@@ -13,6 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 """Keras-NLP layers package definition."""
+from keras_nlp.layers.masked_lm import MaskedLM
 from keras_nlp.layers.on_device_embedding import OnDeviceEmbedding
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.self_attention_mask import SelfAttentionMask
