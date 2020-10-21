@@ -30,7 +30,7 @@ sub-units of models that would not be trained alone. It encapsulates common
 network structures like a classification head or a transformer encoder into an
 easily handled object with a standardized configuration.
 
-*   [BertEncoder](encoders/bert_encoder.py) implements a bi-directional
+*   [BertEncoder](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/encoders/bert_encoder.py) implements a bi-directional
     Transformer-based encoder as described in
     ["BERT: Pre-training of Deep Bidirectional Transformers for Language
     Understanding"](https://arxiv.org/abs/1810.04805). It includes the embedding
