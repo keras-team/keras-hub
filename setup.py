@@ -19,7 +19,8 @@ from setuptools import setup
 
 setup(
     name="keras-nlp",
-    description="High-level NLP libraries based on Keras",
+    description = 
+        "Industry-strength Natural Language Processing extensions for Keras.",
     url="https://github.com/keras-team/keras-nlp",
     author="Keras team",
     author_email="keras-nlp@google.com",
