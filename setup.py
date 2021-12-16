@@ -32,9 +32,11 @@ setup(
     install_requires=["packaging", "tensorflow", "numpy"],
     extras_require={
         "tests": [
+            "black",
             "flake8",
             "isort",
-            "black",
+            "pytest",
+            "pytest-cov",
         ],
     },
     classifiers=[
