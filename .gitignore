@@ -1,0 +1,13 @@
+# Python temp files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Vim temp files
+*.swp
+*.swo
+
+keras_nlp.egg-info/
+
+.coverage
+.coverage.*
