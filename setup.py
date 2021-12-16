@@ -19,8 +19,9 @@ from setuptools import setup
 
 setup(
     name="keras-nlp",
-    description = 
-        "Industry-strength Natural Language Processing extensions for Keras.",
+    description=(
+        "Industry-strength Natural Language Processing extensions for Keras."
+    ),
     url="https://github.com/keras-team/keras-nlp",
     author="Keras team",
     author_email="keras-nlp@google.com",
@@ -29,7 +30,15 @@ setup(
     # download of the gpu version or the cpu version.
     # users should install it manually.
     install_requires=["packaging", "tensorflow", "numpy"],
-    extras_require={"tests": ["flake8", "isort", "black",],},
+    extras_require={
+        "tests": [
+            "black",
+            "flake8",
+            "isort",
+            "pytest",
+            "pytest-cov",
+        ],
+    },
     classifiers=[
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.7",
