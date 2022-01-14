@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2022 The KerasNLP Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,33 +11,54 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Create masked LM/next sentence masked_lm TF examples for BERT.
 
-"""Create masked LM/next sentence masked_lm TF examples for BERT."""
+This script will create TFRecord files containing BERT training examples with
+both word masking and next sentence prediction.
+
+This script will load the entire dataset into memory to setup the next sentence
+prediction task, so it is recommended to run this on shards of data at a time to
+avoid memory issues.
+
+By default, it will duplicate the input data 10 times with different masks and
+sentence pairs, as will the original paper. So a 20gb source of wikipedia and
+bookscorpus will result in a 400gb dataset.
+
+Usage:
+python create_pretraining_data.py \
+    --input_files ~/datasets/bert-sentence-split-data/shard_0.txt \
+    --output_directory ~/datasets/bert-pretraining-data/shard_0.txt \
+    --vocab_file vocab.txt
+"""
 
 import collections
-import itertools
+import os
 import random
+import sys
 
-# Import libraries
+import tensorflow as tf
+import tensorflow_text as tf_text
 from absl import app
 from absl import flags
-from absl import logging
-import tensorflow as tf
 
-from official.nlp.bert import tokenization
+from examples.bert.bert_utils import list_filenames_for_arg
+
+# Tokenization will happen with tensorflow and can easily OOM a GPU.
+# Restrict the script to run CPU as GPU will not offer speedup here anyway.
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "input_file",
+    "input_files",
     None,
-    "Input raw text file (or comma-separated list of files).",
+    "Comma seperated list of directories, files, or globs.",
 )
 
 flags.DEFINE_string(
     "output_file",
     None,
-    "Output TF example file (or comma-separated list of files).",
+    "Output TF record file.",
 )
 
 flags.DEFINE_string(
@@ -51,32 +72,6 @@ flags.DEFINE_bool(
     True,
     "Whether to lower case the input text. Should be True for uncased "
     "models and False for cased models.",
-)
-
-flags.DEFINE_bool(
-    "do_whole_word_mask",
-    False,
-    "Whether to use whole word masking rather than per-WordPiece masking.",
-)
-
-flags.DEFINE_integer(
-    "max_ngram_size",
-    None,
-    "Mask contiguous whole words (n-grams) of up to `max_ngram_size` using a "
-    "weighting scheme to favor shorter n-grams. "
-    "Note: `--do_whole_word_mask=True` must also be set when n-gram masking.",
-)
-
-flags.DEFINE_bool(
-    "gzip_compress",
-    False,
-    "Whether to use `GZIP` compress option to get compressed TFRecord files.",
-)
-
-flags.DEFINE_bool(
-    "use_v2_feature_names",
-    False,
-    "Whether to use the feature names consistent with the models.",
 )
 
 flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
@@ -105,70 +100,48 @@ flags.DEFINE_float(
 )
 
 
-class TrainingInstance(object):
-    """A single training instance (sentence pair)."""
+def convert_to_unicode(text):
+    """Converts text to Unicode if it's not already, assuming utf-8 input."""
+    if isinstance(text, str):
+        return text
+    elif isinstance(text, bytes):
+        return text.decode("utf-8", "ignore")
+    else:
+        raise ValueError("Unsupported string type: %s" % (type(text)))
 
-    def __init__(
-        self,
-        tokens,
-        segment_ids,
-        masked_lm_positions,
-        masked_lm_labels,
-        is_random_next,
-    ):
-        self.tokens = tokens
-        self.segment_ids = segment_ids
-        self.is_random_next = is_random_next
-        self.masked_lm_positions = masked_lm_positions
-        self.masked_lm_labels = masked_lm_labels
 
-    def __str__(self):
-        s = ""
-        s += "tokens: %s\n" % (
-            " ".join([tokenization.printable_text(x) for x in self.tokens])
-        )
-        s += "segment_ids: %s\n" % (
-            " ".join([str(x) for x in self.segment_ids])
-        )
-        s += "is_random_next: %s\n" % self.is_random_next
-        s += "masked_lm_positions: %s\n" % (
-            " ".join([str(x) for x in self.masked_lm_positions])
-        )
-        s += "masked_lm_labels: %s\n" % (
-            " ".join(
-                [tokenization.printable_text(x) for x in self.masked_lm_labels]
-            )
-        )
-        s += "\n"
-        return s
+def printable_text(text):
+    """Returns text encoded in a way suitable for print."""
+    if isinstance(text, str):
+        return text
+    elif isinstance(text, bytes):
+        return text.decode("utf-8", "ignore")
+    else:
+        raise ValueError("Unsupported string type: %s" % (type(text)))
 
-    def __repr__(self):
-        return self.__str__()
+
+# This tuple holds a complete training instance of data ready for serialization.
+TrainingInstance = collections.namedtuple(
+    "TrainingInstance",
+    [
+        "tokens",
+        "segment_ids",
+        "is_random_next",
+        "masked_lm_positions",
+        "masked_lm_labels",
+    ],
+)
 
 
 def write_instance_to_example_files(
-    instances,
-    tokenizer,
-    max_seq_length,
-    max_predictions_per_seq,
-    output_files,
-    gzip_compress,
-    use_v2_feature_names,
+    instances, vocab, max_seq_length, max_predictions_per_seq, output_filename
 ):
-    """Creates TF example files from `TrainingInstance`s."""
-    writers = []
-    for output_file in output_files:
-        writers.append(
-            tf.io.TFRecordWriter(
-                output_file, options="GZIP" if gzip_compress else ""
-            )
-        )
-
-    writer_index = 0
-
+    """Create TF example files from `TrainingInstance`s."""
+    writer = tf.io.TFRecordWriter(output_filename)
     total_written = 0
+    lookup = dict(zip(vocab, range(len(vocab))))
     for (inst_index, instance) in enumerate(instances):
-        input_ids = tokenizer.convert_tokens_to_ids(instance.tokens)
+        input_ids = [lookup[x] for x in instance.tokens]
         input_mask = [1] * len(input_ids)
         segment_ids = list(instance.segment_ids)
         assert len(input_ids) <= max_seq_length
@@ -183,9 +156,7 @@ def write_instance_to_example_files(
         assert len(segment_ids) == max_seq_length
 
         masked_lm_positions = list(instance.masked_lm_positions)
-        masked_lm_ids = tokenizer.convert_tokens_to_ids(
-            instance.masked_lm_labels
-        )
+        masked_lm_ids = [lookup[x] for x in instance.masked_lm_labels]
         masked_lm_weights = [1.0] * len(masked_lm_ids)
 
         while len(masked_lm_positions) < max_predictions_per_seq:
@@ -196,113 +167,68 @@ def write_instance_to_example_files(
         next_sentence_label = 1 if instance.is_random_next else 0
 
         features = collections.OrderedDict()
-        if use_v2_feature_names:
-            features["input_word_ids"] = create_int_feature(input_ids)
-            features["input_type_ids"] = create_int_feature(segment_ids)
-        else:
-            features["input_ids"] = create_int_feature(input_ids)
-            features["segment_ids"] = create_int_feature(segment_ids)
-
-        features["input_mask"] = create_int_feature(input_mask)
-        features["masked_lm_positions"] = create_int_feature(
-            masked_lm_positions
-        )
-        features["masked_lm_ids"] = create_int_feature(masked_lm_ids)
-        features["masked_lm_weights"] = create_float_feature(masked_lm_weights)
-        features["next_sentence_labels"] = create_int_feature(
-            [next_sentence_label]
-        )
+        features["input_ids"] = int_feature(input_ids)
+        features["input_mask"] = int_feature(input_mask)
+        features["segment_ids"] = int_feature(segment_ids)
+        features["masked_lm_positions"] = int_feature(masked_lm_positions)
+        features["masked_lm_ids"] = int_feature(masked_lm_ids)
+        features["masked_lm_weights"] = float_feature(masked_lm_weights)
+        features["next_sentence_labels"] = int_feature([next_sentence_label])
 
         tf_example = tf.train.Example(
             features=tf.train.Features(feature=features)
         )
 
-        writers[writer_index].write(tf_example.SerializeToString())
-        writer_index = (writer_index + 1) % len(writers)
-
+        writer.write(tf_example.SerializeToString())
         total_written += 1
 
-        if inst_index < 20:
-            logging.info("*** Example ***")
-            logging.info(
-                "tokens: %s",
-                " ".join(
-                    [tokenization.printable_text(x) for x in instance.tokens]
-                ),
-            )
-
-            for feature_name in features.keys():
-                feature = features[feature_name]
-                values = []
-                if feature.int64_list.value:
-                    values = feature.int64_list.value
-                elif feature.float_list.value:
-                    values = feature.float_list.value
-                logging.info(
-                    "%s: %s", feature_name, " ".join([str(x) for x in values])
-                )
-
-    for writer in writers:
-        writer.close()
-
-    logging.info("Wrote %d total instances", total_written)
+    writer.close()
+    print(f"Wrote {total_written} total instances")
 
 
-def create_int_feature(values):
-    feature = tf.train.Feature(
-        int64_list=tf.train.Int64List(value=list(values))
-    )
-    return feature
+def int_feature(values):
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
 
 
-def create_float_feature(values):
-    feature = tf.train.Feature(
-        float_list=tf.train.FloatList(value=list(values))
-    )
-    return feature
+def float_feature(values):
+    return tf.train.Feature(float_list=tf.train.FloatList(value=list(values)))
 
 
 def create_training_instances(
-    input_files,
+    input_filenames,
     tokenizer,
+    vocab,
     max_seq_length,
     dupe_factor,
     short_seq_prob,
     masked_lm_prob,
     max_predictions_per_seq,
     rng,
-    do_whole_word_mask=False,
-    max_ngram_size=None,
 ):
     """Create `TrainingInstance`s from raw text."""
-    all_documents = [[]]
-
     # Input file format:
     # (1) One sentence per line. These should ideally be actual sentences, not
     # entire paragraphs or arbitrary spans of text. (Because we use the
     # sentence boundaries for the "next sentence prediction" task).
     # (2) Blank lines between documents. Document boundaries are needed so
     # that the "next sentence prediction" task doesn't span between documents.
-    for input_file in input_files:
-        with tf.io.gfile.GFile(input_file, "rb") as reader:
-            while True:
-                line = tokenization.convert_to_unicode(reader.readline())
-                if not line:
-                    break
-                line = line.strip()
-
-                # Empty lines are used as document delimiters
-                if not line:
-                    all_documents.append([])
-                tokens = tokenizer.tokenize(line)
-                if tokens:
-                    all_documents[-1].append(tokens)
-
-    # Remove empty documents
-    all_documents = [x for x in all_documents if x]
+    dataset = tf.data.TextLineDataset(input_filenames)
+    dataset = dataset.map(
+        lambda x: tokenizer.tokenize(x).flat_values,
+        num_parallel_calls=tf.data.AUTOTUNE,
+    )
+    all_documents = []
+    current_document = []
+    for line in dataset.as_numpy_iterator():
+        if line.size == 0 and current_document:
+            all_documents.append(current_document)
+            current_document = []
+        else:
+            line = [x.decode("utf-8") for x in line]
+            if line:
+                current_document.append(line)
     rng.shuffle(all_documents)
 
-    vocab_words = list(tokenizer.vocab.keys())
     instances = []
     for _ in range(dupe_factor):
         for document_index in range(len(all_documents)):
@@ -314,13 +240,10 @@ def create_training_instances(
                     short_seq_prob,
                     masked_lm_prob,
                     max_predictions_per_seq,
-                    vocab_words,
+                    vocab,
                     rng,
-                    do_whole_word_mask,
-                    max_ngram_size,
                 )
             )
-
     rng.shuffle(instances)
     return instances
 
@@ -334,8 +257,6 @@ def create_instances_from_document(
     max_predictions_per_seq,
     vocab_words,
     rng,
-    do_whole_word_mask=False,
-    max_ngram_size=None,
 ):
     """Creates `TrainingInstance`s for a single document."""
     document = all_documents[document_index]
@@ -444,8 +365,6 @@ def create_instances_from_document(
                     max_predictions_per_seq,
                     vocab_words,
                     rng,
-                    do_whole_word_mask,
-                    max_ngram_size,
                 )
                 instance = TrainingInstance(
                     tokens=tokens,
@@ -466,255 +385,65 @@ MaskedLmInstance = collections.namedtuple(
     "MaskedLmInstance", ["index", "label"]
 )
 
-# A _Gram is a [half-open) interval of token indices which form a word.
-# E.g.,
-#   words:  ["The", "doghouse"]
-#   tokens: ["The", "dog", "##house"]
-#   grams:  [(0,1), (1,3)]
-_Gram = collections.namedtuple("_Gram", ["begin", "end"])
-
-
-def _window(iterable, size):
-    """Helper to create a sliding window iterator with a given size.
-
-    E.g.,
-      input = [1, 2, 3, 4]
-      _window(input, 1) => [1], [2], [3], [4]
-      _window(input, 2) => [1, 2], [2, 3], [3, 4]
-      _window(input, 3) => [1, 2, 3], [2, 3, 4]
-      _window(input, 4) => [1, 2, 3, 4]
-      _window(input, 5) => None
-
-    Args:
-        iterable: elements to iterate over.
-        size: size of the window.
-
-    Yields:
-        Elements of `iterable` batched into a sliding window of length `size`.
-    """
-    i = iter(iterable)
-    window = []
-    try:
-        for e in range(0, size):
-            window.append(next(i))
-        yield window
-    except StopIteration:
-        # handle the case where iterable's length is less than the window size.
-        return
-    for e in i:
-        window = window[1:] + [e]
-        yield window
-
-
-def _contiguous(sorted_grams):
-    """Test whether a sequence of grams is contiguous.
-
-    Args:
-        sorted_grams: _Grams which are sorted in increasing order.
-    Returns:
-        True if `sorted_grams` are touching each other.
-
-    E.g.,
-      _contiguous([(1, 4), (4, 5), (5, 10)]) == True
-      _contiguous([(1, 2), (4, 5)]) == False
-    """
-    for a, b in _window(sorted_grams, 2):
-        if a.end != b.begin:
-            return False
-    return True
-
-
-def _masking_ngrams(grams, max_ngram_size, max_masked_tokens, rng):
-    """Create a list of masking {1, ..., n}-grams from a list of one-grams.
-
-    This is an extention of 'whole word masking' to mask multiple, contiguous
-    words such as (e.g., "the red boat").
-
-    Each input gram represents the token indices of a single word,
-       words:  ["the", "red", "boat"]
-       tokens: ["the", "red", "boa", "##t"]
-       grams:  [(0,1), (1,2), (2,4)]
-
-    For a `max_ngram_size` of three, possible outputs masks include:
-      1-grams: (0,1), (1,2), (2,4)
-      2-grams: (0,2), (1,4)
-      3-grams; (0,4)
-
-    Output masks will not overlap and contain less than `max_masked_tokens`
-    total tokens.  E.g., for the example above with `max_masked_tokens` as
-    three, valid outputs are,
-         [(0,1), (1,2)]  # "the", "red" covering two tokens
-         [(1,2), (2,4)]  # "red", "boa", "##t" covering three tokens
-
-    The length of the selected n-gram follows a zipf weighting to
-    favor shorter n-gram sizes (weight(1)=1, weight(2)=1/2, weight(3)=1/3, ...).
-
-    Args:
-        grams: List of one-grams.
-        max_ngram_size: Maximum number of contiguous one-grams combined to
-            create an n-gram.
-      max_masked_tokens: Maximum total number of tokens to be masked.
-      rng: `random.Random` generator.
-
-    Returns:
-        A list of n-grams to be used as masks.
-    """
-    if not grams:
-        return None
-
-    grams = sorted(grams)
-    num_tokens = grams[-1].end
-
-    # Ensure our grams are valid (i.e., they don't overlap).
-    for a, b in _window(grams, 2):
-        if a.end > b.begin:
-            raise ValueError("overlapping grams: {}".format(grams))
-
-    # Build map from n-gram length to list of n-grams.
-    ngrams = {i: [] for i in range(1, max_ngram_size + 1)}
-    for gram_size in range(1, max_ngram_size + 1):
-        for g in _window(grams, gram_size):
-            if _contiguous(g):
-                # Add an n-gram which spans these one-grams.
-                ngrams[gram_size].append(_Gram(g[0].begin, g[-1].end))
-
-    # Shuffle each list of n-grams.
-    for v in ngrams.values():
-        rng.shuffle(v)
-
-    # Create the weighting for n-gram length selection.
-    # Stored cummulatively for `random.choices` below.
-    cummulative_weights = list(
-        itertools.accumulate([1.0 / n for n in range(1, max_ngram_size + 1)])
-    )
-
-    output_ngrams = []
-    # Keep a bitmask of which tokens have been masked.
-    masked_tokens = [False] * num_tokens
-    # Loop until we have enough masked tokens or there are no more candidate
-    # n-grams of any length.
-    # Each code path should ensure one or more elements from `ngrams` are
-    # removed to guarentee this loop terminates.
-    while sum(masked_tokens) < max_masked_tokens and sum(
-        len(s) for s in ngrams.values()
-    ):
-        # Pick an n-gram size based on our weights.
-        sz = random.choices(
-            range(1, max_ngram_size + 1), cum_weights=cummulative_weights
-        )[0]
-
-        # Ensure this size doesn't result in too many masked tokens.
-        # E.g., a two-gram contains _at least_ two tokens.
-        if sum(masked_tokens) + sz > max_masked_tokens:
-            # All n-grams of this length are too long and can be removed from
-            # consideration.
-            ngrams[sz].clear()
-            continue
-
-        # All of the n-grams of this size have been used.
-        if not ngrams[sz]:
-            continue
-
-        # Choose a random n-gram of the given size.
-        gram = ngrams[sz].pop()
-        num_gram_tokens = gram.end - gram.begin
-
-        # Check if this would add too many tokens.
-        if num_gram_tokens + sum(masked_tokens) > max_masked_tokens:
-            continue
-
-        # Check if any of the tokens in this gram have already been masked.
-        if sum(masked_tokens[gram.begin : gram.end]):
-            continue
-
-        # Found a usable n-gram!  Mark its tokens as masked and add it to
-        # return.
-        masked_tokens[gram.begin : gram.end] = [True] * (gram.end - gram.begin)
-        output_ngrams.append(gram)
-    return output_ngrams
-
-
-def _wordpieces_to_grams(tokens):
-    """Reconstitue grams (words) from `tokens`.
-
-    E.g.,
-       tokens: ['[CLS]', 'That', 'lit', '##tle', 'blue', 'tru', '##ck', '[SEP]']
-        grams: [          [1,2), [2,         4),  [4,5) , [5,       6)]
-
-    Args:
-        tokens: list of wordpieces
-    Returns:
-        List of _Grams representing spans of whole words
-        (without "[CLS]" and "[SEP]").
-    """
-    grams = []
-    gram_start_pos = None
-    for i, token in enumerate(tokens):
-        if gram_start_pos is not None and token.startswith("##"):
-            continue
-        if gram_start_pos is not None:
-            grams.append(_Gram(gram_start_pos, i))
-        if token not in ["[CLS]", "[SEP]"]:
-            gram_start_pos = i
-        else:
-            gram_start_pos = None
-    if gram_start_pos is not None:
-        grams.append(_Gram(gram_start_pos, len(tokens)))
-    return grams
-
 
 def create_masked_lm_predictions(
-    tokens,
-    masked_lm_prob,
-    max_predictions_per_seq,
-    vocab_words,
-    rng,
-    do_whole_word_mask,
-    max_ngram_size=None,
+    tokens, masked_lm_prob, max_predictions_per_seq, vocab_words, rng
 ):
     """Creates the predictions for the masked LM objective."""
-    if do_whole_word_mask:
-        grams = _wordpieces_to_grams(tokens)
-    else:
-        # Here we consider each token to be a word to allow for sub-word masking.
-        if max_ngram_size:
-            raise ValueError(
-                "cannot use ngram masking without whole word masking"
-            )
-        grams = [
-            _Gram(i, i + 1)
-            for i in range(0, len(tokens))
-            if tokens[i] not in ["[CLS]", "[SEP]"]
-        ]
+
+    cand_indexes = []
+    for (i, token) in enumerate(tokens):
+        if token == "[CLS]" or token == "[SEP]":
+            continue
+        cand_indexes.append([i])
+
+    rng.shuffle(cand_indexes)
+
+    output_tokens = list(tokens)
 
     num_to_predict = min(
         max_predictions_per_seq,
         max(1, int(round(len(tokens) * masked_lm_prob))),
     )
-    # Generate masks.  If `max_ngram_size` in [0, None] it means we're doing
-    # whole word masking or token level masking.  Both of these can be treated
-    # as the `max_ngram_size=1` case.
-    masked_grams = _masking_ngrams(
-        grams, max_ngram_size or 1, num_to_predict, rng
-    )
+
     masked_lms = []
-    output_tokens = list(tokens)
-    for gram in masked_grams:
-        # 80% of the time, replace all n-gram tokens with [MASK]
-        if rng.random() < 0.8:
-            replacement_action = lambda idx: "[MASK]"
-        else:
-            # 10% of the time, keep all the original n-gram tokens.
-            if rng.random() < 0.5:
-                replacement_action = lambda idx: tokens[idx]
-            # 10% of the time, replace each n-gram token with a random word.
+    covered_indexes = set()
+    for index_set in cand_indexes:
+        if len(masked_lms) >= num_to_predict:
+            break
+        # If adding a whole-word mask would exceed the maximum number of
+        # predictions, then just skip this candidate.
+        if len(masked_lms) + len(index_set) > num_to_predict:
+            continue
+        is_any_index_covered = False
+        for index in index_set:
+            if index in covered_indexes:
+                is_any_index_covered = True
+                break
+        if is_any_index_covered:
+            continue
+        for index in index_set:
+            covered_indexes.add(index)
+
+            masked_token = None
+            # 80% of the time, replace with [MASK]
+            if rng.random() < 0.8:
+                masked_token = "[MASK]"
             else:
-                replacement_action = lambda idx: rng.choice(vocab_words)
+                # 10% of the time, keep original
+                if rng.random() < 0.5:
+                    masked_token = tokens[index]
+                # 10% of the time, replace with random word
+                else:
+                    masked_token = vocab_words[
+                        rng.randint(0, len(vocab_words) - 1)
+                    ]
 
-        for idx in range(gram.begin, gram.end):
-            output_tokens[idx] = replacement_action(idx)
-            masked_lms.append(MaskedLmInstance(index=idx, label=tokens[idx]))
+            output_tokens[index] = masked_token
 
+            masked_lms.append(
+                MaskedLmInstance(index=index, label=tokens[index])
+            )
     assert len(masked_lms) <= num_to_predict
     masked_lms = sorted(masked_lms, key=lambda x: x.index)
 
@@ -746,50 +475,51 @@ def truncate_seq_pair(tokens_a, tokens_b, max_num_tokens, rng):
 
 
 def main(_):
-    tokenizer = tokenization.FullTokenizer(
-        vocab_file=FLAGS.vocab_file, do_lower_case=FLAGS.do_lower_case
+    print(f"Reading input data from {FLAGS.input_files}")
+    input_filenames = list_filenames_for_arg(FLAGS.input_files)
+    if not input_filenames:
+        print("No input files found. Check `input_files` flag.")
+        sys.exit(1)
+
+    # Load the vocabulary.
+    vocab = []
+    with open(FLAGS.vocab_file, "r") as vocab_file:
+        for line in vocab_file:
+            vocab.append(line.strip())
+    tokenizer = tf_text.BertTokenizer(
+        FLAGS.vocab_file,
+        lower_case=FLAGS.do_lower_case,
+        token_out_type=tf.string,
     )
-
-    input_files = []
-    for input_pattern in FLAGS.input_file.split(","):
-        input_files.extend(tf.io.gfile.glob(input_pattern))
-
-    logging.info("*** Reading from input files ***")
-    for input_file in input_files:
-        logging.info("  %s", input_file)
 
     rng = random.Random(FLAGS.random_seed)
     instances = create_training_instances(
-        input_files,
+        input_filenames,
         tokenizer,
+        vocab,
         FLAGS.max_seq_length,
         FLAGS.dupe_factor,
         FLAGS.short_seq_prob,
         FLAGS.masked_lm_prob,
         FLAGS.max_predictions_per_seq,
         rng,
-        FLAGS.do_whole_word_mask,
-        FLAGS.max_ngram_size,
     )
 
-    output_files = FLAGS.output_file.split(",")
-    logging.info("*** Writing to output files ***")
-    for output_file in output_files:
-        logging.info("  %s", output_file)
-
+    print(f"Outputting to {FLAGS.output_file}.")
+    output_directory = os.path.dirname(FLAGS.output_file)
+    if not os.path.exists(output_directory):
+        os.mkdir(output_directory)
     write_instance_to_example_files(
         instances,
-        tokenizer,
+        vocab,
         FLAGS.max_seq_length,
         FLAGS.max_predictions_per_seq,
-        output_files,
-        FLAGS.gzip_compress,
-        FLAGS.use_v2_feature_names,
+        FLAGS.output_file,
     )
 
 
 if __name__ == "__main__":
-    flags.mark_flag_as_required("input_file")
+    flags.mark_flag_as_required("input_files")
     flags.mark_flag_as_required("output_file")
     flags.mark_flag_as_required("vocab_file")
     app.run(main)
