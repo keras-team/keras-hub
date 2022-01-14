@@ -11,12 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Bert model and layer implementations.
+
+We should work to replace this with components from the keras-nlp library.
+"""
 
 import tensorflow as tf
 from tensorflow import keras
 
 
-class SelfAttentionMask(tf.keras.layers.Layer):
+class SelfAttentionMask(keras.layers.Layer):
     """Create 3D attention mask from a 2D tensor mask.
 
     inputs[0]: from_tensor: 2D or 3D Tensor of shape
@@ -58,24 +62,59 @@ class SelfAttentionMask(tf.keras.layers.Layer):
         return mask
 
 
-class TransformerEncoderBlock(tf.keras.layers.Layer):
+class TransformerEncoderBlock(keras.layers.Layer):
     """TransformerEncoderBlock layer.
 
     This layer implements the Transformer Encoder from
     "Attention Is All You Need". (https://arxiv.org/abs/1706.03762),
-    which combines a `tf.keras.layers.MultiHeadAttention` layer with a
+    which combines a `keras.layers.MultiHeadAttention` layer with a
     two-layer feedforward network.
 
+    Args:
+        num_attention_heads: Number of attention heads.
+        inner_size: The output dimension of the first Dense layer in a
+            two-layer feedforward network.
+        inner_activation: The activation for the first Dense layer in a
+            two-layer feedforward network.
+        output_range: the sequence output range, [0, output_range) for
+            slicing the target sequence. `None` means the target sequence is
+            not sliced.
+        kernel_initializer: Initializer for dense layer kernels.
+        bias_initializer: Initializer for dense layer biases.
+        kernel_regularizer: Regularizer for dense layer kernels.
+        bias_regularizer: Regularizer for dense layer biases.
+        activity_regularizer: Regularizer for dense layer activity.
+        kernel_constraint: Constraint for dense layer kernels.
+        bias_constraint: Constraint for dense layer kernels.
+        use_bias: Whether to enable use_bias in attention layer. If set
+            False, use_bias in attention layer is disabled.
+        norm_first: Whether to normalize inputs to attention and
+            intermediate dense layers. If set False, output of attention and
+            intermediate dense layers is normalized.
+        norm_epsilon: Epsilon value to initialize normalization layers.
+        hidden_dropout: Dropout probability for the post-attention and
+            output dropout.
+        attention_dropout: Dropout probability for within the attention
+            layer.
+        inner_dropout: Dropout probability for the first Dense layer in a
+        two-layer feedforward network.
+        attention_initializer: Initializer for kernels of attention layers.
+            If set `None`, attention layers use kernel_initializer as
+            initializer for kernel.
+        attention_axes: axes over which the attention is applied. `None`
+            means attention over all axes, but batch, heads, and features.
+        **kwargs: keyword arguments.
+
     References:
-      [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
-      [BERT: Pre-training of Deep Bidirectional Transformers for Language
-       Understanding](https://arxiv.org/abs/1810.04805)
+        [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
+        [BERT: Pre-training of Deep Bidirectional Transformers for Language
+        Understanding](https://arxiv.org/abs/1810.04805)
     """
 
     def __init__(
         self,
         num_attention_heads,
-        inner_dim,
+        inner_size,
         inner_activation,
         output_range=None,
         kernel_initializer="glorot_uniform",
@@ -88,76 +127,38 @@ class TransformerEncoderBlock(tf.keras.layers.Layer):
         use_bias=True,
         norm_first=False,
         norm_epsilon=1e-12,
-        output_dropout=0.0,
+        hidden_dropout=0.0,
         attention_dropout=0.0,
         inner_dropout=0.0,
         attention_initializer=None,
         attention_axes=None,
         **kwargs
     ):
-        """Initializes `TransformerEncoderBlock`.
-
-        Args:
-            num_attention_heads: Number of attention heads.
-            inner_dim: The output dimension of the first Dense layer in a
-                two-layer feedforward network.
-            inner_activation: The activation for the first Dense layer in a
-                two-layer feedforward network.
-            output_range: the sequence output range, [0, output_range) for
-                slicing the target sequence. `None` means the target sequence is
-                not sliced.
-            kernel_initializer: Initializer for dense layer kernels.
-            bias_initializer: Initializer for dense layer biases.
-            kernel_regularizer: Regularizer for dense layer kernels.
-            bias_regularizer: Regularizer for dense layer biases.
-            activity_regularizer: Regularizer for dense layer activity.
-            kernel_constraint: Constraint for dense layer kernels.
-            bias_constraint: Constraint for dense layer kernels.
-            use_bias: Whether to enable use_bias in attention layer. If set
-                False, use_bias in attention layer is disabled.
-            norm_first: Whether to normalize inputs to attention and
-                intermediate dense layers. If set False, output of attention and
-                intermediate dense layers is normalized.
-            norm_epsilon: Epsilon value to initialize normalization layers.
-            output_dropout: Dropout probability for the post-attention and
-                output dropout.
-            attention_dropout: Dropout probability for within the attention
-                layer.
-            inner_dropout: Dropout probability for the first Dense layer in a
-              two-layer feedforward network.
-            attention_initializer: Initializer for kernels of attention layers.
-                If set `None`, attention layers use kernel_initializer as
-                initializer for kernel.
-            attention_axes: axes over which the attention is applied. `None`
-                means attention over all axes, but batch, heads, and features.
-            **kwargs: keyword arguments.
-        """
-        util.filter_kwargs(kwargs)
         super().__init__(**kwargs)
 
         self._num_heads = num_attention_heads
-        self._inner_dim = inner_dim
+        self._inner_size = inner_size
         self._inner_activation = inner_activation
         self._attention_dropout = attention_dropout
         self._attention_dropout_rate = attention_dropout
-        self._output_dropout = output_dropout
-        self._output_dropout_rate = output_dropout
+        self._hidden_dropout = hidden_dropout
+        self._hidden_dropout_rate = hidden_dropout
         self._output_range = output_range
-        self._kernel_initializer = tf.keras.initializers.get(kernel_initializer)
-        self._bias_initializer = tf.keras.initializers.get(bias_initializer)
-        self._kernel_regularizer = tf.keras.regularizers.get(kernel_regularizer)
-        self._bias_regularizer = tf.keras.regularizers.get(bias_regularizer)
-        self._activity_regularizer = tf.keras.regularizers.get(
+        self._kernel_initializer = keras.initializers.get(kernel_initializer)
+        self._bias_initializer = keras.initializers.get(bias_initializer)
+        self._kernel_regularizer = keras.regularizers.get(kernel_regularizer)
+        self._bias_regularizer = keras.regularizers.get(bias_regularizer)
+        self._activity_regularizer = keras.regularizers.get(
             activity_regularizer
         )
-        self._kernel_constraint = tf.keras.constraints.get(kernel_constraint)
-        self._bias_constraint = tf.keras.constraints.get(bias_constraint)
+        self._kernel_constraint = keras.constraints.get(kernel_constraint)
+        self._bias_constraint = keras.constraints.get(bias_constraint)
         self._use_bias = use_bias
         self._norm_first = norm_first
         self._norm_epsilon = norm_epsilon
         self._inner_dropout = inner_dropout
         if attention_initializer:
-            self._attention_initializer = tf.keras.initializers.get(
+            self._attention_initializer = keras.initializers.get(
                 attention_initializer
             )
         else:
@@ -192,7 +193,7 @@ class TransformerEncoderBlock(tf.keras.layers.Layer):
             kernel_constraint=self._kernel_constraint,
             bias_constraint=self._bias_constraint,
         )
-        self._attention_layer = tf.keras.layers.MultiHeadAttention(
+        self._attention_layer = keras.layers.MultiHeadAttention(
             num_heads=self._num_heads,
             key_dim=self._attention_head_size,
             dropout=self._attention_dropout,
@@ -202,39 +203,38 @@ class TransformerEncoderBlock(tf.keras.layers.Layer):
             name="self_attention",
             **common_kwargs
         )
-        self._attention_dropout = tf.keras.layers.Dropout(
-            rate=self._output_dropout
+        self._attention_dropout = keras.layers.Dropout(
+            rate=self._hidden_dropout
         )
-        # Use float32 in layernorm for numeric stability.
-        # It is probably safe in mixed_float16, but we haven't validated this
-        # yet.
-        self._attention_layer_norm = tf.keras.layers.LayerNormalization(
+        # Use float32 in layernorm for numeric stability. It is probably safe in
+        # mixed_float16, but we haven't validated this yet.
+        self._attention_layer_norm = keras.layers.LayerNormalization(
             name="self_attention_layer_norm",
             axis=-1,
             epsilon=self._norm_epsilon,
             dtype=tf.float32,
         )
-        self._intermediate_dense = tf.keras.layers.experimental.EinsumDense(
+        self._intermediate_dense = keras.layers.experimental.EinsumDense(
             einsum_equation,
-            output_shape=(None, self._inner_dim),
+            output_shape=(None, self._inner_size),
             bias_axes="d",
             kernel_initializer=self._kernel_initializer,
             name="intermediate",
             **common_kwargs
         )
-        policy = tf.keras.mixed_precision.global_policy()
+        policy = keras.mixed_precision.global_policy()
         if policy.name == "mixed_bfloat16":
             # bfloat16 causes BERT with the LAMB optimizer to not converge
             # as well, so we use float32.
             # TODO(b/154538392): Investigate this.
             policy = tf.float32
-        self._intermediate_activation_layer = tf.keras.layers.Activation(
+        self._intermediate_activation_layer = keras.layers.Activation(
             self._inner_activation, dtype=policy
         )
-        self._inner_dropout_layer = tf.keras.layers.Dropout(
+        self._inner_dropout_layer = keras.layers.Dropout(
             rate=self._inner_dropout
         )
-        self._output_dense = tf.keras.layers.experimental.EinsumDense(
+        self._output_dense = keras.layers.experimental.EinsumDense(
             einsum_equation,
             output_shape=(None, hidden_size),
             bias_axes="d",
@@ -242,58 +242,56 @@ class TransformerEncoderBlock(tf.keras.layers.Layer):
             kernel_initializer=self._kernel_initializer,
             **common_kwargs
         )
-        self._output_dropout = tf.keras.layers.Dropout(
-            rate=self._output_dropout
-        )
+        self._hidden_dropout = keras.layers.Dropout(rate=self._hidden_dropout)
         # Use float32 in layernorm for numeric stability.
-        self._output_layer_norm = tf.keras.layers.LayerNormalization(
+        self._output_layer_norm = keras.layers.LayerNormalization(
             name="output_layer_norm",
             axis=-1,
             epsilon=self._norm_epsilon,
             dtype=tf.float32,
         )
 
-        super(TransformerEncoderBlock, self).build(input_shape)
+        super().build(input_shape)
 
     def get_config(self):
         config = {
             "num_attention_heads": self._num_heads,
-            "inner_dim": self._inner_dim,
+            "inner_size": self._inner_size,
             "inner_activation": self._inner_activation,
-            "output_dropout": self._output_dropout_rate,
+            "hidden_dropout": self._hidden_dropout_rate,
             "attention_dropout": self._attention_dropout_rate,
             "output_range": self._output_range,
-            "kernel_initializer": tf.keras.initializers.serialize(
+            "kernel_initializer": keras.initializers.serialize(
                 self._kernel_initializer
             ),
-            "bias_initializer": tf.keras.initializers.serialize(
+            "bias_initializer": keras.initializers.serialize(
                 self._bias_initializer
             ),
-            "kernel_regularizer": tf.keras.regularizers.serialize(
+            "kernel_regularizer": keras.regularizers.serialize(
                 self._kernel_regularizer
             ),
-            "bias_regularizer": tf.keras.regularizers.serialize(
+            "bias_regularizer": keras.regularizers.serialize(
                 self._bias_regularizer
             ),
-            "activity_regularizer": tf.keras.regularizers.serialize(
+            "activity_regularizer": keras.regularizers.serialize(
                 self._activity_regularizer
             ),
-            "kernel_constraint": tf.keras.constraints.serialize(
+            "kernel_constraint": keras.constraints.serialize(
                 self._kernel_constraint
             ),
-            "bias_constraint": tf.keras.constraints.serialize(
+            "bias_constraint": keras.constraints.serialize(
                 self._bias_constraint
             ),
             "use_bias": self._use_bias,
             "norm_first": self._norm_first,
             "norm_epsilon": self._norm_epsilon,
             "inner_dropout": self._inner_dropout,
-            "attention_initializer": tf.keras.initializers.serialize(
+            "attention_initializer": keras.initializers.serialize(
                 self._attention_initializer
             ),
             "attention_axes": self._attention_axes,
         }
-        base_config = super(TransformerEncoderBlock, self).get_config()
+        base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
     def call(self, inputs):
@@ -303,13 +301,13 @@ class TransformerEncoderBlock(tf.keras.layers.Layer):
             inputs: a single tensor or a list of tensors.
                 `input tensor` as the single sequence of embeddings.
                 [`input tensor`, `attention mask`] to have the additional
-                    attention mask.
+                attention mask.
                 [`query tensor`, `key value tensor`, `attention mask`] to have
-                    separate input streams for the query, and key/value to the
-                    multi-head attention.
+                separate input streams for the query, and key/value to the
+                multi-head attention.
 
         Returns:
-          An output tensor with the same dimensions as input/query tensor.
+            An output tensor with the same dimensions as input/query tensor.
         """
         if isinstance(inputs, (list, tuple)):
             if len(inputs) == 2:
@@ -361,7 +359,7 @@ class TransformerEncoderBlock(tf.keras.layers.Layer):
         inner_output = self._intermediate_activation_layer(inner_output)
         inner_output = self._inner_dropout_layer(inner_output)
         layer_output = self._output_dense(inner_output)
-        layer_output = self._output_dropout(layer_output)
+        layer_output = self._hidden_dropout(layer_output)
 
         if self._norm_first:
             return source_attention_output + layer_output
@@ -372,15 +370,16 @@ class TransformerEncoderBlock(tf.keras.layers.Layer):
         return self._output_layer_norm(layer_output + attention_output)
 
 
-class PositionEmbedding(tf.keras.layers.Layer):
+class PositionEmbedding(keras.layers.Layer):
     """Creates a positional embedding.
 
     Example:
     ```python
     position_embedding = PositionEmbedding(max_length=100)
-    inputs = tf.keras.Input((100, 32), dtype=tf.float32)
+    inputs = keras.Input((100, 32), dtype=tf.float32)
     outputs = position_embedding(inputs)
     ```
+
 
     Args:
         max_length: The maximum size of the dynamic sequence.
@@ -397,20 +396,20 @@ class PositionEmbedding(tf.keras.layers.Layer):
         self, max_length, initializer="glorot_uniform", seq_axis=1, **kwargs
     ):
 
-        super(PositionEmbedding, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         if max_length is None:
             raise ValueError("`max_length` must be an Integer, not `None`.")
         self._max_length = max_length
-        self._initializer = tf.keras.initializers.get(initializer)
+        self._initializer = keras.initializers.get(initializer)
         self._seq_axis = seq_axis
 
     def get_config(self):
         config = {
             "max_length": self._max_length,
-            "initializer": tf.keras.initializers.serialize(self._initializer),
+            "initializer": keras.initializers.serialize(self._initializer),
             "seq_axis": self._seq_axis,
         }
-        base_config = super(PositionEmbedding, self).get_config()
+        base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
     def build(self, input_shape):
@@ -424,7 +423,7 @@ class PositionEmbedding(tf.keras.layers.Layer):
             initializer=self._initializer,
         )
 
-        super(PositionEmbedding, self).build(input_shape)
+        super().build(input_shape)
 
     def call(self, inputs):
         input_shape = tf.shape(inputs)
@@ -437,7 +436,7 @@ class PositionEmbedding(tf.keras.layers.Layer):
         return tf.broadcast_to(position_embeddings, input_shape)
 
 
-class OnDeviceEmbedding(tf.keras.layers.Layer):
+class OnDeviceEmbedding(keras.layers.Layer):
     """Performs an embedding lookup suitable for accelerator devices.
 
     This layer uses either tf.gather or tf.one_hot to translate integer indices
@@ -452,9 +451,9 @@ class OnDeviceEmbedding(tf.keras.layers.Layer):
             lookup. Defaults to False (that is, using tf.gather). Setting this
             option to True may improve performance, especially on small
             vocabulary sizes, but will generally require more memory.
-        scale_factor: Whether to scale the output embeddings. Defaults to None
-            (that is, not to scale). Setting this option to a float will let
-            values in output embeddings multiplied by scale_factor.
+      scale_factor: Whether to scale the output embeddings. Defaults to None
+        (that is, not to scale). Setting this option to a float will let values
+        in output embeddings multiplied by scale_factor.
     """
 
     def __init__(
@@ -466,8 +465,7 @@ class OnDeviceEmbedding(tf.keras.layers.Layer):
         scale_factor=None,
         **kwargs
     ):
-
-        super(OnDeviceEmbedding, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self._vocab_size = vocab_size
         self._embedding_width = embedding_width
         self._initializer = initializer
@@ -482,7 +480,7 @@ class OnDeviceEmbedding(tf.keras.layers.Layer):
             "use_one_hot": self._use_one_hot,
             "scale_factor": self._scale_factor,
         }
-        base_config = super(OnDeviceEmbedding, self).get_config()
+        base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
     def build(self, input_shape):
@@ -493,7 +491,7 @@ class OnDeviceEmbedding(tf.keras.layers.Layer):
             dtype=tf.float32,
         )
 
-        super(OnDeviceEmbedding, self).build(input_shape)
+        super().build(input_shape)
 
     def call(self, inputs):
         flat_inputs = tf.reshape(inputs, [-1])
@@ -510,7 +508,6 @@ class OnDeviceEmbedding(tf.keras.layers.Layer):
             embeddings = tf.matmul(one_hot_data, self.embeddings)
         else:
             embeddings = tf.gather(self.embeddings, flat_inputs)
-
         embeddings = tf.reshape(
             embeddings,
             # Work around b/142213824: prefer concat to shape over a Python
@@ -531,7 +528,7 @@ class OnDeviceEmbedding(tf.keras.layers.Layer):
         return self._embedding_width
 
 
-class BertEncoderV2(tf.keras.layers.Layer):
+class BertModel(keras.Model):
     """Bi-directional Transformer-based encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -546,152 +543,104 @@ class BertEncoderV2(tf.keras.layers.Layer):
 
     Args:
         vocab_size: The size of the token vocabulary.
-        hidden_size: The size of the transformer hidden layers.
         num_layers: The number of transformer layers.
+        hidden_size: The size of the transformer hidden layers.
+        hidden_dropout: Dropout probability for the post-attention and output
+            dropout.
         num_attention_heads: The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
+        attention_dropout: The dropout rate to use for the attention layers
+            within the transformer layers.
+        inner_size: The output dimension of the first Dense layer in a two-layer
+            feedforward network for each transformer.
+        inner_activation: The activation for the first Dense layer in a
+            two-layer feedforward network for each transformer.
+        initializer_range: The initialzer range to use for a truncated normal
+            initializer.
         max_sequence_length: The maximum sequence length that this encoder can
             consume. If None, max_sequence_length uses the value from sequence
             length. This determines the variable shape for positional
             embeddings.
         type_vocab_size: The number of types that the 'type_ids' input can take.
-        inner_dim: The output dimension of the first Dense layer in a two-layer
-          feedforward network for each transformer.
-        inner_activation: The activation for the first Dense layer in a
-            two-layer feedforward network for each transformer.
-        output_dropout: Dropout probability for the post-attention and output
-          dropout.
-        attention_dropout: The dropout rate to use for the attention layers
-            within the transformer layers.
-        initializer: The initialzer to use for all weights in this encoder.
-        output_range: The sequence output range, [0, output_range), by slicing
-            the target sequence of the last transformer layer. `None` means the
-            entire target sequence will attend to the source sequence, which
-            yields the full output.
-        embedding_width: The width of the word embeddings. If the embedding
-            width is not equal to hidden size, embedding parameters will be
-            factorized into two matrices in the shape of ['vocab_size',
-            'embedding_width'] and ['embedding_width', 'hidden_size']
-            ('embedding_width' is usually much smaller than 'hidden_size').
-        embedding_layer: An optional Layer instance which will be called to
-            generate embeddings for the input word IDs.
         norm_first: Whether to normalize inputs to attention and intermediate
             dense layers. If set False, output of attention and intermediate
             dense layers is normalized.
-        with_dense_inputs: Whether to accept dense embeddings as the input.
     """
 
     def __init__(
         self,
-        vocab_size: int,
-        hidden_size: int = 768,
-        num_layers: int = 12,
-        num_attention_heads: int = 12,
-        max_sequence_length: int = 512,
-        type_vocab_size: int = 16,
-        inner_dim: int = 3072,
-        inner_activation: _Activation = _approx_gelu,
-        output_dropout: float = 0.1,
-        attention_dropout: float = 0.1,
-        initializer: _Initializer = tf.keras.initializers.TruncatedNormal(
-            stddev=0.02
-        ),
-        output_range: Optional[int] = None,
-        embedding_width: Optional[int] = None,
-        embedding_layer: Optional[tf.keras.layers.Layer] = None,
-        norm_first: bool = False,
-        with_dense_inputs: bool = False,
+        vocab_size,
+        num_layers=12,
+        hidden_size=768,
+        hidden_dropout=0.1,
+        num_attention_heads=12,
+        attention_dropout=0.1,
+        inner_size=3072,
+        inner_activation="gelu",
+        initializer_range=0.02,
+        max_sequence_length=512,
+        type_vocab_size=2,
+        norm_first=False,
         **kwargs
     ):
-        # Pops kwargs that are used in V1 implementation.
-        if "dict_outputs" in kwargs:
-            kwargs.pop("dict_outputs")
-        if "return_all_encoder_outputs" in kwargs:
-            kwargs.pop("return_all_encoder_outputs")
-        if "intermediate_size" in kwargs:
-            inner_dim = kwargs.pop("intermediate_size")
-        if "activation" in kwargs:
-            inner_activation = kwargs.pop("activation")
-        if "dropout_rate" in kwargs:
-            output_dropout = kwargs.pop("dropout_rate")
-        if "attention_dropout_rate" in kwargs:
-            attention_dropout = kwargs.pop("attention_dropout_rate")
         super().__init__(**kwargs)
 
-        activation = tf.keras.activations.get(inner_activation)
-        initializer = tf.keras.initializers.get(initializer)
+        activation = keras.activations.get(inner_activation)
+        initializer = keras.initializers.TruncatedNormal(
+            stddev=initializer_range
+        )
+        initializer = keras.initializers.get(initializer)
 
-        if embedding_width is None:
-            embedding_width = hidden_size
+        self._embedding_layer = OnDeviceEmbedding(
+            vocab_size=vocab_size,
+            embedding_width=hidden_size,
+            initializer=initializer,
+            name="word_embeddings",
+        )
 
-        if embedding_layer is None:
-            self._embedding_layer = layers.OnDeviceEmbedding(
-                vocab_size=vocab_size,
-                embedding_width=embedding_width,
-                initializer=initializer,
-                name="word_embeddings",
-            )
-        else:
-            self._embedding_layer = embedding_layer
-
-        self._position_embedding_layer = layers.PositionEmbedding(
+        self._position_embedding_layer = PositionEmbedding(
             initializer=initializer,
             max_length=max_sequence_length,
             name="position_embedding",
         )
 
-        self._type_embedding_layer = layers.OnDeviceEmbedding(
+        self._type_embedding_layer = OnDeviceEmbedding(
             vocab_size=type_vocab_size,
-            embedding_width=embedding_width,
+            embedding_width=hidden_size,
             initializer=initializer,
             use_one_hot=True,
             name="type_embeddings",
         )
 
-        self._embedding_norm_layer = tf.keras.layers.LayerNormalization(
+        self._embedding_norm_layer = keras.layers.LayerNormalization(
             name="embeddings/layer_norm",
             axis=-1,
             epsilon=1e-12,
             dtype=tf.float32,
         )
 
-        self._embedding_dropout = tf.keras.layers.Dropout(
-            rate=output_dropout, name="embedding_dropout"
+        self._embedding_dropout = keras.layers.Dropout(
+            rate=hidden_dropout, name="embedding_dropout"
         )
 
-        # We project the 'embedding' output to 'hidden_size' if it is not
-        # already 'hidden_size'.
-        self._embedding_projection = None
-        if embedding_width != hidden_size:
-            self._embedding_projection = (
-                tf.keras.layers.experimental.EinsumDense(
-                    "...x,xy->...y",
-                    output_shape=hidden_size,
-                    bias_axes="y",
-                    kernel_initializer=initializer,
-                    name="embedding_projection",
-                )
-            )
-
         self._transformer_layers = []
-        self._attention_mask_layer = layers.SelfAttentionMask(
+        self._attention_mask_layer = SelfAttentionMask(
             name="self_attention_mask"
         )
         for i in range(num_layers):
-            layer = layers.TransformerEncoderBlock(
+            layer = TransformerEncoderBlock(
                 num_attention_heads=num_attention_heads,
-                inner_dim=inner_dim,
+                inner_size=inner_size,
                 inner_activation=inner_activation,
-                output_dropout=output_dropout,
+                hidden_dropout=hidden_dropout,
                 attention_dropout=attention_dropout,
                 norm_first=norm_first,
-                output_range=output_range if i == num_layers - 1 else None,
                 kernel_initializer=initializer,
                 name="transformer/layer_%d" % i,
             )
             self._transformer_layers.append(layer)
 
-        self._pooler_layer = tf.keras.layers.Dense(
+        self._pooler_layer = keras.layers.Dense(
             units=hidden_size,
             activation="tanh",
             kernel_initializer=initializer,
@@ -705,68 +654,35 @@ class BertEncoderV2(tf.keras.layers.Layer):
             "num_attention_heads": num_attention_heads,
             "max_sequence_length": max_sequence_length,
             "type_vocab_size": type_vocab_size,
-            "inner_dim": inner_dim,
-            "inner_activation": tf.keras.activations.serialize(activation),
-            "output_dropout": output_dropout,
+            "inner_size": inner_size,
+            "inner_activation": keras.activations.serialize(activation),
+            "hidden_dropout": hidden_dropout,
             "attention_dropout": attention_dropout,
-            "initializer": tf.keras.initializers.serialize(initializer),
-            "output_range": output_range,
-            "embedding_width": embedding_width,
-            "embedding_layer": embedding_layer,
+            "initializer_range": initializer_range,
             "norm_first": norm_first,
-            "with_dense_inputs": with_dense_inputs,
         }
-        if with_dense_inputs:
-            self.inputs = dict(
-                input_word_ids=tf.keras.Input(shape=(None,), dtype=tf.int32),
-                input_mask=tf.keras.Input(shape=(None,), dtype=tf.int32),
-                input_type_ids=tf.keras.Input(shape=(None,), dtype=tf.int32),
-                dense_inputs=tf.keras.Input(
-                    shape=(None, embedding_width), dtype=tf.float32
-                ),
-                dense_mask=tf.keras.Input(shape=(None,), dtype=tf.int32),
-                dense_type_ids=tf.keras.Input(shape=(None,), dtype=tf.int32),
-            )
-        else:
-            self.inputs = dict(
-                input_word_ids=tf.keras.Input(shape=(None,), dtype=tf.int32),
-                input_mask=tf.keras.Input(shape=(None,), dtype=tf.int32),
-                input_type_ids=tf.keras.Input(shape=(None,), dtype=tf.int32),
-            )
+        self.inputs = dict(
+            input_ids=keras.Input(shape=(None,), dtype=tf.int32),
+            input_mask=keras.Input(shape=(None,), dtype=tf.int32),
+            segment_ids=keras.Input(shape=(None,), dtype=tf.int32),
+        )
 
     def call(self, inputs):
         word_embeddings = None
         if isinstance(inputs, dict):
-            word_ids = inputs.get("input_word_ids")
+            word_ids = inputs.get("input_ids")
             mask = inputs.get("input_mask")
-            type_ids = inputs.get("input_type_ids")
-            word_embeddings = inputs.get("input_word_embeddings", None)
-
-            dense_inputs = inputs.get("dense_inputs", None)
-            dense_mask = inputs.get("dense_mask", None)
-            dense_type_ids = inputs.get("dense_type_ids", None)
+            type_ids = inputs.get("segment_ids")
         else:
             raise ValueError("Unexpected inputs type to %s." % self.__class__)
 
-        if word_embeddings is None:
-            word_embeddings = self._embedding_layer(word_ids)
-
-        if dense_inputs is not None:
-            # Concat the dense embeddings at sequence end.
-            word_embeddings = tf.concat([word_embeddings, dense_inputs], axis=1)
-            type_ids = tf.concat([type_ids, dense_type_ids], axis=1)
-            mask = tf.concat([mask, dense_mask], axis=1)
-
-        # absolute position embeddings.
+        word_embeddings = self._embedding_layer(word_ids)
         position_embeddings = self._position_embedding_layer(word_embeddings)
         type_embeddings = self._type_embedding_layer(type_ids)
 
         embeddings = word_embeddings + position_embeddings + type_embeddings
         embeddings = self._embedding_norm_layer(embeddings)
         embeddings = self._embedding_dropout(embeddings)
-
-        if self._embedding_projection is not None:
-            embeddings = self._embedding_projection(embeddings)
 
         attention_mask = self._attention_mask_layer(embeddings, mask)
 
@@ -781,7 +697,7 @@ class BertEncoderV2(tf.keras.layers.Layer):
         pooled_output = self._pooler_layer(first_token_tensor)
 
         return dict(
-            sequence_output=encoder_outputs[-1],
+            sequence_output=last_encoder_output,
             pooled_output=pooled_output,
             encoder_outputs=encoder_outputs,
         )
@@ -789,36 +705,5 @@ class BertEncoderV2(tf.keras.layers.Layer):
     def get_embedding_table(self):
         return self._embedding_layer.embeddings
 
-    def get_embedding_layer(self):
-        return self._embedding_layer
-
     def get_config(self):
         return dict(self._config)
-
-    @property
-    def transformer_layers(self):
-        """List of Transformer layers in the encoder."""
-        return self._transformer_layers
-
-    @property
-    def pooler_layer(self):
-        """The pooler dense layer after the transformer layers."""
-        return self._pooler_layer
-
-    @classmethod
-    def from_config(cls, config, custom_objects=None):
-        if (
-            "embedding_layer" in config
-            and config["embedding_layer"] is not None
-        ):
-            warn_string = (
-                "You are reloading a model that was saved with a "
-                "potentially-shared embedding layer object. If you contine to "
-                "train this model, the embedding layer will no longer be "
-                "shared. To work around this, load the model outside of the "
-                "Keras API."
-            )
-            print("WARNING: " + warn_string)
-            logging.warn(warn_string)
-
-        return cls(**config)
