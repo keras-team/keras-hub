@@ -20,46 +20,24 @@ import tensorflow as tf
 from tensorflow import keras
 
 
-class SelfAttentionMask(keras.layers.Layer):
-    """Create 3D attention mask from a 2D tensor mask.
+def make_attention_mask(inputs, mask):
+    """Make a 3D attention mask from a 2D input mask.
 
-    inputs[0]: from_tensor: 2D or 3D Tensor of shape
-        [batch_size, from_seq_length, ...].
-    inputs[1]: to_mask: int32 Tensor of shape [batch_size, to_seq_length].
+    Given `inputs` with shape `[batch, from_seq_length, ...]` and a mask with
+    shape `[batch_size, to_seq_length]`, this will output a mask with dtype
+    matching `inputs` with shape `[batch, from_seq_length, to_seq_length]`.
 
-    Returns:
-        float Tensor of shape [batch_size, from_seq_length, to_seq_length].
+    Args:
+        inputs: The inputs to the attention layer.
+        mask: The 2D input mask.
     """
-
-    def call(self, inputs, to_mask=None):
-        if isinstance(inputs, list) and to_mask is None:
-            to_mask = inputs[1]
-            inputs = inputs[0]
-        from_shape = tf.shape(inputs)
-        batch_size = from_shape[0]
-        from_seq_length = from_shape[1]
-
-        to_shape = tf.shape(to_mask)
-        to_seq_length = to_shape[1]
-
-        to_mask = tf.cast(
-            tf.reshape(to_mask, [batch_size, 1, to_seq_length]),
-            dtype=inputs.dtype,
-        )
-
-        # We don't assume that `from_tensor` is a mask (although it could be).
-        # We don't actually care if we attend *from* padding tokens (only *to*
-        # padding) tokens so we create a tensor of all ones.
-        #
-        # `broadcast_ones` = [batch_size, from_seq_length, 1]
-        broadcast_ones = tf.ones(
-            shape=[batch_size, from_seq_length, 1], dtype=inputs.dtype
-        )
-
-        # Here we broadcast along two dimensions to create the mask.
-        mask = broadcast_ones * to_mask
-
-        return mask
+    inputs_shape = tf.shape(inputs)
+    batch_size = inputs_shape[0]
+    from_seq_length = inputs_shape[1]
+    to_seq_length = tf.shape(mask)[1]
+    mask = tf.reshape(mask, [batch_size, 1, to_seq_length])
+    mask = tf.cast(mask, dtype=inputs.dtype)
+    return tf.ones([batch_size, from_seq_length, 1], dtype=inputs.dtype) * mask
 
 
 class TransformerEncoderBlock(keras.layers.Layer):
@@ -132,7 +110,7 @@ class TransformerEncoderBlock(keras.layers.Layer):
         inner_dropout=0.0,
         attention_initializer=None,
         attention_axes=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
 
@@ -172,8 +150,7 @@ class TransformerEncoderBlock(keras.layers.Layer):
             input_tensor_shape = tf.TensorShape(input_shape[0])
         else:
             raise ValueError(
-                "The type of input shape argument is not supported, got: %s"
-                % type(input_shape)
+                f"Unknown input shape type. Received: {type(input_shape)}"
             )
         einsum_equation = "abc,cd->abd"
         if len(input_tensor_shape.as_list()) > 3:
@@ -181,8 +158,8 @@ class TransformerEncoderBlock(keras.layers.Layer):
         hidden_size = input_tensor_shape[-1]
         if hidden_size % self._num_heads != 0:
             raise ValueError(
-                "The input size (%d) is not a multiple of the number of "
-                "attention heads (%d)" % (hidden_size, self._num_heads)
+                f"The input size {hidden_size} is not a multiple of the number "
+                f"of attention heads {self._num_heads}"
             )
         self._attention_head_size = int(hidden_size // self._num_heads)
         common_kwargs = dict(
@@ -201,7 +178,7 @@ class TransformerEncoderBlock(keras.layers.Layer):
             kernel_initializer=self._attention_initializer,
             attention_axes=self._attention_axes,
             name="self_attention",
-            **common_kwargs
+            **common_kwargs,
         )
         self._attention_dropout = keras.layers.Dropout(
             rate=self._hidden_dropout
@@ -220,7 +197,7 @@ class TransformerEncoderBlock(keras.layers.Layer):
             bias_axes="d",
             kernel_initializer=self._kernel_initializer,
             name="intermediate",
-            **common_kwargs
+            **common_kwargs,
         )
         policy = keras.mixed_precision.global_policy()
         if policy.name == "mixed_bfloat16":
@@ -240,7 +217,7 @@ class TransformerEncoderBlock(keras.layers.Layer):
             bias_axes="d",
             name="output",
             kernel_initializer=self._kernel_initializer,
-            **common_kwargs
+            **common_kwargs,
         )
         self._hidden_dropout = keras.layers.Dropout(rate=self._hidden_dropout)
         # Use float32 in layernorm for numeric stability.
@@ -294,54 +271,38 @@ class TransformerEncoderBlock(keras.layers.Layer):
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-    def call(self, inputs):
+    def call(self, query, key_value=None, attention_mask=None):
         """Transformer self-attention encoder block call.
 
         Args:
-            inputs: a single tensor or a list of tensors.
-                `input tensor` as the single sequence of embeddings.
-                [`input tensor`, `attention mask`] to have the additional
-                attention mask.
-                [`query tensor`, `key value tensor`, `attention mask`] to have
-                separate input streams for the query, and key/value to the
-                multi-head attention.
+            query: The query for the multi-head attention layer.
+            key_value: Optional key/value tensor for multi-head attention. If
+                none supplied, the query will also be used.
+            attention_mask: Optional mask for the multi-head attention layer.
 
         Returns:
             An output tensor with the same dimensions as input/query tensor.
         """
-        if isinstance(inputs, (list, tuple)):
-            if len(inputs) == 2:
-                input_tensor, attention_mask = inputs
-                key_value = None
-            elif len(inputs) == 3:
-                input_tensor, key_value, attention_mask = inputs
-            else:
-                raise ValueError(
-                    "Unexpected inputs to %s with length at %d"
-                    % (self.__class__, len(inputs))
-                )
-        else:
-            input_tensor, key_value, attention_mask = (inputs, None, None)
-
         if self._output_range:
             if self._norm_first:
-                source_tensor = input_tensor[:, 0 : self._output_range, :]
-                input_tensor = self._attention_layer_norm(input_tensor)
+                source_tensor = query[:, 0 : self._output_range, :]
+                query = self._attention_layer_norm(query)
                 if key_value is not None:
                     key_value = self._attention_layer_norm(key_value)
-            target_tensor = input_tensor[:, 0 : self._output_range, :]
+            target_tensor = query[:, 0 : self._output_range, :]
             if attention_mask is not None:
                 attention_mask = attention_mask[:, 0 : self._output_range, :]
         else:
             if self._norm_first:
-                source_tensor = input_tensor
-                input_tensor = self._attention_layer_norm(input_tensor)
+                source_tensor = query
+                query = self._attention_layer_norm(query)
                 if key_value is not None:
                     key_value = self._attention_layer_norm(key_value)
-            target_tensor = input_tensor
+            target_tensor = query
 
         if key_value is None:
-            key_value = input_tensor
+            key_value = query
+        # TODO(mattdangerw): Use the build in masking mechanism.
         attention_output = self._attention_layer(
             query=target_tensor, value=key_value, attention_mask=attention_mask
         )
@@ -436,8 +397,10 @@ class PositionEmbedding(keras.layers.Layer):
         return tf.broadcast_to(position_embeddings, input_shape)
 
 
+# TODO(mattdangerw): This class is needed for TPU friendly embeddings, we should
+# remove it entirely and fix tf.keras.layers.Embedding as needed.
 class OnDeviceEmbedding(keras.layers.Layer):
-    """Performs an embedding lookup suitable for accelerator devices.
+    """Performs an embedding lookup suitable for TPU devices.
 
     This layer uses either tf.gather or tf.one_hot to translate integer indices
     to float embeddings.
@@ -463,7 +426,7 @@ class OnDeviceEmbedding(keras.layers.Layer):
         initializer="glorot_uniform",
         use_one_hot=False,
         scale_factor=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self._vocab_size = vocab_size
@@ -496,36 +459,20 @@ class OnDeviceEmbedding(keras.layers.Layer):
     def call(self, inputs):
         flat_inputs = tf.reshape(inputs, [-1])
         if self._use_one_hot:
-            dtype = self._compute_dtype
-            if not tf.dtypes.as_dtype(dtype).is_floating:
-                # TensorFlow 1 compatibility. In TF1, self._compute_dtype is
-                # int32 instead of a floating-point dtype, as the dtype is
-                # inferred from the dtype of the inputs
-                dtype = tf.float32
             one_hot_data = tf.one_hot(
-                flat_inputs, depth=self._vocab_size, dtype=dtype
+                flat_inputs, depth=self._vocab_size, dtype=self.compute_dtype
             )
             embeddings = tf.matmul(one_hot_data, self.embeddings)
         else:
             embeddings = tf.gather(self.embeddings, flat_inputs)
         embeddings = tf.reshape(
             embeddings,
-            # Work around b/142213824: prefer concat to shape over a Python
-            # list.
             tf.concat([tf.shape(inputs), [self._embedding_width]], axis=0),
         )
         embeddings.set_shape(inputs.shape.as_list() + [self._embedding_width])
         if self._scale_factor:
             embeddings *= self._scale_factor
         return embeddings
-
-    @property
-    def vocab_size(self):
-        return self._vocab_size
-
-    @property
-    def embedding_width(self):
-        return self._embedding_width
 
 
 class BertModel(keras.Model):
@@ -561,7 +508,8 @@ class BertModel(keras.Model):
             consume. If None, max_sequence_length uses the value from sequence
             length. This determines the variable shape for positional
             embeddings.
-        type_vocab_size: The number of types that the 'type_ids' input can take.
+        type_vocab_size: The number of types that the 'segment_ids' input can
+            take.
         norm_first: Whether to normalize inputs to attention and intermediate
             dense layers. If set False, output of attention and intermediate
             dense layers is normalized.
@@ -581,7 +529,7 @@ class BertModel(keras.Model):
         max_sequence_length=512,
         type_vocab_size=2,
         norm_first=False,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
 
@@ -624,9 +572,6 @@ class BertModel(keras.Model):
         )
 
         self._transformer_layers = []
-        self._attention_mask_layer = SelfAttentionMask(
-            name="self_attention_mask"
-        )
         for i in range(num_layers):
             layer = TransformerEncoderBlock(
                 num_attention_heads=num_attention_heads,
@@ -668,28 +613,28 @@ class BertModel(keras.Model):
         )
 
     def call(self, inputs):
-        word_embeddings = None
         if isinstance(inputs, dict):
-            word_ids = inputs.get("input_ids")
-            mask = inputs.get("input_mask")
-            type_ids = inputs.get("segment_ids")
+            input_ids = inputs.get("input_ids")
+            input_mask = inputs.get("input_mask")
+            segment_ids = inputs.get("segment_ids")
         else:
-            raise ValueError("Unexpected inputs type to %s." % self.__class__)
+            raise ValueError(f"Inputs should be a dict. Received: {inputs}.")
 
-        word_embeddings = self._embedding_layer(word_ids)
+        word_embeddings = None
+        word_embeddings = self._embedding_layer(input_ids)
         position_embeddings = self._position_embedding_layer(word_embeddings)
-        type_embeddings = self._type_embedding_layer(type_ids)
+        type_embeddings = self._type_embedding_layer(segment_ids)
 
         embeddings = word_embeddings + position_embeddings + type_embeddings
         embeddings = self._embedding_norm_layer(embeddings)
         embeddings = self._embedding_dropout(embeddings)
 
-        attention_mask = self._attention_mask_layer(embeddings, mask)
+        attention_mask = make_attention_mask(embeddings, input_mask)
 
         encoder_outputs = []
         x = embeddings
         for layer in self._transformer_layers:
-            x = layer([x, attention_mask])
+            x = layer(x, attention_mask=attention_mask)
             encoder_outputs.append(x)
 
         last_encoder_output = encoder_outputs[-1]
