@@ -238,6 +238,15 @@ class BertPretrainer(keras.Model):
         self.next_sentence_head = ClassificationHead(
             inner_dim=768, num_classes=2, dropout_rate=0.1
         )
+        self.loss_tracker = keras.metrics.Mean(name="loss")
+        self.lm_loss_tracker = keras.metrics.Mean(name="lm_loss")
+        self.nsp_loss_tracker = keras.metrics.Mean(name="nsp_loss")
+        self.lm_accuracy = keras.metrics.SparseCategoricalAccuracy(
+            name="lm_accuracy"
+        )
+        self.nsp_accuracy = keras.metrics.SparseCategoricalAccuracy(
+            name="nsp_accuracy"
+        )
 
     def call(self, data):
         outputs = self.bert_model(
@@ -275,7 +284,14 @@ class BertPretrainer(keras.Model):
         gradients = tape.gradient(loss, trainable_vars)
         # Update weights
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-        return {"total_loss": loss, "lm_loss": lm_loss, "nsp_loss": nsp_loss}
+
+        # Update metrics
+        self.loss_tracker.update_state(loss)
+        self.lm_loss_tracker.update_state(lm_loss)
+        self.nsp_loss_tracker.update_state(nsp_loss)
+        self.lm_accuracy.update_state(data["masked_lm_ids"], lm_preds)
+        self.nsp_accuracy.update_state(data["next_sentence_labels"], nsp_preds)
+        return {m.name: m.result() for m in self.metrics}
 
 
 def decode_record(record):
