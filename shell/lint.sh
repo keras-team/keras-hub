@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-base_dir=$(dirname $(dirname $(readlink -f $0)))
+base_dir=$(dirname $(dirname $0))
 
 isort --sl -c "${base_dir}"
 if ! [ $? -eq 0 ]; then
