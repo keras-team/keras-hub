@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-base_dir=$(dirname $(dirname $(readlink -f $0)))
+base_dir=$(dirname $(dirname $0))
 
 isort --sl ${base_dir}
 black --line-length 80 ${base_dir}
