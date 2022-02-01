@@ -1,0 +1,11 @@
+{
+  "num_layers": 8,
+  "hidden_size": 512,
+  "hidden_dropout": 0.1,
+  "num_attention_heads": 8,
+  "attention_dropout": 0.1,
+  "inner_size": 2048,
+  "inner_activation": "gelu",
+  "initializer_range": 0.02,
+  "max_sequence_length": 512
+}

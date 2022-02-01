@@ -26,10 +26,13 @@ setup(
     author="Keras team",
     author_email="keras-nlp@google.com",
     license="Apache License 2.0",
-    # tensorflow isn't a dependency because it would force the
-    # download of the gpu version or the cpu version.
-    # users should install it manually.
-    install_requires=["packaging", "tensorflow", "numpy"],
+    install_requires=[
+        "absl-py",
+        "numpy",
+        "packaging",
+        "tensorflow",
+        "tensorflow_text",
+    ],
     extras_require={
         "tests": [
             "black",
@@ -37,6 +40,10 @@ setup(
             "isort",
             "pytest",
             "pytest-cov",
+        ],
+        "examples": [
+            "nltk",
+            "wikiextractor",
         ],
     },
     classifiers=[
