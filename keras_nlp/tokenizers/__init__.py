@@ -13,3 +13,4 @@
 # limitations under the License.
 
 from keras_nlp.tokenizers.tokenizer import Tokenizer
+from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
