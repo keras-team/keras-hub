@@ -14,23 +14,23 @@
 """Tests for Transformer Decoder."""
 
 import os
-import tempfile
 
 import tensorflow as tf
+from tensorflow import keras
 
 from keras_nlp.layers import transformer_decoder
 
 
 class TransformerDecoderTest(tf.test.TestCase):
     def test_valid_call(self):
-        encoder_input = tf.keras.Input(shape=[4, 6])
-        decoder_input = tf.keras.Input(shape=[4, 6])
+        encoder_input = keras.Input(shape=[4, 6])
+        decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
         )
         output = decoder(encoder_input, decoder_input)
-        model = tf.keras.Model(
+        model = keras.Model(
             inputs=[decoder_input, encoder_input],
             outputs=output,
         )
@@ -79,13 +79,13 @@ class TransformerDecoderTest(tf.test.TestCase):
         )
 
     def test_one_training_step_of_transformer_encoder(self):
-        class MyModel(tf.keras.Model):
+        class MyModel(keras.Model):
             def __init__(self):
                 super(MyModel, self).__init__()
                 self._decoder = transformer_decoder.TransformerDecoder(
                     intermediate_dim=4, num_heads=2
                 )
-                self._dense = tf.keras.layers.Dense(1, activation="sigmoid")
+                self._dense = keras.layers.Dense(1, activation="sigmoid")
 
             def call(self, decoder_input, encoder_output):
                 x = self._decoder(decoder_input, encoder_output)
@@ -97,8 +97,8 @@ class TransformerDecoderTest(tf.test.TestCase):
         encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         label = tf.cast(decoder_sequence[:, :, 0] >= 0.5, dtype=tf.int32)
 
-        loss_fn = tf.keras.losses.BinaryCrossentropy(from_logits=False)
-        optimizer = tf.keras.optimizers.Adam()
+        loss_fn = keras.losses.BinaryCrossentropy(from_logits=False)
+        optimizer = keras.optimizers.Adam()
         with tf.GradientTape() as tape:
             pred = model(decoder_sequence, encoder_sequence)
             loss = loss_fn(label, pred)
@@ -129,7 +129,7 @@ class TransformerDecoderTest(tf.test.TestCase):
         )
         checkpoint = tf.train.Checkpoint(decoder1)
         checkpoint2 = tf.train.Checkpoint(decoder2)
-        temp_dir = tempfile.mkdtemp()
+        temp_dir = self.get_temp_dir()
         save_path = checkpoint.save(temp_dir)
         checkpoint2.restore(save_path)
 
@@ -141,23 +141,23 @@ class TransformerDecoderTest(tf.test.TestCase):
         self.assertAllClose(decoder1_output, decoder2_output)
 
     def test_save_model(self):
-        encoder_input = tf.keras.Input(shape=[4, 6])
-        decoder_input = tf.keras.Input(shape=[4, 6])
+        encoder_input = keras.Input(shape=[4, 6])
+        decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
         )
         output = decoder(encoder_input, decoder_input)
-        model = tf.keras.Model(
+        model = keras.Model(
             inputs=[decoder_input, encoder_input],
             outputs=output,
         )
         encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model([encoder_sequence, decoder_sequence])
-        path = os.path.join(tempfile.mkdtemp(), "model")
+        path = os.path.join(self.get_temp_dir(), "model")
         model.save(path)
-        loaded_model = tf.keras.models.load_model(path)
+        loaded_model = keras.models.load_model(path)
 
         model_output = model([decoder_sequence, encoder_sequence])
         loaded_model_output = loaded_model([decoder_sequence, encoder_sequence])
