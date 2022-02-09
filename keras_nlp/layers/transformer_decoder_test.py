@@ -14,7 +14,6 @@
 """Tests for Transformer Decoder."""
 
 import os
-import tempfile
 
 import tensorflow as tf
 
@@ -129,7 +128,7 @@ class TransformerDecoderTest(tf.test.TestCase):
         )
         checkpoint = tf.train.Checkpoint(decoder1)
         checkpoint2 = tf.train.Checkpoint(decoder2)
-        temp_dir = tempfile.mkdtemp()
+        temp_dir = self.get_temp_dir()
         save_path = checkpoint.save(temp_dir)
         checkpoint2.restore(save_path)
 
@@ -155,7 +154,7 @@ class TransformerDecoderTest(tf.test.TestCase):
         encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model([encoder_sequence, decoder_sequence])
-        path = os.path.join(tempfile.mkdtemp(), "model")
+        path = os.path.join(self.get_temp_dir(), "model")
         model.save(path)
         loaded_model = tf.keras.models.load_model(path)
 
