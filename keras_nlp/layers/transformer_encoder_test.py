@@ -16,6 +16,7 @@
 import os
 
 import tensorflow as tf
+from tensorflow import keras
 
 from keras_nlp.layers import transformer_encoder
 
@@ -26,9 +27,9 @@ class TransformerEncoderTest(tf.test.TestCase):
             intermediate_dim=4,
             num_heads=2,
         )
-        model = tf.keras.Sequential(
+        model = keras.Sequential(
             [
-                tf.keras.Input(shape=(4, 6)),
+                keras.Input(shape=(4, 6)),
                 encoder,
             ]
         )
@@ -72,16 +73,16 @@ class TransformerEncoderTest(tf.test.TestCase):
             intermediate_dim=4,
             num_heads=2,
         )
-        inputs = tf.keras.Input(shape=(4, 6))
+        inputs = keras.Input(shape=(4, 6))
         x = encoder(inputs)
-        x = tf.keras.layers.Dense(1, activation="sigmoid")(x)
-        model = tf.keras.Model(inputs=inputs, outputs=x)
+        x = keras.layers.Dense(1, activation="sigmoid")(x)
+        model = keras.Model(inputs=inputs, outputs=x)
 
         data = tf.random.uniform(shape=[2, 4, 6])
         label = tf.cast(data[:, :, 0] >= 0.5, dtype=tf.int32)
 
-        loss_fn = tf.keras.losses.BinaryCrossentropy(from_logits=False)
-        optimizer = tf.keras.optimizers.Adam()
+        loss_fn = keras.losses.BinaryCrossentropy(from_logits=False)
+        optimizer = keras.optimizers.Adam()
         with tf.GradientTape() as tape:
             pred = model(data)
             loss = loss_fn(label, pred)
@@ -120,9 +121,9 @@ class TransformerEncoderTest(tf.test.TestCase):
         self.assertAllClose(encoder1_output, encoder2_output)
 
     def test_save_model(self):
-        model = tf.keras.Sequential(
+        model = keras.Sequential(
             [
-                tf.keras.Input(shape=(4, 6)),
+                keras.Input(shape=(4, 6)),
                 transformer_encoder.TransformerEncoder(
                     intermediate_dim=4,
                     num_heads=2,
@@ -133,7 +134,7 @@ class TransformerEncoderTest(tf.test.TestCase):
         model(data)
         path = os.path.join(self.get_temp_dir(), "model")
         model.save(path)
-        loaded_model = tf.keras.models.load_model(path)
+        loaded_model = keras.models.load_model(path)
 
         model_output = model(data)
         loaded_model_output = loaded_model(data)
