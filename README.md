@@ -1,4 +1,8 @@
 # KerasNLP
+[![](https://github.com/keras-team/keras-nlp/workflows/Tests/badge.svg?branch=master)](https://github.com/keras-team/keras-nlp/actions?query=workflow%3ATests+branch%3Amaster)
+![Python](https://img.shields.io/badge/python-v3.7.0+-success.svg)
+![Tensorflow](https://img.shields.io/badge/tensorflow-v2.5.0+-success.svg)
+[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-nlp/issues)
 
 KerasNLP is a repository of modular building blocks (layers, metrics, losses).
 Engineers working with applied natural language processing can leverage it to
