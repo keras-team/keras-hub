@@ -122,6 +122,7 @@ def process_file(filename):
 
 
 def main(_):
+    nltk.download("punkt")
     print(f"Reading input data from {FLAGS.input_files}")
     input_filenames = list_filenames_for_arg(FLAGS.input_files)
     if not input_filenames:
