@@ -87,7 +87,7 @@ class TransformerEncoderTest(tf.test.TestCase):
             pred = model(data)
             loss = loss_fn(label, pred)
         grad = tape.gradient(loss, model.trainable_variables)
-        self.assertTrue(len(grad) > 1)
+        self.assertGreater(len(grad), 1)
         optimizer.apply_gradients(zip(grad, model.trainable_variables))
 
     def test_checkpointing_transformer_encoder(self):
