@@ -82,17 +82,17 @@ class WordPieceTokenizerTest(tf.test.TestCase):
             tf.ragged.constant([["qu", "@@ick", "br", "@@own", "@UNK@"]]),
         )
 
-    def test_lower_case(self):
+    def test_lowercase(self):
         input_data = ["the QUicK brOWN FOX"]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
         tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6]])
 
-    def test_skip_lower_case(self):
+    def test_skip_lowercase(self):
         input_data = ["the QUicK brOWN FOX"]
         vocab_data = ["[UNK]", "the", "QU", "##icK", "br", "##OWN", "fox"]
-        tokenizer = WordPieceTokenizer(vocabulary=vocab_data, lower_case=False)
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data, lowercase=False)
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 0]])
 
@@ -142,7 +142,7 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         vocab_data = ["[UNK]", "the", "qu", "##íck", "Br", "##ówn", "Fóx"]
         tokenizer = WordPieceTokenizer(
             vocabulary=vocab_data,
-            lower_case=False,
+            lowercase=False,
             strip_accents=False,
             split_pattern=None,
         )
@@ -175,7 +175,7 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]
         original_tokenizer = WordPieceTokenizer(
             vocabulary=vocab_data,
-            lower_case=False,
+            lowercase=False,
             oov_token="@UNK@",
             suffix_indicator="@@",
             dtype="string",
@@ -193,7 +193,7 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]
         tokenizer = WordPieceTokenizer(
             vocabulary=vocab_data,
-            lower_case=False,
+            lowercase=False,
             oov_token="@UNK@",
             suffix_indicator="@@",
             dtype="string",
