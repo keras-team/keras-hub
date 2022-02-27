@@ -80,7 +80,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     If a more custom pre-tokenization step is desired, the layer can be
     configured to apply only the strict WordPiece algorithm by passing
-    `lower_case=False`, `strip_accents=False` and `split_pattern=None`. In
+    `lowercase=False`, `strip_accents=False` and `split_pattern=None`. In
     this case, inputs should be pre-split string tensors or ragged tensors.
 
     By default, the layer will output a `tf.RaggedTensor` where the last
@@ -97,7 +97,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             plain text file containing a single word piece token per line.
         sequence_length: If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of sequence_length.
-        lower_case: If true, the input text will be first lowered before
+        lowercase: If true, the input text will be first lowered before
             tokenization.
         strip_accents: If true, all accent marks will be removed from text
             before tokenization.
@@ -166,7 +166,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self,
         vocabulary: Union[Iterable[str], str] = None,
         sequence_length: int = None,
-        lower_case: bool = True,
+        lowercase: bool = True,
         strip_accents: bool = True,
         split_pattern: str = WHITESPACE_AND_PUNCTUATION_REGEX,
         keep_pattern: str = PUNCTUATION_REGEX,
@@ -201,7 +201,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             )
 
         self._sequence_length = sequence_length
-        self._lower_case = lower_case
+        self._lowercase = lowercase
         self._strip_accents = strip_accents
         self._split_pattern = split_pattern
         self._keep_pattern = keep_pattern
@@ -234,7 +234,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 # currently, so we save the vocabulary in the config.
                 "vocabulary": self._vocab,
                 "sequence_length": self._sequence_length,
-                "lower_case": self._lower_case,
+                "lowercase": self._lowercase,
                 "strip_accents": self._strip_accents,
                 "split_pattern": self._split_pattern,
                 "keep_pattern": self._keep_pattern,
@@ -246,7 +246,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def tokenize(self, inputs: tf.Tensor) -> tf.Tensor:
         # Optionally normalize and split inputs.
-        if self._lower_case:
+        if self._lowercase:
             inputs = tf_text.case_fold_utf8(inputs)
         if self._strip_accents:
             # Normalize unicode to NFD, which splits out accent mark characters.

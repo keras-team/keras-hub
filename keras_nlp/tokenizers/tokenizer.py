@@ -20,14 +20,14 @@ class Tokenizer(keras.layers.Layer):
     """A base class for tokenizer layers.
 
     The class is intended as a base class when implementing a tokenizer as a
-    `keras.layers.Layer`. It contains two new methods `tokenize` and
-    `detokenize`.
+    `keras.layers.Layer`. It contains two new methods `tokenize()` and
+    `detokenize()`.
 
     Subclassers should always implement the `tokenize` method, which will also
     also be the default when invoking the layer directly on inputs
 
     If a layer does not support detokenization (the tokenization step is not
-    reversible), the `detokenize` method can be skipped.
+    reversible), the `detokenize()` method can be skipped.
 
     Examples:
 
@@ -62,9 +62,9 @@ class Tokenizer(keras.layers.Layer):
             **kwargs: Additional keyword arguments.
         """
         raise NotImplementedError(
-            "No implementation of `tokenize` was found for "
+            "No implementation of `tokenize()` was found for "
             f"{self.__class__.__name__}. All tokenizers should implement "
-            "`tokenize`."
+            "`tokenize()`."
         )
 
     def detokenize(self, inputs: tf.Tensor, *args, **kwargs) -> tf.Tensor:
@@ -76,7 +76,7 @@ class Tokenizer(keras.layers.Layer):
             **kwargs: Additional keyword arguments.
         """
         raise NotImplementedError(
-            "No implementation of `detokenize` was found for "
+            "No implementation of `detokenize()` was found for "
             f"{self.__class__.__name__}."
         )
 
