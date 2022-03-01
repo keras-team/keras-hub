@@ -60,7 +60,7 @@ def merge_padding_and_attention_mask(
             # mask from the input data.
             mask = inputs._keras_mask
         else:
-            logging.warnings.log(
+            logging.warning(
                 "You are explicitly setting `padding_mask` while the `inputs` "
                 "have built-in mask, so the built-in mask is ignored."
             )

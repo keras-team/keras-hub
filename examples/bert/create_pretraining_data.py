@@ -95,8 +95,7 @@ flags.DEFINE_float("masked_lm_prob", 0.15, "Masked LM probability.")
 flags.DEFINE_float(
     "short_seq_prob",
     0.1,
-    "Probability of creating sequences which are shorter than the "
-    "maximum length.",
+    "Probability of creating sequences which are shorter than the " "maximum length.",
 )
 
 
@@ -131,7 +130,6 @@ TrainingInstance = collections.namedtuple(
         "masked_lm_labels",
     ],
 )
-
 
 def write_instance_to_example_files(
     instances, vocab, max_seq_length, max_predictions_per_seq, output_filename
@@ -175,9 +173,7 @@ def write_instance_to_example_files(
         features["masked_lm_weights"] = float_feature(masked_lm_weights)
         features["next_sentence_labels"] = int_feature([next_sentence_label])
 
-        tf_example = tf.train.Example(
-            features=tf.train.Features(feature=features)
-        )
+        tf_example = tf.train.Example(features=tf.train.Features(feature=features))
 
         writer.write(tf_example.SerializeToString())
         total_written += 1
@@ -312,9 +308,7 @@ def create_instances_from_document(
                     # sure that the random document is not the same as the
                     # document we're processing.
                     for _ in range(10):
-                        random_document_index = rng.randint(
-                            0, len(all_documents) - 1
-                        )
+                        random_document_index = rng.randint(0, len(all_documents) - 1)
                         if random_document_index != document_index:
                             break
 
@@ -381,9 +375,7 @@ def create_instances_from_document(
     return instances
 
 
-MaskedLmInstance = collections.namedtuple(
-    "MaskedLmInstance", ["index", "label"]
-)
+MaskedLmInstance = collections.namedtuple("MaskedLmInstance", ["index", "label"])
 
 
 def create_masked_lm_predictions(
@@ -435,15 +427,11 @@ def create_masked_lm_predictions(
                     masked_token = tokens[index]
                 # 10% of the time, replace with random word
                 else:
-                    masked_token = vocab_words[
-                        rng.randint(0, len(vocab_words) - 1)
-                    ]
+                    masked_token = vocab_words[rng.randint(0, len(vocab_words) - 1)]
 
             output_tokens[index] = masked_token
 
-            masked_lms.append(
-                MaskedLmInstance(index=index, label=tokens[index])
-            )
+            masked_lms.append(MaskedLmInstance(index=index, label=tokens[index]))
     assert len(masked_lms) <= num_to_predict
     masked_lms = sorted(masked_lms, key=lambda x: x.index)
 
