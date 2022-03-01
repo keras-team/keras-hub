@@ -22,6 +22,7 @@ setup(
     description=(
         "Industry-strength Natural Language Processing extensions for Keras."
     ),
+    version="0.1.0",
     url="https://github.com/keras-team/keras-nlp",
     author="Keras team",
     author_email="keras-nlp@google.com",
