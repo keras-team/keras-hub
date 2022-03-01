@@ -256,10 +256,8 @@ class BertPretrainer(keras.Model):
                 "segment_ids": data["segment_ids"],
             }
         )
-        lm_preds = self.masked_lm_head(
-            outputs["sequence_output"], data["masked_lm_positions"]
-        )
-        nsp_preds = self.next_sentence_head(outputs["sequence_output"])
+        lm_preds = self.masked_lm_head(outputs, data["masked_lm_positions"])
+        nsp_preds = self.next_sentence_head(outputs)
         return lm_preds, nsp_preds
 
     def train_step(self, data):
