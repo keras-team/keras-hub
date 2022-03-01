@@ -44,6 +44,7 @@ setup(
         ],
         "examples": [
             "nltk",
+            "tensorflow_datasets",
             "wikiextractor",
         ],
     },
