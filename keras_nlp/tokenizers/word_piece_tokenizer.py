@@ -114,8 +114,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             must be included in the vocab.
 
     References:
-        [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)
-        [Song et al., 2020](https://arxiv.org/abs/2012.15524)
+        - [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)
+        - [Song et al., 2020](https://arxiv.org/abs/2012.15524)
 
     Examples:
 
