@@ -58,6 +58,12 @@ flags.DEFINE_bool(
     "models and False for cased models.",
 )
 
+flags.DEFINE_bool(
+    "do_evaluation",
+    True,
+    "Whether to run evaluation on the test set for a given task.",
+)
+
 flags.DEFINE_integer("batch_size", 32, "The batch size.")
 
 flags.DEFINE_integer("epochs", 3, "The number of training epochs.")
@@ -71,36 +77,12 @@ def bert_pack_inputs(
     start_of_sequence_id,
     end_of_segment_id,
     padding_id,
-    truncator="round_robin",
 ):
-    """Freestanding equivalent of the BertPackInputs layer."""
-    # Sanitize inputs.
-    if not isinstance(inputs, (list, tuple)):
-        inputs = [inputs]
-    if not inputs:
-        raise ValueError("At least one input is required for packing")
-    input_ranks = [rt.shape.rank for rt in inputs]
-    if None in input_ranks or len(set(input_ranks)) > 1:
-        raise ValueError(
-            "All inputs for packing must have the same known rank, "
-            "found ranks " + ",".join(input_ranks)
-        )
-    # Flatten inputs to [batch_size, (tokens)].
-    if input_ranks[0] > 2:
-        inputs = [rt.merge_dims(1, -1) for rt in inputs]
     # In case inputs weren't truncated (as they should have been),
     # fall back to some ad-hoc truncation.
-    num_special_tokens = len(inputs) + 1
-    if truncator == "round_robin":
-        trimmed_segments = tftext.RoundRobinTrimmer(
-            seq_length - num_special_tokens
-        ).trim(inputs)
-    elif truncator == "waterfall":
-        trimmed_segments = tftext.WaterfallTrimmer(
-            seq_length - num_special_tokens
-        ).trim(inputs)
-    else:
-        raise ValueError("Unsupported truncator: %s" % truncator)
+    trimmed_segments = tftext.RoundRobinTrimmer(
+        seq_length - len(inputs) - 1
+    ).trim(inputs)
     # Combine segments.
     segments_combined, segment_ids = tftext.combine_segments(
         trimmed_segments,
@@ -114,47 +96,24 @@ def bert_pack_inputs(
     input_type_ids, input_mask = tftext.pad_model_inputs(
         segment_ids, seq_length, pad_value=0
     )
-    # Work around broken shape inference.
-    output_shape = tf.stack(
-        [
-            inputs[0].nrows(out_type=tf.int32),  # batch_size
-            tf.cast(seq_length, dtype=tf.int32),
-        ]
-    )
-
-    def _reshape(t):
-        return tf.reshape(t, output_shape)
-
     # Assemble nest of input tensors as expected by BERT TransformerEncoder.
     return dict(
-        input_ids=_reshape(input_word_ids),
-        input_mask=_reshape(input_mask),
-        segment_ids=_reshape(input_type_ids),
+        input_ids=input_word_ids,
+        input_mask=input_mask,
+        segment_ids=input_type_ids,
     )
 
 
 def extract_features(inputs, task_name):
     """Transform tfds inputs to be an (features, labels) tuple."""
-    if task_name == "cola":
+    if task_name in ("cola", "sst2"):
         return (inputs["sentence"],), inputs["label"]
-    elif task_name == "sst2":
-        return (inputs["sentence"],), inputs["label"]
-    elif task_name == "mrpc":
+    elif task_name in ("mrpc", "qqp", "stsb", "rte", "wnli"):
         return (inputs["sentence1"], inputs["sentence2"]), inputs["label"]
-    elif task_name == "qqp":
-        return (inputs["question1"], inputs["question2"]), inputs["label"]
-    elif task_name == "stsb":
-        return (inputs["sentence1"], inputs["sentence2"]), inputs["label"]
-    elif task_name == "mnli":
+    elif task_name in ("ax", "mnli"):
         return (inputs["premise"], inputs["hypothesis"]), inputs["label"]
-    elif task_name == "qnli":
+    elif task_name in "qnli":
         return (inputs["question"], inputs["sentence"]), inputs["label"]
-    elif task_name == "rte":
-        return (inputs["sentence1"], inputs["sentence2"]), inputs["label"]
-    elif task_name == "wnli":
-        return (inputs["sentence1"], inputs["sentence2"]), inputs["label"]
-    elif task_name == "ax":
-        return (inputs["premise"], inputs["hypothesis"]), inputs["label"]
     else:
         raise ValueError(f"Unkown task_name {task_name}.")
 
@@ -203,7 +162,7 @@ def main(_):
 
     def preprocess_data(inputs):
         inputs, labels = extract_features(inputs, task_name=FLAGS.task_name)
-        inputs = [tokenizer.tokenize(x) for x in inputs]
+        inputs = [tokenizer.tokenize(x).merge_dims(1, -1) for x in inputs]
         inputs = bert_pack_inputs(
             inputs,
             bert_config["max_sequence_length"],
@@ -222,10 +181,10 @@ def main(_):
     train_ds = train_ds.map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
-    test_ds = test_ds.map(preprocess_data, num_parallel_calls=tf.data.AUTOTUNE)
     validation_ds = validation_ds.map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
+    test_ds = test_ds.map(preprocess_data, num_parallel_calls=tf.data.AUTOTUNE)
 
     num_classes = 3 if FLAGS.task_name in ("mnli", "ax") else 2
     finetuning_model = BertFinetuner(
@@ -239,7 +198,9 @@ def main(_):
     finetuning_model.fit(
         train_ds, epochs=FLAGS.epochs, validation_data=validation_ds
     )
-    finetuning_model.evaluate(test_ds)
+    if FLAGS.do_evaluation:
+        print("Evaluating on test set.")
+        finetuning_model.evaluate(test_ds)
 
     if FLAGS.saved_model_output:
         print(f"Saving to {FLAGS.saved_model_output}")
