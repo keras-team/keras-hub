@@ -244,7 +244,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         )
         return config
 
-    def tokenize(self, inputs: tf.Tensor) -> tf.Tensor:
+    def tokenize(self, inputs):
         # Optionally normalize and split inputs.
         if self._lowercase:
             inputs = tf_text.case_fold_utf8(inputs)
@@ -273,5 +273,5 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             tokens = tokens.to_tensor(shape=output_shape)
         return tokens
 
-    def detokenize(self, inputs: tf.Tensor) -> tf.Tensor:
+    def detokenize(self, inputs):
         return self._fast_word_piece.detokenize(inputs)
