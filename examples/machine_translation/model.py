@@ -29,7 +29,6 @@ class PositionalEmbedding(keras.layers.Layer):
         return tf.math.not_equal(inputs, 0)
 
 
-@keras.utils.register_keras_serializable()
 class TranslationModel(keras.Model):
     def __init__(
         self,
@@ -67,19 +66,15 @@ class TranslationModel(keras.Model):
         self.dense = keras.layers.Dense(
             embedding_params["vocab_size"], activation="softmax")
 
-    def call(self, inputs, encoder_input_tokenized=True, decoder_input_tokenized=True,):
+    def call(self, inputs):
         encoder_input, decoder_input = (
             inputs["encoder_inputs"],
             inputs["decoder_inputs"],
         )
-        if not encoder_input_tokenized:
-            encoder_input = self.encoder_tokenizer(encoder_input)
         encoded = self.encoder_embedding(encoder_input)
         for encoder in self.encoders:
             encoded = encoder(encoded)
 
-        if not decoder_input_tokenized:
-            decoder_input = self.decoder_tokenizer(decoder_input)
         decoded = self.decoder_embedding(decoder_input)
         for decoder in self.decoders:
             decoded = decoder(

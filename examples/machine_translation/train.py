@@ -83,6 +83,7 @@ def main(_):
         eng_tokenizer,
         spa_tokenizer,
     ) = get_dataset_and_tokenizer(SEQUENCE_LENGTH, VOCAB_SIZE)
+
     model = TranslationModel(
         num_encoders=2,
         num_decoders=2,
