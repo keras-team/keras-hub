@@ -18,7 +18,6 @@ import string
 
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import TextVectorization
 
 
 def download_data():
@@ -49,8 +48,9 @@ def split_train_val_test(text_pairs):
     num_val_samples = int(0.15 * len(text_pairs))
     num_train_samples = len(text_pairs) - 2 * num_val_samples
     train_pairs = text_pairs[:num_train_samples]
-    val_pairs = text_pairs[num_train_samples : num_train_samples + num_val_samples]
-    test_pairs = text_pairs[num_train_samples + num_val_samples :]
+    val_end_index = num_train_samples + num_val_samples
+    val_pairs = text_pairs[num_train_samples:val_end_index]
+    test_pairs = text_pairs[val_end_index:]
     return train_pairs, val_pairs, test_pairs
 
 
@@ -70,24 +70,26 @@ def custom_standardization(input_string):
 
 
 def prepare_tokenizer(train_pairs, sequence_length, vocab_size):
-    eng_tokenizer = TextVectorization(
+    """Preapare English and Spanish tokenizer."""
+    eng_tokenizer = keras.layers.TextVectorization(
         max_tokens=vocab_size,
         output_mode="int",
         output_sequence_length=sequence_length,
     )
-    spa_tokenizer = TextVectorization(
+    spa_tokenizer = keras.layers.TextVectorization(
         max_tokens=vocab_size,
         output_mode="int",
         output_sequence_length=sequence_length + 1,
         standardize=custom_standardization,
     )
     eng_texts, spa_texts = zip(*train_pairs)
-    eng_tokenizer.adapt(eng_texts[:100])
-    spa_tokenizer.adapt(spa_texts[:100])
+    eng_tokenizer.adapt(eng_texts)
+    spa_tokenizer.adapt(spa_texts)
     return eng_tokenizer, spa_tokenizer
 
 
 def prepare_datasets(text_pairs, batch_size, eng_tokenizer, spa_tokenizer):
+    """Transform raw text pairs to tf datasets."""
     eng_texts, spa_texts = zip(*text_pairs)
     eng_texts = list(eng_texts)
     spa_texts = list(spa_texts)

@@ -19,8 +19,10 @@ from keras_nlp.layers import TransformerEncoder
 
 
 class PositionalEmbedding(keras.layers.Layer):
+    """The positional embedding class."""
+
     def __init__(self, sequence_length, vocab_size, embed_dim, **kwargs):
-        super(PositionalEmbedding, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.token_embeddings = keras.layers.Embedding(
             input_dim=vocab_size, output_dim=embed_dim
         )
@@ -59,11 +61,12 @@ class TranslationModel(keras.Model):
         num_decoders,
         num_heads,
         transformer_intermediate_dim,
-        vocab_size,
+        encoder_vocab_size,
+        decoder_vocab_size,
         embed_dim,
         sequence_length,
     ):
-        super(TranslationModel, self).__init__()
+        super().__init__()
         self.encoders = []
         self.decoders = []
         for _ in range(num_encoders):
@@ -86,19 +89,17 @@ class TranslationModel(keras.Model):
 
         self.encoder_embedding = PositionalEmbedding(
             sequence_length=sequence_length,
-            vocab_size=vocab_size,
+            vocab_size=encoder_vocab_size,
             embed_dim=embed_dim,
         )
 
         self.decoder_embedding = PositionalEmbedding(
             sequence_length=sequence_length,
-            vocab_size=vocab_size,
+            vocab_size=decoder_vocab_size,
             embed_dim=embed_dim,
         )
 
-        self.dense = keras.layers.Dense(
-            vocab_size, activation="softmax"
-        )
+        self.dense = keras.layers.Dense(decoder_vocab_size, activation="softmax")
 
     def call(self, inputs):
         encoder_input, decoder_input = (

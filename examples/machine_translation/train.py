@@ -50,7 +50,7 @@ flags.DEFINE_integer(
 )
 
 flags.DEFINE_string(
-    "saved_model_output",
+    "saved_model_path",
     "saved_models/machine_translation_model",
     "The path to saved model",
 )
@@ -58,7 +58,9 @@ flags.DEFINE_string(
 
 def train_loop(model, train_ds, val_ds):
     learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(
-        initial_learning_rate=FLAGS.learning_rate, decay_steps=20, decay_rate=0.98
+        initial_learning_rate=FLAGS.learning_rate,
+        decay_steps=20,
+        decay_rate=0.98,
     )
     optimizer = tf.keras.optimizers.Adam(learning_rate)
 
@@ -88,8 +90,7 @@ def train_loop(model, train_ds, val_ds):
             time.sleep(0.1)
             values = [("loss", loss), ("accuracy", metrics.result().numpy())]
             bar.update(i, values=values)
-            break
-
+            
         val_metrics.reset_state()
         for batch in val_ds:
             data, label = batch
@@ -110,7 +111,8 @@ def main(_):
     ) = get_dataset_and_tokenizer(
         FLAGS.sequence_length, FLAGS.vocab_size, FLAGS.batch_size
     )
-
+    english_vocab_size = eng_tokenizer.vocabulary_size()
+    spanish_vocab_size = spa_tokenizer.vocabulary_size()
     model = TranslationModel(
         encoder_tokenizer=eng_tokenizer,
         decoder_tokenizer=spa_tokenizer,
@@ -118,15 +120,18 @@ def main(_):
         num_decoders=FLAGS.num_decoders,
         num_heads=FLAGS.num_heads,
         transformer_intermediate_dim=FLAGS.intermediate_dim,
-        vocab_size=FLAGS.vocab_size,
+        encoder_vocab_size=english_vocab_size,
+        decoder_vocab_size=spanish_vocab_size,
         embed_dim=FLAGS.embed_dim,
         sequence_length=FLAGS.sequence_length,
     )
 
     train_loop(model, train_ds, val_ds)
 
-    print(f"Saving to {FLAGS.saved_model_output}")
-    model.save(FLAGS.saved_model_output)
+    print(f"Saving to {FLAGS.saved_model_path}")
+    model.save(FLAGS.saved_model_path)
+
+    print(f"Successfully saved model to {FLAGS.saved_model_path}")
 
 
 if __name__ == "__main__":
