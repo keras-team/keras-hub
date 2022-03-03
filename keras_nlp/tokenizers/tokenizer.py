@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tensorflow as tf
 from tensorflow import keras
 
 
@@ -33,10 +32,10 @@ class Tokenizer(keras.layers.Layer):
 
     ```python
     class WhitespaceTokenizer(keras_nlp.tokenizers.Tokenizer):
-        def tokenize(self, inputs: tf.Tensor) -> tf.Tensor:
+        def tokenize(self, inputs):
             return tf.strings.split(inputs).to_tensor()
 
-        def detokenizer(self, inputs: tf.Tensor) -> tf.Tensor:
+        def detokenizer(self, inputs):
             return tf.strings.reduce_join([inputs], separator=" ", axis=-1)
 
     tokenizer = WhitespaceTokenizer()
@@ -53,7 +52,7 @@ class Tokenizer(keras.layers.Layer):
         obj.detokenize = obj._detokenize_with_call
         return obj
 
-    def tokenize(self, inputs: tf.Tensor, *args, **kwargs) -> tf.Tensor:
+    def tokenize(self, inputs, *args, **kwargs):
         """Transform input tensors of strings into output tokens.
 
         Args:
@@ -67,7 +66,7 @@ class Tokenizer(keras.layers.Layer):
             "`tokenize()`."
         )
 
-    def detokenize(self, inputs: tf.Tensor, *args, **kwargs) -> tf.Tensor:
+    def detokenize(self, inputs, *args, **kwargs):
         """Transform tokens back into strings.
 
         Args:
