@@ -142,7 +142,7 @@ class ClassificationHead(tf.keras.layers.Layer):
         return config
 
 
-class MaskedLM(keras.layers.Layer):
+class MaskedLMHead(keras.layers.Layer):
     """Masked language model network head for BERT.
 
     This layer implements a masked language model based on the provided
@@ -152,7 +152,7 @@ class MaskedLM(keras.layers.Layer):
     Example:
     ```python
     encoder=modeling.networks.BertEncoder(...)
-    lm_layer=MaskedLM(embedding_table=encoder.get_embedding_table())
+    lm_layer=MaskedLMHead(embedding_table=encoder.get_embedding_table())
     ```
 
     Args:
@@ -234,7 +234,7 @@ class BertPretrainer(keras.Model):
     def __init__(self, bert_model, **kwargs):
         super().__init__(**kwargs)
         self.bert_model = bert_model
-        self.masked_lm_head = MaskedLM(bert_model.get_embedding_table())
+        self.masked_lm_head = MaskedLMHead(bert_model.get_embedding_table())
         self.next_sentence_head = ClassificationHead(
             inner_dim=768, num_classes=2, dropout_rate=0.1
         )
