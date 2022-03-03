@@ -1,15 +1,18 @@
-name: Test TF Nightly
+name: Test Nightly
 
 on:
+  push:
+  pull_request:
   schedule:
     - cron: '0 0 * * *'
-  push:
-    branches: [ master ]
 
 jobs:
   build:
     name: Run tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python 3.7
@@ -33,7 +36,9 @@ jobs:
           pip install -e ".[tests]" --progress-bar off --upgrade
           pip uninstall keras -y
           pip uninstall tensorflow -y
+          pip uninstall tensorflow_text -y
           pip install tf-nightly --progress-bar off --upgrade
+          pip install tensorflow-text-nightly --progress-bar off --upgrade
       - name: Test with pytest
         run: |
           pytest --cov=keras_nlp --cov-report xml:coverage.xml
