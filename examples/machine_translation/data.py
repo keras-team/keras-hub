@@ -43,6 +43,7 @@ def prepare_tokenizer(train_pairs, sequence_length, vocab_size):
     strip_chars = strip_chars.replace("[", "")
     strip_chars = strip_chars.replace("]", "")
 
+    @keras.utils.register_keras_serializable()
     def custom_standardization(input_string):
         lowercase = tf.strings.lower(input_string)
         return tf.strings.regex_replace(
@@ -125,4 +126,3 @@ def get_dataset_and_tokenizer(sequence_length, vocab_size):
         spa_tokenizer,
     )
     return (train_ds, val_ds, test_ds), (eng_tokenizer, spa_tokenizer)
-
