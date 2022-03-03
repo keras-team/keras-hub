@@ -43,8 +43,8 @@ setup(
             "pytest-cov",
         ],
         "examples": [
+            "datasets",  # For GLUE in BERT example.
             "nltk",
-            "tensorflow_datasets",
             "wikiextractor",
         ],
     },

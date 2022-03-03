@@ -15,8 +15,8 @@
 
 import json
 
+import datasets
 import tensorflow as tf
-import tensorflow_datasets as tfds
 import tensorflow_text as tftext
 from absl import app
 from absl import flags
@@ -61,24 +61,26 @@ flags.DEFINE_bool(
 flags.DEFINE_bool(
     "do_evaluation",
     True,
-    "Whether to run evaluation on the test set for a given task.",
+    "Whether to run evaluation on the validation set for a given task.",
 )
 
 flags.DEFINE_integer("batch_size", 32, "The batch size.")
 
 flags.DEFINE_integer("epochs", 3, "The number of training epochs.")
 
-flags.DEFINE_float("learning_rate", 5e-5, "The initial learning rate for Adam.")
+flags.DEFINE_float("learning_rate", 2e-5, "The initial learning rate for Adam.")
+
+flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
 
 
-def bert_pack_inputs(
+def pack_inputs(
     inputs,
     seq_length,
     start_of_sequence_id,
     end_of_segment_id,
     padding_id,
 ):
-    # In case inputs weren't truncated (as they should have been),
+    # In case inputs weren"t truncated (as they should have been),
     # fall back to some ad-hoc truncation.
     trimmed_segments = tftext.RoundRobinTrimmer(
         seq_length - len(inputs) - 1
@@ -96,7 +98,7 @@ def bert_pack_inputs(
     input_type_ids, input_mask = tftext.pad_model_inputs(
         segment_ids, seq_length, pad_value=0
     )
-    # Assemble nest of input tensors as expected by BERT TransformerEncoder.
+    # Assemble nest of input tensors as expected by BERT model.
     return dict(
         input_ids=input_word_ids,
         input_mask=input_mask,
@@ -104,26 +106,51 @@ def bert_pack_inputs(
     )
 
 
-def extract_features(inputs, task_name):
-    """Transform tfds inputs to be an (features, labels) tuple."""
+def load_data(task_name):
     if task_name in ("cola", "sst2"):
-        return (inputs["sentence"],), inputs["label"]
-    elif task_name in ("mrpc", "qqp", "stsb", "rte", "wnli"):
-        return (inputs["sentence1"], inputs["sentence2"]), inputs["label"]
-    elif task_name in ("ax", "mnli"):
-        return (inputs["premise"], inputs["hypothesis"]), inputs["label"]
+        feature_names = ("sentence",)
+    elif task_name in ("mrpc", "stsb", "rte", "wnli"):
+        feature_names = ("sentence1", "sentence2")
+    elif task_name in ("mnli", "mnli_matched", "mnli_mismatched"):
+        feature_names = ("premise", "hypothesis")
     elif task_name in "qnli":
-        return (inputs["question"], inputs["sentence"]), inputs["label"]
+        feature_names = ("question", "sentence")
+    elif task_name in "qqp":
+        feature_names = ("question1", "question2")
     else:
         raise ValueError(f"Unkown task_name {task_name}.")
 
+    test_suffix = ""
+    if task_name in ("mnli", "mnli_matched"):
+        # For "mnli", just run default to "mnli_matched".
+        task_name = "mnli"
+        test_suffix = "_matched"
+    elif task_name in ("mnli_mismatched",):
+        task_name = "mnli"
+        test_suffix = "_mismatched"
 
-class BertFinetuner(keras.Model):
+    def to_tf_dataset(split):
+        # Format each sample as a tuple of string features and an int label.
+        features = tuple([split[f] for f in feature_names])
+        label = tf.cast(split["label"], tf.int32)
+        return tf.data.Dataset.from_tensor_slices((features, label))
+
+    data = datasets.load_dataset("glue", task_name)
+    data.set_format(type="tensorflow")
+    train_ds = to_tf_dataset(data["train"])
+    test_ds = to_tf_dataset(data["test" + test_suffix])
+    validation_ds = to_tf_dataset(data["validation" + test_suffix])
+    return train_ds, test_ds, validation_ds
+
+
+class BertClassificationFinetuner(keras.Model):
+    """Adds a classification head to a pre-trained BERT model for finetuning"""
+
     def __init__(self, bert_model, hidden_size, num_classes, **kwargs):
         super().__init__(**kwargs)
         self._bert_model = bert_model
         self._pooler_layer = keras.layers.Dense(
-            units=hidden_size,
+            hidden_size,
             activation="tanh",
             name="pooler",
         )
@@ -160,35 +187,33 @@ def main(_):
     with open(FLAGS.bert_config_file, "r") as bert_config_file:
         bert_config = json.loads(bert_config_file.read())
 
-    def preprocess_data(inputs):
-        inputs, labels = extract_features(inputs, task_name=FLAGS.task_name)
+    def preprocess_data(inputs, labels):
         inputs = [tokenizer.tokenize(x).merge_dims(1, -1) for x in inputs]
-        inputs = bert_pack_inputs(
+        inputs = pack_inputs(
             inputs,
-            bert_config["max_sequence_length"],
+            FLAGS.max_seq_length,
             start_of_sequence_id=start_id,
             end_of_segment_id=end_id,
             padding_id=pad_id,
         )
         return inputs, labels
 
-    # Read in GLUE task data
-    [train_ds, test_ds, validation_ds] = tfds.load(
-        f"glue/{FLAGS.task_name}",
-        batch_size=FLAGS.batch_size,
-        split=["train", "validation", "test"],
-    )
-    train_ds = train_ds.map(
+    # Read and preprocess GLUE task data.
+    train_ds, test_ds, validation_ds = load_data(FLAGS.task_name)
+    train_ds = train_ds.batch(FLAGS.batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
-    validation_ds = validation_ds.map(
+    validation_ds = validation_ds.batch(FLAGS.batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
-    test_ds = test_ds.map(preprocess_data, num_parallel_calls=tf.data.AUTOTUNE)
+    test_ds = test_ds.batch(FLAGS.batch_size).map(
+        preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
+    )
 
-    num_classes = 3 if FLAGS.task_name in ("mnli", "ax") else 2
-    finetuning_model = BertFinetuner(
-        model, bert_config["hidden_size"], num_classes
+    finetuning_model = BertClassificationFinetuner(
+        bert_model=model,
+        hidden_size=bert_config["hidden_size"],
+        num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
     )
     finetuning_model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=FLAGS.learning_rate),
@@ -198,10 +223,13 @@ def main(_):
     finetuning_model.fit(
         train_ds, epochs=FLAGS.epochs, validation_data=validation_ds
     )
+
     if FLAGS.do_evaluation:
         print("Evaluating on test set.")
         finetuning_model.evaluate(test_ds)
 
+    # TODO(mattdangerw): After incorporating keras_nlp tokenization, save an
+    # end-to-end model includeing preprocessing that operates on raw strings.
     if FLAGS.saved_model_output:
         print(f"Saving to {FLAGS.saved_model_output}")
         finetuning_model.save(FLAGS.saved_model_output)
