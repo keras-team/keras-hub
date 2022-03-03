@@ -1,12 +1,42 @@
-import tensorflow as tf
+# Copyright 2022 The KerasNLP Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import numpy as np
+import tensorflow as tf
 from absl import app
+from absl import flags
 
-SAVED_MODEL_OUTPUT = "saved_models/machine_translation_model"
-MAX_SEQUENCE_LENGTH = 20
+import examples.machine_translation.data  # noqa: F401
+
+FLAGS = flags.FLAGS
+
+flags.DEFINE_integer(
+    "sequence_length",
+    20,
+    "Input and output sequence length.",
+)
+
+flags.DEFINE_string(
+    "saved_model_output",
+    "saved_models/machine_translation_model",
+    "The path to saved model",
+)
 
 EXAMPLES = [
-    ("Tom doesn't listen to anyone.", "[start] Tomás no escucha a nadie. [end]"),
+    (
+        "Tom doesn't listen to anyone.",
+        "[start] Tomás no escucha a nadie. [end]",
+    ),
     ("I got soaked to the skin.", "[start] Estoy chorreando. [end]"),
     ("I imagined that.", "[start] Me imaginé eso. [end]"),
     ("The baby is crying.", "[start] El bebé está llorando. [end]"),
@@ -28,13 +58,13 @@ EXAMPLES = [
 def decode_sequence(input_sentence, model, max_sequence_length, lookup_table):
     encoder_tokenizer = model.encoder_tokenizer
     decoder_tokenizer = model.decoder_tokenizer
-    tokenized_input_sentence = encoder_tokenizer([input_sentence])
+    tokenized_input = encoder_tokenizer([input_sentence])
     decoded_sentence = "[start]"
     for i in range(max_sequence_length):
-        tokenized_target_sentence = decoder_tokenizer([decoded_sentence])[:, :-1]
+        tokenized_target = decoder_tokenizer([decoded_sentence])[:, :-1]
         input = {
-            "encoder_inputs": tokenized_input_sentence,
-            "decoder_inputs": tokenized_target_sentence,
+            "encoder_inputs": tokenized_input,
+            "decoder_inputs": tokenized_target,
         }
         predictions = model(input)
 
@@ -48,19 +78,19 @@ def decode_sequence(input_sentence, model, max_sequence_length, lookup_table):
 
 
 def main(_):
-    loaded_model = tf.keras.models.load_model(SAVED_MODEL_OUTPUT)
+    loaded_model = tf.keras.models.load_model(FLAGS.saved_model_output)
 
     decoder_tokenizer = loaded_model.decoder_tokenizer
     vocab = decoder_tokenizer.get_vocabulary()
     index_lookup_table = dict(zip(range(len(vocab)), vocab))
 
     translated = []
-    for example in range(len(EXAMPLES)):
+    for example in EXAMPLES:
         translated.append(
             decode_sequence(
                 example[0],
                 loaded_model,
-                MAX_SEQUENCE_LENGTH,
+                flags.sequence_length,
                 index_lookup_table,
             )
         )

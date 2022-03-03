@@ -1,17 +1,33 @@
-from cgi import test
+# Copyright 2022 The KerasNLP Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import pathlib
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras.layers import TextVectorization
 import random
 import re
 import string
+
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras.layers import TextVectorization
 
 
 def download_data():
     text_file = keras.utils.get_file(
         fname="spa-eng.zip",
-        origin="http://storage.googleapis.com/download.tensorflow.org/data/spa-eng.zip",
+        origin=(
+            "http://storage.googleapis.com/download.tensorflow.org/data/"
+            + "spa-eng.zip"
+        ),
         extract=True,
     )
     return pathlib.Path(text_file).parent / "spa-eng" / "spa.txt"
@@ -38,20 +54,22 @@ def split_train_val_test(text_pairs):
     return train_pairs, val_pairs, test_pairs
 
 
+strip_chars = string.punctuation + "¿"
+strip_chars = strip_chars.replace("[", "")
+strip_chars = strip_chars.replace("]", "")
+
+
+@keras.utils.register_keras_serializable()
+def custom_standardization(input_string):
+    lowercase = tf.strings.lower(input_string)
+    return tf.strings.regex_replace(
+        lowercase,
+        "[%s]" % re.escape(strip_chars),
+        "",
+    )
+
+
 def prepare_tokenizer(train_pairs, sequence_length, vocab_size):
-    strip_chars = string.punctuation + "¿"
-    strip_chars = strip_chars.replace("[", "")
-    strip_chars = strip_chars.replace("]", "")
-
-    @keras.utils.register_keras_serializable()
-    def custom_standardization(input_string):
-        lowercase = tf.strings.lower(input_string)
-        return tf.strings.regex_replace(
-            lowercase,
-            "[%s]" % re.escape(strip_chars),
-            "",
-        )
-
     eng_tokenizer = TextVectorization(
         max_tokens=vocab_size,
         output_mode="int",
@@ -98,7 +116,7 @@ def prepare_datasets(text_pairs, batch_size, eng_tokenizer, spa_tokenizer):
     return dataset.shuffle(2048).prefetch(16).cache()
 
 
-def get_dataset_and_tokenizer(sequence_length, vocab_size):
+def get_dataset_and_tokenizer(sequence_length, vocab_size, batch_size):
     """Main method to get the formatted machine translation dataset."""
     filepath = download_data()
     text_pairs = read_data(filepath)
@@ -106,7 +124,6 @@ def get_dataset_and_tokenizer(sequence_length, vocab_size):
     eng_tokenizer, spa_tokenizer = prepare_tokenizer(
         train_pairs, sequence_length, vocab_size
     )
-    batch_size = 64
     train_ds = prepare_datasets(
         train_pairs,
         batch_size,
