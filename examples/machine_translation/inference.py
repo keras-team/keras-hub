@@ -15,8 +15,11 @@ import numpy as np
 import tensorflow as tf
 from absl import app
 from absl import flags
+from absl import logging
 
-import examples.machine_translation.data  # noqa: F401
+# Import data module to include the customized serializable, required for
+# loading tokenizer.
+import examples.machine_translation.data  # noqa: F401.
 
 FLAGS = flags.FLAGS
 
@@ -27,10 +30,12 @@ flags.DEFINE_integer(
 )
 
 flags.DEFINE_string(
-    "saved_model_output",
+    "saved_model_path",
     "saved_models/machine_translation_model",
     "The path to saved model",
 )
+
+flags.DEFINE_string("inputs", None, "The inputs to run machine translation on.")
 
 EXAMPLES = [
     (
@@ -78,27 +83,38 @@ def decode_sequence(input_sentence, model, max_sequence_length, lookup_table):
 
 
 def main(_):
-    loaded_model = tf.keras.models.load_model(FLAGS.saved_model_output)
+    loaded_model = tf.keras.models.load_model(FLAGS.saved_model_path)
 
     decoder_tokenizer = loaded_model.decoder_tokenizer
     vocab = decoder_tokenizer.get_vocabulary()
     index_lookup_table = dict(zip(range(len(vocab)), vocab))
 
-    translated = []
-    for example in EXAMPLES:
-        translated.append(
-            decode_sequence(
-                example[0],
-                loaded_model,
-                flags.sequence_length,
-                index_lookup_table,
-            )
+    if FLAGS.inputs is not None:
+        # Run inference on user-specified sentence.
+        translated = decode_sequence(
+            FLAGS.inputs,
+            loaded_model,
+            FLAGS.sequence_length,
+            index_lookup_table,
         )
+        logging.info(f"Translated results: {translated}")
 
-    for i in range(len(EXAMPLES)):
-        print("ENGLISH SEnTENCE: ", EXAMPLES[i][0])
-        print("MACHINE TRANSLATED RESULT: ", translated[i])
-        print("GOLDEN: ", EXAMPLES[i][1])
+    else:
+        translated = []
+        for example in EXAMPLES:
+            translated.append(
+                decode_sequence(
+                    example[0],
+                    loaded_model,
+                    FLAGS.sequence_length,
+                    index_lookup_table,
+                )
+            )
+
+        for i in range(len(EXAMPLES)):
+            print("ENGLISH SENTENCE: ", EXAMPLES[i][0])
+            print("MACHINE TRANSLATED RESULT: ", translated[i])
+            print("GOLDEN: ", EXAMPLES[i][1])
 
 
 if __name__ == "__main__":
