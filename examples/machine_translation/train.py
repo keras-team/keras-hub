@@ -23,6 +23,7 @@ from examples.machine_translation.model import TranslationModel
 FLAGS = flags.FLAGS
 
 flags.DEFINE_integer("num_epochs", 1, "Number of epochs to train.")
+flags.DEFINE_integer("steps_per_epoch", None, "Number of steps per epoch.")
 flags.DEFINE_integer("num_encoders", 2, "Number of Transformer encoder layers.")
 flags.DEFINE_integer("num_decoders", 2, "Number of Transformer decoder layers.")
 flags.DEFINE_integer("batch_size", 64, "The training batch size.")
@@ -56,52 +57,24 @@ flags.DEFINE_string(
 )
 
 
-def train_loop(model, train_ds, val_ds):
+def run_training(model, train_ds, val_ds):
     learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(
         initial_learning_rate=FLAGS.learning_rate,
         decay_steps=20,
         decay_rate=0.98,
     )
     optimizer = tf.keras.optimizers.Adam(learning_rate)
-
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(
         reduction=tf.keras.losses.Reduction.NONE
     )
     metrics = tf.keras.metrics.SparseCategoricalAccuracy()
-    val_metrics = tf.keras.metrics.SparseCategoricalAccuracy()
-
-    num_steps = tf.data.experimental.cardinality(train_ds).numpy()
-
-    for _ in range(FLAGS.num_epochs):
-        bar = tf.keras.utils.Progbar(num_steps)
-        for i, batch in enumerate(train_ds):
-            metrics.reset_state()
-            data, label = batch
-            mask = tf.cast((label != 0), tf.float32)
-            with tf.GradientTape() as tape:
-                pred = model(data)
-                loss = loss_fn(label, pred) * mask
-                loss = tf.reduce_sum(loss) / tf.reduce_sum(mask)
-
-            grads = tape.gradient(loss, model.trainable_variables)
-            optimizer.apply_gradients(zip(grads, model.trainable_variables))
-            metrics.update_state(label, pred, sample_weight=mask)
-
-            time.sleep(0.1)
-            values = [("loss", loss), ("accuracy", metrics.result().numpy())]
-            bar.update(i, values=values)
-            
-        val_metrics.reset_state()
-        for batch in val_ds:
-            data, label = batch
-            mask = tf.cast((label != 0), tf.float32)
-            pred = model(data)
-            val_metrics.update_state(
-                label,
-                pred,
-                sample_weight=tf.cast(mask, tf.int16),
-            )
-        print("\nvalidation accuracy: ", val_metrics.result().numpy())
+    model.compile(optimizer=optimizer, metrics=[metrics], loss=loss_fn)
+    model.fit(
+        train_ds,
+        epochs=FLAGS.num_epochs,
+        validation_data=val_ds,
+        steps_per_epoch=FLAGS.steps_per_epoch,
+    )
 
 
 def main(_):
@@ -126,7 +99,7 @@ def main(_):
         sequence_length=FLAGS.sequence_length,
     )
 
-    train_loop(model, train_ds, val_ds)
+    run_training(model, train_ds, val_ds)
 
     print(f"Saving to {FLAGS.saved_model_path}")
     model.save(FLAGS.saved_model_path)
