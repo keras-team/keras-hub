@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import time
 
 import tensorflow as tf
 from absl import app
@@ -28,7 +27,7 @@ flags.DEFINE_integer("num_encoders", 2, "Number of Transformer encoder layers.")
 flags.DEFINE_integer("num_decoders", 2, "Number of Transformer decoder layers.")
 flags.DEFINE_integer("batch_size", 64, "The training batch size.")
 flags.DEFINE_float("learning_rate", 0.001, "The initial learning rate.")
-flags.DEFINE_integer("embed_dim", 64, "Embedding size.")
+flags.DEFINE_integer("model_dim", 64, "Embedding size.")
 flags.DEFINE_integer(
     "intermediate_dim",
     128,
@@ -95,7 +94,7 @@ def main(_):
         transformer_intermediate_dim=FLAGS.intermediate_dim,
         encoder_vocab_size=english_vocab_size,
         decoder_vocab_size=spanish_vocab_size,
-        embed_dim=FLAGS.embed_dim,
+        embed_dim=FLAGS.model_dim,
         sequence_length=FLAGS.sequence_length,
     )
 

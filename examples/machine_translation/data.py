@@ -116,7 +116,7 @@ def prepare_datasets(text_pairs, batch_size, eng_tokenizer, spa_tokenizer):
     dataset = tf.data.Dataset.from_tensor_slices((eng_texts, spa_texts))
     dataset = dataset.batch(batch_size)
     dataset = dataset.map(format_dataset)
-    return dataset.shuffle(2048).prefetch(16).cache()
+    return dataset.shuffle(2048).prefetch(tf.data.AUTOTUNE).cache()
 
 
 def get_dataset_and_tokenizer(sequence_length, vocab_size, batch_size):

@@ -64,22 +64,40 @@ def decode_sequence(input_sentence, model, max_sequence_length, lookup_table):
     encoder_tokenizer = model.encoder_tokenizer
     decoder_tokenizer = model.decoder_tokenizer
     tokenized_input = encoder_tokenizer([input_sentence])
-    decoded_sentence = "[start]"
+
+    start_token = decoder_tokenizer("[start]")[0].numpy()
+    end_token = decoder_tokenizer("[end]")[0].numpy()
+
+    decoded_sentence = [start_token]
     for i in range(max_sequence_length):
-        tokenized_target = decoder_tokenizer([decoded_sentence])[:, :-1]
+        decoder_inputs = tf.convert_to_tensor(
+            [decoded_sentence],
+            dtype=tf.int64,
+        )
+        decoder_inputs = tf.concat(
+            [
+                decoder_inputs,
+                tf.zeros(
+                    [1, max_sequence_length - i - 1],
+                    dtype=tf.int64,
+                ),
+            ],
+            axis=1,
+        )
         input = {
             "encoder_inputs": tokenized_input,
-            "decoder_inputs": tokenized_target,
+            "decoder_inputs": decoder_inputs,
         }
         predictions = model(input)
-
-        sampled_token_index = np.argmax(predictions[0, i, :])
-        sampled_token = lookup_table[sampled_token_index]
-        decoded_sentence += " " + sampled_token
-
-        if sampled_token == "[end]":
+        predicted_token = np.argmax(predictions[0, i, :])
+        decoded_sentence.append(predicted_token)
+        if predicted_token == end_token:
             break
-    return decoded_sentence
+
+    detokenized_output = []
+    for token in decoded_sentence:
+        detokenized_output.append(lookup_table[token])
+    return " ".join(detokenized_output)
 
 
 def main(_):
