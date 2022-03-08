@@ -99,7 +99,10 @@ class TranslationModel(keras.Model):
             embed_dim=embed_dim,
         )
 
-        self.dense = keras.layers.Dense(decoder_vocab_size, activation="softmax")
+        self.dense = keras.layers.Dense(
+            decoder_vocab_size,
+            activation="softmax",
+        )
 
     def call(self, inputs):
         encoder_input, decoder_input = (
