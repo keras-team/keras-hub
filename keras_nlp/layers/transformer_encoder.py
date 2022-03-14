@@ -43,16 +43,16 @@ class TransformerEncoder(keras.layers.Layer):
     Examples:
 
     ```python
-    # Create a single transformer decoder layer.
+    # Create a single transformer encoder layer.
     encoder = keras_nlp.layer.TransformerEncoder(
         intermediate_dim=64, num_heads=8)
 
-    # Create a simple model containing the decoder.
+    # Create a simple model containing the encoder.
     input = tf.keras.Input(shape=[4, 6])
     output = encoder(input)
     model = tf.keras.Model(inputs=input, outputs=output)
 
-    # Call decoder on the inputs.
+    # Call encoder on the inputs.
     input_data = tf.random.uniform(shape=[1, 10, 64])
     output = model(input_data)
 
