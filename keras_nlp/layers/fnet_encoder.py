@@ -1,7 +1,20 @@
+# Copyright 2022 The KerasNLP Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Transformer encoder block implementation based on `keras.layers.Layer`."""
 
 import tensorflow as tf
-
 from tensorflow import keras
 
 
@@ -69,8 +82,12 @@ class FNetEncoder(keras.layers.Layer):
         feature_size = input_shape[-1]
 
         # Layer Norm layers.
-        self._mixing_layer_norm = keras.layers.LayerNormalization(epsilon=self.layer_norm_epsilon)
-        self._output_layer_norm = keras.layers.LayerNormalization(epsilon=self.layer_norm_epsilon)
+        self._mixing_layer_norm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon
+        )
+        self._output_layer_norm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon
+        )
 
         # Feedforward layer.
         self._intermediate_dense = keras.layers.Dense(
@@ -114,14 +131,17 @@ class FNetEncoder(keras.layers.Layer):
         mixing_output = self._fourier_transform(inputs)
 
         # LayerNorm layer.
-        mixing_output = self._add_and_norm(inputs, mixing_output,
-                                           self._mixing_layer_norm)
+        mixing_output = self._add_and_norm(
+            inputs, mixing_output, self._mixing_layer_norm
+        )
 
         # Feedforward layer.
         feed_forward_output = self._feed_forward(mixing_output)
 
         # LayerNorm layer.
-        x = self._add_and_norm(mixing_output, feed_forward_output, self._output_layer_norm)
+        x = self._add_and_norm(
+            mixing_output, feed_forward_output, self._output_layer_norm
+        )
         return x
 
     def get_config(self):
