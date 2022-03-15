@@ -45,7 +45,7 @@ class TransformerDecoder(keras.layers.Layer):
     Examples:
     ```python
     # Create a single transformer decoder layer.
-    decoder = keras_nlp.layer.TransformerDecoder(
+    decoder = keras_nlp.layers.TransformerDecoder(
         intermediate_dim=64, num_heads=8)
 
     # Create a simple model containing the decoder.

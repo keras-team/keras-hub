@@ -14,3 +14,4 @@
 
 from keras_nlp.layers.transformer_decoder import TransformerDecoder
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
+from keras_nlp.layers.fnet_encoder import FNetEncoder

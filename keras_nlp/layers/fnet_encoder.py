@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Transformer encoder block implementation based on `keras.layers.Layer`."""
+"""FNet encoder block implementation based on `keras.layers.Layer`."""
 
 import tensorflow as tf
 from tensorflow import keras
@@ -42,7 +42,7 @@ class FNetEncoder(keras.layers.Layer):
 
     ```python
     # Create a single FNet encoder layer.
-    encoder = keras_nlp.layer.FNetEncoder(
+    encoder = keras_nlp.layers.FNetEncoder(
         intermediate_dim=64)
 
     # Create a simple model containing the encoder.

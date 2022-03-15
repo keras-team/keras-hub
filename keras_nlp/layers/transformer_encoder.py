@@ -44,7 +44,7 @@ class TransformerEncoder(keras.layers.Layer):
 
     ```python
     # Create a single transformer decoder layer.
-    encoder = keras_nlp.layer.TransformerEncoder(
+    encoder = keras_nlp.layers.TransformerEncoder(
         intermediate_dim=64, num_heads=8)
 
     # Create a simple model containing the decoder.
