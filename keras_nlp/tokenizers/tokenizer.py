@@ -35,7 +35,7 @@ class Tokenizer(keras.layers.Layer):
         def tokenize(self, inputs):
             return tf.strings.split(inputs).to_tensor()
 
-        def detokenizer(self, inputs):
+        def detokenize(self, inputs):
             return tf.strings.reduce_join([inputs], separator=" ", axis=-1)
 
     tokenizer = WhitespaceTokenizer()
