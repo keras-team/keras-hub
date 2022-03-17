@@ -585,13 +585,6 @@ class BertModel(keras.Model):
             )
             self._transformer_layers.append(layer)
 
-        self._pooler_layer = keras.layers.Dense(
-            units=hidden_size,
-            activation="tanh",
-            kernel_initializer=initializer,
-            name="pooler_transform",
-        )
-
         self._config = {
             "vocab_size": vocab_size,
             "hidden_size": hidden_size,
@@ -631,21 +624,10 @@ class BertModel(keras.Model):
 
         attention_mask = make_attention_mask(embeddings, input_mask)
 
-        encoder_outputs = []
         x = embeddings
         for layer in self._transformer_layers:
             x = layer(x, attention_mask=attention_mask)
-            encoder_outputs.append(x)
-
-        last_encoder_output = encoder_outputs[-1]
-        first_token_tensor = last_encoder_output[:, 0, :]
-        pooled_output = self._pooler_layer(first_token_tensor)
-
-        return dict(
-            sequence_output=last_encoder_output,
-            pooled_output=pooled_output,
-            encoder_outputs=encoder_outputs,
-        )
+        return x
 
     def get_embedding_table(self):
         return self._embedding_layer.embeddings

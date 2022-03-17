@@ -13,34 +13,40 @@ be useful to validate any code changes, but note that a useful BERT model would
 need to be trained for much longer on a much larger dataset.
 
 ```shell
-DIR=bert_test_output
+OUTPUT_DIR=~/bert_test_output
 DATA_URL=https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert
 
 # Create a virtual env and install dependencies.
-mkdir $DIR
-python3 -m venv $DIR/env
-source $DIR/env/bin/activate
+mkdir $OUTPUT_DIR
+python3 -m venv $OUTPUT_DIR/env
+source $OUTPUT_DIR/env/bin/activate
 pip install -e ".[tests,examples]"
 
 # Download example data.
-wget ${DATA_URL}/bert_vocab_uncased.txt -O $DIR/bert_vocab_uncased.txt
-wget ${DATA_URL}/wiki_example_data.txt -O $DIR/wiki_example_data.txt
+wget ${DATA_URL}/bert_vocab_uncased.txt -O $OUTPUT_DIR/bert_vocab_uncased.txt
+wget ${DATA_URL}/wiki_example_data.txt -O $OUTPUT_DIR/wiki_example_data.txt
 
 # Run preprocessing.
 python3 examples/bert/create_sentence_split_data.py \
-    --input_files $DIR/wiki_example_data.txt \
-    --output_directory $DIR/sentence-split-data --num_shards 1
+    --input_files $OUTPUT_DIR/wiki_example_data.txt \
+    --output_directory $OUTPUT_DIR/sentence-split-data --num_shards 1
 python3 examples/bert/create_pretraining_data.py \
-    --input_files $DIR/sentence-split-data/ \
-    --vocab_file $DIR/bert_vocab_uncased.txt \
-    --output_file $DIR/pretraining-data/pretraining.tfrecord
+    --input_files $OUTPUT_DIR/sentence-split-data/ \
+    --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
+    --output_file $OUTPUT_DIR/pretraining-data/pretraining.tfrecord
 
 # Run pretraining.
 python3 examples/bert/run_pretraining.py \
-    --input_files $DIR/pretraining-data/ \
-    --vocab_file $DIR/bert_vocab_uncased.txt \
+    --input_files $OUTPUT_DIR/pretraining-data/ \
+    --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --bert_config_file examples/bert/configs/bert_tiny.json \
-    --saved_model_output $DIR/model/
+    --saved_model_output $OUTPUT_DIR/model/
+
+# Run finetuning.
+python3 examples/bert/run_glue_finetuning.py \
+    --saved_model_input $OUTPUT_DIR/model/ \
+    --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
+    --bert_config_file examples/bert/configs/bert_tiny.json
 ```
 
 ## Installing dependencies
@@ -145,12 +151,12 @@ In order to set up the next sentence prediction task, the script will load the
 entire input into memory. As such, it is recommended to run this script on a
 subset of the input data at a time.
 
-For example, you can run the script on each file shard in
-`~/datasets/sentence-split-data`, with the following:
+For example, you can run the script on each file shard in a directory
+with the following:
 
 ```shell
-for file in ~/datasets/sentence-split-data/*; do
-    output="~/datasets/pretraining-data/$(basename -- "$file" .txt).tfrecord"
+for file in path/to/sentence-split-data/*; do
+    output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
     python examples/bert/create_pretraining_data.py \
         --input_files ${file} \
         --vocab_file vocab.txt \
@@ -163,8 +169,8 @@ multiple times in parallel:
 
 ```shell
 NUM_JOBS=5
-for file in ~/datasets/sentence-split-data/*; do
-    output="~/datasets/pretraining-data/$(basename -- "$file" .txt).tfrecord"
+for file in path/to/sentence-split-data/*; do
+    output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
     echo python examples/bert/create_pretraining_data.py \
         --input_files ${file} \
         --vocab_file vocab.txt \
@@ -180,10 +186,10 @@ directory.
 
 ```shell
 python3 examples/bert/run_pretraining.py \
-    --input_files $DIR/data/ \
-    --vocab_file $DIR/bert_vocab_uncased.txt \
+    --input_files path/to/data/ \
+    --vocab_file path/to/bert_vocab_uncased.txt \
     --bert_config_file examples/bert/configs/bert_tiny.json \
-    --saved_model_output $DIR/model/
+    --saved_model_output path/to/model/
 ```
 
 ## Evaluating BERT with GLUE
@@ -192,12 +198,16 @@ After pretraining, we can evaluate the performance of a BERT model with the
 General Language Understanding Evaluation (GLUE) benchmark. This will
 fine tune the model and running classification for a number of downstream tasks.
 
-The GLUE starter code repository hosts [a script](https://github.com/nyu-mll/GLUE-baselines/blob/master/download_glue_data.py).
-to download the GLUE dataset. You can download the data to `~/datasets/glue` as
-follows:
+The `run_glue_finetuning.py` script downloads the GLUE data for a specific
+tasks, reloads the pretraining model with appropriate finetuning heads, and runs
+training for a few epochs to finetune the model.
 
 ```shell
-python ~/Downloads/download_glue_data.py --data_dir ~/datasets/glue
+python3 examples/bert/run_glue_finetuning.py \
+    --saved_model_input path/to/model/ \
+    --vocab_file path/to/bert_vocab_uncased.txt \
+    --bert_config_file examples/bert/configs/bert_tiny.json \
 ```
 
-TODO(mattdangerw): Complete evaluation instructions.
+The script could be easily adapted to any other text classification fine-tuning
+tasks, where inputs can be any number of raw text sentences per sample.
