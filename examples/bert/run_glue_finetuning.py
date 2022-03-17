@@ -80,7 +80,7 @@ def pack_inputs(
     end_of_segment_id,
     padding_id,
 ):
-    # In case inputs weren"t truncated (as they should have been),
+    # In case inputs weren't truncated (as they should have been),
     # fall back to some ad-hoc truncation.
     trimmed_segments = tftext.RoundRobinTrimmer(
         seq_length - len(inputs) - 1
@@ -99,11 +99,11 @@ def pack_inputs(
         segment_ids, seq_length, pad_value=0
     )
     # Assemble nest of input tensors as expected by BERT model.
-    return dict(
-        input_ids=input_word_ids,
-        input_mask=input_mask,
-        segment_ids=input_type_ids,
-    )
+    return {
+        "input_ids": input_word_ids,
+        "input_mask": input_mask,
+        "segment_ids": input_type_ids,
+    }
 
 
 def load_data(task_name):
@@ -148,7 +148,7 @@ class BertClassificationFinetuner(keras.Model):
 
     def __init__(self, bert_model, hidden_size, num_classes, **kwargs):
         super().__init__(**kwargs)
-        self._bert_model = bert_model
+        self.bert_model = bert_model
         self._pooler_layer = keras.layers.Dense(
             hidden_size,
             activation="tanh",
@@ -160,7 +160,7 @@ class BertClassificationFinetuner(keras.Model):
         )
 
     def call(self, inputs):
-        outputs = self._bert_model(inputs)
+        outputs = self.bert_model(inputs)
         # Get the first [CLS] token from each output.
         outputs = outputs[:, 0, :]
         outputs = self._pooler_layer(outputs)
