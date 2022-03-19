@@ -16,7 +16,7 @@
 
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras import initializers
+from keras import initializers
 
 from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
     compute_causal_mask,
@@ -93,6 +93,7 @@ class TransformerDecoder(keras.layers.Layer):
         self._built = False
         self.kernel_initializer = kernel_initializer
         self.bias_initializer = bias_initializer
+        
     def _build(self, input_shape):
         # Create layers based on input shape.
         self._built = True
