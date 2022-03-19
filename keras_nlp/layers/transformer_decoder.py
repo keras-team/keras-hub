@@ -16,6 +16,7 @@
 
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.keras import initializers
 
 from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
     compute_causal_mask,
@@ -40,6 +41,10 @@ class TransformerDecoder(keras.layers.Layer):
         layer_norm_epsilon: float, defaults to 1e-5. The eps value in layer
             normalization components.
         name: string, defaults to None. The name of the layer.
+        kernel_initializer: tf.keras.initializers initializer, defaults to None. Sets the
+            kernel initializer for the dense and multiheaded attention layers
+        bias_initializer: tf.keras.initializers initializer, defaults to None. Sets the
+            bias initializer for the dense and multiheaded attention layers
         **kwargs: other keyword arguments.
 
     Examples:
@@ -75,6 +80,8 @@ class TransformerDecoder(keras.layers.Layer):
         activation="relu",
         layer_norm_epsilon=1e-05,
         name=None,
+        kernel_initializer=None,
+        bias_initializer=None,
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
@@ -84,7 +91,8 @@ class TransformerDecoder(keras.layers.Layer):
         self.activation = activation
         self.layer_norm_epsilon = layer_norm_epsilon
         self._built = False
-
+        self.kernel_initializer = kernel_initializer
+        self.bias_initializer = bias_initializer
     def _build(self, input_shape):
         # Create layers based on input shape.
         self._built = True
@@ -95,12 +103,16 @@ class TransformerDecoder(keras.layers.Layer):
             key_dim=self._attention_head_size,
             value_dim=self._attention_head_size,
             dropout=self.dropout,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
         )
         self._encoder_decoder_attention_layer = keras.layers.MultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=self._attention_head_size,
             value_dim=feature_size,
             dropout=self.dropout,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
         )
 
         self._decoder_attention_layernorm = keras.layers.LayerNormalization()
@@ -114,11 +126,13 @@ class TransformerDecoder(keras.layers.Layer):
         # First dense layer in the feedforward network, which maps input
         # feauture size to dimension `self.intermediate_dim`.
         self._intermediate_dense = keras.layers.Dense(
-            self.intermediate_dim, activation=self.activation
+            self.intermediate_dim, activation=self.activation, 
+            kernel_initializer=self.kernel_initializer, bias_initializer=self.bias_initializer,
         )
         # Second dense layer in the feedforward network, which maps input
         # feature size back to the input feature size.
-        self._output_dense = keras.layers.Dense(feature_size)
+        self._output_dense = keras.layers.Dense(feature_size, 
+            kernel_initializer=self.kernel_initializer, bias_initializer=self.bias_initializer)
         self._outputdropout = keras.layers.Dropout(rate=self.dropout)
 
     def _add_and_norm(self, input1, input2, norm_layer):
@@ -221,6 +235,8 @@ class TransformerDecoder(keras.layers.Layer):
                 "dropout": self.dropout,
                 "activation": self.activation,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
+                "kernel_initializer": self.kernel_initializer,
+                "bias_initializer": self.bias_initializer,
             }
         )
         return config
