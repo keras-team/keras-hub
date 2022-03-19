@@ -176,8 +176,8 @@ class TransformerEncoder(keras.layers.Layer):
                 "dropout": self.dropout,
                 "activation": self.activation,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "kernel_initializer": self.kernel_initializer,
-                "bias_initializer": self.bias_initializer,
+                "kernel_initializer": initializers.serialize(self.kernel_initializer),
+                "bias_initializer": initializers.serialize(self.bias_initializer),
             }
         )
         return config

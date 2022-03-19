@@ -17,7 +17,7 @@ import os
 
 import tensorflow as tf
 from tensorflow import keras
-
+from keras import initializers
 from keras_nlp.layers import transformer_encoder
 
 
@@ -47,12 +47,21 @@ class TransformerEncoderTest(tf.test.TestCase):
         encoder(input, mask)
 
     def test_get_config_and_from_config(self):
-        encoder = transformer_encoder.TransformerEncoder(
+        encoder1 = transformer_encoder.TransformerEncoder(
             intermediate_dim=4,
             num_heads=2,
         )
-        config = encoder.get_config()
-        expected_config_subset = {
+        encoder2 = transformer_encoder.TransformerDecoder(
+            intermediate_dim=4,
+            num_heads=2,
+            kernel_initializer=initializers.HeNormal(),
+            bias_initializer=initializers.Constant(value=2)
+        )
+
+        config1 = encoder1.get_config()
+        config2 = encoder2.get_config()
+
+        expected_config_subset1 = {
             "intermediate_dim": 4,
             "num_heads": 2,
             "dropout": 0,
@@ -61,13 +70,31 @@ class TransformerEncoderTest(tf.test.TestCase):
             "kernel_initializer": None,
             "bias_initializer": None,
         }
-        self.assertEqual(config, {**config, **expected_config_subset})
+        expected_config_subset1 = {
+            "intermediate_dim": 4,
+            "num_heads": 2,
+            "dropout": 0,
+            "activation": "relu",
+            "layer_norm_epsilon": 1e-05,
+            "kernel_initializer": initializers.serialize(initializers.HeNormal()),
+            "bias_initializer": initializers.serialize(initializers.Constant(value=2)),
+        }
 
-        restored_encoder = transformer_encoder.TransformerEncoder.from_config(
-            config,
+        self.assertEqual(config1, {**config1, **expected_config_subset1})
+        self.assertEqual(config2, {**config2, **expected_config_subset1})
+
+        restored_encoder1 = transformer_encoder.TransformerEncoder.from_config(
+            config1,
+        )
+        restored_encoder2 = transformer_encoder.TransformerEncoder.from_config(
+            config2,
+        )
+
+        self.assertEqual(
+            restored_encoder1.get_config(), {**config1, **expected_config_subset1}
         )
         self.assertEqual(
-            restored_encoder.get_config(), {**config, **expected_config_subset}
+            restored_encoder2.get_config(), {**config2, **expected_config_subset1}
         )
 
     def test_one_training_step_of_transformer_encoder(self):
