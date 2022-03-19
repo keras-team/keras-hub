@@ -68,6 +68,8 @@ class TransformerDecoderTest(tf.test.TestCase):
             "dropout": 0,
             "activation": "relu",
             "layer_norm_epsilon": 1e-05,
+            "kernel_initializer": None,
+            "bias_initializer": None,
         }
         self.assertEqual(config, {**config, **expected_config_subset})
 
