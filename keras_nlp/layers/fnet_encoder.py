@@ -29,7 +29,7 @@ class FNetEncoder(keras.layers.Layer):
     Args:
         intermediate_dim: int, defaults to 3072. The hidden size of feedforward
             network.
-        dropout: float, defaults to 0.1. the dropout value, applied in the
+        dropout: float, defaults to 0.1. The dropout value, applied in the
             feedforward network.
         activation: string or `tf.keras.activations`, defaults to "gelu". The
             activation function of feedforward network.
@@ -97,8 +97,9 @@ class FNetEncoder(keras.layers.Layer):
         self._output_dropout = keras.layers.Dropout(rate=self.dropout)
 
     def _fourier_transform(self, input):
-        # Apply FFT on the input and take the real part. Before we apply fourier
-        # transform, let's convert the dtype of the input tensor to complex64.
+        # Apply FFT on the input and take the real part.
+        # Before we apply fourier transform, let's convert the dtype of the
+        # input tensor to complex64.
         input = tf.cast(input, tf.complex64)
         mixing_output = tf.math.real(tf.signal.fft2d(input))
         return mixing_output
