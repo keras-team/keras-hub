@@ -47,30 +47,16 @@ class TransformerEncoderTest(tf.test.TestCase):
         encoder(input, mask)
 
     def test_get_config_and_from_config(self):
-        encoder1 = transformer_encoder.TransformerEncoder(
-            intermediate_dim=4,
-            num_heads=2,
-        )
-        encoder2 = transformer_encoder.TransformerDecoder(
+        encoder = transformer_encoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
             kernel_initializer=initializers.HeNormal(),
             bias_initializer=initializers.Constant(value=2)
         )
 
-        config1 = encoder1.get_config()
-        config2 = encoder2.get_config()
+        config = encoder.get_config()
 
-        expected_config_subset1 = {
-            "intermediate_dim": 4,
-            "num_heads": 2,
-            "dropout": 0,
-            "activation": "relu",
-            "layer_norm_epsilon": 1e-05,
-            "kernel_initializer": None,
-            "bias_initializer": None,
-        }
-        expected_config_subset1 = {
+        expected_config_subset = {
             "intermediate_dim": 4,
             "num_heads": 2,
             "dropout": 0,
@@ -80,21 +66,14 @@ class TransformerEncoderTest(tf.test.TestCase):
             "bias_initializer": initializers.serialize(initializers.Constant(value=2)),
         }
 
-        self.assertEqual(config1, {**config1, **expected_config_subset1})
-        self.assertEqual(config2, {**config2, **expected_config_subset1})
+        self.assertEqual(config, {**config, **expected_config_subset})
 
-        restored_encoder1 = transformer_encoder.TransformerEncoder.from_config(
-            config1,
-        )
-        restored_encoder2 = transformer_encoder.TransformerEncoder.from_config(
-            config2,
+        restored_encoder= transformer_encoder.TransformerEncoder.from_config(
+            config,
         )
 
         self.assertEqual(
-            restored_encoder1.get_config(), {**config1, **expected_config_subset1}
-        )
-        self.assertEqual(
-            restored_encoder2.get_config(), {**config2, **expected_config_subset1}
+            restored_encoder.get_config(), {**config, **expected_config_subset}
         )
 
     def test_one_training_step_of_transformer_encoder(self):
