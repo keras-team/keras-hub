@@ -82,7 +82,7 @@ class TransformerEncoder(keras.layers.Layer):
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.dropout = dropout
-        self.activation = activation
+        self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
         self._built = False
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
