@@ -59,8 +59,8 @@ class TransformerDecoderTest(tf.test.TestCase):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
-            kernel_initializer=keras.initializers.HeNormal(),
-            bias_initializer=keras.initializers.Constant(value=2),
+            kernel_initializer="HeNormal",
+            bias_initializer="Zeros",
         )
 
         config = decoder.get_config()
@@ -75,7 +75,7 @@ class TransformerDecoderTest(tf.test.TestCase):
                 keras.initializers.HeNormal()
             ),
             "bias_initializer": keras.initializers.serialize(
-                keras.initializers.Constant(value=2)
+                keras.initializers.Zeros()
             ),
         }
 

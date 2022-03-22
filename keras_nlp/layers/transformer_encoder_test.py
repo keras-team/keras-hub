@@ -46,11 +46,11 @@ class TransformerEncoderTest(tf.test.TestCase):
         encoder(input, mask)
 
     def test_get_config_and_from_config(self):
-        encoder = transformer_encoder.TransformerDecoder(
+        encoder = transformer_encoder.TransformerEncoder(
             intermediate_dim=4,
             num_heads=2,
-            kernel_initializer=keras.initializers.HeNormal(),
-            bias_initializer=keras.initializers.Constant(value=2),
+            kernel_initializer="HeNormal",
+            bias_initializer="Zeros",
         )
 
         config = encoder.get_config()
@@ -65,7 +65,7 @@ class TransformerEncoderTest(tf.test.TestCase):
                 keras.initializers.HeNormal()
             ),
             "bias_initializer": keras.initializers.serialize(
-                keras.initializers.Constant(value=2)
+                keras.initializers.Zeros()
             ),
         }
 
