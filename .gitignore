@@ -11,3 +11,5 @@ keras_nlp.egg-info/
 
 .coverage
 .coverage.*
+
+build/
