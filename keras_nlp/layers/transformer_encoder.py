@@ -107,7 +107,7 @@ class TransformerEncoder(keras.layers.Layer):
         self._attention_layernorm = keras.layers.LayerNormalization()
         self._feedforward_layernorm = keras.layers.LayerNormalization()
 
-        self._attentiondropout = keras.layers.Dropout(rate=self.dropout)
+        self._attention_dropout = keras.layers.Dropout(rate=self.dropout)
 
         self._intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
@@ -120,7 +120,7 @@ class TransformerEncoder(keras.layers.Layer):
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._outputdropout = keras.layers.Dropout(rate=self.dropout)
+        self._output_dropout = keras.layers.Dropout(rate=self.dropout)
 
     def _add_and_norm(self, input1, input2, norm_layer):
         return norm_layer(input1 + input2)
@@ -128,7 +128,7 @@ class TransformerEncoder(keras.layers.Layer):
     def _feed_forward(self, input):
         x = self._intermediate_dense(input)
         x = self._output_dense(x)
-        return self._outputdropout(x)
+        return self._output_dropout(x)
 
     def call(self, inputs, padding_mask=None, attention_mask=None):
         """Forward pass of the TransformerEncoder.
@@ -161,7 +161,7 @@ class TransformerEncoder(keras.layers.Layer):
         attended = self._multi_head_attention_layer(
             inputs, inputs, inputs, attention_mask=mask
         )
-        attended = self._attentiondropout(attended)
+        attended = self._attention_dropout(attended)
         attended = self._add_and_norm(
             inputs,
             attended,
