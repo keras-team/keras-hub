@@ -90,6 +90,15 @@ class TransformerDecoderTest(tf.test.TestCase):
             restored_decoder.get_config(), {**config, **expected_config_subset}
         )
 
+        self.assertRaises(
+            ValueError,
+            transformer_decoder.TransformerDecoder,
+            intermediate_dim=4,
+            num_heads=2,
+            dropout=0.5,
+            kernel_initializer="Invalid",
+        )
+
     def test_one_training_step_of_transformer_encoder(self):
         class MyModel(keras.Model):
             def __init__(self):
