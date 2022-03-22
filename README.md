@@ -21,7 +21,7 @@ API docs and code examples will be available.
 
 ## Contributors
 
-If you'd like to contribute, please see our [contributing guide](.github/CONTRIBUTING.md).
+If you'd like to contribute, please see our [contributing guide](CONTRIBUTING.md).
 
 The fastest way to find a place to contribute is to browse our
 [open issues](https://github.com/keras-team/keras-nlp/issues) and find an
