@@ -53,7 +53,6 @@ class FNetEncoder(keras.layers.Layer):
     # Call encoder on the inputs.
     input_data = tf.random.uniform(shape=[1, 10, 64])
     output = model(input_data)
-
     ```
 
     References:
@@ -126,8 +125,13 @@ class FNetEncoder(keras.layers.Layer):
         if not self._built:
             self._build(inputs.shape)
 
-        # Apply fourier transform on the input. Note: We don't have padding
-        # tokens in the official FNet code.
+        # Apply fourier transform on the input.
+        # Note: In the official FNet code, padding tokens are added to the
+        # the input. However, the padding masks are deleted, i.e., mixing of
+        # all tokens is done. This is because certain frequencies will be zeroed
+        # out if we apply padding masks in every encoder layer.
+        # Code references:
+        # https://github.com/google-research/google-research/blob/master/f_net/input_pipeline.py#L107-L109
         # https://github.com/google-research/google-research/blob/master/f_net/layers.py#L137
         mixing_output = self._fourier_transform(inputs)
 
