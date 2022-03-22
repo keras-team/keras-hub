@@ -41,10 +41,10 @@ class TransformerDecoder(keras.layers.Layer):
         layer_norm_epsilon: float, defaults to 1e-5. The eps value in layer
             normalization components.
         name: string, defaults to None. The name of the layer.
-        kernel_initializer: tf.keras.initializers initializer, defaults to None. Sets the
-            kernel initializer for the dense and multiheaded attention layers
-        bias_initializer: tf.keras.initializers initializer, defaults to None. Sets the
-            bias initializer for the dense and multiheaded attention layers
+        kernel_initializer: tf.keras.initializers initializer, defaults to None. 
+            The kernel initializer for the dense and multiheaded attention layers.
+        bias_initializer: tf.keras.initializers initializer, defaults to None. 
+            The bias initializer for the dense and multiheaded attention layers.
         **kwargs: other keyword arguments.
 
     Examples:
