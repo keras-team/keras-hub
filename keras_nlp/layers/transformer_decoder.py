@@ -39,9 +39,9 @@ class TransformerDecoder(keras.layers.Layer):
             activation function of feedforward network.
         layer_norm_epsilon: float, defaults to 1e-5. The eps value in layer
             normalization components.
-        kernel_initializer: tf.keras.initializers initializer, defaults to None. 
+        kernel_initializer: tf.keras.initializers initializer, defaults to "glorot_uniform". 
             The kernel initializer for the dense and multiheaded attention layers.
-        bias_initializer: tf.keras.initializers initializer, defaults to None. 
+        bias_initializer: tf.keras.initializers initializer, defaults to "zeros". 
             The bias initializer for the dense and multiheaded attention layers.
         name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
@@ -78,8 +78,8 @@ class TransformerDecoder(keras.layers.Layer):
         dropout=0,
         activation="relu",
         layer_norm_epsilon=1e-05,
-        kernel_initializer=None,
-        bias_initializer=None,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
         name=None,
         **kwargs,
     ):
@@ -90,8 +90,8 @@ class TransformerDecoder(keras.layers.Layer):
         self.activation = activation
         self.layer_norm_epsilon = layer_norm_epsilon
         self._built = False
-        self.kernel_initializer = kernel_initializer
-        self.bias_initializer = bias_initializer
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
 
     def _build(self, input_shape):
         # Create layers based on input shape.

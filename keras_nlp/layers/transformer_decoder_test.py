@@ -17,7 +17,6 @@ import os
 
 import tensorflow as tf
 from tensorflow import keras
-from keras import initializers
 from keras_nlp.layers import transformer_decoder
 
 
@@ -60,8 +59,8 @@ class TransformerDecoderTest(tf.test.TestCase):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
-            kernel_initializer=initializers.HeNormal(),
-            bias_initializer=initializers.Constant(value=2)
+            kernel_initializer=keras.initializers.HeNormal(),
+            bias_initializer=keras.initializers.Constant(value=2)
         )
 
         config = decoder.get_config()
@@ -72,8 +71,8 @@ class TransformerDecoderTest(tf.test.TestCase):
             "dropout": 0,
             "activation": "relu",
             "layer_norm_epsilon": 1e-05,
-            "kernel_initializer": initializers.serialize(initializers.HeNormal()),
-            "bias_initializer": initializers.serialize(initializers.Constant(value=2)),
+            "kernel_initializer": keras.initializers.serialize(keras.initializers.HeNormal()),
+            "bias_initializer": keras.initializers.serialize(keras.initializers.Constant(value=2)),
         }
 
         self.assertEqual(config, {**config, **expected_config_subset})
