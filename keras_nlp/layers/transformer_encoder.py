@@ -84,9 +84,9 @@ class TransformerEncoder(keras.layers.Layer):
         self.dropout = dropout
         self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
-        self._built = False
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
+        self._built = False
 
     def _build(self, input_shape):
         # Create layers based on input shape.
