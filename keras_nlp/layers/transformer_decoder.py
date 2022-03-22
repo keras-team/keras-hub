@@ -39,9 +39,9 @@ class TransformerDecoder(keras.layers.Layer):
             activation function of feedforward network.
         layer_norm_epsilon: float, defaults to 1e-5. The eps value in layer
             normalization components.
-        kernel_initializer: tf.keras.initializers initializer, defaults to "glorot_uniform". 
+        kernel_initializer: tf.keras.initializers initializer, defaults to "glorot_uniform".
             The kernel initializer for the dense and multiheaded attention layers.
-        bias_initializer: tf.keras.initializers initializer, defaults to "zeros". 
+        bias_initializer: tf.keras.initializers initializer, defaults to "zeros".
             The bias initializer for the dense and multiheaded attention layers.
         name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
@@ -126,13 +126,18 @@ class TransformerDecoder(keras.layers.Layer):
         # First dense layer in the feedforward network, which maps input
         # feauture size to dimension `self.intermediate_dim`.
         self._intermediate_dense = keras.layers.Dense(
-            self.intermediate_dim, activation=self.activation, 
-            kernel_initializer=self.kernel_initializer, bias_initializer=self.bias_initializer,
+            self.intermediate_dim,
+            activation=self.activation,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
         )
         # Second dense layer in the feedforward network, which maps input
         # feature size back to the input feature size.
-        self._output_dense = keras.layers.Dense(feature_size, 
-            kernel_initializer=self.kernel_initializer, bias_initializer=self.bias_initializer)
+        self._output_dense = keras.layers.Dense(
+            feature_size,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+        )
         self._outputdropout = keras.layers.Dropout(rate=self.dropout)
 
     def _add_and_norm(self, input1, input2, norm_layer):
@@ -235,7 +240,9 @@ class TransformerDecoder(keras.layers.Layer):
                 "dropout": self.dropout,
                 "activation": self.activation,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "kernel_initializer": keras.initializers.serialize(self.kernel_initializer),
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
                 "bias_initializer": keras.initializers.serialize(self.bias_initializer),
             }
         )
