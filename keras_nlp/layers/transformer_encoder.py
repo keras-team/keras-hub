@@ -15,7 +15,6 @@
 """Transformer encoder block implementation based on `keras.layers.Layer`."""
 
 from tensorflow import keras
-from keras import initializers
 
 from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
     merge_padding_and_attention_mask,
@@ -38,11 +37,11 @@ class TransformerEncoder(keras.layers.Layer):
             activation function of feedforward network.
         layer_norm_epsilon: float, defaults to 1e-5. The epsilon value in layer
             normalization components.
-        name: string, defaults to None. The name of the layer.
         kernel_initializer: tf.keras.initializers initializer, defaults to None. 
             The kernel initializer for the dense and multiheaded attention layers.
         bias_initializer: tf.keras.initializers initializer, defaults to None. 
             The bias initializer for the dense and multiheaded attention layers.
+        name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
 
     Examples:
@@ -74,9 +73,9 @@ class TransformerEncoder(keras.layers.Layer):
         dropout=0,
         activation="relu",
         layer_norm_epsilon=1e-05,
-        name=None,
         kernel_initializer=None,
         bias_initializer=None,
+        name=None,
         **kwargs
     ):
         super().__init__(name=name, **kwargs)
@@ -176,8 +175,8 @@ class TransformerEncoder(keras.layers.Layer):
                 "dropout": self.dropout,
                 "activation": self.activation,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "kernel_initializer": initializers.serialize(self.kernel_initializer),
-                "bias_initializer": initializers.serialize(self.bias_initializer),
+                "kernel_initializer": keras.initializers.serialize(self.kernel_initializer),
+                "bias_initializer": keras.initializers.serialize(self.bias_initializer),
             }
         )
         return config
