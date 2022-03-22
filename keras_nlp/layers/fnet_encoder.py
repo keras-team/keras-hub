@@ -35,6 +35,10 @@ class FNetEncoder(keras.layers.Layer):
             activation function of feedforward network.
         layer_norm_epsilon: float, defaults to 1e-12. The epsilon value in layer
             normalization components.
+        kernel_initializer: tf.keras.initializers initializer, defaults to
+            "glorot_uniform". The kernel initializer for the dense layers.
+        bias_initializer: tf.keras.initializers initializer, defaults to
+            "zeros". The bias initializer for the dense layers.
         name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
 
@@ -65,14 +69,18 @@ class FNetEncoder(keras.layers.Layer):
         dropout=0.1,
         activation="gelu",
         layer_norm_epsilon=1e-12,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
         name=None,
         **kwargs
     ):
         super().__init__(name=name, **kwargs)
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
-        self.activation = activation
+        self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
         self._built = False
 
     def _build(self, input_shape):
@@ -90,9 +98,16 @@ class FNetEncoder(keras.layers.Layer):
 
         # Feedforward layer.
         self._intermediate_dense = keras.layers.Dense(
-            self.intermediate_dim, activation=self.activation
+            self.intermediate_dim,
+            activation=self.activation,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
         )
-        self._output_dense = keras.layers.Dense(feature_size)
+        self._output_dense = keras.layers.Dense(
+            feature_size,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+        )
         self._output_dropout = keras.layers.Dropout(rate=self.dropout)
 
     def _fourier_transform(self, input):
@@ -155,8 +170,14 @@ class FNetEncoder(keras.layers.Layer):
             {
                 "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
-                "activation": self.activation,
+                "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
             }
         )
         return config
