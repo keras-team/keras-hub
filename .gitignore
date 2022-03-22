@@ -12,4 +12,5 @@ keras_nlp.egg-info/
 .coverage
 .coverage.*
 
+# Windows-specific build files
 build/
