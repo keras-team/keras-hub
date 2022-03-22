@@ -183,7 +183,9 @@ class TransformerEncoder(keras.layers.Layer):
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
-                "bias_initializer": keras.initializers.serialize(self.bias_initializer),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
             }
         )
         return config
