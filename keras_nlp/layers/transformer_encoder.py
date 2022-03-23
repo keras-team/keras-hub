@@ -37,10 +37,12 @@ class TransformerEncoder(keras.layers.Layer):
             activation function of feedforward network.
         layer_norm_epsilon: float, defaults to 1e-5. The epsilon value in layer
             normalization components.
-        kernel_initializer: tf.keras.initializers initializer, defaults to "glorot_uniform".
-            The kernel initializer for the dense and multiheaded attention layers.
-        bias_initializer: tf.keras.initializers initializer, defaults to "zeros".
-            The bias initializer for the dense and multiheaded attention layers.
+        kernel_initializer: string or tf.keras.initializers initializer,
+            defaults to "glorot_uniform". The kernel initializer for
+            the dense and multiheaded attention layers.
+        bias_initializer: string or tf.keras.initializers initializer,
+            defaults to "zeros". The bias initializer for
+            the dense and multiheaded attention layers.
         name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
 
@@ -48,7 +50,7 @@ class TransformerEncoder(keras.layers.Layer):
 
     ```python
     # Create a single transformer encoder layer.
-    encoder = keras_nlp.layer.TransformerEncoder(
+    encoder = keras_nlp.layers.TransformerEncoder(
         intermediate_dim=64, num_heads=8)
 
     # Create a simple model containing the encoder.
