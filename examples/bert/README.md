@@ -64,7 +64,8 @@ pip install -e ".[examples]"
 
 Training a BERT model happens in two stages. First, the model is "pretrained" on
 a large corpus of input text. This is computationally expensive. After
-pretraining, the model can be "fine tuned" on a downstream task with
+pretraining, the model can be "fine tuned" on a downstream task with much
+smaller amount of labeled data.
 
 ### Downloading pretraining data
 
@@ -82,7 +83,9 @@ python -m wikiextractor.WikiExtractor enwiki-latest-pages-articles.xml.bz2
 BooksCorpus is no longer hosted by
 [it's creators](https://yknzhu.wixsite.com/mbweb), but you can find instructions
 for downloading or reproducing the corpus in this
-[README](https://github.com/soskek/bookcorpus/blob/master/README.md).
+[repository](https://github.com/soskek/bookcorpus). We suggest the pre-made file
+downloads listed at the top of the README. Alternatively, you can forgo it
+entirely and pretrain solely on wikipedia.
 
 Preparing the pretraining data will happen in two stages. First, raw text needs
 to be split into lists of sentences per document. Second, this sentence split
