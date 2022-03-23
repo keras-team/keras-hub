@@ -26,6 +26,12 @@ class FNetEncoder(keras.layers.Layer):
     (https://arxiv.org/abs/2105.03824). Users can instantiate multiple instances
     of this class to stack up the encoder.
 
+    Note on padding: In the official FNet code, padding tokens are added to the
+    the input. However, the padding masks are deleted, i.e., mixing of
+    all tokens is done. This is because certain frequencies will be zeroed
+    out if we apply padding masks in every encoder layer. Hence, we don't
+    take padding mask as input in the call() function.
+
     Args:
         intermediate_dim: int, defaults to 3072. The hidden size of feedforward
             network.
@@ -65,7 +71,7 @@ class FNetEncoder(keras.layers.Layer):
 
     def __init__(
         self,
-        intermediate_dim=3072,
+        intermediate_dim,
         dropout=0.1,
         activation="gelu",
         layer_norm_epsilon=1e-12,
@@ -136,13 +142,6 @@ class FNetEncoder(keras.layers.Layer):
             return self._output_dropout(x)
 
         # Apply fourier transform on the input.
-        # Note: In the official FNet code, padding tokens are added to the
-        # the input. However, the padding masks are deleted, i.e., mixing of
-        # all tokens is done. This is because certain frequencies will be zeroed
-        # out if we apply padding masks in every encoder layer.
-        # Code references:
-        # https://github.com/google-research/google-research/blob/master/f_net/input_pipeline.py#L107-L109
-        # https://github.com/google-research/google-research/blob/master/f_net/layers.py#L137
         mixing_output = _fourier_transform(inputs)
 
         # LayerNorm layer.
