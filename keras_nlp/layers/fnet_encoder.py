@@ -69,8 +69,8 @@ class FNetEncoder(keras.layers.Layer):
         dropout=0.1,
         activation="gelu",
         layer_norm_epsilon=1e-12,
-        kernel_initializer="glorot_uniform",
-        bias_initializer="zeros",
+        kernel_initializer=tf.keras.initializers.RandomNormal(stddev=2e-2),
+        bias_initializer=tf.keras.initializers.RandomNormal(stddev=2e-2),
         name=None,
         **kwargs
     ):
@@ -81,11 +81,9 @@ class FNetEncoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
-        self._built = False
 
-    def _build(self, input_shape):
+    def build(self, input_shape):
         # Create layers based on input shape.
-        self._built = True
         feature_size = input_shape[-1]
 
         # Layer Norm layers.
@@ -110,22 +108,6 @@ class FNetEncoder(keras.layers.Layer):
         )
         self._output_dropout = keras.layers.Dropout(rate=self.dropout)
 
-    def _fourier_transform(self, input):
-        # Apply FFT on the input and take the real part.
-        # Before we apply fourier transform, let's convert the dtype of the
-        # input tensor to complex64.
-        input = tf.cast(input, tf.complex64)
-        mixing_output = tf.math.real(tf.signal.fft2d(input))
-        return mixing_output
-
-    def _add_and_norm(self, input1, input2, norm_layer):
-        return norm_layer(input1 + input2)
-
-    def _feed_forward(self, input):
-        x = self._intermediate_dense(input)
-        x = self._output_dense(x)
-        return self._output_dropout(x)
-
     def call(self, inputs):
         """Forward pass of the FNetEncoder.
 
@@ -137,8 +119,21 @@ class FNetEncoder(keras.layers.Layer):
             A Tensor of the same shape as the `inputs`.
         """
 
-        if not self._built:
-            self._build(inputs.shape)
+        def _fourier_transform(input):
+            # Apply FFT on the input and take the real part.
+            # Before we apply fourier transform, let's convert the dtype of the
+            # input tensor to complex64.
+            input = tf.cast(input, tf.complex64)
+            mixing_output = tf.math.real(tf.signal.fft2d(input))
+            return mixing_output
+
+        def _add_and_norm(input1, input2, norm_layer):
+            return norm_layer(input1 + input2)
+
+        def _feed_forward(input):
+            x = self._intermediate_dense(input)
+            x = self._output_dense(x)
+            return self._output_dropout(x)
 
         # Apply fourier transform on the input.
         # Note: In the official FNet code, padding tokens are added to the
@@ -148,18 +143,18 @@ class FNetEncoder(keras.layers.Layer):
         # Code references:
         # https://github.com/google-research/google-research/blob/master/f_net/input_pipeline.py#L107-L109
         # https://github.com/google-research/google-research/blob/master/f_net/layers.py#L137
-        mixing_output = self._fourier_transform(inputs)
+        mixing_output = _fourier_transform(inputs)
 
         # LayerNorm layer.
-        mixing_output = self._add_and_norm(
+        mixing_output = _add_and_norm(
             inputs, mixing_output, self._mixing_layer_norm
         )
 
         # Feedforward layer.
-        feed_forward_output = self._feed_forward(mixing_output)
+        feed_forward_output = _feed_forward(mixing_output)
 
         # LayerNorm layer.
-        x = self._add_and_norm(
+        x = _add_and_norm(
             mixing_output, feed_forward_output, self._output_layer_norm
         )
         return x
