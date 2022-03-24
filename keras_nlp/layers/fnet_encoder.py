@@ -72,11 +72,11 @@ class FNetEncoder(keras.layers.Layer):
     def __init__(
         self,
         intermediate_dim,
-        dropout=0.1,
-        activation="gelu",
-        layer_norm_epsilon=1e-12,
-        kernel_initializer=tf.keras.initializers.RandomNormal(stddev=2e-2),
-        bias_initializer=tf.keras.initializers.RandomNormal(stddev=2e-2),
+        dropout=0,
+        activation="relu",
+        layer_norm_epsilon=1e-5,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
         name=None,
         **kwargs
     ):
@@ -125,7 +125,7 @@ class FNetEncoder(keras.layers.Layer):
             A Tensor of the same shape as the `inputs`.
         """
 
-        def _fourier_transform(input):
+        def fourier_transform(input):
             # Apply FFT on the input and take the real part.
             # Before we apply fourier transform, let's convert the dtype of the
             # input tensor to complex64.
@@ -133,27 +133,23 @@ class FNetEncoder(keras.layers.Layer):
             mixing_output = tf.math.real(tf.signal.fft2d(input))
             return mixing_output
 
-        def _add_and_norm(input1, input2, norm_layer):
+        def add_and_norm(input1, input2, norm_layer):
             return norm_layer(input1 + input2)
 
-        def _feed_forward(input):
+        def feed_forward(input):
             x = self._intermediate_dense(input)
             x = self._output_dense(x)
             return self._output_dropout(x)
 
-        # Apply fourier transform on the input.
-        mixing_output = _fourier_transform(inputs)
+        mixing_output = fourier_transform(inputs)
 
-        # LayerNorm layer.
-        mixing_output = _add_and_norm(
+        mixing_output = add_and_norm(
             inputs, mixing_output, self._mixing_layer_norm
         )
 
-        # Feedforward layer.
-        feed_forward_output = _feed_forward(mixing_output)
+        feed_forward_output = feed_forward(mixing_output)
 
-        # LayerNorm layer.
-        x = _add_and_norm(
+        x = add_and_norm(
             mixing_output, feed_forward_output, self._output_layer_norm
         )
         return x

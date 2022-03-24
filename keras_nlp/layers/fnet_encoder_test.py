@@ -42,9 +42,9 @@ class FNetEncoderTest(tf.test.TestCase):
         config = encoder.get_config()
         expected_config_subset = {
             "intermediate_dim": 4,
-            "dropout": 0.1,
-            "activation": "gelu",
-            "layer_norm_epsilon": 1e-12,
+            "dropout": 0,
+            "activation": "relu",
+            "layer_norm_epsilon": 1e-5,
             "kernel_initializer": keras.initializers.serialize(
                 keras.initializers.HeNormal()
             ),
