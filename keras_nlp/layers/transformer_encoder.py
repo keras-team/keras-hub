@@ -37,6 +37,12 @@ class TransformerEncoder(keras.layers.Layer):
             activation function of feedforward network.
         layer_norm_epsilon: float, defaults to 1e-5. The epsilon value in layer
             normalization components.
+        kernel_initializer: string or tf.keras.initializers initializer,
+            defaults to "glorot_uniform". The kernel initializer for
+            the dense and multiheaded attention layers.
+        bias_initializer: string or tf.keras.initializers initializer,
+            defaults to "zeros". The bias initializer for
+            the dense and multiheaded attention layers.
         name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
 
@@ -44,7 +50,7 @@ class TransformerEncoder(keras.layers.Layer):
 
     ```python
     # Create a single transformer encoder layer.
-    encoder = keras_nlp.layer.TransformerEncoder(
+    encoder = keras_nlp.layers.TransformerEncoder(
         intermediate_dim=64, num_heads=8)
 
     # Create a simple model containing the encoder.
@@ -69,6 +75,8 @@ class TransformerEncoder(keras.layers.Layer):
         dropout=0,
         activation="relu",
         layer_norm_epsilon=1e-05,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
         name=None,
         **kwargs
     ):
@@ -76,8 +84,10 @@ class TransformerEncoder(keras.layers.Layer):
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.dropout = dropout
-        self.activation = activation
+        self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
         self._built = False
 
     def _build(self, input_shape):
@@ -90,6 +100,8 @@ class TransformerEncoder(keras.layers.Layer):
             key_dim=self._attention_head_size,
             value_dim=self._attention_head_size,
             dropout=self.dropout,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
         )
 
         self._attention_layernorm = keras.layers.LayerNormalization()
@@ -98,9 +110,16 @@ class TransformerEncoder(keras.layers.Layer):
         self._attentiondropout = keras.layers.Dropout(rate=self.dropout)
 
         self._intermediate_dense = keras.layers.Dense(
-            self.intermediate_dim, activation=self.activation
+            self.intermediate_dim,
+            activation=self.activation,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
         )
-        self._output_dense = keras.layers.Dense(feature_size)
+        self._output_dense = keras.layers.Dense(
+            feature_size,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+        )
         self._outputdropout = keras.layers.Dropout(rate=self.dropout)
 
     def _add_and_norm(self, input1, input2, norm_layer):
@@ -161,8 +180,14 @@ class TransformerEncoder(keras.layers.Layer):
                 "intermediate_dim": self.intermediate_dim,
                 "num_heads": self.num_heads,
                 "dropout": self.dropout,
-                "activation": self.activation,
+                "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
             }
         )
         return config
