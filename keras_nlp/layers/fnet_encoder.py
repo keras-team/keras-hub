@@ -100,7 +100,7 @@ class FNetEncoder(keras.layers.Layer):
             epsilon=self.layer_norm_epsilon
         )
 
-        # Feedforward layer.
+        # Feedforward layers.
         self._intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             activation=self.activation,
