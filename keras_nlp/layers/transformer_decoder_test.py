@@ -60,23 +60,45 @@ class TransformerDecoderTest(tf.test.TestCase):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
+            kernel_initializer="HeNormal",
+            bias_initializer="Zeros",
         )
+
         config = decoder.get_config()
+
         expected_config_subset = {
             "intermediate_dim": 4,
             "num_heads": 2,
             "dropout": 0,
             "activation": "relu",
             "layer_norm_epsilon": 1e-05,
+            "kernel_initializer": keras.initializers.serialize(
+                keras.initializers.HeNormal()
+            ),
+            "bias_initializer": keras.initializers.serialize(
+                keras.initializers.Zeros()
+            ),
         }
+
+        self.assertEqual(config, {**config, **expected_config_subset})
         self.assertEqual(config, {**config, **expected_config_subset})
 
         restored_decoder = transformer_decoder.TransformerDecoder.from_config(
             config,
         )
+
         self.assertEqual(
             restored_decoder.get_config(), {**config, **expected_config_subset}
         )
+
+    def test_value_error_when_invalid_kernel_inititalizer(self):
+        with self.assertRaises(ValueError):
+            transformer_decoder.TransformerDecoder(
+                intermediate_dim=4,
+                num_heads=2,
+                dropout=0.5,
+                kernel_initializer="Invalid",
+            )
 
     def test_one_training_step_of_transformer_encoder(self):
         class MyModel(keras.Model):
