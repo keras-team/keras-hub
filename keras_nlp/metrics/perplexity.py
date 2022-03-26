@@ -42,7 +42,7 @@ class Perplexity(keras.metrics.Metric):
 
     ```python
     # 1. update_state() and result()
-    perplexity = Perplexity(name="perplexity")
+    perplexity = keras_nlp.metrics.Perplexity(name="perplexity")
     target = tf.experimental.numpy.random.randint(low=0, high=10, size=(2, 5))
     logits = tf.random.uniform(shape=(2, 5, 10))
 
@@ -58,12 +58,12 @@ class Perplexity(keras.metrics.Metric):
     print(perplexity.result())
 
     # 2. Call perplexity directly.
-    perplexity = Perplexity(name="perplexity")
+    perplexity = keras_nlp.metrics.Perplexity(name="perplexity")
     print(perplexity(target, logits))
 
     # 3. Provide the padding token ID and let the class compute the mask on its
     # own.
-    perplexity = Perplexity(name="perplexity", pad_token_id=0)
+    perplexity = keras_nlp.metrics.Perplexity(name="perplexity", pad_token_id=0)
     print(perplexity(target, logits))
     ```
     """
