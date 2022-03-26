@@ -33,18 +33,18 @@ class FNetEncoder(keras.layers.Layer):
     take padding mask as input in the call() function.
 
     Args:
-        intermediate_dim: int, defaults to 3072. The hidden size of feedforward
-            network.
-        dropout: float, defaults to 0.1. The dropout value, applied in the
+        intermediate_dim: int. The hidden size of feedforward network.
+        dropout: float, defaults to 0. The dropout value, applied in the
             feedforward network.
-        activation: string or `tf.keras.activations`, defaults to "gelu". The
+        activation: string or `tf.keras.activations`, defaults to "relu". The
             activation function of feedforward network.
-        layer_norm_epsilon: float, defaults to 1e-12. The epsilon value in layer
+        layer_norm_epsilon: float, defaults to 1e-5. The epsilon value in layer
             normalization components.
-        kernel_initializer: tf.keras.initializers initializer, defaults to
-            "glorot_uniform". The kernel initializer for the dense layers.
-        bias_initializer: tf.keras.initializers initializer, defaults to
-            "zeros". The bias initializer for the dense layers.
+        kernel_initializer: "string" or `tf.keras.initializers` initializer,
+            defaults to "glorot_uniform". The kernel initializer for the dense
+            layers.
+        bias_initializer: "string" or `tf.keras.initializers` initializer,
+            defaults to "zeros". The bias initializer for the dense layers.
         name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
 
