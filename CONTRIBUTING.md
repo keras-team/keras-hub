@@ -106,9 +106,10 @@ If after running these the CI flow is still failing, try updating `flake8`,
 `isort` and `black`. This can be done by running `pip install --upgrade black`,
 `pip install --upgrade flake8`, and `pip install --upgrade isort`.
 
-If you face issues while running the shell scripts and face errors like 
-`: invalid option` one possible reason might be that the line endings are 
-different. To fix this you can try migrating to LF line endings from CRLF.
+Note that if you are using WSL, make sure you clone the repo with Linux style LF 
+line endings before running the format or lint scripts, this is automatically
+done if you clone using git inside WSL. If there is conflict due to the line
+endings you might see an error like - `: invalid option`
 
 ## Community Guidelines
 
