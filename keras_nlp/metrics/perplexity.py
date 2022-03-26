@@ -98,11 +98,11 @@ class Perplexity(keras.metrics.Metric):
         # y_true shape: (bsz, seq_len), y_pred shape: (bsz, seq_len, vocab_size)
         if tf.rank(y_true) != 2:
             raise ValueError(
-                f"`y_true must have rank 2. Found rank " f"`{tf.rank(y_true)}`"
+                f"`y_true` must have rank 2. Found rank " f"`{tf.rank(y_true)}`"
             )
         if tf.rank(y_pred) != 3:
             raise ValueError(
-                f"`y_pred must have rank 3. Found rank " f"`{tf.rank(y_pred)}`"
+                f"`y_pred` must have rank 3. Found rank " f"`{tf.rank(y_pred)}`"
             )
 
         if (
