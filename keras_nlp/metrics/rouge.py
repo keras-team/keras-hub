@@ -76,31 +76,6 @@ class RougeN(keras.metrics.Metric):
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         # y_true shape: (bsz, seq_len), y_pred shape: (bsz, seq_len)
-        if tf.rank(y_true) != 2:
-            raise ValueError(
-                f"`y_true` must have rank 2. Found rank {tf.rank(y_true)}"
-            )
-        if tf.rank(y_pred) != 2:
-            raise ValueError(
-                f"`y_pred` must have rank 2. Found rank {tf.rank(y_pred)}"
-            )
-
-        if (
-            tf.reduce_sum(
-                tf.cast(
-                    tf.equal(tf.shape(y_true), tf.shape(y_pred)),
-                    tf.int32,
-                )
-            )
-            != 2
-        ):
-            raise ValueError(
-                f"`y_true` and `y_pred` must have the same shape. Full shape "
-                f"received for `y_true`: {tf.shape(y_true)}. Full shape "
-                f"received for `y_pred`: {tf.shape(y_pred)}"
-            )
-
-        # Typecast the tensors to self._dtype.
         y_true = tf.cast(y_true, self._dtype)
         y_pred = tf.cast(y_pred, self._dtype)
 
