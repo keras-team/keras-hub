@@ -26,9 +26,8 @@ class Perplexity(keras.metrics.Metric):
 
     Args:
         name: string. Name of the metric instance.
-        dtype: string or tf.dtypes.Dtype. Data type of y_pred, to which all
-            tensors are also cast, for computation. If not specified, it
-            defaults to tf.float32.
+        dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
+               not specified, it defaults to tf.float32.
         from_logits: bool. If True, `y_pred` (input to `update_state()`) should
             be the logits as returned by the model. Otherwise, `y_pred` is a
             tensor of probabilities.
@@ -96,31 +95,7 @@ class Perplexity(keras.metrics.Metric):
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         # y_true shape: (bsz, seq_len), y_pred shape: (bsz, seq_len, vocab_size)
-        if tf.rank(y_true) != 2:
-            raise ValueError(
-                f"`y_true` must have rank 2. Found rank {tf.rank(y_true)}"
-            )
-        if tf.rank(y_pred) != 3:
-            raise ValueError(
-                f"`y_pred` must have rank 3. Found rank {tf.rank(y_pred)}"
-            )
-
-        if (
-            tf.reduce_sum(
-                tf.cast(
-                    tf.equal(tf.shape(y_true)[:2], tf.shape(y_pred)[:2]),
-                    tf.int32,
-                )
-            )
-            != 2
-        ):
-            raise ValueError(
-                f"`y_true` and `y_pred` must have the same first "
-                f"two dimensions. Full shape received for `y_true`"
-                f": {tf.shape(y_true)}. Full shape received for "
-                f"`y_pred`: {tf.shape(y_pred)}"
-            )
-
+        y_true = tf.cast(y_true, self._dtype)
         y_pred = tf.cast(y_pred, self._dtype)
         bsz = tf.cast(tf.shape(y_true)[0], self._dtype)
 
