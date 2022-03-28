@@ -121,7 +121,7 @@ class TransformerDecoder(keras.layers.Layer):
         self._enc_dec_attention_layernorm = keras.layers.LayerNormalization()
         self._feedforward_layernorm = keras.layers.LayerNormalization()
 
-        self._self_attentiondropout = keras.layers.Dropout(rate=self.dropout)
+        self._self_attention_dropout = keras.layers.Dropout(rate=self.dropout)
         self._enc_dec_attentiondropout = keras.layers.Dropout(
             rate=self.dropout,
         )
@@ -140,7 +140,7 @@ class TransformerDecoder(keras.layers.Layer):
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._outputdropout = keras.layers.Dropout(rate=self.dropout)
+        self._output_dropout = keras.layers.Dropout(rate=self.dropout)
 
     def _add_and_norm(self, input1, input2, norm_layer):
         return norm_layer(input1 + input2)
@@ -148,7 +148,7 @@ class TransformerDecoder(keras.layers.Layer):
     def _feed_forward(self, input):
         x = self._intermediate_dense(input)
         x = self._output_dense(x)
-        return self._outputdropout(x)
+        return self._output_dropout(x)
 
     def call(
         self,
@@ -206,7 +206,7 @@ class TransformerDecoder(keras.layers.Layer):
             decoder_sequence,
             attention_mask=decoder_mask,
         )
-        self_attended = self._self_attentiondropout(self_attended)
+        self_attended = self._self_attention_dropout(self_attended)
         self_attended = self._add_and_norm(
             self_attended, decoder_sequence, self._decoder_attention_layernorm
         )
