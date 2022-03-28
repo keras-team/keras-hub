@@ -106,10 +106,11 @@ If after running these the CI flow is still failing, try updating `flake8`,
 `isort` and `black`. This can be done by running `pip install --upgrade black`,
 `pip install --upgrade flake8`, and `pip install --upgrade isort`.
 
-Note that if you are using WSL, make sure you clone the repo with Linux style LF 
-line endings before running the format or lint scripts, this is automatically
-done if you clone using git inside WSL. If there is conflict due to the line
-endings you might see an error like - `: invalid option`
+Note that if you are using Windows Subsystem for Linux (WSL), make sure you 
+clone the repo with Linux style LF line endings before running the format
+or lint scripts. This is automatically done if you clone using git inside WSL.
+If there is conflict due to the line endings you might see an error
+like - `: invalid option`
 
 ## Community Guidelines
 
