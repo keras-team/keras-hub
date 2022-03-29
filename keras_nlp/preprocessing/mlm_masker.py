@@ -12,15 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterable
-
 import tensorflow as tf
 import tensorflow_text as tf_text
-from absl import logging
 from tensorflow import keras
 
 
-class LMMask(keras.layers.Layer):
+class MaskedLanguageModelMasker(keras.layers.Layer):
     """Class that applies language model masking.
 
     This class is useful for preparing inputs for masked languaged modeling
@@ -46,53 +43,20 @@ class LMMask(keras.layers.Layer):
 
     def __init__(
         self,
-        vocabulary,
-        unselectable_tokens=None,
-        mask_token="[MASK]",
+        vocabulary_size,
+        unselectable_token_ids=None,
+        mask_token_id=0,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.unselectable_tokens = unselectable_tokens
-        self.mask_token = mask_token
-
-        # Parse the vocabulary.
-        if isinstance(vocabulary, str):
-            self._vocab = [
-                line.rstrip() for line in tf.io.gfile.GFile(vocabulary)
-            ]
-        elif isinstance(vocabulary, Iterable):
-            self._vocab = list(vocabulary)
-        else:
+        self.vocabulary_size = vocabulary_size
+        self.unselectable_token_ids = unselectable_token_ids
+        if mask_token_id >= vocabulary_size:
             raise ValueError(
-                "Vocabulary must be an file path or list of terms. "
-                f"Received: vocabulary={vocabulary}"
+                f"Mask token id should be in range [0, vocabulary_size - 1], "
+                f"but received mask_token_id={mask_token_id}."
             )
-
-        # Parse the ids of unselectable tokens.
-        if unselectable_tokens is None:
-            self._unselectable_token_ids = []
-        else:
-            for token in unselectable_tokens:
-                if token not in self._vocab:
-                    logging.warning(
-                        "Unselectable token %s does not exist in the vocab, "
-                        "so it is ignored. Please choose unselectable "
-                        "tokens from the right vocabulary.",
-                        token,
-                    )
-                else:
-                    self._unselectable_token_ids = [
-                        self._vocab.index(token)
-                        for token in unselectable_tokens
-                    ]
-
-        if mask_token not in self._vocab:
-            raise KeyError(
-                f"Mask token {mask_token} does not exist in the given "
-                f"vocabulary, please make sure the mask token is selected "
-                f"from the correct vocabulary."
-            )
-        self._mask_token_id = self._vocab.index(mask_token)
+        self.mask_token_id = mask_token_id
 
     def call(
         self,
@@ -103,33 +67,46 @@ class LMMask(keras.layers.Layer):
         random_token_rate=0.1,
         padding_token=None,
     ):
-        if not isinstance(inputs, tf.RaggedTensor):
+        input_is_ragged = isinstance(inputs, tf.RaggedTensor)
+        if not input_is_ragged:
             # Convert to RaggedTensor to avoid masking out padded token.
             inputs = tf.RaggedTensor.from_tensor(inputs, padding=padding_token)
         random_selector = tf_text.RandomItemSelector(
             max_selections_per_batch=max_selections,
             selection_rate=lm_selection_rate,
-            unselectable_ids=self._unselectable_token_ids,
+            unselectable_ids=self.unselectable_token_ids,
         )
         mask_values_chooser = tf_text.MaskValuesChooser(
-            len(self._vocab),
-            self._mask_token_id,
+            self.vocabulary_size,
+            self.mask_token_id,
             mask_token_rate=mask_token_rate,
             random_token_rate=random_token_rate,
         )
-        return tf_text.mask_language_model(
+
+        (
+            masked_input_ids,
+            masked_positions,
+            masked_ids,
+        ) = tf_text.mask_language_model(
             inputs,
             item_selector=random_selector,
             mask_values_chooser=mask_values_chooser,
         )
 
+        if not input_is_ragged:
+            # if inputs is a Tensor not RaggedTensor, we format the masked
+            # output to be a Tensor.
+            masked_input_ids = masked_input_ids.to_tensor()
+
+        return masked_input_ids, masked_positions, masked_ids
+
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "vocabulary": self._vocab,
-                "unselectable_tokens": self.unselectable_tokens,
-                "mask_token": self.mask_token,
+                "vocabulary_size": self.vocabulary_size,
+                "unselectable_token_ids": self.unselectable_token_ids,
+                "mask_token_id": self.mask_token_id,
             }
         )
         return config
