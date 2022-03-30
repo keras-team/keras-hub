@@ -11,22 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Transformer Encoder."""
+"""Tests for FNet Encoder."""
 
 import os
 
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers import transformer_encoder
+from keras_nlp.layers import fnet_encoder
 
 
-class TransformerEncoderTest(tf.test.TestCase):
+class FNetEncoderTest(tf.test.TestCase):
     def test_valid_call(self):
-        encoder = transformer_encoder.TransformerEncoder(
-            intermediate_dim=4,
-            num_heads=2,
-        )
+        encoder = fnet_encoder.FNetEncoder(intermediate_dim=4)
         model = keras.Sequential(
             [
                 keras.Input(shape=(4, 6)),
@@ -36,32 +33,18 @@ class TransformerEncoderTest(tf.test.TestCase):
         input = tf.random.uniform(shape=[2, 4, 6])
         model(input)
 
-    def test_valid_call_with_mask(self):
-        encoder = transformer_encoder.TransformerEncoder(
-            intermediate_dim=4,
-            num_heads=2,
-        )
-        encoder.build([2, 4, 6])
-        input = tf.random.uniform(shape=[2, 4, 6])
-        mask = input[:, :, 0] < 0.5
-        encoder(input, mask)
-
     def test_get_config_and_from_config(self):
-        encoder = transformer_encoder.TransformerEncoder(
+        encoder = fnet_encoder.FNetEncoder(
             intermediate_dim=4,
-            num_heads=2,
             kernel_initializer="HeNormal",
             bias_initializer="Zeros",
         )
-
         config = encoder.get_config()
-
         expected_config_subset = {
             "intermediate_dim": 4,
-            "num_heads": 2,
             "dropout": 0,
             "activation": "relu",
-            "layer_norm_epsilon": 1e-05,
+            "layer_norm_epsilon": 1e-5,
             "kernel_initializer": keras.initializers.serialize(
                 keras.initializers.HeNormal()
             ),
@@ -69,31 +52,25 @@ class TransformerEncoderTest(tf.test.TestCase):
                 keras.initializers.Zeros()
             ),
         }
-
         self.assertEqual(config, {**config, **expected_config_subset})
 
-        restored_encoder = transformer_encoder.TransformerEncoder.from_config(
+        restored_encoder = fnet_encoder.FNetEncoder.from_config(
             config,
         )
-
         self.assertEqual(
             restored_encoder.get_config(), {**config, **expected_config_subset}
         )
 
-    def test_value_error_when_invalid_kernel_inititalizer(self):
+    def test_value_error_when_invalid_kernel_initializer(self):
         with self.assertRaises(ValueError):
-            transformer_encoder.TransformerEncoder(
+            fnet_encoder.FNetEncoder(
                 intermediate_dim=4,
-                num_heads=2,
                 dropout=0.5,
                 kernel_initializer="Invalid",
             )
 
-    def test_one_training_step_of_transformer_encoder(self):
-        encoder = transformer_encoder.TransformerEncoder(
-            intermediate_dim=4,
-            num_heads=2,
-        )
+    def test_one_training_step_of_fnet_encoder(self):
+        encoder = fnet_encoder.FNetEncoder(intermediate_dim=4)
         inputs = keras.Input(shape=(4, 6))
         x = encoder(inputs)
         x = keras.layers.Dense(1, activation="sigmoid")(x)
@@ -111,15 +88,13 @@ class TransformerEncoderTest(tf.test.TestCase):
         self.assertGreater(len(grad), 1)
         optimizer.apply_gradients(zip(grad, model.trainable_variables))
 
-    def test_checkpointing_transformer_encoder(self):
-        encoder1 = transformer_encoder.TransformerEncoder(
+    def test_checkpointing_fnet_encoder(self):
+        encoder1 = fnet_encoder.FNetEncoder(
             intermediate_dim=4,
-            num_heads=2,
         )
 
-        encoder2 = transformer_encoder.TransformerEncoder(
+        encoder2 = fnet_encoder.FNetEncoder(
             intermediate_dim=4,
-            num_heads=2,
         )
         data = tf.random.uniform(shape=[2, 4, 6])
         encoder1(data)
@@ -145,9 +120,8 @@ class TransformerEncoderTest(tf.test.TestCase):
         model = keras.Sequential(
             [
                 keras.Input(shape=(4, 6)),
-                transformer_encoder.TransformerEncoder(
+                fnet_encoder.FNetEncoder(
                     intermediate_dim=4,
-                    num_heads=2,
                 ),
             ]
         )

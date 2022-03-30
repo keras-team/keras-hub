@@ -66,6 +66,10 @@ class WordPieceTokenizerTest(tf.test.TestCase):
             tokenizer.get_vocabulary(),
             ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"],
         )
+        self.assertEqual(tokenizer.id_to_token(0), "[UNK]")
+        self.assertEqual(tokenizer.id_to_token(6), "fox")
+        self.assertEqual(tokenizer.token_to_id("[UNK]"), 0)
+        self.assertEqual(tokenizer.token_to_id("fox"), 6)
 
     def test_special_tokens(self):
         input_data = ["quick brown whale"]
