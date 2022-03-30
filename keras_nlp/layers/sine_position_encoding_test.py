@@ -17,12 +17,12 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers import sine_positional_embedding
+from keras_nlp.layers import sine_position_encoding
 
 
 class SinePositionEncodingTest(tf.test.TestCase):
     def test_valid_call(self):
-        pos_encoding = sine_positional_embedding.SinePositionEncoding()
+        pos_encoding = sine_position_encoding.SinePositionEncoding()
         model = keras.Sequential(
             [
                 keras.Input(shape=(4, 6)),
@@ -33,7 +33,7 @@ class SinePositionEncodingTest(tf.test.TestCase):
         model(input)
 
     def test_static_layer_output_shape(self):
-        pos_encoding = sine_positional_embedding.SinePositionEncoding()
+        pos_encoding = sine_position_encoding.SinePositionEncoding()
         seq_length = 100
         hidden_size = 32
         inputs = keras.Input(shape=(seq_length, hidden_size))
@@ -45,7 +45,7 @@ class SinePositionEncodingTest(tf.test.TestCase):
         self.assertEqual(expected_output_shape, outputs.shape.as_list())
 
     def test_dynamic_layer_output_shape(self):
-        pos_encoding = sine_positional_embedding.SinePositionEncoding()
+        pos_encoding = sine_position_encoding.SinePositionEncoding()
         hidden_size = 32
         inputs = keras.Input(shape=(None, hidden_size))
         outputs = pos_encoding(inputs)
@@ -57,7 +57,7 @@ class SinePositionEncodingTest(tf.test.TestCase):
 
     # do multi dimension before sequence length
     def test_multi_dimension_layer_output_shape(self):
-        pos_encoding = sine_positional_embedding.SinePositionEncoding()
+        pos_encoding = sine_position_encoding.SinePositionEncoding()
         seq_length = 100
         hidden_size = 32
         inputs = keras.Input(shape=(None, seq_length, hidden_size))
@@ -69,7 +69,7 @@ class SinePositionEncodingTest(tf.test.TestCase):
         self.assertEqual(expected_output_shape, outputs.shape.as_list())
 
     def test_output_correct_values(self):
-        pos_encoding = sine_positional_embedding.SinePositionEncoding()
+        pos_encoding = sine_position_encoding.SinePositionEncoding()
         model = keras.Sequential(
             [
                 keras.Input(shape=(4, 6)),
@@ -93,7 +93,7 @@ class SinePositionEncodingTest(tf.test.TestCase):
         self.assertAllClose(output[0, 3, :], expected_encoding_position_3)
 
     def test_get_config_and_from_config(self):
-        pos_encoding = sine_positional_embedding.SinePositionEncoding(
+        pos_encoding = sine_position_encoding.SinePositionEncoding(
             max_wavelength=1000,
         )
         config = pos_encoding.get_config()
@@ -102,7 +102,7 @@ class SinePositionEncodingTest(tf.test.TestCase):
         }
         self.assertEqual(config, {**config, **expected_config_subset})
         restored_pos_encoding = (
-            sine_positional_embedding.SinePositionEncoding.from_config(config)
+            sine_position_encoding.SinePositionEncoding.from_config(config)
         )
         self.assertEqual(
             restored_pos_encoding.get_config(),
@@ -110,7 +110,7 @@ class SinePositionEncodingTest(tf.test.TestCase):
         )
 
     def test_float16_dtype(self):
-        pos_encoding = sine_positional_embedding.SinePositionEncoding(
+        pos_encoding = sine_position_encoding.SinePositionEncoding(
             dtype="float16"
         )
         seq_length = 100
