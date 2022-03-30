@@ -23,7 +23,6 @@ class Perplexity(keras.metrics.Metric):
     This class implements the perplexity metric. In short, this class calculates
     the cross entropy loss and takes its exponent.
     Note: This implementation is not suitable for fixed-size windows.
-
     Args:
         name: string. Name of the metric instance.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
@@ -36,30 +35,24 @@ class Perplexity(keras.metrics.Metric):
             computing the cross entropy loss). Note that if this field is
             provided, the `sample_weight` field in `update_state()` is ignored.
         **kwargs: Other keyword arguments.
-
     Examples:
-
     ```python
     # 1. update_state() and result()
     perplexity = keras_nlp.metrics.Perplexity(name="perplexity")
     target = tf.experimental.numpy.random.randint(low=0, high=10, size=(2, 5))
     logits = tf.random.uniform(shape=(2, 5, 10))
-
     # 1.1 sample_weight not specified.
     perplexity.update_state(target, logits)
     print(perplexity.result())
-
     # 1.2 sample_weight specified.
     # mask token 0
     sample_weight = tf.cast(tf.math.logical_not(tf.equal(y_true, 0)),
                             tf.float32)
     perplexity.update_state(target, logits, sample_weight)
     print(perplexity.result())
-
     # 2. Call perplexity directly.
     perplexity = keras_nlp.metrics.Perplexity(name="perplexity")
     print(perplexity(target, logits))
-
     # 3. Provide the padding token ID and let the class compute the mask on its
     # own.
     perplexity = keras_nlp.metrics.Perplexity(name="perplexity", pad_token_id=0)
@@ -99,7 +92,7 @@ class Perplexity(keras.metrics.Metric):
         y_pred = tf.cast(y_pred, self._dtype)
         bsz = tf.cast(tf.shape(y_true)[0], self._dtype)
 
-        if self.pad_token_id:
+        if self.pad_token_id is not None:
             sample_weight = tf.cast(
                 tf.math.logical_not(tf.equal(y_true, 0)), self._dtype
             )
@@ -109,6 +102,10 @@ class Perplexity(keras.metrics.Metric):
         y_pred = tf.reshape(
             y_pred, [-1, y_pred.shape[-1]]
         )  # (bsz * seq_len, vocab_size)
+        if sample_weight is not None:
+            sample_weight = tf.cast(
+                tf.reshape(sample_weight, [-1]), self._dtype
+            )
 
         # Calculate the Cross Entropy Loss.
         loss_value = tf.cast(
@@ -119,10 +116,8 @@ class Perplexity(keras.metrics.Metric):
         )  # scalar
 
         # Divide the loss by the number of non-masked tokens
-        if sample_weight:
-            loss_value = loss_value / tf.reduce_sum(
-                tf.reshape(sample_weight, [-1])
-            )  # scalar
+        if sample_weight is not None:
+            loss_value = loss_value / tf.reduce_sum(sample_weight)  # scalar
         else:
             loss_value = loss_value / tf.cast(
                 tf.shape(y_true)[0], self._dtype
