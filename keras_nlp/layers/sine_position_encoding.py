@@ -31,9 +31,9 @@ class SinePositionEncoding(keras.layers.Layer):
     can be added directly to the embedded token tensor.
 
     Args:
-        max_wavelength: The maximum angular wavelength of the sine/cosine curves
-                        , as described in Attention is All You Need. Defaults to
-                        10000.
+        max_wavelength: The maximum angular wavelength of the sine/cosine
+            curves, as described in Attention is All You Need. Defaults to
+            10000.
 
     Example:
     ```python
