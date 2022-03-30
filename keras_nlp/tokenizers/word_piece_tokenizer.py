@@ -225,6 +225,17 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         """Get the size of the tokenizer vocabulary."""
         return len(self._vocab)
 
+    def id_to_token(self, id: int) -> str:
+        """Convert an integer id to a string token."""
+        return self._vocab[id]
+
+    def token_to_id(self, token: str) -> int:
+        """Convert a string token to an integer id."""
+        # This will be slow, but keep memory usage down compared to building a
+        # dict. Assuming the main use case is looking up a few special tokens
+        # early in the vocab, this should be fine.
+        return self._vocab.index(token)
+
     def get_config(self) -> Dict[str, Any]:
         config = super().get_config()
         config.update(
