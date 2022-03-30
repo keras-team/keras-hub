@@ -31,8 +31,9 @@ class SinePositionEncoding(keras.layers.Layer):
     can be added directly to the embedded token tensor.
 
     Args:
-        base_frequency: The base frequency for each position embedding,
-                       initalized to 1.0e-4.
+        max_wavelength: The maximum angular wavelength of the sine/cosine curves
+                        , as described in Attention is All You Need. Defaults to
+                        10000.
 
     Example:
     ```python
@@ -54,11 +55,11 @@ class SinePositionEncoding(keras.layers.Layer):
 
     def __init__(
         self,
-        base_frequency: float = 1.0e-4,
+        max_wavelength=10000,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.base_frequency = base_frequency
+        self.max_wavelength = max_wavelength
 
     def call(self, inputs):
         input_shape = tf.shape(inputs)
@@ -66,9 +67,9 @@ class SinePositionEncoding(keras.layers.Layer):
         seq_length = input_shape[-2]
         hidden_size = input_shape[-1]
         position = tf.cast(tf.range(seq_length), self.compute_dtype)
-        base_freq = tf.cast(self.base_frequency, dtype=self.compute_dtype)
+        min_freq = tf.cast(1 / self.max_wavelength, dtype=self.compute_dtype)
         timescales = tf.pow(
-            base_freq,
+            min_freq,
             tf.cast(2 * (tf.range(hidden_size) // 2), self.compute_dtype)
             / tf.cast(hidden_size, self.compute_dtype),
         )
@@ -87,7 +88,7 @@ class SinePositionEncoding(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "base_frequency": self.base_frequency,
+                "max_wavelength": self.max_wavelength,
             }
         )
         return config

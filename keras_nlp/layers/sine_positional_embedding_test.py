@@ -68,13 +68,37 @@ class SinePositionEncodingTest(tf.test.TestCase):
         expected_output_shape = [None, None, seq_length, hidden_size]
         self.assertEqual(expected_output_shape, outputs.shape.as_list())
 
+    def test_output_correct_values(self):
+        pos_encoding = sine_positional_embedding.SinePositionEncoding()
+        model = keras.Sequential(
+            [
+                keras.Input(shape=(4, 6)),
+                pos_encoding,
+            ]
+        )
+        input = tf.random.uniform(shape=[1, 4, 6])
+        output = model(input)
+
+        # comapre position encoding values for position 0 and 3
+        expected_encoding_position_0 = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]
+        expected_encoding_position_3 = [
+            0.14112,
+            -0.9899925,
+            0.1387981,
+            0.9903207,
+            0.00646326,
+            0.99997914,
+        ]
+        self.assertAllClose(output[0, 0, :], expected_encoding_position_0)
+        self.assertAllClose(output[0, 3, :], expected_encoding_position_3)
+
     def test_get_config_and_from_config(self):
         pos_encoding = sine_positional_embedding.SinePositionEncoding(
-            base_frequency=1e-5,
+            max_wavelength=1000,
         )
         config = pos_encoding.get_config()
         expected_config_subset = {
-            "base_frequency": 1e-5,
+            "max_wavelength": 1000,
         }
         self.assertEqual(config, {**config, **expected_config_subset})
         restored_pos_encoding = (
