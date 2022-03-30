@@ -70,11 +70,11 @@ class SinePositionEncodingTest(tf.test.TestCase):
 
     def test_get_config_and_from_config(self):
         pos_encoding = sine_positional_embedding.SinePositionEncoding(
-            min_frequency=1e-5,
+            base_frequency=1e-5,
         )
         config = pos_encoding.get_config()
         expected_config_subset = {
-            "min_frequency": 1e-5,
+            "base_frequency": 1e-5,
         }
         self.assertEqual(config, {**config, **expected_config_subset})
         restored_pos_encoding = (

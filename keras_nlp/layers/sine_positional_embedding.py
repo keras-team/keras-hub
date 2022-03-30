@@ -25,22 +25,25 @@ class SinePositionEncoding(keras.layers.Layer):
     functions with geometrically increasing wavelengths. Defined and formulized
     in [Attention is All You Need](https://arxiv.org/abs/1706.03762).
 
-    Usage:
-        Takes as input an embedded token tensor, where the last dimension is
-        assumed to be the feature dim, and the second to last dimension is
-        assumed to be the sequence dimension. This layer will return a
-        positional encoding the same size as the embedded token tensor, which
-        can be added directly to the embedded token tensor.
+    Takes as input an embedded token tensor. The input must have shape
+    [batch_size, sequence_length, feature_size]. This layer will return a
+    positional encoding the same size as the embedded token tensor, which
+    can be added directly to the embedded token tensor.
 
     Args:
-        min_frequency: The minimum frequency for each position embedding,
+        base_frequency: The base frequency for each position embedding,
                        initalized to 1.0e-4.
 
     Example:
     ```python
     # create a simple embedding layer with sinusoidal positional encoding
-    inputs = keras.Input((100, ), dtype=tf.float32)
-    embedding = keras.layers.Embedding(input_dim=1000, output_dim=32)(inputs)
+    seq_len = 100
+    vocab_size = 1000
+    embedding_dim = 32
+    inputs = keras.Input((seq_len,), dtype=tf.float32)
+    embedding = keras.layers.Embedding(
+        input_dim=vocab_size, output_dim=embedding_dim
+    )(inputs)
     positional_encoding = keras_nlp.layers.SinePositionEncoding()(embedding)
     outputs = embedding + positional_encoding
     ```
@@ -51,30 +54,21 @@ class SinePositionEncoding(keras.layers.Layer):
 
     def __init__(
         self,
-        min_frequency: float = 1.0e-4,
+        base_frequency: float = 1.0e-4,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.min_frequency = min_frequency
+        self.base_frequency = base_frequency
 
     def call(self, inputs):
-        """Forward pass of the SinePositionEncoding.
-
-        Args:
-            inputs: a Tensor.
-
-        Returns:
-            A Tensor of the same shape as the `inputs` containing the sinusoidal
-            positional encoding weights for the input sequence.
-        """
         input_shape = tf.shape(inputs)
         # length of sequence is the second last dimension of the inputs
         seq_length = input_shape[-2]
         hidden_size = input_shape[-1]
         position = tf.cast(tf.range(seq_length), self.compute_dtype)
-        min_freq = tf.cast(self.min_frequency, dtype=self.compute_dtype)
+        base_freq = tf.cast(self.base_frequency, dtype=self.compute_dtype)
         timescales = tf.pow(
-            min_freq,
+            base_freq,
             tf.cast(2 * (tf.range(hidden_size) // 2), self.compute_dtype)
             / tf.cast(hidden_size, self.compute_dtype),
         )
@@ -93,7 +87,7 @@ class SinePositionEncoding(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "min_frequency": self.min_frequency,
+                "base_frequency": self.base_frequency,
             }
         )
         return config
