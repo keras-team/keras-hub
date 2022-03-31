@@ -32,11 +32,11 @@ class ByteTokenizer(tokenizer.Tokenizer):
     as raw bytes from [0, 256).
 
     By default, the layer will output a `tf.RaggedTensor` where the last
-    dimension of the output is ragged after whitespace splitting and sub-word
-    tokenizing. If `sequence_length` is set, the layer will output a dense
-    `tf.Tensor` where all inputs have been padded or truncated to
-    `sequence_length`. The output dtype can be controlled via the `dtype`
-    argument, which should be an integer type (tf.int16, tf.int32, etc.).
+    dimension of the output is ragged. If `sequence_length` is set, the layer
+    will output a dense `tf.Tensor` where all inputs have been padded or
+    truncated to `sequence_length`. The output dtype can be controlled via the
+    `dtype` argument, which should be an integer type
+    (tf.int16, tf.int32, etc.).
 
     Args:
     lowercase: boolean. If True, the input text will be converted to lowercase
@@ -54,6 +54,35 @@ class ByteTokenizer(tokenizer.Tokenizer):
         when an invalid byte sequence is encountered and when `errors` is set to
         "replace" (same behaviour as
         https://www.tensorflow.org/api_docs/python/tf/strings/unicode_transcode).
+
+    Examples:
+
+    Ragged outputs.
+    >>> inputs = ["hello"]
+    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
+    >>> tokenizer(inputs)
+    <tf.RaggedTensor [[104, 101, 108, 108, 111]]>
+
+    Dense outputs.
+    >>> inputs = ["hello"]
+    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(sequence_length=8)
+    >>> tokenizer(inputs)
+    <tf.Tensor: shape=(1, 8), dtype=int32,
+                numpy=array([[104, 101, 108, 108, 111,   0,   0,   0]])>
+
+    Detokenization.
+    >>> inputs = ["hello"]
+    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
+    >>> tokenizer.detokenize(tokenizer.tokenize(inputs))
+    <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'hello'], dtype=object)>
+
+    Detokenization with errors = "replace", replacement_char = 65533.
+    >>> inputs = ["he�llo"]
+    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(
+        errors="replace", replacement_char=65533)
+    >>> tokenizer.detokenize(tokenizer.tokenize(inputs))
+    <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'he\xef\xbf\xbdllo'],
+                dtype=object)>
     """
 
     def __init__(
