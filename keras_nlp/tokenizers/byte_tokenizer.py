@@ -14,6 +14,10 @@
 
 """Byte Tokenizer."""
 
+from typing import Any
+from typing import Dict
+from typing import List
+
 import numpy as np
 import tensorflow as tf
 import tensorflow_text as tf_text
@@ -54,11 +58,11 @@ class ByteTokenizer(tokenizer.Tokenizer):
 
     def __init__(
         self,
-        lowercase=True,
-        sequence_length=None,
-        normalization_form=None,
-        errors="replace",
-        replacement_char=65533,
+        lowercase: bool = True,
+        sequence_length: int = None,
+        normalization_form: str = None,
+        errors: str = "replace",
+        replacement_char: int = 65533,
         **kwargs,
     ):
         # Check dtype and provide a default.
@@ -68,7 +72,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer:
                 raise ValueError(
-                    "Output dtype must be an integer type of a string. "
+                    "Output dtype must be an integer type. "
                     f"Received: dtype={dtype}"
                 )
 
@@ -83,18 +87,35 @@ class ByteTokenizer(tokenizer.Tokenizer):
         # Check errors.
         if errors not in ("strict", "replace", "ignore"):
             raise ValueError(
-                '`errors` must be one of "replace", "remove", '
-                f'"strict". Received: errors={errors}'
+                '`errors` must be one of "strict", "replace", "ignore" '
+                f"Received: errors={errors}"
             )
 
         super().__init__(**kwargs)
 
         self._dtype = kwargs["dtype"]
+        self._vocab = [i.tobytes() for i in np.arange(256, dtype=np.uint8)]
         self._lowercase = lowercase
         self._sequence_length = sequence_length
         self._normalization_form = normalization_form
         self._errors = errors
         self._replacement_char = replacement_char
+
+    def get_vocabulary(self) -> List[str]:
+        """Get the tokenizer vocabulary as a list of strings tokens."""
+        return self._vocab
+
+    def vocabulary_size(self) -> int:
+        """Get the size of the tokenizer vocabulary."""
+        return len(self._vocab)
+
+    def id_to_token(self, id: int) -> str:
+        """Convert an integer id to a string token."""
+        return self._vocab[id]
+
+    def token_to_id(self, token: str) -> int:
+        """Convert a string token to an integer id."""
+        return self._vocab.index(token)
 
     def tokenize(self, inputs):
         # Optional: Lowercase the input.
@@ -120,11 +141,9 @@ class ByteTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        byte_to_char_map = tf.constant(
-            [i.tobytes() for i in np.arange(256, dtype=np.uint8)]
-        )
+        idx_to_char_lst = tf.constant(self._vocab)
         decoded = tf.strings.reduce_join(
-            tf.gather(byte_to_char_map, inputs), axis=-1
+            tf.gather(idx_to_char_lst, inputs), axis=-1
         )
         decoded = tf.strings.unicode_transcode(
             decoded,
@@ -135,7 +154,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
         )
         return decoded
 
-    def get_config(self):
+    def get_config(self) -> Dict[str, Any]:
         config = super().get_config()
         config.update(
             {
