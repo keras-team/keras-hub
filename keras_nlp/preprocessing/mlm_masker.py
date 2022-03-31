@@ -44,13 +44,24 @@ class MaskedLanguageModelMasker(keras.layers.Layer):
     def __init__(
         self,
         vocabulary_size,
+        lm_selection_rate,
+        max_selections,
         unselectable_token_ids=None,
         mask_token_id=0,
+        mask_token_rate=0.8,
+        random_token_rate=0.1,
+        padding_token=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.vocabulary_size = vocabulary_size
         self.unselectable_token_ids = unselectable_token_ids
+        self.lm_selection_rate = lm_selection_rate
+        self.max_selections = max_selections
+        self.mask_token_rate = mask_token_rate
+        self.random_token_rate = random_token_rate
+        self.padding_token = padding_token
+
         if mask_token_id >= vocabulary_size:
             raise ValueError(
                 f"Mask token id should be in range [0, vocabulary_size - 1], "
@@ -61,26 +72,24 @@ class MaskedLanguageModelMasker(keras.layers.Layer):
     def call(
         self,
         inputs,
-        lm_selection_rate,
-        max_selections,
-        mask_token_rate=0.8,
-        random_token_rate=0.1,
-        padding_token=None,
     ):
         input_is_ragged = isinstance(inputs, tf.RaggedTensor)
         if not input_is_ragged:
             # Convert to RaggedTensor to avoid masking out padded token.
-            inputs = tf.RaggedTensor.from_tensor(inputs, padding=padding_token)
+            inputs = tf.RaggedTensor.from_tensor(
+                inputs,
+                padding=self.padding_token,
+            )
         random_selector = tf_text.RandomItemSelector(
-            max_selections_per_batch=max_selections,
-            selection_rate=lm_selection_rate,
+            max_selections_per_batch=self.max_selections,
+            selection_rate=self.lm_selection_rate,
             unselectable_ids=self.unselectable_token_ids,
         )
         mask_values_chooser = tf_text.MaskValuesChooser(
             self.vocabulary_size,
             self.mask_token_id,
-            mask_token_rate=mask_token_rate,
-            random_token_rate=random_token_rate,
+            mask_token_rate=self.mask_token_rate,
+            random_token_rate=self.random_token_rate,
         )
 
         (
@@ -105,8 +114,13 @@ class MaskedLanguageModelMasker(keras.layers.Layer):
         config.update(
             {
                 "vocabulary_size": self.vocabulary_size,
+                "lm_selection_rate": self.lm_selection_rate,
+                "max_selections": self.max_selections,
                 "unselectable_token_ids": self.unselectable_token_ids,
                 "mask_token_id": self.mask_token_id,
+                "mask_token_rate": self.mask_token_rate,
+                "random_token_rate": self.random_token_rate,
+                "padding_token": self.padding_token,
             }
         )
         return config

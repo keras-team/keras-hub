@@ -42,16 +42,14 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
     def test_mask_ragged_tensor(self):
         mlm_masker = MaskedLanguageModelMasker(
             vocabulary_size=self.vocabulary_size,
-            mask_token_id=self.mask_token_id,
-        )
-        inputs = tf.ragged.constant([[5, 3, 2], [1, 2, 3, 4, 5]])
-        masked_input_ids, masked_positions, masked_ids = mlm_masker(
-            inputs,
             lm_selection_rate=0.5,
             max_selections=5,
+            mask_token_id=self.mask_token_id,
             mask_token_rate=1,
             random_token_rate=0,
         )
+        inputs = tf.ragged.constant([[5, 3, 2], [1, 2, 3, 4, 5]])
+        masked_input_ids, masked_positions, masked_ids = mlm_masker(inputs)
         self.assertEqual(type(masked_input_ids), type(inputs))
         self.assertAllEqual(masked_input_ids.shape, inputs.shape)
         self.assertAllEqual(
@@ -69,20 +67,18 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
     def test_mask_tensor(self):
         mlm_masker = MaskedLanguageModelMasker(
             vocabulary_size=self.vocabulary_size,
+            lm_selection_rate=0.5,
+            max_selections=5,
             mask_token_id=self.mask_token_id,
+            mask_token_rate=1,
+            random_token_rate=0,
         )
         inputs = tf.random.uniform(
             shape=[5, 10],
             maxval=len(self.VOCAB),
             dtype=tf.int32,
         )
-        masked_input_ids, masked_positions, masked_ids = mlm_masker(
-            inputs,
-            lm_selection_rate=0.5,
-            max_selections=5,
-            mask_token_rate=1,
-            random_token_rate=0,
-        )
+        masked_input_ids, masked_positions, masked_ids = mlm_masker(inputs)
         self.assertEqual(type(masked_input_ids), type(inputs))
         self.assertAllEqual(masked_input_ids.shape, inputs.shape)
         self.assertAllEqual(
@@ -97,19 +93,17 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
         self.assertEqual(tf.reduce_mean(masked_values), self.mask_token_id)
 
     def test_number_of_masked_position_as_expected(self):
+        lm_selection_rate = 0.5
+        max_selections = 5
         mlm_masker = MaskedLanguageModelMasker(
-            vocabulary_size=self.vocabulary_size
+            vocabulary_size=self.vocabulary_size,
+            lm_selection_rate=lm_selection_rate,
+            max_selections=max_selections,
         )
         inputs = tf.ragged.constant(
             [[0, 1, 2], [0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4]]
         )
-        lm_selection_rate = 0.5
-        max_selections = 5
-        _, masked_positions, _ = mlm_masker(
-            inputs,
-            lm_selection_rate=lm_selection_rate,
-            max_selections=max_selections,
-        )
+        _, masked_positions, _ = mlm_masker(inputs)
 
         expected_number_of_masked_tokens = tf.cast(
             tf.math.minimum(
@@ -128,11 +122,12 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
         # Cap the number of masked tokens at 0, so we can test if
         # max_selections takes effect.
         max_selections = 0
-        _, masked_positions, _ = mlm_masker(
-            inputs,
+        mlm_masker = MaskedLanguageModelMasker(
+            vocabulary_size=self.vocabulary_size,
             lm_selection_rate=lm_selection_rate,
             max_selections=max_selections,
         )
+        _, masked_positions, _ = mlm_masker(inputs)
         self.assertAllEqual(
             masked_positions.row_lengths(),
             tf.zeros(shape=[inputs.shape[0]], dtype=tf.int64),
@@ -140,20 +135,18 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
 
     def test_apply_random_token_not_mask(self):
         mlm_masker = MaskedLanguageModelMasker(
-            vocabulary_size=self.vocabulary_size
+            vocabulary_size=self.vocabulary_size,
+            lm_selection_rate=0.5,
+            max_selections=5,
+            mask_token_rate=0,
+            random_token_rate=1,
         )
         inputs = tf.random.uniform(
             shape=[5, 10],
             maxval=len(self.VOCAB),
             dtype=tf.int32,
         )
-        masked_input_ids, masked_positions, masked_ids = mlm_masker(
-            inputs,
-            lm_selection_rate=0.5,
-            max_selections=5,
-            mask_token_rate=0,
-            random_token_rate=1,
-        )
+        masked_input_ids, masked_positions, masked_ids = mlm_masker(inputs)
         self.assertAllEqual(masked_input_ids.shape, inputs.shape)
         self.assertAllEqual(
             masked_positions.row_lengths(), masked_ids.row_lengths()
@@ -170,6 +163,8 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
         with self.assertRaisesRegex(ValueError, "Mask token id should be*"):
             _ = MaskedLanguageModelMasker(
                 vocabulary_size=self.vocabulary_size,
+                lm_selection_rate=0.5,
+                max_selections=5,
                 mask_token_id=self.vocabulary_size,
             )
 
@@ -180,16 +175,14 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
         ]
         mlm_masker = MaskedLanguageModelMasker(
             vocabulary_size=self.vocabulary_size,
-            unselectable_token_ids=unselectable_token_ids,
-        )
-        inputs = [unselectable_token_ids]
-        _, masked_positions, _ = mlm_masker(
-            inputs,
             lm_selection_rate=1,
             max_selections=5,
+            unselectable_token_ids=unselectable_token_ids,
             mask_token_rate=1,
             random_token_rate=0,
         )
+        inputs = [unselectable_token_ids]
+        _, masked_positions, _ = mlm_masker(inputs)
         # Verify that no token is masked out.
         self.assertAllEqual(
             masked_positions.row_lengths(),
@@ -203,6 +196,8 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
         ]
         mlm_masker = MaskedLanguageModelMasker(
             vocabulary_size=self.vocabulary_size,
+            lm_selection_rate=0.5,
+            max_selections=5,
             unselectable_token_ids=unselectable_token_ids,
         )
         config = mlm_masker.get_config()
@@ -217,7 +212,7 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
         inputs = tf.ragged.constant(
             [[0, 1, 2], [0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4]]
         )
-        cloned_mlm_masker(inputs, lm_selection_rate=0.5, max_selections=5)
+        cloned_mlm_masker(inputs)
 
     def test_save_and_load(self):
         unselectable_token_ids = [
@@ -226,10 +221,12 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
         ]
         mlm_masker = MaskedLanguageModelMasker(
             vocabulary_size=self.vocabulary_size,
+            lm_selection_rate=0.5,
+            max_selections=5,
             unselectable_token_ids=unselectable_token_ids,
         )
         inputs = keras.Input(shape=[None], ragged=True, dtype=tf.int64)
-        outputs = mlm_masker(inputs, lm_selection_rate=0.5, max_selections=5)
+        outputs = mlm_masker(inputs)
         model = keras.Model(inputs, outputs)
         inputs_data = tf.ragged.constant(
             [[0, 1, 2], [0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4]]
