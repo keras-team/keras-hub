@@ -73,8 +73,10 @@ class Perplexity(keras.metrics.Metric):
             self._dtype = tf.float32
         else:
             if not dtype.is_floating:
-                raise ValueError("`dtype` must be a floating point type. "
-                                 f"Received: dtype={dtype}")
+                raise ValueError(
+                    "`dtype` must be a floating point type. "
+                    f"Received: dtype={dtype}"
+                )
 
         self.cross_entropy_loss = keras.losses.SparseCategoricalCrossentropy(
             from_logits=from_logits, reduction="sum"
