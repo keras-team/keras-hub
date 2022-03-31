@@ -70,7 +70,7 @@ class PerplexityTest(tf.test.TestCase):
         self.assertAlmostEqual(val1, 10.599162)
 
         val2 = perplexity(self.y_true_2, self.y_pred_2)
-        self.assertEqual(val2, 10.477932)
+        self.assertAlmostEqual(val2, 10.477932)
 
     def test_output_on_two_inputs_from_logits_with_pad_token(self):
         perplexity = Perplexity(from_logits=True, pad_token_id=0)
