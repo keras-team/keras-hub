@@ -87,14 +87,16 @@ class Perplexity(keras.metrics.Metric):
         )
 
     def update_state(self, y_true, y_pred, sample_weight=None):
-        # y_true shape: (bsz, seq_len), y_pred shape: (bsz, seq_len, vocab_size)
+        # y_true shape: (batch_size, seq_len)
+        # y_pred shape: (batch_size, seq_len, vocab_size)
         y_true = tf.cast(y_true, self._dtype)
         y_pred = tf.cast(y_pred, self._dtype)
-        bsz = tf.cast(tf.shape(y_true)[0], self._dtype)
+        batch_size = tf.cast(tf.shape(y_true)[0], self._dtype)
 
         if self.pad_token_id is not None:
             sample_weight = tf.cast(
-                tf.math.logical_not(tf.equal(y_true, 0)), self._dtype
+                tf.math.logical_not(tf.equal(y_true, self.pad_token_id)),
+                self._dtype,
             )
 
         if sample_weight is not None:
@@ -116,8 +118,8 @@ class Perplexity(keras.metrics.Metric):
                 tf.shape(y_true)[0], self._dtype
             )  # scalar
 
-        self.aggregate_cross_entropy_loss.assign_add(bsz * loss_value)
-        self.number_of_samples.assign_add(bsz)
+        self.aggregate_cross_entropy_loss.assign_add(batch_size * loss_value)
+        self.number_of_samples.assign_add(batch_size)
 
     def result(self):
         if self.number_of_samples == 0:
