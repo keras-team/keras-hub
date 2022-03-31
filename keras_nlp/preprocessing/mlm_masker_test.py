@@ -92,6 +92,26 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
         )
         self.assertEqual(tf.reduce_mean(masked_values), self.mask_token_id)
 
+    def test_mask_1d_input(self):
+        mlm_masker = MaskedLanguageModelMasker(
+            vocabulary_size=self.vocabulary_size,
+            lm_selection_rate=0.5,
+            max_selections=5,
+            mask_token_id=self.mask_token_id,
+            mask_token_rate=1,
+            random_token_rate=0,
+        )
+        inputs = tf.constant([1, 2, 3, 4, 5])
+        masked_input_ids, masked_positions, _ = mlm_masker(inputs)
+        self.assertAllEqual(masked_input_ids[0].shape, inputs.shape)
+        # Test all selected tokens are correctly masked.
+        masked_values = tf.gather(
+            masked_input_ids,
+            masked_positions,
+            batch_dims=1,
+        )
+        self.assertEqual(tf.reduce_mean(masked_values), self.mask_token_id)
+
     def test_number_of_masked_position_as_expected(self):
         lm_selection_rate = 0.5
         max_selections = 5

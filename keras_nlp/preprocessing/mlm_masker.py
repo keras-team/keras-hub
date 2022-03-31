@@ -69,12 +69,12 @@ class MaskedLanguageModelMasker(keras.layers.Layer):
             )
         self.mask_token_id = mask_token_id
 
-    def call(
-        self,
-        inputs,
-    ):
+    def call(self, inputs):
         input_is_ragged = isinstance(inputs, tf.RaggedTensor)
         if not input_is_ragged:
+            if tf.rank(inputs) == 1:
+                # If inputs is of rank 1, we manually add the batch axis.
+                inputs = inputs[tf.newaxis, :]
             # Convert to RaggedTensor to avoid masking out padded token.
             inputs = tf.RaggedTensor.from_tensor(
                 inputs,
