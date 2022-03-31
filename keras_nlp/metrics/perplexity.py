@@ -97,15 +97,8 @@ class Perplexity(keras.metrics.Metric):
                 tf.math.logical_not(tf.equal(y_true, 0)), self._dtype
             )
 
-        # Reshape y_true and y_pred.
-        y_true = tf.reshape(y_true, [-1])  # (bsz * seq_len,)
-        y_pred = tf.reshape(
-            y_pred, [-1, y_pred.shape[-1]]
-        )  # (bsz * seq_len, vocab_size)
         if sample_weight is not None:
-            sample_weight = tf.cast(
-                tf.reshape(sample_weight, [-1]), self._dtype
-            )
+            sample_weight = tf.cast(sample_weight, self._dtype)
 
         # Calculate the Cross Entropy Loss.
         loss_value = tf.cast(
