@@ -14,14 +14,21 @@
 
 """Setup script."""
 
+import pathlib
+
 from setuptools import find_packages
 from setuptools import setup
+
+HERE = pathlib.Path(__file__).parent
+README = (HERE / "README.md").read_text()
 
 setup(
     name="keras-nlp",
     description=(
         "Industry-strength Natural Language Processing extensions for Keras."
     ),
+    long_description=README,
+    long_description_content_type="text/markdown",
     version="0.1.0",
     url="https://github.com/keras-team/keras-nlp",
     author="Keras team",
