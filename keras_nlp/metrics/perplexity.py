@@ -114,8 +114,9 @@ class Perplexity(keras.metrics.Metric):
         if sample_weight is not None:
             loss_value = loss_value / tf.reduce_sum(sample_weight)  # scalar
         else:
-            loss_value = loss_value / tf.cast(
-                tf.shape(y_true)[0], self._dtype
+            loss_value = loss_value / (
+                tf.cast(tf.shape(y_true)[0], self._dtype)
+                * tf.cast(tf.shape(y_true)[1], self._dtype)
             )  # scalar
 
         self.aggregate_cross_entropy_loss.assign_add(batch_size * loss_value)
