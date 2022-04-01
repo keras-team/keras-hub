@@ -154,8 +154,6 @@ class ByteTokenizer(tokenizer.Tokenizer):
         # Convert to a dense output if `sequence_length` is set.
         if self.sequence_length:
             output_shape = tokens.shape.as_list()
-            print(tokens)
-            print(output_shape)
             output_shape[-1] = self.sequence_length
             tokens = tokens.to_tensor(shape=output_shape)
         return tokens
