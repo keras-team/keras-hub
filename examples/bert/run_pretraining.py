@@ -291,6 +291,18 @@ class BertPretrainer(keras.Model):
         self.nsp_accuracy.update_state(data["next_sentence_labels"], nsp_preds)
         return {m.name: m.result() for m in self.metrics}
 
+class AdamLRSchedule(keras.optimizers.schedules.LearningRateSchedule):
+    """Implements a custom Learning Rate Scheduler."""
+    
+    def __init__(self, initial_learning_rate):
+        self.initial_learning_rate = initial_learning_rate
+    
+    def __call__(self, step):
+        lr = self.initial_learning_rate
+        if step <= 10000:
+            return lr + (lr / (step + 1))
+        return lr - ()                      #TODO: add a decaying factor
+
 
 def decode_record(record):
     """Decodes a record to a TensorFlow example."""
@@ -348,18 +360,20 @@ def main(_):
     model(model.inputs)
     model.summary()
 
+    #Implemented Learning Rate Schedule
+    learning_rate_schedule = AdamLRSchedule(FLAGS.learning_rate)
+    
     # Wrap with pretraining heads and call fit.
     pretraining_model = BertPretrainer(model)
     pretraining_model.compile(
         # TODO(mattdangerw): Add AdamW and a learning rate schedule.
-        optimizer=keras.optimizers.Adam(learning_rate=FLAGS.learning_rate)
+        optimizer=keras.optimizers.Adam(learning_rate=learning_rate_schedule)
     )
     # TODO(mattdangerw): Add TPU strategy support.
     pretraining_model.fit(dataset, epochs=FLAGS.epochs)
 
     print(f"Saving to {FLAGS.saved_model_output}")
     model.save(FLAGS.saved_model_output)
-
 
 if __name__ == "__main__":
     flags.mark_flag_as_required("input_files")

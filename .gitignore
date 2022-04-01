@@ -15,3 +15,5 @@ dist/
 
 # Windows-specific build files
 build/
+
+venv/
