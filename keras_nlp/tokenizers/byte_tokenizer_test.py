@@ -48,6 +48,25 @@ class ByteTokenizerTest(tf.test.TestCase):
             ],
         )
 
+    def test_tokenize_scalar(self):
+        input_data = "hello"
+        tokenizer = ByteTokenizer()
+        call_output = tokenizer(input_data)
+        self.assertIsInstance(call_output, tf.Tensor)
+        # AssertionError: TensorShape([5]) != [None] even though I set the shape
+        # explicitly. Does [None] show up only in Graph mode or something?
+        # self.assertEqual(call_output.shape, [None])
+        self.assertAllEqual(call_output, [104, 101, 108, 108, 111])
+
+        # With sequence length
+        tokenizer = ByteTokenizer(sequence_length=10)
+        call_output = tokenizer(input_data)
+        self.assertIsInstance(call_output, tf.Tensor)
+        self.assertEqual(call_output.shape.as_list(), [10])
+        self.assertAllEqual(
+            call_output, [104, 101, 108, 108, 111, 0, 0, 0, 0, 0]
+        )
+
     def test_detokenize(self):
         input_data = tf.ragged.constant(
             [

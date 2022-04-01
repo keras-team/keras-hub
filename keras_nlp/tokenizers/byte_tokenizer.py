@@ -30,12 +30,18 @@ class ByteTokenizer(tokenizer.Tokenizer):
     This tokenizer is a vocabulary-free tokenizer which will tokenize text as
     as raw bytes from [0, 256).
 
+    If input is a tensor of strings:
     By default, the layer will output a `tf.RaggedTensor` where the last
     dimension of the output is ragged. If `sequence_length` is set, the layer
     will output a dense `tf.Tensor` where all inputs have been padded or
     truncated to `sequence_length`. The output dtype can be controlled via the
     `dtype` argument, which should be an integer type
     (tf.int16, tf.int32, etc.).
+
+    If input is a scalar string:
+    There are two cases here. If `sequence_length` is set, the output will be
+    a dense `tf.Tensor` of shape `[sequence_length]`. Otherwise, the output will
+    be a dense `tf.Tensor` of shape `[None]`.
 
     Args:
         lowercase: boolean. If True, the input text will be converted to
@@ -137,6 +143,10 @@ class ByteTokenizer(tokenizer.Tokenizer):
 
     def tokenize(self, inputs):
         # Optional: Lowercase the input.
+        scalar_input_bool = False
+        if isinstance(inputs, str):
+            scalar_input_bool = True
+
         if self.lowercase:
             inputs = tf_text.case_fold_utf8(inputs)
 
@@ -154,8 +164,26 @@ class ByteTokenizer(tokenizer.Tokenizer):
         # Convert to a dense output if `sequence_length` is set.
         if self.sequence_length:
             output_shape = tokens.shape.as_list()
-            output_shape[-1] = self.sequence_length
-            tokens = tokens.to_tensor(shape=output_shape)
+            if scalar_input_bool:
+                if output_shape[0] >= self.sequence_length:
+                    tokens = tf.slice(tokens, [0], [self.sequence_length])
+                else:
+                    tokens = tf.concat(
+                        [
+                            tokens,
+                            tf.zeros(
+                                self.sequence_length - output_shape[0],
+                                dtype=self.compute_dtype,
+                            ),
+                        ],
+                        axis=0,
+                    )
+            else:
+                output_shape[-1] = self.sequence_length
+                tokens = tokens.to_tensor(shape=output_shape)
+        else:
+            if scalar_input_bool:
+                tokens.set_shape([None])
         return tokens
 
     def detokenize(self, inputs):
