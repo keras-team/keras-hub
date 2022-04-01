@@ -75,6 +75,13 @@ class ByteTokenizer(tokenizer.Tokenizer):
     <tf.Tensor: shape=(1, 8), dtype=int32,
                 numpy=array([[104, 101, 108, 108, 111,   0,   0,   0]])>
 
+    Scalar input.
+    >>> inputs = "hello"
+    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(sequence_length=8)
+    >>> tokenizer(inputs)
+    <tf.Tensor: shape=(8,), dtype=int32,
+                numpy=array([104, 101, 108, 108, 111,   0,   0,   0])>
+
     Detokenization.
     >>> inputs = ["hello"]
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
