@@ -16,7 +16,6 @@
 
 from typing import Any
 from typing import Dict
-from typing import List
 
 import numpy as np
 import tensorflow as tf
@@ -39,21 +38,21 @@ class ByteTokenizer(tokenizer.Tokenizer):
     (tf.int16, tf.int32, etc.).
 
     Args:
-    lowercase: boolean. If True, the input text will be converted to lowercase
-        before tokenization.
-    sequence_length: int. If set, the output will be converted to a dense
-        tensor and padded/trimmed so all outputs are of sequence_length.
-    normalization_form: string. One of the following values: (None, "NFC",
-        "NFKC", "NFD", "NFKD"). If set, every UTF-8 string in the input tensor
-        text will be normalized to the given form before tokenizing.
-    errors: string. One of ("strict", "replace", "ignore"). Defaults to
-        "replace".Specifies the `detokenize()` behaviour when an invalid byte
-        sequence is encountered (same behaviour as
-        https://www.tensorflow.org/api_docs/python/tf/strings/unicode_transcode).
-    replacement_char: int. Defaults to 65533. The replacement character to use
-        when an invalid byte sequence is encountered and when `errors` is set to
-        "replace" (same behaviour as
-        https://www.tensorflow.org/api_docs/python/tf/strings/unicode_transcode).
+        lowercase: boolean. If True, the input text will be converted to
+            lowercase before tokenization.
+        sequence_length: int. If set, the output will be converted to a dense
+            tensor and padded/trimmed so all outputs are of sequence_length.
+        normalization_form: string. One of the following values: (None, "NFC",
+            "NFKC", "NFD", "NFKD"). If set, every UTF-8 string in the input
+            tensor text will be normalized to the given form before tokenizing.
+        errors: string. One of ("strict", "replace", "ignore"). Defaults to
+            "replace".Specifies the `detokenize()` behaviour when an invalid
+            byte sequence is encountered (same behaviour as
+            https://www.tensorflow.org/api_docs/python/tf/strings/unicode_transcode).
+        replacement_char: int. Defaults to 65533. The replacement character to
+            use when an invalid byte sequence is encountered and when `errors`
+            is set to "replace" (same behaviour as
+            https://www.tensorflow.org/api_docs/python/tf/strings/unicode_transcode).
 
     Examples:
 
@@ -77,10 +76,10 @@ class ByteTokenizer(tokenizer.Tokenizer):
     <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'hello'], dtype=object)>
 
     Detokenization with errors = "replace", replacement_char = 65533.
-    >>> inputs = ["he�llo"]
+    >>> inputs = [[104, 101, 226, 150, 108, 108, 111]]
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(
-        errors="replace", replacement_char=65533)
-    >>> tokenizer.detokenize(tokenizer.tokenize(inputs))
+            errors="replace", replacement_char=65533)
+    >>> tokenizer.detokenize(inputs)
     <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'he\xef\xbf\xbdllo'],
                 dtype=object)>
     """
@@ -122,64 +121,58 @@ class ByteTokenizer(tokenizer.Tokenizer):
 
         super().__init__(**kwargs)
 
-        self._dtype = kwargs["dtype"]
-        self._vocab = [i.tobytes() for i in np.arange(256, dtype=np.uint8)]
-        self._lowercase = lowercase
-        self._sequence_length = sequence_length
-        self._normalization_form = normalization_form
-        self._errors = errors
-        self._replacement_char = replacement_char
+        self.lowercase = lowercase
+        self.sequence_length = sequence_length
+        self.normalization_form = normalization_form
+        self.errors = errors
+        self.replacement_char = replacement_char
 
-    def get_vocabulary(self) -> List[str]:
-        """Get the tokenizer vocabulary as a list of strings tokens."""
-        return self._vocab
+        self._char_lst = tf.constant(
+            [i.tobytes() for i in np.arange(256, dtype=np.uint8)]
+        )
 
     def vocabulary_size(self) -> int:
         """Get the size of the tokenizer vocabulary."""
-        return len(self._vocab)
-
-    def id_to_token(self, id: int) -> str:
-        """Convert an integer id to a string token."""
-        return self._vocab[id]
-
-    def token_to_id(self, token: str) -> int:
-        """Convert a string token to an integer id."""
-        return self._vocab.index(token)
+        return 256
 
     def tokenize(self, inputs):
         # Optional: Lowercase the input.
-        if self._lowercase:
+        if self.lowercase:
             inputs = tf_text.case_fold_utf8(inputs)
 
         # Optional: Normalize unicode.
-        if self._normalization_form is not None:
-            inputs = tf_text.normalize_utf8(inputs, self._normalization_form)
+        if self.normalization_form is not None:
+            inputs = tf_text.normalize_utf8(inputs, self.normalization_form)
 
         # Tokenize input strings.
         tokens = tf.strings.bytes_split(inputs)
         tokens = tf.squeeze(
             tf.ragged.map_flat_values(tf.io.decode_raw, tokens, tf.uint8), -1
         )
-        tokens = tf.cast(tokens, self._dtype)
+        tokens = tf.cast(tokens, self.compute_dtype)
 
         # Convert to a dense output if `sequence_length` is set.
-        if self._sequence_length:
+        if self.sequence_length:
             output_shape = tokens.shape.as_list()
-            output_shape[-1] = self._sequence_length
+            print(tokens)
+            print(output_shape)
+            output_shape[-1] = self.sequence_length
             tokens = tokens.to_tensor(shape=output_shape)
         return tokens
 
     def detokenize(self, inputs):
-        idx_to_char_lst = tf.constant(self._vocab)
+
         decoded = tf.strings.reduce_join(
-            tf.gather(idx_to_char_lst, inputs), axis=-1
+            tf.gather(self._char_lst, inputs), axis=-1
         )
+
+        # Handle errors if an invalid byte sequence is encountered.
         decoded = tf.strings.unicode_transcode(
             decoded,
             "UTF-8",
             "UTF-8",
-            errors=self._errors,
-            replacement_char=self._replacement_char,
+            errors=self.errors,
+            replacement_char=self.replacement_char,
         )
         return decoded
 
@@ -187,11 +180,11 @@ class ByteTokenizer(tokenizer.Tokenizer):
         config = super().get_config()
         config.update(
             {
-                "lowercase": self._lowercase,
-                "sequence_length": self._sequence_length,
-                "normalization_form": self._normalization_form,
-                "errors": self._errors,
-                "replacement_char": self._replacement_char,
+                "lowercase": self.lowercase,
+                "sequence_length": self.sequence_length,
+                "normalization_form": self.normalization_form,
+                "errors": self.errors,
+                "replacement_char": self.replacement_char,
             }
         )
         return config
