@@ -63,13 +63,13 @@ class ByteTokenizer(tokenizer.Tokenizer):
     Examples:
 
     Ragged outputs.
-    >>> inputs = ["hello"]
+    >>> inputs = tf.constant(["hello"])
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
     >>> tokenizer(inputs)
     <tf.RaggedTensor [[104, 101, 108, 108, 111]]>
 
     Dense outputs.
-    >>> inputs = ["hello"]
+    >>> inputs = tf.constant(["hello"])
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(sequence_length=8)
     >>> tokenizer(inputs)
     <tf.Tensor: shape=(1, 8), dtype=int32,
@@ -110,13 +110,13 @@ class ByteTokenizer(tokenizer.Tokenizer):
         [102, 117, 110,   0,   0]])>
 
     Detokenization.
-    >>> inputs = ["hello"]
+    >>> inputs = tf.constant(["hello"])
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
     >>> tokenizer.detokenize(tokenizer.tokenize(inputs))
     <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'hello'], dtype=object)>
 
     Detokenization with errors = "replace", replacement_char = 65533.
-    >>> inputs = [[104, 101, 226, 150, 108, 108, 111]]
+    >>> inputs = tf.constant([[104, 101, 226, 150, 108, 108, 111]])
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(
             errors="replace", replacement_char=65533)
     >>> tokenizer.detokenize(inputs)
