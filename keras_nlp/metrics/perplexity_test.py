@@ -20,129 +20,311 @@ from keras_nlp.metrics import Perplexity
 
 
 class PerplexityTest(tf.test.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        tf.random.set_seed(42)
-
-        cls.y_true_1 = tf.constant(
-            [[1, 2, 3, 4, 5, 0, 0, 0], [6, 7, 8, 0, 0, 0, 0, 0]], dtype=tf.int32
-        )
-        cls.y_pred_1 = tf.random.uniform(
-            shape=[2, 8, 10], maxval=1, dtype=tf.float32, seed=42
-        )
-        cls.y_prob_1 = tf.nn.softmax(cls.y_pred_1, axis=-1)
-        cls.sample_wt_1 = tf.cast(cls.y_true_1 != 0, tf.int32)
-
-        cls.y_true_2 = tf.constant(
-            [[1, 9, 2, 2, 1, 0, 0, 0], [7, 5, 1, 8, 0, 0, 0, 0]], dtype=tf.int32
-        )
-        cls.y_pred_2 = tf.random.uniform(
-            shape=[2, 8, 10], maxval=1, dtype=tf.float32, seed=42
-        )
-        cls.y_prob_2 = tf.nn.softmax(cls.y_pred_2, axis=-1)
-        cls.sample_wt_2 = tf.cast(cls.y_true_2 != 0, tf.int32)
-
-        cls.y_true_3 = tf.constant(
-            [[3, 3, 6, 2, 7, 4, 5, 0], [9, 4, 1, 6, 5, 4, 0, 0]], dtype=tf.int32
-        )
-        cls.y_pred_3 = tf.random.uniform(
-            shape=[2, 8, 10], maxval=1, dtype=tf.float32, seed=42
-        )
-
-    def test_output_after_initializing_class(self):
+    def test_vars_after_initializing_class(self):
         perplexity = Perplexity()
-        self.assertEqual(perplexity.aggregate_cross_entropy_loss, 0.0)
-        self.assertEqual(perplexity.number_of_samples, 0.0)
+        self.assertEqual(perplexity._aggregate_cross_entropy, 0.0)
+        self.assertEqual(perplexity._number_of_samples, 0.0)
 
-    def test_output_on_two_inputs_from_logits_with_sample_weight(self):
+    def test_from_logits_without_masking(self):
+        perplexity = Perplexity(from_logits=True)
+        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
+        y_pred = tf.constant(
+            [
+                [
+                    [1.034, 4.797, 2.82, 1.154],
+                    [2.258, 1.591, 1.811, 1.852],
+                    [3.216, 1.037, 0.3662, 2.7],
+                ],
+                [
+                    [1.363, 1.726, 1.898, 2.582],
+                    [1.163, 1.943, 1.761, 1.497],
+                    [2.766, 1.453, 2.61, 2.805],
+                ],
+            ]
+        )
+
+        perplexity_val = perplexity(y_true, y_pred)
+        self.assertAlmostEqual(perplexity_val, 2.6541839)
+
+    def test_from_logits_with_sample_weight(self):
         perplexity = Perplexity(from_logits=True)
 
-        val1 = perplexity(self.y_true_1, self.y_pred_1, self.sample_wt_1)
-        self.assertAlmostEqual(val1, 9.682761)
+        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
+        y_pred = tf.constant(
+            [
+                [
+                    [1.034, 4.797, 2.82, 1.154],
+                    [2.258, 1.591, 1.811, 1.852],
+                    [3.216, 1.037, 0.3662, 2.7],
+                ],
+                [
+                    [1.363, 1.726, 1.898, 2.582],
+                    [1.163, 1.943, 1.761, 1.497],
+                    [2.766, 1.453, 2.61, 2.805],
+                ],
+            ]
+        )
+        sample_wt = tf.cast(y_true != 0, tf.int32)
 
-        val2 = perplexity(self.y_true_2, self.y_pred_2, self.sample_wt_2)
-        self.assertAlmostEqual(val2, 10.067247)
+        perplexity_val = perplexity(y_true, y_pred, sample_wt)
+        self.assertAlmostEqual(perplexity_val, 2.8788896)
 
-    def test_output_on_two_inputs_from_logits_without_masking(self):
-        perplexity = Perplexity(from_logits=True)
-
-        val1 = perplexity(self.y_true_1, self.y_pred_1)
-        self.assertAlmostEqual(val1, 10.599162)
-
-        val2 = perplexity(self.y_true_2, self.y_pred_2)
-        self.assertAlmostEqual(val2, 10.477932)
-
-    def test_output_on_two_inputs_from_logits_with_pad_token(self):
+    def test_from_logits_with_pad_token_id(self):
         perplexity = Perplexity(from_logits=True, pad_token_id=0)
 
-        val1 = perplexity(self.y_true_1, self.y_pred_1)
-        self.assertAlmostEqual(val1, 9.682761)
+        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
+        y_pred = tf.constant(
+            [
+                [
+                    [1.034, 4.797, 2.82, 1.154],
+                    [2.258, 1.591, 1.811, 1.852],
+                    [3.216, 1.037, 0.3662, 2.7],
+                ],
+                [
+                    [1.363, 1.726, 1.898, 2.582],
+                    [1.163, 1.943, 1.761, 1.497],
+                    [2.766, 1.453, 2.61, 2.805],
+                ],
+            ]
+        )
 
-        val2 = perplexity(self.y_true_2, self.y_pred_2)
-        self.assertAlmostEqual(val2, 10.067247)
+        perplexity_val = perplexity(y_true, y_pred)
+        self.assertAlmostEqual(perplexity_val, 2.8788896)
 
-    def test_output_on_two_inputs_from_probabilities_with_sample_weight(self):
+    def test_two_inputs_from_logits(self):
+        perplexity = Perplexity(from_logits=True, pad_token_id=0)
+
+        y_true_1 = tf.constant([[1, 3, 0], [2, 1, 3]])
+        y_pred_1 = tf.constant(
+            [
+                [
+                    [1.034, 4.797, 2.82, 1.154],
+                    [2.258, 1.591, 1.811, 1.852],
+                    [3.216, 1.037, 0.3662, 2.7],
+                ],
+                [
+                    [1.363, 1.726, 1.898, 2.582],
+                    [1.163, 1.943, 1.761, 1.497],
+                    [2.766, 1.453, 2.61, 2.805],
+                ],
+            ]
+        )
+
+        perplexity_val = perplexity(y_true_1, y_pred_1)
+        self.assertAlmostEqual(perplexity_val, 2.8788896)
+
+        y_true_2 = tf.constant([[2, 0, 0], [1, 2, 3]])
+        y_pred_2 = tf.constant(
+            [
+                [
+                    [2.887, 0.885, 2.973, 2.582],
+                    [0.3838, 2.629, 1.91, 1.802],
+                    [0.2578, 1.081, 1.125, 2.773],
+                ],
+                [
+                    [1.623, 2.784, 0.2109, 2.66],
+                    [2.395, 2.01, 0.252, 1.828],
+                    [0.4482, 2.629, 0.9697, 0.998],
+                ],
+            ]
+        )
+        perplexity_val = perplexity(y_true_2, y_pred_2)
+        self.assertEqual(perplexity_val, 3.9998498)
+
+    def test_from_probs_with_sample_weight(self):
         perplexity = Perplexity(from_logits=False)
 
-        val1 = perplexity(self.y_true_1, self.y_prob_1, self.sample_wt_1)
-        self.assertAlmostEqual(val1, 9.682761)
+        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
+        y_pred = tf.constant(
+            [
+                [
+                    [1.034, 4.797, 2.82, 1.154],
+                    [2.258, 1.591, 1.811, 1.852],
+                    [3.216, 1.037, 0.3662, 2.7],
+                ],
+                [
+                    [1.363, 1.726, 1.898, 2.582],
+                    [1.163, 1.943, 1.761, 1.497],
+                    [2.766, 1.453, 2.61, 2.805],
+                ],
+            ]
+        )
+        y_prob = tf.nn.softmax(y_pred, axis=-1)
 
-        val2 = perplexity(self.y_true_2, self.y_prob_2, self.sample_wt_2)
-        self.assertAlmostEqual(val2, 10.067247)
+        sample_wt = tf.cast(y_true != 0, tf.int32)
 
-    def test_output_on_two_inputs_from_probabilities_with_pad_token(self):
+        perplexity_val = perplexity(y_true, y_prob, sample_wt)
+        self.assertAlmostEqual(perplexity_val, 2.8788898)
+
+    def test_from_probs_with_pad_token(self):
         perplexity = Perplexity(from_logits=False, pad_token_id=0)
 
-        val1 = perplexity(self.y_true_1, self.y_prob_1)
-        self.assertAlmostEqual(val1, 9.682761)
+        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
+        y_pred = tf.constant(
+            [
+                [
+                    [1.034, 4.797, 2.82, 1.154],
+                    [2.258, 1.591, 1.811, 1.852],
+                    [3.216, 1.037, 0.3662, 2.7],
+                ],
+                [
+                    [1.363, 1.726, 1.898, 2.582],
+                    [1.163, 1.943, 1.761, 1.497],
+                    [2.766, 1.453, 2.61, 2.805],
+                ],
+            ]
+        )
+        y_prob = tf.nn.softmax(y_pred, axis=-1)
 
-        val2 = perplexity(self.y_true_2, self.y_prob_2)
-        self.assertAlmostEqual(val2, 10.067247)
+        perplexity_val = perplexity(y_true, y_prob)
+        self.assertAlmostEqual(perplexity_val, 2.8788898)
 
     def test_reset_state(self):
+        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
+        y_pred = tf.constant(
+            [
+                [
+                    [1.034, 4.797, 2.82, 1.154],
+                    [2.258, 1.591, 1.811, 1.852],
+                    [3.216, 1.037, 0.3662, 2.7],
+                ],
+                [
+                    [1.363, 1.726, 1.898, 2.582],
+                    [1.163, 1.943, 1.761, 1.497],
+                    [2.766, 1.453, 2.61, 2.805],
+                ],
+            ]
+        )
+
         perplexity = Perplexity(from_logits=True, pad_token_id=0)
 
-        perplexity.update_state(self.y_true_1, self.y_pred_1)
-        self.assertNotEqual(perplexity.aggregate_cross_entropy_loss, 0.0)
-        self.assertNotEqual(perplexity.number_of_samples, 0.0)
+        perplexity.update_state(y_true, y_pred)
+        self.assertNotEqual(perplexity._aggregate_cross_entropy, 0.0)
+        self.assertNotEqual(perplexity._number_of_samples, 0.0)
         self.assertNotEqual(perplexity.result(), 0.0)
 
         perplexity.reset_state()
-        self.assertEqual(perplexity.aggregate_cross_entropy_loss, 0.0)
-        self.assertEqual(perplexity.number_of_samples, 0.0)
+        self.assertEqual(perplexity._aggregate_cross_entropy, 0.0)
+        self.assertEqual(perplexity._number_of_samples, 0.0)
         self.assertEqual(perplexity.result(), 0.0)
 
     def test_update_state(self):
         perplexity = Perplexity(from_logits=True, pad_token_id=0)
 
-        perplexity.update_state(self.y_true_1, self.y_pred_1)
-        self.assertAlmostEqual(
-            perplexity.aggregate_cross_entropy_loss, 4.54069424
+        y_true_1 = tf.constant([[1, 3, 0], [2, 1, 3]])
+        y_pred_1 = tf.constant(
+            [
+                [
+                    [1.034, 4.797, 2.82, 1.154],
+                    [2.258, 1.591, 1.811, 1.852],
+                    [3.216, 1.037, 0.3662, 2.7],
+                ],
+                [
+                    [1.363, 1.726, 1.898, 2.582],
+                    [1.163, 1.943, 1.761, 1.497],
+                    [2.766, 1.453, 2.61, 2.805],
+                ],
+            ]
         )
-        self.assertEqual(perplexity.number_of_samples, 2)
-        self.assertAlmostEqual(perplexity.result(), 9.682761)
 
-        perplexity.update_state(self.y_true_2, self.y_pred_2)
-        self.assertAlmostEqual(
-            perplexity.aggregate_cross_entropy_loss, 9.23714924
+        perplexity.update_state(y_true_1, y_pred_1)
+        perplexity_val = perplexity.result()
+        self.assertAlmostEqual(perplexity._aggregate_cross_entropy, 2.11480927)
+        self.assertEqual(perplexity._number_of_samples, 2)
+        self.assertAlmostEqual(perplexity_val, 2.8788896)
+
+        y_true_2 = tf.constant([[2, 0, 0], [1, 2, 3]])
+        y_pred_2 = tf.constant(
+            [
+                [
+                    [2.887, 0.885, 2.973, 2.582],
+                    [0.3838, 2.629, 1.91, 1.802],
+                    [0.2578, 1.081, 1.125, 2.773],
+                ],
+                [
+                    [1.623, 2.784, 0.2109, 2.66],
+                    [2.395, 2.01, 0.252, 1.828],
+                    [0.4482, 2.629, 0.9697, 0.998],
+                ],
+            ]
         )
-        self.assertEqual(perplexity.number_of_samples, 4)
-        self.assertAlmostEqual(perplexity.result(), 10.067247)
+
+        perplexity.update_state(y_true_2, y_pred_2)
+        perplexity_val = perplexity.result()
+        self.assertAlmostEqual(perplexity._aggregate_cross_entropy, 5.54502726)
+        self.assertEqual(perplexity._number_of_samples, 4)
+        self.assertAlmostEqual(perplexity_val, 3.9998498)
 
     def test_merge_state(self):
         perplexity_1 = Perplexity(from_logits=True, pad_token_id=0)
         perplexity_2 = Perplexity(from_logits=True, pad_token_id=0)
 
-        perplexity_1.update_state(self.y_true_1, self.y_pred_1)
-        perplexity_1.update_state(self.y_true_2, self.y_pred_2)
+        y_true_1 = tf.constant([[1, 3, 0], [2, 1, 3]])
+        y_pred_1 = tf.constant(
+            [
+                [
+                    [1.034, 4.797, 2.82, 1.154],
+                    [2.258, 1.591, 1.811, 1.852],
+                    [3.216, 1.037, 0.3662, 2.7],
+                ],
+                [
+                    [1.363, 1.726, 1.898, 2.582],
+                    [1.163, 1.943, 1.761, 1.497],
+                    [2.766, 1.453, 2.61, 2.805],
+                ],
+            ]
+        )
 
-        perplexity_2.update_state(self.y_true_3, self.y_pred_3)
+        y_true_2 = tf.constant([[2, 0, 0], [1, 2, 3]])
+        y_pred_2 = tf.constant(
+            [
+                [
+                    [2.887, 0.885, 2.973, 2.582],
+                    [0.3838, 2.629, 1.91, 1.802],
+                    [0.2578, 1.081, 1.125, 2.773],
+                ],
+                [
+                    [1.623, 2.784, 0.2109, 2.66],
+                    [2.395, 2.01, 0.252, 1.828],
+                    [0.4482, 2.629, 0.9697, 0.998],
+                ],
+            ]
+        )
+
+        y_true_3 = tf.constant([[1, 3, 1], [2, 2, 1]])
+        y_pred_3 = tf.constant(
+            [
+                [
+                    [0.7383, 0.882, 0.7295, 2.64],
+                    [0.867, 1.588, 2.291, 0.967],
+                    [0.0908, 1.453, 1.5, 0.0703],
+                ],
+                [
+                    [2.783, 0.9785, 2.664, 0.507],
+                    [0.741, 1.535, 2.16, 2.531],
+                    [2.863, 1.591, 1.403, 0.885],
+                ],
+            ]
+        )
+
+        perplexity_1.update_state(y_true_1, y_pred_1)
+        perplexity_1.update_state(y_true_2, y_pred_2)
+        self.assertAlmostEqual(
+            perplexity_1._aggregate_cross_entropy, 5.54502726
+        )
+
+        perplexity_2.update_state(y_true_3, y_pred_3)
+        self.assertAlmostEqual(
+            perplexity_2._aggregate_cross_entropy, 2.97691536
+        )
 
         merged_perplexity = Perplexity(from_logits=True, pad_token_id=0)
         merged_perplexity.merge_state([perplexity_1, perplexity_2])
 
+        # _aggregate_cross_entropy value should be equal to the sum of the
+        # _aggregate_cross_entropy values of the states.
         self.assertAlmostEqual(
-            merged_perplexity.aggregate_cross_entropy_loss, 14.1800919
+            merged_perplexity._aggregate_cross_entropy, 8.521942
         )
-        self.assertEqual(merged_perplexity.number_of_samples, 6)
-        self.assertAlmostEqual(merged_perplexity.result(), 10.626477)
+        self.assertEqual(merged_perplexity._number_of_samples, 6)
+        self.assertAlmostEqual(merged_perplexity.result(), 4.13846)
