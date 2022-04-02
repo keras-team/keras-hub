@@ -20,7 +20,7 @@ from keras_nlp.tokenizers.byte_tokenizer import ByteTokenizer
 
 class ByteTokenizerTest(tf.test.TestCase):
     def test_tokenize(self):
-        input_data = ["hello", "fun", "▀▁▂▃"]
+        input_data = tf.constant(["hello", "fun", "▀▁▂▃"])
         tokenizer = ByteTokenizer()
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
@@ -35,7 +35,7 @@ class ByteTokenizerTest(tf.test.TestCase):
             self.assertAllEqual(tokenize_output[i], exp_outputs[i])
 
     def test_dense_output(self):
-        input_data = ["hello", "fun", "▀▁▂▃"]
+        input_data = tf.constant(["hello", "fun", "▀▁▂▃"])
         tokenizer = ByteTokenizer(sequence_length=10)
         call_output = tokenizer(input_data)
         self.assertIsInstance(call_output, tf.Tensor)
@@ -46,25 +46,6 @@ class ByteTokenizerTest(tf.test.TestCase):
                 [102, 117, 110, 0, 0, 0, 0, 0, 0, 0],
                 [226, 150, 128, 226, 150, 129, 226, 150, 130, 226],
             ],
-        )
-
-    def test_tokenize_scalar(self):
-        input_data = "hello"
-        tokenizer = ByteTokenizer()
-        call_output = tokenizer(input_data)
-        self.assertIsInstance(call_output, tf.Tensor)
-        # AssertionError: TensorShape([5]) != [None] even though I set the shape
-        # explicitly. Does [None] show up only in Graph mode or something?
-        # self.assertEqual(call_output.shape, [None])
-        self.assertAllEqual(call_output, [104, 101, 108, 108, 111])
-
-        # With sequence length
-        tokenizer = ByteTokenizer(sequence_length=10)
-        call_output = tokenizer(input_data)
-        self.assertIsInstance(call_output, tf.Tensor)
-        self.assertEqual(call_output.shape.as_list(), [10])
-        self.assertAllEqual(
-            call_output, [104, 101, 108, 108, 111, 0, 0, 0, 0, 0]
         )
 
     def test_detokenize(self):
@@ -106,7 +87,7 @@ class ByteTokenizerTest(tf.test.TestCase):
         self.assertEqual(tokenizer.vocabulary_size(), 256)
 
     def test_lowercase(self):
-        input_data = ["HeLlO wOrLd"]
+        input_data = tf.constant(["HeLlO wOrLd"])
         tokenizer = ByteTokenizer()
         call_output = tokenizer(input_data)
         self.assertAllEqual(
@@ -115,12 +96,90 @@ class ByteTokenizerTest(tf.test.TestCase):
         )
 
     def test_skip_lowercase(self):
-        input_data = ["HeLlO wOrLd"]
+        input_data = tf.constant(["HeLlO wOrLd"])
         tokenizer = ByteTokenizer(lowercase=False)
         call_output = tokenizer(input_data)
         self.assertAllEqual(
             call_output, [[72, 101, 76, 108, 79, 32, 119, 79, 114, 76, 100]]
         )
+
+    def test_tokenize_first_batch_second(self):
+        tokenizer = ByteTokenizer()
+
+        ds = tf.data.Dataset.from_tensor_slices(
+            ["hello", "fun", "▀▁▂▃", "haha"]
+        )
+        ds = ds.map(tokenizer)
+        ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(4))
+        output = ds.take(1).get_single_element()
+
+        exp_output = [
+            [104, 101, 108, 108, 111],
+            [102, 117, 110],
+            [226, 150, 128, 226, 150, 129, 226, 150, 130, 226, 150, 131],
+            [104, 97, 104, 97],
+        ]
+        for i in range(output.shape[0]):
+            print(output[i])
+            self.assertAllEqual(output[i], exp_output[i])
+
+    def test_tokenize_first_batch_second_with_sequence_length(self):
+        tokenizer = ByteTokenizer(sequence_length=10)
+
+        ds = tf.data.Dataset.from_tensor_slices(
+            ["hello", "fun", "▀▁▂▃", "haha"]
+        )
+        ds = ds.map(tokenizer)
+        ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(4))
+        output = ds.take(1).get_single_element()
+
+        exp_output = [
+            [104, 101, 108, 108, 111, 0, 0, 0, 0, 0],
+            [102, 117, 110, 0, 0, 0, 0, 0, 0, 0],
+            [226, 150, 128, 226, 150, 129, 226, 150, 130, 226],
+            [104, 97, 104, 97, 0, 0, 0, 0, 0, 0],
+        ]
+        for i in range(output.shape[0]):
+            print(output[i])
+            self.assertAllEqual(output[i], exp_output[i])
+
+    def test_batch_first_tokenize_second(self):
+        tokenizer = ByteTokenizer()
+
+        ds = tf.data.Dataset.from_tensor_slices(
+            ["hello", "fun", "▀▁▂▃", "haha"]
+        )
+        ds = ds.batch(4).map(tokenizer)
+        output = ds.take(1).get_single_element()
+
+        exp_output = [
+            [104, 101, 108, 108, 111],
+            [102, 117, 110],
+            [226, 150, 128, 226, 150, 129, 226, 150, 130, 226, 150, 131],
+            [104, 97, 104, 97],
+        ]
+        for i in range(output.shape[0]):
+            print(output[i])
+            self.assertAllEqual(output[i], exp_output[i])
+
+    def test_batch_first_tokenize_second_with_sequence_length(self):
+        tokenizer = ByteTokenizer(sequence_length=10)
+
+        ds = tf.data.Dataset.from_tensor_slices(
+            ["hello", "fun", "▀▁▂▃", "haha"]
+        )
+        ds = ds.batch(4).map(tokenizer)
+        output = ds.take(1).get_single_element()
+
+        exp_output = [
+            [104, 101, 108, 108, 111, 0, 0, 0, 0, 0],
+            [102, 117, 110, 0, 0, 0, 0, 0, 0, 0],
+            [226, 150, 128, 226, 150, 129, 226, 150, 130, 226],
+            [104, 97, 104, 97, 0, 0, 0, 0, 0, 0],
+        ]
+        for i in range(output.shape[0]):
+            print(output[i])
+            self.assertAllEqual(output[i], exp_output[i])
 
     def test_functional_model(self):
         input_data = tf.constant(["hello", "fun", "▀▁▂▃"])
@@ -132,7 +191,7 @@ class ByteTokenizerTest(tf.test.TestCase):
         self.assertAllEqual(model_output, ["hello", "fun", "▀▁▂▃"])
 
     def test_load_model_with_config(self):
-        input_data = ["hello"]
+        input_data = tf.constant(["hello"])
 
         original_tokenizer = ByteTokenizer(
             lowercase=False,

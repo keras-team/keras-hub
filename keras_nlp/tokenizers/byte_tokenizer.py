@@ -75,13 +75,6 @@ class ByteTokenizer(tokenizer.Tokenizer):
     <tf.Tensor: shape=(1, 8), dtype=int32,
                 numpy=array([[104, 101, 108, 108, 111,   0,   0,   0]])>
 
-    Scalar input.
-    >>> inputs = "hello"
-    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(sequence_length=8)
-    >>> tokenizer(inputs)
-    <tf.Tensor: shape=(8,), dtype=int32,
-                numpy=array([104, 101, 108, 108, 111,   0,   0,   0])>
-
     Detokenization.
     >>> inputs = ["hello"]
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
@@ -150,9 +143,9 @@ class ByteTokenizer(tokenizer.Tokenizer):
 
     def tokenize(self, inputs):
         # Optional: Lowercase the input.
-        scalar_input_bool = False
-        if isinstance(inputs, str):
-            scalar_input_bool = True
+        scalar_input = inputs.shape.rank == 0
+        if scalar_input:
+            inputs = tf.expand_dims(inputs, 0)
 
         if self.lowercase:
             inputs = tf_text.case_fold_utf8(inputs)
@@ -171,26 +164,11 @@ class ByteTokenizer(tokenizer.Tokenizer):
         # Convert to a dense output if `sequence_length` is set.
         if self.sequence_length:
             output_shape = tokens.shape.as_list()
-            if scalar_input_bool:
-                if output_shape[0] >= self.sequence_length:
-                    tokens = tf.slice(tokens, [0], [self.sequence_length])
-                else:
-                    tokens = tf.concat(
-                        [
-                            tokens,
-                            tf.zeros(
-                                self.sequence_length - output_shape[0],
-                                dtype=self.compute_dtype,
-                            ),
-                        ],
-                        axis=0,
-                    )
-            else:
-                output_shape[-1] = self.sequence_length
-                tokens = tokens.to_tensor(shape=output_shape)
-        else:
-            if scalar_input_bool:
-                tokens.set_shape([None])
+            output_shape[-1] = self.sequence_length
+            tokens = tokens.to_tensor(shape=output_shape)
+
+        if scalar_input:
+            tokens = tf.squeeze(tokens, 0)
         return tokens
 
     def detokenize(self, inputs):
