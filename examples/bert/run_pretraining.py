@@ -305,6 +305,7 @@ class AdamLRSchedule(keras.optimizers.schedules.LearningRateSchedule):
             curr_lr += (init_lr / 1e3)
         else:
             curr_lr -= (init_lr / 1e4)
+        self.current_learning_rate = curr_lr
         return curr_lr
 
 
