@@ -296,12 +296,16 @@ class AdamLRSchedule(keras.optimizers.schedules.LearningRateSchedule):
     
     def __init__(self, initial_learning_rate):
         self.initial_learning_rate = initial_learning_rate
+        self.current_learning_rate = initial_learning_rate
     
     def __call__(self, step):
-        lr = self.initial_learning_rate
+        curr_lr = self.current_learning_rate
+        init_lr = self.initial_learning_rate
         if step <= 10000:
-            return lr + (lr / (step + 1))
-        return lr - ()                      #TODO: add a decaying factor
+            curr_lr += (init_lr / 1e3)
+        else:
+            curr_lr -= (init_lr / 1e4)
+        return curr_lr
 
 
 def decode_record(record):
