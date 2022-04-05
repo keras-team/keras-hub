@@ -35,6 +35,15 @@ class BertPacker(keras.layers.Layer):
     If inputs are unbatched, inputs should be dense rank 1 tensors of any shape
     and will be packed to shape `[sequence_length]`.
 
+    Returns a python diction with three elements:
+    ```python
+    {
+        "tokens": ...,  # The dense, packed token tensor.
+        "padding_mask": ...,  # A mask with 0s where inputs have been padded.
+        "segment_ids": ...,  # Int ids corresponding to input segments.
+    }
+    ```
+
     Args:
         sequence_length: The desired output length.
         start_value: The id or token that is to be placed at the start of each
@@ -56,6 +65,36 @@ class BertPacker(keras.layers.Layer):
                     "waterfall" algorithm that allocates quota in a
                     left-to-right manner and fills up the buckets until we run
                     out of budget. It support arbitrary number of segments.
+
+    Examples:
+
+    *Pack a single input for classification.*
+    >>> seq1 = [1, 2, 3, 4]  # Replace with a real input.
+    >>> packer = keras_nlp.layers.BertPacker(8, start_value=101, end_value=102)
+    >>> packer(seq1)
+    {
+        "tokens": <tf.Tensor: shape=(8,), dtype=int32,
+            numpy=array([101,   1,   2,   3,   4, 102,   0,   0], dtype=int32)>,
+        "padding_mask": <tf.Tensor: shape=(8,), dtype=float32, 
+            numpy=array([1., 1., 1., 1., 1., 1., 0., 0.], dtype=float32)>,
+        "segment_ids": <tf.Tensor: shape=(8,), dtype=float32, 
+            numpy=array([0., 0., 0., 0., 0., 0., 0., 0.], dtype=float32)>,
+    }
+
+    *Pack a multiple input for classification.*
+    >>> seq1 = [1, 2, 3, 4]  # Replace with a real input.
+    >>> seq2 = [11, 12, 13, 14]  # Replace with a real input.
+    >>> seq3 = [21, 12, 23, 24]  # Replace with a real input.
+    >>> packer = keras_nlp.layers.BertPacker(8, start_value=101, end_value=102)
+    >>> packer((seq1, seq2, seq3))
+    {
+        "tokens": <tf.Tensor: shape=(8,), dtype=int32,
+            numpy=array([101,   1,   2, 102,  11, 102,  21,  102], dtype=int32)>,
+        "padding_mask": <tf.Tensor: shape=(8,), dtype=float32, 
+            numpy=array([1., 1., 1., 1., 1., 1., 1., 1.], dtype=float32)>,
+        "segment_ids": <tf.Tensor: shape=(8,), dtype=float32, 
+            numpy=array([0., 0., 0., 0., 1., 1., 2., 2.], dtype=float32)>,
+    }
 
     Reference:
         [Devlin et al., 2018](https://arxiv.org/abs/1810.04805).
