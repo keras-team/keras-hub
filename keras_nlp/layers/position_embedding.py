@@ -46,8 +46,8 @@ class PositionEmbedding(keras.layers.Layer):
         max_length=max_length
     )
 
-    embedded_tokens = self.token_embeddings(inputs)
-    embedded_positions = self.position_embeddings(embedded_tokens)
+    embedded_tokens = token_embeddings(inputs)
+    embedded_positions = position_embeddings(embedded_tokens)
     outputs = embedded_tokens + embedded_positions
     ```
 
