@@ -20,29 +20,31 @@ from tensorflow import keras
 
 
 class BertPacker(keras.layers.Layer):
-    """Packs multiple sequences into a single BERT model input.
+    """Packs multiple sequences into a single fixed width model input.
 
-    This layer packs multiple sequences suitable for input to a BERT or
-    BERT-like model. Takes as input a list of sequences, and truncates and
-    concatenes the sequences into a single sequence of `sequence_length`.
-    The output sequence will always start with a `start_value` and contain an
+    This layer packs multiple input sequences into a single fixed width sequence
+    containing start and end delimeters, forming an input suitable for BERT and
+    BERT-like models.
+
+    Takes as input a list or tuple of sequences with the layer will truncate and
+    concatenate the sequences into a single sequence of `sequence_length`. The
+    output sequence will always start with a `start_value` and contain an
     `end_value` after each sequence.
 
     If inputs are batched, inputs should be `tf.RaggedTensor`s with shape
     `[batch_size, None]` and will be packed and converted to a dense tensor with
     shape `[batch_size, sequence_length]`.
 
-    If inputs are unbatched, inputs should be dense rank 1 tensors of any shape
+    If inputs are unbatched, inputs should be dense rank-1 tensors of any shape,
     and will be packed to shape `[sequence_length]`.
 
-    Returns a python diction with three elements:
-    ```python
-    {
-        "tokens": ...,  # The dense, packed token tensor.
-        "padding_mask": ...,  # A mask with 0s where inputs have been padded.
-        "segment_ids": ...,  # Int ids corresponding to input segments.
-    }
-    ```
+    Returns a python dictionary with three elements:
+      - `"tokens"`: The packed token `tf.Tensor`.
+      - `"padding_mask"`: A `tf.Tensor` with the same shape as `"tokens"`,
+        containing 0s where inputs have been padded and 1s elsewhere.
+      - `"segment_ids"`: A `tf.Tensor` with the same shape as `"tokens"`,
+        containing an int id maching tokens to the index of input sequence they
+        belonged to.
 
     Args:
         sequence_length: The desired output length.
@@ -75,13 +77,13 @@ class BertPacker(keras.layers.Layer):
     {
         "tokens": <tf.Tensor: shape=(8,), dtype=int32,
             numpy=array([101,   1,   2,   3,   4, 102,   0,   0], dtype=int32)>,
-        "padding_mask": <tf.Tensor: shape=(8,), dtype=float32, 
+        "padding_mask": <tf.Tensor: shape=(8,), dtype=float32,
             numpy=array([1., 1., 1., 1., 1., 1., 0., 0.], dtype=float32)>,
-        "segment_ids": <tf.Tensor: shape=(8,), dtype=float32, 
+        "segment_ids": <tf.Tensor: shape=(8,), dtype=float32,
             numpy=array([0., 0., 0., 0., 0., 0., 0., 0.], dtype=float32)>,
     }
 
-    *Pack a multiple input for classification.*
+    *Pack multiple inputs for classification.*
     >>> seq1 = [1, 2, 3, 4]  # Replace with a real input.
     >>> seq2 = [11, 12, 13, 14]  # Replace with a real input.
     >>> seq3 = [21, 12, 23, 24]  # Replace with a real input.
@@ -90,9 +92,9 @@ class BertPacker(keras.layers.Layer):
     {
         "tokens": <tf.Tensor: shape=(8,), dtype=int32,
             numpy=array([101,   1,   2, 102,  11, 102,  21,  102], dtype=int32)>,
-        "padding_mask": <tf.Tensor: shape=(8,), dtype=float32, 
+        "padding_mask": <tf.Tensor: shape=(8,), dtype=float32,
             numpy=array([1., 1., 1., 1., 1., 1., 1., 1.], dtype=float32)>,
-        "segment_ids": <tf.Tensor: shape=(8,), dtype=float32, 
+        "segment_ids": <tf.Tensor: shape=(8,), dtype=float32,
             numpy=array([0., 0., 0., 0., 1., 1., 2., 2.], dtype=float32)>,
     }
 
