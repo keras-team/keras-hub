@@ -29,7 +29,7 @@ setup(
     ),
     long_description=README,
     long_description_content_type="text/markdown",
-    version="0.1.0",
+    version="0.1.1",
     url="https://github.com/keras-team/keras-nlp",
     author="Keras team",
     author_email="keras-nlp@google.com",
