@@ -34,6 +34,15 @@ class ByteTokenizerTest(tf.test.TestCase):
             self.assertAllEqual(call_output[i], exp_outputs[i])
             self.assertAllEqual(tokenize_output[i], exp_outputs[i])
 
+    def test_tokenize_scalar(self):
+        input_data = "hello"
+        tokenizer = ByteTokenizer()
+        call_output = tokenizer(input_data)
+        tokenize_output = tokenizer.tokenize(input_data)
+
+        self.assertAllEqual(call_output, [104, 101, 108, 108, 111])
+        self.assertAllEqual(tokenize_output, [104, 101, 108, 108, 111])
+
     def test_dense_output(self):
         input_data = tf.constant(["hello", "fun", "▀▁▂▃"])
         tokenizer = ByteTokenizer(sequence_length=10)
@@ -62,6 +71,7 @@ class ByteTokenizerTest(tf.test.TestCase):
         self.assertAllEqual(detokenize_output, ["hello", "fun", "▀▁▂▃"])
 
     def test_detokenize_replace_error(self):
+        # 226 is an invalid UTF-8 byte.
         input_data = tf.ragged.constant([[104, 101, 226, 150, 108, 108, 111]])
 
         tokenizer = ByteTokenizer(errors="replace", replacement_char=341)

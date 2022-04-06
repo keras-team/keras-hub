@@ -30,7 +30,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
     This tokenizer is a vocabulary-free tokenizer which will tokenize text as
     as raw bytes from [0, 256).
 
-    If input is a tensor of strings:
+    If input is a batch of strings:
     By default, the layer will output a `tf.RaggedTensor` where the last
     dimension of the output is ragged. If `sequence_length` is set, the layer
     will output a dense `tf.Tensor` where all inputs have been padded or
@@ -110,9 +110,9 @@ class ByteTokenizer(tokenizer.Tokenizer):
         [102, 117, 110,   0,   0]])>
 
     Detokenization.
-    >>> inputs = tf.constant(["hello"])
+    >>> inputs = tf.constant([[104, 101, 108, 108, 111]], dtype=tf.int32)
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
-    >>> tokenizer.detokenize(tokenizer.tokenize(inputs))
+    >>> tokenizer.detokenize(inputs)
     <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'hello'], dtype=object)>
 
     Detokenization with errors = "replace", replacement_char = 65533.
@@ -176,11 +176,15 @@ class ByteTokenizer(tokenizer.Tokenizer):
         return 256
 
     def tokenize(self, inputs):
-        # Optional: Lowercase the input.
+
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            inputs = tf.convert_to_tensor(inputs)
+
         scalar_input = inputs.shape.rank == 0
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
 
+        # Optional: Lowercase the input.
         if self.lowercase:
             inputs = tf_text.case_fold_utf8(inputs)
 
@@ -206,10 +210,23 @@ class ByteTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
+        # Remove trailing padding tokens, so that trailing "\x00" bytes don't
+        # show up in the detokenized output.
+        inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
 
-        decoded = tf.strings.reduce_join(
-            tf.gather(self._char_lst, inputs), axis=-1
-        )
+        try:
+            decoded = tf.strings.reduce_join(
+                tf.gather(self._char_lst, inputs), axis=-1
+            )
+        except tf.errors.InvalidArgumentError:
+            invalid_indices = tf.where(
+                tf.logical_or(tf.less(inputs, 0), tf.greater(inputs, 255))
+            )
+            raise ValueError(
+                "All entries in `inputs` must lie in the range "
+                f"[0, 256). Values at indices {invalid_indices} "
+                "lie outside this range."
+            )
 
         # Handle errors if an invalid byte sequence is encountered.
         decoded = tf.strings.unicode_transcode(
