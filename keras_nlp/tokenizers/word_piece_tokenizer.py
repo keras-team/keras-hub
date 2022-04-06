@@ -256,6 +256,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         return config
 
     def tokenize(self, inputs):
+        scalar_input = inputs.shape.rank == 0
+        if scalar_input:
+            inputs = tf.expand_dims(inputs, 0)
         # Optionally normalize and split inputs.
         if self._lowercase:
             inputs = tf_text.case_fold_utf8(inputs)
@@ -282,6 +285,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             output_shape = tokens.shape.as_list()
             output_shape[-1] = self._sequence_length
             tokens = tokens.to_tensor(shape=output_shape)
+
+        if scalar_input:
+            tokens = tf.squeeze(tokens, 0)
+            tf.ensure_shape(tokens, shape=[None])
+
         return tokens
 
     def detokenize(self, inputs):
