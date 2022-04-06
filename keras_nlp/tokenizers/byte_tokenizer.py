@@ -62,11 +62,24 @@ class ByteTokenizer(tokenizer.Tokenizer):
 
     Examples:
 
+    Basic usage.
+    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
+    >>> tokenizer("hello")
+    <tf.Tensor: shape=(5,), dtype=int32, numpy=array([104, 101, 108, 108, 111], dtype=int32)>
+
     Ragged outputs.
-    >>> inputs = tf.constant(["hello"])
+    >>> inputs = tf.constant(["hello", "hi"])
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
     >>> tokenizer(inputs)
-    <tf.RaggedTensor [[104, 101, 108, 108, 111]]>
+    <tf.RaggedTensor [[104, 101, 108, 108, 111], [104, 105]]>
+    
+    Dense outputs.
+    >>> inputs = tf.constant(["hello", "hi"])
+    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(sequence_length=8)
+    >>> tokenizer(inputs)
+    <tf.Tensor: shape=(2, 8), dtype=int32, numpy=
+    array([[104, 101, 108, 108, 111,   0,   0,   0],
+           [104, 105,   0,   0,   0,   0,   0,   0]], dtype=int32)>
 
     Dense outputs.
     >>> inputs = tf.constant(["hello"])
@@ -110,18 +123,17 @@ class ByteTokenizer(tokenizer.Tokenizer):
         [102, 117, 110,   0,   0]])>
 
     Detokenization.
-    >>> inputs = tf.constant([[104, 101, 108, 108, 111]], dtype=tf.int32)
+    >>> inputs = tf.constant([104, 101, 108, 108, 111], dtype=tf.int32)
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
     >>> tokenizer.detokenize(inputs)
-    <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'hello'], dtype=object)>
+    <tf.Tensor: shape=(), dtype=string, numpy=b'hello'>
 
-    Detokenization with errors = "replace", replacement_char = 65533.
-    >>> inputs = tf.constant([[104, 101, 226, 150, 108, 108, 111]])
-    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(
-            errors="replace", replacement_char=65533)
-    >>> tokenizer.detokenize(inputs)
-    <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'he\xef\xbf\xbdllo'],
-                dtype=object)>
+    Detokenization with invalid bytes.
+    >>> # The 255s below are invalid utf-8.
+    >>> inputs = tf.constant([104, 101, 255, 255, 255, 108, 108, 111], dtype=tf.int32)
+    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(errors="replace")
+    >>> tokenizer.detokenize(inputs).numpy().decode('utf-8')
+    'he���llo'
     """
 
     def __init__(
