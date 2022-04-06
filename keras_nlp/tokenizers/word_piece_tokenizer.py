@@ -257,7 +257,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def tokenize(self, inputs):
         """Check if inputs is a tensor"""
-        if isinstance(inputs, tf.Tensor):
+        if not isinstance(inputs, tf.Tensor):
             scalar_input = tf.convert_to_tensor(inputs).shape.rank == 0
         else:
             scalar_input = inputs.shape.rank == 0
