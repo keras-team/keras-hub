@@ -256,7 +256,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         return config
 
     def tokenize(self, inputs):
-        scalar_input = tf.tensor(inputs).shape.rank == 0
+        """Check if inputs is a tensor"""
+        if isinstance(inputs, tf.Tensor):
+            scalar_input = tf.convert_to_tensor(inputs).shape.rank == 0
+        else:
+            scalar_input = inputs.shape.rank == 0
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
         # Optionally normalize and split inputs.
