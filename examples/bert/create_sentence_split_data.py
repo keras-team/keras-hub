@@ -49,9 +49,7 @@ flags.DEFINE_string(
 )
 
 flags.DEFINE_string(
-    "output_directory",
-    None,
-    "Directory for output data.",
+    "output_directory", None, "Directory for output data.",
 )
 
 flags.DEFINE_integer("num_jobs", None, "Number of file shards to use.")

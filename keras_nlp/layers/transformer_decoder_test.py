@@ -26,13 +26,11 @@ class TransformerDecoderTest(tf.test.TestCase):
         encoder_input = keras.Input(shape=[4, 6])
         decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
-            intermediate_dim=4,
-            num_heads=2,
+            intermediate_dim=4, num_heads=2,
         )
         output = decoder(encoder_input, decoder_input)
         model = keras.Model(
-            inputs=[decoder_input, encoder_input],
-            outputs=output,
+            inputs=[decoder_input, encoder_input], outputs=output,
         )
 
         encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
@@ -41,8 +39,7 @@ class TransformerDecoderTest(tf.test.TestCase):
 
     def test_valid_call_with_mask(self):
         decoder = transformer_decoder.TransformerDecoder(
-            intermediate_dim=4,
-            num_heads=2,
+            intermediate_dim=4, num_heads=2,
         )
         encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
@@ -130,13 +127,11 @@ class TransformerDecoderTest(tf.test.TestCase):
 
     def test_checkpointing_transformer_decoder(self):
         decoder1 = transformer_decoder.TransformerDecoder(
-            intermediate_dim=4,
-            num_heads=2,
+            intermediate_dim=4, num_heads=2,
         )
 
         decoder2 = transformer_decoder.TransformerDecoder(
-            intermediate_dim=4,
-            num_heads=2,
+            intermediate_dim=4, num_heads=2,
         )
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
@@ -156,23 +151,18 @@ class TransformerDecoderTest(tf.test.TestCase):
         checkpoint2.restore(save_path)
 
         decoder1_output = decoder1(decoder_sequence, encoder_sequence)
-        decoder2_output = decoder2(
-            decoder_sequence,
-            encoder_sequence,
-        )
+        decoder2_output = decoder2(decoder_sequence, encoder_sequence,)
         self.assertAllClose(decoder1_output, decoder2_output)
 
     def test_save_model(self):
         encoder_input = keras.Input(shape=[4, 6])
         decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
-            intermediate_dim=4,
-            num_heads=2,
+            intermediate_dim=4, num_heads=2,
         )
         output = decoder(encoder_input, decoder_input)
         model = keras.Model(
-            inputs=[decoder_input, encoder_input],
-            outputs=output,
+            inputs=[decoder_input, encoder_input], outputs=output,
         )
         encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])

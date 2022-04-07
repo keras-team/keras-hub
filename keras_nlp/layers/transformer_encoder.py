@@ -152,9 +152,7 @@ class TransformerEncoder(keras.layers.Layer):
             self._build(inputs.shape)
 
         mask = merge_padding_and_attention_mask(
-            inputs,
-            padding_mask,
-            attention_mask,
+            inputs, padding_mask, attention_mask,
         )
 
         # Self attention.
@@ -163,9 +161,7 @@ class TransformerEncoder(keras.layers.Layer):
         )
         attended = self._attention_dropout(attended)
         attended = self._add_and_norm(
-            inputs,
-            attended,
-            self._attention_layernorm,
+            inputs, attended, self._attention_layernorm,
         )
         # Feedforward.
         feed_forward_output = self._feed_forward(attended)

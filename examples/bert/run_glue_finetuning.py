@@ -74,11 +74,7 @@ flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
 
 
 def pack_inputs(
-    inputs,
-    seq_length,
-    start_of_sequence_id,
-    end_of_segment_id,
-    padding_id,
+    inputs, seq_length, start_of_sequence_id, end_of_segment_id, padding_id,
 ):
     # In case inputs weren't truncated (as they should have been),
     # fall back to some ad-hoc truncation.
@@ -150,14 +146,9 @@ class BertClassificationFinetuner(keras.Model):
         super().__init__(**kwargs)
         self.bert_model = bert_model
         self._pooler_layer = keras.layers.Dense(
-            hidden_size,
-            activation="tanh",
-            name="pooler",
+            hidden_size, activation="tanh", name="pooler",
         )
-        self._logit_layer = tf.keras.layers.Dense(
-            num_classes,
-            name="logits",
-        )
+        self._logit_layer = tf.keras.layers.Dense(num_classes, name="logits",)
 
     def call(self, inputs):
         outputs = self.bert_model(inputs)

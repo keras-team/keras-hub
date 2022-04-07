@@ -200,8 +200,7 @@ class WordPieceTokenizerTest(tf.test.TestCase):
             original_tokenizer.get_config()
         )
         self.assertAllEqual(
-            original_tokenizer(input_data),
-            cloned_tokenizer(input_data),
+            original_tokenizer(input_data), cloned_tokenizer(input_data),
         )
 
     def test_saving(self):
@@ -220,6 +219,5 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         model.save(self.get_temp_dir())
         restored_model = keras.models.load_model(self.get_temp_dir())
         self.assertAllEqual(
-            model(input_data),
-            restored_model(input_data),
+            model(input_data), restored_model(input_data),
         )

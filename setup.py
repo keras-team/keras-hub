@@ -42,13 +42,7 @@ setup(
         "tensorflow_text",
     ],
     extras_require={
-        "tests": [
-            "black",
-            "flake8",
-            "isort",
-            "pytest",
-            "pytest-cov",
-        ],
+        "tests": ["black", "flake8", "isort", "pytest", "pytest-cov",],
         "examples": [
             "datasets",  # For GLUE in BERT example.
             "nltk",

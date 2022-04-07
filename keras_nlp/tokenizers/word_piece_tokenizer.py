@@ -59,10 +59,7 @@ PUNCTUATION_REGEX = r"|".join(
 
 # Matches both whitespace and punctuation.
 WHITESPACE_AND_PUNCTUATION_REGEX = r"|".join(
-    [
-        WHITESPACE_REGEX,
-        PUNCTUATION_REGEX,
-    ]
+    [WHITESPACE_REGEX, PUNCTUATION_REGEX,]
 )
 
 

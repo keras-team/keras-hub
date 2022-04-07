@@ -32,35 +32,44 @@ class MaskedLanguageModelMasker(keras.layers.Layer):
     useful for workflows like RoBERTa training.
 
     Args:
-        vocabulary: A list of strings or a string string filename path. If
-            passing a list, each element of the list should be a single word
-            piece token string. If passing a filename, the file should be a
-            plain text file containing a single word piece token per line.
-        unselectable_tokens: A list of tokens, defaults to None. Tokens in
-            `unselectable_tokens` will not be selected for masking.
-        mask_token: String, defaults to "[MASK]". The mask token.
+        vocabulary_size: int, the size of the vocabulary.
+        mask_selection_rate: float, the probability of a token is selected for
+            masking.
+        max_selections: int, maximum number of tokens selected for masking in
+            each sequence.
+        unselectable_token_ids: A list of tokens, defaults to None. Tokens in
+            `unselectable_tokens_ids` will not be selected for masking.
+        mask_token_id: int, defaults to 0. The id of mask token.
+        mask_token_rate: float, defaults to 0.8. `mask_token_rate` must be
+            between 0 and 1 which indicates how often the mask_token is
+            substituted for tokens selected for masking.
+        random_token_rate: float, defaults to 0.1. `random_token_rate` must be
+            between 0 and 1 which indicates how often a random token is
+            substituted for tokens selected for masking. Default is 0.1.
+            Note: mask_token_rate + random_token_rate <= 1.
+        padding_token_id: int, defaults to None. The id of padding token.
     """
 
     def __init__(
         self,
         vocabulary_size,
-        lm_selection_rate,
+        mask_selection_rate,
         max_selections,
         unselectable_token_ids=None,
         mask_token_id=0,
         mask_token_rate=0.8,
         random_token_rate=0.1,
-        padding_token=None,
+        padding_token_id=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.vocabulary_size = vocabulary_size
         self.unselectable_token_ids = unselectable_token_ids
-        self.lm_selection_rate = lm_selection_rate
+        self.mask_selection_rate = mask_selection_rate
         self.max_selections = max_selections
         self.mask_token_rate = mask_token_rate
         self.random_token_rate = random_token_rate
-        self.padding_token = padding_token
+        self.padding_token_id = padding_token_id
 
         if mask_token_id >= vocabulary_size:
             raise ValueError(
@@ -71,18 +80,18 @@ class MaskedLanguageModelMasker(keras.layers.Layer):
 
     def call(self, inputs):
         input_is_ragged = isinstance(inputs, tf.RaggedTensor)
+        input_is_1d = tf.rank(inputs) == 1
         if not input_is_ragged:
-            if tf.rank(inputs) == 1:
+            if input_is_1d:
                 # If inputs is of rank 1, we manually add the batch axis.
                 inputs = inputs[tf.newaxis, :]
             # Convert to RaggedTensor to avoid masking out padded token.
             inputs = tf.RaggedTensor.from_tensor(
-                inputs,
-                padding=self.padding_token,
+                inputs, padding=self.padding_token_id,
             )
         random_selector = tf_text.RandomItemSelector(
             max_selections_per_batch=self.max_selections,
-            selection_rate=self.lm_selection_rate,
+            selection_rate=self.mask_selection_rate,
             unselectable_ids=self.unselectable_token_ids,
         )
         mask_values_chooser = tf_text.MaskValuesChooser(
@@ -103,24 +112,33 @@ class MaskedLanguageModelMasker(keras.layers.Layer):
         )
 
         if not input_is_ragged:
-            # if inputs is a Tensor not RaggedTensor, we format the masked
+            # If inputs is a Tensor not RaggedTensor, we format the masked
             # output to be a Tensor.
             masked_input_ids = masked_input_ids.to_tensor()
+            if input_is_1d:
+                # If inputs is 1D, we format the output to be 1D as well.
+                masked_input_ids = tf.squeeze(masked_input_ids)
+                masked_positions = tf.squeeze(masked_positions.to_tensor())
+                masked_ids = tf.squeeze(masked_ids.to_tensor())
 
-        return masked_input_ids, masked_positions, masked_ids
+        return {
+            "masked_input_ids": masked_input_ids,
+            "masked_positions": masked_positions,
+            "masked_ids": masked_ids,
+        }
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "vocabulary_size": self.vocabulary_size,
-                "lm_selection_rate": self.lm_selection_rate,
+                "mask_selection_rate": self.mask_selection_rate,
                 "max_selections": self.max_selections,
                 "unselectable_token_ids": self.unselectable_token_ids,
                 "mask_token_id": self.mask_token_id,
                 "mask_token_rate": self.mask_token_rate,
                 "random_token_rate": self.random_token_rate,
-                "padding_token": self.padding_token,
+                "padding_token_id": self.padding_token_id,
             }
         )
         return config

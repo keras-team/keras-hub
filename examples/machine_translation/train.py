@@ -34,19 +34,13 @@ flags.DEFINE_integer(
     "Intermediate dimension (feedforward network) of transformer.",
 )
 flags.DEFINE_integer(
-    "num_heads",
-    8,
-    "Number of head of the multihead attention.",
+    "num_heads", 8, "Number of head of the multihead attention.",
 )
 flags.DEFINE_integer(
-    "sequence_length",
-    20,
-    "Input and output sequence length.",
+    "sequence_length", 20, "Input and output sequence length.",
 )
 flags.DEFINE_integer(
-    "vocab_size",
-    15000,
-    "Vocabulary size, required by tokenizer.",
+    "vocab_size", 15000, "Vocabulary size, required by tokenizer.",
 )
 
 flags.DEFINE_string(
@@ -77,9 +71,9 @@ def run_training(model, train_ds, val_ds):
 
 
 def main(_):
-    (train_ds, val_ds, test_ds), (
-        eng_tokenizer,
-        spa_tokenizer,
+    (
+        (train_ds, val_ds, test_ds),
+        (eng_tokenizer, spa_tokenizer,),
     ) = get_dataset_and_tokenizer(
         FLAGS.sequence_length, FLAGS.vocab_size, FLAGS.batch_size
     )

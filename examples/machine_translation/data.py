@@ -63,9 +63,7 @@ strip_chars = strip_chars.replace("]", "")
 def custom_standardization(input_string):
     lowercase = tf.strings.lower(input_string)
     return tf.strings.regex_replace(
-        lowercase,
-        "[%s]" % re.escape(strip_chars),
-        "",
+        lowercase, "[%s]" % re.escape(strip_chars), "",
     )
 
 
@@ -105,10 +103,7 @@ def prepare_datasets(text_pairs, batch_size, eng_tokenizer, spa_tokenizer):
         eng = eng_tokenizer(eng)
         spa = spa_tokenizer(spa)
         return (
-            {
-                "encoder_inputs": eng,
-                "decoder_inputs": spa[:, :-1],
-            },
+            {"encoder_inputs": eng, "decoder_inputs": spa[:, :-1],},
             spa[:, 1:],
             tf.cast((spa[:, 1:] != 0), tf.float32),  # mask as sample weights
         )
@@ -128,21 +123,12 @@ def get_dataset_and_tokenizer(sequence_length, vocab_size, batch_size):
         train_pairs, sequence_length, vocab_size
     )
     train_ds = prepare_datasets(
-        train_pairs,
-        batch_size,
-        eng_tokenizer,
-        spa_tokenizer,
+        train_pairs, batch_size, eng_tokenizer, spa_tokenizer,
     )
     val_ds = prepare_datasets(
-        val_pairs,
-        batch_size,
-        eng_tokenizer,
-        spa_tokenizer,
+        val_pairs, batch_size, eng_tokenizer, spa_tokenizer,
     )
     test_ds = prepare_datasets(
-        test_pairs,
-        batch_size,
-        eng_tokenizer,
-        spa_tokenizer,
+        test_pairs, batch_size, eng_tokenizer, spa_tokenizer,
     )
     return (train_ds, val_ds, test_ds), (eng_tokenizer, spa_tokenizer)
