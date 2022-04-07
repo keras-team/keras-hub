@@ -52,7 +52,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
             "NFKC", "NFD", "NFKD"). If set, every UTF-8 string in the input
             tensor text will be normalized to the given form before tokenizing.
         errors: string. One of ("strict", "replace", "ignore"). Defaults to
-            "replace".Specifies the `detokenize()` behaviour when an invalid
+            "replace". Specifies the `detokenize()` behaviour when an invalid
             byte sequence is encountered (same behaviour as
             https://www.tensorflow.org/api_docs/python/tf/strings/unicode_transcode).
         replacement_char: int. Defaults to 65533. The replacement character to
@@ -132,9 +132,10 @@ class ByteTokenizer(tokenizer.Tokenizer):
     Detokenization with invalid bytes.
     >>> # The 255 below is invalid utf-8.
     >>> inputs = tf.constant([104, 101, 255, 108, 108, 111], dtype=tf.int32)
-    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(errors="replace")
+    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(                                       
+    ...     errors="replace", replacement_char=88)
     >>> tokenizer.detokenize(inputs).numpy().decode('utf-8')
-    'he�llo'
+    'heXllo'
     """
 
     def __init__(
@@ -227,19 +228,9 @@ class ByteTokenizer(tokenizer.Tokenizer):
         # show up in the detokenized output.
         inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
 
-        try:
-            decoded = tf.strings.reduce_join(
-                tf.gather(self._char_lst, inputs), axis=-1
-            )
-        except tf.errors.InvalidArgumentError:
-            invalid_indices = tf.where(
-                tf.logical_or(tf.less(inputs, 0), tf.greater(inputs, 255))
-            )
-            raise ValueError(
-                "All entries in `inputs` must lie in the range "
-                f"[0, 256). Values at indices {invalid_indices} "
-                "lie outside this range."
-            )
+        decoded = tf.strings.reduce_join(
+            tf.gather(self._char_lst, inputs), axis=-1
+        )
 
         # Handle errors if an invalid byte sequence is encountered.
         decoded = tf.strings.unicode_transcode(
