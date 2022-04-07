@@ -47,7 +47,7 @@ flags.DEFINE_string(
     "The vocabulary file that the BERT model was trained on.",
 )
 
-flags.DEFINE_integer("epochs", 10, "The number of training epochs.")
+# flags.DEFINE_integer("epochs", 10, "The number of training epochs.")
 
 flags.DEFINE_integer("batch_size", 256, "The training batch size.")
 
@@ -61,6 +61,17 @@ flags.DEFINE_integer(
     "Maximum number of masked LM predictions per sequence.",
 )
 
+flags.DEFINE_integer(
+    "num_warmup_steps",
+    1e4,
+    "The number of warmup steps during which the learning rate will increase "
+    "till a threshold.")
+
+flags.DEFINE_integer(
+    "num_train_steps",
+    3e4,
+    "The number of warmup steps during which the learning rate will increase "
+    "till a threshold.")
 
 class ClassificationHead(tf.keras.layers.Layer):
     """Pooling head for sentence-level classification tasks.
@@ -292,21 +303,51 @@ class BertPretrainer(keras.Model):
         return {m.name: m.result() for m in self.metrics}
 
 class AdamLRSchedule(keras.optimizers.schedules.LearningRateSchedule):
-    """Implements a custom Learning Rate Scheduler."""
+    """
+    Implements a Learning Rate Scheduler for Adam with Linear Warmup and
+    Linear Decay for a fixed number of training steps instead of epochs.
+    """
     
-    def __init__(self, initial_learning_rate):
-        self.initial_learning_rate = initial_learning_rate
-        self.current_learning_rate = initial_learning_rate
+    def __init__(self,
+            learning_rate,
+            num_warmup_steps,
+            num_train_steps
+        ):
+        self.threshold_learning_rate = learning_rate
+        self.warmup_steps = num_warmup_steps
+        self.train_steps = num_train_steps
+        
     
     def __call__(self, step):
-        curr_lr = self.current_learning_rate
-        init_lr = self.initial_learning_rate
-        if step <= 10000:
-            curr_lr += (init_lr / 1e3)
-        else:
-            curr_lr -= (init_lr / 1e4)
-        self.current_learning_rate = curr_lr
-        return curr_lr
+        """
+        Calculates learning rate with linear warmup and linear decay based
+        on the current step. Linear Warmup for the first `num_warmup_steps` and
+        Linear Decay for the steps post `num_warmup_steps` till
+        `num_train_steps`.
+        """
+        final_lr = tf.cast(self.threshold_learning_rate, dtype = tf.float32)
+        warmup = tf.cast(self.warmup_steps, dtype = tf.float32)
+        training = tf.cast(self.train_steps, dtype = tf.float32)
+        
+        is_warmup = step < warmup
+
+        #Linear Decay will be implemented if current step is not less than
+        #`num_warmup_steps`
+        learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(
+            final_lr,
+            training,
+            end_learning_rate=0.0,
+            power=1.0,
+            cycle=False,
+            name=None,
+        )
+        
+        #Linear Warmup will be implemented if current step is less than
+        #`num_warmup_steps`
+        if is_warmup:
+            learning_rate = final_lr * (step / warmup)
+        
+        return learning_rate
 
 
 def decode_record(record):
@@ -366,7 +407,10 @@ def main(_):
     model.summary()
 
     #Implemented Learning Rate Schedule
-    learning_rate_schedule = AdamLRSchedule(FLAGS.learning_rate)
+    learning_rate_schedule = AdamLRSchedule(
+        learning_rate = FLAGS.learning_rate,
+        num_warmup_steps = FLAGS.num_warmup_steps,
+        num_train_steps = FLAGS.num_train_steps)
     
     # Wrap with pretraining heads and call fit.
     pretraining_model = BertPretrainer(model)
@@ -375,7 +419,9 @@ def main(_):
         optimizer=keras.optimizers.Adam(learning_rate=learning_rate_schedule)
     )
     # TODO(mattdangerw): Add TPU strategy support.
-    pretraining_model.fit(dataset, epochs=FLAGS.epochs)
+    pretraining_model.train(
+        dataset,
+        steps = FLAGS.num_train_steps)
 
     print(f"Saving to {FLAGS.saved_model_output}")
     model.save(FLAGS.saved_model_output)
