@@ -257,8 +257,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def tokenize(self, inputs):
         # Check if Input is Scalar or Not
-        if not isinstance(inputs, tf.Tensor) or not isinstance(inputs, 
-        tf.RaggedTensor):
+        if not isinstance(inputs, tf.Tensor) or not isinstance(
+            inputs, tf.RaggedTensor
+        ):
             scalar_input = tf.convert_to_tensor(inputs).shape.rank == 0
         else:
             scalar_input = inputs.shape.rank == 0

@@ -165,11 +165,13 @@ class WordPieceTokenizerTest(tf.test.TestCase):
 
     def test_batching_ragged_tensors(self):
         tokenizer = WordPieceTokenizer(
-            vocabulary=["[UNK]", "a", "b", "c", "d", "e", "f"])
-        dataset = tf.data.Dataset.from_tensor_slices(["a b c","d e","a f e"])
+            vocabulary=["[UNK]", "a", "b", "c", "d", "e", "f"]
+        )
+        dataset = tf.data.Dataset.from_tensor_slices(["a b c", "d e", "a f e"])
         dataset = dataset.map(tokenizer)
         dataset = dataset.apply(
-            tf.data.experimental.dense_to_ragged_batch(batch_size=1))
+            tf.data.experimental.dense_to_ragged_batch(batch_size=1)
+        )
         element = dataset.take(1).get_single_element().numpy()
         self.assertAllEqual(element, [[1, 2, 3]])
 
