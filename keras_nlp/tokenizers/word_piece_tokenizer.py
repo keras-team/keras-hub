@@ -257,12 +257,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def tokenize(self, inputs):
         # Check if Input is Scalar or Not
-        if not isinstance(inputs, tf.Tensor) or not isinstance(
-            inputs, tf.RaggedTensor
-        ):
-            scalar_input = tf.convert_to_tensor(inputs).shape.rank == 0
-        else:
-            scalar_input = inputs.shape.rank == 0
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            inputs = tf.convert_to_tensor(inputs)
+        scalar_input = tf.convert_to_tensor(inputs).shape.rank == 0
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
         # Optionally normalize and split inputs.
@@ -294,7 +291,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         # Convert to a dense output if input in scalar
         if scalar_input:
             tokens = tf.squeeze(tokens, 0)
-            tf.ensure_shape(tokens, shape=[None])
+            tf.ensure_shape(tokens, shape=[self._sequence_length])
 
         return tokens
 
