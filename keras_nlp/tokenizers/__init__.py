@@ -12,5 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.tokenizers.byte_tokenizer import ByteTokenizer
 from keras_nlp.tokenizers.tokenizer import Tokenizer
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
