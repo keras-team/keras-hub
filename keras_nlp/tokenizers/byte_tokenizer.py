@@ -132,7 +132,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
     Detokenization with invalid bytes.
     >>> # The 255 below is invalid utf-8.
     >>> inputs = tf.constant([104, 101, 255, 108, 108, 111], dtype=tf.int32)
-    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(                                       
+    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(
     ...     errors="replace", replacement_char=88)
     >>> tokenizer.detokenize(inputs).numpy().decode('utf-8')
     'heXllo'
