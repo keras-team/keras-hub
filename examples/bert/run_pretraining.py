@@ -419,9 +419,11 @@ def main(_):
         optimizer=keras.optimizers.Adam(learning_rate=learning_rate_schedule)
     )
     # TODO(mattdangerw): Add TPU strategy support.
-    pretraining_model.train(
+    steps_per_epoch = FLAGS.num_train_steps/FLAGS.epochs
+    pretraining_model.fit(
         dataset,
-        steps = FLAGS.num_train_steps)
+        epochs = FLAGS.epochs,
+        steps_per_epoch = steps_per_epoch)
 
     print(f"Saving to {FLAGS.saved_model_output}")
     model.save(FLAGS.saved_model_output)
