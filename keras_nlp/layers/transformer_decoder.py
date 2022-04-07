@@ -191,7 +191,8 @@ class TransformerDecoder(keras.layers.Layer):
         )
         if use_causal_mask:
             causal_mask = tf.cast(
-                compute_causal_mask(decoder_sequence), dtype=tf.int32,
+                compute_causal_mask(decoder_sequence),
+                dtype=tf.int32,
             )
             if decoder_mask is None:
                 decoder_mask = causal_mask

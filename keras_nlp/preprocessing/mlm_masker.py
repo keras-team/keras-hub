@@ -87,7 +87,8 @@ class MaskedLanguageModelMasker(keras.layers.Layer):
                 inputs = inputs[tf.newaxis, :]
             # Convert to RaggedTensor to avoid masking out padded token.
             inputs = tf.RaggedTensor.from_tensor(
-                inputs, padding=self.padding_token_id,
+                inputs,
+                padding=self.padding_token_id,
             )
         random_selector = tf_text.RandomItemSelector(
             max_selections_per_batch=self.max_selections,

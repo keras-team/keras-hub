@@ -24,7 +24,9 @@ import examples.machine_translation.data  # noqa: F401.
 FLAGS = flags.FLAGS
 
 flags.DEFINE_integer(
-    "sequence_length", 20, "Input and output sequence length.",
+    "sequence_length",
+    20,
+    "Input and output sequence length.",
 )
 
 flags.DEFINE_string(
@@ -69,12 +71,16 @@ def decode_sequence(input_sentence, model, max_sequence_length, lookup_table):
     decoded_sentence = [start_token]
     for i in range(max_sequence_length):
         decoder_inputs = tf.convert_to_tensor(
-            [decoded_sentence], dtype=tf.int64,
+            [decoded_sentence],
+            dtype=tf.int64,
         )
         decoder_inputs = tf.concat(
             [
                 decoder_inputs,
-                tf.zeros([1, max_sequence_length - i - 1], dtype=tf.int64,),
+                tf.zeros(
+                    [1, max_sequence_length - i - 1],
+                    dtype=tf.int64,
+                ),
             ],
             axis=1,
         )

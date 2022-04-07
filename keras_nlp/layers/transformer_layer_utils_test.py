@@ -28,7 +28,9 @@ class TransformerEncoderTest(tf.test.TestCase):
         attention_mask = tf.convert_to_tensor([[0, 0, 1], [0, 1, 0], [1, 0, 0]])
         inputs = tf.random.uniform(shape=[1, 3, 2])
         merged_mask = utils.merge_padding_and_attention_mask(
-            inputs, padding_mask, attention_mask,
+            inputs,
+            padding_mask,
+            attention_mask,
         )
         self.assertTrue(
             (merged_mask.numpy() == [[0, 0, 0], [0, 1, 0], [1, 0, 0]]).all()

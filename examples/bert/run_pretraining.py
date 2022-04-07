@@ -381,7 +381,10 @@ def main(_):
     dataset = dataset.batch(FLAGS.batch_size, drop_remainder=True)
 
     # Create a BERT model the input config.
-    model = BertModel(vocab_size=len(vocab), **bert_config,)
+    model = BertModel(
+        vocab_size=len(vocab),
+        **bert_config,
+    )
     # Make sure model has been called.
     model(model.inputs)
     model.summary()

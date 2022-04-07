@@ -24,15 +24,22 @@ from keras_nlp.layers import transformer_encoder
 class TransformerEncoderTest(tf.test.TestCase):
     def test_valid_call(self):
         encoder = transformer_encoder.TransformerEncoder(
-            intermediate_dim=4, num_heads=2,
+            intermediate_dim=4,
+            num_heads=2,
         )
-        model = keras.Sequential([keras.Input(shape=(4, 6)), encoder,])
+        model = keras.Sequential(
+            [
+                keras.Input(shape=(4, 6)),
+                encoder,
+            ]
+        )
         input = tf.random.uniform(shape=[2, 4, 6])
         model(input)
 
     def test_valid_call_with_mask(self):
         encoder = transformer_encoder.TransformerEncoder(
-            intermediate_dim=4, num_heads=2,
+            intermediate_dim=4,
+            num_heads=2,
         )
         encoder.build([2, 4, 6])
         input = tf.random.uniform(shape=[2, 4, 6])
@@ -84,7 +91,8 @@ class TransformerEncoderTest(tf.test.TestCase):
 
     def test_one_training_step_of_transformer_encoder(self):
         encoder = transformer_encoder.TransformerEncoder(
-            intermediate_dim=4, num_heads=2,
+            intermediate_dim=4,
+            num_heads=2,
         )
         inputs = keras.Input(shape=(4, 6))
         x = encoder(inputs)
@@ -105,11 +113,13 @@ class TransformerEncoderTest(tf.test.TestCase):
 
     def test_checkpointing_transformer_encoder(self):
         encoder1 = transformer_encoder.TransformerEncoder(
-            intermediate_dim=4, num_heads=2,
+            intermediate_dim=4,
+            num_heads=2,
         )
 
         encoder2 = transformer_encoder.TransformerEncoder(
-            intermediate_dim=4, num_heads=2,
+            intermediate_dim=4,
+            num_heads=2,
         )
         data = tf.random.uniform(shape=[2, 4, 6])
         encoder1(data)
@@ -136,7 +146,8 @@ class TransformerEncoderTest(tf.test.TestCase):
             [
                 keras.Input(shape=(4, 6)),
                 transformer_encoder.TransformerEncoder(
-                    intermediate_dim=4, num_heads=2,
+                    intermediate_dim=4,
+                    num_heads=2,
                 ),
             ]
         )

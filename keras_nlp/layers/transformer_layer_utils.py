@@ -26,14 +26,19 @@ def compute_causal_mask(inputs):
     mask = tf.cast(i >= j, dtype="int32")
     mask = tf.reshape(mask, (1, input_shape[1], input_shape[1]))
     mult = tf.concat(
-        [tf.expand_dims(batch_size, -1), tf.constant([1, 1], dtype=tf.int32),],
+        [
+            tf.expand_dims(batch_size, -1),
+            tf.constant([1, 1], dtype=tf.int32),
+        ],
         axis=0,
     )
     return tf.tile(mask, mult)
 
 
 def merge_padding_and_attention_mask(
-    inputs, padding_mask, attention_mask,
+    inputs,
+    padding_mask,
+    attention_mask,
 ):
     """Merge padding mask with users' customized mask.
 
@@ -68,5 +73,8 @@ def merge_padding_and_attention_mask(
         if mask is None:
             return attention_mask
         else:
-            return tf.minimum(mask[:, tf.newaxis, :], attention_mask,)
+            return tf.minimum(
+                mask[:, tf.newaxis, :],
+                attention_mask,
+            )
     return mask

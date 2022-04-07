@@ -56,7 +56,9 @@ flags.DEFINE_string(
 )
 
 flags.DEFINE_string(
-    "output_file", None, "Output TF record file.",
+    "output_file",
+    None,
+    "Output TF record file.",
 )
 
 flags.DEFINE_string(

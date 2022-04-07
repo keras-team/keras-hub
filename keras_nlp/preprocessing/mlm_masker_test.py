@@ -63,7 +63,9 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
 
         # Test all selected tokens are correctly masked.
         masked_values = tf.gather(
-            masked_input_ids, masked_positions, batch_dims=1,
+            masked_input_ids,
+            masked_positions,
+            batch_dims=1,
         )
         self.assertEqual(tf.reduce_mean(masked_values), self.mask_token_id)
 
@@ -77,7 +79,9 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
             random_token_rate=0,
         )
         inputs = tf.random.uniform(
-            shape=[5, 10], maxval=len(self.VOCAB), dtype=tf.int32,
+            shape=[5, 10],
+            maxval=len(self.VOCAB),
+            dtype=tf.int32,
         )
         outputs = mlm_masker(inputs)
         masked_input_ids, masked_positions, masked_ids = (
@@ -92,7 +96,9 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
         )
         # Test all selected tokens are correctly masked.
         masked_values = tf.gather(
-            masked_input_ids, masked_positions, batch_dims=1,
+            masked_input_ids,
+            masked_positions,
+            batch_dims=1,
         )
         self.assertEqual(tf.reduce_mean(masked_values), self.mask_token_id)
 
@@ -159,7 +165,9 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
             random_token_rate=1,
         )
         inputs = tf.random.uniform(
-            shape=[5, 10], maxval=len(self.VOCAB), dtype=tf.int32,
+            shape=[5, 10],
+            maxval=len(self.VOCAB),
+            dtype=tf.int32,
         )
         outputs = mlm_masker(inputs)
         masked_input_ids, masked_positions, masked_ids = (
@@ -172,7 +180,9 @@ class MaskedLanguageModelMaskerTest(tf.test.TestCase):
             masked_positions.row_lengths(), masked_ids.row_lengths()
         )
         masked_values = tf.gather(
-            masked_input_ids, masked_positions, batch_dims=1,
+            masked_input_ids,
+            masked_positions,
+            batch_dims=1,
         )
         # Verify that selected tokens are replaced by random tokens.
         self.assertNotEqual(tf.reduce_mean(masked_values), self.mask_token_id)
