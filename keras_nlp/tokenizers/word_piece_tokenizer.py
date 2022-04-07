@@ -188,28 +188,28 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         super().__init__(**kwargs)
 
         if isinstance(vocabulary, str):
-            self._vocab = [
+            self.vocabulary = [
                 line.rstrip() for line in tf.io.gfile.GFile(vocabulary)
             ]
         elif isinstance(vocabulary, Iterable):
             # Make a copy.
-            self._vocab = list(vocabulary)
+            self.vocabulary = list(vocabulary)
         else:
             raise ValueError(
                 "Vocabulary must be an file path or list of terms. "
                 f"Received: vocabulary={vocabulary}"
             )
 
-        self._sequence_length = sequence_length
-        self._lowercase = lowercase
-        self._strip_accents = strip_accents
-        self._split_pattern = split_pattern
-        self._keep_pattern = keep_pattern
-        self._suffix_indicator = suffix_indicator
-        self._oov_token = oov_token
+        self.sequence_length = sequence_length
+        self.lowercase = lowercase
+        self.strip_accents = strip_accents
+        self.split_pattern = split_pattern
+        self.keep_pattern = keep_pattern
+        self.suffix_indicator = suffix_indicator
+        self.oov_token = oov_token
 
         self._fast_word_piece = tf_text.FastWordpieceTokenizer(
-            vocab=self._vocab,
+            vocab=self.vocabulary,
             token_out_type=self.compute_dtype,
             suffix_indicator=suffix_indicator,
             unknown_token=oov_token,
@@ -219,22 +219,22 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def get_vocabulary(self) -> List[str]:
         """Get the tokenizer vocabulary as a list of strings tokens."""
-        return self._vocab
+        return self.vocabulary
 
     def vocabulary_size(self) -> int:
         """Get the size of the tokenizer vocabulary."""
-        return len(self._vocab)
+        return len(self.vocabulary)
 
     def id_to_token(self, id: int) -> str:
         """Convert an integer id to a string token."""
-        return self._vocab[id]
+        return self.vocabulary[id]
 
     def token_to_id(self, token: str) -> int:
         """Convert a string token to an integer id."""
         # This will be slow, but keep memory usage down compared to building a
         # dict. Assuming the main use case is looking up a few special tokens
         # early in the vocab, this should be fine.
-        return self._vocab.index(token)
+        return self.vocabulary.index(token)
 
     def get_config(self) -> Dict[str, Any]:
         config = super().get_config()
@@ -243,14 +243,14 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 # Ideally a vocabulary would be saved as a plain text asset in
                 # the saved model. We have no good way to support this
                 # currently, so we save the vocabulary in the config.
-                "vocabulary": self._vocab,
-                "sequence_length": self._sequence_length,
-                "lowercase": self._lowercase,
-                "strip_accents": self._strip_accents,
-                "split_pattern": self._split_pattern,
-                "keep_pattern": self._keep_pattern,
-                "suffix_indicator": self._suffix_indicator,
-                "oov_token": self._oov_token,
+                "vocabulary": self.vocabulary,
+                "sequence_length": self.sequence_length,
+                "lowercase": self.lowercase,
+                "strip_accents": self.strip_accents,
+                "split_pattern": self.split_pattern,
+                "keep_pattern": self.keep_pattern,
+                "suffix_indicator": self.suffix_indicator,
+                "oov_token": self.oov_token,
             }
         )
         return config
@@ -263,18 +263,18 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
         # Optionally normalize and split inputs.
-        if self._lowercase:
+        if self.lowercase:
             inputs = tf_text.case_fold_utf8(inputs)
-        if self._strip_accents:
+        if self.strip_accents:
             # Normalize unicode to NFD, which splits out accent mark characters.
             inputs = tf_text.normalize_utf8(inputs, "NFD")
             # Remove the accent marks.
             inputs = tf.strings.regex_replace(inputs, r"\p{Mn}", "")
-        if self._split_pattern:
+        if self.split_pattern:
             inputs = tf_text.regex_split(
                 inputs,
-                delim_regex_pattern=self._split_pattern,
-                keep_delim_regex_pattern=self._keep_pattern,
+                delim_regex_pattern=self.split_pattern,
+                keep_delim_regex_pattern=self.keep_pattern,
             )
 
         # Apply word piece and coerce shape for outputs.
@@ -284,14 +284,14 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         # ragged dimension which is a better out of box default.
         tokens = tokens.merge_dims(-2, -1)
         # Convert to a dense output if `sequence_length` is set.
-        if self._sequence_length:
+        if self.sequence_length:
             output_shape = tokens.shape.as_list()
-            output_shape[-1] = self._sequence_length
+            output_shape[-1] = self.sequence_length
             tokens = tokens.to_tensor(shape=output_shape)
         # Convert to a dense output if input in scalar
         if scalar_input:
             tokens = tf.squeeze(tokens, 0)
-            tf.ensure_shape(tokens, shape=[self._sequence_length])
+            tf.ensure_shape(tokens, shape=[self.sequence_length])
 
         return tokens
 
