@@ -93,7 +93,7 @@ class Tokenizer(keras.layers.Layer):
             f"{self.__class__.__name__}."
         )
 
-    def vocabulary_size(self):
+    def vocabulary_size(self) -> int:
         """Returns the total size of the token id space."""
         raise NotImplementedError(
             "No implementation of `vocabulary_size()` was found for "
