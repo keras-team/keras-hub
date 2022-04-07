@@ -290,7 +290,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             output_shape = tokens.shape.as_list()
             output_shape[-1] = self._sequence_length
             tokens = tokens.to_tensor(shape=output_shape)
-
+        # Convert to a dense output if input in scalar
         if scalar_input:
             tokens = tf.squeeze(tokens, 0)
             tf.ensure_shape(tokens, shape=[None])
