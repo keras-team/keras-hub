@@ -70,8 +70,7 @@ flags.DEFINE_integer(
 flags.DEFINE_integer(
     "num_train_steps",
     3e4,
-    "The number of warmup steps during which the learning rate will increase "
-    "till a threshold.")
+    "The total fixed number of steps till which the model will train.")
 
 class ClassificationHead(tf.keras.layers.Layer):
     """Pooling head for sentence-level classification tasks.
