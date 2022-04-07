@@ -129,7 +129,7 @@ class PerplexityTest(tf.test.TestCase):
             ]
         )
         perplexity_val = perplexity(y_true_2, y_pred_2)
-        self.assertEqual(perplexity_val, 3.9998498)
+        self.assertAlmostEqual(perplexity_val.numpy(), 3.9998, delta=1e-3)
 
     def test_from_probs_with_sample_weight(self):
         perplexity = Perplexity(from_logits=False)
