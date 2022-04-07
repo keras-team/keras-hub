@@ -163,6 +163,18 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         model_output = model(input_data)
         self.assertAllEqual(model_output, ["the quick brown fox"])
 
+    def test_batching_ragged_tensors(self):
+        tokenizer = WordPieceTokenizer(
+            vocabulary=["[UNK]", "a", "b", "c", "d", "e", "f"]
+        )
+        dataset = tf.data.Dataset.from_tensor_slices(["a b c", "d e", "a f e"])
+        dataset = dataset.map(tokenizer)
+        dataset = dataset.apply(
+            tf.data.experimental.dense_to_ragged_batch(batch_size=1)
+        )
+        element = dataset.take(1).get_single_element().numpy()
+        self.assertAllEqual(element, [[1, 2, 3]])
+
     def test_from_file(self):
         vocab_path = os.path.join(self.get_temp_dir(), "vocab.txt")
         input_data = ["the quick brown fox."]
