@@ -65,14 +65,15 @@ class ByteTokenizer(tokenizer.Tokenizer):
     Basic usage.
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
     >>> tokenizer("hello")
-    <tf.Tensor: shape=(5,), dtype=int32, numpy=array([104, 101, 108, 108, 111], dtype=int32)>
+    <tf.Tensor: shape=(5,), dtype=int32, numpy=
+    array([104, 101, 108, 108, 111], dtype=int32)>
 
     Ragged outputs.
     >>> inputs = tf.constant(["hello", "hi"])
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
     >>> tokenizer(inputs)
     <tf.RaggedTensor [[104, 101, 108, 108, 111], [104, 105]]>
-    
+
     Dense outputs.
     >>> inputs = tf.constant(["hello", "hi"])
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(sequence_length=8)
@@ -129,11 +130,11 @@ class ByteTokenizer(tokenizer.Tokenizer):
     <tf.Tensor: shape=(), dtype=string, numpy=b'hello'>
 
     Detokenization with invalid bytes.
-    >>> # The 255s below are invalid utf-8.
-    >>> inputs = tf.constant([104, 101, 255, 255, 255, 108, 108, 111], dtype=tf.int32)
+    >>> # The 255 below is invalid utf-8.
+    >>> inputs = tf.constant([104, 101, 255, 108, 108, 111], dtype=tf.int32)
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(errors="replace")
     >>> tokenizer.detokenize(inputs).numpy().decode('utf-8')
-    'he���llo'
+    'he�llo'
     """
 
     def __init__(
