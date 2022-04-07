@@ -47,7 +47,7 @@ flags.DEFINE_string(
     "The vocabulary file that the BERT model was trained on.",
 )
 
-# flags.DEFINE_integer("epochs", 10, "The number of training epochs.")
+flags.DEFINE_integer("epochs", 10, "The number of training epochs.")
 
 flags.DEFINE_integer("batch_size", 256, "The training batch size.")
 
