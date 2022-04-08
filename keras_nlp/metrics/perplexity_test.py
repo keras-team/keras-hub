@@ -22,8 +22,7 @@ from keras_nlp.metrics import Perplexity
 class PerplexityTest(tf.test.TestCase):
     def test_vars_after_initializing_class(self):
         perplexity = Perplexity()
-        self.assertEqual(perplexity._aggregate_cross_entropy, 0.0)
-        self.assertEqual(perplexity._number_of_samples, 0.0)
+        self.assertEqual(perplexity.result().numpy(), 0.0)
 
     def test_from_logits_without_masking(self):
         perplexity = Perplexity(from_logits=True)
@@ -199,13 +198,9 @@ class PerplexityTest(tf.test.TestCase):
         perplexity = Perplexity(from_logits=True, pad_token_id=0)
 
         perplexity.update_state(y_true, y_pred)
-        self.assertNotEqual(perplexity._aggregate_cross_entropy, 0.0)
-        self.assertNotEqual(perplexity._number_of_samples, 0.0)
         self.assertNotEqual(perplexity.result(), 0.0)
 
         perplexity.reset_state()
-        self.assertEqual(perplexity._aggregate_cross_entropy, 0.0)
-        self.assertEqual(perplexity._number_of_samples, 0.0)
         self.assertEqual(perplexity.result(), 0.0)
 
     def test_update_state(self):
@@ -229,10 +224,6 @@ class PerplexityTest(tf.test.TestCase):
 
         perplexity.update_state(y_true_1, y_pred_1)
         perplexity_val = perplexity.result()
-        self.assertAlmostEqual(
-            perplexity._aggregate_cross_entropy.numpy(), 2.1148, delta=1e-3
-        )
-        self.assertEqual(perplexity._number_of_samples, 2)
         self.assertAlmostEqual(perplexity_val.numpy(), 2.8789, delta=1e-3)
 
         y_true_2 = tf.constant([[2, 0, 0], [1, 2, 3]])
@@ -253,10 +244,6 @@ class PerplexityTest(tf.test.TestCase):
 
         perplexity.update_state(y_true_2, y_pred_2)
         perplexity_val = perplexity.result()
-        self.assertAlmostEqual(
-            perplexity._aggregate_cross_entropy, 5.5450, delta=1e-3
-        )
-        self.assertEqual(perplexity._number_of_samples, 4)
         self.assertAlmostEqual(perplexity_val, 3.9998, delta=1e-3)
 
     def test_merge_state(self):
@@ -324,8 +311,6 @@ class PerplexityTest(tf.test.TestCase):
 
         merged_perplexity = Perplexity(from_logits=True, pad_token_id=0)
         merged_perplexity.merge_state([perplexity_1, perplexity_2])
-
-        self.assertEqual(merged_perplexity._number_of_samples, 6)
         self.assertAlmostEqual(
             merged_perplexity.result().numpy(), 4.1385, delta=1e-3
         )
