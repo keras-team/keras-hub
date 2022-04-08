@@ -194,7 +194,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         inputs = tf.convert_to_tensor(inputs)
         print(inputs)
         print(inputs.shape)
-        print(inputs.ndim)
+        print(inputs.shape.rank)
         if self._lowercase:
             inputs = tf_text.case_fold_utf8(inputs)
         if self._normalization_form:
@@ -208,6 +208,8 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
             replacement_char=self._replacement_char, 
             input_encoding=self._input_encoding)
         print(tokens)
+        print(tokens.shape)
+        print(tokens.shape.rank)
         # Convert to a dense output if `sequence_length` is set.
         # if self._sequence_length:
         #     output_shape = tokens.shape.as_list()
