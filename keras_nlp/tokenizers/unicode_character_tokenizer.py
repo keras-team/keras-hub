@@ -187,14 +187,13 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return config
         
     def tokenize(self, inputs):
-        # scalar_input = inputs.shape.rank == 0
-        # if scalar_input:
-        #     inputs = tf.expand_dims(inputs, 0)
-        # Optionally lowercase and normalize the input.
-        inputs = tf.convert_to_tensor(inputs)
-        print(inputs)
-        print(inputs.shape)
-        print(inputs.shape.rank)
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            inputs = tf.convert_to_tensor(inputs)
+
+        scalar_input = inputs.shape.rank == 0
+        if scalar_input:
+            inputs = tf.expand_dims(inputs, 0)
+
         if self._lowercase:
             inputs = tf_text.case_fold_utf8(inputs)
         if self._normalization_form:
@@ -210,12 +209,13 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         print(tokens)
         print(tokens.shape)
         print(tokens.shape.rank)
-        if (self._sequence_length):
-            tokens = tf.data.Dataset.from_tensor_slices(
-                tf.keras.preprocessing.sequence.pad_sequences(tokens, 
-                maxlen = self._sequence_length, padding='post', 
-                truncating='post')
-            )
+        if self.sequence_length:
+            output_shape = tokens.shape.as_list()
+            output_shape[-1] = self.sequence_length
+            tokens = tokens.to_tensor(shape=output_shape)
+
+        if scalar_input:
+            tokens = tf.squeeze(tokens, 0)
         return tokens
 
     def detokenize(self, inputs):
