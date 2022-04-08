@@ -216,9 +216,6 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        # Remove trailing padding tokens, so that trailing "\x00" bytes don't
-        # show up in the detokenized output.
-        inputs = tf.strings.regex_replace(inputs, r"\x00+$", "")
         return tf.strings.unicode_encode(inputs, errors=self.errors, 
             replacement_char=self.replacement_char, 
             output_encoding=self.output_encoding)
