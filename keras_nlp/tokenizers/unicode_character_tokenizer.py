@@ -218,13 +218,8 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     def detokenize(self, inputs):
         # Remove trailing padding tokens, so that trailing "\x00" bytes don't
         # show up in the detokenized output.
-        inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
-
-        decoded = tf.strings.reduce_join(
-            tf.gather(self._char_lst, inputs), axis=-1
-        )
-
-        return tf.strings.unicode_encode(decoded, errors=self.errors, 
+        inputs = tf.strings.regex_replace(inputs, r"\x00+$", "")
+        return tf.strings.unicode_encode(inputs, errors=self.errors, 
             replacement_char=self.replacement_char, 
             output_encoding=self.output_encoding)
 
