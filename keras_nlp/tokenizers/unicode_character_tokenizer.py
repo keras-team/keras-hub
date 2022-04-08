@@ -183,28 +183,29 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return config
         
     def tokenize(self, inputs):
+
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
-
         scalar_input = inputs.shape.rank == 0
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
 
+        # Optionally Lowercase the Text
         if self.lowercase:
             inputs = tf_text.case_fold_utf8(inputs)
+
+        # Optionally Normalize the Text to a given form
         if self.normalization_form:
             if (self.input_encoding != "utf8"):
                 raise ValueError("Normalization Forms are Only Supported for Input Encoding utf-8")
             else:
                 inputs = tf_text.normalize_utf8(inputs, self.normalization_form)
+
         # Apply Unicode Decoder
-        print(inputs)
         tokens = tf.strings.unicode_decode(inputs, errors=self.errors, 
             replacement_char=self.replacement_char, 
             input_encoding=self.input_encoding)
-        print(tokens)
-        print(tokens.shape)
-        print(tokens.shape.rank)
+
         if self.sequence_length:
             output_shape = tokens.shape.as_list()
             output_shape[-1] = self.sequence_length
@@ -215,7 +216,15 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        return tf.strings.unicode_encode(inputs, errors=self.errors, 
+        # Remove trailing padding tokens, so that trailing "\x00" bytes don't
+        # show up in the detokenized output.
+        inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
+
+        decoded = tf.strings.reduce_join(
+            tf.gather(self._char_lst, inputs), axis=-1
+        )
+
+        return tf.strings.unicode_encode(decoded, errors=self.errors, 
             replacement_char=self.replacement_char, 
             output_encoding=self.output_encoding)
 
