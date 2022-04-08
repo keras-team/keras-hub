@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import List
+
 from tensorflow import keras
 
 
@@ -23,15 +25,20 @@ class Tokenizer(keras.layers.Layer):
     `detokenize()`.
 
     Subclassers should always implement the `tokenize` method, which will also
-    also be the default when invoking the layer directly on inputs
+    be the default when invoking the layer directly on inputs.
 
-    If a layer does not support detokenization (the tokenization step is not
-    reversible), the `detokenize()` method can be skipped.
+    Subclassers should implement the `detokenize()` method if the tokenization
+    is reversible. Otherwise, this can be skipped.
+
+    Subclassers should implement `get_vocabulary()`, `vocabulary_size()`,
+    `token_to_id()` and `id_to_token()` if applicable. For some simple
+    "pre-tokenizers," such whitespace splitting, these methods may not apply,
+    and can be skipped.
 
     Examples:
 
     ```python
-    class WhitespaceTokenizer(keras_nlp.tokenizers.Tokenizer):
+    class WhitespaceSplitterTokenizer(keras_nlp.tokenizers.Tokenizer):
         def tokenize(self, inputs):
             return tf.strings.split(inputs).to_tensor()
 
@@ -76,6 +83,34 @@ class Tokenizer(keras.layers.Layer):
         """
         raise NotImplementedError(
             "No implementation of `detokenize()` was found for "
+            f"{self.__class__.__name__}."
+        )
+
+    def get_vocabulary(self) -> List[str]:
+        """Get the tokenizer vocabulary as a list of strings terms."""
+        raise NotImplementedError(
+            "No implementation of `get_vocabulary()` was found for "
+            f"{self.__class__.__name__}."
+        )
+
+    def vocabulary_size(self) -> int:
+        """Returns the total size of the token id space."""
+        raise NotImplementedError(
+            "No implementation of `vocabulary_size()` was found for "
+            f"{self.__class__.__name__}."
+        )
+
+    def id_to_token(self, id: int) -> str:
+        """Convert an integer id to a string token."""
+        raise NotImplementedError(
+            "No implementation of `id_to_token()` was found for "
+            f"{self.__class__.__name__}."
+        )
+
+    def token_to_id(self, token: str) -> int:
+        """Convert an integer id to a string token."""
+        raise NotImplementedError(
+            "No implementation of `id_to_token()` was found for "
             f"{self.__class__.__name__}."
         )
 
