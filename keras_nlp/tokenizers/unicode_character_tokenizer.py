@@ -186,7 +186,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     <tf.Tensor: shape=(), dtype=string, numpy=b'a b c'>
 
     Detokenization with invalid bytes.
-    >>> # The 10000000 in the inputs tensor below is an invalid valye
+    >>> # The 10000000 in the inputs tensor below is an invalid value
     >>> # Hence it replaces to the replacement_char 75 which represents 'K'
     >>> inputs = tf.constant([110, 105, 10000000, 110, 106,  97],
         dtype=tf.int32)
