@@ -314,24 +314,17 @@ class PerplexityTest(tf.test.TestCase):
         perplexity_1.update_state(y_true_1, y_pred_1)
         perplexity_1.update_state(y_true_2, y_pred_2)
         self.assertAlmostEqual(
-            perplexity_1._aggregate_cross_entropy.numpy(), 5.5450, delta=1e-3
+            perplexity_1.result().numpy(), 3.9998, delta=1e-3
         )
 
         perplexity_2.update_state(y_true_3, y_pred_3)
         self.assertAlmostEqual(
-            perplexity_2._aggregate_cross_entropy.numpy(), 2.9769, delta=1e-3
+            perplexity_2.result().numpy(), 4.4303, delta=1e-3
         )
 
         merged_perplexity = Perplexity(from_logits=True, pad_token_id=0)
         merged_perplexity.merge_state([perplexity_1, perplexity_2])
 
-        # _aggregate_cross_entropy value should be equal to the sum of the
-        # _aggregate_cross_entropy values of the states.
-        self.assertAlmostEqual(
-            merged_perplexity._aggregate_cross_entropy.numpy(),
-            8.521942,
-            delta=1e-3,
-        )
         self.assertEqual(merged_perplexity._number_of_samples, 6)
         self.assertAlmostEqual(
             merged_perplexity.result().numpy(), 4.1385, delta=1e-3
