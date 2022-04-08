@@ -15,7 +15,9 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.tokenizers.unicode_character_tokenizer import UnicodeCharacterTokenizer
+from keras_nlp.tokenizers.unicode_character_tokenizer import (
+    UnicodeCharacterTokenizer,
+)
 
 
 class UnicodeCharacterTokenizerTest(tf.test.TestCase):
@@ -26,9 +28,9 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         tokenize_output = tokenizer.tokenize(input_data)
         self.assertIsInstance(call_output, tf.RaggedTensor)
         exp_outputs = [
-            [110, 105, 110, 106, 97], 
+            [110, 105, 110, 106, 97],
             [115, 97, 109, 117, 114, 97, 105],
-            [9600, 9601, 9602, 9603]
+            [9600, 9601, 9602, 9603],
         ]
         for i in range(call_output.shape[0]):
             self.assertAllEqual(call_output[i], exp_outputs[i])
@@ -52,48 +54,57 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             call_output,
             [
                 [110, 105, 110, 106, 97, 0, 0, 0, 0, 0],
-                [ 115, 97, 109, 117, 114, 97, 105, 0, 0, 0],
-                [9600, 9601, 9602, 9603, 0, 0, 0, 0, 0, 0]
-            ]
+                [115, 97, 109, 117, 114, 97, 105, 0, 0, 0],
+                [9600, 9601, 9602, 9603, 0, 0, 0, 0, 0, 0],
+            ],
         )
 
     def test_detokenize(self):
         input_data = tf.ragged.constant(
             [
-                [110, 105, 110, 106, 97], 
+                [110, 105, 110, 106, 97],
                 [115, 97, 109, 117, 114, 97, 105],
-                [9600, 9601, 9602, 9603]
+                [9600, 9601, 9602, 9603],
             ]
         )
 
         tokenizer = UnicodeCharacterTokenizer()
         detokenize_output = tokenizer.detokenize(input_data)
-        self.assertAllEqual(detokenize_output, [b'ninja', b'samurai',
-       b'\xe2\x96\x80\xe2\x96\x81\xe2\x96\x82\xe2\x96\x83'])
+        self.assertAllEqual(
+            detokenize_output,
+            [
+                b"ninja",
+                b"samurai",
+                b"\xe2\x96\x80\xe2\x96\x81\xe2\x96\x82\xe2\x96\x83",
+            ],
+        )
 
     def test_detokenize_replace_error(self):
         # 10000000 is an invalid value
         input_data = tf.ragged.constant([[110, 105, 10000000, 110, 106, 97]])
-        tokenizer = UnicodeCharacterTokenizer(errors="replace", replacement_char=75)
+        tokenizer = UnicodeCharacterTokenizer(
+            errors="replace", replacement_char=75
+        )
         detokenize_output = tokenizer.detokenize(input_data)
-        self.assertAllEqual(detokenize_output, [b'niKnja'])
+        self.assertAllEqual(detokenize_output, [b"niKnja"])
 
     def test_detokenize_ignore_error(self):
         input_data = tf.ragged.constant([[110, 105, 10000000, 110, 106, 97]])
         tokenizer = UnicodeCharacterTokenizer(errors="ignore")
         detokenize_output = tokenizer.detokenize(input_data)
-        self.assertAllEqual(detokenize_output, [b'ninja'])
+        self.assertAllEqual(detokenize_output, [b"ninja"])
 
     def test_detokenize_strict_error(self):
         input_data = tf.ragged.constant([[110, 105, 10000000, 110, 106, 97]])
         tokenizer = UnicodeCharacterTokenizer(errors="strict")
         with self.assertRaises(tf.errors.InvalidArgumentError):
-            error = tokenizer.detokenize(input_data)
-            
+            _ = tokenizer.detokenize(input_data)
+
     def test_normalization_without_utf8_valueerror(self):
         input_data = tf.ragged.constant(["Gotta Catch 'em All"])
-        tokenizer = UnicodeCharacterTokenizer(errors="strict", 
-            input_encoding="UTF-16", normalization_form="NFC")
+        tokenizer = UnicodeCharacterTokenizer(
+            errors="strict", input_encoding="UTF-16", normalization_form="NFC"
+        )
         with self.assertRaises(ValueError):
             tokenizer.tokenize(input_data)
 
@@ -103,8 +114,28 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(
             call_output,
-            [[110, 105, 110, 106, 97, 115, 32, 97, 110, 100, 32, 115, 97, 109, 
-            117, 114, 97, 105]],
+            [
+                [
+                    110,
+                    105,
+                    110,
+                    106,
+                    97,
+                    115,
+                    32,
+                    97,
+                    110,
+                    100,
+                    32,
+                    115,
+                    97,
+                    109,
+                    117,
+                    114,
+                    97,
+                    105,
+                ]
+            ],
         )
 
     def test_skip_lowercase(self):
@@ -112,9 +143,29 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         tokenizer = UnicodeCharacterTokenizer(lowercase=False)
         call_output = tokenizer(input_data)
         self.assertAllEqual(
-            call_output, 
-            [[78, 105, 78, 74, 97, 83, 32, 97, 78, 100, 32, 115, 65, 109, 85, 
-            114, 97, 73]]
+            call_output,
+            [
+                [
+                    78,
+                    105,
+                    78,
+                    74,
+                    97,
+                    83,
+                    32,
+                    97,
+                    78,
+                    100,
+                    32,
+                    115,
+                    65,
+                    109,
+                    85,
+                    114,
+                    97,
+                    73,
+                ]
+            ],
         )
 
     def test_tokenize_first_batch_second(self):
@@ -128,11 +179,11 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         output = ds.take(1).get_single_element()
 
         exp_output = [
-            [110, 105, 110, 106, 97], 
+            [110, 105, 110, 106, 97],
             [115, 97, 109, 117, 114, 97, 105],
-            [9600, 9601, 9602, 9603], 
+            [9600, 9601, 9602, 9603],
             [107, 101, 114, 97, 115],
-            [116, 101, 110, 115, 111, 114, 102, 108, 111, 119]
+            [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
         ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
@@ -148,11 +199,11 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         output = ds.take(1).get_single_element()
 
         exp_output = [
-            [ 110,  105,  110,  106,   97,    0,    0,    0,    0,    0],
-            [ 115,   97,  109,  117,  114,   97,  105,    0,    0,    0],
-            [9600, 9601, 9602, 9603,    0,    0,    0,    0,    0,    0],
-            [ 107,  101,  114,   97,  115,    0,    0,    0,    0,    0],
-            [ 116,  101,  110,  115,  111,  114,  102,  108,  111,  119]
+            [110, 105, 110, 106, 97, 0, 0, 0, 0, 0],
+            [115, 97, 109, 117, 114, 97, 105, 0, 0, 0],
+            [9600, 9601, 9602, 9603, 0, 0, 0, 0, 0, 0],
+            [107, 101, 114, 97, 115, 0, 0, 0, 0, 0],
+            [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
         ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
@@ -167,11 +218,11 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         output = ds.take(1).get_single_element()
 
         exp_output = [
-            [110, 105, 110, 106, 97], 
+            [110, 105, 110, 106, 97],
             [115, 97, 109, 117, 114, 97, 105],
-            [9600, 9601, 9602, 9603], 
+            [9600, 9601, 9602, 9603],
             [107, 101, 114, 97, 115],
-            [116, 101, 110, 115, 111, 114, 102, 108, 111, 119]
+            [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
         ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
@@ -186,26 +237,34 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         output = ds.take(1).get_single_element()
 
         exp_output = [
-            [ 110,  105,  110,  106,   97,    0,    0,    0,    0,    0],
-            [ 115,   97,  109,  117,  114,   97,  105,    0,    0,    0],
-            [9600, 9601, 9602, 9603,    0,    0,    0,    0,    0,    0],
-            [ 107,  101,  114,   97,  115,    0,    0,    0,    0,    0],
-            [ 116,  101,  110,  115,  111,  114,  102,  108,  111,  119]
+            [110, 105, 110, 106, 97, 0, 0, 0, 0, 0],
+            [115, 97, 109, 117, 114, 97, 105, 0, 0, 0],
+            [9600, 9601, 9602, 9603, 0, 0, 0, 0, 0, 0],
+            [107, 101, 114, 97, 115, 0, 0, 0, 0, 0],
+            [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
         ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_functional_model(self):
-        input_data = tf.constant(["ninja", "samurai", "▀▁▂▃", "keras", 
-            "tensorflow"])
+        input_data = tf.constant(
+            ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
+        )
         tokenizer = UnicodeCharacterTokenizer()
         inputs = tf.keras.Input(dtype="string", shape=())
         outputs = tokenizer.detokenize(tokenizer.tokenize(inputs))
         model = tf.keras.Model(inputs, outputs)
         model_output = model(input_data)
-        self.assertAllEqual(model_output, [b'ninja', b'samurai',
-            b'\xe2\x96\x80\xe2\x96\x81\xe2\x96\x82\xe2\x96\x83', b'keras',
-            b'tensorflow'])
+        self.assertAllEqual(
+            model_output,
+            [
+                b"ninja",
+                b"samurai",
+                b"\xe2\x96\x80\xe2\x96\x81\xe2\x96\x82\xe2\x96\x83",
+                b"keras",
+                b"tensorflow",
+            ],
+        )
 
     def test_load_model_with_config(self):
         input_data = tf.constant(["hello"])
@@ -224,7 +283,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             cloned_tokenizer(input_data),
         )
 
-        decoded_input = [107,  101,  114,   97,  115]
+        decoded_input = [107, 101, 114, 97, 115]
         self.assertAllEqual(
             original_tokenizer.detokenize(decoded_input),
             cloned_tokenizer.detokenize(decoded_input),
@@ -262,7 +321,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             errors="ignore",
             replacement_char=0,
             input_encoding="UTF-16",
-            output_encoding="UTF-16"
+            output_encoding="UTF-16",
         )
         exp_configWithDifferentInputEncoding = {
             "dtype": "int32",
@@ -276,8 +335,10 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             "output_encoding": "UTF-16",
             "trainable": True,
         }
-        self.assertEqual(tokenizerWithDifferentInputEncoding.get_config(), 
-                exp_configWithDifferentInputEncoding)
+        self.assertEqual(
+            tokenizerWithDifferentInputEncoding.get_config(),
+            exp_configWithDifferentInputEncoding,
+        )
 
     def test_saving(self):
         input_data = tf.constant(["ninjas and samurais", "time travel"])
