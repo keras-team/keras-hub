@@ -14,9 +14,6 @@
 
 from typing import Any
 from typing import Dict
-from typing import Iterable
-from typing import List
-from typing import Union
 
 import tensorflow as tf
 import tensorflow_text as tf_text
@@ -69,7 +66,7 @@ WHITESPACE_AND_PUNCTUATION_REGEX = r"|".join(
 class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     """A unicode character tokenizer layer.
 
-    This tokenizer is a vocabulary free tokenizer which tokenizes text as 
+    This tokenizer is a vocabulary free tokenizer which tokenizes text as
     unicode characters codepoints.
 
     Args:
@@ -80,11 +77,11 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         strip_accents: If true, all accent marks will be removed from text
             before tokenization.
         normalization_form: One of the following string values (None, 'NFC',
-            'NFKC', 'NFD', 'NFKD'). If set will normalize unicode to the given 
+            'NFKC', 'NFD', 'NFKD'). If set will normalize unicode to the given
             form before tokenizing.
-        errors: One of ('replace', 'remove', 'strict'). Specifies the 
-            `detokenize()` behavior when an invalid codepoint is encountered. 
-            (same behavior as 
+        errors: One of ('replace', 'remove', 'strict'). Specifies the
+            `detokenize()` behavior when an invalid codepoint is encountered.
+            (same behavior as
             https://www.tensorflow.org/api_docs/python/tf/strings/unicode_transcode)
         replacement_char: The unicode codepoint to use in place of invalid
             codepoints. Defaults to 65533 (U+FFFD).
@@ -105,7 +102,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     >>> inputs = ["Ninja", "Samurai"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
     >>> tokenizer(inputs)
-    <tf.RaggedTensor [[110, 105, 110, 106, 97], 
+    <tf.RaggedTensor [[110, 105, 110, 106, 97],
         [115, 97, 109, 117, 114, 97, 105]]>
 
     Dense outputs.
@@ -124,7 +121,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     >>> ds = ds.map(tokenizer)
     >>> ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
     >>> ds.take(1).get_single_element()
-    <tf.RaggedTensor [[110, 105, 110, 106, 97], 
+    <tf.RaggedTensor [[110, 105, 110, 106, 97],
         [115, 97, 109, 117, 114, 97, 105]]>
 
     Batch up the inputs and then tokenize.
@@ -133,10 +130,10 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
     >>> ds = ds.batch(2).map(tokenizer)
     >>> ds.take(1).get_single_element()
-    <tf.RaggedTensor [[110, 105, 110, 106, 97], 
+    <tf.RaggedTensor [[110, 105, 110, 106, 97],
         [115, 97, 109, 117, 114, 97, 105]]>
 
-    Tokenize first, then batch the dataset up for Dense Outputs 
+    Tokenize first, then batch the dataset up for Dense Outputs
     (`sequence_length` provided).
     >>> inputs = ["Ninja", "Samurai"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
@@ -149,7 +146,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     array([[110, 105, 110, 106,  97],
         [115,  97, 109, 117, 114]], dtype=int32)>
 
-    Batch up the inputs and then tokenize for Dense Outputs 
+    Batch up the inputs and then tokenize for Dense Outputs
     (`sequence_length` provided).
     >>> inputs = ["Ninja", "Samurai"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
@@ -166,7 +163,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
         sequence_length=5)
     >>> tokenizer(inputs)
-    <tf.Tensor: shape=(5,), dtype=int32, 
+    <tf.Tensor: shape=(5,), dtype=int32,
         numpy=array([105,  32, 108, 105, 107], dtype=int32)>
 
     Detokenization.
@@ -176,11 +173,12 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     <tf.Tensor: shape=(), dtype=string, numpy=b'ninja'>
 
     Detokenization while showcasing padded characters being removed
-    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(sequence_length=7)
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+        sequence_length=7)
     >>> dataset = tf.data.Dataset.from_tensor_slices(["a b c", "b c", "a"])
     >>> dataset = dataset.map(tokenizer)
     >>> dataset.take(1).get_single_element()
-    <tf.Tensor: shape=(7,), dtype=int32, 
+    <tf.Tensor: shape=(7,), dtype=int32,
         numpy=array([97, 32, 98, 32, 99,  0,  0], dtype=int32)>
     >>> detokunbatched = dataset.map(tokenizer.detokenize)
     >>> detokunbatched = dataset.map(tokenizer.detokenize)
@@ -190,7 +188,8 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     Detokenization with invalid bytes.
     >>> # The 10000000 in the inputs tensor below is an invalid valye
     >>> # Hence it replaces to the replacement_char 75 which represents 'K'
-    >>> inputs = tf.constant([110, 105, 10000000, 110, 106,  97], dtype=tf.int32)
+    >>> inputs = tf.constant([110, 105, 10000000, 110, 106,  97],
+        dtype=tf.int32)
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
     ...     errors="replace", replacement_char=75)
     >>> tokenizer.detokenize(inputs).numpy().decode('utf-8')
@@ -258,7 +257,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
             }
         )
         return config
-        
+
     def tokenize(self, inputs):
 
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
@@ -274,15 +273,21 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
         # Optionally Normalize the Text to a given form
         if self.normalization_form:
-            if (self.input_encoding != "utf8"):
-                raise ValueError("Normalization Forms are Only Supported for Input Encoding utf-8")
+            if self.input_encoding != "utf8":
+                raise ValueError(
+                    """Normalization Forms are Only Supported for Input Encoding
+                     utf-8"""
+                )
             else:
                 inputs = tf_text.normalize_utf8(inputs, self.normalization_form)
 
         # Apply Unicode Decoder
-        tokens = tf.strings.unicode_decode(inputs, errors=self.errors, 
-            replacement_char=self.replacement_char, 
-            input_encoding=self.input_encoding)
+        tokens = tf.strings.unicode_decode(
+            inputs,
+            errors=self.errors,
+            replacement_char=self.replacement_char,
+            input_encoding=self.input_encoding,
+        )
 
         if self.sequence_length:
             output_shape = tokens.shape.as_list()
@@ -294,10 +299,13 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        encoded_string = tf.strings.unicode_encode(inputs, errors=self.errors, 
-            replacement_char=self.replacement_char, 
-            output_encoding=self.output_encoding)
+        encoded_string = tf.strings.unicode_encode(
+            inputs,
+            errors=self.errors,
+            replacement_char=self.replacement_char,
+            output_encoding=self.output_encoding,
+        )
         encoded_string_with_removed_null = tf.strings.regex_replace(
-            encoded_string, r"\x00+$", "")
+            encoded_string, r"\x00+$", ""
+        )
         return encoded_string_with_removed_null
-
