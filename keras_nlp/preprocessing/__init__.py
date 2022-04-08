@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.preprocessing.mlm_masker import MaskedLanguageModelMasker
+from keras_nlp.preprocessing.mlm_mask_generator import MLMMaskGenerator
