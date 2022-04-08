@@ -159,29 +159,25 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
         super().__init__(**kwargs)
 
-        self._sequence_length = sequence_length
-        self._lowercase = lowercase
-        self._normalization_form = normalization_form
-        self._errors = errors
-        self._replacement_char = replacement_char
-        self._input_encoding = input_encoding
-        self._output_encoding = output_encoding
+        self.sequence_length = sequence_length
+        self.lowercase = lowercase
+        self.normalization_form = normalization_form
+        self.errors = errors
+        self.replacement_char = replacement_char
+        self.input_encoding = input_encoding
+        self.output_encoding = output_encoding
 
     def get_config(self) -> Dict[str, Any]:
         config = super().get_config()
         config.update(
             {
-                # Ideally a vocabulary would be saved as a plain text asset in
-                # the saved model. We have no good way to support this
-                # currently, so we save the vocabulary in the config.
-                "vocabulary": self._vocab,
-                "sequence_length": self._sequence_length,
-                "lowercase": self._lowercase,
-                "normalization_form": self._normalization_form,
-                "errors": self._errors,
-                "replacement_char": self._replacement_char,
-                "input_encoding": self._input_encoding,
-                "output_encoding": self._output_encoding,
+                "sequence_length": self.sequence_length,
+                "lowercase": self.lowercase,
+                "normalization_form": self.normalization_form,
+                "errors": self.errors,
+                "replacement_char": self.replacement_char,
+                "input_encoding": self.input_encoding,
+                "output_encoding": self.output_encoding,
             }
         )
         return config
@@ -194,18 +190,18 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
 
-        if self._lowercase:
+        if self.lowercase:
             inputs = tf_text.case_fold_utf8(inputs)
-        if self._normalization_form:
-            if (self._input_encoding != "utf8"):
+        if self.normalization_form:
+            if (self.input_encoding != "utf8"):
                 raise ValueError("Normalization Forms are Only Supported for Input Encoding utf-8")
             else:
-                inputs = tf_text.normalize_utf8(inputs, self._normalization_form)
+                inputs = tf_text.normalize_utf8(inputs, self.normalization_form)
         # Apply Unicode Decoder
         print(inputs)
-        tokens = tf.strings.unicode_decode(inputs, errors=self._errors, 
-            replacement_char=self._replacement_char, 
-            input_encoding=self._input_encoding)
+        tokens = tf.strings.unicode_decode(inputs, errors=self.errors, 
+            replacement_char=self.replacement_char, 
+            input_encoding=self.input_encoding)
         print(tokens)
         print(tokens.shape)
         print(tokens.shape.rank)
@@ -219,8 +215,8 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        return tf.strings.unicode_encode(inputs, errors=self._errors, 
-            replacement_char=self._replacement_char, 
-            output_encoding=self._output_encoding)
+        return tf.strings.unicode_encode(inputs, errors=self.errors, 
+            replacement_char=self.replacement_char, 
+            output_encoding=self.output_encoding)
 
 
