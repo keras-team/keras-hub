@@ -157,6 +157,21 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
                     f"Received: dtype={dtype}"
                 )
 
+        # Check normalization_form.
+        if normalization_form not in [None, "NFC", "NFKC", "NFD", "NFKD"]:
+            raise ValueError(
+                '`normalization_form` must be one of None, "NFC", "NFKC", '
+                '"NFD", "NFKD". Received: normalization_form='
+                f"{normalization_form}"
+            )
+
+        # Check errors.
+        if errors not in ["strict", "replace", "ignore"]:
+            raise ValueError(
+                '`errors` must be one of "strict", "replace", "ignore" '
+                f"Received: errors={errors}"
+            )
+
         super().__init__(**kwargs)
 
         self.sequence_length = sequence_length
@@ -216,9 +231,10 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        a = tf.strings.unicode_encode(inputs, errors=self.errors, 
+        encoded_string = tf.strings.unicode_encode(inputs, errors=self.errors, 
             replacement_char=self.replacement_char, 
             output_encoding=self.output_encoding)
-        a = tf.strings.regex_replace(a, r"\x00+$", "")
-        return a
+        encoded_string_with_removed_null = tf.strings.regex_replace(
+            encoded_string, r"\x00+$", "")
+        return encoded_string_with_removed_null
 
