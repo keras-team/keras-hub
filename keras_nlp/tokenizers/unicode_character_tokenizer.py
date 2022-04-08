@@ -216,8 +216,11 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        return tf.strings.unicode_encode(inputs, errors=self.errors, 
+        a = tf.strings.unicode_encode(inputs, errors=self.errors, 
             replacement_char=self.replacement_char, 
             output_encoding=self.output_encoding)
+        print(a)
+        return a
 
-
+    def removeNull(x):
+        return tf.strings.regex_replace(x, r"\x00+$", "")
