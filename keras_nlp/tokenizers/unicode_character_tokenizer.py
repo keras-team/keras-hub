@@ -93,46 +93,108 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     Examples:
 
-    Ragged outputs.
-    >>> inputs = [["a b c", "b c", "a b"]]
+    Basic Usage.
+    >>> inputs = "Unicode Tokenizer"
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
     >>> tokenizer(inputs)
-    <tf.RaggedTensor [[97, 32, 98, 32, 99], [98, 32, 99], [97, 32, 98]]>
+    <tf.Tensor: shape=(17,), dtype=int32, numpy=
+    array([117, 110, 105,  99, 111, 100, 101,  32, 116, 111, 107, 101, 110,
+        105, 122, 101, 114], dtype=int32)>
+
+    Ragged outputs.
+    >>> inputs = ["Ninja", "Samurai"]
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
+    >>> tokenizer(inputs)
+    <tf.RaggedTensor [[110, 105, 110, 106, 97], 
+        [115, 97, 109, 117, 114, 97, 105]]>
 
     Dense outputs.
-    >>> inputs = [["a b c", "b c", "a b"]]
+    >>> inputs = ["Ninja", "Samurai"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
-    ...     sequence_length=5)
+        sequence_length=8)
     >>> tokenizer(inputs)
-    tf.Tensor([[97 32 98 32 99]
-        [98 32 99  0  0]
-        [97 32 98  0  0]], shape=(3, 5), dtype=int32)
+    <tf.Tensor: shape=(2, 8), dtype=int32, numpy=
+    array([[110, 105, 110, 106,  97,   0,   0,   0],
+        [115,  97, 109, 117, 114,  97, 105,   0]], dtype=int32)>
 
-    String output.
-    >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
-    >>> inputs = ["The quick brown fox."]
-    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-    ...     vocabulary=vocab, dtype="string")
+    Tokenize first, then batch the dataset up.
+    >>> inputs = ["Ninja", "Samurai"]
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
+    >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
+    >>> ds = ds.map(tokenizer)
+    >>> ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
+    >>> ds.take(1).get_single_element()
+    <tf.RaggedTensor [[110, 105, 110, 106, 97], 
+        [115, 97, 109, 117, 114, 97, 105]]>
+
+    Batch up the inputs and then tokenize.
+    >>> inputs = ["Ninja", "Samurai"]
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
+    >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
+    >>> ds = ds.batch(2).map(tokenizer)
+    >>> ds.take(1).get_single_element()
+    <tf.RaggedTensor [[110, 105, 110, 106, 97], 
+        [115, 97, 109, 117, 114, 97, 105]]>
+
+    Tokenize first, then batch the dataset up for Dense Outputs 
+    (`sequence_length` provided).
+    >>> inputs = ["Ninja", "Samurai"]
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+        sequence_length=5)
+    >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
+    >>> ds = ds.map(tokenizer)
+    >>> ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
+    >>> ds.take(1).get_single_element()
+    <tf.Tensor: shape=(2, 5), dtype=int32, numpy=
+    array([[110, 105, 110, 106,  97],
+        [115,  97, 109, 117, 114]], dtype=int32)>
+
+    Batch up the inputs and then tokenize for Dense Outputs 
+    (`sequence_length` provided).
+    >>> inputs = ["Ninja", "Samurai"]
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+        sequence_length=5)
+    >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
+    >>> ds = ds.batch(2).map(tokenizer)
+    >>> ds.take(1).get_single_element()
+    <tf.Tensor: shape=(2, 5), dtype=int32, numpy=
+    array([[110, 105, 110, 106,  97],
+        [115,  97, 109, 117, 114]], dtype=int32)>
+
+    Tokenization Showcasing Truncation of Long Sequences.
+    >>> inputs = "I Like to Travel a Lot"
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+        sequence_length=5)
     >>> tokenizer(inputs)
-    <tf.RaggedTensor [[b'the', b'qu', b'##ick', b'br', b'##own', b'fox', b'.']]>
+    <tf.Tensor: shape=(5,), dtype=int32, 
+        numpy=array([105,  32, 108, 105, 107], dtype=int32)>
 
     Detokenization.
-    >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
-    >>> inputs = ["The quick brown fox."]
-    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
-    >>> tokenizer.detokenize(tokenizer.tokenize(inputs))
-    <tf.Tensor: shape=(1,), dtype=string,
-        numpy=array([b"the quick brown fox ."], dtype=object)>
+    >>> inputs = tf.constant([110, 105, 110, 106,  97], dtype=tf.int32)
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
+    >>> tokenizer.detokenize(inputs)
+    <tf.Tensor: shape=(), dtype=string, numpy=b'ninja'>
 
-    Custom splitting.
-    >>> vocab = ["[UNK]", "fox", ","]
-    >>> inputs = ["fox,,fox,fox"]
-    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab,
-    ...     split_pattern=",", keep_pattern=",", dtype='string')(inputs)
-    <tf.RaggedTensor [[b'fox', b',', b',', b'fox', b',', b'fox']]>
-    >>> keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab,
-    ...     split_pattern=",", keep_pattern="", dtype='string')(inputs)
-    <tf.RaggedTensor [[b'fox', b'fox', b'fox']]>
+    Detokenization while showcasing padded characters being removed
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(sequence_length=7)
+    >>> dataset = tf.data.Dataset.from_tensor_slices(["a b c", "b c", "a"])
+    >>> dataset = dataset.map(tokenizer)
+    >>> dataset.take(1).get_single_element()
+    <tf.Tensor: shape=(7,), dtype=int32, 
+        numpy=array([97, 32, 98, 32, 99,  0,  0], dtype=int32)>
+    >>> detokunbatched = dataset.map(tokenizer.detokenize)
+    >>> detokunbatched = dataset.map(tokenizer.detokenize)
+    >>> detokunbatched.take(1).get_single_element()
+    <tf.Tensor: shape=(), dtype=string, numpy=b'a b c'>
+
+    Detokenization with invalid bytes.
+    >>> # The 10000000 in the inputs tensor below is an invalid valye
+    >>> # Hence it replaces to the replacement_char 75 which represents 'K'
+    >>> inputs = tf.constant([110, 105, 10000000, 110, 106,  97], dtype=tf.int32)
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+    ...     errors="replace", replacement_char=75)
+    >>> tokenizer.detokenize(inputs).numpy().decode('utf-8')
+    'niKnja'
     """
 
     def __init__(
@@ -201,6 +263,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
+
         scalar_input = inputs.shape.rank == 0
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
