@@ -210,16 +210,13 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         print(tokens)
         print(tokens.shape)
         print(tokens.shape.rank)
-        # Convert to a dense output if `sequence_length` is set.
-        # if self._sequence_length:
-        #     output_shape = tokens.shape.as_list()
-        #     output_shape[-1] = self._sequence_length
-        #     # tokens = tokens.to_tensor(shape=output_shape)
-        #     tf.reshape(tokens, output_shape)
+        if (self._sequence_length):
+            tokens = tf.data.Dataset.from_tensor_slices(
+                tf.keras.preprocessing.sequence.pad_sequences(tokens, 
+                maxlen = self._sequence_length, padding='post', 
+                truncating='post')
+            )
         return tokens
-        # if scalar_input:
-        #     tokens = tf.squeeze(tokens, 0)
-        # return tokens
 
     def detokenize(self, inputs):
         return tf.strings.unicode_encode(inputs, errors=self._errors, 
