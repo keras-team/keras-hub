@@ -68,8 +68,8 @@ class PerplexityTest(tf.test.TestCase):
         perplexity_val = perplexity(y_true, y_pred, sample_wt)
         self.assertAlmostEqual(perplexity_val.numpy(), 2.8789, delta=1e-3)
 
-    def test_from_logits_with_pad_token_id(self):
-        perplexity = Perplexity(from_logits=True, pad_token_id=0)
+    def test_from_logits_with_mask_token_id(self):
+        perplexity = Perplexity(from_logits=True, mask_token_id=0)
 
         y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
         y_pred = tf.constant(
@@ -91,7 +91,7 @@ class PerplexityTest(tf.test.TestCase):
         self.assertAlmostEqual(perplexity_val.numpy(), 2.8789, delta=1e-3)
 
     def test_two_inputs_from_logits(self):
-        perplexity = Perplexity(from_logits=True, pad_token_id=0)
+        perplexity = Perplexity(from_logits=True, mask_token_id=0)
 
         y_true_1 = tf.constant([[1, 3, 0], [2, 1, 3]])
         y_pred_1 = tf.constant(
@@ -156,7 +156,7 @@ class PerplexityTest(tf.test.TestCase):
         self.assertAlmostEqual(perplexity_val, 2.8789, delta=1e-3)
 
     def test_from_probs_with_pad_token(self):
-        perplexity = Perplexity(from_logits=False, pad_token_id=0)
+        perplexity = Perplexity(from_logits=False, mask_token_id=0)
 
         y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
         y_pred = tf.constant(
@@ -195,7 +195,7 @@ class PerplexityTest(tf.test.TestCase):
             ]
         )
 
-        perplexity = Perplexity(from_logits=True, pad_token_id=0)
+        perplexity = Perplexity(from_logits=True, mask_token_id=0)
 
         perplexity.update_state(y_true, y_pred)
         self.assertNotEqual(perplexity.result(), 0.0)
@@ -204,7 +204,7 @@ class PerplexityTest(tf.test.TestCase):
         self.assertEqual(perplexity.result(), 0.0)
 
     def test_update_state(self):
-        perplexity = Perplexity(from_logits=True, pad_token_id=0)
+        perplexity = Perplexity(from_logits=True, mask_token_id=0)
 
         y_true_1 = tf.constant([[1, 3, 0], [2, 1, 3]])
         y_pred_1 = tf.constant(
@@ -247,8 +247,8 @@ class PerplexityTest(tf.test.TestCase):
         self.assertAlmostEqual(perplexity_val, 3.9998, delta=1e-3)
 
     def test_merge_state(self):
-        perplexity_1 = Perplexity(from_logits=True, pad_token_id=0)
-        perplexity_2 = Perplexity(from_logits=True, pad_token_id=0)
+        perplexity_1 = Perplexity(from_logits=True, mask_token_id=0)
+        perplexity_2 = Perplexity(from_logits=True, mask_token_id=0)
 
         y_true_1 = tf.constant([[1, 3, 0], [2, 1, 3]])
         y_pred_1 = tf.constant(
@@ -309,8 +309,24 @@ class PerplexityTest(tf.test.TestCase):
             perplexity_2.result().numpy(), 4.4303, delta=1e-3
         )
 
-        merged_perplexity = Perplexity(from_logits=True, pad_token_id=0)
+        merged_perplexity = Perplexity(from_logits=True, mask_token_id=0)
         merged_perplexity.merge_state([perplexity_1, perplexity_2])
         self.assertAlmostEqual(
             merged_perplexity.result().numpy(), 4.1385, delta=1e-3
         )
+
+    def test_get_config(self):
+        perplexity = Perplexity(
+            from_logits=True,
+            mask_token_id=0,
+            dtype=tf.float32,
+            name="perplexity_test",
+        )
+        config = perplexity.get_config()
+        expected_config = {
+            "from_logits": True,
+            "mask_token_id": 0,
+            "dtype": tf.float32,
+            "name": "perplexity_test",
+        }
+        self.assertEqual(config, expected_config)

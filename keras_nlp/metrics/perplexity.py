@@ -26,22 +26,21 @@ class Perplexity(keras.metrics.Metric):
     Note: This implementation is not suitable for fixed-size windows.
 
     Args:
-        name: string. Name of the metric instance.
-        dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
-               not specified, it defaults to tf.float32.
         from_logits: bool. If True, `y_pred` (input to `update_state()`) should
             be the logits as returned by the model. Otherwise, `y_pred` is a
             tensor of probabilities.
-        pad_token_id: int. Token ID of the padding token. If provided, the mask
-            is computed by this class (all padding tokens are masked while
-            computing the cross entropy loss). Note that if this field is
-            provided, the `sample_weight` field in `update_state()` is ignored.
+        mask_token_id: int. ID of the token to be masked. If provided, the mask
+            is computed for this class. Note that if this field is provided, the
+            `sample_weight` field in `update_state()` is ignored.
+        dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
+               not specified, it defaults to tf.float32.
+        name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
 
     Examples:
 
     1. Calculate perplexity by calling update_state() and result().
-    1.1. `sample_weight`, and `pad_token_id` are not provided.
+    1.1. `sample_weight`, and `mask_token_id` are not provided.
     >>> tf.random.set_seed(42)
     >>> perplexity = keras_nlp.metrics.Perplexity(name="perplexity")
     >>> target = tf.random.uniform(
@@ -76,7 +75,7 @@ class Perplexity(keras.metrics.Metric):
        own.
     >>> tf.random.set_seed(42)
     >>> perplexity = keras_nlp.metrics.Perplexity(
-    ...     name="perplexity", pad_token_id=0)
+    ...     name="perplexity", mask_token_id=0)
     >>> target = tf.random.uniform(
     ...     shape=[2, 5],  maxval=10, dtype=tf.int32, seed=42)
     >>> logits = tf.random.uniform(shape=(2, 5, 10), seed=42)
@@ -86,10 +85,10 @@ class Perplexity(keras.metrics.Metric):
 
     def __init__(
         self,
-        name="perplexity",
-        dtype=None,
         from_logits=False,
-        pad_token_id=None,
+        mask_token_id=None,
+        dtype=None,
+        name="perplexity",
         **kwargs,
     ):
         super().__init__(name=name, dtype=dtype, **kwargs)
@@ -100,14 +99,15 @@ class Perplexity(keras.metrics.Metric):
                 f"Received: dtype={dtype}"
             )
 
-        self._cross_entropy = keras.losses.SparseCategoricalCrossentropy(
+        self._crossentropy = keras.losses.SparseCategoricalCrossentropy(
             from_logits=from_logits, reduction="sum"
         )
 
-        self.pad_token_id = pad_token_id
+        self.from_logits = from_logits
+        self.mask_token_id = mask_token_id
 
-        self._aggregate_cross_entropy = self.add_weight(
-            name="aggregate_cross_entropy",
+        self._aggregate_crossentropy = self.add_weight(
+            name="aggregate_crossentropy",
             initializer="zeros",
             dtype=self.dtype,
         )
@@ -122,9 +122,9 @@ class Perplexity(keras.metrics.Metric):
         y_pred = tf.cast(y_pred, self.dtype)
         batch_size = tf.cast(tf.shape(y_true)[0], self.dtype)
 
-        if self.pad_token_id is not None:
+        if self.mask_token_id is not None:
             sample_weight = tf.cast(
-                tf.math.logical_not(tf.equal(y_true, self.pad_token_id)),
+                tf.math.logical_not(tf.equal(y_true, self.mask_token_id)),
                 self.dtype,
             )
 
@@ -132,35 +132,43 @@ class Perplexity(keras.metrics.Metric):
             sample_weight = tf.cast(sample_weight, self.dtype)
 
         # Calculate the Cross Entropy Loss.
-        cross_entropy_value = tf.cast(
-            self._cross_entropy(y_true, y_pred, sample_weight=sample_weight),
+        crossentropy_value = tf.cast(
+            self._crossentropy(y_true, y_pred, sample_weight=sample_weight),
             self.dtype,
         )  # scalar
 
         # Divide the loss by the number of non-masked tokens
         if sample_weight is not None:
-            cross_entropy_value = cross_entropy_value / tf.reduce_sum(
+            crossentropy_value = crossentropy_value / tf.reduce_sum(
                 sample_weight
             )  # scalar
         else:
-            cross_entropy_value = cross_entropy_value / (
+            crossentropy_value = crossentropy_value / (
                 tf.cast(tf.shape(y_true)[0], self.dtype)
                 * tf.cast(tf.shape(y_true)[1], self.dtype)
             )  # scalar
 
-        self._aggregate_cross_entropy.assign_add(
-            batch_size * cross_entropy_value
-        )
+        self._aggregate_crossentropy.assign_add(batch_size * crossentropy_value)
         self._number_of_samples.assign_add(batch_size)
 
     def result(self):
         if self._number_of_samples == 0:
             return 0.0
         perplexity_score = tf.exp(
-            self._aggregate_cross_entropy / self._number_of_samples
+            self._aggregate_crossentropy / self._number_of_samples
         )
         return perplexity_score
 
     def reset_state(self):
-        self._aggregate_cross_entropy.assign(0.0)
+        self._aggregate_crossentropy.assign(0.0)
         self._number_of_samples.assign(0.0)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "from_logits": self.from_logits,
+                "mask_token_id": self.mask_token_id,
+            }
+        )
+        return config
