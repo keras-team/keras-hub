@@ -61,6 +61,19 @@ flags.DEFINE_integer(
     "Maximum number of masked LM predictions per sequence.",
 )
 
+flags.DEFINE_integer(
+    "num_warmup_steps",
+    1e4,
+    "The number of warmup steps during which the learning rate will increase "
+    "till a threshold.",
+)
+
+flags.DEFINE_integer(
+    "num_train_steps",
+    1e6,
+    "The total fixed number of steps till which the model will train.",
+)
+
 
 class ClassificationHead(tf.keras.layers.Layer):
     """Pooling head for sentence-level classification tasks.
@@ -292,6 +305,34 @@ class BertPretrainer(keras.Model):
         return {m.name: m.result() for m in self.metrics}
 
 
+class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
+    """
+    A learning rate schedule with linear warmup and decay.
+
+    This schedule implements a linear warmup for the first `num_warmup_steps`
+    and a linear ramp down until `num_train_steps`.
+    """
+
+    def __init__(self, learning_rate, num_warmup_steps, num_train_steps):
+        self.learning_rate = learning_rate
+        self.warmup_steps = num_warmup_steps
+        self.train_steps = num_train_steps
+
+    def __call__(self, step):
+        peak_lr = tf.cast(self.learning_rate, dtype=tf.float32)
+        warmup = tf.cast(self.warmup_steps, dtype=tf.float32)
+        training = tf.cast(self.train_steps, dtype=tf.float32)
+
+        is_warmup = step < warmup
+
+        # Linear Warmup will be implemented if current step is less than
+        # `num_warmup_steps`.
+        if is_warmup:
+            return peak_lr * (step / warmup)
+        # else Linear Decay will be implemented
+        return max(0.0, peak_lr * (training - step) / (training - warmup))
+
+
 def decode_record(record):
     """Decodes a record to a TensorFlow example."""
     seq_length = FLAGS.max_seq_length
@@ -348,14 +389,22 @@ def main(_):
     model(model.inputs)
     model.summary()
 
+    learning_rate_schedule = LinearDecayWithWarmup(
+        learning_rate=FLAGS.learning_rate,
+        num_warmup_steps=FLAGS.num_warmup_steps,
+        num_train_steps=FLAGS.num_train_steps,
+    )
+
     # Wrap with pretraining heads and call fit.
     pretraining_model = BertPretrainer(model)
     pretraining_model.compile(
-        # TODO(mattdangerw): Add AdamW and a learning rate schedule.
-        optimizer=keras.optimizers.Adam(learning_rate=FLAGS.learning_rate)
+        optimizer=keras.optimizers.Adam(learning_rate=learning_rate_schedule)
     )
     # TODO(mattdangerw): Add TPU strategy support.
-    pretraining_model.fit(dataset, epochs=FLAGS.epochs)
+    steps_per_epoch = FLAGS.num_train_steps // FLAGS.epochs
+    pretraining_model.fit(
+        dataset, epochs=FLAGS.epochs, steps_per_epoch=steps_per_epoch
+    )
 
     print(f"Saving to {FLAGS.saved_model_output}")
     model.save(FLAGS.saved_model_output)
