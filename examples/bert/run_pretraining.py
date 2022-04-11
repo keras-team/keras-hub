@@ -315,23 +315,23 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
             num_warmup_steps,
             num_train_steps
         ):
-        self.threshold_learning_rate = learning_rate
+        self.learning_rate = learning_rate
         self.warmup_steps = num_warmup_steps
         self.train_steps = num_train_steps
     
     def __call__(self, step):
-        final_lr = tf.cast(self.threshold_learning_rate, dtype = tf.float32)
+        peak_lr = tf.cast(self.learning_rate, dtype = tf.float32)
         warmup = tf.cast(self.warmup_steps, dtype = tf.float32)
         training = tf.cast(self.train_steps, dtype = tf.float32)
         
         is_warmup = step < warmup
         
-        #Linear Warmup will be implemented if current step is less than
-        #`num_warmup_steps`.
+        # Linear Warmup will be implemented if current step is less than
+        # `num_warmup_steps`.
         if is_warmup:
-            return final_lr * (step / warmup)
-        #else Linear Decay will be implemented
-        return max(0.0, final_lr * (training - step)/(training - warmup))
+            return peak_lr * (step / warmup)
+        # else Linear Decay will be implemented
+        return max(0.0, peak_lr * (training - step)/(training - warmup))
 
 
 def decode_record(record):
@@ -390,7 +390,7 @@ def main(_):
     model(model.inputs)
     model.summary()
 
-    #Implemented Learning Rate Schedule
+    # Implemented Learning Rate Schedule
     learning_rate_schedule = LinearDecayWithWarmup(
         learning_rate = FLAGS.learning_rate,
         num_warmup_steps = FLAGS.num_warmup_steps,
@@ -399,7 +399,6 @@ def main(_):
     # Wrap with pretraining heads and call fit.
     pretraining_model = BertPretrainer(model)
     pretraining_model.compile(
-        # TODO(mattdangerw): Add AdamW and a learning rate schedule.
         optimizer=keras.optimizers.Adam(learning_rate=learning_rate_schedule)
     )
     # TODO(mattdangerw): Add TPU strategy support.
