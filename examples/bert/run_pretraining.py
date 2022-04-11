@@ -307,11 +307,10 @@ class BertPretrainer(keras.Model):
 
 class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
     """
-    Implements a learning rate schedule for BERT.
+    A learning rate schedule with linear warmup and decay.
 
     This schedule implements a linear warmup for the first `num_warmup_steps`
-    and for the steps post that, till the `num_train_steps` it will implement
-    a linear decay.
+    and a linear ramp down until `num_train_steps`.
     """
 
     def __init__(self, learning_rate, num_warmup_steps, num_train_steps):
@@ -390,7 +389,6 @@ def main(_):
     model(model.inputs)
     model.summary()
 
-    # Implemented Learning Rate Schedule
     learning_rate_schedule = LinearDecayWithWarmup(
         learning_rate=FLAGS.learning_rate,
         num_warmup_steps=FLAGS.num_warmup_steps,
