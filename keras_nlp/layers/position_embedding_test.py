@@ -272,7 +272,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
             pred = model(data)
             loss = loss_fn(label, pred)
         grad = tape.gradient(loss, model.trainable_variables)
-        self.assertEquals(len(grad), 1)
+        self.assertEqual(len(grad), 1)
 
         trainable_variables_before = tf.Variable(model.trainable_variables[0])
         optimizer.apply_gradients(zip(grad, model.trainable_variables))
