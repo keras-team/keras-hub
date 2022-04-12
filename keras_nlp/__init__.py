@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from keras_nlp import layers
-from keras_nlp import preprocessing
 from keras_nlp import tokenizers
 
 __version__ = "0.1.1"

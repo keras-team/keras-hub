@@ -18,16 +18,16 @@ from tensorflow import keras
 
 
 class MLMMaskGenerator(keras.layers.Layer):
-    """Class that applies language model masking.
+    """Layer that applies language model masking.
 
-    This class is useful for preparing inputs for masked languaged modeling
+    This layer is useful for preparing inputs for masked languaged modeling
     (MLM) tasks. It follows the masking strategy described in the [original BERT
-    paper](https://arxiv.org/abs/1810.04805). Basically, given a tokenized text,
+    paper](https://arxiv.org/abs/1810.04805). Given tokenized text,
     it randomly selects certain number of tokens for masking. Then for each
     selected token, it has chance (configurable) to be replaced by "mask token"
     or random token, or stay unchanged.
 
-    This class can both be applied in tf.data pipeline as a standalone utility,
+    This layer can both be applied in tf.data pipeline as a standalone utility,
     or used together with `tf.keras.Model` to generate dynamic mask, which is
     useful for workflows like RoBERTa training.
 
@@ -58,7 +58,7 @@ class MLMMaskGenerator(keras.layers.Layer):
         Represents the sequence to mask.
 
     Returns:
-        A Dict of 4 keys:
+        A Dict with 4 keys:
             masked_input_ids: Tensor, has the same type and shape of input.
                 Sequence after getting masked.
             masked_positions: Tensor, or RaggedTensor if
@@ -183,6 +183,10 @@ class MLMMaskGenerator(keras.layers.Layer):
                 masked_ids,
                 max_seq_length=self.max_selections,
             )
+        if mask_weights is None:
+            # If mask_weights is not populated, i.e., `masked_positions` is
+            # ragged, then we set mask_weights as a RaggedTensor of only 1.
+            mask_weights = tf.ones_like(masked_positions)
 
         if input_is_1d:
             # If inputs is 1D, we format the output to be 1D as well.
@@ -190,16 +194,17 @@ class MLMMaskGenerator(keras.layers.Layer):
             if isinstance(masked_positions, tf.RaggedTensor):
                 masked_positions = masked_positions.to_tensor()
                 masked_ids = masked_ids.to_tensor()
+                mask_weights = mask_weights.to_tensor()
             masked_positions = tf.squeeze(masked_positions)
             masked_ids = tf.squeeze(masked_ids)
+            mask_weights = tf.squeeze(mask_weights)
 
         output_dict = {
             "masked_input_ids": masked_input_ids,
             "masked_positions": masked_positions,
             "masked_ids": masked_ids,
+            "mask_weights": mask_weights,
         }
-        if mask_weights is not None:
-            output_dict.update({"mask_weights": mask_weights})
         return output_dict
 
     def get_config(self):
