@@ -272,5 +272,5 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         encoded_string_with_removed_null = tf.strings.regex_replace(
             encoded_string, r"\x00+$", ""
         )
-        encoded_string_with_removed_null = encoded_string_with_removed_null.numpy().decode("utf-8")
+        print(encoded_string_with_removed_null)
         return encoded_string_with_removed_null
