@@ -20,49 +20,6 @@ import tensorflow_text as tf_text
 
 from keras_nlp.tokenizers import tokenizer
 
-# Matches whitespace and control characters.
-WHITESPACE_REGEX = r"|".join(
-    [
-        r"\s",
-        # Invisible control characters
-        r"\p{Cc}",
-        r"\p{Cf}",
-    ]
-)
-
-# Matches punctuation compatible with the original bert implementation.
-PUNCTUATION_REGEX = r"|".join(
-    [
-        # Treat all non-letter/number ASCII as punctuation.
-        # Characters such as "^", "$", and "`" are not in the Unicode
-        # Punctuation class but we treat them as punctuation anyways.
-        r"[!-/]",
-        r"[:-@]",
-        r"[\[-`]",
-        r"[{-~]",
-        # Unicode punctuation class.
-        r"[\p{P}]",
-        # More unicode ranges.
-        r"[\x{4E00}-\x{9FFF}]",
-        r"[\x{3400}-\x{4DBF}]",
-        r"[\x{20000}-\x{2A6DF}]",
-        r"[\x{2A700}-\x{2B73F}]",
-        r"[\x{2B740}-\x{2B81F}]",
-        r"[\x{2B820}-\x{2CEAF}]",
-        r"[\x{F900}-\x{FAFF}]",
-        r"[\x{2F800}-\x{2FA1F}]",
-    ]
-)
-
-# Matches both whitespace and punctuation.
-WHITESPACE_AND_PUNCTUATION_REGEX = r"|".join(
-    [
-        WHITESPACE_REGEX,
-        PUNCTUATION_REGEX,
-    ]
-)
-
-
 class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     """A unicode character tokenizer layer.
 
@@ -74,8 +31,6 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
             tokenization.
         sequence_length: If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of sequence_length.
-        strip_accents: If true, all accent marks will be removed from text
-            before tokenization.
         normalization_form: One of the following string values (None, 'NFC',
             'NFKC', 'NFD', 'NFKD'). If set will normalize unicode to the given
             form before tokenizing.
@@ -158,7 +113,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     array([[110, 105, 110, 106,  97],
         [115,  97, 109, 117, 114]], dtype=int32)>
 
-    Tokenization Showcasing Truncation of Long Sequences.
+    Tokenization showcasing truncation of long sequences.
     >>> inputs = "I Like to Travel a Lot"
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
         sequence_length=5)
@@ -203,7 +158,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         normalization_form: str = None,
         errors: str = "replace",
         replacement_char: int = 65533,
-        input_encoding: str = "utf8",
+        input_encoding: str = "UTF-8",
         output_encoding: str = "UTF-8",
         **kwargs,
     ) -> None:
@@ -233,6 +188,13 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
                 f"Received: errors={errors}"
             )
 
+        if self.normalization_form:
+            if self.input_encoding != "UTF-8":
+                raise ValueError(
+                    """Normalization Forms are Only Supported for Input Encoding
+                     utf-8"""
+                )
+
         super().__init__(**kwargs)
 
         self.sequence_length = sequence_length
@@ -259,7 +221,6 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return config
 
     def tokenize(self, inputs):
-
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
 
@@ -273,15 +234,8 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
         # Optionally Normalize the Text to a given form
         if self.normalization_form:
-            if self.input_encoding != "utf8":
-                raise ValueError(
-                    """Normalization Forms are Only Supported for Input Encoding
-                     utf-8"""
-                )
-            else:
-                inputs = tf_text.normalize_utf8(inputs, self.normalization_form)
+            inputs = tf_text.normalize_utf8(inputs, self.normalization_form)
 
-        # Apply Unicode Decoder
         tokens = tf.strings.unicode_decode(
             inputs,
             errors=self.errors,
