@@ -102,11 +102,10 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
 
     def test_normalization_without_UTF8_valueerror(self):
         input_data = tf.ragged.constant(["Gotta Catch 'em All"])
-        tokenizer = UnicodeCharacterTokenizer(
-            errors="strict", input_encoding="UTF-16", normalization_form="NFC"
-        )
         with self.assertRaises(ValueError):
-            tokenizer.tokenize(input_data)
+            tokenizer = UnicodeCharacterTokenizer(
+                errors="strict", input_encoding="UTF-16", normalization_form="NFC"
+            )
 
     def test_lowercase(self):
         input_data = tf.constant(["NiNJaS aNd sAmUraI"])
@@ -285,7 +284,6 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             name="unicode_character_tokenizer_config_gen",
             lowercase=False,
             sequence_length=8,
-            normalization_form="NFC",
             errors="ignore",
             replacement_char=0,
             input_encoding="UTF-16",
@@ -296,7 +294,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             "errors": "ignore",
             "lowercase": False,
             "name": "unicode_character_tokenizer_config_gen",
-            "normalization_form": "NFC",
+            "normalization_form": None,
             "replacement_char": 0,
             "sequence_length": 8,
             "input_encoding": "UTF-16",
