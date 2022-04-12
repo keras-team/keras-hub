@@ -136,7 +136,7 @@ class Perplexity(keras.metrics.Metric):
             if sample_weight is None:
                 sample_weight = mask
             else:
-                sample_weight = tf.multiply(mask, sample_weight)  
+                sample_weight = tf.multiply(mask, sample_weight)
 
         # Calculate the Cross Entropy Loss.
         crossentropy_value = tf.cast(
