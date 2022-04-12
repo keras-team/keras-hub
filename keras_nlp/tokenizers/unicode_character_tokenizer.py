@@ -188,11 +188,12 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
                 f"Received: errors={errors}"
             )
 
-        if self.normalization_form:
-            if self.input_encoding != "UTF-8":
+        # Check normalization_form matches input_encoding.
+        if normalization_form:
+            if input_encoding != "UTF-8":
                 raise ValueError(
                     """Normalization Forms are Only Supported for Input Encoding
-                     utf-8"""
+                     UTF-8"""
                 )
 
         super().__init__(**kwargs)
