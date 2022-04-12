@@ -21,14 +21,7 @@ from tensorflow import keras
 from keras_nlp.layers import TokenAndPositionEmbedding
 
 
-def custom_position_embed_init(shape, dtype=None):
-    count = 1
-    for length in shape:
-        count *= length
-    return tf.reshape(tf.range(count, dtype=dtype), shape)
-
-
-def custom_token_embed_init(shape, dtype=None):
+def custom_embed_init(shape, dtype=None):
     count = 1
     for length in shape:
         count *= length
@@ -49,10 +42,6 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase):
             "embeddings_initializer": keras.initializers.serialize(
                 keras.initializers.GlorotUniform()
             ),
-            "position_embeddings_initializer": keras.initializers.serialize(
-                keras.initializers.GlorotUniform()
-            ),
-            "embeddings_regularizer": None,
             "mask_zero": False,
         }
 
@@ -67,50 +56,103 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase):
             {**config, **expected_config_subset},
         )
 
-    def test_ragged_tensor_with_3_dimensions(self):
+    def test_ragged_tensor(self):
         vocabulary_size = 5
         sequence_length = 4
-        feature_size = 2
         embedding_dim = 3
         test_layer = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
             max_length=sequence_length,
             embedding_dim=embedding_dim,
-            embeddings_initializer=custom_token_embed_init,
-            position_embeddings_initializer=custom_position_embed_init,
+            embeddings_initializer=custom_embed_init,
         )
-        # Create a 3-dimensional ragged input (the first dimension is implicit).
+        # Create a 2-dimensional ragged input
+        # (the first dimension is implicit).
         input_tensor = tf.keras.Input(
-            shape=(None, feature_size), dtype=tf.float32, ragged=True
+            shape=(sequence_length,), dtype=tf.float32, ragged=True
         )
         output_tensor = test_layer(input_tensor)
         model = tf.keras.Model(input_tensor, output_tensor)
 
         input_data = tf.ragged.constant(
             [
-                [[1.0, 1.0], [1.0, 1.0]],
+                [1.0, 1.0],
                 [],
-                [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0]],
-                [[1.0, 1.0]],
+                [1.0, 1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0],
             ],
             ragged_rank=1,
-            inner_shape=(2,),
         )
         expected_output_data = tf.ragged.constant(
             [
-                [
-                    [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
-                    [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
-                ],
+                [[2.0, 2.0, 2.0], [2.0, 2.0, 2.0]],
                 [],
                 [
-                    [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
-                    [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
-                    [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
                 ],
-                [[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]],
+                [[2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0]],
             ],
             ragged_rank=1,
+        )
+        output_data = model.predict(input_data)
+        self.assertAllClose(output_data, expected_output_data)
+
+    def test_dense_tensor(self):
+        vocabulary_size = 5
+        sequence_length = 4
+        embedding_dim = 3
+        test_layer = TokenAndPositionEmbedding(
+            vocabulary_size=vocabulary_size,
+            max_length=sequence_length,
+            embedding_dim=embedding_dim,
+            embeddings_initializer=custom_embed_init,
+        )
+        # Create a 2-dimensional input
+        # (the first dimension is implicit).
+        input_tensor = tf.keras.Input(
+            shape=(sequence_length,), dtype=tf.float32, ragged=True
+        )
+        output_tensor = test_layer(input_tensor)
+        model = tf.keras.Model(input_tensor, output_tensor)
+
+        input_data = tf.constant(
+            [
+                [1.0, 1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0, 1.0],
+            ],
+        )
+        expected_output_data = tf.constant(
+            [
+                [
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                ],
+                [
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                ],
+                [
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                ],
+                [
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                    [2.0, 2.0, 2.0],
+                ],
+            ],
         )
         output_data = model.predict(input_data)
         self.assertAllClose(output_data, expected_output_data)
@@ -118,18 +160,17 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase):
     def test_save_model(self):
         vocabulary_size = 5
         sequence_length = 4
-        feature_size = 2
         embedding_dim = 3
         test_layer = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
             max_length=sequence_length,
             embedding_dim=embedding_dim,
         )
-        inputs = keras.Input(shape=(sequence_length, feature_size))
+        inputs = keras.Input(shape=(sequence_length,))
         outputs = test_layer(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)
 
-        data = tf.zeros(shape=[2, sequence_length, feature_size])
+        data = tf.zeros(shape=[2, sequence_length])
         model(data)
 
         path = os.path.join(self.get_temp_dir(), "model")

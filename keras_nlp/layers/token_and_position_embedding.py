@@ -27,25 +27,27 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
     sequence.
 
     Args:
-        `vocabulary_size`: The size of the vocabulary (should be no larger than 999)
+        `vocabulary_size`: The size of the vocabulary (should be no larger
+            than 999)
         `max_length`: The maximum length of input sequence
         `embedding_dim`: The output dimension of the embedding layer
-        `embeddings_initializer`: The initializer to use for the Embedding Layer
-        `position_embeddings_initializer`: The initializer to use for Position
-            Embedding Layer
-        `embeddings_regularizer`: The regularizer to user for regularization of the
-            Embedding Layer
-        `mask_zero`: Boolean, whether or not the input value 0 is a special "padding"
-            value that should be masked out.
+        `embeddings_initializer`: The initializer to use for the Embedding
+            Layers
+        `mask_zero`: Boolean, whether or not the input value 0 is a special
+            "padding" value that should be masked out.
             This is useful when using recurrent layers which may take variable
             length input. If this is True, then all subsequent layers in the
-            model need to support masking or an exception will be raised. If mask_zero
-            is set to True, as a consequence, index 0 cannot be used in the vocabulary
+            model need to support masking or an exception will be raised.
+            If mask_zero` is set to True, as a consequence, index 0 cannot be
+            used in the vocabulary
             (input_dim should equal size of vocabulary + 1).
-        `seq_axis`: The axis of the input tensor where we add the embeddings
 
     Example:
     ```python
+    seq_length = 50
+    vocab_size = 5000
+    embed_dim = 128
+    inputs = tf.keras.Input(shape=(seq_length,))
     embedding_layer = keras_nlp.layers.TokenAndPositionEmbedding(
         vocabulary_size=vocab_size,
         max_length=max_length,
@@ -61,8 +63,6 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         max_length,
         embedding_dim,
         embeddings_initializer="glorot_uniform",
-        position_embeddings_initializer="glorot_uniform",
-        embeddings_regularizer=None,
         mask_zero=False,
         **kwargs
     ):
@@ -86,13 +86,11 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
             vocabulary_size,
             embedding_dim,
             embeddings_initializer=embeddings_initializer,
-            embeddings_regularizer=embeddings_regularizer,
             mask_zero=mask_zero,
         )
         self.position_embedding = keras_nlp.layers.PositionEmbedding(
             max_length=max_length,
-            initializer=position_embeddings_initializer,
-            **kwargs
+            initializer=embeddings_initializer,
         )
 
     def get_config(self):
@@ -105,19 +103,10 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
                 "embeddings_initializer": keras.initializers.serialize(
                     self.token_embedding.embeddings_initializer
                 ),
-                "embeddings_regularizer": keras.regularizers.serialize(
-                    self.token_embedding.embeddings_regularizer
-                ),
-                "position_embeddings_initializer": keras.initializers.serialize(
-                    self.position_embedding.initializer
-                ),
                 "mask_zero": self.token_embedding.mask_zero,
             },
         )
         return config
-
-    def build(self, input_shape):
-        super().build(input_shape)
 
     def call(self, inputs):
         embedded_tokens = self.token_embedding(inputs)
