@@ -30,8 +30,10 @@ class Perplexity(keras.metrics.Metric):
             be the logits as returned by the model. Otherwise, `y_pred` is a
             tensor of probabilities.
         mask_token_id: int. ID of the token to be masked. If provided, the mask
-            is computed for this class. Note that if this field is provided, the
-            `sample_weight` field in `update_state()` is ignored.
+            is computed for this class. Note that if this field is provided, and
+            if the `sample_weight` field in `update_state()` is also provided,
+            we will compute the final `sample_weight` as the element-wise
+            product of the mask and the `sample_weight`.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
                not specified, it defaults to tf.float32.
         name: string. Name of the metric instance.
@@ -120,16 +122,21 @@ class Perplexity(keras.metrics.Metric):
         # y_pred shape: (batch_size, seq_len, vocab_size)
         y_true = tf.cast(y_true, self.dtype)
         y_pred = tf.cast(y_pred, self.dtype)
-        batch_size = tf.cast(tf.shape(y_true)[0], self.dtype)
-
-        if self.mask_token_id is not None:
-            sample_weight = tf.cast(
-                tf.math.logical_not(tf.equal(y_true, self.mask_token_id)),
-                self.dtype,
-            )
 
         if sample_weight is not None:
             sample_weight = tf.cast(sample_weight, self.dtype)
+
+        batch_size = tf.cast(tf.shape(y_true)[0], self.dtype)
+
+        if self.mask_token_id is not None:
+            mask = tf.cast(
+                tf.math.logical_not(tf.equal(y_true, self.mask_token_id)),
+                self.dtype,
+            )
+            if sample_weight is None:
+                sample_weight = mask
+            else:
+                sample_weight = tf.multiply(mask, sample_weight)  
 
         # Calculate the Cross Entropy Loss.
         crossentropy_value = tf.cast(

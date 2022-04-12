@@ -90,6 +90,29 @@ class PerplexityTest(tf.test.TestCase):
         perplexity_val = perplexity(y_true, y_pred)
         self.assertAlmostEqual(perplexity_val.numpy(), 2.8789, delta=1e-3)
 
+    def test_from_logits_with_mask_token_id_and_sample_weight(self):
+        perplexity = Perplexity(from_logits=True, mask_token_id=0)
+
+        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
+        y_pred = tf.constant(
+            [
+                [
+                    [1.034, 4.797, 2.82, 1.154],
+                    [2.258, 1.591, 1.811, 1.852],
+                    [3.216, 1.037, 0.3662, 2.7],
+                ],
+                [
+                    [1.363, 1.726, 1.898, 2.582],
+                    [1.163, 1.943, 1.761, 1.497],
+                    [2.766, 1.453, 2.61, 2.805],
+                ],
+            ]
+        )
+        sample_weight = tf.constant([[0.5, 0.1, 0.9], [1, 0.7, 0.5]])
+
+        perplexity_val = perplexity(y_true, y_pred, sample_weight)
+        self.assertAlmostEqual(perplexity_val.numpy(), 2.9442, delta=1e-3)
+
     def test_two_inputs_from_logits(self):
         perplexity = Perplexity(from_logits=True, mask_token_id=0)
 
