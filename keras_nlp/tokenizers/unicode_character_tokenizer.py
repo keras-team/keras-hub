@@ -265,7 +265,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        inputs = tf.ragged.boolean_mask(inputs, inputs != 0)
+        inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
         encoded_string = tf.strings.unicode_encode(
             inputs,
             errors=self.errors,
