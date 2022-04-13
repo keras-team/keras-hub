@@ -49,19 +49,19 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
         )
         inputs = tf.ragged.constant([[5, 3, 2], [1, 2, 3, 4, 5]])
         outputs = mlm_masker(inputs)
-        tokens, masked_positions, masked_ids = (
+        tokens, mask_positions, mask_ids = (
             outputs["tokens"],
-            outputs["masked_positions"],
-            outputs["masked_ids"],
+            outputs["mask_positions"],
+            outputs["mask_ids"],
         )
         self.assertEqual(type(tokens), type(inputs))
         self.assertAllEqual(tokens.shape, inputs.shape)
-        self.assertAllEqual(masked_positions.shape, masked_ids.shape)
+        self.assertAllEqual(mask_positions.shape, mask_ids.shape)
 
         # Test all selected tokens are correctly masked.
         masked_values = tf.gather(
             tokens,
-            masked_positions,
+            mask_positions,
             batch_dims=1,
         )
         self.assertEqual(tf.reduce_mean(masked_values), self.mask_token_id)
@@ -81,18 +81,18 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
             dtype=tf.int32,
         )
         outputs = mlm_masker(inputs)
-        tokens, masked_positions, masked_ids = (
+        tokens, mask_positions, mask_ids = (
             outputs["tokens"],
-            outputs["masked_positions"],
-            outputs["masked_ids"],
+            outputs["mask_positions"],
+            outputs["mask_ids"],
         )
         self.assertEqual(type(tokens), type(inputs))
         self.assertAllEqual(tokens.shape, inputs.shape)
-        self.assertAllEqual(masked_positions.shape, masked_ids.shape)
+        self.assertAllEqual(mask_positions.shape, mask_ids.shape)
         # Test all selected tokens are correctly masked.
         masked_values = tf.gather(
             tokens,
-            masked_positions,
+            mask_positions,
             batch_dims=1,
         )
         self.assertEqual(tf.reduce_mean(masked_values), self.mask_token_id)
@@ -130,7 +130,7 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
         )
 
         self.assertAllEqual(
-            outputs["masked_positions"].row_lengths(),
+            outputs["mask_positions"].row_lengths(),
             expected_number_of_masked_tokens,
         )
 
@@ -143,7 +143,7 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
             mask_selection_length=mask_selection_length,
         )
         outputs = mlm_masker(inputs)
-        self.assertEqual(tf.reduce_sum(outputs["masked_positions"]), 0)
+        self.assertEqual(tf.reduce_sum(outputs["mask_positions"]), 0)
 
     def test_apply_random_token_not_mask(self):
         mlm_masker = MLMMaskGenerator(
@@ -158,18 +158,18 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
             dtype=tf.int32,
         )
         outputs = mlm_masker(inputs)
-        tokens, masked_positions, masked_ids = (
+        tokens, mask_positions, mask_ids = (
             outputs["tokens"],
-            outputs["masked_positions"],
-            outputs["masked_ids"],
+            outputs["mask_positions"],
+            outputs["mask_ids"],
         )
         self.assertAllEqual(tokens.shape, inputs.shape)
         self.assertAllEqual(
-            masked_positions.row_lengths(), masked_ids.row_lengths()
+            mask_positions.row_lengths(), mask_ids.row_lengths()
         )
         masked_values = tf.gather(
             tokens,
-            masked_positions,
+            mask_positions,
             batch_dims=1,
         )
         # Verify that selected tokens are replaced by random tokens.
@@ -200,7 +200,7 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
         inputs = [unselectable_token_ids]
         outputs = mlm_masker(inputs)
         # Verify that no token is masked out.
-        self.assertEqual(tf.reduce_sum(outputs["masked_positions"]), 0)
+        self.assertEqual(tf.reduce_sum(outputs["mask_positions"]), 0)
 
     def test_config(self):
         unselectable_token_ids = [

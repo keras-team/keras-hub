@@ -37,9 +37,9 @@ class MLMMaskGenerator(keras.layers.Layer):
             masking.
         mask_selection_length: int, defaults to None. Maximum number of tokens
             selected for  masking in each sequence. If set, the output
-            `masked_positions`, `masked_ids` and `mask_weights` will be padded
+            `mask_positions`, `mask_ids` and `mask_weights` will be padded
             to dense tensors of length `mask_selection_length`,
-            otherwise be RaggedTensor.
+            otherwise the output will be a RaggedTensor.
         unselectable_token_ids: A list of tokens, defaults to None. Tokens in
             `unselectable_tokens_ids` will not be selected for masking.
         mask_token_id: int, defaults to 0. The id of mask token.
@@ -61,17 +61,17 @@ class MLMMaskGenerator(keras.layers.Layer):
         A Dict with 4 keys:
             tokens: Tensor, has the same type and shape of input.
                 Sequence after getting masked.
-            masked_positions: Tensor, or RaggedTensor if
+            mask_positions: Tensor, or RaggedTensor if
                 `mask_selection_length` is None. The positions of tokens
                 getting masked.
-            masked_ids: Tensor, or RaggedTensor if
+            mask_ids: Tensor, or RaggedTensor if
                 `mask_selection_length` is None. The original token ids
                 at masked positions.
             mask_weights: Tensor, or RaggedTensor if
                 `mask_selection_length` is None. `mask_weights` has the same
-                shape as `mask_positions` and `masked_ids`. Each element in
+                shape as `mask_positions` and `mask_ids`. Each element in
                 `mask_weights` should be 0 or 1, 1 means the corresponding
-                position in `masked_positions` is an actual mask, 0 means it is
+                position in `mask_positions` is an actual mask, 0 means it is
                 a pad.
 
     Examples:
@@ -82,9 +82,9 @@ class MLMMaskGenerator(keras.layers.Layer):
     >>> masker(tf.constant([1, 2, 3, 4, 5]))
     {'tokens': <tf.Tensor: shape=(5,), dtype=int32,
         numpy=array([1, 2, 3, 4, 0], dtype=int32)>,
-    'masked_positions': <tf.Tensor: shape=(5,), dtype=int64,
+    'mask_positions': <tf.Tensor: shape=(5,), dtype=int64,
         numpy=array([4, 0, 0, 0, 0])>,
-    'masked_ids': <tf.Tensor: shape=(5,), dtype=int32,
+    'mask_ids': <tf.Tensor: shape=(5,), dtype=int32,
         numpy=array([5, 0, 0, 0, 0], dtype=int32)>,
     'mask_weights': <tf.Tensor: shape=(1, 5), dtype=int64,
         numpy=array([[1, 0, 0, 0, 0]])>}
@@ -94,10 +94,10 @@ class MLMMaskGenerator(keras.layers.Layer):
     ...     10, mask_selection_rate=0.5, mask_selection_length=5)
     >>> masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
     {'tokens': <tf.RaggedTensor [[1, 4], [0, 2, 3, 0]]>,
-    'masked_positions': <tf.Tensor: shape=(2, 5), dtype=int64, numpy=
+    'mask_positions': <tf.Tensor: shape=(2, 5), dtype=int64, numpy=
         array([[1, 0, 0, 0, 0],
                [0, 3, 0, 0, 0]])>,
-    'masked_ids': <tf.Tensor: shape=(2, 5), dtype=int32, numpy=
+    'mask_ids': <tf.Tensor: shape=(2, 5), dtype=int32, numpy=
         array([[2, 0, 0, 0, 0],
                [1, 4, 0, 0, 0]], dtype=int32)>,
     'mask_weights': <tf.Tensor: shape=(2, 5), dtype=int64, numpy=
@@ -161,7 +161,7 @@ class MLMMaskGenerator(keras.layers.Layer):
                 inputs,
                 padding=self.padding_token_id,
             )
-        (tokens, masked_positions, masked_ids,) = tf_text.mask_language_model(
+        (tokens, mask_positions, mask_ids,) = tf_text.mask_language_model(
             inputs,
             item_selector=self._random_selector,
             mask_values_chooser=self._mask_values_chooser,
@@ -173,35 +173,36 @@ class MLMMaskGenerator(keras.layers.Layer):
             tokens = tokens.to_tensor()
 
         if self.mask_selection_length:
-            # Pad `masked_positions`, `mask_weights` and `masked_ids` if there
+            # Pad `mask_positions`, `mask_weights` and `mask_ids` if there
             # is a desired `mask_selection_length` set.
-            masked_positions, mask_weights = tf_text.pad_model_inputs(
-                masked_positions,
+            mask_positions, mask_weights = tf_text.pad_model_inputs(
+                mask_positions,
                 max_seq_length=self.mask_selection_length,
             )
-            masked_ids, _ = tf_text.pad_model_inputs(
-                masked_ids,
+            mask_ids, _ = tf_text.pad_model_inputs(
+                mask_ids,
                 max_seq_length=self.mask_selection_length,
             )
         else:
             # Otherwise we set `mask_weights` as a RaggedTensor of only 1.
-            mask_weights = tf.ones_like(masked_positions)
+            mask_weights = tf.ones_like(mask_positions)
+        mask_weights = tf.cast(mask_weights, self.compute_dtype)
 
         if input_is_1d:
             # If inputs is 1D, we format the output to be 1D as well.
             tokens = tf.squeeze(tokens)
-            if isinstance(masked_positions, tf.RaggedTensor):
-                masked_positions = masked_positions.to_tensor()
-                masked_ids = masked_ids.to_tensor()
+            if isinstance(mask_positions, tf.RaggedTensor):
+                mask_positions = mask_positions.to_tensor()
+                mask_ids = mask_ids.to_tensor()
                 mask_weights = mask_weights.to_tensor()
-            masked_positions = tf.squeeze(masked_positions)
-            masked_ids = tf.squeeze(masked_ids)
+            mask_positions = tf.squeeze(mask_positions)
+            mask_ids = tf.squeeze(mask_ids)
             mask_weights = tf.squeeze(mask_weights)
 
         output_dict = {
             "tokens": tokens,
-            "masked_positions": masked_positions,
-            "masked_ids": masked_ids,
+            "mask_positions": mask_positions,
+            "mask_ids": mask_ids,
             "mask_weights": mask_weights,
         }
         return output_dict
