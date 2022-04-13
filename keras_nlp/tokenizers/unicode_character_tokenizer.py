@@ -273,4 +273,5 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         )
         print(encoded_string)
         print(type(encoded_string))
+        print(encoded_string.numpy())
         return encoded_string
