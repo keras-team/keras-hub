@@ -172,21 +172,13 @@ class MLMMaskGenerator(keras.layers.Layer):
             # output to be a Tensor.
             tokens = tokens.to_tensor()
 
+        mask_weights = tf.ones_like(mask_positions, self.compute_dtype)
+        # If mask_selection_length is set, covert to raggeds to dense.
         if self.mask_selection_length:
-            # Pad `mask_positions`, `mask_weights` and `mask_ids` if there
-            # is a desired `mask_selection_length` set.
-            mask_positions, mask_weights = tf_text.pad_model_inputs(
-                mask_positions,
-                max_seq_length=self.mask_selection_length,
-            )
-            mask_ids, _ = tf_text.pad_model_inputs(
-                mask_ids,
-                max_seq_length=self.mask_selection_length,
-            )
-        else:
-            # Otherwise we set `mask_weights` as a RaggedTensor of only 1.
-            mask_weights = tf.ones_like(mask_positions)
-        mask_weights = tf.cast(mask_weights, self.compute_dtype)
+            target_shape = tf.cast([-1, self.mask_selection_length], tf.int64)
+            mask_positions = mask_positions.to_tensor(shape=target_shape)
+            mask_ids = mask_ids.to_tensor(shape=target_shape)
+            mask_weights = mask_weights.to_tensor(shape=target_shape)
 
         if input_is_1d:
             # If inputs is 1D, we format the output to be 1D as well.
