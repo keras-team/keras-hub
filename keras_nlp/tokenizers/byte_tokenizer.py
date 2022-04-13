@@ -227,7 +227,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
         # Remove trailing padding tokens, so that trailing "\x00" bytes don't
         # show up in the detokenized output.
         inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
-        
+
         decoded = tf.strings.reduce_join(
             tf.gather(self._char_lst, inputs), axis=-1
         )

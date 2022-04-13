@@ -20,6 +20,7 @@ import tensorflow_text as tf_text
 
 from keras_nlp.tokenizers import tokenizer
 
+
 class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     """A unicode character tokenizer layer.
 
@@ -40,9 +41,9 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
             https://www.tensorflow.org/api_docs/python/tf/strings/unicode_transcode)
         replacement_char: The unicode codepoint to use in place of invalid
             codepoints. Defaults to 65533 (U+FFFD).
-        input_encoding: One of ("UTF-8", "UTF-16-BE", or "UTF-32-BE"). 
+        input_encoding: One of ("UTF-8", "UTF-16-BE", or "UTF-32-BE").
             One of The encoding of the input text. Defaults to "UTF-8".
-        output_encoding: One of ("UTF-8", "UTF-16-BE", or "UTF-32-BE"). 
+        output_encoding: One of ("UTF-8", "UTF-16-BE", or "UTF-32-BE").
             The encoding of the output text. Defaults to "UTF-8".
 
     Examples:
@@ -61,7 +62,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     >>> tokenizer(inputs)
     <tf.RaggedTensor [[110, 105, 110, 106, 97],
         [115, 97, 109, 117, 114, 97, 105],
-        [2346, 2369, 2360, 2381, 2340, 2325], 
+        [2346, 2369, 2360, 2381, 2340, 2325],
         [1705, 1578, 1575, 1576]]>
 
     Dense outputs.
@@ -82,7 +83,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     >>> ds = ds.map(tokenizer)
     >>> ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(3))
     >>> ds.take(1).get_single_element()
-    <tf.RaggedTensor [[110, 105, 110, 106, 97], 
+    <tf.RaggedTensor [[110, 105, 110, 106, 97],
         [115, 97, 109, 117, 114, 97, 105],
         [2346, 2369, 2360, 2381, 2340, 2325]]>
 
@@ -92,7 +93,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
     >>> ds = ds.batch(3).map(tokenizer)
     >>> ds.take(1).get_single_element()
-    <tf.RaggedTensor [[110, 105, 110, 106, 97], 
+    <tf.RaggedTensor [[110, 105, 110, 106, 97],
         [115, 97, 109, 117, 114, 97, 105],
         [2346, 2369, 2360, 2381, 2340, 2325]]>
 

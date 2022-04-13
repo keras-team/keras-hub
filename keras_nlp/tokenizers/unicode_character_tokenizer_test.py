@@ -101,10 +101,11 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             _ = tokenizer.detokenize(input_data)
 
     def test_normalization_without_UTF8_valueerror(self):
-        input_data = tf.ragged.constant(["Gotta Catch 'em All"])
         with self.assertRaises(ValueError):
-            tokenizer = UnicodeCharacterTokenizer(
-                errors="strict", input_encoding="UTF-16", normalization_form="NFC"
+            _ = UnicodeCharacterTokenizer(
+                errors="strict",
+                input_encoding="UTF-16",
+                normalization_form="NFC",
             )
 
     def test_lowercase(self):
@@ -115,8 +116,24 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             call_output,
             [
                 [
-                    110, 105, 110, 106, 97, 115, 32, 97, 110, 100, 32, 115,
-                    97, 109, 117, 114, 97, 105,
+                    110,
+                    105,
+                    110,
+                    106,
+                    97,
+                    115,
+                    32,
+                    97,
+                    110,
+                    100,
+                    32,
+                    115,
+                    97,
+                    109,
+                    117,
+                    114,
+                    97,
+                    105,
                 ]
             ],
         )
@@ -129,8 +146,24 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             call_output,
             [
                 [
-                    78, 105, 78, 74, 97, 83, 32, 97, 78, 100, 32, 115, 65, 109,
-                    85, 114, 97, 73,
+                    78,
+                    105,
+                    78,
+                    74,
+                    97,
+                    83,
+                    32,
+                    97,
+                    78,
+                    100,
+                    32,
+                    115,
+                    65,
+                    109,
+                    85,
+                    114,
+                    97,
+                    73,
                 ]
             ],
         )
