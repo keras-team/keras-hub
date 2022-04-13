@@ -40,7 +40,8 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
             https://www.tensorflow.org/api_docs/python/tf/strings/unicode_transcode)
         replacement_char: The unicode codepoint to use in place of invalid
             codepoints. Defaults to 65533 (U+FFFD).
-        input_encoding: One of The encoding of the input text. Defaults to "UTF-8".
+        input_encoding: One of The encoding of the input text. Defaults to 
+            "UTF-8".
         output_encoding: The encoding of the output text. Defaults to "UTF-8".
 
     Examples:
@@ -270,4 +271,6 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
             replacement_char=self.replacement_char,
             output_encoding=self.output_encoding,
         )
+        print(encoded_string)
+        print(type(encoded_string))
         return encoded_string
