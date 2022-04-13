@@ -18,8 +18,6 @@ from typing import Dict
 import tensorflow as tf
 import tensorflow_text as tf_text
 
-import numpy as np
-
 from keras_nlp.tokenizers import tokenizer
 
 class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
@@ -219,10 +217,6 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         self.input_encoding = input_encoding
         self.output_encoding = output_encoding
 
-        self._char_lst = tf.constant(
-            [i.tobytes() for i in np.arange(256, dtype=np.uint8)]
-        )
-
     def get_config(self) -> Dict[str, Any]:
         config = super().get_config()
         config.update(
@@ -271,20 +265,12 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        # Remove trailing padding tokens, so that trailing "\x00" bytes don't
-        # show up in the detokenized output.
-        inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
-        
-        decoded = tf.strings.reduce_join(
-            tf.gather(self._char_lst, inputs), axis=-1
-        )
-
-        # Handle errors if an invalid byte sequence is encountered.
-        decoded = tf.strings.unicode_transcode(
-            decoded,
-            "UTF-8",
-            "UTF-8",
+        inputs = tf.ragged.boolean_mask(inputs, inputs != 0)
+        encoded_string = tf.strings.unicode_encode(
+            inputs,
             errors=self.errors,
             replacement_char=self.replacement_char,
+            output_encoding=self.output_encoding,
         )
-        return decoded
+        print([m for m in dir(encoded_string) if not m.startswith('__')])
+        return encoded_string
