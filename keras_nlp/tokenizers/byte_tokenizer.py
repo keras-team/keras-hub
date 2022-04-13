@@ -97,7 +97,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
     >>> ds.take(1).get_single_element()
     <tf.RaggedTensor [[104, 101, 108, 108, 111], [102, 117, 110]]>
 
-    Batch up the inputs and then tokenize.
+    Batch the inputs and then tokenize.
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
     >>> ds = tf.data.Dataset.from_tensor_slices(["hello", "fun"])
     >>> ds = ds.batch(2).map(tokenizer)
@@ -114,7 +114,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
     array([[104, 101, 108, 108, 111],
         [102, 117, 110,   0,   0]])>
 
-    Batch up the inputs and then tokenize (`sequence_length` provided).
+    Batch the inputs and then tokenize (`sequence_length` provided).
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(sequence_length=5)
     >>> ds = tf.data.Dataset.from_tensor_slices(["hello", "fun"])
     >>> ds = ds.batch(2).map(tokenizer)
@@ -227,7 +227,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
         # Remove trailing padding tokens, so that trailing "\x00" bytes don't
         # show up in the detokenized output.
         inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
-
+        
         decoded = tf.strings.reduce_join(
             tf.gather(self._char_lst, inputs), axis=-1
         )
