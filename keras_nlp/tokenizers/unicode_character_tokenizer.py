@@ -271,14 +271,20 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        inputs = tf.ragged.boolean_mask(inputs, inputs != 0)
+        # Remove trailing padding tokens, so that trailing "\x00" bytes don't
+        # show up in the detokenized output.
+        inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
+        
         decoded = tf.strings.reduce_join(
             tf.gather(self._char_lst, inputs), axis=-1
         )
-        encoded_string = tf.strings.unicode_encode(
+
+        # Handle errors if an invalid byte sequence is encountered.
+        decoded = tf.strings.unicode_transcode(
             decoded,
+            "UTF-8",
+            "UTF-8",
             errors=self.errors,
             replacement_char=self.replacement_char,
-            output_encoding=self.output_encoding,
         )
-        return encoded_string
+        return decoded
