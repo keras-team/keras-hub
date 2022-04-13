@@ -42,28 +42,25 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
         mlm_masker = MLMMaskGenerator(
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=0.5,
-            max_selections=5,
+            mask_selection_length=5,
             mask_token_id=self.mask_token_id,
             mask_token_rate=1,
             random_token_rate=0,
-            output_dense_mask_positions=False,
         )
         inputs = tf.ragged.constant([[5, 3, 2], [1, 2, 3, 4, 5]])
         outputs = mlm_masker(inputs)
-        masked_input_ids, masked_positions, masked_ids = (
-            outputs["masked_input_ids"],
+        tokens, masked_positions, masked_ids = (
+            outputs["tokens"],
             outputs["masked_positions"],
             outputs["masked_ids"],
         )
-        self.assertEqual(type(masked_input_ids), type(inputs))
-        self.assertAllEqual(masked_input_ids.shape, inputs.shape)
-        self.assertAllEqual(
-            masked_positions.row_lengths(), masked_ids.row_lengths()
-        )
+        self.assertEqual(type(tokens), type(inputs))
+        self.assertAllEqual(tokens.shape, inputs.shape)
+        self.assertAllEqual(masked_positions.shape, masked_ids.shape)
 
         # Test all selected tokens are correctly masked.
         masked_values = tf.gather(
-            masked_input_ids,
+            tokens,
             masked_positions,
             batch_dims=1,
         )
@@ -73,11 +70,10 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
         mlm_masker = MLMMaskGenerator(
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=0.5,
-            max_selections=5,
+            mask_selection_length=5,
             mask_token_id=self.mask_token_id,
             mask_token_rate=1,
             random_token_rate=0,
-            output_dense_mask_positions=False,
         )
         inputs = tf.random.uniform(
             shape=[5, 10],
@@ -85,19 +81,17 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
             dtype=tf.int32,
         )
         outputs = mlm_masker(inputs)
-        masked_input_ids, masked_positions, masked_ids = (
-            outputs["masked_input_ids"],
+        tokens, masked_positions, masked_ids = (
+            outputs["tokens"],
             outputs["masked_positions"],
             outputs["masked_ids"],
         )
-        self.assertEqual(type(masked_input_ids), type(inputs))
-        self.assertAllEqual(masked_input_ids.shape, inputs.shape)
-        self.assertAllEqual(
-            masked_positions.row_lengths(), masked_ids.row_lengths()
-        )
+        self.assertEqual(type(tokens), type(inputs))
+        self.assertAllEqual(tokens.shape, inputs.shape)
+        self.assertAllEqual(masked_positions.shape, masked_ids.shape)
         # Test all selected tokens are correctly masked.
         masked_values = tf.gather(
-            masked_input_ids,
+            tokens,
             masked_positions,
             batch_dims=1,
         )
@@ -107,66 +101,56 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
         mlm_masker = MLMMaskGenerator(
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=0.5,
-            max_selections=5,
+            mask_selection_length=5,
             mask_token_id=self.mask_token_id,
             mask_token_rate=1,
             random_token_rate=0,
         )
         inputs = tf.constant([1, 2, 3, 4, 5])
         outputs = mlm_masker(inputs)
-        self.assertAllEqual(outputs["masked_input_ids"].shape, inputs.shape)
+        self.assertAllEqual(outputs["tokens"].shape, inputs.shape)
 
     def test_number_of_masked_position_as_expected(self):
         mask_selection_rate = 0.5
-        max_selections = 5
+        mask_selection_length = 5
         mlm_masker = MLMMaskGenerator(
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=mask_selection_rate,
-            max_selections=max_selections,
-            output_dense_mask_positions=False,
         )
         inputs = tf.ragged.constant(
             [[0, 1, 2], [0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4]]
         )
         outputs = mlm_masker(inputs)
         expected_number_of_masked_tokens = tf.cast(
-            tf.math.minimum(
-                tf.math.ceil(
-                    tf.cast(inputs.row_lengths(), dtype=tf.float32)
-                    * mask_selection_rate,
-                ),
-                max_selections,
+            tf.math.ceil(
+                tf.cast(inputs.row_lengths(), dtype=tf.float32)
+                * mask_selection_rate,
             ),
             dtype=tf.int64,
         )
+
         self.assertAllEqual(
             outputs["masked_positions"].row_lengths(),
             expected_number_of_masked_tokens,
         )
 
         # Cap the number of masked tokens at 0, so we can test if
-        # max_selections takes effect.
-        max_selections = 0
+        # mask_selection_length takes effect.
+        mask_selection_length = 0
         mlm_masker = MLMMaskGenerator(
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=mask_selection_rate,
-            max_selections=max_selections,
-            output_dense_mask_positions=False,
+            mask_selection_length=mask_selection_length,
         )
         outputs = mlm_masker(inputs)
-        self.assertAllEqual(
-            outputs["masked_positions"].row_lengths(),
-            tf.zeros(shape=[inputs.shape[0]], dtype=tf.int64),
-        )
+        self.assertEqual(tf.reduce_sum(outputs["masked_positions"]), 0)
 
     def test_apply_random_token_not_mask(self):
         mlm_masker = MLMMaskGenerator(
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=0.5,
-            max_selections=5,
             mask_token_rate=0,
             random_token_rate=1,
-            output_dense_mask_positions=False,
         )
         inputs = tf.random.uniform(
             shape=[5, 10],
@@ -174,17 +158,17 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
             dtype=tf.int32,
         )
         outputs = mlm_masker(inputs)
-        masked_input_ids, masked_positions, masked_ids = (
-            outputs["masked_input_ids"],
+        tokens, masked_positions, masked_ids = (
+            outputs["tokens"],
             outputs["masked_positions"],
             outputs["masked_ids"],
         )
-        self.assertAllEqual(masked_input_ids.shape, inputs.shape)
+        self.assertAllEqual(tokens.shape, inputs.shape)
         self.assertAllEqual(
             masked_positions.row_lengths(), masked_ids.row_lengths()
         )
         masked_values = tf.gather(
-            masked_input_ids,
+            tokens,
             masked_positions,
             batch_dims=1,
         )
@@ -196,7 +180,7 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
             _ = MLMMaskGenerator(
                 vocabulary_size=self.vocabulary_size,
                 mask_selection_rate=0.5,
-                max_selections=5,
+                mask_selection_length=5,
                 mask_token_id=self.vocabulary_size,
             )
 
@@ -208,19 +192,15 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
         mlm_masker = MLMMaskGenerator(
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=1,
-            max_selections=5,
+            mask_selection_length=5,
             unselectable_token_ids=unselectable_token_ids,
             mask_token_rate=1,
             random_token_rate=0,
-            output_dense_mask_positions=False,
         )
         inputs = [unselectable_token_ids]
         outputs = mlm_masker(inputs)
         # Verify that no token is masked out.
-        self.assertAllEqual(
-            outputs["masked_positions"].row_lengths(),
-            tf.zeros(shape=[len(inputs)], dtype=tf.int64),
-        )
+        self.assertEqual(tf.reduce_sum(outputs["masked_positions"]), 0)
 
     def test_config(self):
         unselectable_token_ids = [
@@ -230,7 +210,7 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
         mlm_masker = MLMMaskGenerator(
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=0.5,
-            max_selections=5,
+            mask_selection_length=5,
             unselectable_token_ids=unselectable_token_ids,
         )
         config = mlm_masker.get_config()
