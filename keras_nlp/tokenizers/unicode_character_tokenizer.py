@@ -18,6 +18,8 @@ from typing import Dict
 import tensorflow as tf
 import tensorflow_text as tf_text
 
+import numpy as np
+
 from keras_nlp.tokenizers import tokenizer
 
 class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
@@ -42,7 +44,8 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
             codepoints. Defaults to 65533 (U+FFFD).
         input_encoding: One of The encoding of the input text. Defaults to 
             "UTF-8".
-        output_encoding: The encoding of the output text. Defaults to "UTF-8".
+        output_encoding: One of ("UTF-8", "UTF-16-BE", or "UTF-32-BE). 
+            The encoding of the output text. Defaults to "UTF-8".
 
     Examples:
 
@@ -216,6 +219,10 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         self.input_encoding = input_encoding
         self.output_encoding = output_encoding
 
+        self._char_lst = tf.constant(
+            [i.tobytes() for i in np.arange(256, dtype=np.uint8)]
+        )
+
     def get_config(self) -> Dict[str, Any]:
         config = super().get_config()
         config.update(
@@ -265,13 +272,13 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     def detokenize(self, inputs):
         inputs = tf.ragged.boolean_mask(inputs, inputs != 0)
+        decoded = tf.strings.reduce_join(
+            tf.gather(self._char_lst, inputs), axis=-1
+        )
         encoded_string = tf.strings.unicode_encode(
-            inputs,
+            decoded,
             errors=self.errors,
             replacement_char=self.replacement_char,
             output_encoding=self.output_encoding,
         )
-        print(encoded_string)
-        print(type(encoded_string))
-        print(encoded_string.numpy())
         return encoded_string
