@@ -273,4 +273,6 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
             output_encoding=self.output_encoding,
         )
         print([m for m in dir(encoded_string) if not m.startswith('__')])
+        print(encoded_string._numpy)
+        print(encoded_string._numpy())
         return encoded_string
