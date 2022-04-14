@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.layers.bert_packer import BertPacker
 from keras_nlp.layers.fnet_encoder import FNetEncoder
 from keras_nlp.layers.mlm_head import MLMHead
 from keras_nlp.layers.mlm_mask_generator import MLMMaskGenerator

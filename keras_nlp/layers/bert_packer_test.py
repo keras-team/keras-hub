@@ -19,7 +19,7 @@ from tensorflow import keras
 from keras_nlp.layers.bert_packer import BertPacker
 
 
-class WordPieceTokenizerTest(tf.test.TestCase):
+class BertPackerTest(tf.test.TestCase):
     def test_trim_single_input_ints(self):
         input_data = tf.range(3, 10)
         packer = BertPacker(8, start_value=1, end_value=2)

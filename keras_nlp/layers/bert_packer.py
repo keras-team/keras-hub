@@ -49,13 +49,13 @@ class BertPacker(keras.layers.Layer):
     Args:
         sequence_length: The desired output length.
         start_value: The id or token that is to be placed at the start of each
-            sequence (called "[CLS]" for BERT). The dtype much mach the dtype of
+            sequence (called "[CLS]" for BERT). The dtype must mach the dtype of
             the input tensors to the layer.
         end_value: The id or token that is to be placed at the end of each
             input segment (called "[SEP]" for BERT). The dtype much mach the
             dtype of the input tensors to the layer.
         pad_value: The id or token that is to be placed into the unused
-            unused positions after the last segment in the sequence
+            positions after the last segment in the sequence
             (called "[PAD]" for BERT).
         truncator: The algorithm to truncate a list of batched segments to fit a
             per-example length limit. The value can be either `round_robin` or
@@ -71,31 +71,30 @@ class BertPacker(keras.layers.Layer):
     Examples:
 
     *Pack a single input for classification.*
-    >>> seq1 = [1, 2, 3, 4]  # Replace with a real input.
+    >>> seq1 = tf.constant([1, 2, 3, 4])
     >>> packer = keras_nlp.layers.BertPacker(8, start_value=101, end_value=102)
     >>> packer(seq1)
     {
-        "tokens": <tf.Tensor: shape=(8,), dtype=int32,
-            numpy=array([101,   1,   2,   3,   4, 102,   0,   0], dtype=int32)>,
-        "padding_mask": <tf.Tensor: shape=(8,), dtype=float32,
-            numpy=array([1., 1., 1., 1., 1., 1., 0., 0.], dtype=float32)>,
-        "segment_ids": <tf.Tensor: shape=(8,), dtype=float32,
-            numpy=array([0., 0., 0., 0., 0., 0., 0., 0.], dtype=float32)>,
+        'tokens': <tf.Tensor: shape=(8,), dtype=int32, numpy=
+            array([101,   1,   2,   3,   4, 102,   0,   0], dtype=int32)>,
+        'padding_mask': <tf.Tensor: shape=(8,), dtype=float32, numpy=
+            array([1., 1., 1., 1., 1., 1., 0., 0.], dtype=float32)>,
+        'segment_ids': <tf.Tensor: shape=(8,), dtype=int32, numpy=
+            array([0, 0, 0, 0, 0, 0, 0, 0], dtype=int32)>
     }
 
     *Pack multiple inputs for classification.*
-    >>> seq1 = [1, 2, 3, 4]  # Replace with a real input.
-    >>> seq2 = [11, 12, 13, 14]  # Replace with a real input.
-    >>> seq3 = [21, 12, 23, 24]  # Replace with a real input.
+    >>> seq1 = tf.constant([1, 2, 3, 4])
+    >>> seq2 = tf.constant([11, 12, 13, 14])
     >>> packer = keras_nlp.layers.BertPacker(8, start_value=101, end_value=102)
-    >>> packer((seq1, seq2, seq3))
+    >>> packer((seq1, seq2))
     {
-        "tokens": <tf.Tensor: shape=(8,), dtype=int32,
-            numpy=array([101,   1,   2, 102,  11, 102,  21,  102], dtype=int32)>,
-        "padding_mask": <tf.Tensor: shape=(8,), dtype=float32,
-            numpy=array([1., 1., 1., 1., 1., 1., 1., 1.], dtype=float32)>,
-        "segment_ids": <tf.Tensor: shape=(8,), dtype=float32,
-            numpy=array([0., 0., 0., 0., 1., 1., 2., 2.], dtype=float32)>,
+        'tokens': <tf.Tensor: shape=(8,), dtype=int32, numpy=
+            array([101,   1,   2,   3, 102,  11,  12, 102], dtype=int32)>,
+        'padding_mask': <tf.Tensor: shape=(8,), dtype=float32, numpy=
+            array([1., 1., 1., 1., 1., 1., 1., 1.], dtype=float32)>,
+        'segment_ids': <tf.Tensor: shape=(8,), dtype=int32, numpy=
+            array([0, 0, 0, 0, 0, 1, 1, 1], dtype=int32)>
     }
 
     Reference:
@@ -171,8 +170,7 @@ class BertPacker(keras.layers.Layer):
             raise ValueError("Unsupported truncator: %s" % self.truncator)
 
     def _combine_inputs(self, segments):
-        """Trim inputs to desired length."""
-        # Combine segments.
+        """Combine inputs with start and end values added."""
         dtype = segments[0].dtype
         start_value = tf.convert_to_tensor(self.start_value, dtype=dtype)
         end_value = tf.convert_to_tensor(self.end_value, dtype=dtype)
@@ -209,7 +207,7 @@ class BertPacker(keras.layers.Layer):
 
         segments = self._trim_inputs(inputs)
         tokens, segment_ids = self._combine_inputs(segments)
-        padding_mask = tf.ones_like(segment_ids)
+        padding_mask = tf.ones_like(segment_ids, self.compute_dtype)
 
         # Pad to dense tensor output.
         shape = tf.cast([-1, self.sequence_length], "int64")
