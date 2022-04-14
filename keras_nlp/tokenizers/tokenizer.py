@@ -130,11 +130,15 @@ class Tokenizer(keras.layers.Layer):
                 f"Unsupported tokenizer mode. Received: mode={mode}"
             )
 
-    def detokenize_to_strings(self, inputs):
-        detokenized_input = self.detokenize(inputs)
-        if isinstance(detokenized_input, tf.RaggedTensor):
-            detokenized_input = detokenized_input.to_list()
-        elif isinstance(detokenized_input, tf.Tensor):
-            detokenized_input = detokenized_input.numpy().tolist()
-        for i in range(len(detokenized_input)):
-            detokenized_input[i] = detokenized_input[i].decode("utf-8")
+    def detokenize_to_strings(self, inputs, *args, **kwargs):
+        """Transform detokenized inputs to strings.
+
+        Args:
+            inputs: Input tensor, or dict/list/tuple of input tensors.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+        """
+        raise NotImplementedError(
+            "No implementation of `detokenize_to_strings()` was found for "
+            f"{self.__class__.__name__}."
+        )
