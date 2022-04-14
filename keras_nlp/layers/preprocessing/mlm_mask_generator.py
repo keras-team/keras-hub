@@ -35,6 +35,7 @@ class MLMMaskGenerator(keras.layers.Layer):
         vocabulary_size: int, the size of the vocabulary.
         mask_selection_rate: float, the probability of a token is selected for
             masking.
+        mask_token_id: int. The id of mask token.
         mask_selection_length: int, defaults to None. Maximum number of tokens
             selected for  masking in each sequence. If set, the output
             `mask_positions`, `mask_ids` and `mask_weights` will be padded
@@ -42,7 +43,6 @@ class MLMMaskGenerator(keras.layers.Layer):
             otherwise the output will be a RaggedTensor.
         unselectable_token_ids: A list of tokens, defaults to None. Tokens in
             `unselectable_tokens_ids` will not be selected for masking.
-        mask_token_id: int, defaults to 0. The id of mask token.
         mask_token_rate: float, defaults to 0.8. `mask_token_rate` must be
             between 0 and 1 which indicates how often the mask_token is
             substituted for tokens selected for masking.
@@ -78,7 +78,7 @@ class MLMMaskGenerator(keras.layers.Layer):
 
     Basic usage.
     >>> masker = keras_nlp.preprocessing.MLMMaskGenerator( \
-    ...     10, mask_selection_rate=0.2, mask_selection_length=5)
+    ...     vocaublary_size=10, mask_selection_rate=0.2, mask_token_id=0)
     >>> masker(tf.constant([1, 2, 3, 4, 5]))
     {'tokens': <tf.Tensor: shape=(5,), dtype=int32,
         numpy=array([1, 2, 3, 4, 0], dtype=int32)>,
@@ -91,7 +91,7 @@ class MLMMaskGenerator(keras.layers.Layer):
 
     Ragged Input:
     >>> masker = keras_nlp.preprocessing.MLMMaskGenerator( \
-    ...     10, mask_selection_rate=0.5, mask_selection_length=5)
+    ...     vocaublary_size=10, mask_selection_rate=0.2, mask_token_id=0)
     >>> masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
     {'tokens': <tf.RaggedTensor [[1, 4], [0, 2, 3, 0]]>,
     'mask_positions': <tf.Tensor: shape=(2, 5), dtype=int64, numpy=
@@ -109,9 +109,9 @@ class MLMMaskGenerator(keras.layers.Layer):
         self,
         vocabulary_size,
         mask_selection_rate,
+        mask_token_id,
         mask_selection_length=None,
         unselectable_token_ids=None,
-        mask_token_id=0,
         mask_token_rate=0.8,
         random_token_rate=0.1,
         padding_token_id=None,
@@ -182,14 +182,10 @@ class MLMMaskGenerator(keras.layers.Layer):
 
         if input_is_1d:
             # If inputs is 1D, we format the output to be 1D as well.
-            tokens = tf.squeeze(tokens)
-            if isinstance(mask_positions, tf.RaggedTensor):
-                mask_positions = mask_positions.to_tensor()
-                mask_ids = mask_ids.to_tensor()
-                mask_weights = mask_weights.to_tensor()
-            mask_positions = tf.squeeze(mask_positions)
-            mask_ids = tf.squeeze(mask_ids)
-            mask_weights = tf.squeeze(mask_weights)
+            tokens = tf.squeeze(tokens, axis=0)
+            mask_positions = tf.squeeze(mask_positions, axis=0)
+            mask_ids = tf.squeeze(mask_ids, axis=0)
+            mask_weights = tf.squeeze(mask_weights, axis=0)
 
         output_dict = {
             "tokens": tokens,

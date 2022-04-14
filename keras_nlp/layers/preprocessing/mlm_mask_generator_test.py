@@ -116,6 +116,7 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
         mlm_masker = MLMMaskGenerator(
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=mask_selection_rate,
+            mask_token_id=self.mask_token_id,
         )
         inputs = tf.ragged.constant(
             [[0, 1, 2], [0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4]]
@@ -140,6 +141,7 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
         mlm_masker = MLMMaskGenerator(
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=mask_selection_rate,
+            mask_token_id=self.mask_token_id,
             mask_selection_length=mask_selection_length,
         )
         outputs = mlm_masker(inputs)
@@ -149,6 +151,7 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
         mlm_masker = MLMMaskGenerator(
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=0.5,
+            mask_token_id=self.mask_token_id,
             mask_token_rate=0,
             random_token_rate=1,
         )
@@ -180,8 +183,8 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
             _ = MLMMaskGenerator(
                 vocabulary_size=self.vocabulary_size,
                 mask_selection_rate=0.5,
-                mask_selection_length=5,
                 mask_token_id=self.vocabulary_size,
+                mask_selection_length=5,
             )
 
     def test_unselectable_tokens(self):
@@ -192,6 +195,7 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
         mlm_masker = MLMMaskGenerator(
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=1,
+            mask_token_id=self.mask_token_id,
             mask_selection_length=5,
             unselectable_token_ids=unselectable_token_ids,
             mask_token_rate=1,
@@ -210,6 +214,7 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
         mlm_masker = MLMMaskGenerator(
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=0.5,
+            mask_token_id=self.mask_token_id,
             mask_selection_length=5,
             unselectable_token_ids=unselectable_token_ids,
         )
