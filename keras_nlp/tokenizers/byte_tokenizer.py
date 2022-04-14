@@ -257,11 +257,13 @@ class ByteTokenizer(tokenizer.Tokenizer):
 
     def detokenize_to_strings(self, inputs):
         detokenized_input = self.detokenize(inputs)
+        scalar = detokenized_input.ndim == 0
         if isinstance(detokenized_input, tf.RaggedTensor):
             detokenized_input = detokenized_input.to_list()
         elif isinstance(detokenized_input, tf.Tensor):
-            if (detokenized_input.ndim == 0):
+            if (scalar):
                 detokenized_input = detokenized_input.numpy()
+                return detokenized_input
             else:
                 detokenized_input = detokenized_input.numpy().tolist()
         for i in range(len(detokenized_input)):
