@@ -15,7 +15,7 @@
 from typing import List
 
 from tensorflow import keras
-
+import tensorflow as tf
 
 class Tokenizer(keras.layers.Layer):
     """A base class for tokenizer layers.
@@ -129,3 +129,12 @@ class Tokenizer(keras.layers.Layer):
             raise ValueError(
                 f"Unsupported tokenizer mode. Received: mode={mode}"
             )
+
+    def detokenize_to_strings(self, inputs):
+        detokenized_input = self.detokenize(inputs)
+        if isinstance(detokenized_input, tf.RaggedTensor):
+            detokenized_input = detokenized_input.to_list()
+        elif isinstance(detokenized_input, tf.Tensor):
+            detokenized_input = detokenized_input.numpy().tolist()
+        for i in range(len(detokenized_input)):
+            detokenized_input[i] = detokenized_input[i].decode("utf-8")
