@@ -18,6 +18,7 @@ import sys
 import unittest
 
 import numpy as np
+import pytest
 import tensorflow as tf
 from tensorflow import keras
 
@@ -36,6 +37,9 @@ def find_modules():
     return keras_nlp_modules
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="Numpy prints differently on windows"
+)
 def test_docstrings():
     keras_nlp_modules = find_modules()
     # As of this writing, it doesn't seem like pytest support load_tests
