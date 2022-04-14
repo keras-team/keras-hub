@@ -260,6 +260,9 @@ class ByteTokenizer(tokenizer.Tokenizer):
         if isinstance(detokenized_input, tf.RaggedTensor):
             detokenized_input = detokenized_input.to_list()
         elif isinstance(detokenized_input, tf.Tensor):
+            print(detokenized_input.ndim)
+            print(detokenized_input)
+            print(detokenized_input.shape)
             detokenized_input = detokenized_input.numpy()
             print(detokenized_input)
             print(detokenized_input.dtype)
