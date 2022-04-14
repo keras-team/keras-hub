@@ -117,6 +117,7 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
             vocabulary_size=self.vocabulary_size,
             mask_selection_rate=mask_selection_rate,
             mask_token_id=self.mask_token_id,
+            unselectable_token_ids=None,
         )
         inputs = tf.ragged.constant(
             [[0, 1, 2], [0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4]]

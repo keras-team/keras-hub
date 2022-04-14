@@ -41,8 +41,9 @@ class MLMMaskGenerator(keras.layers.Layer):
             `mask_positions`, `mask_ids` and `mask_weights` will be padded
             to dense tensors of length `mask_selection_length`,
             otherwise the output will be a RaggedTensor.
-        unselectable_token_ids: A list of tokens, defaults to None. Tokens in
-            `unselectable_tokens_ids` will not be selected for masking.
+        unselectable_token_ids: A list of tokens, defaults to [0] (the default
+            `padding_token_id`). Tokens in `unselectable_tokens_ids` will not
+            be selected for masking.
         mask_token_rate: float, defaults to 0.8. `mask_token_rate` must be
             between 0 and 1 which indicates how often the mask_token is
             substituted for tokens selected for masking.
@@ -111,7 +112,7 @@ class MLMMaskGenerator(keras.layers.Layer):
         mask_selection_rate,
         mask_token_id,
         mask_selection_length=None,
-        unselectable_token_ids=None,
+        unselectable_token_ids=[0],
         mask_token_rate=0.8,
         random_token_rate=0.1,
         padding_token_id=0,
