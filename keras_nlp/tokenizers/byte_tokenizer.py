@@ -260,7 +260,10 @@ class ByteTokenizer(tokenizer.Tokenizer):
         if isinstance(detokenized_input, tf.RaggedTensor):
             detokenized_input = detokenized_input.to_list()
         elif isinstance(detokenized_input, tf.Tensor):
-            detokenized_input = detokenized_input.numpy().tolist()
+            detokenized_input = detokenized_input.numpy()
+            print(detokenized_input)
+            print(detokenized_input.dtype)
+            detokenized_input = detokenized_input.tolist()
         for i in range(len(detokenized_input)):
             detokenized_input[i] = detokenized_input[i].decode("utf-8")
         return detokenized_input
