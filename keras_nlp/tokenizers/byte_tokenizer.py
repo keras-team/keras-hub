@@ -263,7 +263,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
         elif isinstance(detokenized_input, tf.Tensor):
             if (scalar):
                 detokenized_input = detokenized_input.numpy()
-                return detokenized_input
+                return detokenized_input.decode("utf-8")
             else:
                 detokenized_input = detokenized_input.numpy().tolist()
         for i in range(len(detokenized_input)):
