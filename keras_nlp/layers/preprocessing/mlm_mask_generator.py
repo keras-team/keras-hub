@@ -51,7 +51,6 @@ class MLMMaskGenerator(keras.layers.Layer):
             between 0 and 1 which indicates how often a random token is
             substituted for tokens selected for masking. Default is 0.1.
             Note: mask_token_rate + random_token_rate <= 1.
-        padding_token_id: int, defaults to 0. The id of padding token.
 
     Input:
         A 1D integer tensor of shape [sequence_length,] or a 2D integer tensor
@@ -115,7 +114,6 @@ class MLMMaskGenerator(keras.layers.Layer):
         unselectable_token_ids=[0],
         mask_token_rate=0.8,
         random_token_rate=0.1,
-        padding_token_id=0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -125,7 +123,6 @@ class MLMMaskGenerator(keras.layers.Layer):
         self.mask_selection_length = mask_selection_length
         self.mask_token_rate = mask_token_rate
         self.random_token_rate = random_token_rate
-        self.padding_token_id = padding_token_id
 
         if mask_token_id >= vocabulary_size:
             raise ValueError(
@@ -158,10 +155,7 @@ class MLMMaskGenerator(keras.layers.Layer):
             inputs = inputs[tf.newaxis, :]
         if not input_is_ragged:
             # Convert to RaggedTensor to avoid masking out padded token.
-            inputs = tf.RaggedTensor.from_tensor(
-                inputs,
-                padding=self.padding_token_id,
-            )
+            inputs = tf.RaggedTensor.from_tensor(inputs)
         (tokens, mask_positions, mask_ids,) = tf_text.mask_language_model(
             inputs,
             item_selector=self._random_selector,
@@ -207,7 +201,6 @@ class MLMMaskGenerator(keras.layers.Layer):
                 "mask_token_id": self.mask_token_id,
                 "mask_token_rate": self.mask_token_rate,
                 "random_token_rate": self.random_token_rate,
-                "padding_token_id": self.padding_token_id,
             }
         )
         return config
