@@ -138,7 +138,16 @@ class Tokenizer(keras.layers.Layer):
             *args: Additional positional arguments.
             **kwargs: Additional keyword arguments.
         """
-        raise NotImplementedError(
-            "No implementation of `detokenize_to_strings()` was found for "
-            f"{self.__class__.__name__}."
-        )
+        detokenized_input = self.detokenize(inputs)
+        scalar = detokenized_input.ndim == 0
+        if isinstance(detokenized_input, tf.RaggedTensor):
+            detokenized_input = detokenized_input.to_list()
+        elif isinstance(detokenized_input, tf.Tensor):
+            if (scalar):
+                detokenized_input = detokenized_input.numpy()
+                return detokenized_input.decode("utf-8")
+            else:
+                detokenized_input = detokenized_input.numpy().tolist()
+        for i in range(len(detokenized_input)):
+            detokenized_input[i] = detokenized_input[i].decode("utf-8")
+        return detokenized_input
