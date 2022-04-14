@@ -50,7 +50,7 @@ class MLMMaskGenerator(keras.layers.Layer):
             between 0 and 1 which indicates how often a random token is
             substituted for tokens selected for masking. Default is 0.1.
             Note: mask_token_rate + random_token_rate <= 1.
-        padding_token_id: int, defaults to None. The id of padding token.
+        padding_token_id: int, defaults to 0. The id of padding token.
 
     Input:
         A 1D integer tensor of shape [sequence_length,] or a 2D integer tensor
@@ -114,7 +114,7 @@ class MLMMaskGenerator(keras.layers.Layer):
         unselectable_token_ids=None,
         mask_token_rate=0.8,
         random_token_rate=0.1,
-        padding_token_id=None,
+        padding_token_id=0,
         **kwargs,
     ):
         super().__init__(**kwargs)
