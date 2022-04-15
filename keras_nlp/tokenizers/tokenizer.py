@@ -139,7 +139,7 @@ class Tokenizer(keras.layers.Layer):
             **kwargs: Additional keyword arguments.
         """
         detokenized_input = self.detokenize(inputs)
-        scalar = detokenized_input.ndim == 0
+        scalar = detokenized_input.shape.rank == 0
         if isinstance(detokenized_input, tf.RaggedTensor):
             detokenized_input = detokenized_input.to_list()
         elif isinstance(detokenized_input, tf.Tensor):
