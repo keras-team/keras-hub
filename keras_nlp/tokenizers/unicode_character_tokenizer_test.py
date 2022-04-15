@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-import numpy as np
+
 from keras_nlp.tokenizers.unicode_character_tokenizer import (
     UnicodeCharacterTokenizer,
 )
@@ -229,19 +230,23 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
         )
         tokenizer = UnicodeCharacterTokenizer()
-        outputs = tokenizer.detokenize_to_strings(tokenizer.tokenize(input_data))
+        outputs = tokenizer.detokenize_to_strings(
+            tokenizer.tokenize(input_data)
+        )
         self.assertAllEqual(
             outputs,
-            ['ninja', 'samurai', '▀▁▂▃', 'keras', 'tensorflow'],
+            ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"],
         )
 
     def test_detokenizing_to_list_of_strings_scalar(self):
-        input_data = '▀▁▂▃'
+        input_data = "▀▁▂▃"
         tokenizer = UnicodeCharacterTokenizer()
-        outputs = tokenizer.detokenize_to_strings(tokenizer.tokenize(input_data))
+        outputs = tokenizer.detokenize_to_strings(
+            tokenizer.tokenize(input_data)
+        )
         self.assertAllEqual(
             outputs,
-            '▀▁▂▃',
+            "▀▁▂▃",
         )
 
     def test_detokenizing_to_list_of_strings_ragged(self):
@@ -250,7 +255,9 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             [["ninja", "samurai"], ["▀▁▂▃", "keras", "tensorflow"]]
         )
         tokenizer = UnicodeCharacterTokenizer()
-        outputs = tokenizer.detokenize_to_strings(tokenizer.tokenize(input_data))
+        outputs = tokenizer.detokenize_to_strings(
+            tokenizer.tokenize(input_data)
+        )
         self.assertAllEqual(
             outputs,
             [["ninja", "samurai"], ["▀▁▂▃", "keras", "tensorflow"]],

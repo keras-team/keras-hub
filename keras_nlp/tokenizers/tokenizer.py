@@ -14,8 +14,9 @@
 
 from typing import List
 
-from tensorflow import keras
 import tensorflow as tf
+from tensorflow import keras
+
 
 class Tokenizer(keras.layers.Layer):
     """A base class for tokenizer layers.
@@ -131,17 +132,19 @@ class Tokenizer(keras.layers.Layer):
             )
 
     def recursive_utf8_decoder(self, inputs, *args, **kwargs):
-        """Recursively Decodes String to list of string with 'utf-8' encoding."""
+        """Recursively decodes to list of strings with 'utf-8' encoding."""
         if str(type(inputs)) == "<class 'bytes'>":
-            inputs = inputs.decode('utf-8')
+            inputs = inputs.decode("utf-8")
             return inputs
         if str(type(inputs[0])) == "<class 'bytes'>":
             for i in range(len(inputs)):
-                inputs[i] = inputs[i].decode('utf-8')
+                inputs[i] = inputs[i].decode("utf-8")
             return inputs
         else:
             for i in range(len(inputs)):
-               inputs[i] = self.recursive_utf8_decoder(inputs[i], *args, **kwargs)
+                inputs[i] = self.recursive_utf8_decoder(
+                    inputs[i], *args, **kwargs
+                )
 
     def detokenize_to_strings(self, inputs, *args, **kwargs):
         """Transform detokenized inputs to strings.
@@ -155,10 +158,12 @@ class Tokenizer(keras.layers.Layer):
         if isinstance(detokenized_input, tf.RaggedTensor):
             detokenized_input = detokenized_input.to_list()
         elif isinstance(detokenized_input, tf.Tensor):
-            if (scalar):
+            if scalar:
                 detokenized_input = detokenized_input.numpy()
                 return detokenized_input.decode("utf-8")
             else:
                 detokenized_input = detokenized_input.numpy().tolist()
-        detokenized_input = list(map(self.recursive_utf8_decoder, detokenized_input))
+        detokenized_input = list(
+            map(self.recursive_utf8_decoder, detokenized_input)
+        )
         return detokenized_input
