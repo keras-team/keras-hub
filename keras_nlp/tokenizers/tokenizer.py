@@ -160,5 +160,5 @@ class Tokenizer(keras.layers.Layer):
                 return detokenized_input.decode("utf-8")
             else:
                 detokenized_input = detokenized_input.numpy().tolist()
-        list(map(self.recursive_utf8_decoder, detokenized_input))
+        detokenized_input = list(map(self.recursive_utf8_decoder, detokenized_input))
         return detokenized_input
