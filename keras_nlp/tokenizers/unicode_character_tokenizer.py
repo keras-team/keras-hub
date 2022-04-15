@@ -57,72 +57,70 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         105, 122, 101, 114], dtype=int32)>
 
     Ragged outputs.
-    >>> inputs = ["Ninja", "Samurai", "पुस्तक", "کتاب"]
+    >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
     >>> tokenizer(inputs)
-    <tf.RaggedTensor [[110, 105, 110, 106, 97],
-        [115, 97, 109, 117, 114, 97, 105],
+    <tf.RaggedTensor [[98, 111, 111, 107],
         [2346, 2369, 2360, 2381, 2340, 2325],
         [1705, 1578, 1575, 1576]]>
 
     Dense outputs.
-    >>> inputs = ["Ninja", "Samurai", "पुस्तक", "کتاب"]
+    >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
         sequence_length=8)
     >>> tokenizer(inputs)
-    <tf.Tensor: shape=(2, 8), dtype=int32, numpy=
-    array([[ 110,  105,  110,  106,   97,    0,    0,    0],
-       [ 115,   97,  109,  117,  114,   97,  105,    0],
-       [2346, 2369, 2360, 2381, 2340, 2325,    0,    0],
-       [1705, 1578, 1575, 1576,    0,    0,    0,    0]], dtype=int32)>
+    <tf.Tensor: shape=(3, 8), dtype=int32, numpy=
+    array([[  98,  111,  111,  107,    0,    0,    0,    0],
+        [2346, 2369, 2360, 2381, 2340, 2325,    0,    0],
+        [1705, 1578, 1575, 1576,    0,    0,    0,    0]], dtype=int32)>
 
-    Tokenize first, then batch the dataset up.
-    >>> inputs = ["Ninja", "Samurai", "पुस्तक", "کتاب"]
+    Tokenize first, then batch the dataset.
+    >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
     >>> ds = ds.map(tokenizer)
     >>> ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(3))
     >>> ds.take(1).get_single_element()
-    <tf.RaggedTensor [[110, 105, 110, 106, 97],
-        [115, 97, 109, 117, 114, 97, 105],
-        [2346, 2369, 2360, 2381, 2340, 2325]]>
+    <tf.RaggedTensor [[98, 111, 111, 107],
+        [2346, 2369, 2360, 2381, 2340, 2325],
+        [1705, 1578, 1575, 1576]]>
 
     Batch the inputs and then tokenize.
-    >>> inputs = ["Ninja", "Samurai", "पुस्तक", "کتاب"]
+    >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
     >>> ds = ds.batch(3).map(tokenizer)
     >>> ds.take(1).get_single_element()
-    <tf.RaggedTensor [[110, 105, 110, 106, 97],
-        [115, 97, 109, 117, 114, 97, 105],
-        [2346, 2369, 2360, 2381, 2340, 2325]]>
+    <tf.RaggedTensor [[98, 111, 111, 107],
+        [2346, 2369, 2360, 2381, 2340, 2325],
+        [1705, 1578, 1575, 1576]]>
 
-    Tokenize first, then batch the dataset up for Dense Outputs
+    Tokenize first, then batch the dataset for Dense Outputs
     (`sequence_length` provided).
-    >>> inputs = ["Ninja", "Samurai", "पुस्तक", "کتاب"]
+    >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
         sequence_length=5)
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
     >>> ds = ds.map(tokenizer)
     >>> ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(3))
     >>> ds.take(1).get_single_element()
-    <tf.Tensor: shape=(2, 5), dtype=int32, numpy=
-    array([[ 110,  105,  110,  106,   97],
-       [ 115,   97,  109,  117,  114],
-       [2346, 2369, 2360, 2381, 2340]], dtype=int32)>
+    <tf.Tensor: shape=(3, 5), dtype=int32, numpy=
+    array([[  98,  111,  111,  107,    0],
+        [2346, 2369, 2360, 2381, 2340],
+        [1705, 1578, 1575, 1576,    0]], dtype=int32)>
 
     Batch the inputs and then tokenize for Dense Outputs
     (`sequence_length` provided).
-    >>> inputs = ["Ninja", "Samurai", "पुस्तक", "کتاب"]
+    >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
         sequence_length=5)
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
     >>> ds = ds.batch(3).map(tokenizer)
     >>> ds.take(1).get_single_element()
-    <tf.Tensor: shape=(2, 5), dtype=int32, numpy=
-    array([[ 110,  105,  110,  106,   97],
-       [ 115,   97,  109,  117,  114],
-       [2346, 2369, 2360, 2381, 2340]], dtype=int32)>
+    <tf.Tensor: shape=(3, 5), dtype=int32, numpy=
+    array([[  98,  111,  111,  107,    0],
+        [2346, 2369, 2360, 2381, 2340],
+        [1705, 1578, 1575, 1576,    0]], dtype=int32)>
 
     Tokenization showcasing truncation of long sequences.
     >>> inputs = ["I Like to Travel a Lot", "मैं किताबें पढ़ना पसंद करता हूं"]
