@@ -26,13 +26,18 @@ If you'd like to contribute, please see our [contributing guide](CONTRIBUTING.md
 
 The fastest way to find a place to contribute is to browse our
 [open issues](https://github.com/keras-team/keras-nlp/issues) and find an
-unclaimed issue to work on. We tag good introductory issues with the
-`good first issue` label.
+unclaimed issue to work on. Issues with a [contributions welcome](
+https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
+tag are places where we are actively looking for support, and a
+[good first issue](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+tag means we think this could be a accessible a first time contributor.
 
 If you would like to propose a new symbol or feature, please open an issue to
-discuss. Be aware the design for new features may take longer at this early
-stage. If you have a design in mind, please include a colab notebook showing the
-proposed design in a end-to-end example.
+discuss. Be aware the design for new features may take longer than contributing
+pre-planned features. If you have a design in mind, please include a colab
+notebook showing the proposed design in a end-to-end example. Make sure to
+follow the [Keras API design guidelines](
+https://github.com/keras-team/governance/blob/master/keras_api_design_guidelines.md).
 
 ## Roadmap
 
@@ -48,6 +53,19 @@ on components that follow a established Keras interface (e.g.
 
 As we progress further with the library, we will attempt to cover an ever
 expanding list of widely cited model architectures.
+
+## Releases
+
+KerasNLP release are documented on our
+[github release page](https://github.com/keras-team/keras-nlp/releases) and
+available to download from our [PyPI project](
+https://pypi.org/project/keras-nlp/).
+
+To install KerasNLP and all it's dependencies, simply run:
+
+```
+pip install keras-nlp
+```
 
 ## Compatibility
 
