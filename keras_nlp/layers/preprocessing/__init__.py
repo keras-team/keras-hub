@@ -12,9 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.layers.fnet_encoder import FNetEncoder
-from keras_nlp.layers.position_embedding import PositionEmbedding
-from keras_nlp.layers.preprocessing import MLMMaskGenerator
-from keras_nlp.layers.sine_position_encoding import SinePositionEncoding
-from keras_nlp.layers.transformer_decoder import TransformerDecoder
-from keras_nlp.layers.transformer_encoder import TransformerEncoder
+from keras_nlp.layers.preprocessing.mlm_mask_generator import MLMMaskGenerator
