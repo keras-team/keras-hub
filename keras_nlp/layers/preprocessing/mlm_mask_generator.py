@@ -24,12 +24,10 @@ class MLMMaskGenerator(keras.layers.Layer):
     (MLM) tasks. It follows the masking strategy described in the [original BERT
     paper](https://arxiv.org/abs/1810.04805). Given tokenized text,
     it randomly selects certain number of tokens for masking. Then for each
-    selected token, it has chance (configurable) to be replaced by "mask token"
-    or random token, or stay unchanged.
+    selected token, it has a chance (configurable) to be replaced by
+    "mask token" or random token, or stay unchanged.
 
-    This layer can both be applied in tf.data pipeline as a standalone utility,
-    or used together with `tf.keras.Model` to generate dynamic mask, which is
-    useful for workflows like RoBERTa training.
+    Users should use this layer with `tf.data` to generate masks.
 
     Args:
         vocabulary_size: int, the size of the vocabulary.
@@ -42,37 +40,35 @@ class MLMMaskGenerator(keras.layers.Layer):
             to dense tensors of length `mask_selection_length`,
             otherwise the output will be a RaggedTensor.
         unselectable_token_ids: A list of tokens, defaults to [0] (the default
-            `padding_token_id`). Tokens in `unselectable_tokens_ids` will not
-            be selected for masking.
+            `padding_token_id`).
         mask_token_rate: float, defaults to 0.8. `mask_token_rate` must be
             between 0 and 1 which indicates how often the mask_token is
             substituted for tokens selected for masking.
         random_token_rate: float, defaults to 0.1. `random_token_rate` must be
             between 0 and 1 which indicates how often a random token is
             substituted for tokens selected for masking. Default is 0.1.
-            Note: mask_token_rate + random_token_rate <= 1.
+            Note: mask_token_rate + random_token_rate <= 1,  and for
+            (1 - mask_token_rate - random_token_rate), the token will not be
+            changed.
 
     Input:
-        A 1D integer tensor of shape [sequence_length,] or a 2D integer tensor
+        A 1D integer tensor of shape [sequence_length] or a 2D integer tensor
         of shape [batch_size, sequence_length], or a 2D integer RaggedTensor.
         Represents the sequence to mask.
 
     Returns:
         A Dict with 4 keys:
-            tokens: Tensor, has the same type and shape of input.
-                Sequence after getting masked.
-            mask_positions: Tensor, or RaggedTensor if
-                `mask_selection_length` is None. The positions of tokens
-                getting masked.
-            mask_ids: Tensor, or RaggedTensor if
-                `mask_selection_length` is None. The original token ids
-                at masked positions.
-            mask_weights: Tensor, or RaggedTensor if
-                `mask_selection_length` is None. `mask_weights` has the same
-                shape as `mask_positions` and `mask_ids`. Each element in
-                `mask_weights` should be 0 or 1, 1 means the corresponding
-                position in `mask_positions` is an actual mask, 0 means it is
-                a pad.
+            tokens: Tensor or RaggedTensor, has the same type and shape of
+                input. Sequence after getting masked.
+            mask_positions: Tensor, or RaggedTensor if `mask_selection_length`
+                is None. The positions of tokens getting masked.
+            mask_ids: Tensor, or RaggedTensor if  `mask_selection_length` is
+                None. The original token ids at masked positions.
+            mask_weights: Tensor, or RaggedTensor if `mask_selection_length` is
+                None. `mask_weights` has the same shape as `mask_positions` and
+                `mask_ids`. Each element in `mask_weights` should be 0 or 1,
+                1 means the corresponding position in `mask_positions` is an
+                actual mask, 0 means it is a pad.
 
     Examples:
 
@@ -154,7 +150,8 @@ class MLMMaskGenerator(keras.layers.Layer):
             # If inputs is of rank 1, we manually add the batch axis.
             inputs = inputs[tf.newaxis, :]
         if not input_is_ragged:
-            # Convert to RaggedTensor to avoid masking out padded token.
+            # `tf_text.mask_language_model` requires a ragged tensor, so
+            # convert dense to ragged.
             inputs = tf.RaggedTensor.from_tensor(inputs)
         (tokens, mask_positions, mask_ids,) = tf_text.mask_language_model(
             inputs,
@@ -163,8 +160,7 @@ class MLMMaskGenerator(keras.layers.Layer):
         )
 
         if not input_is_ragged:
-            # If inputs is a Tensor not RaggedTensor, we format the masked
-            # output to be a Tensor.
+            # If we converted the input from dense to ragged, convert back.
             tokens = tokens.to_tensor()
 
         mask_weights = tf.ones_like(mask_positions, self.compute_dtype)
