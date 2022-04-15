@@ -132,6 +132,9 @@ class Tokenizer(keras.layers.Layer):
 
     def recursive_utf8_decoder(self, inputs, *args, **kwargs):
         """Recursively Decodes String to list of string with 'utf-8' encoding."""
+        if str(type(inputs)) == "<class 'bytes'>":
+            inputs = inputs.decode('utf-8')
+            return inputs
         if str(type(inputs[0])) == "<class 'bytes'>":
             for i in range(len(inputs)):
                 inputs[i] = inputs[i].decode('utf-8')
