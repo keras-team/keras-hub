@@ -130,9 +130,19 @@ class Tokenizer(keras.layers.Layer):
                 f"Unsupported tokenizer mode. Received: mode={mode}"
             )
 
+    def recursive_utf8_decoder(self, inputs, *args, **kwargs):
+        """Recursively Decodes String to list of string with 'utf-8' encoding."""
+        if str(type(inputs[0])) == "<class 'bytes'>":
+            for i in range(len(inputs)):
+                inputs[i] = inputs[i].decode('utf-8')
+                return inputs
+        else:
+            for i in range(len(inputs)):
+               inputs[i] = self.recursive_utf8_decoder(inputs[i], *args, **kwargs)
+
+
     def detokenize_to_strings(self, inputs, *args, **kwargs):
         """Transform detokenized inputs to strings.
-
         Args:
             inputs: Input tensor, or dict/list/tuple of input tensors.
             *args: Additional positional arguments.
@@ -148,6 +158,5 @@ class Tokenizer(keras.layers.Layer):
                 return detokenized_input.decode("utf-8")
             else:
                 detokenized_input = detokenized_input.numpy().tolist()
-        for i in range(len(detokenized_input)):
-            detokenized_input[i] = detokenized_input[i].decode("utf-8")
+        map(self.recursive_utf8_decoder, detokenized_input)
         return detokenized_input
