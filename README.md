@@ -4,8 +4,9 @@
 ![Tensorflow](https://img.shields.io/badge/tensorflow-v2.5.0+-success.svg)
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-nlp/issues)
 
-KerasNLP is a repository of modular building blocks (layers, metrics, losses).
-Engineers working with applied natural language processing can leverage it to
+KerasNLP is a repository of modular building blocks (e.g. layers, metrics, losses)
+to support modern Natural Language Processing (NLP) workflows.
+Engineers working with applied NLP can leverage it to
 rapidly assemble training and inference pipelines that are both state-of-the-art
 and production-grade. Common use cases for application include sentiment
 analysis, named entity recognition, text generation, etc.
