@@ -200,6 +200,43 @@ class ByteTokenizerTest(tf.test.TestCase):
         model_output = model(input_data)
         self.assertAllEqual(model_output, ["hello", "fun", "▀▁▂▃"])
 
+    def test_detokenizing_to_list_of_strings_dense(self):
+        input_data = tf.constant(
+            ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
+        )
+        tokenizer = ByteTokenizer()
+        outputs = tokenizer.detokenize_to_strings(
+            tokenizer.tokenize(input_data)
+        )
+        self.assertAllEqual(
+            outputs,
+            ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"],
+        )
+
+    def test_detokenizing_to_list_of_strings_scalar(self):
+        input_data = "▀▁▂▃"
+        tokenizer = ByteTokenizer()
+        outputs = tokenizer.detokenize_to_strings(
+            tokenizer.tokenize(input_data)
+        )
+        self.assertAllEqual(
+            outputs,
+            "▀▁▂▃",
+        )
+
+    def test_detokenizing_to_list_of_strings_ragged(self):
+        input_data = tf.ragged.constant(
+            [["ninja", "samurai"], ["▀▁▂▃", "keras", "tensorflow"]]
+        )
+        tokenizer = ByteTokenizer()
+        outputs = tokenizer.detokenize_to_strings(
+            tokenizer.tokenize(input_data)
+        )
+        self.assertAllEqual(
+            outputs,
+            [["ninja", "samurai"], ["▀▁▂▃", "keras", "tensorflow"]],
+        )
+
     def test_load_model_with_config(self):
         input_data = tf.constant(["hello"])
 

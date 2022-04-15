@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
@@ -250,7 +249,6 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         )
 
     def test_detokenizing_to_list_of_strings_ragged(self):
-        np.seterr(all="ignore")
         input_data = tf.ragged.constant(
             [["ninja", "samurai"], ["▀▁▂▃", "keras", "tensorflow"]]
         )
