@@ -60,7 +60,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
     >>> tokenizer(inputs)
-    <tf.RaggedTensor [[98, 111, 111, 107], 
+    <tf.RaggedTensor [[98, 111, 111, 107],
         [2346, 2369, 2360, 2381, 2340, 2325],
         [1705, 1578, 1575, 1576]]>
 
@@ -81,7 +81,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     >>> ds = ds.map(tokenizer)
     >>> ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(3))
     >>> ds.take(1).get_single_element()
-    <tf.RaggedTensor [[98, 111, 111, 107], 
+    <tf.RaggedTensor [[98, 111, 111, 107],
         [2346, 2369, 2360, 2381, 2340, 2325],
         [1705, 1578, 1575, 1576]]>
 
@@ -91,7 +91,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
     >>> ds = ds.batch(3).map(tokenizer)
     >>> ds.take(1).get_single_element()
-    <tf.RaggedTensor [[98, 111, 111, 107], 
+    <tf.RaggedTensor [[98, 111, 111, 107],
         [2346, 2369, 2360, 2381, 2340, 2325],
         [1705, 1578, 1575, 1576]]>
 
