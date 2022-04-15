@@ -277,15 +277,24 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             ['ninja', 'samurai', '▀▁▂▃', 'keras', 'tensorflow'],
         )
 
+    def test_detokenizing_to_list_of_strings_scalar(self):
+        input_data = '▀▁▂▃'
+        tokenizer = UnicodeCharacterTokenizer()
+        outputs = tokenizer.detokenize_to_strings(tokenizer.tokenize(input_data))
+        self.assertAllEqual(
+            outputs,
+            '▀▁▂▃',
+        )
+
     def test_detokenizing_to_list_of_strings_ragged(self):
-        input_data = tf.constant(
-            ["ninja", "samurai"], ["▀▁▂▃", "keras", "tensorflow"]
+        input_data = tf.ragged.constant(
+            [["ninja", "samurai"], ["▀▁▂▃", "keras", "tensorflow"]]
         )
         tokenizer = UnicodeCharacterTokenizer()
         outputs = tokenizer.detokenize_to_strings(tokenizer.tokenize(input_data))
         self.assertAllEqual(
             outputs,
-            ['ninja', 'samurai', '▀▁▂▃', 'keras', 'tensorflow'],
+            [["ninja", "samurai"], ["▀▁▂▃", "keras", "tensorflow"]],
         )
 
     def test_load_model_with_config(self):
