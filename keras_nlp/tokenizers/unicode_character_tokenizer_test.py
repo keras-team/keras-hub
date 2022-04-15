@@ -109,63 +109,21 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             )
 
     def test_lowercase(self):
-        input_data = tf.constant(["NiNJaS aNd sAmUraI"])
+        input_data = tf.constant(["NiNJaS"])
         tokenizer = UnicodeCharacterTokenizer()
         call_output = tokenizer(input_data)
         self.assertAllEqual(
             call_output,
-            [
-                [
-                    110,
-                    105,
-                    110,
-                    106,
-                    97,
-                    115,
-                    32,
-                    97,
-                    110,
-                    100,
-                    32,
-                    115,
-                    97,
-                    109,
-                    117,
-                    114,
-                    97,
-                    105,
-                ]
-            ],
+            [[110, 105, 110, 106, 97, 115]],
         )
 
     def test_skip_lowercase(self):
-        input_data = tf.constant(["NiNJaS aNd sAmUraI"])
+        input_data = tf.constant(["NiNJaS"])
         tokenizer = UnicodeCharacterTokenizer(lowercase=False)
         call_output = tokenizer(input_data)
         self.assertAllEqual(
             call_output,
-            [
-                [
-                    78,
-                    105,
-                    78,
-                    74,
-                    97,
-                    83,
-                    32,
-                    97,
-                    78,
-                    100,
-                    32,
-                    115,
-                    65,
-                    109,
-                    85,
-                    114,
-                    97,
-                    73,
-                ]
-            ],
+            [[78, 105, 78, 74, 97, 83]],
         )
 
     def test_tokenize_first_batch_second(self):
