@@ -14,4 +14,7 @@
 
 from keras_nlp.tokenizers.byte_tokenizer import ByteTokenizer
 from keras_nlp.tokenizers.tokenizer import Tokenizer
+from keras_nlp.tokenizers.unicode_character_tokenizer import (
+    UnicodeCharacterTokenizer,
+)
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
