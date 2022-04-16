@@ -22,18 +22,17 @@ import keras_nlp.layers
 class TokenAndPositionEmbedding(keras.layers.Layer):
     """A layer which sums a token and position embedding.
 
-    This class assumes that in the input tensor, the last dimension corresponds
-    to the features, and the dimension before the last corresponds to the
-    sequence.
+    This layer assumes that the last dimension in the input corresponds
+    to the sequence dimension.
 
     Args:
-        `vocabulary_size`: The size of the vocabulary (should be no larger
+        vocabulary_size: The size of the vocabulary (should be no larger
             than 999)
-        `max_length`: The maximum length of input sequence
-        `embedding_dim`: The output dimension of the embedding layer
-        `embeddings_initializer`: The initializer to use for the Embedding
+        max_length: The maximum length of input sequence
+        embedding_dim: The output dimension of the embedding layer
+        embeddings_initializer: The initializer to use for the Embedding
             Layers
-        `mask_zero`: Boolean, whether or not the input value 0 is a special
+        mask_zero: Boolean, whether or not the input value 0 is a special
             "padding" value that should be masked out.
             This is useful when using recurrent layers which may take variable
             length input. If this is True, then all subsequent layers in the
