@@ -108,8 +108,8 @@ class RougeL(keras.metrics.Metric):
     >>> rouge_l(references, hypotheses)
     <tf.Tensor: shape=(), dtype=float32, numpy=0.4>
 
-    4. Modify the precision vs recall importance by specifying the `alpha`
-    parameter.
+    4. Modify the precision vs recall importance (for calculating F1-score) by
+    specifying the `alpha` parameter.
     >>> rouge_l = RougeL(name="rouge_l", alpha=0.7)
     >>> y_true = tf.ragged.constant([[1, 2, 3], [5, 6, 7, 8]], dtype=tf.int32)
     >>> y_pred = tf.ragged.constant([[1], [5, 6, 10, 10, 10]], dtype=tf.int32)
