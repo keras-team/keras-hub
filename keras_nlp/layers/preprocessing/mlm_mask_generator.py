@@ -73,32 +73,16 @@ class MLMMaskGenerator(keras.layers.Layer):
     Examples:
 
     Basic usage.
-    >>> masker = keras_nlp.preprocessing.MLMMaskGenerator( \
-    ...     vocaublary_size=10, mask_selection_rate=0.2, mask_token_id=0)
+    >>> masker = keras_nlp.layers.preprocessing.MLMMaskGenerator( \
+            vocabulary_size=10, mask_selection_rate=0.2, mask_token_id=0, \
+            mask_selection_length=5)
     >>> masker(tf.constant([1, 2, 3, 4, 5]))
-    {'tokens': <tf.Tensor: shape=(5,), dtype=int32,
-        numpy=array([1, 2, 3, 4, 0], dtype=int32)>,
-    'mask_positions': <tf.Tensor: shape=(5,), dtype=int64,
-        numpy=array([4, 0, 0, 0, 0])>,
-    'mask_ids': <tf.Tensor: shape=(5,), dtype=int32,
-        numpy=array([5, 0, 0, 0, 0], dtype=int32)>,
-    'mask_weights': <tf.Tensor: shape=(1, 5), dtype=int64,
-        numpy=array([[1, 0, 0, 0, 0]])>}
 
     Ragged Input:
-    >>> masker = keras_nlp.preprocessing.MLMMaskGenerator( \
-    ...     vocaublary_size=10, mask_selection_rate=0.2, mask_token_id=0)
+    >>> masker = keras_nlp.layers.preprocessing.MLMMaskGenerator( \
+            vocabulary_size=10, mask_selection_rate=0.5, mask_token_id=0, \
+            mask_selection_length=5)
     >>> masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
-    {'tokens': <tf.RaggedTensor [[1, 4], [0, 2, 3, 0]]>,
-    'mask_positions': <tf.Tensor: shape=(2, 5), dtype=int64, numpy=
-        array([[1, 0, 0, 0, 0],
-               [0, 3, 0, 0, 0]])>,
-    'mask_ids': <tf.Tensor: shape=(2, 5), dtype=int32, numpy=
-        array([[2, 0, 0, 0, 0],
-               [1, 4, 0, 0, 0]], dtype=int32)>,
-    'mask_weights': <tf.Tensor: shape=(2, 5), dtype=int64, numpy=
-        array([[1, 0, 0, 0, 0],
-               [1, 1, 0, 0, 0]])>}
     """
 
     def __init__(
