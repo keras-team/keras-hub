@@ -64,7 +64,9 @@ class PositionEmbedding(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
         if max_length is None:
-            raise ValueError("`max_length` must be an Integer, not `None`.")
+            raise ValueError(
+                "`max_length` must be an Integer, received `None`."
+            )
         self.max_length = int(max_length)
         self.initializer = keras.initializers.get(initializer)
 
