@@ -40,6 +40,8 @@ python3 examples/bert/run_pretraining.py \
     --input_files $OUTPUT_DIR/pretraining-data/ \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --bert_config_file examples/bert/configs/bert_tiny.json \
+    --num_warmup_steps 20 \
+    --num_train_steps 200 \
     --saved_model_output $OUTPUT_DIR/model/
 
 # Run finetuning.
