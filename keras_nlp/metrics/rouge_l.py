@@ -40,6 +40,73 @@ class RougeL(keras.metrics.Metric):
 
     Examples:
 
+    1. Calculate RougeL (F1 Score) by calling `update_state()` and `result()`.
+    1.1. `mask_token_ids` not provided.
+    >>> tf.random.set_seed(42)
+    >>> rouge_l = keras_nlp.metrics.RougeL(name="rouge_l")
+    >>> references = tf.random.uniform(
+    ...     shape=[2,5], maxval=10, dtype=tf.int32, seed=42)
+    >>> hypotheses = tf.random.uniform(
+    ...     shape=[2,5], maxval=10, dtype=tf.int32, seed=42)
+    >>> rouge_l.update_state(references, hypotheses)
+    >>> rouge_l.result()
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.40000004
+
+    1.2. `mask_token_ids` provided.
+    >>> tf.random.set_seed(42)
+    >>> rouge_l = keras_nlp.metrics.RougeL(
+    ...     name="rouge_l", mask_token_ids=[0, 1])
+    >>> references = tf.random.uniform(
+    ...     shape=[2,5], maxval=10, dtype=tf.int32, seed=42)
+    >>> hypotheses = tf.random.uniform(
+    ...     shape=[2,5], maxval=10, dtype=tf.int32, seed=42)
+    >>> rouge_l.update_state(references, hypotheses)
+    >>> rouge_l.result()
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.47619048>
+
+    1.3. tf.RaggedTensor as input, and `mask_token_ids` not provided.
+    >>> rouge_l = keras_nlp.metrics.RougeL(name="rouge_l")
+    >>> references = tf.ragged.constant(
+    ...     [[3, 4, 5], [5, 6, 7, 8, 9]], dtype=tf.int32)
+    >>> hypotheses = tf.ragged.constant(
+    ...     [[1, 4, 3, 2, 5], [5, 6]], dtype=tf.int32)
+    >>> rouge_l.update_state(references, hypotheses)
+    >>> rouge_l.result()
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.53571427>
+
+    1.4. tf.RaggedTensor as input, and `mask_token_ids` provided.
+    >>> rouge_l = keras_nlp.metrics.RougeL(
+    ...     name="rouge_l", mask_token_ids=[1, 5])
+    >>> references = tf.ragged.constant(
+    ...     [[3, 4, 5], [5, 6, 7, 8, 9]], dtype=tf.int32)
+    >>> hypotheses = tf.ragged.constant(
+    ...     [[1, 4, 3, 2, 5], [5, 6]], dtype=tf.int32)
+    >>> rouge_l.update_state(references, hypotheses)
+    >>> rouge_l.result()
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.57142854>
+
+    2. Calculate ROUGE-L directly. This has the same functionality as above.
+    >>> tf.random.set_seed(42)
+    >>> rouge_l = keras_nlp.metrics.RougeL(
+    ...     name="rouge_l", mask_token_ids=[0, 1])
+    >>> references = tf.random.uniform(
+    ...     shape=[2,5], maxval=10, dtype=tf.int32, seed=42)
+    >>> hypotheses = tf.random.uniform(
+    ...     shape=[2,5], maxval=10, dtype=tf.int32, seed=42)
+    >>> rouge_l(references, hypotheses)
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.47619048>
+
+    3. Traditionally, the ROUGE-L metric calculates the F1-score. However, if
+    the user wants the precision, this is how it can be done:
+    >>> tf.random.set_seed(42)
+    >>> rouge_l = keras_nlp.metrics.RougeL(
+    ...     name="rouge_l", metric_type="precision")
+    >>> references = tf.random.uniform(
+    ...     shape=[2,5], maxval=10, dtype=tf.int32, seed=42)
+    >>> hypotheses = tf.random.uniform(
+    ...     shape=[2,5], maxval=10, dtype=tf.int32, seed=42)
+    >>> rouge_l(references, hypotheses)
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.4>
     """
 
     def __init__(
