@@ -143,8 +143,8 @@ class RougeL(keras.metrics.Metric):
         config = super().get_config()
         config.update(
             {
-                "alpha": 0.5,
-                "metric_type": "f1_score",
+                "alpha": self.alpha,
+                "metric_type": self.metric_type,
                 "mask_token_id": self.mask_token_id,
             }
         )
@@ -155,12 +155,12 @@ def rouge_l(y_true, y_pred, alpha=0.5):
     """
     Computes the ROUGE-L score.
     Args:
-        y_true (_type_): tf.RaggedTensor. The reference summaries.
-        y_pred (_type_): tf.RaggedTensor. The generated summaries.
-        alpha (float, optional): float. Defaults to 0.5. `alpha` is used as the
-            weight for the harmonic mean of precision and recall. A value of 0
-            means recall is more important and a value of 1 means precision is
-            more important (same behaviour as
+        y_true: tf.RaggedTensor. The reference summaries.
+        y_pred: tf.RaggedTensor. The generated summaries.
+        alpha: float. Defaults to 0.5. `alpha` is used as the weight for the
+            harmonic mean of precision and recall. A value of 0 means recall is
+            more important and a value of 1 means precision is more important
+            (same behaviour as
             https://www.tensorflow.org/text/api_docs/python/text/metrics/rouge_l).
 
     Returns:
