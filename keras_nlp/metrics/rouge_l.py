@@ -32,13 +32,7 @@ class RougeL(keras.metrics.Metric):
             https://www.tensorflow.org/text/api_docs/python/text/metrics/rouge_l).
         metric_type: string. One of "precision", "recall", "f1_score". Defaults
             to "f1_score".
-        mask_token_id: int. ID of the token to be masked. If provided, the mask
-            is computed for this class. Note that if this field is provided, and
-            if the `sample_weight` field in `update_state()` is also provided,
-            we will compute the final `sample_weight` as the element-wise
-            product of the mask and the `sample_weight`. In the product, any
-            value >= 1 will be treated as True, and False, otherwise, for
-            masking.
+        mask_token_ids: list of integers. IDs of the tokens to be masked.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
                not specified, it defaults to tf.float32.
         name: string. Name of the metric instance.
@@ -52,7 +46,7 @@ class RougeL(keras.metrics.Metric):
         self,
         alpha=0.5,
         metric_type="f1_score",
-        mask_token_id=None,
+        mask_token_ids=None,
         dtype=None,
         name="rouge_l",
         **kwargs,
@@ -65,7 +59,7 @@ class RougeL(keras.metrics.Metric):
                 f"Received: dtype={dtype}"
             )
 
-        if metric_type not in ["precision", "recall", "f1_score"]:
+        if metric_type not in ("precision", "recall", "f1_score"):
             raise ValueError(
                 "`metric_type` must be one of 'precision', 'recall', "
                 "'f1_score'. Received: metric_type={metric_type}"
@@ -73,7 +67,7 @@ class RougeL(keras.metrics.Metric):
 
         self.alpha = alpha
         self.metric_type = metric_type
-        self.mask_token_id = mask_token_id
+        self.mask_token_ids = mask_token_ids
 
         self._rouge_l_score = self.add_weight(
             name="rouge_l_score",
@@ -95,27 +89,25 @@ class RougeL(keras.metrics.Metric):
         if not isinstance(y_pred, tf.RaggedTensor):
             y_pred = tf.RaggedTensor.from_tensor(y_pred)
 
-        if sample_weight is not None:
-            sample_weight = tf.cast(sample_weight, self.dtype)
-
         batch_size = tf.cast(y_true.nrows(), self.dtype)
 
-        if self.mask_token_id is not None:
-            mask = tf.cast(
-                tf.math.logical_not(tf.equal(y_true, self.mask_token_id)),
-                self.dtype,
-            )
-            if sample_weight is None:
-                sample_weight = mask
-            else:
-                sample_weight = tf.multiply(mask, sample_weight)
+        y_true_mask = tf.cast(tf.ones_like(y_true), tf.bool)
+        y_pred_mask = tf.cast(tf.ones_like(y_pred), tf.bool)
 
-        if sample_weight is not None:
-            sample_weight = tf.cast(sample_weight, tf.bool)
+        if self.mask_token_ids is not None:
+            for mask_token_id in self.mask_token_ids:
+                y_true_mask = tf.logical_and(
+                    y_true_mask,
+                    tf.math.logical_not(tf.equal(y_true, mask_token_id)),
+                )
+                y_pred_mask = tf.logical_and(
+                    y_pred_mask,
+                    tf.math.logical_not(tf.equal(y_pred, mask_token_id)),
+                )
 
             # Apply mask to both tensors.
-            y_true = tf.ragged.boolean_mask(y_true, sample_weight)
-            y_pred = tf.ragged.boolean_mask(y_pred, sample_weight)
+            y_true = tf.ragged.boolean_mask(y_true, y_true_mask)
+            y_pred = tf.ragged.boolean_mask(y_pred, y_pred_mask)
 
         f1_scores, precisions, recalls = rouge_l(
             y_true, y_pred, alpha=self.alpha
@@ -145,7 +137,7 @@ class RougeL(keras.metrics.Metric):
             {
                 "alpha": self.alpha,
                 "metric_type": self.metric_type,
-                "mask_token_id": self.mask_token_id,
+                "mask_token_ids": self.mask_token_ids,
             }
         )
         return config
