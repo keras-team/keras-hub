@@ -49,6 +49,7 @@ setup(
             "pytest",
             "pytest-cov",
             "rouge-score",
+            "sentencepiece",
         ],
         "examples": [
             "datasets",  # For GLUE in BERT example.
