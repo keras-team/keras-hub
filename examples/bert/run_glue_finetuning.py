@@ -21,6 +21,8 @@ import tensorflow_text as tftext
 from absl import app
 from absl import flags
 from tensorflow import keras
+import keras_tuner as kt
+import time
 
 FLAGS = flags.FLAGS
 
@@ -63,12 +65,6 @@ flags.DEFINE_bool(
     True,
     "Whether to run evaluation on the validation set for a given task.",
 )
-
-flags.DEFINE_integer("batch_size", 32, "The batch size.")
-
-flags.DEFINE_integer("epochs", 3, "The number of training epochs.")
-
-flags.DEFINE_float("learning_rate", 2e-5, "The initial learning rate for Adam.")
 
 flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
 
@@ -200,28 +196,60 @@ def main(_):
 
     # Read and preprocess GLUE task data.
     train_ds, test_ds, validation_ds = load_data(FLAGS.task_name)
-    train_ds = train_ds.batch(FLAGS.batch_size).map(
-        preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
-    )
-    validation_ds = validation_ds.batch(FLAGS.batch_size).map(
-        preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
-    )
-    test_ds = test_ds.batch(FLAGS.batch_size).map(
-        preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
-    )
 
     finetuning_model = BertClassificationFinetuner(
-        bert_model=model,
-        hidden_size=bert_config["hidden_size"],
-        num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
+            bert_model=model,
+            hidden_size=bert_config["hidden_size"],
+            num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
+        )
+
+
+    def build_model(hp):
+        batch_size = hp.Choice("batch_size", [16, 32])
+        train_ds = train_ds.batch(batch_size).map(
+            preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
+        )
+        validation_ds = validation_ds.batch(batch_size).map(
+            preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
+        )
+
+        finetuning_model.compile(
+            optimizer=keras.optimizers.Adam(
+                learning_rate=hp.Choice("lr", [5e-5, 3e-5, 2e-5])),
+            loss="sparse_categorical_crossentropy",
+            metrics=["accuracy"],
+        )
+        finetuning_model.fit(
+            train_ds,
+            epochs=hp.Choice("epochs", [2, 3, 4]),
+            validation_data=validation_ds
+        )
+        return finetuning_model
+
+    tuner = kt.RandomSearch(
+        hypermodel = build_model,
+        objective="val_accuracy",
+        max_trials=3,
+        executions_per_trial=3,
+        overwrite=True,
+        directory=f"{time.time()}",
+        project_name="glue_finetuning_hp",
     )
-    finetuning_model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=FLAGS.learning_rate),
-        loss="sparse_categorical_crossentropy",
-        metrics=["accuracy"],
-    )
-    finetuning_model.fit(
-        train_ds, epochs=FLAGS.epochs, validation_data=validation_ds
+
+    tuner.search(train_ds,
+        epochs = 3,
+        validation_data = validation_ds
+        )
+
+    best_hp = tuner.get_best_hyperparameters()[0]
+    finetuning_model = tuner.get_best_models()[0]
+
+    batch_size = best_hp.get("batch_size")
+    learning_rate = best_hp.get("lr")
+    epochs = best_hp.get("epoch")
+
+    test_ds = test_ds.batch(batch_size).map(
+        preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
 
     if FLAGS.do_evaluation:

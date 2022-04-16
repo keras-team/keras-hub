@@ -53,7 +53,7 @@ setup(
             "datasets",  # For GLUE in BERT example.
             "nltk",
             "wikiextractor",
-            "keras-tuner"
+            "keras-tuner",
         ],
     },
     classifiers=[
