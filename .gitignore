@@ -16,5 +16,8 @@ dist/
 # Windows-specific build files
 build/
 
+# Pycharm files
+.idea/
+
 venv/
 
