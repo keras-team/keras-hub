@@ -83,7 +83,7 @@ class RougeL(keras.metrics.Metric):
     ...     [[1, 4, 3, 2, 5], [5, 6]], dtype=tf.int32)
     >>> rouge_l.update_state(references, hypotheses)
     >>> rouge_l.result()
-    <tf.Tensor: shape=(), dtype=float32, numpy=0.57142854>
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.4>
 
     2. Calculate ROUGE-L directly. This has the same functionality as above.
     >>> tf.random.set_seed(42)
@@ -227,6 +227,6 @@ def rouge_l(y_true, y_pred, alpha=0.5):
             precisions and recalls are returned for every sample.
     """
     f1_scores, precisions, recalls = tf_text.metrics.rouge_l(
-        y_true, y_pred, alpha=alpha
+        y_pred, y_true, alpha=alpha
     )
     return f1_scores, precisions, recalls

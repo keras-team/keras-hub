@@ -76,7 +76,7 @@ class RougeLTest(tf.test.TestCase):
         )
 
         rouge_l_val = rouge_l(y_true, y_pred)
-        self.assertAlmostEqual(rouge_l_val.numpy(), 0.8333, delta=1e-3)
+        self.assertAlmostEqual(rouge_l_val.numpy(), 0.45, delta=1e-3)
 
     def test_recall(self):
         rouge_l = RougeL(mask_token_ids=[0, 1], metric_type="recall")
@@ -88,7 +88,15 @@ class RougeLTest(tf.test.TestCase):
         )
 
         rouge_l_val = rouge_l(y_true, y_pred)
-        self.assertAlmostEqual(rouge_l_val.numpy(), 0.45, delta=1e-3)
+        self.assertAlmostEqual(rouge_l_val.numpy(), 0.8333, delta=1e-3)
+
+    def test_output_with_alpha(self):
+        rouge_l = RougeL(alpha=0.7)
+        y_true = tf.constant([[1, 2, 3, 4, 5], [5, 6, 7, 8, 9]], dtype=tf.int32)
+        y_pred = tf.constant([[1, 2, 3, 2, 5], [5, 6, 8, 8, 8]], dtype=tf.int32)
+
+        rouge_l_val = rouge_l(y_true, y_pred)
+        self.assertAlmostEqual(rouge_l_val.numpy(), 0.70, delta=1e-3)
 
     def test_two_inputs_from_logits(self):
         rouge_l = RougeL(mask_token_ids=[0, 1])
