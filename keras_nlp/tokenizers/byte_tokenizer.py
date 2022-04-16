@@ -86,8 +86,8 @@ class ByteTokenizer(tokenizer.Tokenizer):
     >>> inputs = tf.constant(["hello"])
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(sequence_length=8)
     >>> tokenizer(inputs)
-    <tf.Tensor: shape=(1, 8), dtype=int32,
-                numpy=array([[104, 101, 108, 108, 111,   0,   0,   0]])>
+    <tf.Tensor: shape=(1, 8), dtype=int32, numpy=
+    array([[104, 101, 108, 108, 111,   0,   0,   0]], dtype=int32)>
 
     Tokenize first, then batch the dataset up.
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
@@ -97,7 +97,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
     >>> ds.take(1).get_single_element()
     <tf.RaggedTensor [[104, 101, 108, 108, 111], [102, 117, 110]]>
 
-    Batch up the inputs and then tokenize.
+    Batch the inputs and then tokenize.
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
     >>> ds = tf.data.Dataset.from_tensor_slices(["hello", "fun"])
     >>> ds = ds.batch(2).map(tokenizer)
@@ -112,16 +112,16 @@ class ByteTokenizer(tokenizer.Tokenizer):
     >>> ds.take(1).get_single_element()
     <tf.Tensor: shape=(2, 5), dtype=int32, numpy=
     array([[104, 101, 108, 108, 111],
-        [102, 117, 110,   0,   0]])>
+           [102, 117, 110,   0,   0]], dtype=int32)>
 
-    Batch up the inputs and then tokenize (`sequence_length` provided).
+    Batch the inputs and then tokenize (`sequence_length` provided).
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(sequence_length=5)
     >>> ds = tf.data.Dataset.from_tensor_slices(["hello", "fun"])
     >>> ds = ds.batch(2).map(tokenizer)
     >>> ds.take(1).get_single_element()
     <tf.Tensor: shape=(2, 5), dtype=int32, numpy=
     array([[104, 101, 108, 108, 111],
-        [102, 117, 110,   0,   0]])>
+           [102, 117, 110,   0,   0]], dtype=int32)>
 
     Detokenization.
     >>> inputs = tf.constant([104, 101, 108, 108, 111], dtype=tf.int32)

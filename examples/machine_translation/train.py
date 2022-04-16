@@ -77,9 +77,12 @@ def run_training(model, train_ds, val_ds):
 
 
 def main(_):
-    (train_ds, val_ds, test_ds), (
-        eng_tokenizer,
-        spa_tokenizer,
+    (
+        (train_ds, val_ds, test_ds),
+        (
+            eng_tokenizer,
+            spa_tokenizer,
+        ),
     ) = get_dataset_and_tokenizer(
         FLAGS.sequence_length, FLAGS.vocab_size, FLAGS.batch_size
     )
