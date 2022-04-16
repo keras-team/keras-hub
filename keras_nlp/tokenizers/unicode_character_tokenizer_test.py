@@ -248,7 +248,6 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         )
 
     def test_config(self):
-
         tokenizer = UnicodeCharacterTokenizer(
             name="unicode_character_tokenizer_config_gen",
             lowercase=False,
@@ -271,7 +270,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         }
         self.assertEqual(tokenizer.get_config(), exp_config)
 
-        tokenizerWithDifferentInputEncoding = UnicodeCharacterTokenizer(
+        tokenize_different_encoding = UnicodeCharacterTokenizer(
             name="unicode_character_tokenizer_config_gen",
             lowercase=False,
             sequence_length=8,
@@ -280,7 +279,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             input_encoding="UTF-16",
             output_encoding="UTF-16",
         )
-        exp_configWithDifferentInputEncoding = {
+        exp_config_different_encoding = {
             "dtype": "int32",
             "errors": "ignore",
             "lowercase": False,
@@ -293,8 +292,8 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             "trainable": True,
         }
         self.assertEqual(
-            tokenizerWithDifferentInputEncoding.get_config(),
-            exp_configWithDifferentInputEncoding,
+            tokenize_different_encoding.get_config(),
+            exp_config_different_encoding,
         )
 
     def test_saving(self):
