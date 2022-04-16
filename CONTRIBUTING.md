@@ -48,16 +48,24 @@ Once the pull request is approved, a team member will take care of merging.
 ## Setup environment
 
 Setting up your KerasNLP development environment requires you to fork the
-KerasNLP repository, clone the repository, install dependencies, and execute
-`python setup.py develop`.
+KerasNLP repository, clone the repository, create a virtual environment, and install dependencies.
 
 You can achieve this by running the following commands:
 
 ```shell
 gh repo fork keras-team/keras-nlp --clone --remote
 cd keras-nlp
+
+(on Windows)
+python -m venv ./venv
+venv/Scripts/activate
+
+(on Debian)
+sudo apt install python3.8-venv
+python -m venv ./venv
+source venv/bin/activate
+
 pip install ".[tests]"
-python setup.py develop
 ```
 
 The first line relies on having an installation of [the GitHub CLI](https://github.com/cli/cli).
