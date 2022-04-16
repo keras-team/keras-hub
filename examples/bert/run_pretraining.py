@@ -63,14 +63,14 @@ flags.DEFINE_integer(
 
 flags.DEFINE_integer(
     "num_warmup_steps",
-    1e4,
+    10000,
     "The number of warmup steps during which the learning rate will increase "
     "till a threshold.",
 )
 
 flags.DEFINE_integer(
     "num_train_steps",
-    1e6,
+    1000000,
     "The total fixed number of steps till which the model will train.",
 )
 
@@ -326,11 +326,14 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
         is_warmup = step < warmup
 
         # Linear Warmup will be implemented if current step is less than
-        # `num_warmup_steps`.
-        if is_warmup:
-            return peak_lr * (step / warmup)
-        # else Linear Decay will be implemented
-        return max(0.0, peak_lr * (training - step) / (training - warmup))
+        # `num_warmup_steps` else Linear Decay will be implemented.
+        return tf.cond(
+            is_warmup,
+            lambda: peak_lr * (step / warmup),
+            lambda: tf.math.maximum(
+                0.0, peak_lr * (training - step) / (training - warmup)
+            ),
+        )
 
 
 def decode_record(record):
