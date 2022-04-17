@@ -34,7 +34,7 @@ class RougeL(keras.metrics.Metric):
             to "f1_score".
         mask_token_ids: list of integers. IDs of the tokens to be masked.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
-               not specified, it defaults to tf.float32.
+            not specified, it defaults to tf.float32.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
 
