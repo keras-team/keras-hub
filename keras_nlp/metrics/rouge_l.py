@@ -26,9 +26,9 @@ class RougeL(keras.metrics.Metric):
 
     Args:
         alpha: float. `alpha` is used as the weight for the
-            harmonic mean of precision and recall. A value of 0 means recall is
-            more important and a value of 1 means precision is more important
-            (same behaviour as
+            harmonic mean of precision and recall  (for calculating F1-score). A
+            value of 0 means recall is more important and a value of 1 means
+            precision is more important (same behaviour as
             https://www.tensorflow.org/text/api_docs/python/text/metrics/rouge_l).
         metric_type: string. One of "precision", "recall", "f1_score". Defaults
             to "f1_score".
@@ -227,9 +227,9 @@ def rouge_l(y_true, y_pred, alpha=0.5):
         y_true: tf.RaggedTensor. The reference summaries.
         y_pred: tf.RaggedTensor. The generated summaries.
         alpha: float. Defaults to 0.5. `alpha` is used as the weight for the
-            harmonic mean of precision and recall. A value of 0 means recall is
-            more important and a value of 1 means precision is more important
-            (same behaviour as
+            harmonic mean of precision and recall (for calculating F1-score). A
+            value of 0 means recall is more important and a value of 1 means
+            precision is more important (same behaviour as
             https://www.tensorflow.org/text/api_docs/python/text/metrics/rouge_l).
 
     Returns:
