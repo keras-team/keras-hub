@@ -138,8 +138,8 @@ class RougeL(keras.metrics.Metric):
 
         if metric_type not in ("precision", "recall", "f1_score"):
             raise ValueError(
-                "`metric_type` must be one of 'precision', 'recall', "
-                "'f1_score'. Received: metric_type={metric_type}"
+                '`metric_type` must be one of "precision", "recall", '
+                f'"f1_score". Received: metric_type={metric_type}'
             )
 
         self.alpha = alpha
