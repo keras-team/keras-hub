@@ -26,12 +26,15 @@ development environment and run the unit tests. This is covered in section
 ### Step 3. Create a pull request
 
 Once the change is ready, open a pull request from your branch in your fork to
-the master branch in [keras-team/keras-nlp](https://github.com/keras-team/keras-nlp).
+the master branch in 
+[keras-team/keras-nlp](https://github.com/keras-team/keras-nlp).
 
 ### Step 4. Sign the Contributor License Agreement
 
 After creating the pull request, you will need to sign the Google CLA agreement.
-The agreement can be foiund at [https://cla.developers.google.com/clas](https://cla.developers.google.com/clas).
+The agreement can be found at
+[https://cla.developers.google.com/clas](https://cla.developers.google.com/clas)
+.
 
 ### Step 5. Code review
 
@@ -47,28 +50,24 @@ Once the pull request is approved, a team member will take care of merging.
 
 ## Setup environment
 
+Python 3.7 or later is required.
+
 Setting up your KerasNLP development environment requires you to fork the
-KerasNLP repository, clone the repository, create a virtual environment, and install dependencies.
+KerasNLP repository, clone the repository, create a virtual environment, and 
+install dependencies.
 
 You can achieve this by running the following commands:
 
 ```shell
 gh repo fork keras-team/keras-nlp --clone --remote
 cd keras-nlp
-
-(on Windows)
-python -m venv ./venv
-venv/Scripts/activate
-
-(on Debian)
-sudo apt install python3.8-venv
-python -m venv ./venv
-source venv/bin/activate
-
+python -me venv ~/keras-nlp-venv
+source ~/keras-nlp-venv/bin/activate
 pip install ".[tests]"
 ```
 
-The first line relies on having an installation of [the GitHub CLI](https://github.com/cli/cli).
+The first line relies on having an installation of
+[the GitHub CLI](https://github.com/cli/cli).
 
 Following these commands you should be able to run the tests using
 `pytest keras_nlp`. Please report any issues running tests following these
@@ -122,4 +121,5 @@ like - `: invalid option`
 
 ## Community Guidelines
 
-This project follows [Google's Open Source Community Guidelines](https://opensource.google/conduct/).
+This project follows 
+[Google's Open Source Community Guidelines](https://opensource.google/conduct/).
