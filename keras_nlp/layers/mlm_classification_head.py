@@ -22,9 +22,10 @@ class MLMClassificationHead(keras.layers.Layer):
     """Masked Language Model classification head.
 
     This layer takes two inputs:
-     - `inputs`: which should be a tensor of encoded token with shape
+     - `inputs`: which should be a tensor of encoded tokens with shape
             `(batch_size, sequence_length, encoding_dim)`.
-     - `mask_positions`: with shape `(batch_size, masks_per_sequence)`.
+     - `mask_positions`: with be a tensor of integer positions to predict
+            with shape `(batch_size, masks_per_sequence)`.
 
     The token encodings should usually be the last output of an encoder model,
     and mask positions should be the interger positions you would like to
@@ -42,7 +43,7 @@ class MLMClassificationHead(keras.layers.Layer):
         embedding_weights: Optional. The weights of the word embedding used
             to transform input token ids. The transpose of this weight matrix
             will be used to project a token embedding vector to a prediction
-            over all input words, as describe in [1].
+            over all input words, as described in [1].
         inner_activation: The activation function of inner dense layer.
         outer_activation: The activation function for the outputs of the layer.
             Usually either `None` (return logits), or `"softmax"`
