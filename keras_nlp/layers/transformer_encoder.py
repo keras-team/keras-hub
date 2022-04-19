@@ -104,8 +104,12 @@ class TransformerEncoder(keras.layers.Layer):
             bias_initializer=self.bias_initializer,
         )
 
-        self._attention_layernorm = keras.layers.LayerNormalization()
-        self._feedforward_layernorm = keras.layers.LayerNormalization()
+        self._attention_layernorm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+        )
+        self._feedforward_layernorm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+        )
 
         self._attention_dropout = keras.layers.Dropout(rate=self.dropout)
 
