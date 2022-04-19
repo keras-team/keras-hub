@@ -117,9 +117,15 @@ class TransformerDecoder(keras.layers.Layer):
             bias_initializer=self.bias_initializer,
         )
 
-        self._decoder_attention_layernorm = keras.layers.LayerNormalization()
-        self._enc_dec_attention_layernorm = keras.layers.LayerNormalization()
-        self._feedforward_layernorm = keras.layers.LayerNormalization()
+        self._decoder_attention_layernorm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+        )
+        self._enc_dec_attention_layernorm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+        )
+        self._feedforward_layernorm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+        )
 
         self._self_attention_dropout = keras.layers.Dropout(rate=self.dropout)
         self._enc_dec_attentiondropout = keras.layers.Dropout(
