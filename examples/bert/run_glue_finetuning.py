@@ -165,7 +165,7 @@ class BertClassificationFinetuner(keras.Model):
 
 def main(_):
     print(f"Reading input model from {FLAGS.saved_model_input}")
-    model = keras.models.load_model(FLAGS.saved_model_input)
+    model = keras.models.load_model(FLAGS.saved_model_input, compile = False)
 
     vocab = []
     with open(FLAGS.vocab_file, "r") as vocab_file:
@@ -196,6 +196,15 @@ def main(_):
 
     # Read and preprocess GLUE task data.
     train_ds, test_ds, validation_ds = load_data(FLAGS.task_name)
+    train_ds = train_ds.batch(32).map(
+        preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
+    )
+    validation_ds = validation_ds.batch(32).map(
+        preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
+    )
+    test_ds = test_ds.batch(32).map(
+        preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
+    )
 
     finetuning_model = BertClassificationFinetuner(
             bert_model=model,
@@ -203,26 +212,12 @@ def main(_):
             num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
         )
 
-
     def build_model(hp):
-        batch_size = hp.Choice("batch_size", [16, 32])
-        train_ds = train_ds.batch(batch_size).map(
-            preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
-        )
-        validation_ds = validation_ds.batch(batch_size).map(
-            preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
-        )
-
         finetuning_model.compile(
             optimizer=keras.optimizers.Adam(
                 learning_rate=hp.Choice("lr", [5e-5, 3e-5, 2e-5])),
             loss="sparse_categorical_crossentropy",
             metrics=["accuracy"],
-        )
-        finetuning_model.fit(
-            train_ds,
-            epochs=hp.Choice("epochs", [2, 3, 4]),
-            validation_data=validation_ds
         )
         return finetuning_model
 
@@ -230,26 +225,24 @@ def main(_):
         hypermodel = build_model,
         objective="val_accuracy",
         max_trials=3,
-        executions_per_trial=3,
+        executions_per_trial=2,
         overwrite=True,
-        directory=f"{time.time()}",
+        directory=f"tuning_hp_bert",
         project_name="glue_finetuning_hp",
     )
 
     tuner.search(train_ds,
         epochs = 3,
         validation_data = validation_ds
-        )
+    )
 
     best_hp = tuner.get_best_hyperparameters()[0]
     finetuning_model = tuner.get_best_models()[0]
 
-    batch_size = best_hp.get("batch_size")
-    learning_rate = best_hp.get("lr")
-    epochs = best_hp.get("epoch")
-
-    test_ds = test_ds.batch(batch_size).map(
-        preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
+    finetuning_model.fit(
+        train_ds,
+        epochs = 3,
+        validation_data = validation_ds
     )
 
     if FLAGS.do_evaluation:
