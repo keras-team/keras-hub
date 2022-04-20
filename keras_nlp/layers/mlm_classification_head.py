@@ -24,8 +24,8 @@ class MLMClassificationHead(keras.layers.Layer):
     This layer takes two inputs:
      - `inputs`: which should be a tensor of encoded tokens with shape
             `(batch_size, sequence_length, encoding_dim)`.
-     - `mask_positions`: with be a tensor of integer positions to predict
-            with shape `(batch_size, masks_per_sequence)`.
+     - `mask_positions`: which should be a tensor of integer positions to
+            predict with shape `(batch_size, masks_per_sequence)`.
 
     The token encodings should usually be the last output of an encoder model,
     and mask positions should be the interger positions you would like to
@@ -34,7 +34,7 @@ class MLMClassificationHead(keras.layers.Layer):
     The layer will first gather the token encodings at the mask positions. These
     gathered tokens will be passed through a dense layer the same size as
     encoding dimension, then transformed to predictions the same size as the
-    input vocabulary.  This layer will produce a single output with shape
+    input vocabulary. This layer will produce a single output with shape
     `(batch_size, masks_per_sequence, vocabulary_size)`, which can be used to
     compute an MLM loss function.
 
@@ -73,8 +73,8 @@ class MLMClassificationHead(keras.layers.Layer):
     # Predict an output word for each masked input token.
     outputs = keras_nlp.layers.MLMClassificationHead(
         vocabulary_size=10000,
-        activation="softmax",
-    )(encoded_tokens, inputs["mask_indices"])
+        outer_activation="softmax",
+    )(encoded_tokens, mask_positions=inputs["mask_indices"])
 
     # Build a model
     model = keras.Model(inputs, outpus)

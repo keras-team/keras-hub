@@ -114,7 +114,7 @@ class MLMMaskGenerator(keras.layers.Layer):
         max_selections = self.mask_selection_length
         if max_selections is None:
             # Set a large number to remove the `max_selections_per_batch` cap.
-            max_selections = 2**31 - 1
+            max_selections = 2 ** 31 - 1
         self._random_selector = tf_text.RandomItemSelector(
             max_selections_per_batch=max_selections,
             selection_rate=self.mask_selection_rate,
