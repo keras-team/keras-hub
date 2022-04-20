@@ -84,7 +84,6 @@ class RougeL(keras.metrics.Metric):
     <tf.Tensor: shape=(), dtype=float32, numpy=0.4>
 
     2. Calculate ROUGE-L directly. This has the same functionality as above.
-    >>> tf.random.set_seed(42)
     >>> rouge_l = keras_nlp.metrics.RougeL(
     ...     name="rouge_l", mask_token_ids=[0, 1])
     >>> references = tf.constant(
