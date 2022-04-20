@@ -20,7 +20,7 @@ from keras_nlp.metrics import RougeL
 
 
 class RougeLTest(tf.test.TestCase):
-    def test_vars_after_initializing_class(self):
+    def test_initialization(self):
         rouge_l = RougeL()
         self.assertEqual(rouge_l.result().numpy(), 0.0)
 
