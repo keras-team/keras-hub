@@ -33,8 +33,7 @@ the master branch in
 
 After creating the pull request, you will need to sign the Google CLA agreement.
 The agreement can be found at
-[https://cla.developers.google.com/clas](https://cla.developers.google.com/clas)
-.
+[https://cla.developers.google.com/clas](https://cla.developers.google.com/clas).
 
 ### Step 5. Code review
 
@@ -61,9 +60,9 @@ You can achieve this by running the following commands:
 ```shell
 gh repo fork keras-team/keras-nlp --clone --remote
 cd keras-nlp
-python -me venv ~/keras-nlp-venv
+python -m venv ~/keras-nlp-venv
 source ~/keras-nlp-venv/bin/activate
-pip install ".[tests]"
+pip install -e ".[tests]"
 ```
 
 The first line relies on having an installation of
