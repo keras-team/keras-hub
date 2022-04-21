@@ -207,14 +207,25 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
 
-        self._fast_word_piece = tf_text.FastWordpieceTokenizer(
-            vocab=self.vocabulary,
-            token_out_type=self.compute_dtype,
-            suffix_indicator=suffix_indicator,
-            unknown_token=oov_token,
-            no_pretokenization=True,
-            support_detokenization=True,
-        )
+        try:
+            self._fast_word_piece = tf_text.FastWordpieceTokenizer(
+                vocab=self.vocabulary,
+                token_out_type=self.compute_dtype,
+                suffix_indicator=suffix_indicator,
+                unknown_token=oov_token,
+                no_pretokenization=True,
+                support_detokenization=True,
+            )
+        except RuntimeError:
+            raise RuntimeError(
+                "Cannot find Out of Vocabulary token, "
+                f'oov_token ("{self.oov_token}") in the '
+                "vocabulary.\n "
+                "You can either update vocabulary to include "
+                'default oov_token "[UNK]" or '
+                "pass a different token as oov_token to the"
+                "initializer that already exists in vocabulary."
+            )
 
     def get_vocabulary(self) -> List[str]:
         """Get the tokenizer vocabulary as a list of strings tokens."""
