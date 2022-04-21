@@ -18,13 +18,14 @@ import os
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers import mlm_classification_head
+from keras_nlp.layers import mlm_head
 
 
-class MLMClassificationHeadTest(tf.test.TestCase):
+class MLMHeadTest(tf.test.TestCase):
     def test_valid_call(self):
-        head = mlm_classification_head.MLMClassificationHead(
+        head = mlm_head.MLMHead(
             vocabulary_size=100,
+            activation="softmax",
         )
         encoded_tokens = keras.Input(shape=(10, 16))
         positions = keras.Input(shape=(5,), dtype="int32")
@@ -40,9 +41,10 @@ class MLMClassificationHeadTest(tf.test.TestCase):
     def test_valid_call_with_embedding_weights(self):
         embedding = keras.layers.Embedding(100, 16)
         embedding.build((4, 10))
-        head = mlm_classification_head.MLMClassificationHead(
+        head = mlm_head.MLMHead(
             vocabulary_size=100,
             embedding_weights=embedding.embeddings,
+            activation="softmax",
         )
         encoded_tokens = keras.Input(shape=(10, 16))
         positions = keras.Input(shape=(5,), dtype="int32")
@@ -55,10 +57,11 @@ class MLMClassificationHeadTest(tf.test.TestCase):
         model((token_data, position_data))
 
     def test_get_config_and_from_config(self):
-        head = mlm_classification_head.MLMClassificationHead(
+        head = mlm_head.MLMHead(
             vocabulary_size=100,
             kernel_initializer="HeNormal",
             bias_initializer="Zeros",
+            activation="softmax",
         )
 
         config = head.get_config()
@@ -71,13 +74,14 @@ class MLMClassificationHeadTest(tf.test.TestCase):
             "bias_initializer": keras.initializers.serialize(
                 keras.initializers.Zeros()
             ),
+            "activation": keras.activations.serialize(
+                keras.activations.softmax
+            ),
         }
 
         self.assertEqual(config, {**config, **expected_params})
 
-        restored = mlm_classification_head.MLMClassificationHead.from_config(
-            config
-        )
+        restored = mlm_head.MLMHead.from_config(config)
         restored_config = restored.get_config()
 
         self.assertEqual(
@@ -87,19 +91,19 @@ class MLMClassificationHeadTest(tf.test.TestCase):
 
     def test_value_error_when_neither_embedding_or_vocab_size_set(self):
         with self.assertRaises(ValueError):
-            mlm_classification_head.MLMClassificationHead()
+            mlm_head.MLMHead()
 
     def test_value_error_when_vocab_size_mismatch(self):
         embedding = keras.layers.Embedding(100, 16)
         embedding.build((4, 10))
         with self.assertRaises(ValueError):
-            mlm_classification_head.MLMClassificationHead(
+            mlm_head.MLMHead(
                 vocabulary_size=101,
                 embedding_weights=embedding.embeddings,
             )
 
     def test_one_training_step_of_mlm_classification_head(self):
-        head = mlm_classification_head.MLMClassificationHead(
+        head = mlm_head.MLMHead(
             vocabulary_size=100,
         )
         encoded_tokens = keras.Input(shape=(10, 16))
@@ -126,11 +130,13 @@ class MLMClassificationHeadTest(tf.test.TestCase):
         optimizer.apply_gradients(zip(grad, model.trainable_variables))
 
     def test_checkpointing_mlm_classification_head(self):
-        head1 = mlm_classification_head.MLMClassificationHead(
+        head1 = mlm_head.MLMHead(
             vocabulary_size=100,
+            activation="softmax",
         )
-        head2 = mlm_classification_head.MLMClassificationHead(
+        head2 = mlm_head.MLMHead(
             vocabulary_size=100,
+            activation="softmax",
         )
         token_data = tf.random.uniform(shape=(4, 10, 16))
         position_data = tf.random.uniform(
@@ -151,8 +157,9 @@ class MLMClassificationHeadTest(tf.test.TestCase):
         self.assertAllClose(head1_output, head2_output)
 
     def test_save_model(self):
-        head = mlm_classification_head.MLMClassificationHead(
+        head = mlm_head.MLMHead(
             vocabulary_size=100,
+            activation="softmax",
         )
         encoded_tokens = keras.Input(shape=(10, 16))
         positions = keras.Input(shape=(5,), dtype="int32")

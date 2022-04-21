@@ -18,7 +18,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 
-class MLMClassificationHead(keras.layers.Layer):
+class MLMHead(keras.layers.Layer):
     """Masked Language Model classification head.
 
     This layer takes two inputs:
@@ -44,8 +44,8 @@ class MLMClassificationHead(keras.layers.Layer):
             to transform input token ids. The transpose of this weight matrix
             will be used to project a token embedding vector to a prediction
             over all input words, as described in [1].
-        inner_activation: The activation function of inner dense layer.
-        outer_activation: The activation function for the outputs of the layer.
+        intermediate_activation: The activation function of inner dense layer.
+        activation: The activation function for the outputs of the layer.
             Usually either `None` (return logits), or `"softmax"`
             (return probabilities).
         layer_norm_epsilon: float, defaults to 1e-5. The epsilon value in layer
@@ -71,9 +71,9 @@ class MLMClassificationHead(keras.layers.Layer):
     encoded_tokens = encoder_model(inputs["tokens"])
 
     # Predict an output word for each masked input token.
-    outputs = keras_nlp.layers.MLMClassificationHead(
+    outputs = keras_nlp.layers.MLMHead(
         vocabulary_size=10000,
-        outer_activation="softmax",
+        activation="softmax",
     )(encoded_tokens, mask_positions=inputs["mask_indices"])
 
     # Build a model
@@ -89,8 +89,8 @@ class MLMClassificationHead(keras.layers.Layer):
         self,
         vocabulary_size=None,
         embedding_weights=None,
-        inner_activation="relu",
-        outer_activation=None,
+        intermediate_activation="relu",
+        activation=None,
         layer_norm_epsilon=1e-05,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
@@ -101,8 +101,10 @@ class MLMClassificationHead(keras.layers.Layer):
 
         self.vocabulary_size = vocabulary_size
         self.embedding_weights = embedding_weights
-        self.inner_activation = keras.activations.get(inner_activation)
-        self.outer_activation = keras.activations.get(outer_activation)
+        self.intermediate_activation = keras.activations.get(
+            intermediate_activation
+        )
+        self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
@@ -132,7 +134,7 @@ class MLMClassificationHead(keras.layers.Layer):
 
         self._dense = keras.layers.Dense(
             feature_size,
-            activation=self.inner_activation,
+            activation=self.intermediate_activation,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
@@ -176,8 +178,8 @@ class MLMClassificationHead(keras.layers.Layer):
         outputs = outputs + self._bias
 
         # Apply a final activation.
-        if self.outer_activation is not None:
-            outputs = self.outer_activation(outputs)
+        if self.activation is not None:
+            outputs = self.activation(outputs)
 
         return outputs
 
@@ -186,12 +188,10 @@ class MLMClassificationHead(keras.layers.Layer):
         config.update(
             {
                 "vocabulary_size": self.vocabulary_size,
-                "inner_activation": keras.activations.serialize(
-                    self.inner_activation
+                "intermediate_activation": keras.activations.serialize(
+                    self.intermediate_activation
                 ),
-                "outer_activation": keras.activations.serialize(
-                    self.outer_activation
-                ),
+                "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
