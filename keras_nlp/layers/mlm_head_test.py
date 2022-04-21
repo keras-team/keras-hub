@@ -102,7 +102,7 @@ class MLMHeadTest(tf.test.TestCase):
                 embedding_weights=embedding.embeddings,
             )
 
-    def test_one_training_step_of_mlm_classification_head(self):
+    def test_one_train_step(self):
         head = mlm_head.MLMHead(
             vocabulary_size=100,
         )
@@ -129,7 +129,7 @@ class MLMHeadTest(tf.test.TestCase):
         self.assertGreater(len(grad), 1)
         optimizer.apply_gradients(zip(grad, model.trainable_variables))
 
-    def test_checkpointing_mlm_classification_head(self):
+    def test_checkpointing(self):
         head1 = mlm_head.MLMHead(
             vocabulary_size=100,
             activation="softmax",
@@ -156,7 +156,7 @@ class MLMHeadTest(tf.test.TestCase):
         head2_output = head2(token_data, mask_positions=position_data)
         self.assertAllClose(head1_output, head2_output)
 
-    def test_save_model(self):
+    def test_saving_model(self):
         head = mlm_head.MLMHead(
             vocabulary_size=100,
             activation="softmax",
