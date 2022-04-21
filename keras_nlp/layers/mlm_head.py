@@ -38,7 +38,7 @@ class MLMHead(keras.layers.Layer):
     `(batch_size, masks_per_sequence, vocabulary_size)`, which can be used to
     compute an MLM loss function.
 
-    This layer is often be paired with `keras_nlp.layersMLMMaskGenerator`,
+    This layer is often be paired with `keras_nlp.layers.MLMMaskGenerator`,
     which will help prepare inputs for the MLM task.
 
     Args:
