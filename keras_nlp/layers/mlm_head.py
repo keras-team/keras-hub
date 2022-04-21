@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Masked Language Model classification head."""
+"""Masked Language Model (MLM) head."""
 
 import tensorflow as tf
 from tensorflow import keras
 
 
 class MLMHead(keras.layers.Layer):
-    """Masked Language Model classification head.
+    """Masked Language Model (MLM) head.
 
     This layer takes two inputs:
      - `inputs`: which should be a tensor of encoded tokens with shape
@@ -37,6 +37,9 @@ class MLMHead(keras.layers.Layer):
     input vocabulary. This layer will produce a single output with shape
     `(batch_size, masks_per_sequence, vocabulary_size)`, which can be used to
     compute an MLM loss function.
+
+    This layer is often be paired with `keras_nlp.layersMLMMaskGenerator`,
+    which will help prepare inputs for the MLM task.
 
     Args:
         vocabulary_size: The total size of the vocabulary for predictions.
@@ -62,23 +65,29 @@ class MLMHead(keras.layers.Layer):
     Examples:
 
     ```python
-    inputs = {
-        "tokens": keras.Input(shape=(100,), dtype="int32"),
-        "mask_positions": keras.Input(shape=(20,), dtype="int32"),
-    }
+    batch_size = 32
+    vocab_size = 100
+    encoding_size = 32
+    seq_length = 50
+    mask_length = 10
 
-    # Encode the tokens, e.g. with a transformer.
-    encoded_tokens = encoder_model(inputs["tokens"])
+    # Generate a random encoding.
+    encoded_tokens = tf.random.normal([batch_size, seq_length, encoding_size])
+    # Generate random positions and labels
+    mask_positions = tf.random.uniform(
+        [batch_size, mask_length], maxval=seq_length, dtype="int32"
+    )
+    mask_ids = tf.random.uniform(
+        [batch_size, mask_length], maxval=vocab_size, dtype="int32"
+    )
 
     # Predict an output word for each masked input token.
-    outputs = keras_nlp.layers.MLMHead(
-        vocabulary_size=10000,
+    mask_preds = keras_nlp.layers.MLMHead(
+        vocabulary_size=vocab_size,
         activation="softmax",
-    )(encoded_tokens, mask_positions=inputs["mask_indices"])
-
-    # Build a model
-    model = keras.Model(inputs, outpus)
-    model.compile(optimizer="adam", loss="sparse_categorical_crossentropy")
+    )(encoded_tokens, mask_positions=mask_positions)
+    # Calculate a loss.
+    keras.losses.sparse_categorical_crossentropy(mask_ids, mask_preds)
     ```
 
     References:
