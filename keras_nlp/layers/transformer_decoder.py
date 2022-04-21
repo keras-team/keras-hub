@@ -94,6 +94,7 @@ class TransformerDecoder(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self._built = False
+        self.supports_masking = True
 
     def _build(self, input_shape):
         # Create layers based on input shape.
