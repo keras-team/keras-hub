@@ -4,7 +4,6 @@ base_dir=$(dirname $(dirname $0))
 targets="${base_dir}/*.py ${base_dir}/examples/ ${base_dir}/keras_nlp/"
 
 isort --sp "${base_dir}/setup.cfg" --sl ${targets}
-echo "isort done"
 black --line-length 80 ${targets}
 
 for i in $(find ${targets} -name '*.py'); do
