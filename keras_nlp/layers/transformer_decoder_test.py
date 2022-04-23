@@ -162,6 +162,18 @@ class TransformerDecoderTest(tf.test.TestCase):
         )
         self.assertAllClose(decoder1_output, decoder2_output)
 
+    def test_mask_propagation(self):
+        decoder = transformer_decoder.TransformerDecoder(
+            intermediate_dim=4,
+            num_heads=2,
+        )
+        decoder_sequence = tf.random.uniform(shape=[1, 4, 6])
+        encoder_sequence = tf.random.uniform(shape=[1, 4, 6])
+        mask = tf.constant([[True, True, False, False]])
+        decoder_sequence._keras_mask = mask
+        outputs = decoder(decoder_sequence, encoder_sequence)
+        self.assertAllEqual(outputs._keras_mask, mask)
+
     def test_save_model(self):
         encoder_input = keras.Input(shape=[4, 6])
         decoder_input = keras.Input(shape=[4, 6])

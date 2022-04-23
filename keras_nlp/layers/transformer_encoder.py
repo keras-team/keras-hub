@@ -89,6 +89,7 @@ class TransformerEncoder(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self._built = False
+        self.supports_masking = True
 
     def _build(self, input_shape):
         # Create layers based on input shape.
@@ -104,8 +105,12 @@ class TransformerEncoder(keras.layers.Layer):
             bias_initializer=self.bias_initializer,
         )
 
-        self._attention_layernorm = keras.layers.LayerNormalization()
-        self._feedforward_layernorm = keras.layers.LayerNormalization()
+        self._attention_layernorm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+        )
+        self._feedforward_layernorm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+        )
 
         self._attention_dropout = keras.layers.Dropout(rate=self.dropout)
 
