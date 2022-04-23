@@ -242,3 +242,6 @@ class WordPieceTokenizerTest(tf.test.TestCase):
             WordPieceTokenizer(
                 vocabulary=vocab_data,
             )
+
+        with self.assertRaises(ValueError):
+            WordPieceTokenizer(vocabulary=vocab_data, oov_token=None)
