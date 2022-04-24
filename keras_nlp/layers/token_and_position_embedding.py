@@ -91,6 +91,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
             max_length=max_length,
             initializer=embeddings_initializer,
         )
+        self.supports_masking = self.token_embedding.supports_masking
 
     def get_config(self):
         config = super().get_config()
@@ -112,3 +113,6 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         embedded_positions = self.position_embedding(embedded_tokens)
         outputs = embedded_tokens + embedded_positions
         return outputs
+
+    def compute_mask(self, inputs, mask=None):
+        return self.token_embedding.compute_mask(inputs, mask=mask)
