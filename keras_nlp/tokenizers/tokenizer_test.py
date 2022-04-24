@@ -17,7 +17,15 @@ from tensorflow import keras
 
 from keras_nlp.tokenizers.tokenizer import Tokenizer
 
+class PassThroughTokenizer(Tokenizer):
+    __test__ = False  # for pytest
 
+    def tokenize(self, inputs):
+        return inputs
+
+    def detokenize(self, inputs):
+        return inputs
+        
 class SimpleTokenizer(Tokenizer):
     __test__ = False  # for pytest
 
