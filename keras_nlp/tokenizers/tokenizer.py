@@ -146,7 +146,8 @@ class Tokenizer(keras.layers.Layer):
             return inputs
 
     def detokenize_to_strings(self, inputs, *args, **kwargs):
-        """Transform detokenized inputs to strings.
+        """Detokenize, then convert the output tensor to nested lists
+            of python strings.
 
         Args:
             inputs: Input tensor, or dict/list/tuple of input tensors.
