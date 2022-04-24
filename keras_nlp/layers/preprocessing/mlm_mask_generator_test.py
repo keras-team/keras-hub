@@ -202,7 +202,7 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
             mask_token_rate=1,
             random_token_rate=0,
         )
-        inputs = [unselectable_token_ids]
+        inputs = tf.convert_to_tensor([unselectable_token_ids])
         outputs = mlm_masker(inputs)
         # Verify that no token is masked out.
         self.assertEqual(tf.reduce_sum(outputs["mask_positions"]), 0)
@@ -232,3 +232,36 @@ class MLMMaskGeneratorTest(tf.test.TestCase):
             [[0, 1, 2], [0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4]]
         )
         cloned_mlm_masker(inputs)
+
+    def test_graph_mode_execution(self):
+        mlm_masker = MLMMaskGenerator(
+            vocabulary_size=self.vocabulary_size,
+            mask_selection_rate=0.5,
+            mask_token_id=self.mask_token_id,
+            mask_selection_length=5,
+        )
+
+        @tf.function
+        def masker(inputs):
+            return mlm_masker(inputs)
+
+        masker(tf.constant([1, 2, 3]))
+        masker(tf.constant([[1, 2, 3], [1, 2, 3]]))
+        masker(tf.ragged.constant([[3, 5, 7, 7], [4, 6, 7, 5]]))
+
+    def test_with_tf_data(self):
+        ds = tf.data.Dataset.from_tensor_slices(
+            tf.ones((100, 10), dtype="int32")
+        )
+        mlm_masker = MLMMaskGenerator(
+            vocabulary_size=self.vocabulary_size,
+            mask_selection_rate=0.5,
+            mask_token_id=self.mask_token_id,
+            mask_selection_length=5,
+        )
+        batch_first = ds.batch(8).map(mlm_masker)
+        batch_second = ds.map(mlm_masker).batch(8)
+        self.assertEqual(
+            batch_first.take(1).get_single_element()["tokens"].shape,
+            batch_second.take(1).get_single_element()["tokens"].shape,
+        )

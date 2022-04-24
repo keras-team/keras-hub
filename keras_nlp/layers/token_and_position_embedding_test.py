@@ -112,50 +112,26 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase):
         )
         # Create a 2-dimensional input
         # (the first dimension is implicit).
-        input_tensor = tf.keras.Input(
-            shape=(sequence_length,), dtype=tf.float32, ragged=True
-        )
-        output_tensor = test_layer(input_tensor)
-        model = tf.keras.Model(input_tensor, output_tensor)
+        inputs = tf.keras.Input(shape=(sequence_length,), dtype="int32")
+        outputs = test_layer(inputs)
+        model = tf.keras.Model(inputs, outputs)
 
-        input_data = tf.constant(
-            [
-                [1.0, 1.0, 1.0, 1.0],
-                [1.0, 1.0, 1.0, 1.0],
-                [1.0, 1.0, 1.0, 1.0],
-                [1.0, 1.0, 1.0, 1.0],
-            ],
-        )
-        expected_output_data = tf.constant(
-            [
-                [
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                ],
-                [
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                ],
-                [
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                ],
-                [
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                ],
-            ],
-        )
+        input_data = tf.ones((2, sequence_length), dtype="int32")
+        expected_output_data = tf.ones((2, sequence_length, embedding_dim)) * 2
         output_data = model.predict(input_data)
         self.assertAllClose(output_data, expected_output_data)
+
+    def test_mask_propagation(self):
+        test_layer = TokenAndPositionEmbedding(
+            vocabulary_size=5,
+            max_length=4,
+            embedding_dim=3,
+            mask_zero=True,
+        )
+        input_data = tf.constant([[1, 0], [1, 0]])
+        mask = input_data != 0
+        outputs = test_layer(input_data)
+        self.assertAllEqual(outputs._keras_mask, mask)
 
     def test_save_model(self):
         vocabulary_size = 5
