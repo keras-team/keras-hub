@@ -17,15 +17,39 @@ from tensorflow import keras
 
 from keras_nlp.tokenizers.tokenizer import Tokenizer
 
+
 class PassThroughTokenizer(Tokenizer):
     __test__ = False  # for pytest
 
-    def tokenize(self, inputs):
-        return inputs
+    def tokenize(self, inputs, sequence_length=None):
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            inputs = tf.convert_to_tensor(inputs)
+
+        scalar_input = inputs.shape.rank == 0
+        if scalar_input:
+            inputs = tf.expand_dims(inputs, 0)
+
+        tokens = tf.strings.unicode_decode(
+            inputs, input_encoding="UTF-8", errors="ignore"
+        )
+
+        if sequence_length:
+            output_shape = tokens.shape.as_list()
+            output_shape[-1] = sequence_length
+            tokens = tokens.to_tensor(shape=output_shape)
+
+        if scalar_input:
+            tokens = tf.squeeze(tokens, 0)
+        return tokens
 
     def detokenize(self, inputs):
-        return inputs
-        
+        inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
+        encoded_string = tf.strings.unicode_encode(
+            inputs, output_encoding="UTF-8", errors="ignore"
+        )
+        return encoded_string
+
+
 class SimpleTokenizer(Tokenizer):
     __test__ = False  # for pytest
 
@@ -65,3 +89,24 @@ class TokenizerTest(tf.test.TestCase):
     def test_missing_tokenize_raises(self):
         with self.assertRaises(NotImplementedError):
             Tokenizer()(["the quick brown fox"])
+
+    def test_detokenize_to_strings_for_ragged(self):
+        input_data = ["▀▁▂▃", "samurai"]
+        tokenizer = PassThroughTokenizer()
+        tokenize_output = tokenizer.tokenize(input_data)
+        detokenize_output = tokenizer.detokenize_to_strings(tokenize_output)
+        self.assertAllEqual(detokenize_output, ["▀▁▂▃", "samurai"])
+
+    def test_detokenize_to_strings_for_dense(self):
+        input_data = ["▀▁▂▃", "samurai"]
+        tokenizer = PassThroughTokenizer()
+        tokenize_output = tokenizer.tokenize(input_data, sequence_length=5)
+        detokenize_output = tokenizer.detokenize_to_strings(tokenize_output)
+        self.assertAllEqual(detokenize_output, ["▀▁▂▃", "samur"])
+
+    def test_detokenize_to_strings_for_scalar(self):
+        input_data = "▀▁▂▃"
+        tokenizer = PassThroughTokenizer()
+        tokenize_output = tokenizer.tokenize(input_data)
+        detokenize_output = tokenizer.detokenize_to_strings(tokenize_output)
+        self.assertEqual(detokenize_output, "▀▁▂▃")
