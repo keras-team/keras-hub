@@ -198,6 +198,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "Vocabulary must be an file path or list of terms. "
                 f"Received: vocabulary={vocabulary}"
             )
+        if oov_token is None:
+            raise ValueError("`oov_token` cannot be None.")
 
         self.sequence_length = sequence_length
         self.lowercase = lowercase
@@ -206,6 +208,15 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.keep_pattern = keep_pattern
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
+
+        if oov_token not in self.vocabulary:
+            raise RuntimeError(
+                f'Cannot find `oov_token="{self.oov_token}"` in the '
+                "vocabulary.\n"
+                "You can either update the vocabulary to include "
+                f'`"{self.oov_token}"`, or pass a different value for '
+                "the `oov_token` argument when creating the tokenizer."
+            )
 
         self._fast_word_piece = tf_text.FastWordpieceTokenizer(
             vocab=self.vocabulary,
