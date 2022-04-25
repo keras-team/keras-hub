@@ -72,17 +72,16 @@ class TokenizerTest(tf.test.TestCase):
         input_data = tf.ragged.constant([["▀▁▂▃", "samurai"]])
         tokenizer = PassThroughTokenizer()
         detokenize_output = tokenizer.detokenize_to_strings(input_data)
-        self.assertAllEqual(detokenize_output, ["▀▁▂▃", "samurai"])
+        self.assertAllEqual(detokenize_output, [['▀▁▂▃', 'samurai']])
 
     def test_detokenize_to_strings_for_dense(self):
         input_data = tf.constant([["▀▁▂▃", "samurai"]])
         tokenizer = PassThroughTokenizer()
         detokenize_output = tokenizer.detokenize_to_strings(input_data)
-        self.assertAllEqual(detokenize_output, ["▀▁▂▃", "samur"])
+        self.assertAllEqual(detokenize_output, [['▀▁▂▃', 'samurai']])
 
     def test_detokenize_to_strings_for_scalar(self):
-        input_data = "▀▁▂▃"
+        input_data = tf.constant("▀▁▂▃")
         tokenizer = PassThroughTokenizer()
-        tokenize_output = tokenizer.tokenize(input_data)
-        detokenize_output = tokenizer.detokenize_to_strings(tokenize_output)
+        detokenize_output = tokenizer.detokenize_to_strings(input_data)
         self.assertEqual(detokenize_output, "▀▁▂▃")
