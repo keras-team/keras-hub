@@ -214,7 +214,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 f'Cannot find `oov_token="{self.oov_token}"` in the '
                 "vocabulary.\n"
                 "You can either update the vocabulary to include "
-                '`"{self.oov_token}"`, or pass a different value for '
+                f'`"{self.oov_token}"`, or pass a different value for '
                 "the `oov_token` argument when creating the tokenizer."
             )
 
