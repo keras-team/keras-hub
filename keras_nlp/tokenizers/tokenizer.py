@@ -154,11 +154,11 @@ class Tokenizer(keras.layers.Layer):
             *args: Additional positional arguments.
             **kwargs: Additional keyword arguments.
         """
-        detokenized_input = self.detokenize(inputs, *args, **kwargs)
-        if isinstance(detokenized_input, tf.RaggedTensor):
-            detokenized_input = detokenized_input.to_list()
-        elif isinstance(detokenized_input, tf.Tensor):
-            detokenized_input = detokenized_input.numpy()
-            if detokenized_input.shape.rank != 0:
-                detokenized_input = detokenized_input.tolist()
-        return self._decode_strings_to_utf8(detokenized_input)
+        tensor_outputs = self.detokenize(inputs, *args, **kwargs)
+        if isinstance(tensor_outputs, tf.RaggedTensor):
+            list_outputs = tensor_outputs.to_list()
+        elif isinstance(tensor_outputs, tf.Tensor):
+            list_outputs = tensor_outputs.numpy()
+            if tensor_outputs.shape.rank != 0:
+                list_outputs = list_outputs.tolist()
+        return self._decode_strings_to_utf8(list_outputs)
