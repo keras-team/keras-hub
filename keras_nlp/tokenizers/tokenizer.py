@@ -133,16 +133,21 @@ class Tokenizer(keras.layers.Layer):
 
     def _decode_strings_to_utf8(self, inputs):
         """Recursively decodes to list of strings with 'utf-8' encoding."""
-        # Handles the case when the input is a scalar
         if isinstance(inputs, bytes):
+            # Handles the case when the input is a scalar string.
             return inputs.decode("utf-8")
-        # Recursive calls for all other cases by iterating over elements
         else:
+            # Recursively iterate when input is a list.
             return [self._decode_strings_to_utf8(x) for x in inputs]
 
     def detokenize_to_strings(self, inputs, *args, **kwargs):
-        """Detokenize, then convert the output tensor to nested lists
-            of python strings.
+        """Detokenize and convert tensor to nested lists of python strings.
+
+        This is a convenience method layered on top of `detokenize()`. This 
+        method will call `detokenize()` and transform the output string
+        tensors back to python strings, by first converting output tensors
+        to nested lists of elements, and then converting each byte string
+        to a python string.
 
         Args:
             inputs: Input tensor, or dict/list/tuple of input tensors.
@@ -153,8 +158,7 @@ class Tokenizer(keras.layers.Layer):
         if isinstance(detokenized_input, tf.RaggedTensor):
             detokenized_input = detokenized_input.to_list()
         elif isinstance(detokenized_input, tf.Tensor):
-            scalar = detokenized_input.shape.rank == 0
             detokenized_input = detokenized_input.numpy()
-            if not scalar:
+            if detokenized_input.shape.rank != 0:
                 detokenized_input = detokenized_input.tolist()
         return self._decode_strings_to_utf8(detokenized_input)
