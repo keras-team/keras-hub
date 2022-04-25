@@ -143,7 +143,7 @@ class Tokenizer(keras.layers.Layer):
     def detokenize_to_strings(self, inputs, *args, **kwargs):
         """Detokenize and convert tensor to nested lists of python strings.
 
-        This is a convenience method layered on top of `detokenize()`. This 
+        This is a convenience method layered on top of `detokenize()`. This
         method will call `detokenize()` and transform the output string
         tensors back to python strings, by first converting output tensors
         to nested lists of elements, and then converting each byte string
