@@ -199,7 +199,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 f"Received: vocabulary={vocabulary}"
             )
         if oov_token is None:
-            raise ValueError("oov_token cannot be None")
+            raise ValueError("`oov_token` cannot be None.")
 
         self.sequence_length = sequence_length
         self.lowercase = lowercase
@@ -211,13 +211,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         if oov_token not in self.vocabulary:
             raise RuntimeError(
-                "Cannot find Out of Vocabulary token, "
-                f'oov_token `"{self.oov_token}"` in the '
-                "vocabulary.\n "
-                "You can either update vocabulary to include "
-                'default oov_token `"[UNK]"` or '
-                "pass a different token as oov_token to the"
-                "initializer that already exists in vocabulary."
+                f'Cannot find `oov_token="{self.oov_token}"` in the '
+                "vocabulary.\n"
+                "You can either update the vocabulary to include "
+                '`"{self.oov_token}"`, or pass a different value for '
+                "the `oov_token` argument when creating the tokenizer."
             )
 
         self._fast_word_piece = tf_text.FastWordpieceTokenizer(
