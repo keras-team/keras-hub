@@ -70,6 +70,7 @@ flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
 batch_size = 32
 epochs = 3
 
+
 def pack_inputs(
     inputs,
     seq_length,
@@ -247,13 +248,11 @@ def main(_):
     best_hp = tuner.get_best_hyperparameters()[0]
     finetuning_model = tuner.get_best_models()[0]
 
-    finetuning_model.fit(
-        train_ds,
-        epochs = epochs,
-        validation_data = validation_ds
-    )
+    finetuning_model.fit(train_ds, epochs=epochs, validation_data=validation_ds)
 
-    print(f"The best hyperparameters found are:\nLearning Rate: {best_hp['lr']}")
+    print(
+        f"The best hyperparameters found are:\nLearning Rate: {best_hp['lr']}"
+    )
 
     if FLAGS.do_evaluation:
         print("Evaluating on test set.")
