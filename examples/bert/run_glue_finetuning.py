@@ -162,6 +162,22 @@ class BertClassificationFinetuner(keras.Model):
         outputs = self._pooler_layer(outputs)
         return self._logit_layer(outputs)
 
+class BertHyperModel(kt.HyperModel):
+    """Creates a hypermodel to help with the search space for finetuning."""
+
+    def __init__(self, model):
+        self.model = model
+        
+    def build(self, hp):
+        model = self.model
+        model.compile(
+        optimizer=keras.optimizers.Adam(
+            learning_rate=hp.Choice("lr", [5e-5, 4e-5, 3e-5, 2e-5])
+            ),
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"],
+        )
+        return model
 
 def main(_):
     print(f"Reading input model from {FLAGS.saved_model_input}")
@@ -212,21 +228,12 @@ def main(_):
         num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
     )
 
-    def build_model(hp):
-        finetuning_model.compile(
-            optimizer=keras.optimizers.Adam(
-                learning_rate=hp.Choice("lr", [5e-5, 3e-5, 2e-5])
-            ),
-            loss="sparse_categorical_crossentropy",
-            metrics=["accuracy"],
-        )
-        return finetuning_model
+    hypermodel = BertHyperModel(finetuning_model)
 
     tuner = kt.RandomSearch(
-        hypermodel=build_model,
+        hypermodel=hypermodel,
         objective="val_accuracy",
-        max_trials=3,
-        executions_per_trial=2,
+        max_trials=4,
         overwrite=True,
         directory=f"tuning_hp_bert",
         project_name="glue_finetuning_hp",
@@ -237,6 +244,7 @@ def main(_):
     best_hp = tuner.get_best_hyperparameters()[0]
     finetuning_model = tuner.get_best_models()[0]
 
+    print("Training the model using the best hyperparameters found.")
     finetuning_model.fit(train_ds, epochs=3, validation_data=validation_ds)
 
     if FLAGS.do_evaluation:
