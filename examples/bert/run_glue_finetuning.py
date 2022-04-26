@@ -212,6 +212,8 @@ def main(_):
 
     # Read and preprocess GLUE task data.
     train_ds, test_ds, validation_ds = load_data(FLAGS.task_name)
+    
+    # batch_size is taken as 32.
     train_ds = train_ds.batch(32).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
@@ -230,6 +232,8 @@ def main(_):
 
     hypermodel = BertHyperModel(finetuning_model)
 
+    # Initialize the random search over the 4 learning rate parameters, for 4
+    # trials and 3 epochs for each trial.
     tuner = kt.RandomSearch(
         hypermodel=hypermodel,
         objective="val_accuracy",
@@ -241,8 +245,9 @@ def main(_):
 
     tuner.search(train_ds, epochs=3, validation_data=validation_ds)
 
+    # Extract the best hyperparameters after the search.
     best_hp = tuner.get_best_hyperparameters()[0]
-    finetuning_model = tuner.get_best_models()[0]
+    finetuning_model = hypermodel.build(best_hp)
 
     print("Training the model using the best hyperparameters found.")
     finetuning_model.fit(train_ds, epochs=3, validation_data=validation_ds)
