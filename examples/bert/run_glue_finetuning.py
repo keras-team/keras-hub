@@ -16,7 +16,7 @@
 import json
 
 import datasets
-import keras_tuner as kt
+import keras_tuner
 import tensorflow as tf
 import tensorflow_text as tftext
 from absl import app
@@ -67,6 +67,8 @@ flags.DEFINE_bool(
 
 flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
 
+batch_size = 32
+epochs = 3
 
 def pack_inputs(
     inputs,
@@ -162,24 +164,6 @@ class BertClassificationFinetuner(keras.Model):
         return self._logit_layer(outputs)
 
 
-class BertHyperModel(kt.HyperModel):
-    """Creates a hypermodel to help with the search space for finetuning."""
-
-    def __init__(self, model):
-        self.model = model
-
-    def build(self, hp):
-        model = self.model
-        model.compile(
-            optimizer=keras.optimizers.Adam(
-                learning_rate=hp.Choice("lr", [5e-5, 4e-5, 3e-5, 2e-5])
-            ),
-            loss="sparse_categorical_crossentropy",
-            metrics=["accuracy"],
-        )
-        return model
-
-
 def main(_):
     print(f"Reading input model from {FLAGS.saved_model_input}")
     model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
@@ -215,43 +199,61 @@ def main(_):
     train_ds, test_ds, validation_ds = load_data(FLAGS.task_name)
 
     # batch_size is taken as 32.
-    train_ds = train_ds.batch(32).map(
+    train_ds = train_ds.batch(batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
-    validation_ds = validation_ds.batch(32).map(
+    validation_ds = validation_ds.batch(batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
-    test_ds = test_ds.batch(32).map(
+    test_ds = test_ds.batch(batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
 
-    finetuning_model = BertClassificationFinetuner(
-        bert_model=model,
-        hidden_size=bert_config["hidden_size"],
-        num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
-    )
+    class BertHyperModel(keras_tuner.HyperModel):
+        """Creates a hypermodel to help with the search space for finetuning."""
 
-    hypermodel = BertHyperModel(finetuning_model)
+        def build(self, hp):
+            finetuning_model = BertClassificationFinetuner(
+                bert_model=model,
+                hidden_size=bert_config["hidden_size"],
+                num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
+            )
+            finetuning_model.compile(
+                optimizer=keras.optimizers.Adam(
+                    learning_rate=hp.Choice("lr", [5e-5, 4e-5, 3e-5, 2e-5])
+                ),
+                loss="sparse_categorical_crossentropy",
+                metrics=["accuracy"],
+            )
+            return finetuning_model
+
+    # Create a hypermodel object for a RandomSearch.
+    hypermodel = BertHyperModel()
 
     # Initialize the random search over the 4 learning rate parameters, for 4
     # trials and 3 epochs for each trial.
-    tuner = kt.RandomSearch(
+    tuner = keras_tuner.RandomSearch(
         hypermodel=hypermodel,
-        objective="val_accuracy",
+        objective=keras_tuner.Objective("val_loss", direction="min"),
         max_trials=4,
         overwrite=True,
         directory="tuning_hp_bert",
         project_name="glue_finetuning_hp",
     )
 
-    tuner.search(train_ds, epochs=3, validation_data=validation_ds)
+    tuner.search(train_ds, epochs=epochs, validation_data=validation_ds)
 
     # Extract the best hyperparameters after the search.
     best_hp = tuner.get_best_hyperparameters()[0]
-    finetuning_model = hypermodel.build(best_hp)
+    finetuning_model = tuner.get_best_models()[0]
 
-    print("Training the model using the best hyperparameters found.")
-    finetuning_model.fit(train_ds, epochs=3, validation_data=validation_ds)
+    finetuning_model.fit(
+        train_ds,
+        epochs = epochs,
+        validation_data = validation_ds
+    )
+
+    print(f"The best hyperparameters found are:\nLearning Rate: {best_hp['lr']}")
 
     if FLAGS.do_evaluation:
         print("Evaluating on test set.")
