@@ -14,7 +14,6 @@
 """Run finetuning on a GLUE task."""
 
 import json
-import time
 
 import datasets
 import keras_tuner as kt
@@ -162,22 +161,24 @@ class BertClassificationFinetuner(keras.Model):
         outputs = self._pooler_layer(outputs)
         return self._logit_layer(outputs)
 
+
 class BertHyperModel(kt.HyperModel):
     """Creates a hypermodel to help with the search space for finetuning."""
 
     def __init__(self, model):
         self.model = model
-        
+
     def build(self, hp):
         model = self.model
         model.compile(
-        optimizer=keras.optimizers.Adam(
-            learning_rate=hp.Choice("lr", [5e-5, 4e-5, 3e-5, 2e-5])
+            optimizer=keras.optimizers.Adam(
+                learning_rate=hp.Choice("lr", [5e-5, 4e-5, 3e-5, 2e-5])
             ),
-        loss="sparse_categorical_crossentropy",
-        metrics=["accuracy"],
+            loss="sparse_categorical_crossentropy",
+            metrics=["accuracy"],
         )
         return model
+
 
 def main(_):
     print(f"Reading input model from {FLAGS.saved_model_input}")
@@ -212,7 +213,7 @@ def main(_):
 
     # Read and preprocess GLUE task data.
     train_ds, test_ds, validation_ds = load_data(FLAGS.task_name)
-    
+
     # batch_size is taken as 32.
     train_ds = train_ds.batch(32).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
@@ -239,7 +240,7 @@ def main(_):
         objective="val_accuracy",
         max_trials=4,
         overwrite=True,
-        directory=f"tuning_hp_bert",
+        directory="tuning_hp_bert",
         project_name="glue_finetuning_hp",
     )
 
