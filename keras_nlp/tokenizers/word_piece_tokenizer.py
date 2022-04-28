@@ -289,7 +289,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             inputs = tf_text.normalize_utf8(inputs, "NFD")
             # Remove the accent marks.
             inputs = tf.strings.regex_replace(inputs, r"\p{Mn}", "")
-        if self.split_pattern:
+        if self.split_input:
             inputs = tf_text.regex_split(
                 inputs,
                 delim_regex_pattern=self.split_pattern,
