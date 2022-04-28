@@ -80,7 +80,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     If a more custom pre-tokenization step is desired, the layer can be
     configured to apply only the strict WordPiece algorithm by passing
-    `lowercase=False`, `strip_accents=False` and `split_pattern=None`. In
+    `lowercase=False`, `strip_accents=False` and `split_input=False`. In
     this case, inputs should be pre-split string tensors or ragged tensors.
 
     By default, the layer will output a `tf.RaggedTensor` where the last
@@ -101,10 +101,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             tokenization.
         strip_accents: If true, all accent marks will be removed from text
             before tokenization.
-        split_pattern: A regex pattern to match delimiters to split, or None
-            indicating that the input is pre-split and no splitting should be
-            performed. By default, all whitespace and punctuation marks will
-            be split on.
+        split_input: If true, input will be split according to `split_pattern`
+            and `keep_pattern`. If false, input should be split before calling
+            the layer.
+        split_pattern: A regex pattern to match delimiters to split. By default,
+            all whitespace and punctuation marks will be split on.
         keep_pattern: A regex pattern of delimiters contained in the
             `split_pattern` of delimeters that should be kept as independent
             tokens. By default, all punctuation marks will be kept as tokens.
@@ -167,8 +168,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         sequence_length: int = None,
         lowercase: bool = True,
         strip_accents: bool = True,
-        split_pattern: str = WHITESPACE_AND_PUNCTUATION_REGEX,
-        keep_pattern: str = PUNCTUATION_REGEX,
+        split_input: bool = True,
+        split_pattern: str = None,
+        keep_pattern: str = None,
         suffix_indicator: str = "##",
         oov_token: str = "[UNK]",
         **kwargs,
@@ -201,9 +203,16 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
 
+        if split_pattern is None:
+            split_pattern = WHITESPACE_AND_PUNCTUATION_REGEX
+
+        if keep_pattern is None:
+            keep_pattern = PUNCTUATION_REGEX
+
         self.sequence_length = sequence_length
         self.lowercase = lowercase
         self.strip_accents = strip_accents
+        self.split_input = split_input
         self.split_pattern = split_pattern
         self.keep_pattern = keep_pattern
         self.suffix_indicator = suffix_indicator
