@@ -36,14 +36,14 @@ class FNetEncoder(keras.layers.Layer):
         intermediate_dim: int. The hidden size of feedforward network.
         dropout: float, defaults to 0. The dropout value, applied in the
             feedforward network.
-        activation: string or `tf.keras.activations`, defaults to "relu". The
+        activation: string or `keras.activations`, defaults to "relu". The
             activation function of feedforward network.
         layer_norm_epsilon: float, defaults to 1e-5. The epsilon value in layer
             normalization components.
-        kernel_initializer: "string" or `tf.keras.initializers` initializer,
+        kernel_initializer: "string" or `keras.initializers` initializer,
             defaults to "glorot_uniform". The kernel initializer for the dense
             layers.
-        bias_initializer: "string" or `tf.keras.initializers` initializer,
+        bias_initializer: "string" or `keras.initializers` initializer,
             defaults to "zeros". The bias initializer for the dense layers.
         name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
@@ -56,9 +56,9 @@ class FNetEncoder(keras.layers.Layer):
         intermediate_dim=64)
 
     # Create a simple model containing the encoder.
-    input = tf.keras.Input(shape=[4, 6])
+    input = keras.Input(shape=[4, 6])
     output = encoder(input)
-    model = tf.keras.Model(inputs=input, outputs=output)
+    model = keras.Model(inputs=input, outputs=output)
 
     # Call encoder on the inputs.
     input_data = tf.random.uniform(shape=[1, 10, 64])

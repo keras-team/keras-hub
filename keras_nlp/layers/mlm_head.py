@@ -22,10 +22,11 @@ class MLMHead(keras.layers.Layer):
     """Masked Language Model (MLM) head.
 
     This layer takes two inputs:
+
      - `inputs`: which should be a tensor of encoded tokens with shape
-            `(batch_size, sequence_length, encoding_dim)`.
+       `(batch_size, sequence_length, encoding_dim)`.
      - `mask_positions`: which should be a tensor of integer positions to
-            predict with shape `(batch_size, masks_per_sequence)`.
+       predict with shape `(batch_size, masks_per_sequence)`.
 
     The token encodings should usually be the last output of an encoder model,
     and mask positions should be the interger positions you would like to
@@ -46,7 +47,8 @@ class MLMHead(keras.layers.Layer):
         embedding_weights: Optional. The weights of the word embedding used
             to transform input token ids. The transpose of this weight matrix
             will be used to project a token embedding vector to a prediction
-            over all input words, as described in [1].
+            over all input words, as described
+            [here](https://arxiv.org/abs/1608.05859).
         intermediate_activation: The activation function of inner dense layer.
         activation: The activation function for the outputs of the layer.
             Usually either `None` (return logits), or `"softmax"`
@@ -91,7 +93,7 @@ class MLMHead(keras.layers.Layer):
     ```
 
     References:
-        [1] [Press and Wolf, 2016](https://arxiv.org/abs/1608.05859)
+     - [Press and Wolf, 2016](https://arxiv.org/abs/1608.05859)
     """
 
     def __init__(
