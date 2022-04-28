@@ -14,7 +14,7 @@
 
 import tensorflow as tf
 
-from keras_nlp.layers.preprocessing.mlm_mask_generator import MLMMaskGenerator
+from keras_nlp.layers.mlm_mask_generator import MLMMaskGenerator
 
 
 class MLMMaskGeneratorTest(tf.test.TestCase):

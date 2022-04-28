@@ -73,13 +73,13 @@ class MLMMaskGenerator(keras.layers.Layer):
     Examples:
 
     Basic usage.
-    >>> masker = keras_nlp.layers.preprocessing.MLMMaskGenerator( \
+    >>> masker = keras_nlp.layers.MLMMaskGenerator( \
             vocabulary_size=10, mask_selection_rate=0.2, mask_token_id=0, \
             mask_selection_length=5)
     >>> masker(tf.constant([1, 2, 3, 4, 5]))
 
     Ragged Input:
-    >>> masker = keras_nlp.layers.preprocessing.MLMMaskGenerator( \
+    >>> masker = keras_nlp.layers.MLMMaskGenerator( \
             vocabulary_size=10, mask_selection_rate=0.5, mask_token_id=0, \
             mask_selection_length=5)
     >>> masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
