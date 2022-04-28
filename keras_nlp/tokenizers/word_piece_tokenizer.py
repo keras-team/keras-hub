@@ -80,7 +80,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     If a more custom pre-tokenization step is desired, the layer can be
     configured to apply only the strict WordPiece algorithm by passing
-    `lowercase=False`, `strip_accents=False` and `split_input=False`. In
+    `lowercase=False`, `strip_accents=False` and `split=False`. In
     this case, inputs should be pre-split string tensors or ragged tensors.
 
     By default, the layer will output a `tf.RaggedTensor` where the last
@@ -101,7 +101,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             tokenization.
         strip_accents: If true, all accent marks will be removed from text
             before tokenization.
-        split_input: If true, input will be split according to `split_pattern`
+        split: If true, input will be split according to `split_pattern`
             and `keep_pattern`. If false, input should be split before calling
             the layer.
         split_pattern: A regex pattern to match delimiters to split. By default,
@@ -168,7 +168,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         sequence_length: int = None,
         lowercase: bool = True,
         strip_accents: bool = True,
-        split_input: bool = True,
+        split: bool = True,
         split_pattern: str = None,
         keep_pattern: str = None,
         suffix_indicator: str = "##",
@@ -212,7 +212,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.sequence_length = sequence_length
         self.lowercase = lowercase
         self.strip_accents = strip_accents
-        self.split_input = split_input
+        self.split = split
         self.split_pattern = split_pattern
         self.keep_pattern = keep_pattern
         self.suffix_indicator = suffix_indicator
@@ -266,6 +266,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "sequence_length": self.sequence_length,
                 "lowercase": self.lowercase,
                 "strip_accents": self.strip_accents,
+                "split": self.split,
                 "split_pattern": self.split_pattern,
                 "keep_pattern": self.keep_pattern,
                 "suffix_indicator": self.suffix_indicator,
@@ -289,7 +290,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             inputs = tf_text.normalize_utf8(inputs, "NFD")
             # Remove the accent marks.
             inputs = tf.strings.regex_replace(inputs, r"\p{Mn}", "")
-        if self.split_input:
+        if self.split:
             inputs = tf_text.regex_split(
                 inputs,
                 delim_regex_pattern=self.split_pattern,
