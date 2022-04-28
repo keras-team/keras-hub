@@ -13,7 +13,11 @@
 # limitations under the License.
 """Bert model and layer implementations.
 
-We should work to replace this with components from the keras-nlp library.
+These components come from the tensorflow official model repository for BERT:
+https://github.com/tensorflow/models/tree/master/official/nlp/modeling
+
+This is to get us into a testable state. We should work to replace all of these
+components with components from the keras-nlp library.
 """
 
 import tensorflow as tf
