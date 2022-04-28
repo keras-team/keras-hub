@@ -21,12 +21,11 @@ from tensorflow import keras
 class FNetEncoder(keras.layers.Layer):
     """FNet encoder.
 
-    This class follows the architecture of FNet encoder layer in paper
-    "FNet: Mixing Tokens with Fourier Transforms"
-    (https://arxiv.org/abs/2105.03824). Users can instantiate multiple instances
-    of this class to stack up the encoder.
+    This class follows the architecture of FNet encoder layer in the
+    [FNet paper](https://arxiv.org/abs/2105.03824). Users can instantiate
+    multiple instances of this class to stack up the encoder.
 
-    Note on padding: In the official FNet code, padding tokens are added to the
+    Note on masking: In the official FNet code, padding tokens are added to the
     the input. However, the padding masks are deleted, i.e., mixing of
     all tokens is done. This is because certain frequencies will be zeroed
     out if we apply padding masks in every encoder layer. Hence, we don't
@@ -56,7 +55,7 @@ class FNetEncoder(keras.layers.Layer):
         intermediate_dim=64)
 
     # Create a simple model containing the encoder.
-    input = keras.Input(shape=[4, 6])
+    input = keras.Input(shape=[10, 64])
     output = encoder(input)
     model = keras.Model(inputs=input, outputs=output)
 
@@ -66,7 +65,7 @@ class FNetEncoder(keras.layers.Layer):
     ```
 
     References:
-        [Lee-Thorp et al., 2021](https://arxiv.org/abs/2105.03824)
+     - [Lee-Thorp et al., 2021](https://arxiv.org/abs/2105.03824)
     """
 
     def __init__(

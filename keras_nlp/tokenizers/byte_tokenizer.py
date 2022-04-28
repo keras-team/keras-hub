@@ -30,18 +30,24 @@ class ByteTokenizer(tokenizer.Tokenizer):
     This tokenizer is a vocabulary-free tokenizer which will tokenize text as
     as raw bytes from [0, 256).
 
+    Tokenizer outputs can either be padded and truncated with a
+    `sequence_length` argument, or left un-truncated. The exact output will
+    depend on the rank of the input tensors.
+
     If input is a batch of strings:
     By default, the layer will output a `tf.RaggedTensor` where the last
     dimension of the output is ragged. If `sequence_length` is set, the layer
     will output a dense `tf.Tensor` where all inputs have been padded or
-    truncated to `sequence_length`. The output dtype can be controlled via the
-    `dtype` argument, which should be an integer type
-    (tf.int16, tf.int32, etc.).
+    truncated to `sequence_length`.
 
     If input is a scalar string:
     There are two cases here. If `sequence_length` is set, the output will be
     a dense `tf.Tensor` of shape `[sequence_length]`. Otherwise, the output will
     be a dense `tf.Tensor` of shape `[None]`.
+
+    The output dtype can be controlled via the
+    `dtype` argument, which should be an integer type
+    (tf.int16, tf.int32, etc.).
 
     Args:
         lowercase: boolean. If True, the input text will be converted to

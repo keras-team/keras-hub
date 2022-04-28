@@ -27,9 +27,9 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     This tokenizer is a vocabulary free tokenizer which tokenizes text as
     unicode characters codepoints.
 
-    Tokenizer outputs can either be truncated with a `sequence_length` argument,
-    or left un-truncated. The exact output will depend on the rank of the input
-    tensors.
+    Tokenizer outputs can either be padded and truncated with a
+    `sequence_length` argument, or left un-truncated. The exact output will
+    depend on the rank of the input tensors.
 
     If input is a batch of strings (rank > 0):
     By default, the layer will output a `tf.RaggedTensor` where the last
@@ -44,7 +44,6 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     The output dtype can be controlled via the `dtype` argument, which should be
     an integer type (tf.int16, tf.int32, etc.).
-
 
     Args:
         lowercase: If true, the input text will be first lowered before

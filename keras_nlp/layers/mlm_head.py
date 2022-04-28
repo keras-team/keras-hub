@@ -55,10 +55,10 @@ class MLMHead(keras.layers.Layer):
             (return probabilities).
         layer_norm_epsilon: float, defaults to 1e-5. The epsilon value in layer
             normalization components.
-        kernel_initializer: string or tf.keras.initializers initializer,
+        kernel_initializer: string or `keras.initializers` initializer,
             defaults to "glorot_uniform". The kernel initializer for
             the dense and multiheaded attention layers.
-        bias_initializer: string or tf.keras.initializers initializer,
+        bias_initializer: string or `keras.initializers` initializer,
             defaults to "zeros". The bias initializer for
             the dense and multiheaded attention layers.
         name: string, defaults to None. The name of the layer.
@@ -149,7 +149,7 @@ class MLMHead(keras.layers.Layer):
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._layer_norm = tf.keras.layers.LayerNormalization(
+        self._layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
         if self.embedding_weights is None:

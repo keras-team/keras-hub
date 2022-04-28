@@ -41,7 +41,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
             used in the vocabulary
             (input_dim should equal size of vocabulary + 1).
 
-    Example:
+    Examples:
     ```python
     seq_length = 50
     vocab_size = 5000

@@ -83,9 +83,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     `lowercase=False`, `strip_accents=False` and `split=False`. In
     this case, inputs should be pre-split string tensors or ragged tensors.
 
-    Tokenizer outputs can either be truncated with a `sequence_length` argument,
-    or left un-truncated. The exact output will depend on the rank of the input
-    tensors.
+    Tokenizer outputs can either be padded and truncated with a
+    `sequence_length` argument, or left un-truncated. The exact output will
+    depend on the rank of the input tensors.
 
     If input is a batch of strings (rank > 0):
     By default, the layer will output a `tf.RaggedTensor` where the last
