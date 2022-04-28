@@ -83,6 +83,45 @@ class MLMMaskGenerator(keras.layers.Layer):
             vocabulary_size=10, mask_selection_rate=0.5, mask_token_id=0, \
             mask_selection_length=5)
     >>> masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
+
+    With TensorFlow Dataset
+    >>> # Load dataset
+        train_data = tfds.load(
+            name="imdb_reviews/plain_text",
+            split=('train[:100%]'),
+            as_supervised=True)
+    >>> # Create training dataset
+        train_examples_batch, train_labels_batch = next(iter(
+            train_data.batch(10)))
+    >>> # Preprocess to split and pad
+        def preprocess(X_batch, y_batch):
+            X_batch = tf.strings.split(X_batch)
+            return X_batch.to_tensor(default_value=b"<PAD>"), y_batch
+
+        BATCH_SIZE = 32
+
+        # Calulcate Vocabulary
+        from collections import Counter
+
+        vocabulary = Counter()
+        for X_batch, y_batch in train_data.batch(BATCH_SIZE).map(preprocess):
+            for review in X_batch:
+                vocabulary.update(list(review.numpy()))
+    >>> OOV_TOKEN = "<UNK>"
+        vocabulary[OOV_TOKEN] = 0
+        VOCAB_SIZE = len(vocabulary)
+        SEQUENCE_LENGTH = 100
+
+        # generates dataset for training
+        word_tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+            vocabulary=vocabulary.keys(),
+            oov_token=OOV_TOKEN,
+            sequence_length=SEQUENCE_LENGTH
+        )
+        def generate_dataset(data):
+            for X_batch, y_batch in data.batch(BATCH_SIZE).map(preprocess):
+                masked_output = masker(word_tokenizer(X_batch))
+            return masker_output['tokens'], masker_output['mask_ids']
     """
 
     def __init__(
