@@ -175,9 +175,9 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
             kwargs["dtype"] = tf.int32
         else:
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
-            if not dtype.is_integer and dtype != tf.string:
+            if not dtype.is_integer:
                 raise ValueError(
-                    "Output dtype must be an integer type of a string. "
+                    "Output dtype must be an integer type. "
                     f"Received: dtype={dtype}"
                 )
 
