@@ -135,9 +135,7 @@ class WordPieceTokenizerTest(tf.test.TestCase):
     def test_no_spliting(self):
         input_data = ["t o k e n", "m i s s i n g", "t o k e n"]
         vocab_data = ["[UNK]", "t o k e n"]
-        tokenizer = WordPieceTokenizer(
-            vocabulary=vocab_data, split=False
-        )
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data, split=False)
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [1, 0, 1])
 
