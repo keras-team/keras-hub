@@ -488,7 +488,7 @@ class BertModel(keras.Model):
 
         self._position_embedding_layer = keras_nlp.layers.PositionEmbedding(
             initializer=initializer,
-            max_length=max_sequence_length,
+            sequence_length=max_sequence_length,
             name="position_embedding",
         )
 
