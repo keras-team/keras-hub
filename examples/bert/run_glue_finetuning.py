@@ -172,30 +172,27 @@ class BertClassificationFinetuner(keras.Model):
 
 
 class BertHyperModel(keras_tuner.HyperModel):
-        """Creates a hypermodel to help with the search space for finetuning."""
+    """Creates a hypermodel to help with the search space for finetuning."""
 
-        def __init__(self, bert_config):
-            self.bert_config = bert_config
-        
-        def build(self, hp):
-            model = keras.models.load_model(
-                FLAGS.saved_model_input,
-                compile=False
-            )
-            bert_config = self.bert_config
-            finetuning_model = BertClassificationFinetuner(
-                bert_model=model,
-                hidden_size=bert_config["hidden_size"],
-                num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
-            )
-            finetuning_model.compile(
-                optimizer=keras.optimizers.Adam(
-                    learning_rate=hp.Choice("lr", [5e-5, 4e-5, 3e-5, 2e-5])
-                ),
-                loss="sparse_categorical_crossentropy",
-                metrics=["accuracy"],
-            )
-            return finetuning_model
+    def __init__(self, bert_config):
+        self.bert_config = bert_config
+
+    def build(self, hp):
+        model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
+        bert_config = self.bert_config
+        finetuning_model = BertClassificationFinetuner(
+            bert_model=model,
+            hidden_size=bert_config["hidden_size"],
+            num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
+        )
+        finetuning_model.compile(
+            optimizer=keras.optimizers.Adam(
+                learning_rate=hp.Choice("lr", [5e-5, 4e-5, 3e-5, 2e-5])
+            ),
+            loss="sparse_categorical_crossentropy",
+            metrics=["accuracy"],
+        )
+        return finetuning_model
 
 
 def main(_):
