@@ -32,7 +32,7 @@ class PositionEmbedding(keras.layers.Layer):
     corresponds to the sequence, that is, the penultimate dimension.
 
     Args:
-        max_length: The maximum length of the dynamic sequence.
+        sequence_length: The maximum length of the dynamic sequence.
         initializer: The initializer to use for the embedding weights. Defaults
             to "glorot_uniform".
         seq_axis: The axis of the input tensor where we add the embeddings.
@@ -43,7 +43,7 @@ class PositionEmbedding(keras.layers.Layer):
         input_dim=vocab_size, output_dim=embed_dim
     )
     position_embeddings = keras_nlp.layers.PositionEmbedding(
-        max_length=max_length
+        sequence_length=sequence_length
     )
 
     embedded_tokens = token_embeddings(inputs)
@@ -58,23 +58,23 @@ class PositionEmbedding(keras.layers.Layer):
 
     def __init__(
         self,
-        max_length,
+        sequence_length,
         initializer="glorot_uniform",
         **kwargs,
     ):
         super().__init__(**kwargs)
-        if max_length is None:
+        if sequence_length is None:
             raise ValueError(
-                "`max_length` must be an Integer, received `None`."
+                "`sequence_length` must be an Integer, received `None`."
             )
-        self.max_length = int(max_length)
+        self.sequence_length = int(sequence_length)
         self.initializer = keras.initializers.get(initializer)
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "max_length": self.max_length,
+                "sequence_length": self.sequence_length,
                 "initializer": keras.initializers.serialize(self.initializer),
             }
         )
@@ -84,7 +84,7 @@ class PositionEmbedding(keras.layers.Layer):
         feature_size = input_shape[-1]
         self.position_embeddings = self.add_weight(
             "embeddings",
-            shape=[self.max_length, feature_size],
+            shape=[self.sequence_length, feature_size],
             initializer=self.initializer,
             trainable=True,
         )

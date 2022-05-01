@@ -24,6 +24,9 @@ By default, it will duplicate the input data 10 times with different masks and
 sentence pairs, as will the original paper. So a 20gb source of wikipedia and
 bookscorpus will result in a 400gb dataset.
 
+This script is adapted from the original BERT respository:
+https://github.com/google-research/bert/blob/master/create_pretraining_data.py
+
 Usage:
 python create_pretraining_data.py \
     --input_files ~/datasets/bert-sentence-split-data/shard_0.txt \

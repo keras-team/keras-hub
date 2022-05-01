@@ -47,6 +47,21 @@ request gets approved by the reviewer.
 
 Once the pull request is approved, a team member will take care of merging.
 
+## Developing on Windows
+
+For Windows development, we recommend using WSL (Windows Subsystem for Linux),
+so you can run the shell scripts in this repository. We will not support
+Windows Shell/PowerShell. You can refer
+[to these instructions](https://docs.microsoft.com/en-us/windows/wsl/install)
+for WSL installation.
+
+Note that if you are using Windows Subsystem for Linux (WSL), make sure you 
+clone the repo with Linux style LF line endings and change the default setting
+for line separator in your Text Editor before running the format
+or lint scripts. This is automatically done if you clone using git inside WSL.
+If there is conflict due to the line endings you might see an error
+like - `: invalid option`.
+
 ## Setup environment
 
 Python 3.7 or later is required.
@@ -111,12 +126,6 @@ the following commands manually every time you want to format your code:
 If after running these the CI flow is still failing, try updating `flake8`,
 `isort` and `black`. This can be done by running `pip install --upgrade black`,
 `pip install --upgrade flake8`, and `pip install --upgrade isort`.
-
-Note that if you are using Windows Subsystem for Linux (WSL), make sure you 
-clone the repo with Linux style LF line endings before running the format
-or lint scripts. This is automatically done if you clone using git inside WSL.
-If there is conflict due to the line endings you might see an error
-like - `: invalid option`
 
 ## Community Guidelines
 

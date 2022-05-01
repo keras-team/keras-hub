@@ -14,8 +14,8 @@
 
 from keras_nlp.layers.fnet_encoder import FNetEncoder
 from keras_nlp.layers.mlm_head import MLMHead
+from keras_nlp.layers.mlm_mask_generator import MLMMaskGenerator
 from keras_nlp.layers.position_embedding import PositionEmbedding
-from keras_nlp.layers.preprocessing import MLMMaskGenerator
 from keras_nlp.layers.sine_position_encoding import SinePositionEncoding
 from keras_nlp.layers.token_and_position_embedding import (
     TokenAndPositionEmbedding,

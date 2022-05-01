@@ -32,7 +32,7 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase):
     def test_get_config_and_from_config(self):
         token_and_position_embed = TokenAndPositionEmbedding(
             vocabulary_size=5,
-            max_length=10,
+            sequence_length=10,
             embedding_dim=32,
         )
 
@@ -62,7 +62,7 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase):
         embedding_dim = 3
         test_layer = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
-            max_length=sequence_length,
+            sequence_length=sequence_length,
             embedding_dim=embedding_dim,
             embeddings_initializer=custom_embed_init,
         )
@@ -106,7 +106,7 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase):
         embedding_dim = 3
         test_layer = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
-            max_length=sequence_length,
+            sequence_length=sequence_length,
             embedding_dim=embedding_dim,
             embeddings_initializer=custom_embed_init,
         )
@@ -124,7 +124,7 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase):
     def test_mask_propagation(self):
         test_layer = TokenAndPositionEmbedding(
             vocabulary_size=5,
-            max_length=4,
+            sequence_length=4,
             embedding_dim=3,
             mask_zero=True,
         )
@@ -139,7 +139,7 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase):
         embedding_dim = 3
         test_layer = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
-            max_length=sequence_length,
+            sequence_length=sequence_length,
             embedding_dim=embedding_dim,
         )
         inputs = keras.Input(shape=(sequence_length,))

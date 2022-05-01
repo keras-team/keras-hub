@@ -34,7 +34,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         sequence_length = 21
         feature_size = 30
         test_layer = position_embedding.PositionEmbedding(
-            max_length=sequence_length
+            sequence_length=sequence_length
         )
         input_tensor = tf.keras.Input(shape=(sequence_length, feature_size))
         output_tensor = test_layer(input_tensor)
@@ -51,7 +51,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         sequence_length = 21
         feature_size = 30
         test_layer = position_embedding.PositionEmbedding(
-            max_length=sequence_length
+            sequence_length=sequence_length
         )
         input_tensor = tf.keras.Input(
             shape=(feature_size, sequence_length, feature_size)
@@ -75,7 +75,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         sequence_length = 21
         feature_size = 30
         test_layer = position_embedding.PositionEmbedding(
-            max_length=sequence_length, dtype="float16"
+            sequence_length=sequence_length, dtype="float16"
         )
         input_tensor = tf.keras.Input(shape=(sequence_length, feature_size))
         output_tensor = test_layer(input_tensor)
@@ -91,7 +91,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         max_sequence_length = 40
         feature_size = 30
         test_layer = position_embedding.PositionEmbedding(
-            max_length=max_sequence_length
+            sequence_length=max_sequence_length
         )
         # Create a 3-dimensional input (the first dimension is implicit).
         input_tensor = tf.keras.Input(shape=(None, feature_size))
@@ -107,7 +107,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         max_sequence_length = 60
         feature_size = 30
         test_layer = position_embedding.PositionEmbedding(
-            max_length=max_sequence_length
+            sequence_length=max_sequence_length
         )
         # Create a 4-dimensional input (the first dimension is implicit).
         input_tensor = tf.keras.Input(shape=(None, None, feature_size))
@@ -123,7 +123,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         max_sequence_length = 40
         feature_size = 30
         test_layer = position_embedding.PositionEmbedding(
-            max_length=max_sequence_length
+            sequence_length=max_sequence_length
         )
         # Create a 3-dimensional input (the first dimension is implicit).
         input_tensor = tf.keras.Input(shape=(None, feature_size))
@@ -148,7 +148,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         max_sequence_length = 4
         feature_size = 3
         test_layer = position_embedding.PositionEmbedding(
-            max_length=max_sequence_length,
+            sequence_length=max_sequence_length,
             initializer=custom_init,
         )
         inputs = tf.keras.Input(shape=(max_sequence_length, feature_size))
@@ -172,7 +172,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         max_sequence_length = 4
         feature_size = 2
         test_layer = position_embedding.PositionEmbedding(
-            max_length=max_sequence_length,
+            sequence_length=max_sequence_length,
             initializer=custom_init,
         )
         # Create a 3-dimensional ragged input (the first dimension is implicit).
@@ -209,7 +209,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         max_sequence_length = 4
         feature_size = 2
         test_layer = position_embedding.PositionEmbedding(
-            max_length=max_sequence_length,
+            sequence_length=max_sequence_length,
             initializer=custom_init,
         )
         # Create a 4-dimensional ragged input (the first dimension is implicit).
@@ -254,7 +254,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         max_sequence_length = 4
         feature_size = 3
         test_layer = position_embedding.PositionEmbedding(
-            max_length=max_sequence_length
+            sequence_length=max_sequence_length
         )
         inputs = tf.keras.Input(shape=(max_sequence_length, feature_size))
         outputs = test_layer(inputs)
@@ -283,11 +283,11 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
     def test_get_config_and_from_config(self):
         max_sequence_length = 40
         test_layer = position_embedding.PositionEmbedding(
-            max_length=max_sequence_length
+            sequence_length=max_sequence_length
         )
         config = test_layer.get_config()
         expected_config_subset = {
-            "max_length": max_sequence_length,
+            "sequence_length": max_sequence_length,
             "initializer": {
                 "class_name": "GlorotUniform",
                 "config": {"seed": None},
@@ -306,7 +306,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         max_sequence_length = 4
         feature_size = 6
         test_layer = position_embedding.PositionEmbedding(
-            max_length=max_sequence_length
+            sequence_length=max_sequence_length
         )
         inputs = tf.keras.Input(shape=(max_sequence_length, feature_size))
         outputs = test_layer(inputs)
