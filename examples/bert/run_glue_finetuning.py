@@ -65,16 +65,11 @@ flags.DEFINE_bool(
     "Whether to run evaluation on the validation set for a given task.",
 )
 
-flags.DEFINE_string(
-    "finetune_results_output",
-    None,
-    "The directory to save the finetuner results in.",
-)
+flags.DEFINE_integer("batch_size", 32, "The batch size.")
+
+flags.DEFINE_integer("epochs", 3, "The number of training epochs.")
 
 flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
-
-BATCH_SIZE = 32
-EPOCHS = 3
 
 
 def pack_inputs(
@@ -229,13 +224,13 @@ def main(_):
     train_ds, test_ds, validation_ds = load_data(FLAGS.task_name)
 
     # batch_size is taken as 32.
-    train_ds = train_ds.batch(BATCH_SIZE).map(
+    train_ds = train_ds.batch(FLAGS.batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
-    validation_ds = validation_ds.batch(BATCH_SIZE).map(
+    validation_ds = validation_ds.batch(FLAGS.batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
-    test_ds = test_ds.batch(BATCH_SIZE).map(
+    test_ds = test_ds.batch(FLAGS.batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
 
@@ -252,13 +247,15 @@ def main(_):
         project_name="hyperparameter_tuner_results",
     )
 
-    tuner.search(train_ds, epochs=EPOCHS, validation_data=validation_ds)
+    tuner.search(train_ds, epochs=FLAGS.epochs, validation_data=validation_ds)
 
     # Extract the best hyperparameters after the search.
     best_hp = tuner.get_best_hyperparameters()[0]
     finetuning_model = tuner.get_best_models()[0]
 
-    finetuning_model.fit(train_ds, epochs=EPOCHS, validation_data=validation_ds)
+    finetuning_model.fit(
+        train_ds, epochs=FLAGS.epochs, validation_data=validation_ds
+    )
 
     print(
         f"The best hyperparameters found are:\nLearning Rate: {best_hp['lr']}"
