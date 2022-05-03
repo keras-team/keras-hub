@@ -33,8 +33,8 @@ class Tokenizer(keras.layers.Layer):
 
     Subclassers should implement `get_vocabulary()`, `vocabulary_size()`,
     `token_to_id()` and `id_to_token()` if applicable. For some simple
-    "pre-tokenizers", such as a whitespace splitter, these methods do not apply
-    and can be skipped.
+    "vocab free" tokenizers, such as a whitespace splitter show below, these
+    methods do not apply and can be skipped.
 
     Examples:
 

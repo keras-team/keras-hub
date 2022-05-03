@@ -127,7 +127,6 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         [1705, 1578, 1575, 1576,    0]], dtype=int32)>
 
     Batch, then tokenize for dense outputs (`sequence_length` provided).
-    (`sequence_length` provided).
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
     ...     sequence_length=5)
