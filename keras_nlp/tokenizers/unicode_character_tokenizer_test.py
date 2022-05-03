@@ -59,6 +59,45 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             ],
         )
 
+    def test_tokenize_scalar_with_vocabulary_size(self):
+        input_data = "ninja"
+        tokenizer = UnicodeCharacterTokenizer(vocabulary_size = 105)
+        call_output = tokenizer(input_data)
+        tokenize_output = tokenizer.tokenize(input_data)
+
+        self.assertAllEqual(call_output, [104, 104, 104, 104,  97])
+        self.assertAllEqual(tokenize_output, [104, 104, 104, 104,  97])
+
+    def test_tokenize_dense_with_vocabulary_size(self):
+        input_data = tf.constant(["ninja", "samurai", "▀▁▂▃"])
+        tokenizer = UnicodeCharacterTokenizer(sequence_length = 10, 
+            vocabulary_size = 105)
+        call_output = tokenizer(input_data)
+        self.assertIsInstance(call_output, tf.Tensor)
+        self.assertAllEqual(
+            call_output,
+            [
+                [104, 104, 104, 104, 97, 0, 0, 0, 0, 0],
+                [104, 97, 104, 104, 104, 97, 104, 0, 0, 0],
+                [104, 104, 104, 104, 0, 0, 0, 0, 0, 0],
+            ],
+        )
+    
+    def test_tokenize_ragged_with_vocabulary_size(self):
+        input_data = tf.constant(["ninja", "samurai", "▀▁▂▃"])
+        tokenizer = UnicodeCharacterTokenizer(vocabulary_size = 105)
+        call_output = tokenizer(input_data)
+        tokenize_output = tokenizer.tokenize(input_data)
+        self.assertIsInstance(call_output, tf.RaggedTensor)
+        exp_outputs = [
+            [104, 104, 104, 104, 97],
+            [104, 97, 104, 104, 104, 97, 104],
+            [104, 104, 104, 104],
+        ]
+        for i in range(call_output.shape[0]):
+            self.assertAllEqual(call_output[i], exp_outputs[i])
+            self.assertAllEqual(tokenize_output[i], exp_outputs[i])
+
     def test_detokenize(self):
         input_data = tf.ragged.constant(
             [
@@ -232,6 +271,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             sequence_length=11,
             normalization_form="NFC",
             errors="strict",
+            vocabulary_size= None,
         )
         cloned_tokenizer = UnicodeCharacterTokenizer.from_config(
             original_tokenizer.get_config()
@@ -255,6 +295,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             normalization_form="NFC",
             errors="ignore",
             replacement_char=0,
+            vocabulary_size= None,
         )
         exp_config = {
             "dtype": "int32",
@@ -267,6 +308,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             "input_encoding": "UTF-8",
             "output_encoding": "UTF-8",
             "trainable": True,
+            "vocabulary_size": None,
         }
         self.assertEqual(tokenizer.get_config(), exp_config)
 
@@ -278,6 +320,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             replacement_char=0,
             input_encoding="UTF-16",
             output_encoding="UTF-16",
+            vocabulary_size= None,
         )
         exp_config_different_encoding = {
             "dtype": "int32",
@@ -290,10 +333,37 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             "input_encoding": "UTF-16",
             "output_encoding": "UTF-16",
             "trainable": True,
+            "vocabulary_size": None,
         }
         self.assertEqual(
             tokenize_different_encoding.get_config(),
             exp_config_different_encoding,
+        )
+
+        tokenize_different_vocabular_size = UnicodeCharacterTokenizer(
+            name="unicode_character_tokenizer_config_gen",
+            lowercase=False,
+            sequence_length=8,
+            errors="ignore",
+            replacement_char=0,
+            vocabulary_size= 100,
+        )
+        exp_config_different_vocabular_size = {
+            "dtype": "int32",
+            "errors": "ignore",
+            "lowercase": False,
+            "name": "unicode_character_tokenizer_config_gen",
+            "normalization_form": None,
+            "replacement_char": 0,
+            "sequence_length": 8,
+            "input_encoding": "UTF-8",
+            "output_encoding": "UTF-8",
+            "trainable": True,
+            "vocabulary_size": 100,
+        }
+        self.assertEqual(
+            tokenize_different_vocabular_size.get_config(),
+            exp_config_different_vocabular_size,
         )
 
     def test_saving(self):
@@ -305,6 +375,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             sequence_length=20,
             normalization_form="NFKC",
             errors="replace",
+            vocabulary_size= None,
         )
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
