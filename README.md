@@ -4,20 +4,21 @@
 ![Tensorflow](https://img.shields.io/badge/tensorflow-v2.5.0+-success.svg)
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-nlp/issues)
 
-KerasNLP is a simple and powerful API for building Natural Language
-Processing (NLP) models. KerasNLP provides modular building blocks following
+KerasNLP is a simple and powerful API for building Natural Language Processing
+(NLP) models within the Keras ecosystem.
+
+KerasNLP provides modular building blocks following
 standard Keras interfaces (layers, metrics) that allow you to quickly and
 flexibly iterate on your task. Engineers working in applied NLP can leverage the
 library to assemble training and inference pipelines that are both
 state-of-the-art and production-grade.
 
-KerasNLP can be understood as a horizontal extension of the Keras API:
+KerasNLP can be understood as a horizontal extension of the Keras API —
 components are first-party Keras objects that are too specialized to be
 added to core Keras, but that receive the same level of polish as the rest of
 the Keras API.
 
-KerasNLP is a new and growing project, and we welcome
-[contributions](#contributing).
+We are a new and growing project, and welcome [contributions](#contributing).
 
 ## Quick Links
 
@@ -25,7 +26,7 @@ KerasNLP is a new and growing project, and we welcome
 - [Contributing guide](CONTRIBUTING.md)
 - [Roadmap](ROADMAP.md)
 - [API Design Guidelines](API_DESIGN.md)
-- [Help wanted issues](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
+- [Call for contribution issues](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
 
 ## Quick Start
 
@@ -35,7 +36,7 @@ Install the latest release:
 pip install keras-nlp --upgrade
 ```
 
-Tokenize text, build a transformer, and train a single batch:
+Tokenize text, build a tiny transformer, and train a single batch:
 
 ```python
 import keras_nlp
@@ -46,7 +47,9 @@ from tensorflow import keras
 vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "jumped", "."]
 inputs = ["The quick brown fox jumped.", "The fox slept."]
 tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-    vocabulary=vocab, sequence_length=10)
+    vocabulary=vocab,
+    sequence_length=10,
+)
 X, Y = tokenizer(inputs), tf.constant([1, 0])
 
 # Create a tiny transformer.
@@ -74,22 +77,21 @@ For a complete model building tutorial, see our guide on
 
 ## Contributing
 
-If you'd like to contribute, please see our [contributing guide](CONTRIBUTING.md).
+If you'd like to contribute, our [contributing guide](CONTRIBUTING.md)
+contains instructions for setting up a development environment and contributing
+PRs.
 
-The fastest way to contribute it to find
-[open issues](https://github.com/keras-team/keras-nlp/issues) that need
-an assignee. We maintain a
-[good first issue](
-https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
-tag for newcomers to the project, and a longer list of
-[contributions welcome](
-https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
-issues that may range in complexity.
+The fastest way to contribute it to find open issues that need an assignee. We
+maintain two lists of github tags for contributors:
+ - [good first issue](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22):
+   a list of small, well defined issues for newcomers to the project.
+ - [contributions welcome](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22):
+   a larger list of issues that may range in complexity.
 
 If you would like propose a new symbol or feature, please first read our
 [Roadmap](ROADMAP.md) and [API Design Guidelines](API_DESIGN.md), then open
 an issue to discuss. If you have a specific design in mind, please include a
-[Colab](https://colab.research.google.com/) notebook showing the proposed design
+Colab notebook showing the proposed design
 in a end-to-end example. Keep in mind that design for a new feature or use case
 may take longer than contributing to an open issue with a vetted-design.
 

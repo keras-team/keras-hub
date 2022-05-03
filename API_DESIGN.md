@@ -1,12 +1,26 @@
 # KerasNLP Design Guidelines
 
-KerasNLP uses the same API design guidelines as the rest of the Keras
-ecosystem, documented [here]
-(https://github.com/keras-team/governance/blob/master/keras_api_design_guidelines.md).
-Anyone contributing to KerasNLP API design is strongly encouraged to
-read through the document in it's entirety.
+Before reading this document, please read the
+[Keras API design guidelines](https://github.com/keras-team/governance/blob/master/keras_api_design_guidelines.md).
 
 Below are some design considerations specific to KerasNLP.
+
+## Philosophy
+
+- **Let user needs be our compass.** Any modular building block that NLP
+  practitioners need is in scope, whether it's data loading, augmentation, model
+  building, evaluation metrics, or visualization utils.
+
+- **Be resolutely high-level.** Even if something is easy to do by hand in 5
+  lines, package it as a one liner.
+
+- **Balance ease of use and flexibility.** Simple things should be easy, and
+  arbitrarily advanced use cases should be possible. There should always be a
+  "we need to go deeper" path available to our most expert users.
+
+- **Grow as a platform and as a community.** KerasNLP development should be
+  driven by the community, with feature and release planning happening in
+  the open on GitHub.
 
 ## Avoid new dependencies
 
@@ -50,12 +64,12 @@ If an low-level (c++) operation we need is missing, we should add it in
 collaboration with core TensorFlow or TensorFlow Text. KerasNLP is a python-only
 library.
 
-## Use tf.data for text preprocessing and augmentation
+## Support tf.data for text preprocessing and augmentation
 
 In general, our preprocessing tools should be runnable inside a
 [tf.data](https://www.tensorflow.org/guide/data) pipeline, and any augmentation
-to training data should be dynamic--runnable on the fly during training rather
-than precomputed.
+to training data should be dynamic (runnable on the fly during training rather
+than precomputed).
 
 We should design our preprocessing workflows with tf.data in mind, and support
 both batched and unbatched data as input to preprocessing layers.

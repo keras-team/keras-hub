@@ -8,12 +8,9 @@
   assemble state-of-the-art NLP workflows.
 
 - **A collection of guides and examples.** This effort is split between two
-  locations:
-  
-  On [keras.io](keras.io/keras_nlp), we host a collection of small-scale,
-  easily accessible guides showing end-to-end workflows using KerasNLP.
-
-  In this repository, we host a collection of
+  locations. On [keras.io](keras.io/keras_nlp), we host a collection of
+  small-scale, easily accessible guides showing end-to-end workflows using
+  KerasNLP. In this repository, we host a collection of
   [examples](https://github.com/keras-team/keras-nlp/tree/master/examples) on
   how to train large-scale, state-of-the-art models from scratch. This is not
   part of the library itself, but rather a way to vet our components and show
@@ -47,23 +44,6 @@
   directly to [Tensorflow Text](https://www.tensorflow.org/text) or
   core Tensorflow.
 
-## Philosophy
-
-- **Let user needs be our compass.** Any modular building block that NLP
-  practitioners need is in scope, whether it's data loading, augmentation, model
-  building, evaluation metrics, or visualization utils.
-
-- **Be resolutely high-level.** Even if something is easy to do by hand in 5
-  lines, package it as a one liner.
-
-- **Balance ease of use and flexibility.** Simple things should be easy, and
-  arbitrarily advanced use cases should be possible. There should always be a
-  "we need to go deeper" path available to our most expert users.
-
-- **Grow as a platform and as a community.** KerasNLP development should be
-  driven by the community, with feature and release planning happening out in
-  the open on GitHub.
-
 ## Areas of interest
 
 At this point in our development cycle, we are primarily interested in providing
@@ -73,10 +53,10 @@ sequence-to-sequence transformer like T5) and a end-to-end task (e.g.
 summarization), we should have a clear code example in mind and a list of
 components to use.
 
-Note that while we will be supporting large-scale Transformer models as a
-key offering from our library, but we are not a strictly Transformer-based
-modeling library. We aim to support simple techniques such as n-gram models and
-word2vec embeddings, and make it easy to hop between different approaches.
+Note that while Transformers is a key offering from our library,
+we are not a strictly Transformer-based modeling library. We aim to support
+simple techniques such as n-gram models and word2vec embeddings, and make it
+easy to hop between different approaches.
 
 Current focus areas:
 
@@ -99,22 +79,23 @@ Current focus areas:
 - Metrics for model evaluation, such a ROUGE and BLEU for evaluating translation
   quality.
 
-## Citations
+## Citation bar
 
 At this moment in time, we have no set citation bar for development, but due to
 the newness of the library we want to focus our efforts on a small subset of the
 best known and most effective NLP techniques.
 
-Proposed components should usually either be part of a very well architecture
-(think 1000s of citations) or contribute in some meaningful way to the usability
-of an end-to-end workflow.
+Proposed components should usually either be part of a very well known
+architecture or contribute in some meaningful way to the usability of an
+end-to-end workflow.
 
 ## Pre-trained modeling workflows
 
 Pre-training many modern NLP models is prohibitively expensive and
-time-consuming for an average user. A key goal with the KerasNLP project is to
-support easy use of pre-trained models using KerasNLP components.
+time-consuming for an average user. A key goal with for the KerasNLP project is
+to have KerasNLP components available in a pre-trained model offering of some
+form.
 
-We are working with the rest of the Tensorflow ecosystem (e.g. TF Hub), to
-provide a coherent plan for accessing pre-trained models. We will continue to
-share updates as they are available.
+We are working with the rest of the Tensorflow ecosystem (e.g. TF Hub,
+TF Models), to provide a coherent plan for accessing pre-trained models. We will
+continue to share updates as they are available.
