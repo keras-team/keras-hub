@@ -26,23 +26,29 @@ from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
 class TransformerDecoder(keras.layers.Layer):
     """Transformer decoder.
 
-    This class follows the architecture of transformer decoder layer in paper
-    "Attention is All You Need" (https://arxiv.org/abs/1706.03762). Users can
-    instantiate multiple instances of this class to stack up the decoder.
+    This class follows the architecture of the transformer decoder layer in the
+    paper [Attention is All You Need](https://arxiv.org/abs/1706.03762). Users
+    can instantiate multiple instances of this class to stack up a decoder.
+
+    This layer will correctly compute an attention mask from an implicit
+    Keras padding mask (for example, by passing `mask_zero=True` to a
+    `keras.layers.Embedding` layer). See the Masking and Padding
+    [guide](https://keras.io/guides/understanding_masking_and_padding/)
+    for more details.
 
     Args:
         intermediate_dim: int, the hidden size of feedforward network.
         num_heads: int, the number of heads in MultiHeadAttention.
         dropout: float, defaults to 0. the dropout value, shared by
             MultiHeadAttention and feedforward network.
-        activation: string or tf.keras.activations, defaults to "relu". the
+        activation: string or `keras.activations`, defaults to "relu". the
             activation function of feedforward network.
         layer_norm_epsilon: float, defaults to 1e-5. The eps value in layer
             normalization components.
-        kernel_initializer: string or tf.keras.initializers initializer,
+        kernel_initializer: string or `keras.initializers` initializer,
             defaults to "glorot_uniform". The kernel initializer for
             the dense and multiheaded attention layers.
-        bias_initializer: string or tf.keras.initializers initializer,
+        bias_initializer: string or `keras.initializers` initializer,
             defaults to "zeros". The bias initializer for
             the dense and multiheaded attention layers.
         name: string, defaults to None. The name of the layer.
@@ -55,21 +61,21 @@ class TransformerDecoder(keras.layers.Layer):
         intermediate_dim=64, num_heads=8)
 
     # Create a simple model containing the decoder.
-    decoder_input = tf.keras.Input(shape=[4, 6])
-    encoder_input = tf.keras.Input(shape=[4, 6])
+    decoder_input = keras.Input(shape=[10, 64])
+    encoder_input = keras.Input(shape=[10, 64])
     output = decoder(decoder_input, encoder_input)
-    model = tf.keras.Model(inputs=[decoder_input, encoder_input],
+    model = keras.Model(inputs=[decoder_input, encoder_input],
         outputs=output)
 
     # Call decoder on the inputs.
-    decoder_input_data = tf.random.uniform(shape=[1, 10, 64])
-    encoder_input_data = tf.random.uniform(shape=[1, 10, 64])
+    decoder_input_data = tf.random.uniform(shape=[2, 10, 64])
+    encoder_input_data = tf.random.uniform(shape=[2, 10, 64])
     decoder_output = model([decoder_input_data, encoder_input_data])
 
     ```
 
     References:
-        [Vaswani et al., 20XX](https://arxiv.org/abs/1706.03762)
+     - [Vaswani et al., 2017](https://arxiv.org/abs/1706.03762)
 
     """
 

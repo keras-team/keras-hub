@@ -20,32 +20,42 @@ from tensorflow import keras
 class Tokenizer(keras.layers.Layer):
     """A base class for tokenizer layers.
 
-    The class is intended as a base class when implementing a tokenizer as a
-    `keras.layers.Layer`. It contains two new methods `tokenize()` and
-    `detokenize()`.
+    Tokenizers in the KerasNLP library should all subclass this layer.
+    The class provides two core methods `tokenize()` and `detokenize()` for
+    going from plain text to sequences and back. A tokenizer is a subclass of
+    `keras.layers.Layer` and can be combined into a `keras.Model`.
 
-    Subclassers should always implement the `tokenize` method, which will also
-    be the default when invoking the layer directly on inputs.
+    Subclassers should always implement the `tokenize()` method, which will also
+    be the default when calling the layer directly on inputs.
 
-    Subclassers should implement the `detokenize()` method if the tokenization
-    is reversible. Otherwise, this can be skipped.
+    Subclassers can optionally implement the `detokenize()` method if the
+    tokenization is reversible. Otherwise, this can be skipped.
 
     Subclassers should implement `get_vocabulary()`, `vocabulary_size()`,
     `token_to_id()` and `id_to_token()` if applicable. For some simple
-    "pre-tokenizers," such whitespace splitting, these methods may not apply,
-    and can be skipped.
+    "vocab free" tokenizers, such as a whitespace splitter show below, these
+    methods do not apply and can be skipped.
 
     Examples:
 
     ```python
     class WhitespaceSplitterTokenizer(keras_nlp.tokenizers.Tokenizer):
         def tokenize(self, inputs):
-            return tf.strings.split(inputs).to_tensor()
+            return tf.strings.split(inputs)
 
         def detokenize(self, inputs):
-            return tf.strings.reduce_join([inputs], separator=" ", axis=-1)
+            return tf.strings.reduce_join(inputs, separator=" ", axis=-1)
 
-    tokenizer = WhitespaceTokenizer()
+    tokenizer = WhitespaceSplitterTokenizer()
+
+    # Tokenize some inputs.
+    tokenizer.tokenize("This is a test")
+
+    # Shorthard for `tokenize()`.
+    tokenizer("This is a test")
+
+    # Detokenize some outputs.
+    tokenizer.detokenize(["This", "is", "a", "test"])
     ```
     """
 
