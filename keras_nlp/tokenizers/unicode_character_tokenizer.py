@@ -273,7 +273,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         if scalar_input:
             tokens = tf.squeeze(tokens, 0)
 
-        # Optionally clamps the output code point values to be in the 
+        # Optionally clamps the output code point values to be in the
         # range [0, vocabulary_size)
         if self.vocabulary_size:
             tokens = tf.clip_by_value(tokens, 0, self.vocabulary_size - 1)
@@ -289,5 +289,3 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
             output_encoding=self.output_encoding,
         )
         return encoded_string
-    
-
