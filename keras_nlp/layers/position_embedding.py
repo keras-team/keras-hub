@@ -34,10 +34,10 @@ class PositionEmbedding(keras.layers.Layer):
     Args:
         sequence_length: The maximum length of the dynamic sequence.
         initializer: The initializer to use for the embedding weights. Defaults
-            to "glorot_uniform".
+            to `"glorot_uniform"`.
         seq_axis: The axis of the input tensor where we add the embeddings.
 
-    Example:
+    Examples:
     ```python
     token_embeddings = layers.Embedding(
         input_dim=vocab_size, output_dim=embed_dim
@@ -52,8 +52,7 @@ class PositionEmbedding(keras.layers.Layer):
     ```
 
     Reference:
-        [BERT: Pre-training of Deep Bidirectional Transformers for Language
-        Understanding](https://arxiv.org/abs/1810.04805).
+     - [Devlin et al., 2019](https://arxiv.org/abs/1810.04805)
     """
 
     def __init__(

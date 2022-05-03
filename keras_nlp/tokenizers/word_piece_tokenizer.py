@@ -83,12 +83,23 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     `lowercase=False`, `strip_accents=False` and `split=False`. In
     this case, inputs should be pre-split string tensors or ragged tensors.
 
+    Tokenizer outputs can either be padded and truncated with a
+    `sequence_length` argument, or left un-truncated. The exact output will
+    depend on the rank of the input tensors.
+
+    If input is a batch of strings (rank > 0):
     By default, the layer will output a `tf.RaggedTensor` where the last
-    dimension of the output is ragged after whitespace splitting and sub-word
-    tokenizing. If `sequence_length` is set, the layer will output a dense
-    `tf.Tensor` where all inputs have been padded or truncated to
-    `sequence_length`. The output dtype can be controlled via the `dtype`
-    argument, which should be either an integer or string type.
+    dimension of the output is ragged. If `sequence_length` is set, the layer
+    will output a dense `tf.Tensor` where all inputs have been padded or
+    truncated to `sequence_length`.
+
+    If input is a scalar string (rank == 0):
+    By default, the layer will output a dense `tf.Tensor` with static shape
+    `[None]`. If `sequence_length` is set, the output will be
+    a dense `tf.Tensor` of shape `[sequence_length]`.
+
+    The output dtype can be controlled via the `dtype` argument, which should
+    be either an integer or string type.
 
     Args:
         vocabulary: A list of strings or a string string filename path. If
@@ -115,8 +126,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             must be included in the vocab.
 
     References:
-        - [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)
-        - [Song et al., 2020](https://arxiv.org/abs/2012.15524)
+     - [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)
+     - [Song et al., 2020](https://arxiv.org/abs/2012.15524)
 
     Examples:
 
