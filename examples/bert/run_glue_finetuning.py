@@ -16,6 +16,7 @@
 import json
 
 import datasets
+import keras_tuner
 import tensorflow as tf
 import tensorflow_text as tftext
 from absl import app
@@ -67,8 +68,6 @@ flags.DEFINE_bool(
 flags.DEFINE_integer("batch_size", 32, "The batch size.")
 
 flags.DEFINE_integer("epochs", 3, "The number of training epochs.")
-
-flags.DEFINE_float("learning_rate", 2e-5, "The initial learning rate for Adam.")
 
 flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
 
@@ -167,9 +166,32 @@ class BertClassificationFinetuner(keras.Model):
         return self._logit_layer(outputs)
 
 
+class BertHyperModel(keras_tuner.HyperModel):
+    """Creates a hypermodel to help with the search space for finetuning."""
+
+    def __init__(self, bert_config):
+        self.bert_config = bert_config
+
+    def build(self, hp):
+        model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
+        bert_config = self.bert_config
+        finetuning_model = BertClassificationFinetuner(
+            bert_model=model,
+            hidden_size=bert_config["hidden_size"],
+            num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
+        )
+        finetuning_model.compile(
+            optimizer=keras.optimizers.Adam(
+                learning_rate=hp.Choice("lr", [5e-5, 4e-5, 3e-5, 2e-5])
+            ),
+            loss="sparse_categorical_crossentropy",
+            metrics=["accuracy"],
+        )
+        return finetuning_model
+
+
 def main(_):
     print(f"Reading input model from {FLAGS.saved_model_input}")
-    model = keras.models.load_model(FLAGS.saved_model_input)
 
     vocab = []
     with open(FLAGS.vocab_file, "r") as vocab_file:
@@ -200,6 +222,7 @@ def main(_):
 
     # Read and preprocess GLUE task data.
     train_ds, test_ds, validation_ds = load_data(FLAGS.task_name)
+
     train_ds = train_ds.batch(FLAGS.batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
@@ -210,18 +233,27 @@ def main(_):
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
 
-    finetuning_model = BertClassificationFinetuner(
-        bert_model=model,
-        hidden_size=bert_config["hidden_size"],
-        num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
+    # Create a hypermodel object for a RandomSearch.
+    hypermodel = BertHyperModel(bert_config)
+
+    # Initialize the random search over the 4 learning rate parameters, for 4
+    # trials and 3 epochs for each trial.
+    tuner = keras_tuner.RandomSearch(
+        hypermodel=hypermodel,
+        objective=keras_tuner.Objective("val_loss", direction="min"),
+        max_trials=4,
+        overwrite=True,
+        project_name="hyperparameter_tuner_results",
     )
-    finetuning_model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=FLAGS.learning_rate),
-        loss="sparse_categorical_crossentropy",
-        metrics=["accuracy"],
-    )
-    finetuning_model.fit(
-        train_ds, epochs=FLAGS.epochs, validation_data=validation_ds
+
+    tuner.search(train_ds, epochs=FLAGS.epochs, validation_data=validation_ds)
+
+    # Extract the best hyperparameters after the search.
+    best_hp = tuner.get_best_hyperparameters()[0]
+    finetuning_model = tuner.get_best_models()[0]
+
+    print(
+        f"The best hyperparameters found are:\nLearning Rate: {best_hp['lr']}"
     )
 
     if FLAGS.do_evaluation:
