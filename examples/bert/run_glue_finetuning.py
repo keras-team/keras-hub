@@ -223,7 +223,6 @@ def main(_):
     # Read and preprocess GLUE task data.
     train_ds, test_ds, validation_ds = load_data(FLAGS.task_name)
 
-    # batch_size is taken as 32.
     train_ds = train_ds.batch(FLAGS.batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
