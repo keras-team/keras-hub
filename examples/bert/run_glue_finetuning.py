@@ -253,10 +253,6 @@ def main(_):
     best_hp = tuner.get_best_hyperparameters()[0]
     finetuning_model = tuner.get_best_models()[0]
 
-    finetuning_model.fit(
-        train_ds, epochs=FLAGS.epochs, validation_data=validation_ds
-    )
-
     print(
         f"The best hyperparameters found are:\nLearning Rate: {best_hp['lr']}"
     )
