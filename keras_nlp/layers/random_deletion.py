@@ -3,6 +3,7 @@ from typing import Dict
 
 import tensorflow as tf
 from tensorflow import keras
+import tensorflow_text as tf_text
 
 stop_words = [
     "a",
@@ -186,6 +187,47 @@ stop_words = [
     "yourselves",
 ]
 
+# Matches whitespace and control characters.
+WHITESPACE_REGEX = r"|".join(
+    [
+        r"\s",
+        # Invisible control characters
+        r"\p{Cc}",
+        r"\p{Cf}",
+    ]
+)
+
+# Matches punctuation compatible with the original bert implementation.
+PUNCTUATION_REGEX = r"|".join(
+    [
+        # Treat all non-letter/number ASCII as punctuation.
+        # Characters such as "^", "$", and "`" are not in the Unicode
+        # Punctuation class but we treat them as punctuation anyways.
+        r"[!-/]",
+        r"[:-@]",
+        r"[\[-`]",
+        r"[{-~]",
+        # Unicode punctuation class.
+        r"[\p{P}]",
+        # More unicode ranges.
+        r"[\x{4E00}-\x{9FFF}]",
+        r"[\x{3400}-\x{4DBF}]",
+        r"[\x{20000}-\x{2A6DF}]",
+        r"[\x{2A700}-\x{2B73F}]",
+        r"[\x{2B740}-\x{2B81F}]",
+        r"[\x{2B820}-\x{2CEAF}]",
+        r"[\x{F900}-\x{FAFF}]",
+        r"[\x{2F800}-\x{2FA1F}]",
+    ]
+)
+
+# Matches both whitespace and punctuation.
+WHITESPACE_AND_PUNCTUATION_REGEX = r"|".join(
+    [
+        WHITESPACE_REGEX,
+        PUNCTUATION_REGEX,
+    ]
+)
 
 class RandomDeletion(keras.layers.Layer):
     """Augments input by randomly deleting words
@@ -194,6 +236,8 @@ class RandomDeletion(keras.layers.Layer):
         probability: probability of a word being chosen for deletion
         max_replacements: The maximum number of words to replace
         stop_word_only: Only deletes stopwords. Defaults to False.
+        split_pattern: A regex pattern to match delimiters to split. By default,
+            all whitespace and punctuation marks will be split on.
 
     Examples:
 
@@ -219,15 +263,39 @@ class RandomDeletion(keras.layers.Layer):
         probability, 
         max_replacements, 
         stop_word_only: bool = False,
+        split_pattern: str = None,
         **kwargs) -> None:
-        super(RandomDeletion, self).__init__(**kwargs)
+        # Check dtype and provide a default.
+        if "dtype" not in kwargs or kwargs["dtype"] is None:
+            kwargs["dtype"] = tf.int32
+        else:
+            dtype = tf.dtypes.as_dtype(kwargs["dtype"])
+            if not dtype.is_integer and dtype != tf.string:
+                raise ValueError(
+                    "Output dtype must be an integer type of a string. "
+                    f"Received: dtype={dtype}"
+                )
+
+        if split_pattern is None:
+            split_pattern = WHITESPACE_AND_PUNCTUATION_REGEX
+
+        super().__init__(**kwargs)
         self.probability = probability
         self.max_replacements = max_replacements
         self.stop_word_only = stop_word_only
+        self.split_pattern = split_pattern
 
     def call(self, inputs):
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            inputs = tf.convert_to_tensor(inputs)
+        scalar_input = tf.convert_to_tensor(inputs).shape.rank == 0
+        if scalar_input:
+            inputs = tf.expand_dims(inputs, 0)
+        inputs = tf_text.regex_split(
+            inputs,
+            delim_regex_pattern=self.split_pattern,
+        )
         replacementsPerformed = 0
-        inputs = tf.strings.split(inputs)
         indices_retained = []
         i = 0
         while (
@@ -250,6 +318,8 @@ class RandomDeletion(keras.layers.Layer):
         inputs = tf.strings.reduce_join(
             tf.gather(inputs, indices_retained), separator=" "
         )
+        if scalar_input:
+            inputs = tf.squeeze(inputs, 0)
         return inputs
 
     def get_config(self) -> Dict[str, Any]:
@@ -259,6 +329,7 @@ class RandomDeletion(keras.layers.Layer):
                 "probability": self.probability,
                 "max_replacements": self.max_replacements,
                 "stop_word_only": self.stop_word_only,
+                "split_pattern": self.split_pattern,
             }
         )
         return config
