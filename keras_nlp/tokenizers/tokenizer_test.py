@@ -18,16 +18,6 @@ from tensorflow import keras
 from keras_nlp.tokenizers.tokenizer import Tokenizer
 
 
-class PassThroughTokenizer(Tokenizer):
-    __test__ = False  # for pytest
-
-    def tokenize(self, inputs):
-        return inputs
-
-    def detokenize(self, inputs):
-        return inputs
-
-
 class SimpleTokenizer(Tokenizer):
     __test__ = False  # for pytest
 
@@ -67,21 +57,3 @@ class TokenizerTest(tf.test.TestCase):
     def test_missing_tokenize_raises(self):
         with self.assertRaises(NotImplementedError):
             Tokenizer()(["the quick brown fox"])
-
-    def test_detokenize_to_strings_for_ragged(self):
-        input_data = tf.ragged.constant([["▀▁▂▃", "samurai"]])
-        tokenizer = PassThroughTokenizer()
-        detokenize_output = tokenizer.detokenize_to_strings(input_data)
-        self.assertAllEqual(detokenize_output, [["▀▁▂▃", "samurai"]])
-
-    def test_detokenize_to_strings_for_dense(self):
-        input_data = tf.constant([["▀▁▂▃", "samurai"]])
-        tokenizer = PassThroughTokenizer()
-        detokenize_output = tokenizer.detokenize_to_strings(input_data)
-        self.assertAllEqual(detokenize_output, [["▀▁▂▃", "samurai"]])
-
-    def test_detokenize_to_strings_for_scalar(self):
-        input_data = tf.constant("▀▁▂▃")
-        tokenizer = PassThroughTokenizer()
-        detokenize_output = tokenizer.detokenize_to_strings(input_data)
-        self.assertEqual(detokenize_output, "▀▁▂▃")

@@ -14,7 +14,6 @@
 
 from typing import List
 
-import tensorflow as tf
 from tensorflow import keras
 
 
@@ -130,35 +129,3 @@ class Tokenizer(keras.layers.Layer):
             raise ValueError(
                 f"Unsupported tokenizer mode. Received: mode={mode}"
             )
-
-    def _decode_strings_to_utf8(self, inputs):
-        """Recursively decodes to list of strings with 'utf-8' encoding."""
-        if isinstance(inputs, bytes):
-            # Handles the case when the input is a scalar string.
-            return inputs.decode("utf-8")
-        else:
-            # Recursively iterate when input is a list.
-            return [self._decode_strings_to_utf8(x) for x in inputs]
-
-    def detokenize_to_strings(self, inputs, *args, **kwargs):
-        """Detokenize and convert tensor to nested lists of python strings.
-
-        This is a convenience method layered on top of `detokenize()`. This
-        method will call `detokenize()` and transform the output string
-        tensors back to python strings, by first converting output tensors
-        to nested lists of elements, and then converting each byte string
-        to a python string.
-
-        Args:
-            inputs: Input tensor, or dict/list/tuple of input tensors.
-            *args: Additional positional arguments.
-            **kwargs: Additional keyword arguments.
-        """
-        tensor_outputs = self.detokenize(inputs, *args, **kwargs)
-        if isinstance(tensor_outputs, tf.RaggedTensor):
-            list_outputs = tensor_outputs.to_list()
-        elif isinstance(tensor_outputs, tf.Tensor):
-            list_outputs = tensor_outputs.numpy()
-            if tensor_outputs.shape.rank != 0:
-                list_outputs = list_outputs.tolist()
-        return self._decode_strings_to_utf8(list_outputs)
