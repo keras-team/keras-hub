@@ -2,19 +2,19 @@
 
 KerasNLP uses the same API design guidelines as the rest of the Keras
 ecosystem, documented [here]
-https://github.com/keras-team/governance/blob/master/keras_api_design_guidelines.md).
-Anyone hoping to contribute to KerasNLP API design is strongly encouraged to
-read through that document in it's entirety.
+(https://github.com/keras-team/governance/blob/master/keras_api_design_guidelines.md).
+Anyone contributing to KerasNLP API design is strongly encouraged to
+read through the document in it's entirety.
 
 Below are some design considerations specific to KerasNLP.
 
-## Dependencies
+## Avoid new dependencies
 
-The core dependencies of KerasNLP are Numpy, TensorFlow, Keras, and
+The core dependencies of KerasNLP are Keras, NumPy, TensorFlow, and
 [Tensorflow Text](https://www.tensorflow.org/text).
 
-We strive to keep KerasNLP as self-contained as possible, and will not add
-dependencies to projects like NLTK or spaCy for text preprocessing.
+We strive to keep KerasNLP as self-contained as possible, and avoid adding
+dependencies to projects (for example NLTK or spaCy) for text preprocessing.
 
 In rare cases, particularly with tokenizers and metrics, we may need to add
 an external dependency for compatibility with the "canonical" implementation
@@ -35,7 +35,7 @@ class RougeL(keras.metrics.Metric):
                 '`pip install rouge-score`.')
 ```
 
-## TensorFlow graph support
+## Keep computation inside TensorFlow graph
 
 Our layers, metrics, and tokenizers should be fast and efficient, which means
 running inside the
@@ -50,11 +50,21 @@ If an low-level (c++) operation we need is missing, we should add it in
 collaboration with core TensorFlow or TensorFlow Text. KerasNLP is a python-only
 library.
 
-## Multi-lingual support
+## Use tf.data for text preprocessing and augmentation
+
+In general, our preprocessing tools should be runnable inside a
+[tf.data](https://www.tensorflow.org/guide/data) pipeline, and any augmentation
+to training data should be dynamic--runnable on the fly during training rather
+than precomputed.
+
+We should design our preprocessing workflows with tf.data in mind, and support
+both batched and unbatched data as input to preprocessing layers.
+
+## Prioritize multi-lingual support
 
 We strive to keep KerasNLP a friendly and useful library for speakers of all
 languages. In general, prefer designing workflows that are language agnostic,
-and do not involve details (e.g. stemming) that need to be rewritten
+and do not involve logic (e.g. stemming) that need to be rewritten
 per-language.
 
 It is OK for new workflows to not come with of the box support for all

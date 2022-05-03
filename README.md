@@ -16,16 +16,16 @@ components are first-party Keras objects that are too specialized to be
 added to core Keras, but that receive the same level of polish as the rest of
 the Keras API.
 
-KerasNLP is a new and growing project, and open to
+KerasNLP is a new and growing project, and we welcome
 [contributions](#contributing).
 
 ## Quick Links
 
-- [Documentation](keras.io/keras_nlp)
-- [Contributing Guide](CONTRIBUTING.md)
-- [Call for Contributions](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
+- [Documentation](https://keras.io/keras_nlp)
+- [Contributing guide](CONTRIBUTING.md)
 - [Roadmap](ROADMAP.md)
 - [API Design Guidelines](API_DESIGN.md)
+- [Help wanted issues](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
 
 ## Quick Start
 
@@ -76,22 +76,22 @@ For a complete model building tutorial, see our guide on
 
 If you'd like to contribute, please see our [contributing guide](CONTRIBUTING.md).
 
-The fastest way to contribute it to find an
-[open issues](https://github.com/keras-team/keras-nlp/issues) that needs
+The fastest way to contribute it to find
+[open issues](https://github.com/keras-team/keras-nlp/issues) that need
 an assignee. We maintain a
 [good first issue](
 https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 tag for newcomers to the project, and a longer list of
 [contributions welcome](
 https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
-issues.
+issues that may range in complexity.
 
 If you would like propose a new symbol or feature, please first read our
-[Roadmap](ROADMAP.md) and [API Design Guidelines](API_DESIGN.md), and then open
-an issue to discuss. If you have a design in mind, please include a colab
-notebook showing the proposed design in a end-to-end example. Keep in
-mind that design for a new feature or use case may take much longer than
-contributing to an open issue with a vetted-design.
+[Roadmap](ROADMAP.md) and [API Design Guidelines](API_DESIGN.md), then open
+an issue to discuss. If you have a specific design in mind, please include a
+[Colab](https://colab.research.google.com/) notebook showing the proposed design
+in a end-to-end example. Keep in mind that design for a new feature or use case
+may take longer than contributing to an open issue with a vetted-design.
 
 Thank you to all of our wonderful contributors!
 
