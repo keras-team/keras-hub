@@ -22,11 +22,11 @@ We are a new and growing project, and welcome [contributions](#contributing).
 
 ## Quick Links
 
-- [Documentation](https://keras.io/keras_nlp)
-- [Contributing guide](CONTRIBUTING.md)
+- [Documentation and Guides](https://keras.io/keras_nlp)
+- [Contributing](CONTRIBUTING.md)
 - [Roadmap](ROADMAP.md)
 - [API Design Guidelines](API_DESIGN.md)
-- [Call for contribution issues](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
+- [Call for Contributions](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
 
 ## Quick Start
 
