@@ -16,12 +16,13 @@ import json
 import sys
 
 import tensorflow as tf
-from absl import app
+
 from absl import flags
 from tensorflow import keras
 
 from examples.bert.bert_model import BertModel
 from examples.bert.bert_utils import list_filenames_for_arg
+from examples.bert.bert_utils import decode_record
 
 FLAGS = flags.FLAGS
 
@@ -52,14 +53,6 @@ flags.DEFINE_integer("epochs", 10, "The number of training epochs.")
 flags.DEFINE_integer("batch_size", 256, "The training batch size.")
 
 flags.DEFINE_float("learning_rate", 1e-4, "The initial learning rate for Adam.")
-
-flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
-
-flags.DEFINE_integer(
-    "max_predictions_per_seq",
-    20,
-    "Maximum number of masked LM predictions per sequence.",
-)
 
 flags.DEFINE_integer(
     "num_warmup_steps",
@@ -334,30 +327,6 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
                 0.0, peak_lr * (training - step) / (training - warmup)
             ),
         )
-
-
-def decode_record(record):
-    """Decodes a record to a TensorFlow example."""
-    seq_length = FLAGS.max_seq_length
-    lm_length = FLAGS.max_predictions_per_seq
-    name_to_features = {
-        "input_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
-        "input_mask": tf.io.FixedLenFeature([seq_length], tf.int64),
-        "segment_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
-        "masked_lm_positions": tf.io.FixedLenFeature([lm_length], tf.int64),
-        "masked_lm_ids": tf.io.FixedLenFeature([lm_length], tf.int64),
-        "masked_lm_weights": tf.io.FixedLenFeature([lm_length], tf.float32),
-        "next_sentence_labels": tf.io.FixedLenFeature([1], tf.int64),
-    }
-    # tf.Example only supports tf.int64, but the TPU only supports tf.int32.
-    # So cast all int64 to int32.
-    example = tf.io.parse_single_example(record, name_to_features)
-    for name in list(example.keys()):
-        value = example[name]
-        if value.dtype == tf.int64:
-            value = tf.cast(value, tf.int32)
-        example[name] = value
-    return example
 
 
 def main(_):
