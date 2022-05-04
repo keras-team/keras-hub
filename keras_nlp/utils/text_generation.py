@@ -26,7 +26,7 @@ def _handle_end_token(next_token, end_token_received, end_token_id):
 
 
 def generate_text_greedy(
-    get_next_token_probability_fn, input_ids, max_length, end_token_id=None
+    token_probability_fn, input_ids, max_length, end_token_id=None
 ):
     """
     Text generation utility based on greedy search.
@@ -35,7 +35,7 @@ def generate_text_greedy(
     existing sequence.
 
     Args:
-        get_next_token_probability_fn: a callable, which takes in input_sequence
+        token_probability_fn: a callable, which takes in input_sequence
             and output the probability distribution of the next token.
         input_ids: a list, the initial tokens to append generated tokens.
         max_length: int. The max length of generated text.
@@ -44,8 +44,8 @@ def generate_text_greedy(
             sequence. If None, every sequence is generated up to `max_length`.
 
     Returns:
-        A 1D int Tensor, or 2D int Tensor of shape `(batch_size, max_length)`
-        representing the generated sequences.
+        A 1D int Tensor, or 2D int RaggedTensor representing the generated
+        sequences.
 
     Examples:
     ```python
@@ -63,17 +63,17 @@ def generate_text_greedy(
 
     # Define a function that outputs the next token's probability given the
     # input sequence.
-    def get_next_token_probability_fn(inputs):
+    def token_probability_fn(inputs):
         return model(inputs)[:, -1, :]
 
     inputs = tf.random.uniform(shape=[5, 5], maxval=VOCAB_SIZE, dtype=tf.int64)
 
     # Print the generated sequence (token ids).
-    print(generate_text_greedy(
-        get_next_token_probability_fn,
+    generate_text_greedy(
+        token_probability_fn,
         inputs,
         max_length=10,
-        end_token=0,))
+        end_token=0,)
     ```
 
     """
@@ -96,7 +96,7 @@ def generate_text_greedy(
         if input_ids.shape[1] >= max_length:
             # If the input_ids has reached our desired length, exit recursion.
             return input_ids
-        pred = get_next_token_probability_fn(input_ids)
+        pred = token_probability_fn(input_ids)
         next_token = tf.cast(tf.argmax(pred, axis=-1), dtype=input_ids.dtype)
         if end_token_id is not None:
             # Replace the next token with `end_token_id` if end token has

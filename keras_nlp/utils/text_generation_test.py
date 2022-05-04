@@ -38,22 +38,22 @@ class TextGenerationTest(tf.test.TestCase):
             ]
         )
 
-        def get_next_token_probability_fn(inputs):
+        def token_probability_fn(inputs):
             return model(inputs)[:, -1, :]
 
-        self.get_next_token_probability_fn = get_next_token_probability_fn
+        self.token_probability_fn = token_probability_fn
 
     def test_generate_with_1d_input_ids(self):
         inputs = tf.constant([1])
         outputs = generate_text_greedy(
-            self.get_next_token_probability_fn, inputs, max_length=5
+            self.token_probability_fn, inputs, max_length=5
         )
         self.assertEquals(outputs.shape, [5])
 
     def test_generate_with_2d_input_ids(self):
         inputs = tf.constant([[1], [1]])
         outputs = generate_text_greedy(
-            self.get_next_token_probability_fn, inputs, max_length=5
+            self.token_probability_fn, inputs, max_length=5
         )
         self.assertEquals(outputs.shape, [2, 5])
 
@@ -61,11 +61,11 @@ class TextGenerationTest(tf.test.TestCase):
         inputs = tf.constant([])
         with self.assertRaisesRegex(ValueError, "input_ids must not be empty*"):
             generate_text_greedy(
-                self.get_next_token_probability_fn, inputs, max_length=5
+                self.token_probability_fn, inputs, max_length=5
             )
 
     def test_assert_generation_is_correct(self):
-        def get_next_token_probability_fn(inputs):
+        def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
             prob = tf.constant([[0.1, 0.2, 0.3, 0.4]])
             return tf.repeat(prob, batch_size, axis=0)
@@ -73,12 +73,12 @@ class TextGenerationTest(tf.test.TestCase):
         batch_size = 10
         inputs = tf.ones([batch_size, 1], dtype=tf.int32)
         outputs = generate_text_greedy(
-            get_next_token_probability_fn, inputs, max_length=3
+            token_probability_fn, inputs, max_length=3
         )
         self.assertAllEqual(outputs[:, -1], tf.repeat(3, batch_size))
 
     def test_end_token(self):
-        def get_next_token_probability_fn(inputs):
+        def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
             prob = tf.constant([[0.1, 0.2, 0.3, 0.4]])
             return tf.repeat(prob, batch_size, axis=0)
@@ -86,7 +86,7 @@ class TextGenerationTest(tf.test.TestCase):
         max_length = 3
         inputs = tf.constant([[0], [3]])
         outputs = generate_text_greedy(
-            get_next_token_probability_fn,
+            token_probability_fn,
             inputs,
             max_length=max_length,
             end_token_id=0,
