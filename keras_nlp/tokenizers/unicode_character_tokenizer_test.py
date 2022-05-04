@@ -296,7 +296,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             normalization_form="NFC",
             errors="ignore",
             replacement_char=0,
-            vocabulary_size=None,
+            vocabulary_size=100,
         )
         exp_config = {
             "dtype": "int32",
@@ -309,7 +309,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             "input_encoding": "UTF-8",
             "output_encoding": "UTF-8",
             "trainable": True,
-            "vocabulary_size": None,
+            "vocabulary_size": 100,
         }
         self.assertEqual(tokenizer.get_config(), exp_config)
 
@@ -339,32 +339,6 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         self.assertEqual(
             tokenize_different_encoding.get_config(),
             exp_config_different_encoding,
-        )
-
-        tokenize_different_vocabular_size = UnicodeCharacterTokenizer(
-            name="unicode_character_tokenizer_config_gen",
-            lowercase=False,
-            sequence_length=8,
-            errors="ignore",
-            replacement_char=0,
-            vocabulary_size=100,
-        )
-        exp_config_different_vocabular_size = {
-            "dtype": "int32",
-            "errors": "ignore",
-            "lowercase": False,
-            "name": "unicode_character_tokenizer_config_gen",
-            "normalization_form": None,
-            "replacement_char": 0,
-            "sequence_length": 8,
-            "input_encoding": "UTF-8",
-            "output_encoding": "UTF-8",
-            "trainable": True,
-            "vocabulary_size": 100,
-        }
-        self.assertEqual(
-            tokenize_different_vocabular_size.get_config(),
-            exp_config_different_vocabular_size,
         )
 
     def test_saving(self):

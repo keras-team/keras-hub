@@ -48,7 +48,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         vocabulary_size: Set the vocabulary `vocabulary_size`,
             by clamping all codepoints to the range [0, vocabulary_size).
             Effectively this will make the `vocabulary_size - 1` id the
-            the OOV token.
+            the OOV value.
 
     Examples:
 
@@ -133,6 +133,14 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     <tf.Tensor: shape=(5,), dtype=int32,
         numpy=array([[ 105,   32,  108,  105,  107],
        [2350, 2376, 2306,   32, 2325]], dtype=int32)>
+
+    Tokenization with vocabulary_size.
+    >>> input_data = "आप कैसे हैं"
+    >>> tokenizer = UnicodeCharacterTokenizer(vocabulary_size = 592)
+    >>> tokenizer(input_data)
+    <tf.Tensor: shape=(11,), dtype=int32,
+    numpy=array([591, 591,  32, 591, 591, 591, 591,  32, 591, 591, 591],
+    dtype=int32)>
 
     Detokenization.
     >>> inputs = tf.constant([110, 105, 110, 106,  97], dtype=tf.int32)
