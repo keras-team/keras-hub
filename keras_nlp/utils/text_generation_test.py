@@ -43,23 +43,23 @@ class TextGenerationTest(tf.test.TestCase):
 
         self.get_next_token_probability_fn = get_next_token_probability_fn
 
-    def test_generate_with_1d_seed(self):
+    def test_generate_with_1d_input_ids(self):
         inputs = tf.constant([1])
         outputs = generate_text_greedy(
             self.get_next_token_probability_fn, inputs, max_length=5
         )
         self.assertEquals(outputs.shape, [5])
 
-    def test_generate_with_2d_seed(self):
+    def test_generate_with_2d_input_ids(self):
         inputs = tf.constant([[1], [1]])
         outputs = generate_text_greedy(
             self.get_next_token_probability_fn, inputs, max_length=5
         )
         self.assertEquals(outputs.shape, [2, 5])
 
-    def test_empty_seed(self):
+    def test_empty_input_ids(self):
         inputs = tf.constant([])
-        with self.assertRaisesRegex(ValueError, "Seed must not be empty*"):
+        with self.assertRaisesRegex(ValueError, "input_ids must not be empty*"):
             generate_text_greedy(
                 self.get_next_token_probability_fn, inputs, max_length=5
             )

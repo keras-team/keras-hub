@@ -26,7 +26,7 @@ def _handle_end_token(next_token, end_token_received, end_token_id):
 
 
 def generate_text_greedy(
-    get_next_token_probability_fn, seed, max_length, end_token_id=None
+    get_next_token_probability_fn, input_ids, max_length, end_token_id=None
 ):
     """
     Text generation utility based on greedy search.
@@ -37,14 +37,14 @@ def generate_text_greedy(
     Args:
         get_next_token_probability_fn: a callable, which takes in input_sequence
             and output the probability distribution of the next token.
-        seed: a list, the initial tokens to append generated tokens.
+        input_ids: a list, the initial tokens to append generated tokens.
         max_length: int. The max length of generated text.
         end_token_id: int, defaults to None. The token marking the end of the
             sequence, once encountered the generation is finished for the exact
-            sequence. If None, every sequence is generated to `max_length`.
+            sequence. If None, every sequence is generated up to `max_length`.
 
     Returns:
-        A 1D int Tensor, or 2D int Tensor of shape (batch_size, `max_length`)
+        A 1D int Tensor, or 2D int Tensor of shape `(batch_size, max_length)`
         representing the generated sequences.
 
     Examples:
@@ -58,8 +58,7 @@ def generate_text_greedy(
         tf.keras.layers.Embedding(
             input_dim=VOCAB_SIZE,
             output_dim=FEATURE_SIZE,),
-        tf.keras.layers.Dense(VOCAB_SIZE),
-        tf.keras.layers.Softmax(),
+        tf.keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
     ])
 
     # Define a function that outputs the next token's probability given the
@@ -78,25 +77,27 @@ def generate_text_greedy(
     ```
 
     """
-    if 0 in seed.shape:
-        raise ValueError("Seed must not be empty, but received empty seed.")
-    input_is_1d = seed.shape.rank == 1
+    if 0 in input_ids.shape:
+        raise ValueError(
+            "input_ids must not be empty, but received empty input_ids."
+        )
+    input_is_1d = input_ids.shape.rank == 1
     if input_is_1d:
-        seed = seed[tf.newaxis, :]
+        input_ids = input_ids[tf.newaxis, :]
 
     # Store if the end token has been generated for each sequence.
     end_token_received = None
     if end_token_id is not None:
         end_token_received = tf.cast(
-            (seed[:, -1] == end_token_id), dtype=seed.dtype
+            (input_ids[:, -1] == end_token_id), dtype=input_ids.dtype
         )
 
-    def helper(seed, end_token_received):
-        if seed.shape[1] >= max_length:
-            # If the seed has reached our desired length, exit recursion.
-            return seed
-        pred = get_next_token_probability_fn(seed)
-        next_token = tf.cast(tf.argmax(pred, axis=-1), dtype=seed.dtype)
+    def get_subsequent_tokens(input_ids, end_token_received):
+        if input_ids.shape[1] >= max_length:
+            # If the input_ids has reached our desired length, exit recursion.
+            return input_ids
+        pred = get_next_token_probability_fn(input_ids)
+        next_token = tf.cast(tf.argmax(pred, axis=-1), dtype=input_ids.dtype)
         if end_token_id is not None:
             # Replace the next token with `end_token_id` if end token has
             # appeared in the sequenece.
@@ -104,10 +105,10 @@ def generate_text_greedy(
                 next_token, end_token_received, end_token_id
             )
         # Append the next token to current sequence.
-        seed = tf.concat([seed, next_token[:, tf.newaxis]], axis=-1)
-        return helper(seed, end_token_received)
+        input_ids = tf.concat([input_ids, next_token[:, tf.newaxis]], axis=-1)
+        return get_subsequent_tokens(input_ids, end_token_received)
 
-    generated_sequence = helper(seed, end_token_received)
+    generated_sequence = get_subsequent_tokens(input_ids, end_token_received)
     if input_is_1d:
         return tf.squeeze(generated_sequence)
     return generated_sequence
