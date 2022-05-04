@@ -11,16 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""A script to visualize the preprocessed data."""
+"""A script to visualize the preprocessed data.
 
-import glob
-import os
-from examples.bert.bert_utils import decode_record
+To run the script, use
+```
+python examples/bert/visualize_preprocessed_data.py \
+    --filepath=path/to/your/tfrecord
+```
+"""
 
 import tensorflow as tf
-
 from absl import app
 from absl import flags
+
+from examples.bert.bert_utils import decode_record
 
 FLAGS = flags.FLAGS
 
@@ -30,12 +34,14 @@ flags.DEFINE_string(
     "The file path to preprocessed data.",
 )
 
+
 def visualize_tfrecord(filepath):
     dataset = tf.data.TFRecordDataset(filepath)
     sample = next(iter(dataset))
     decoded = decode_record(sample)
     for key, val in decoded.items():
         print(key, ": ", val)
+
 
 def main(_):
     visualize_tfrecord(FLAGS.filepath)
@@ -44,5 +50,3 @@ def main(_):
 if __name__ == "__main__":
     flags.mark_flag_as_required("filepath")
     app.run(main)
-
-

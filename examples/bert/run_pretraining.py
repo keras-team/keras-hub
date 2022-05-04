@@ -16,13 +16,13 @@ import json
 import sys
 
 import tensorflow as tf
-
+from absl import app
 from absl import flags
 from tensorflow import keras
 
 from examples.bert.bert_model import BertModel
-from examples.bert.bert_utils import list_filenames_for_arg
 from examples.bert.bert_utils import decode_record
+from examples.bert.bert_utils import list_filenames_for_arg
 
 FLAGS = flags.FLAGS
 

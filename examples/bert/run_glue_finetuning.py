@@ -15,12 +15,13 @@
 
 import json
 
-import datasets
 import tensorflow as tf
 import tensorflow_text as tftext
 from absl import app
 from absl import flags
 from tensorflow import keras
+
+import datasets
 
 FLAGS = flags.FLAGS
 

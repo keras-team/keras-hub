@@ -15,8 +15,9 @@
 
 import glob
 import os
-from absl import flags
+
 import tensorflow as tf
+from absl import flags
 
 FLAGS = flags.FLAGS
 
@@ -41,6 +42,7 @@ def list_filenames_for_arg(arg_pattern):
                 input_filenames.append(filename)
     return input_filenames
 
+
 def decode_record(record):
     """Decodes a record to a TensorFlow example."""
     seq_length = FLAGS.max_seq_length
@@ -64,9 +66,8 @@ def decode_record(record):
         example[name] = value
     return example
 
+
 def visualize_tfrecord(filepath):
     dataset = tf.data.TFRecordDataset(filepath)
     sample = next(iter(dataset))
     print(decode_record(sample))
-
-
