@@ -63,6 +63,10 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
             One of The encoding of the input text. Defaults to "UTF-8".
         output_encoding: One of ("UTF-8", "UTF-16-BE", or "UTF-32-BE").
             The encoding of the output text. Defaults to "UTF-8".
+        vocabulary_size: Set the vocabulary `vocabulary_size`,
+            by clamping all codepoints to the range [0, vocabulary_size).
+            Effectively this will make the `vocabulary_size - 1` id the
+            the OOV value.
 
     Examples:
 
@@ -147,6 +151,19 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         numpy=array([[ 105,   32,  108,  105,  107],
        [2350, 2376, 2306,   32, 2325]], dtype=int32)>
 
+    Tokenization with vocabulary_size.
+    >>> latin_ext_cutoff = 592
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+    ...     vocabulary_size=latin_ext_cutoff)
+    >>> tokenizer("¿Cómo estás?")
+    <tf.Tensor: shape=(10,), dtype=int32,
+    numpy=array([191,  99, 243, 109, 111,  32, 101, 115, 116, 225, 115,  63],
+    dtype=int32)>
+    >>> tokenizer("आप कैसे हैं")
+    <tf.Tensor: shape=(11,), dtype=int32,
+    numpy=array([591, 591,  32, 591, 591, 591, 591,  32, 591, 591, 591],
+    dtype=int32)>
+
     Detokenization.
     >>> inputs = tf.constant([110, 105, 110, 106,  97], dtype=tf.int32)
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
@@ -183,6 +200,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         replacement_char: int = 65533,
         input_encoding: str = "UTF-8",
         output_encoding: str = "UTF-8",
+        vocabulary_size: int = None,
         **kwargs,
     ) -> None:
         # Check dtype and provide a default.
@@ -228,6 +246,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         self.replacement_char = replacement_char
         self.input_encoding = input_encoding
         self.output_encoding = output_encoding
+        self.vocabulary_size = vocabulary_size
 
     def get_config(self) -> Dict[str, Any]:
         config = super().get_config()
@@ -240,9 +259,15 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
                 "replacement_char": self.replacement_char,
                 "input_encoding": self.input_encoding,
                 "output_encoding": self.output_encoding,
+                "vocabulary_size": self.vocabulary_size,
             }
         )
         return config
+
+    def vocabulary_size(self) -> int:
+        """Get the size of the tokenizer vocabulary. None implies no vocabulary
+        size was provided"""
+        return self.vocabulary_size
 
     def tokenize(self, inputs):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
@@ -275,6 +300,12 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
         if scalar_input:
             tokens = tf.squeeze(tokens, 0)
+
+        # Optionally clamps the output code point values to be in the
+        # range [0, vocabulary_size)
+        if self.vocabulary_size:
+            tokens = tf.clip_by_value(tokens, 0, self.vocabulary_size - 1)
+
         return tokens
 
     def detokenize(self, inputs):
