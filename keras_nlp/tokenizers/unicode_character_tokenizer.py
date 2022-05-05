@@ -135,9 +135,14 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
        [2350, 2376, 2306,   32, 2325]], dtype=int32)>
 
     Tokenization with vocabulary_size.
-    >>> input_data = "आप कैसे हैं"
-    >>> tokenizer = UnicodeCharacterTokenizer(vocabulary_size = 592)
-    >>> tokenizer(input_data)
+    >>> latin_ext_cutoff = 592
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+    ...     vocabulary_size=latin_ext_cutoff)
+    >>> tokenizer("cómo estás")
+    <tf.Tensor: shape=(10,), dtype=int32,
+    numpy=array([ 99, 243, 109, 111,  32, 101, 115, 116, 225, 115],
+    dtype=int32)>
+    >>> tokenizer("आप कैसे हैं")
     <tf.Tensor: shape=(11,), dtype=int32,
     numpy=array([591, 591,  32, 591, 591, 591, 591,  32, 591, 591, 591],
     dtype=int32)>
