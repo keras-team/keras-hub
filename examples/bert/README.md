@@ -75,7 +75,12 @@ The GLUE pretraining data (Wikipedia + BooksCorpus) is fairly large. The raw
 input data takes roughly ~20GB of space, and after preprocessing, the full
 corpus will take ~400GB.
 
-The latest wikipedia dump can be downloaded [at this link](https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2).
+The latest wikipedia dump can be downloaded [at this link](https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2),
+or via command line:
+
+```shell
+curl https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2
+```
 The dump can be extracted with the `wikiextractor` tool.
 
 ```shell
@@ -86,7 +91,7 @@ BooksCorpus is no longer hosted by
 [it's creators](https://yknzhu.wixsite.com/mbweb), but you can find instructions
 for downloading or reproducing the corpus in this
 [repository](https://github.com/soskek/bookcorpus). We suggest the pre-made file
-downloads listed at the top of the README. Alternatively, you can forgo it
+downloads listed at the top of the README. Alternatively, you can forgo it 
 entirely and pretrain solely on wikipedia.
 
 Preparing the pretraining data will happen in two stages. First, raw text needs
@@ -181,6 +186,12 @@ for file in path/to/sentence-split-data/*; do
         --vocab_file vocab.txt \
         --output_file ${output}
 done | parallel -j ${NUM_JOBS}
+```
+
+To preview a sample of generated data files, you can run the command below:
+
+```shell
+python -c "from keras_nlp.utils.tensor_utils import preview_tfrecord; preview_tfrecord('/path/to/tfrecord_file')"
 ```
 
 ### Running BERT pretraining
