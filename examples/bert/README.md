@@ -91,13 +91,8 @@ BooksCorpus is no longer hosted by
 [it's creators](https://yknzhu.wixsite.com/mbweb), but you can find instructions
 for downloading or reproducing the corpus in this
 [repository](https://github.com/soskek/bookcorpus). We suggest the pre-made file
-downloads listed at the top of the README, for which you can run:
-
-```shell
-curl battle.shawwn.com/sdb/books1/books1.tar.gz
-```
-
-Alternatively, you can forgo it entirely and pretrain solely on wikipedia.
+downloads listed at the top of the README. Alternatively, you can forgo it 
+entirely and pretrain solely on wikipedia.
 
 Preparing the pretraining data will happen in two stages. First, raw text needs
 to be split into lists of sentences per document. Second, this sentence split
