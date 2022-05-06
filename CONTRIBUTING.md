@@ -1,5 +1,36 @@
 # Contribution guide
 
+KerasNLP is an actively growing project and community! We would love for you
+to get involved. Below are instructions for how to plug into KerasNLP
+development.
+
+## Background reading
+
+Before contributing code, please review our [Style Guide](CODE_STYLE.md) and
+[API Design Guide](API_DESIGN.md).
+
+Our [Roadmap](ROADMAP.md) contains an overview of the project goals and our
+current focus areas.
+
+We follow
+[Google's Open Source Community Guidelines](https://opensource.google/conduct/).
+
+## Finding an issue
+
+The fastest way to contribute it to find open issues that need an assignee. We
+maintain two lists of github tags for contributors:
+
+ - [good first issue](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22):
+   a list of small, well defined issues for newcomers to the project.
+ - [contributions welcome](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22):
+   a larger list of issues that may range in complexity.
+
+If you would like propose a new symbol or feature within our API design
+guidelines, please open an issue to discuss. If you have a specific design in
+mind, please include a Colab notebook showing the proposed design
+in a end-to-end example. Keep in mind that design for a new feature or use case
+may take longer than contributing to an open issue with a vetted-design.
+
 ## How to contribute code
 
 Follow these steps to submit your code contribution.
@@ -47,22 +78,7 @@ request gets approved by the reviewer.
 
 Once the pull request is approved, a team member will take care of merging.
 
-## Developing on Windows
-
-For Windows development, we recommend using WSL (Windows Subsystem for Linux),
-so you can run the shell scripts in this repository. We will not support
-Windows Shell/PowerShell. You can refer
-[to these instructions](https://docs.microsoft.com/en-us/windows/wsl/install)
-for WSL installation.
-
-Note that if you are using Windows Subsystem for Linux (WSL), make sure you 
-clone the repo with Linux style LF line endings and change the default setting
-for line separator in your Text Editor before running the format
-or lint scripts. This is automatically done if you clone using git inside WSL.
-If there is conflict due to the line endings you might see an error
-like - `: invalid option`.
-
-## Setup environment
+## Development Environment
 
 Python 3.7 or later is required.
 
@@ -87,16 +103,16 @@ Following these commands you should be able to run the tests using
 `pytest keras_nlp`. Please report any issues running tests following these
 steps.
 
-## Run tests
+### Running tests
 
 KerasNLP is tested using [PyTest](https://docs.pytest.org/en/6.2.x/).
 
-### Run a test file
+#### Run a test file
 
 To run a test file, run `pytest path/to/file` from the root directory of the
 repository.
 
-### Run a single test case
+#### Run a single test case
 
 To run a single test, you can use `-k=<your_regex>`
 to use regular expression to match the test you want to run. For example, you
@@ -107,7 +123,7 @@ whose names contain `import`:
 pytest keras_nlp/keras_nlp/integration_tests/import_test.py -k="import"
 ```
 
-### Run all tests
+#### Run all tests
 
 You can run the unit tests for KerasNLP by running:
 
@@ -115,7 +131,7 @@ You can run the unit tests for KerasNLP by running:
 pytest keras_nlp/
 ```
 
-## Formatting the Code
+### Formatting Code
 
 We use `flake8`, `isort` and `black` for code formatting.  You can run
 the following commands manually every time you want to format your code:
@@ -127,7 +143,17 @@ If after running these the CI flow is still failing, try updating `flake8`,
 `isort` and `black`. This can be done by running `pip install --upgrade black`,
 `pip install --upgrade flake8`, and `pip install --upgrade isort`.
 
-## Community Guidelines
+### Developing on Windows
 
-This project follows 
-[Google's Open Source Community Guidelines](https://opensource.google/conduct/).
+For Windows development, we recommend using WSL (Windows Subsystem for Linux),
+so you can run the shell scripts in this repository. We will not support
+Windows Shell/PowerShell. You can refer
+[to these instructions](https://docs.microsoft.com/en-us/windows/wsl/install)
+for WSL installation.
+
+Note that if you are using Windows Subsystem for Linux (WSL), make sure you 
+clone the repo with Linux style LF line endings and change the default setting
+for line separator in your Text Editor before running the format
+or lint scripts. This is automatically done if you clone using git inside WSL.
+If there is conflict due to the line endings you might see an error
+like - `: invalid option`.

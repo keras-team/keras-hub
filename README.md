@@ -18,14 +18,15 @@ components are first-party Keras objects that are too specialized to be
 added to core Keras, but that receive the same level of polish as the rest of
 the Keras API.
 
-We are a new and growing project, and welcome [contributions](#contributing).
+We are a new and growing project, and welcome [contributions](CONTRIBUTING.md).
 
 ## Quick Links
 
 - [Documentation and Guides](https://keras.io/keras_nlp)
 - [Contributing](CONTRIBUTING.md)
 - [Roadmap](ROADMAP.md)
-- [API Design Guidelines](API_DESIGN.md)
+- [Style Guide](CODE_STYLE.md)
+- [API Design Guide](API_DESIGN.md)
 - [Call for Contributions](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
 
 ## Quick Start
@@ -75,32 +76,6 @@ model.train_on_batch(X, Y)
 For a complete model building tutorial, see our guide on
 [pretraining a transformer](keras.io/guides/keras_nlp/transformer_pretraining).
 
-## Contributing
-
-If you'd like to contribute, our [contributing guide](CONTRIBUTING.md)
-contains instructions for setting up a development environment and contributing
-PRs.
-
-The fastest way to contribute it to find open issues that need an assignee. We
-maintain two lists of github tags for contributors:
- - [good first issue](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22):
-   a list of small, well defined issues for newcomers to the project.
- - [contributions welcome](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22):
-   a larger list of issues that may range in complexity.
-
-If you would like propose a new symbol or feature, please first read our
-[Roadmap](ROADMAP.md) and [API Design Guidelines](API_DESIGN.md), then open
-an issue to discuss. If you have a specific design in mind, please include a
-Colab notebook showing the proposed design
-in a end-to-end example. Keep in mind that design for a new feature or use case
-may take longer than contributing to an open issue with a vetted-design.
-
-Thank you to all of our wonderful contributors!
-
-<a href="https://github.com/keras-team/keras-nlp/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=keras-team/keras-nlp" />
-</a>
-
 ## Compatibility
 
 We follow [Semantic Versioning](https://semver.org/), and plan to
@@ -121,3 +96,9 @@ Here is the BibTeX entry:
   howpublished={\url{https://github.com/keras-team/keras-nlp}},
 }
 ```
+
+Thank you to all of our wonderful contributors!
+
+<a href="https://github.com/keras-team/keras-nlp/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=keras-team/keras-nlp" />
+</a>
