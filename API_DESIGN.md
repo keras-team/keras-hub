@@ -1,4 +1,4 @@
-# KerasNLP Design Guide
+# API Design Guide
 
 Before reading this document, please read the
 [Keras API design guidelines](https://github.com/keras-team/governance/blob/master/keras_api_design_guidelines.md).

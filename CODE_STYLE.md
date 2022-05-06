@@ -2,7 +2,7 @@
 
 ## Use black
 
-For the most part, following are style guide is very simple, we just use
+For the most part, following our code style is very simple, we just use
 [black](https://github.com/psf/black) to format code. See our
 [Contributing Guide](CONTRIBUTING.md) for how to run our formatting scripts.
 
@@ -20,30 +20,31 @@ import tensorflow as tf
 from tensorflow import keras
 ```
 
-❌ `tf.keras.activations.X`
-✅ `keras.activations.X`
+- ❌ `tf.keras.activations.X`
+- ✅ `keras.activations.X`
 
-❌ `layers.X`
-✅ `keras.layers.X` or `keras_nlp.layers.X`
+- ❌ `layers.X`
+- ✅ `keras.layers.X` or `keras_nlp.layers.X`
 
-❌ `Dense(1, activation='softmax')`
-✅ `keras.layers.Dense(1, activation='softmax')`
+- ❌ `Dense(1, activation='softmax')`
+- ✅ `keras.layers.Dense(1, activation='softmax')`
 
 For KerasNLP library code, `keras_nlp` will not be directly imported, but
 `keras` should still be as a top-level object used to access library symbols.
 
 ## Ideal layer style
 
-When writing a new KerasNLP layer (or tokenizer), please make sure to do the
-following:
+When writing a new KerasNLP layer (or tokenizer or metric), please make sure to
+do the following:
 
 - Accept `**kwargs` in `__init__` and forward this to the super class.
 - Keep a python attribute on the layer for each `__init__` argument to the
   layer. The name and value should match the passed value.
 - Write a `get_config()` which chains to super.
-- Document the layer behavior thouroughly including call behavior, on the
-  class
-- Always include usage examples including the full symbol location.
+- Document the layer behavior thouroughly including call behavior though a
+  class level docstring. Generally methods like `build()` and `call()` should
+  not have their own docstring.
+- Always include usage examples using the full symbol location in `keras_nlp`.
 
 ````python
 class Linear(keras.layers.Layer):
