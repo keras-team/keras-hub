@@ -25,13 +25,14 @@ maintain two lists of github tags for contributors:
  - [contributions welcome](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22):
    a larger list of issues that may range in complexity.
 
-If you would like propose a new symbol or feature within our API design
-guidelines, please open an issue to discuss. If you have a specific design in
-mind, please include a Colab notebook showing the proposed design
-in a end-to-end example. Keep in mind that design for a new feature or use case
-may take longer than contributing to an open issue with a vetted-design.
+If you would like propose a new symbol or feature, please first review our
+design guide and roadmap linked above, and issue to discuss. If you have a
+specific design in mind, please include a Colab notebook showing the proposed
+design in a end-to-end example. Keep in mind that design for a new feature or
+use case may take longer than contributing to an open issue with a
+vetted-design.
 
-## How to contribute code
+## Contributing code
 
 Follow these steps to submit your code contribution.
 
@@ -78,7 +79,7 @@ request gets approved by the reviewer.
 
 Once the pull request is approved, a team member will take care of merging.
 
-## Development Environment
+## Setting up an Environment
 
 Python 3.7 or later is required.
 
@@ -103,16 +104,16 @@ Following these commands you should be able to run the tests using
 `pytest keras_nlp`. Please report any issues running tests following these
 steps.
 
-### Running tests
+## Testing changes
 
 KerasNLP is tested using [PyTest](https://docs.pytest.org/en/6.2.x/).
 
-#### Run a test file
+### Run a test file
 
 To run a test file, run `pytest path/to/file` from the root directory of the
 repository.
 
-#### Run a single test case
+### Run a single test case
 
 To run a single test, you can use `-k=<your_regex>`
 to use regular expression to match the test you want to run. For example, you
@@ -123,7 +124,7 @@ whose names contain `import`:
 pytest keras_nlp/keras_nlp/integration_tests/import_test.py -k="import"
 ```
 
-#### Run all tests
+### Run all tests
 
 You can run the unit tests for KerasNLP by running:
 
@@ -131,7 +132,7 @@ You can run the unit tests for KerasNLP by running:
 pytest keras_nlp/
 ```
 
-### Formatting Code
+## Formatting Code
 
 We use `flake8`, `isort` and `black` for code formatting.  You can run
 the following commands manually every time you want to format your code:
@@ -143,7 +144,7 @@ If after running these the CI flow is still failing, try updating `flake8`,
 `isort` and `black`. This can be done by running `pip install --upgrade black`,
 `pip install --upgrade flake8`, and `pip install --upgrade isort`.
 
-### Developing on Windows
+## Developing on Windows
 
 For Windows development, we recommend using WSL (Windows Subsystem for Linux),
 so you can run the shell scripts in this repository. We will not support
