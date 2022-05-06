@@ -18,6 +18,7 @@ components are first-party Keras objects that are too specialized to be
 added to core Keras, but that receive the same level of polish as the rest of
 the Keras API.
 
+You can browse our official documentation [here](https://keras.io/keras_nlp).
 We are a new and growing project, and welcome [contributions](CONTRIBUTING.md).
 
 ## Quick Links
