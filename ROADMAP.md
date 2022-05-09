@@ -71,16 +71,16 @@ The major tasks within this effort:
 
 - Work with Tensorflow Text to continue to support a growing range of
   tokenization options and popular vocabulary formats. For example, we would
-  like to add support for byte-level BPE tokenization within the Tensorflow
-  graph.
+  like to add support for byte-level BPE tokenization (the RoBERTa and GPT
+  tokenizer) within the Tensorflow graph.
 - Pre-trained sub-word tokenizers for any language. Training a tokenizer can
   add a lot of friction to a project, particularly when working working in a
   language where examples are less readily available. We would like to support
-  a pre-trained tokenization offering that makes it easy to start training
-  models on input text right away.
-- A standardized way to training tokenizer vocabularies. Training vocabularies
-  for various tokenization algorithms can be a fractured and painful experience.
-  We should offer a standardized experience for training new vocabularies.
+  a pre-trained tokenization offering that allows a user to choose a tokenizer,
+  language, and vocabulary size and then download an off the shelf vocabulary.
+- A standardized way to training tokenizer vocabularies. As another way to
+  reduce the friction of training a tokenizer, we should offer a standardized
+  experience for training new vocabularies.
 
 ### Scalable examples of popular model architectures using KerasNLP
 
@@ -92,28 +92,32 @@ shipped with the library itself.
 
 These examples will serve two purposes—a demonstration to the community of how
 models can be built using KerasNLP, and a way to vet our the performance and
-accuracy of our library components on both TPUs and GPUs.
+accuracy of our library components on both TPUs and GPUs at scale.
 
 At this moment in time, our focus is on polishing our BERT example. We would
 like it to run entirely on KerasNLP components for both training and
-preprocessing, and come easy recipes for running multi-worker training jobs.
-Once this is done, we would like to extend our examples directory to other
+preprocessing, and come with easy recipes for running multi-worker training
+jobs. Once this is done, we would like to extend our examples directory to other
 popular architectures (e.g. RoBERTa and ELECTRA).
 
 As we move forward with KerasNLP as a whole, we expect development for new
 components (say, a new attention mechanism) to happen in tandem with an
 example demonstrating the component in an end-to-end architecture.
 
+By the end of 2022, we should have a actively growing collection of examples
+models, with a standardized set of training scripts, that match expected
+performance as reported in publications.
+
 ### Tools for data preprocessing and postprocessing for end-to-end workflows
 
-It should be easy to use KerasNLP to take a trained model and use it for a wide
+It should be easy to take trained Keras language model and use it for a wide
 range of real world NLP tasks. We should support classification, text
 generation, summarization, translation, name-entity recognition, and question
 answering. We should have a guide for each of these tasks using KerasNLP by
 the end of 2022.
 
-We are looking for simple, modular components that make it easy to build
-end-to-end workflows for any of these tasks.
+We are looking to develop simple, modular components that make it easy to build
+end-to-end workflows for each of these tasks.
 
 Currently projects in this area include:
 
@@ -131,12 +135,15 @@ industry leading collection of easy to use guides and examples.
 
 These examples should be easy to follow, run within a colab notebook, and
 provide a practical starting place for solving most real-world NLP problems.
+Given the scale of modern NLP models, this will often involve scaling down the
+model or data size for a particular task while preserving the core of what we
+are trying to explain to the reader.
 
 This will continue to be a key investment area for the library. If you have an
 idea for a guide or example, please open an issue to discuss.
 
-By the end of 2022, most new keras.io NLP examples should be using the KerasNLP
-library.
+By the end of 2022, most new NLP examples on keras.io should be use
+KerasNLP library.
 
 ## Citation bar
 
