@@ -45,11 +45,11 @@
   core Tensorflow.
 
 - **KerasNLP is not a Transformer only library.**
-  Transformer based models are a key offering for KerasNLP, and these
-  architectures should be easy to train and use within the library. However, we
-  want to support other types of models, such as n-gram or word2vec approaches
-  that might be more suited to some real-world tasks (e.g. low-resource
-  deployments).
+  Transformer based models are a key offering for KerasNLP, and they should be
+  easy to train and use within the library. However, we need to support other
+  types of models, such as n-gram or word2vec approaches that might run more
+  easily on limited hardware. We will always want the most practical tool for
+  the task, regardless of architecture.
 
 ## Focus areas for 2022
 
@@ -110,7 +110,7 @@ performance as reported in publications.
 
 ### Tools for data preprocessing and postprocessing for end-to-end workflows
 
-It should be easy to take trained Keras language model and use it for a wide
+It should be easy to take a trained Keras language model and use it for a wide
 range of real world NLP tasks. We should support classification, text
 generation, summarization, translation, name-entity recognition, and question
 answering. We should have a guide for each of these tasks using KerasNLP by
@@ -121,7 +121,7 @@ end-to-end workflows for each of these tasks.
 
 Currently projects in this area include:
 
-- Utilties for generating sequences of text using greedy or beam search.
+- Utilities for generating sequences of text using greedy or beam search.
 - Metrics for evaluating the quality of generated sequences, such a ROUGE and
   BLEU.
 - Data augmentation preprocessing layers for domains with limited data. These

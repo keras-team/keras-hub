@@ -21,13 +21,13 @@ from tensorflow import keras
 ```
 
 ❌ `tf.keras.activations.X`<br/>
-✅ `keras.activations.X`
+✔️ `keras.activations.X`
 
 ❌ `layers.X`<br/>
-✅ `keras.layers.X` or `keras_nlp.layers.X`
+✔️ `keras.layers.X` or `keras_nlp.layers.X`
 
 ❌ `Dense(1, activation='softmax')`<br/>
-✅ `keras.layers.Dense(1, activation='softmax')`
+✔️ `keras.layers.Dense(1, activation='softmax')`
 
 For KerasNLP library code, `keras_nlp` will not be directly imported, but
 `keras` should still be as a top-level object used to access library symbols.
@@ -66,7 +66,7 @@ class Linear(keras.layers.Layer):
     model = keras.Model(inputs, outputs)
     ```
 
-    Call the layer on direct input.
+    Call the layer directly on input.
     >>> layer = keras_nlp.layers.Linear(4)
     >>> layer(tf.zeros(8, 2)) == layer.b
     True

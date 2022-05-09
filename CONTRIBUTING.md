@@ -6,8 +6,8 @@ development.
 
 ## Background reading
 
-Before contributing code, please review our [Style Guide](CODE_STYLE.md) and
-[API Design Guide](API_DESIGN.md).
+Before contributing code, please review our [Style Guide](STYLE_GUIDE.md) and
+[API Design Guide](API_DESIGN_GUIDE.md).
 
 Our [Roadmap](ROADMAP.md) contains an overview of the project goals and our
 current focus areas.

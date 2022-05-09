@@ -26,8 +26,8 @@ We are a new and growing project, and welcome [contributions](CONTRIBUTING.md).
 - [Documentation and Guides](https://keras.io/keras_nlp)
 - [Contributing](CONTRIBUTING.md)
 - [Roadmap](ROADMAP.md)
-- [Style Guide](CODE_STYLE.md)
-- [API Design Guide](API_DESIGN.md)
+- [Style Guide](STYLE_GUIDE.md)
+- [API Design Guide](API_DESIGN_GUIDE.md)
 - [Call for Contributions](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
 
 ## Quick Start
