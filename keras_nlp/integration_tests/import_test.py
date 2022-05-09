@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import tensorflow as tf
+
 import keras_nlp
 
 
-# Basic test to make sure the library can be imported.
-def test_import():
-    assert keras_nlp.__version__
+class ImportTest(tf.test.TestCase):
+    def test_version(self):
+        self.assertIsNotNone(keras_nlp.__version__)

@@ -12,44 +12,43 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import math
-
 import tensorflow as tf
 from tensorflow import keras
 
 import keras_nlp
 
 
-def test_basic_usage():
-    """This matches the quick start example in our documentation."""
+class BasicUsageTest(tf.test.TestCase):
+    def test_quick_start(self):
+        """This matches the quick start example in our base README."""
 
-    # Tokenize some inputs with a binary label.
-    vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "jumped", "."]
-    inputs = ["The quick brown fox jumped.", "The fox slept."]
-    tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-        vocabulary=vocab,
-        sequence_length=10,
-    )
-    X, Y = tokenizer(inputs), tf.constant([1, 0])
+        # Tokenize some inputs with a binary label.
+        vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        inputs = ["The quick brown fox jumped.", "The fox slept."]
+        tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+            vocabulary=vocab,
+            sequence_length=10,
+        )
+        X, Y = tokenizer(inputs), tf.constant([1, 0])
 
-    # Create a tiny transformer.
-    inputs = keras.Input(shape=(None,), dtype="int32")
-    x = keras_nlp.layers.TokenAndPositionEmbedding(
-        vocabulary_size=len(vocab),
-        sequence_length=10,
-        embedding_dim=16,
-    )(inputs)
-    x = keras_nlp.layers.TransformerEncoder(
-        num_heads=4,
-        intermediate_dim=32,
-    )(x)
-    x = keras.layers.GlobalAveragePooling1D()(x)
-    outputs = keras.layers.Dense(1, activation="sigmoid")(x)
-    model = keras.Model(inputs, outputs)
+        # Create a tiny transformer.
+        inputs = keras.Input(shape=(None,), dtype="int32")
+        x = keras_nlp.layers.TokenAndPositionEmbedding(
+            vocabulary_size=len(vocab),
+            sequence_length=10,
+            embedding_dim=16,
+        )(inputs)
+        x = keras_nlp.layers.TransformerEncoder(
+            num_heads=4,
+            intermediate_dim=32,
+        )(x)
+        x = keras.layers.GlobalAveragePooling1D()(x)
+        outputs = keras.layers.Dense(1, activation="sigmoid")(x)
+        model = keras.Model(inputs, outputs)
 
-    # Run a single batch of gradient descent.
-    model.compile(loss="binary_crossentropy")
-    loss = model.train_on_batch(X, Y)
+        # Run a single batch of gradient descent.
+        model.compile(loss="binary_crossentropy")
+        loss = model.train_on_batch(X, Y)
 
-    # Make sure we have a valid loss.
-    assert not math.isnan(loss)
+        # Make sure we have a valid loss.
+        self.assertGreater(loss, 0)
