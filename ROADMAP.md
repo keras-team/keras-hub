@@ -44,7 +44,14 @@
   directly to [Tensorflow Text](https://www.tensorflow.org/text) or
   core Tensorflow.
 
-## Areas of interest
+- **KerasNLP is not a Transformer only library.**
+  Transformer based models are a key offering for KerasNLP, and these
+  architectures should be easy to train and use within the library. However, we
+  want to support other types of models, such as n-gram or word2vec approaches
+  that might be more suited to some real-world tasks (e.g. low-resource
+  deployments).
+
+## Focus areas for 2022
 
 At this point in our development cycle, we are primarily interested in providing
 building blocks for a short list of "greatest hits" NLP models (such as BERT,
@@ -53,31 +60,83 @@ sequence-to-sequence transformer like T5) and a end-to-end task (e.g.
 summarization), we should have a clear code example in mind and a list of
 components to use.
 
-Note that while Transformers is a key offering from our library,
-we are not a strictly Transformer-based modeling library. We aim to support
-simple techniques such as n-gram models and word2vec embeddings, and make it
-easy to hop between different approaches.
+Below, we describe our areas of focus for the year in more detail.
 
-Current focus areas:
+### Easy-to-use and feature-complete tokenization
 
-- In-graph tokenization leveraging
-  [Tensorflow Text](https://www.tensorflow.org/text). We aim to have a fully
-  featured offering of character, word, and sub-word tokenizers that run
-  within the Tensorflow graph.
-- Scalable and easily trainable modeling
-  [examples](https://github.com/keras-team/keras-nlp/tree/master/examples)
-  runnable on Google Cloud. We will continue to port our BERT example to run
-  entirely on keras_nlp components for both training and preprocessing, and
-  give easy recipes for running multi-worker training. Once this is done, we
-  would like to extend this effort to other popular architectures.
-- Text generation workflows. We would like to support text generation from
-  trained models using greedy or beam search in a clear and easy to use
-  workflow.
+KerasNLP should be the "go-to" tokenization solution for Keras model training
+and deployment by the end of 2022.
+
+The major tasks within this effort:
+
+- Work with Tensorflow Text to continue to support a growing range of
+  tokenization options and popular vocabulary formats. For example, we would
+  like to add support for byte-level BPE tokenization within the Tensorflow
+  graph.
+- Pre-trained sub-word tokenizers for any language. Training a tokenizer can
+  add a lot of friction to a project, particularly when working working in a
+  language where examples are less readily available. We would like to support
+  a pre-trained tokenization offering that makes it easy to start training
+  models on input text right away.
+- A standardized way to training tokenizer vocabularies. Training vocabularies
+  for various tokenization algorithms can be a fractured and painful experience.
+  We should offer a standardized experience for training new vocabularies.
+
+### Scalable examples of popular model architectures using KerasNLP
+
+We would like our
+[examples](https://github.com/keras-team/keras-nlp/tree/master/examples)
+directory to contain scalable implementations of popular model
+architectures easily runnable on Google Cloud. Note that these will not be
+shipped with the library itself.
+
+These examples will serve two purposes—a demonstration to the community of how
+models can be built using KerasNLP, and a way to vet our the performance and
+accuracy of our library components on both TPUs and GPUs.
+
+At this moment in time, our focus is on polishing our BERT example. We would
+like it to run entirely on KerasNLP components for both training and
+preprocessing, and come easy recipes for running multi-worker training jobs.
+Once this is done, we would like to extend our examples directory to other
+popular architectures (e.g. RoBERTa and ELECTRA).
+
+As we move forward with KerasNLP as a whole, we expect development for new
+components (say, a new attention mechanism) to happen in tandem with an
+example demonstrating the component in an end-to-end architecture.
+
+### Tools for data preprocessing and postprocessing for end-to-end workflows
+
+It should be easy to use KerasNLP to take a trained model and use it for a wide
+range of real world NLP tasks. We should support classification, text
+generation, summarization, translation, name-entity recognition, and question
+answering. We should have a guide for each of these tasks using KerasNLP by
+the end of 2022.
+
+We are looking for simple, modular components that make it easy to build
+end-to-end workflows for any of these tasks.
+
+Currently projects in this area include:
+
+- Utilties for generating sequences of text using greedy or beam search.
+- Metrics for evaluating the quality of generated sequences, such a ROUGE and
+  BLEU.
 - Data augmentation preprocessing layers for domains with limited data. These
   layers will allow easily defining `tf.data` pipelines that augment input
   example sentences on the fly.
-- Metrics for model evaluation, such a ROUGE and BLEU for evaluating translation
-  quality.
+
+### Accessible guides and examples on keras.io
+
+For all of the above focus areas, we would like to make ensure we have an
+industry leading collection of easy to use guides and examples.
+
+These examples should be easy to follow, run within a colab notebook, and
+provide a practical starting place for solving most real-world NLP problems.
+
+This will continue to be a key investment area for the library. If you have an
+idea for a guide or example, please open an issue to discuss.
+
+By the end of 2022, most new keras.io NLP examples should be using the KerasNLP
+library.
 
 ## Citation bar
 
