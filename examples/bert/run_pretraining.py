@@ -382,6 +382,7 @@ def main(_):
         num_parallel_calls=tf.data.experimental.AUTOTUNE,
     )
     dataset = dataset.batch(FLAGS.batch_size, drop_remainder=True)
+    dataset = dataset.repeat()
 
     # Create a BERT model the input config.
     model = BertModel(
