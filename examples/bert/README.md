@@ -79,7 +79,7 @@ The latest wikipedia dump can be downloaded [at this link](https://dumps.wikimed
 or via command line:
 
 ```shell
-curl https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2
+curl -O https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2
 ```
 The dump can be extracted with the `wikiextractor` tool.
 
@@ -126,7 +126,12 @@ The `create_vocabulary.py` script allows you to compute your own WordPiece
 vocabulary for use with BERT. In most cases however, it is desirable to use the
 standard BERT vocabularies from the original models. You can download the
 English uncased vocabulary
-[here](https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt).
+[here](https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt),
+or in your terminal run:
+
+```shell
+curl -O https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt
+```
 
 ### Tokenize, mask, and combine sentences into training examples
 
@@ -169,7 +174,7 @@ for file in path/to/sentence-split-data/*; do
     output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
     python examples/bert/create_pretraining_data.py \
         --input_files ${file} \
-        --vocab_file vocab.txt \
+        --vocab_file bert_vocab_uncased.txt \
         --output_file ${output}
 done
 ```
@@ -183,7 +188,7 @@ for file in path/to/sentence-split-data/*; do
     output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
     echo python examples/bert/create_pretraining_data.py \
         --input_files ${file} \
-        --vocab_file vocab.txt \
+        --vocab_file bert_vocab_uncased.txt \
         --output_file ${output}
 done | parallel -j ${NUM_JOBS}
 ```
