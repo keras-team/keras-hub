@@ -79,7 +79,7 @@ The latest wikipedia dump can be downloaded [at this link](https://dumps.wikimed
 or via command line:
 
 ```shell
-curl -O https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2 
+curl -O https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2
 ```
 The dump can be extracted with the `wikiextractor` tool.
 
@@ -130,8 +130,7 @@ English uncased vocabulary
 or in your terminal run:
 
 ```shell
-curl https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt \
-    -o bert_vocab_uncased.txt
+curl -O https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt
 ```
 
 ### Tokenize, mask, and combine sentences into training examples
@@ -226,8 +225,7 @@ training for a few epochs to finetune the model.
 
 ```shell
 python3 examples/bert/run_glue_finetuning.py \
-    --saved_model_input path/to/input/model/ \
-    --saved_model_output path/to/output/model/ \
+    --saved_model_input path/to/model/ \
     --vocab_file path/to/bert_vocab_uncased.txt \
     --bert_config_file examples/bert/configs/bert_tiny.json \
 ```
