@@ -128,6 +128,7 @@ standard BERT vocabularies from the original models. You can download the
 English uncased vocabulary
 [here](https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt),
 or in your terminal run:
+
 ```shell
 curl https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt \
     -o bert_vocab_uncased.txt
