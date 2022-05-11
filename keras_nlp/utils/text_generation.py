@@ -17,17 +17,15 @@
 import tensorflow as tf
 
 
-def _handle_end_token(next_token, end_token_received, end_token_id):
-    filtered_next_token = next_token * (1 - end_token_received)
-    end_token_received = tf.cast(
+def _handle_end_token_id(next_token, end_token_id_received, end_token_id):
+    filtered_next_token = next_token * (1 - end_token_id_received)
+    end_token_id_received = tf.cast(
         filtered_next_token == end_token_id, dtype=next_token.dtype
     )
-    return filtered_next_token, end_token_received
+    return filtered_next_token, end_token_id_received
 
 
-def generate_text_greedy(
-    token_probability_fn, input_ids, max_length, end_token_id=None
-):
+def greedy_search(token_probability_fn, prompt, max_length, end_token_id=None):
     """
     Text generation utility based on greedy search.
 
@@ -37,7 +35,7 @@ def generate_text_greedy(
     Args:
         token_probability_fn: a callable, which takes in input_sequence
             and output the probability distribution of the next token.
-        input_ids: a list, the initial tokens to append generated tokens.
+        prompt: a list, the initial tokens to append generated tokens.
         max_length: int. The max length of generated text.
         end_token_id: int, defaults to None. The token marking the end of the
             sequence, once encountered the generation is finished for the exact
@@ -53,62 +51,63 @@ def generate_text_greedy(
     FEATURE_SIZE = 16
 
     # Create a dummy model to predict the next token.
-    model = tf.keras.Sequential([
-        tf.keras.Input(shape=[None]),
-        tf.keras.layers.Embedding(
-            input_dim=VOCAB_SIZE,
-            output_dim=FEATURE_SIZE,),
-        tf.keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
-    ])
+    model = tf.keras.Sequential(
+        [
+            tf.keras.Input(shape=[None]),
+            tf.keras.layers.Embedding(
+                input_dim=VOCAB_SIZE,
+                output_dim=FEATURE_SIZE,
+            ),
+            tf.keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
+        ]
+    )
 
     # Define a function that outputs the next token's probability given the
     # input sequence.
     def token_probability_fn(inputs):
         return model(inputs)[:, -1, :]
 
-    inputs = tf.random.uniform(shape=[5, 5], maxval=VOCAB_SIZE, dtype=tf.int64)
+    prompt = tf.random.uniform(shape=[5, 5], maxval=VOCAB_SIZE, dtype=tf.int64)
 
     # Print the generated sequence (token ids).
-    generate_text_greedy(
+    keras_nlp.greedy_search(
         token_probability_fn,
-        inputs,
+        prompt,
         max_length=10,
-        end_token=0,)
+        end_token_id=0,)
     ```
 
     """
-    if 0 in input_ids.shape:
-        raise ValueError(
-            "input_ids must not be empty, but received empty input_ids."
-        )
-    input_is_1d = input_ids.shape.rank == 1
+    if 0 in prompt.shape:
+        raise ValueError("prompt must not be empty, but received empty prompt.")
+    input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
-        input_ids = input_ids[tf.newaxis, :]
+        prompt = prompt[tf.newaxis, :]
 
     # Store if the end token has been generated for each sequence.
-    end_token_received = None
+    end_token_id_received = None
     if end_token_id is not None:
-        end_token_received = tf.cast(
-            (input_ids[:, -1] == end_token_id), dtype=input_ids.dtype
+        end_token_id_received = tf.cast(
+            (prompt[:, -1] == end_token_id), dtype=prompt.dtype
         )
 
-    def get_subsequent_tokens(input_ids, end_token_received):
-        if input_ids.shape[1] >= max_length:
-            # If the input_ids has reached our desired length, exit recursion.
-            return input_ids
-        pred = token_probability_fn(input_ids)
-        next_token = tf.cast(tf.argmax(pred, axis=-1), dtype=input_ids.dtype)
+    def get_subsequent_tokens(prompt, end_token_id_received):
+        if prompt.shape[1] >= max_length:
+            # If the prompt has reached our desired length, exit recursion.
+            return prompt
+        pred = token_probability_fn(prompt)
+        next_token = tf.cast(tf.argmax(pred, axis=-1), dtype=prompt.dtype)
         if end_token_id is not None:
             # Replace the next token with `end_token_id` if end token has
             # appeared in the sequenece.
-            next_token, end_token_received = _handle_end_token(
-                next_token, end_token_received, end_token_id
+            next_token, end_token_id_received = _handle_end_token_id(
+                next_token, end_token_id_received, end_token_id
             )
         # Append the next token to current sequence.
-        input_ids = tf.concat([input_ids, next_token[:, tf.newaxis]], axis=-1)
-        return get_subsequent_tokens(input_ids, end_token_received)
+        prompt = tf.concat([prompt, next_token[:, tf.newaxis]], axis=-1)
+        return get_subsequent_tokens(prompt, end_token_id_received)
 
-    generated_sequence = get_subsequent_tokens(input_ids, end_token_received)
+    generated_sequence = get_subsequent_tokens(prompt, end_token_id_received)
     if input_is_1d:
         return tf.squeeze(generated_sequence)
     return generated_sequence

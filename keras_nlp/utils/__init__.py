@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.utils.text_generation import generate_text_greedy
+from keras_nlp.utils.text_generation import greedy_search
