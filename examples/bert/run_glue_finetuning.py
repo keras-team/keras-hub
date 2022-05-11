@@ -153,10 +153,9 @@ class BertClassificationFinetuner(keras.Model):
             activation="tanh",
             name="pooler",
         )
-        self._probability_layer = tf.keras.layers.Dense(
+        self._logit_layer = tf.keras.layers.Dense(
             num_classes,
-            name="probability",
-            activation="softmax",
+            name="logits",
         )
 
     def call(self, inputs):
@@ -164,7 +163,7 @@ class BertClassificationFinetuner(keras.Model):
         # Get the first [CLS] token from each output.
         outputs = outputs[:, 0, :]
         outputs = self._pooler_layer(outputs)
-        return self._probability_layer(outputs)
+        return self._logit_layer(outputs)
 
 
 class BertHyperModel(keras_tuner.HyperModel):
@@ -185,7 +184,7 @@ class BertHyperModel(keras_tuner.HyperModel):
             optimizer=keras.optimizers.Adam(
                 learning_rate=hp.Choice("lr", [5e-5, 4e-5, 3e-5, 2e-5])
             ),
-            loss=keras.losses.SparseCategoricalCrossentropy(),
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
         )
         return finetuning_model
