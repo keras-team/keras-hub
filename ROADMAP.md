@@ -3,9 +3,9 @@
 ## What KerasNLP is
 
 - **A high-quality library of modular building blocks.** KerasNLP components
-  follow an established Keras interface (e.g. keras.layers.Layer,
-  keras.metrics.Metric, or keras_nlp.tokenizers.Tokenizer), and make it easy to
-  assemble state-of-the-art NLP workflows.
+  follow an established Keras interface (e.g. `keras.layers.Layer`,
+  `keras.metrics.Metric`, or `keras_nlp.tokenizers.Tokenizer`), and make it easy
+  to assemble state-of-the-art NLP workflows.
 
 - **A collection of guides and examples.** This effort is split between two
   locations. On [keras.io](keras.io/keras_nlp), we host a collection of
@@ -38,7 +38,7 @@
   end-to-end workflows, but they're intended purely for demonstration and
   grounding purposes, they're not our main deliverable.
 
-- **KerasNLP is not a repository of low-level string ops, like tf.text.**
+- **KerasNLP is not a repository of low-level string ops, like `tf.text`.**
   KerasNLP is fundamentally an extension of the Keras API: it hosts Keras
   objects, like layers, metrics, or callbacks. Low-level C++ ops should go
   directly to [Tensorflow Text](https://www.tensorflow.org/text) or
@@ -106,7 +106,10 @@ example demonstrating the component in an end-to-end architecture.
 
 By the end of 2022, we should have a actively growing collection of examples
 models, with a standardized set of training scripts, that match expected
-performance as reported in publications.
+performance as reported in publications. On the scalability front, we should
+be running our training scripts on multi-worker GPU and TPU settings, using
+[DTensor](https://www.tensorflow.org/guide/dtensor_overview) for data parallel
+training.
 
 ### Tools for data preprocessing and postprocessing for end-to-end workflows
 
@@ -155,13 +158,13 @@ Proposed components should usually either be part of a very well known
 architecture or contribute in some meaningful way to the usability of an
 end-to-end workflow.
 
-## Pre-trained modeling workflows
+## Pretrained modeling workflows
 
-Pre-training many modern NLP models is prohibitively expensive and
+Pretraining many modern NLP models is prohibitively expensive and
 time-consuming for an average user. A key goal with for the KerasNLP project is
-to have KerasNLP components available in a pre-trained model offering of some
+to have KerasNLP components available in a pretrained model offering of some
 form.
 
-We are working with the rest of the Tensorflow ecosystem (e.g. TF Hub,
-TF Models), to provide a coherent plan for accessing pre-trained models. We will
-continue to share updates as they are available.
+We are working with the rest of the Tensorflow ecosystem, to provide a coherent
+plan for accessing pretrained models. We will continue to share updates as they
+are available.

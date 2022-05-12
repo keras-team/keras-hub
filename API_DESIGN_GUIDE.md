@@ -54,15 +54,19 @@ class RougeL(keras.metrics.Metric):
 Our layers, metrics, and tokenizers should be fast and efficient, which means
 running inside the
 [TensorFlow graph](https://www.tensorflow.org/guide/intro_to_graphs)
-whenever possible.
+whenever possible. This means you should be able to wrap annotate a function
+calling a layer, metric or loss with `@tf.function` without running into issues.
 
 [tf.strings](https://www.tensorflow.org/api_docs/python/tf/strings) and
 [tf.text](https://www.tensorflow.org/text/api_docs/python/text) provides a large
-surface on TensorFlow operations that manipulate strings.
+surface on TensorFlow operations that manipulate strings. If an low-level (c++)
+operation we need is missing, we should add it in collaboration with core
+TensorFlow or TensorFlow Text. KerasNLP is a python-only library.
 
-If an low-level (c++) operation we need is missing, we should add it in
-collaboration with core TensorFlow or TensorFlow Text. KerasNLP is a python-only
-library.
+We should also strive to keep computation XLA compilable wherever possible (e.g.
+`tf.function(jit_compile=True)`). For trainable modeling components this is
+particularly important due to the performance gains offered by XLA. For
+preprocessing and postprocessing, XLA compilation is not a requirement.
 
 ## Support tf.data for text preprocessing and augmentation
 

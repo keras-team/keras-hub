@@ -46,32 +46,32 @@ import tensorflow as tf
 from tensorflow import keras
 
 # Tokenize some inputs with a binary label.
-vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "jumped", "."]
-inputs = ["The quick brown fox jumped.", "The fox slept."]
+vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+sentences = ["The quick brown fox jumped.", "The fox slept."]
 tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
     vocabulary=vocab,
     sequence_length=10,
 )
-X, Y = tokenizer(inputs), tf.constant([1, 0])
+x, y = tokenizer(sentences), tf.constant([1, 0])
 
 # Create a tiny transformer.
 inputs = keras.Input(shape=(None,), dtype="int32")
-x = keras_nlp.layers.TokenAndPositionEmbedding(
+outputs = keras_nlp.layers.TokenAndPositionEmbedding(
     vocabulary_size=len(vocab),
     sequence_length=10,
     embedding_dim=16,
 )(inputs)
-x = keras_nlp.layers.TransformerEncoder(
+outputs = keras_nlp.layers.TransformerEncoder(
     num_heads=4,
     intermediate_dim=32,
-)(x)
-x = keras.layers.GlobalAveragePooling1D()(x)
-outputs = keras.layers.Dense(1, activation="sigmoid")(x)
+)(outputs)
+outputs = keras.layers.GlobalAveragePooling1D()(outputs)
+outputs = keras.layers.Dense(1, activation="sigmoid")(outputs)
 model = keras.Model(inputs, outputs)
 
 # Run a single batch of gradient descent.
-model.compile(loss="binary_crossentropy")
-model.train_on_batch(X, Y)
+model.compile(loss="binary_crossentropy", jit_compile=True)
+model.train_on_batch(x, y)
 ```
 
 For a complete model building tutorial, see our guide on

@@ -1,6 +1,6 @@
 # Style Guide
 
-## Use black
+## Use `black`
 
 For the most part, following our code style is very simple, we just use
 [black](https://github.com/psf/black) to format code. See our
@@ -21,16 +21,17 @@ from tensorflow import keras
 ```
 
 ❌ `tf.keras.activations.X`<br/>
-✔️ `keras.activations.X`
+✅ `keras.activations.X`
 
 ❌ `layers.X`<br/>
-✔️ `keras.layers.X` or `keras_nlp.layers.X`
+✅ `keras.layers.X` or `keras_nlp.layers.X`
 
 ❌ `Dense(1, activation='softmax')`<br/>
-✔️ `keras.layers.Dense(1, activation='softmax')`
+✅ `keras.layers.Dense(1, activation='softmax')`
 
 For KerasNLP library code, `keras_nlp` will not be directly imported, but
-`keras` should still be as a top-level object used to access library symbols.
+`keras` should still be used as a top-level object used to access library
+symbols.
 
 ## Ideal layer style
 
@@ -41,52 +42,86 @@ do the following:
 - Keep a python attribute on the layer for each `__init__` argument to the
   layer. The name and value should match the passed value.
 - Write a `get_config()` which chains to super.
-- Document the layer behavior thouroughly including call behavior though a
+- Document the layer behavior thoroughly including call behavior though a
   class level docstring. Generally methods like `build()` and `call()` should
   not have their own docstring.
+- Document the
+  [masking](https://keras.io/guides/understanding_masking_and_padding/) behavior
+  of the layer in the class level docstring as well.
 - Always include usage examples using the full symbol location in `keras_nlp`.
+- Include a reference citation if applicable.
 
 ````python
-class Linear(keras.layers.Layer):
-    """A simple WX + B linear layer.
+class PositionEmbedding(keras.layers.Layer):
+    """A layer which learns a position embedding for input sequences.
 
-    This layer contains two trainable parameters, a weight matrix and bias
-    vector. The layer will linearly transform input to an output of `units`
-    size.
+    This class accepts a single dense tensor as input, and will output a
+    learned position embedding of the same shape.
+
+    This class assumes that in the input tensor, the last dimension corresponds
+    to the features, and the dimension before the last corresponds to the
+    sequence.
+
+    This layer does not supporting masking, but can be combined with a
+    `keras.layers.Embedding` for padding mask support.
 
     Args:
-        units: The dimensionality of the output space.
+        sequence_length: The maximum length of the dynamic sequence.
 
     Examples:
 
-    Build a linear model.
+    Direct call.
+    >>> layer = keras_nlp.layers.PositionEmbedding(sequence_length=10)
+    >>> layer(tf.zeros((8, 10, 16))).shape
+    TensorShape([8, 10, 16])
+
+    Combining with a token embedding.
     ```python
-    inputs = keras.Input(shape=(2,))
-    outputs = keras_nlp.layers.Linear(4)(inputs)
-    model = keras.Model(inputs, outputs)
+    seq_length = 50
+    vocab_size = 5000
+    embed_dim = 128
+    inputs = keras.Input(shape=(seq_length,))
+    token_embeddings = keras.layers.Embedding(
+        input_dim=vocab_size, output_dim=embed_dim
+    )(inputs)
+    position_embeddings = keras_nlp.layers.PositionEmbedding(
+        sequence_length=seq_length
+    )(token_embeddings)
+    outputs = token_embeddings + position_embeddings
     ```
 
-    Call the layer directly on input.
-    >>> layer = keras_nlp.layers.Linear(4)
-    >>> layer(tf.zeros(8, 2)) == layer.b
-    True
+    Reference:
+     - [Devlin et al., 2019](https://arxiv.org/abs/1810.04805)
     """
-    def __init__(self, units=32, **kwargs):
+
+    def __init__(
+        self,
+        sequence_length,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
-        self.units = units
+        self.sequence_length = int(sequence_length)
 
     def build(self, input_shape):
         super().build(input_shape)
-        self.w = self.add_weight(shape=(input_shape[-1], self.units))
-        self.b = self.add_weight(shape=(self.units,))
+        feature_size = input_shape[-1]
+        self.position_embeddings = self.add_weight(
+            "embeddings",
+            shape=[self.sequence_length, feature_size],
+        )
 
     def call(self, inputs):
-        return tf.matmul(inputs, self.w) + self.b
+        shape = tf.shape(inputs)
+        input_length = shape[-2]
+        position_embeddings = self.position_embeddings[:input_length, :]
+        return tf.broadcast_to(position_embeddings, shape)
 
     def get_config(self):
         config = super().get_config()
-        config.update({
-            "units": self.units,
-        })
+        config.update(
+            {
+                "sequence_length": self.sequence_length,
+            }
+        )
         return config
 ````
