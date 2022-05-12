@@ -106,10 +106,13 @@ example demonstrating the component in an end-to-end architecture.
 
 By the end of 2022, we should have a actively growing collection of examples
 models, with a standardized set of training scripts, that match expected
-performance as reported in publications. On the scalability front, we should
-be running our training scripts on multi-worker GPU and TPU settings, using
-[DTensor](https://www.tensorflow.org/guide/dtensor_overview) for data parallel
-training.
+performance as reported in publications.
+
+On the scalability front, we should have at least one example demonstrating both
+data parallel and model parallel training, in a multi-worker GPU and TPU
+setting, leveraging
+[DTensor](https://www.tensorflow.org/guide/dtensor_overview) for distributed
+support.
 
 ### Tools for data preprocessing and postprocessing for end-to-end workflows
 
