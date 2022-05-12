@@ -21,15 +21,19 @@ SEQUENCE_AXIS = -2
 
 
 class PositionEmbedding(keras.layers.Layer):
-    """Creates a layer which learns a position embedding for inputs sequences.
+    """A layer which learns a position embedding for inputs sequences.
 
     This class assumes that in the input tensor, the last dimension corresponds
     to the features, and the dimension before the last corresponds to the
     sequence.
 
-    This class accepts `RaggedTensor`s as inputs to process batches of sequences
-    of different lengths. The one ragged dimension must be the dimension that
-    corresponds to the sequence, that is, the penultimate dimension.
+    This layer optionally accepts `tf.RaggedTensor`s as inputs to process
+    batches of sequences of different lengths. The one ragged dimension must be
+    the dimension that corresponds to the sequence, that is, the penultimate
+    dimension.
+
+    This layer does not supporting masking, but can be combined with a
+    `keras.layers.Embedding` for padding mask support.
 
     Args:
         sequence_length: The maximum length of the dynamic sequence.
@@ -38,17 +42,25 @@ class PositionEmbedding(keras.layers.Layer):
         seq_axis: The axis of the input tensor where we add the embeddings.
 
     Examples:
-    ```python
-    token_embeddings = layers.Embedding(
-        input_dim=vocab_size, output_dim=embed_dim
-    )
-    position_embeddings = keras_nlp.layers.PositionEmbedding(
-        sequence_length=sequence_length
-    )
 
-    embedded_tokens = token_embeddings(inputs)
-    embedded_positions = position_embeddings(embedded_tokens)
-    outputs = embedded_tokens + embedded_positions
+    Called directly on input.
+    >>> layer = keras_nlp.layers.PositionEmbedding(sequence_length=10)
+    >>> layer(tf.zeros((8, 10, 16))).shape
+    TensorShape([8, 10, 16])
+
+    Combine with a token embedding.
+    ```python
+    seq_length = 50
+    vocab_size = 5000
+    embed_dim = 128
+    inputs = keras.Input(shape=(seq_length,))
+    token_embeddings = keras.layers.Embedding(
+        input_dim=vocab_size, output_dim=embed_dim
+    )(inputs)
+    position_embeddings = keras_nlp.layers.PositionEmbedding(
+        sequence_length=seq_length
+    )(token_embeddings)
+    outputs = token_embeddings + position_embeddings
     ```
 
     Reference:
@@ -107,8 +119,9 @@ class PositionEmbedding(keras.layers.Layer):
             )
 
     def _trim_and_broadcast_position_embeddings(self, shape):
-        sequence_length = shape[SEQUENCE_AXIS]
-        # trim to match the length of the sequence
-        position_embeddings = self.position_embeddings[:sequence_length, :]
+        input_length = shape[SEQUENCE_AXIS]
+        # trim to match the length of the input sequence, which might be less
+        # than the sequence_length of the layer.
+        position_embeddings = self.position_embeddings[:input_length, :]
         # then broadcast to add the missing dimensions to match "shape"
         return tf.broadcast_to(position_embeddings, shape)
