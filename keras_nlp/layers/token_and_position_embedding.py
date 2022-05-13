@@ -46,7 +46,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
     seq_length = 50
     vocab_size = 5000
     embed_dim = 128
-    inputs = tf.keras.Input(shape=(seq_length,))
+    inputs = keras.Input(shape=(seq_length,))
     embedding_layer = keras_nlp.layers.TokenAndPositionEmbedding(
         vocabulary_size=vocab_size,
         sequence_length=seq_length,
