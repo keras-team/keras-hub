@@ -18,12 +18,10 @@ components are first-party Keras objects that are too specialized to be
 added to core Keras, but that receive the same level of polish as the rest of
 the Keras API.
 
-You can browse our official documentation [here](https://keras.io/keras_nlp).
 We are a new and growing project, and welcome [contributions](CONTRIBUTING.md).
 
 ## Quick Links
 
-- [Documentation and Guides](https://keras.io/keras_nlp)
 - [Contributing](CONTRIBUTING.md)
 - [Roadmap](ROADMAP.md)
 - [Style Guide](STYLE_GUIDE.md)
@@ -74,14 +72,10 @@ model.compile(loss="binary_crossentropy", jit_compile=True)
 model.train_on_batch(x, y)
 ```
 
-For a complete model building tutorial, see our guide on
-[pretraining a transformer](keras.io/guides/keras_nlp/transformer_pretraining).
-
 ## Compatibility
 
 We follow [Semantic Versioning](https://semver.org/), and plan to
 provide backwards compatibility guarantees both for code and saved models built
-with our components. While we continue with pre-release `0.y.z` development, we
 may break compatibility at any time and APIs should not be consider stable.
 
 ## Citing KerasNLP
