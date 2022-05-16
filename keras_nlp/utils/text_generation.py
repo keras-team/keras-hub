@@ -17,15 +17,28 @@
 import tensorflow as tf
 
 
-def _handle_end_token_id(next_token, end_token_id_received, end_token_id):
-    filtered_next_token = next_token * (1 - end_token_id_received)
+def _handle_end_token_id(
+    next_token, end_token_id_received, end_token_id, pad_token_id
+):
+    # For sequences already seeing `end_token_id`, we replace the next token
+    # with `pad_token_id`.
+    filtered_next_token = (
+        next_token * (1 - end_token_id_received)
+        + pad_token_id * end_token_id_received
+    )
     end_token_id_received = tf.cast(
-        filtered_next_token == end_token_id, dtype=next_token.dtype
+        (filtered_next_token == end_token_id), dtype=next_token.dtype
     )
     return filtered_next_token, end_token_id_received
 
 
-def greedy_search(token_probability_fn, prompt, max_length, end_token_id=None):
+def greedy_search(
+    token_probability_fn,
+    prompt,
+    max_length,
+    end_token_id=None,
+    pad_token_id=0,
+):
     """
     Text generation utility based on greedy search.
 
@@ -40,6 +53,10 @@ def greedy_search(token_probability_fn, prompt, max_length, end_token_id=None):
         end_token_id: int, defaults to None. The token marking the end of the
             sequence, once encountered the generation is finished for the exact
             sequence. If None, every sequence is generated up to `max_length`.
+            If set, all tokens after encountering `end_token_id` will be
+            replaced with `pad_token_id`.
+        pad_token_id: int, defaults to 0. The pad token after `end_token_id`
+            is received.
 
     Returns:
         A 1D int Tensor, or 2D int RaggedTensor representing the generated
@@ -78,8 +95,6 @@ def greedy_search(token_probability_fn, prompt, max_length, end_token_id=None):
     ```
 
     """
-    if 0 in prompt.shape:
-        raise ValueError("prompt must not be empty, but received empty prompt.")
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
@@ -101,7 +116,7 @@ def greedy_search(token_probability_fn, prompt, max_length, end_token_id=None):
             # Replace the next token with `end_token_id` if end token has
             # appeared in the sequenece.
             next_token, end_token_id_received = _handle_end_token_id(
-                next_token, end_token_id_received, end_token_id
+                next_token, end_token_id_received, end_token_id, pad_token_id
             )
         # Append the next token to current sequence.
         prompt = tf.concat([prompt, next_token[:, tf.newaxis]], axis=-1)
