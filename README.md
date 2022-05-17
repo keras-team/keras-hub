@@ -76,6 +76,7 @@ model.train_on_batch(x, y)
 
 We follow [Semantic Versioning](https://semver.org/), and plan to
 provide backwards compatibility guarantees both for code and saved models built
+with our components. While we continue with pre-release `0.y.z` development, we
 may break compatibility at any time and APIs should not be consider stable.
 
 ## Citing KerasNLP
