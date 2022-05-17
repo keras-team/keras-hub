@@ -71,12 +71,12 @@ class TextGenerationTest(tf.test.TestCase):
             return tf.repeat(prob, batch_size, axis=0)
 
         max_length = 3
-        inputs = tf.constant([[0], [3]])
+        inputs = tf.constant([[1, 0], [3, 3]])
         outputs = greedy_search(
             token_probability_fn,
             inputs,
             max_length=max_length,
             end_token_id=0,
         )
-        self.assertAllEqual(outputs[0, :], tf.repeat(0, max_length))
+        self.assertAllEqual(outputs[0, 1:], tf.repeat(0, max_length - 1))
         self.assertAllEqual(outputs[1, :], tf.repeat(3, max_length))

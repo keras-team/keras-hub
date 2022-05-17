@@ -17,21 +17,6 @@
 import tensorflow as tf
 
 
-def _handle_end_token_id(
-    next_token, end_token_id_received, end_token_id, pad_token_id
-):
-    # For sequences already seeing `end_token_id`, we replace the next token
-    # with `pad_token_id`.
-    filtered_next_token = (
-        next_token * (1 - end_token_id_received)
-        + pad_token_id * end_token_id_received
-    )
-    end_token_id_received = tf.cast(
-        (filtered_next_token == end_token_id), dtype=next_token.dtype
-    )
-    return filtered_next_token, end_token_id_received
-
-
 def greedy_search(
     token_probability_fn,
     prompt,
@@ -95,34 +80,37 @@ def greedy_search(
     ```
 
     """
+    if not tf.executing_eagerly():
+        raise RuntimeError(
+            "`greedy_search` can only work in eager mode for "
+            "now. Please call `greedy_search` outside tf.function or "
+            "run `tf.config.run_functions_eagerly(True)` to run "
+            "tf.function in eager mode."
+        )
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
 
-    # Store if the end token has been generated for each sequence.
-    end_token_id_received = None
-    if end_token_id is not None:
-        end_token_id_received = tf.cast(
-            (prompt[:, -1] == end_token_id), dtype=prompt.dtype
-        )
-
-    def get_subsequent_tokens(prompt, end_token_id_received):
-        if prompt.shape[1] >= max_length:
-            # If the prompt has reached our desired length, exit recursion.
-            return prompt
+    i = prompt.shape[1]
+    while i < max_length:
+        # If the prompt has reached our desired length, exit while loop.
         pred = token_probability_fn(prompt)
         next_token = tf.cast(tf.argmax(pred, axis=-1), dtype=prompt.dtype)
-        if end_token_id is not None:
-            # Replace the next token with `end_token_id` if end token has
-            # appeared in the sequenece.
-            next_token, end_token_id_received = _handle_end_token_id(
-                next_token, end_token_id_received, end_token_id, pad_token_id
-            )
         # Append the next token to current sequence.
         prompt = tf.concat([prompt, next_token[:, tf.newaxis]], axis=-1)
-        return get_subsequent_tokens(prompt, end_token_id_received)
+        i += 1
 
-    generated_sequence = get_subsequent_tokens(prompt, end_token_id_received)
+    if end_token_id is not None:
+        # Mask out tokens after `end_token_id` is encountered.
+        # Find index of first end_token_id.
+        end_indices = tf.math.argmax(prompt == end_token_id, -1)
+        # Use max_length if no `end_token_id` is found.
+        end_indices = tf.where(end_indices == 0, max_length, end_indices)
+        # Build a mask including end_token and replace tokens after end_token
+        # with `pad_token_id`.
+        valid_indices = tf.sequence_mask(end_indices + 1, maxlen=max_length)
+        prompt = tf.where(valid_indices, prompt, pad_token_id)
+
     if input_is_1d:
-        return tf.squeeze(generated_sequence)
-    return generated_sequence
+        return tf.squeeze(prompt)
+    return prompt
