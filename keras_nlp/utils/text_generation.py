@@ -33,7 +33,8 @@ def greedy_search(
     Args:
         token_probability_fn: a callable, which takes in input_sequence
             and output the probability distribution of the next token.
-        prompt: a list, the initial tokens to append generated tokens.
+        prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
+            append generated tokens.
         max_length: int. The max length of generated text.
         end_token_id: int, defaults to None. The token marking the end of the
             sequence, once encountered the generation is finished for the exact
@@ -87,6 +88,13 @@ def greedy_search(
             "run `tf.config.run_functions_eagerly(True)` to run "
             "tf.function in eager mode."
         )
+    if isinstance(prompt, tf.RaggedTensor):
+        raise ValueError(
+            "RaggedTensor `prompt` is not supported, please "
+            "provide `prompt` as a list or Tensor."
+        )
+    if isinstance(prompt, list):
+        prompt = tf.convert_to_tensor(prompt)
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]

@@ -53,6 +53,16 @@ class TextGenerationTest(tf.test.TestCase):
         outputs = greedy_search(self.token_probability_fn, inputs, max_length=5)
         self.assertEquals(outputs.shape, [2, 5])
 
+    def test_generate_with_list_prompt(self):
+        inputs = [[1], [1]]
+        outputs = greedy_search(self.token_probability_fn, inputs, max_length=5)
+        self.assertEquals(outputs.shape, [2, 5])
+
+    def test_generate_with_ragged_prompt(self):
+        inputs = tf.ragged.constant([[1], [2, 3]])
+        with self.assertRaises(ValueError):
+            greedy_search(self.token_probability_fn, inputs, max_length=5)
+
     def test_assert_generation_is_correct(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
