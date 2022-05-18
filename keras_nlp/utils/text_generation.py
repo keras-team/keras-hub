@@ -83,9 +83,9 @@ def greedy_search(
     """
     if not tf.executing_eagerly():
         raise RuntimeError(
-            "`greedy_search` currently requires an eager execution context. "
-            "Please call `greedy_search` outside tf.function or "
-            "run `tf.config.run_functions_eagerly(True)` to run "
+            "`keras_nlp.utils.greedy_search` currently requires an eager "
+            "execution context. Please call `greedy_search` outside "
+            "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
             "tf.function in eager mode."
         )
     if isinstance(prompt, tf.RaggedTensor):
