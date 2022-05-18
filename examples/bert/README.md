@@ -1,14 +1,14 @@
 # BERT with KerasNLP
 
-This example will show how to train a Bidirectional Encoder
+This example demonstrates how to train a Bidirectional Encoder
 Representations from Transformers (BERT) model end-to-end using the KerasNLP
 library. This README contains instructions on how to run pretraining directly
-from raw data, followed by fine tuning and evaluation on the GLUE dataset.
+from raw data, followed by finetuning and evaluation on the GLUE dataset.
 
 ## Quickly test out the code
 
 To exercise the code in this directory by training a tiny BERT model, you can
-run the following commands from the base of the repository. This can
+run the following commands from the base directory of the repository. This can
 be useful to validate any code changes, but note that a useful BERT model would
 need to be trained for much longer on a much larger dataset.
 
@@ -50,8 +50,8 @@ python3 examples/bert/bert_finetune_glue.py \
 
 Pip dependencies for all KerasNLP examples are listed in `setup.py`. To install
 both the KerasNLP library from source and all other dependencies required to
-run the example, run the below command. You may want to install to a self
-contained environment (e.g. a container or a virtualenv).
+run the example, run the below command. You may want to install to a self-contained
+environment (e.g. a container or a virtualenv).
 
 ```shell
 pip install -e ".[examples]"
@@ -61,7 +61,7 @@ pip install -e ".[examples]"
 
 Training a BERT model happens in two stages. First, the model is "pretrained" on
 a large corpus of input text. This is computationally expensive. After
-pretraining, the model can be "fine tuned" on a downstream task with much
+pretraining, the model can be "finetuned" on a downstream task with a much
 smaller amount of labeled data.
 
 ### Downloading pretraining data
@@ -84,9 +84,9 @@ python -m wikiextractor.WikiExtractor enwiki-latest-pages-articles.xml.bz2
 ```
 
 BooksCorpus is no longer hosted by
-[it's creators](https://yknzhu.wixsite.com/mbweb), but you can find instructions
-for downloading or reproducing the corpus in this
-[repository](https://github.com/soskek/bookcorpus). We suggest the pre-made file
+[its creators](https://yknzhu.wixsite.com/mbweb), but you can find instructions
+for downloading or reproducing the corpus in
+[this repository](https://github.com/soskek/bookcorpus). We suggest the pre-made file
 downloads listed at the top of the README. Alternatively, you can forgo it
 entirely and pretrain solely on wikipedia.
 
@@ -97,12 +97,12 @@ next sentence predictions.
 
 ### Splitting raw text into sentences
 
-Next use, `examples/tools/split_sentences.py` to process raw input files and
+Next, use `examples/tools/split_sentences.py` to process raw input files and
 split them into output files where each line contains a sentence, and a blank
-line marks the start of a new document. We need this for the next sentence
+line marks the start of a new document. We need this for the next-sentence
 prediction task used by BERT.
 
-For example, if wikipedia files are located in `~/datasets/wikipedia` and
+For example, if Wikipedia files are located in `~/datasets/wikipedia` and
 bookscorpus in `~/datasets/bookscorpus`, the following command will output
 sentence split documents to a configurable number of output file shards:
 
@@ -172,7 +172,7 @@ for file in path/to/sentence-split-data/*; do
 done
 ```
 
-If memory is available, this could be further sped up by running this script
+If enough memory is available, this could be further sped up by running this script
 multiple times in parallel:
 
 ```shell
@@ -210,7 +210,7 @@ python3 examples/bert/bert_pretrain.py \
 
 After pretraining, we can evaluate the performance of a BERT model with the
 General Language Understanding Evaluation (GLUE) benchmark. This will
-fine tune the model and running classification for a number of downstream tasks.
+finetune the model and running classification for a number of downstream tasks.
 
 The `bert_finetune_glue.py` script downloads the GLUE data for a specific
 tasks, reloads the pretraining model with appropriate finetuning heads, and runs
@@ -223,5 +223,5 @@ python3 examples/bert/bert_finetune_glue.py \
     --bert_config_file examples/bert/configs/bert_tiny.json \
 ```
 
-The script could be easily adapted to any other text classification fine-tuning
+The script could be easily adapted to any other text classification finetuning
 tasks, where inputs can be any number of raw text sentences per sample.
