@@ -39,7 +39,7 @@ setup(
         "numpy",
         "packaging",
         "tensorflow",
-        "tensorflow_text",
+        "tensorflow-text",
     ],
     extras_require={
         "tests": [
