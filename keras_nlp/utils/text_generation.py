@@ -73,7 +73,7 @@ def greedy_search(
     prompt = tf.random.uniform(shape=[5, 5], maxval=VOCAB_SIZE, dtype=tf.int64)
 
     # Print the generated sequence (token ids).
-    keras_nlp.greedy_search(
+    keras_nlp.utils.greedy_search(
         token_probability_fn,
         prompt,
         max_length=10,
@@ -83,8 +83,8 @@ def greedy_search(
     """
     if not tf.executing_eagerly():
         raise RuntimeError(
-            "`greedy_search` can only work in eager mode for "
-            "now. Please call `greedy_search` outside tf.function or "
+            "`greedy_search` currently requires an eager execution context. "
+            "Please call `greedy_search` outside tf.function or "
             "run `tf.config.run_functions_eagerly(True)` to run "
             "tf.function in eager mode."
         )
@@ -93,7 +93,7 @@ def greedy_search(
             "RaggedTensor `prompt` is not supported, please "
             "provide `prompt` as a list or Tensor."
         )
-    if isinstance(prompt, list):
+    if not isinstance(prompt, tf.Tensor):
         prompt = tf.convert_to_tensor(prompt)
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:

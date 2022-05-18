@@ -71,8 +71,13 @@ class TextGenerationTest(tf.test.TestCase):
 
         batch_size = 10
         inputs = tf.ones([batch_size, 1], dtype=tf.int32)
-        outputs = greedy_search(token_probability_fn, inputs, max_length=3)
-        self.assertAllEqual(outputs[:, -1], tf.repeat(3, batch_size))
+        max_length = 3
+        outputs = greedy_search(
+            token_probability_fn, inputs, max_length=max_length
+        )
+        self.assertAllEqual(
+            outputs[:, 1:], 3 * tf.ones(shape=[batch_size, max_length - 1])
+        )
 
     def test_end_token_id(self):
         def token_probability_fn(inputs):
@@ -80,13 +85,14 @@ class TextGenerationTest(tf.test.TestCase):
             prob = tf.constant([[0.1, 0.2, 0.3, 0.4]])
             return tf.repeat(prob, batch_size, axis=0)
 
-        max_length = 3
-        inputs = tf.constant([[1, 0], [3, 3]])
+        max_length = 5
+        inputs = tf.constant([[0, 1], [1, 2]])
         outputs = greedy_search(
             token_probability_fn,
             inputs,
             max_length=max_length,
-            end_token_id=0,
+            end_token_id=2,
+            pad_token_id=0,
         )
-        self.assertAllEqual(outputs[0, 1:], tf.repeat(0, max_length - 1))
-        self.assertAllEqual(outputs[1, :], tf.repeat(3, max_length))
+        self.assertAllEqual(outputs[0, 2:], tf.repeat(3, max_length - 2))
+        self.assertAllEqual(outputs[1, 2:], tf.repeat(0, max_length - 2))
