@@ -2,21 +2,22 @@
 
 This examples directory contains complete recipes for training popular model
 architectures using KerasNLP. These are not part of the library itself, but
-rather serves to demonstrate how to use the library for popular tasks, while
+rather serve to demonstrate how to use the library for common tasks, while
 simultaneously providing a mechanism to rigorously test library components.
 
-This directory is complimentary to the NLP examples on
-[keras.io](https://keras.io/examples/). You should sort a potential example to
-either keras.io or this directory as follows:
+This directory is complementary to the NLP examples on
+[keras.io](https://keras.io/examples/). If you want to contribute a KerasNLP
+example and you're not sure if it should live on keras.io or in this directory,
+here's how they differ:
 
-- If an example can fit in < 300 lines of code and run in a colab,
+- If an example can fit in < 300 lines of code and run in a Colab,
   put it on keras.io.
 - If an example is too big for a single script or has high compute requirements,
   add it here.
 
-In general, we will have fairly high bar for what models we support in this
-directory. They should be widely used, practical models for solving problems in
-NLP.
+In general, we will have a fairly high bar for what models we support in this
+directory. They should be widely used, practical models for solving standard
+problems in NLP.
 
 ## Anatomy of an example
 
@@ -36,9 +37,9 @@ modelname
 
 - `README.md`: The README should contain complete instructions for downloading
   data and training a model from scratch.
-- `__init__.py`: Empty, for imports.
+- `__init__.py`: Empty (it's for imports).
 - `modelname_config.py`: This file should contain most of the configuration for
-  the model architecture, learning rate, etc, using simple python constants. We
+  the model architecture, learning rate, etc, using simple Python constants. We
   would like to avoid complex configuration setups (json, yaml, etc).
 - `modelname_model.py`: This file should contain the actual `keras.Model` and
   any custom layers needed for the example. In general, use KerasNLP components
