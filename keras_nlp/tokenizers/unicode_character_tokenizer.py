@@ -179,7 +179,6 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     <tf.Tensor: shape=(7,), dtype=int32,
         numpy=array([97, 32, 98, 32, 99,  0,  0], dtype=int32)>
     >>> detokunbatched = dataset.map(tokenizer.detokenize)
-    >>> detokunbatched = dataset.map(tokenizer.detokenize)
     >>> detokunbatched.take(1).get_single_element()
     <tf.Tensor: shape=(), dtype=string, numpy=b'a b c'>
 
