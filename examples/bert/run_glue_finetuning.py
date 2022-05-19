@@ -145,16 +145,20 @@ def load_data(task_name):
 class BertClassificationFinetuner(keras.Model):
     """Adds a classification head to a pre-trained BERT model for finetuning"""
 
-    def __init__(self, bert_model, hidden_size, num_classes, **kwargs):
+    def __init__(
+        self, bert_model, hidden_size, num_classes, initializer, **kwargs
+    ):
         super().__init__(**kwargs)
         self.bert_model = bert_model
         self._pooler_layer = keras.layers.Dense(
             hidden_size,
             activation="tanh",
+            kernel_initializer=initializer,
             name="pooler",
         )
         self._logit_layer = tf.keras.layers.Dense(
             num_classes,
+            kernel_initializer=initializer,
             name="logits",
         )
 
@@ -179,6 +183,9 @@ class BertHyperModel(keras_tuner.HyperModel):
             bert_model=model,
             hidden_size=bert_config["hidden_size"],
             num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
+            initializer=keras.initializers.TruncatedNormal(
+                stddev=bert_config["initializer_range"]
+            ),
         )
         finetuning_model.compile(
             optimizer=keras.optimizers.Adam(
