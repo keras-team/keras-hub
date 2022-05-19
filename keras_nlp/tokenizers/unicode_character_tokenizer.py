@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any
-from typing import Dict
-
 import tensorflow as tf
 import tensorflow_text as tf_text
 
@@ -247,7 +244,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         self.output_encoding = output_encoding
         self.vocabulary_size = vocabulary_size
 
-    def get_config(self) -> Dict[str, Any]:
+    def get_config(self):
         config = super().get_config()
         config.update(
             {

@@ -12,11 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any
-from typing import Dict
 from typing import Iterable
 from typing import List
-from typing import Union
 
 import tensorflow as tf
 import tensorflow_text as tf_text
@@ -175,7 +172,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def __init__(
         self,
-        vocabulary: Union[Iterable[str], str] = None,
+        vocabulary=None,
         sequence_length: int = None,
         lowercase: bool = True,
         strip_accents: bool = True,
@@ -262,11 +259,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     def token_to_id(self, token: str) -> int:
         """Convert a string token to an integer id."""
         # This will be slow, but keep memory usage down compared to building a
-        # dict. Assuming the main use case is looking up a few special tokens
+        # . Assuming the main use case is looking up a few special tokens
         # early in the vocab, this should be fine.
         return self.vocabulary.index(token)
 
-    def get_config(self) -> Dict[str, Any]:
+    def get_config(self):
         config = super().get_config()
         config.update(
             {

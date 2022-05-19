@@ -14,9 +14,6 @@
 
 """Byte Tokenizer."""
 
-from typing import Any
-from typing import Dict
-
 import numpy as np
 import tensorflow as tf
 import tensorflow_text as tf_text
@@ -248,7 +245,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
         )
         return decoded
 
-    def get_config(self) -> Dict[str, Any]:
+    def get_config(self):
         config = super().get_config()
         config.update(
             {
