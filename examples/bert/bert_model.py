@@ -473,21 +473,31 @@ class BertModel(keras.Model):
     ):
         super().__init__(**kwargs)
 
-        activation = keras.activations.get(inner_activation)
-        initializer = keras.initializers.TruncatedNormal(
+        self.vocab_size = vocab_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.num_attention_heads = num_attention_heads
+        self.max_sequence_length = max_sequence_length
+        self.type_vocab_size = type_vocab_size
+        self.inner_size = inner_size
+        self.inner_activation = keras.activations.get(inner_activation)
+        self.initializer_range = initializer_range
+        self.initializer = keras.initializers.TruncatedNormal(
             stddev=initializer_range
         )
-        initializer = keras.initializers.get(initializer)
+        self.hidden_dropout = hidden_dropout
+        self.attention_dropout = attention_dropout
+        self.norm_first = norm_first
 
         self._embedding_layer = OnDeviceEmbedding(
             vocab_size=vocab_size,
             embedding_width=hidden_size,
-            initializer=initializer,
+            initializer=self.initializer,
             name="word_embeddings",
         )
 
         self._position_embedding_layer = keras_nlp.layers.PositionEmbedding(
-            initializer=initializer,
+            initializer=self.initializer,
             sequence_length=max_sequence_length,
             name="position_embedding",
         )
@@ -495,7 +505,7 @@ class BertModel(keras.Model):
         self._type_embedding_layer = OnDeviceEmbedding(
             vocab_size=type_vocab_size,
             embedding_width=hidden_size,
-            initializer=initializer,
+            initializer=self.initializer,
             use_one_hot=True,
             name="type_embeddings",
         )
@@ -516,29 +526,15 @@ class BertModel(keras.Model):
             layer = TransformerEncoderBlock(
                 num_attention_heads=num_attention_heads,
                 inner_size=inner_size,
-                inner_activation=inner_activation,
+                inner_activation=self.inner_activation,
                 hidden_dropout=hidden_dropout,
                 attention_dropout=attention_dropout,
                 norm_first=norm_first,
-                kernel_initializer=initializer,
+                kernel_initializer=self.initializer,
                 name="transformer/layer_%d" % i,
             )
             self._transformer_layers.append(layer)
 
-        self._config = {
-            "vocab_size": vocab_size,
-            "hidden_size": hidden_size,
-            "num_layers": num_layers,
-            "num_attention_heads": num_attention_heads,
-            "max_sequence_length": max_sequence_length,
-            "type_vocab_size": type_vocab_size,
-            "inner_size": inner_size,
-            "inner_activation": keras.activations.serialize(activation),
-            "hidden_dropout": hidden_dropout,
-            "attention_dropout": attention_dropout,
-            "initializer_range": initializer_range,
-            "norm_first": norm_first,
-        }
         self.inputs = dict(
             input_ids=keras.Input(shape=(None,), dtype=tf.int32),
             input_mask=keras.Input(shape=(None,), dtype=tf.int32),
@@ -573,4 +569,23 @@ class BertModel(keras.Model):
         return self._embedding_layer.embeddings
 
     def get_config(self):
-        return dict(self._config)
+        config = super().get_config()
+        config.update(
+            {
+                "vocab_size": self.vocab_size,
+                "hidden_size": self.hidden_size,
+                "num_layers": self.num_layers,
+                "num_attention_heads": self.num_attention_heads,
+                "max_sequence_length": self.max_sequence_length,
+                "type_vocab_size": self.type_vocab_size,
+                "inner_size": self.inner_size,
+                "inner_activation": keras.activations.serialize(
+                    self.inner_activation
+                ),
+                "hidden_dropout": self.hidden_dropout,
+                "attention_dropout": self.attention_dropout,
+                "initializer_range": self.initializer_range,
+                "norm_first": self.norm_first,
+            }
+        )
+        return config
