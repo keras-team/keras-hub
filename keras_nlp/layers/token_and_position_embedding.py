@@ -26,8 +26,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
     to the sequence dimension.
 
     Args:
-        vocabulary_size: The size of the vocabulary (should be no larger
-            than 999)
+        vocabulary_size: The size of the vocabulary.
         sequence_length: The maximum length of input sequence
         embedding_dim: The output dimension of the embedding layer
         embeddings_initializer: The initializer to use for the Embedding
