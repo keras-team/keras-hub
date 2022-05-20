@@ -46,6 +46,8 @@ from absl import flags
 
 from examples.bert.bert_utils import list_filenames_for_arg
 
+from keras_nlp.layers.mlm_mask_generator import MLMMaskGenerator
+
 # Tokenization will happen with tensorflow and can easily OOM a GPU.
 # Restrict the script to run CPU as GPU will not offer speedup here anyway.
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -369,6 +371,10 @@ def create_instances_from_document(
                     vocab_words,
                     rng,
                 )
+                # Use MLMMaskGenerator instead of create_masked_lm_predictions
+                # (which is used in the original BERT code)
+                MLMMaskGenerator(mask_selection_rate=masked_lm_prob, mask_selection_length=max_predictions_per_seq, vocabulary_size=len(vocab_words), rng=rng)
+
                 instance = TrainingInstance(
                     tokens=tokens,
                     segment_ids=segment_ids,
