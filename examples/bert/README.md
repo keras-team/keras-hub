@@ -40,6 +40,8 @@ python3 examples/bert/run_pretraining.py \
     --input_files $OUTPUT_DIR/pretraining-data/ \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --bert_config_file examples/bert/configs/bert_tiny.json \
+    --num_warmup_steps 20 \
+    --num_train_steps 200 \
     --saved_model_output $OUTPUT_DIR/model/
 
 # Run finetuning.
@@ -73,7 +75,12 @@ The GLUE pretraining data (Wikipedia + BooksCorpus) is fairly large. The raw
 input data takes roughly ~20GB of space, and after preprocessing, the full
 corpus will take ~400GB.
 
-The latest wikipedia dump can be downloaded [at this link](https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2).
+The latest wikipedia dump can be downloaded [at this link](https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2),
+or via command line:
+
+```shell
+curl -O https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2
+```
 The dump can be extracted with the `wikiextractor` tool.
 
 ```shell
@@ -84,7 +91,7 @@ BooksCorpus is no longer hosted by
 [it's creators](https://yknzhu.wixsite.com/mbweb), but you can find instructions
 for downloading or reproducing the corpus in this
 [repository](https://github.com/soskek/bookcorpus). We suggest the pre-made file
-downloads listed at the top of the README. Alternatively, you can forgo it
+downloads listed at the top of the README. Alternatively, you can forgo it 
 entirely and pretrain solely on wikipedia.
 
 Preparing the pretraining data will happen in two stages. First, raw text needs
@@ -119,7 +126,12 @@ The `create_vocabulary.py` script allows you to compute your own WordPiece
 vocabulary for use with BERT. In most cases however, it is desirable to use the
 standard BERT vocabularies from the original models. You can download the
 English uncased vocabulary
-[here](https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt).
+[here](https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt),
+or in your terminal run:
+
+```shell
+curl -O https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt
+```
 
 ### Tokenize, mask, and combine sentences into training examples
 
@@ -162,7 +174,7 @@ for file in path/to/sentence-split-data/*; do
     output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
     python examples/bert/create_pretraining_data.py \
         --input_files ${file} \
-        --vocab_file vocab.txt \
+        --vocab_file bert_vocab_uncased.txt \
         --output_file ${output}
 done
 ```
@@ -176,9 +188,15 @@ for file in path/to/sentence-split-data/*; do
     output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
     echo python examples/bert/create_pretraining_data.py \
         --input_files ${file} \
-        --vocab_file vocab.txt \
+        --vocab_file bert_vocab_uncased.txt \
         --output_file ${output}
 done | parallel -j ${NUM_JOBS}
+```
+
+To preview a sample of generated data files, you can run the command below:
+
+```shell
+python -c "from keras_nlp.utils.tensor_utils import preview_tfrecord; preview_tfrecord('/path/to/tfrecord_file')"
 ```
 
 ### Running BERT pretraining

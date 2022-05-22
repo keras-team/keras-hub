@@ -135,9 +135,7 @@ class WordPieceTokenizerTest(tf.test.TestCase):
     def test_no_spliting(self):
         input_data = ["t o k e n", "m i s s i n g", "t o k e n"]
         vocab_data = ["[UNK]", "t o k e n"]
-        tokenizer = WordPieceTokenizer(
-            vocabulary=vocab_data, split_pattern=None
-        )
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data, split=False)
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [1, 0, 1])
 
@@ -148,7 +146,7 @@ class WordPieceTokenizerTest(tf.test.TestCase):
             vocabulary=vocab_data,
             lowercase=False,
             strip_accents=False,
-            split_pattern=None,
+            split=False,
         )
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [1, 2, 3, 4, 5, 6])
@@ -223,3 +221,25 @@ class WordPieceTokenizerTest(tf.test.TestCase):
             model(input_data),
             restored_model(input_data),
         )
+
+    def test_no_oov_token_in_vocabulary(self):
+        vocab_data = ["qu", "@@ick", "br", "@@OWN", "fox"]
+        with self.assertRaises(RuntimeError):
+            WordPieceTokenizer(
+                vocabulary=vocab_data,
+            )
+
+        vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]
+        with self.assertRaises(RuntimeError):
+            WordPieceTokenizer(
+                vocabulary=vocab_data,
+            )
+
+        vocab_data = ["UNK", "qu", "@@ick", "br", "@@OWN", "fox"]
+        with self.assertRaises(RuntimeError):
+            WordPieceTokenizer(
+                vocabulary=vocab_data,
+            )
+
+        with self.assertRaises(ValueError):
+            WordPieceTokenizer(vocabulary=vocab_data, oov_token=None)

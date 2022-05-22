@@ -26,9 +26,8 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
     to the sequence dimension.
 
     Args:
-        vocabulary_size: The size of the vocabulary (should be no larger
-            than 999)
-        max_length: The maximum length of input sequence
+        vocabulary_size: The size of the vocabulary.
+        sequence_length: The maximum length of input sequence
         embedding_dim: The output dimension of the embedding layer
         embeddings_initializer: The initializer to use for the Embedding
             Layers
@@ -41,15 +40,15 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
             used in the vocabulary
             (input_dim should equal size of vocabulary + 1).
 
-    Example:
+    Examples:
     ```python
     seq_length = 50
     vocab_size = 5000
     embed_dim = 128
-    inputs = tf.keras.Input(shape=(seq_length,))
+    inputs = keras.Input(shape=(seq_length,))
     embedding_layer = keras_nlp.layers.TokenAndPositionEmbedding(
         vocabulary_size=vocab_size,
-        max_length=max_length,
+        sequence_length=seq_length,
         embedding_dim=embed_dim,
     )
     outputs = embedding_layer(inputs)
@@ -59,7 +58,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
     def __init__(
         self,
         vocabulary_size,
-        max_length,
+        sequence_length,
         embedding_dim,
         embeddings_initializer="glorot_uniform",
         mask_zero=False,
@@ -70,16 +69,16 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
             raise ValueError(
                 "`vocabulary_size` must be an Integer, received `None`."
             )
-        if max_length is None:
+        if sequence_length is None:
             raise ValueError(
-                "`max_length` must be an Integer, received `None`."
+                "`sequence_length` must be an Integer, received `None`."
             )
         if embedding_dim is None:
             raise ValueError(
                 "`embedding_dim` must be an Integer, received `None`."
             )
         self.vocabulary_size = int(vocabulary_size)
-        self.max_length = int(max_length)
+        self.sequence_length = int(sequence_length)
         self.embedding_dim = int(embedding_dim)
         self.token_embedding = keras.layers.Embedding(
             vocabulary_size,
@@ -88,16 +87,17 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
             mask_zero=mask_zero,
         )
         self.position_embedding = keras_nlp.layers.PositionEmbedding(
-            max_length=max_length,
+            sequence_length=sequence_length,
             initializer=embeddings_initializer,
         )
+        self.supports_masking = self.token_embedding.supports_masking
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "vocabulary_size": self.vocabulary_size,
-                "max_length": self.max_length,
+                "sequence_length": self.sequence_length,
                 "embedding_dim": self.embedding_dim,
                 "embeddings_initializer": keras.initializers.serialize(
                     self.token_embedding.embeddings_initializer
@@ -112,3 +112,6 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         embedded_positions = self.position_embedding(embedded_tokens)
         outputs = embedded_tokens + embedded_positions
         return outputs
+
+    def compute_mask(self, inputs, mask=None):
+        return self.token_embedding.compute_mask(inputs, mask=mask)

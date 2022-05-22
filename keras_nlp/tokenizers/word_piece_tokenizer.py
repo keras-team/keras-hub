@@ -80,15 +80,26 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     If a more custom pre-tokenization step is desired, the layer can be
     configured to apply only the strict WordPiece algorithm by passing
-    `lowercase=False`, `strip_accents=False` and `split_pattern=None`. In
+    `lowercase=False`, `strip_accents=False` and `split=False`. In
     this case, inputs should be pre-split string tensors or ragged tensors.
 
+    Tokenizer outputs can either be padded and truncated with a
+    `sequence_length` argument, or left un-truncated. The exact output will
+    depend on the rank of the input tensors.
+
+    If input is a batch of strings (rank > 0):
     By default, the layer will output a `tf.RaggedTensor` where the last
-    dimension of the output is ragged after whitespace splitting and sub-word
-    tokenizing. If `sequence_length` is set, the layer will output a dense
-    `tf.Tensor` where all inputs have been padded or truncated to
-    `sequence_length`. The output dtype can be controlled via the `dtype`
-    argument, which should be either an integer or string type.
+    dimension of the output is ragged. If `sequence_length` is set, the layer
+    will output a dense `tf.Tensor` where all inputs have been padded or
+    truncated to `sequence_length`.
+
+    If input is a scalar string (rank == 0):
+    By default, the layer will output a dense `tf.Tensor` with static shape
+    `[None]`. If `sequence_length` is set, the output will be
+    a dense `tf.Tensor` of shape `[sequence_length]`.
+
+    The output dtype can be controlled via the `dtype` argument, which should
+    be either an integer or string type.
 
     Args:
         vocabulary: A list of strings or a string string filename path. If
@@ -101,10 +112,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             tokenization.
         strip_accents: If true, all accent marks will be removed from text
             before tokenization.
-        split_pattern: A regex pattern to match delimiters to split, or None
-            indicating that the input is pre-split and no splitting should be
-            performed. By default, all whitespace and punctuation marks will
-            be split on.
+        split: If true, input will be split according to `split_pattern`
+            and `keep_pattern`. If false, input should be split before calling
+            the layer.
+        split_pattern: A regex pattern to match delimiters to split. By default,
+            all whitespace and punctuation marks will be split on.
         keep_pattern: A regex pattern of delimiters contained in the
             `split_pattern` of delimeters that should be kept as independent
             tokens. By default, all punctuation marks will be kept as tokens.
@@ -114,8 +126,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             must be included in the vocab.
 
     References:
-        - [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)
-        - [Song et al., 2020](https://arxiv.org/abs/2012.15524)
+     - [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)
+     - [Song et al., 2020](https://arxiv.org/abs/2012.15524)
 
     Examples:
 
@@ -167,8 +179,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         sequence_length: int = None,
         lowercase: bool = True,
         strip_accents: bool = True,
-        split_pattern: str = WHITESPACE_AND_PUNCTUATION_REGEX,
-        keep_pattern: str = PUNCTUATION_REGEX,
+        split: bool = True,
+        split_pattern: str = None,
+        keep_pattern: str = None,
         suffix_indicator: str = "##",
         oov_token: str = "[UNK]",
         **kwargs,
@@ -198,14 +211,32 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "Vocabulary must be an file path or list of terms. "
                 f"Received: vocabulary={vocabulary}"
             )
+        if oov_token is None:
+            raise ValueError("`oov_token` cannot be None.")
+
+        if split_pattern is None:
+            split_pattern = WHITESPACE_AND_PUNCTUATION_REGEX
+
+        if keep_pattern is None:
+            keep_pattern = PUNCTUATION_REGEX
 
         self.sequence_length = sequence_length
         self.lowercase = lowercase
         self.strip_accents = strip_accents
+        self.split = split
         self.split_pattern = split_pattern
         self.keep_pattern = keep_pattern
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
+
+        if oov_token not in self.vocabulary:
+            raise RuntimeError(
+                f'Cannot find `oov_token="{self.oov_token}"` in the '
+                "vocabulary.\n"
+                "You can either update the vocabulary to include "
+                f'`"{self.oov_token}"`, or pass a different value for '
+                "the `oov_token` argument when creating the tokenizer."
+            )
 
         self._fast_word_piece = tf_text.FastWordpieceTokenizer(
             vocab=self.vocabulary,
@@ -246,6 +277,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "sequence_length": self.sequence_length,
                 "lowercase": self.lowercase,
                 "strip_accents": self.strip_accents,
+                "split": self.split,
                 "split_pattern": self.split_pattern,
                 "keep_pattern": self.keep_pattern,
                 "suffix_indicator": self.suffix_indicator,
@@ -269,7 +301,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             inputs = tf_text.normalize_utf8(inputs, "NFD")
             # Remove the accent marks.
             inputs = tf.strings.regex_replace(inputs, r"\p{Mn}", "")
-        if self.split_pattern:
+        if self.split:
             inputs = tf_text.regex_split(
                 inputs,
                 delim_regex_pattern=self.split_pattern,

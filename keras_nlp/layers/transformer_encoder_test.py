@@ -111,6 +111,17 @@ class TransformerEncoderTest(tf.test.TestCase):
         self.assertGreater(len(grad), 1)
         optimizer.apply_gradients(zip(grad, model.trainable_variables))
 
+    def test_mask_propagation(self):
+        encoder = transformer_encoder.TransformerEncoder(
+            intermediate_dim=4,
+            num_heads=2,
+        )
+        inputs = tf.random.uniform(shape=[1, 4, 6])
+        mask = tf.constant([[True, True, False, False]])
+        inputs._keras_mask = mask
+        outputs = encoder(inputs)
+        self.assertAllEqual(outputs._keras_mask, mask)
+
     def test_checkpointing_transformer_encoder(self):
         encoder1 = transformer_encoder.TransformerEncoder(
             intermediate_dim=4,

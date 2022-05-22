@@ -63,14 +63,14 @@ flags.DEFINE_integer(
 
 flags.DEFINE_integer(
     "num_warmup_steps",
-    1e4,
+    10000,
     "The number of warmup steps during which the learning rate will increase "
     "till a threshold.",
 )
 
 flags.DEFINE_integer(
     "num_train_steps",
-    1e6,
+    1000000,
     "The total fixed number of steps till which the model will train.",
 )
 
@@ -83,7 +83,7 @@ class ClassificationHead(tf.keras.layers.Layer):
             then only the output projection layer is created.
         num_classes: Number of output classes.
         cls_token_idx: The index inside the sequence to pool.
-        activation: Dense layer activation.
+        inner_activation: Inner layer activation.
         dropout_rate: Dropout probability.
         initializer: Initializer for dense layer kernels.
         **kwargs: Keyword arguments.
@@ -94,7 +94,7 @@ class ClassificationHead(tf.keras.layers.Layer):
         inner_dim,
         num_classes,
         cls_token_idx=0,
-        activation="tanh",
+        inner_activation="tanh",
         dropout_rate=0.0,
         initializer="glorot_uniform",
         **kwargs,
@@ -103,14 +103,14 @@ class ClassificationHead(tf.keras.layers.Layer):
         self.dropout_rate = dropout_rate
         self.inner_dim = inner_dim
         self.num_classes = num_classes
-        self.activation = keras.activations.get(activation)
+        self.inner_activation = keras.activations.get(inner_activation)
         self.initializer = keras.initializers.get(initializer)
         self.cls_token_idx = cls_token_idx
 
         if self.inner_dim:
             self.dense = keras.layers.Dense(
                 units=self.inner_dim,
-                activation=self.activation,
+                activation=self.inner_activation,
                 kernel_initializer=self.initializer,
                 name="pooler_dense",
             )
@@ -142,18 +142,6 @@ class ClassificationHead(tf.keras.layers.Layer):
         x = self.out_proj(x)
         return x
 
-    def get_config(self):
-        config = {
-            "cls_token_idx": self.cls_token_idx,
-            "dropout_rate": self.dropout_rate,
-            "num_classes": self.num_classes,
-            "inner_dim": self.inner_dim,
-            "activation": tf.keras.activations.serialize(self.activation),
-            "initializer": tf.keras.initializers.serialize(self.initializer),
-        }
-        config.update(super(ClassificationHead, self).get_config())
-        return config
-
 
 class MaskedLMHead(keras.layers.Layer):
     """Masked language model network head for BERT.
@@ -170,21 +158,32 @@ class MaskedLMHead(keras.layers.Layer):
 
     Args:
         embedding_table: The embedding table from encoder network.
-        activation: The activation, if any, for the dense layer.
+        inner_activation: The activation, if any, for the inner dense layer.
         initializer: The initializer for the dense layer. Defaults to a Glorot
             uniform initializer.
         output: The output style for this layer. Can be either 'logits' or
             'predictions'.
     """
 
-    def __init__(self, embedding_table, **kwargs):
+    def __init__(
+        self,
+        embedding_table,
+        inner_activation="gelu",
+        initializer="glorot_uniform",
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.embedding_table = embedding_table
+        self.inner_activation = keras.activations.get(inner_activation)
+        self.initializer = initializer
 
     def build(self, input_shape):
         self._vocab_size, hidden_size = self.embedding_table.shape
         self.dense = keras.layers.Dense(
-            hidden_size, activation=None, name="transform/dense"
+            hidden_size,
+            activation=self.inner_activation,
+            kernel_initializer=self.initializer,
+            name="transform/dense",
         )
         self.layer_norm = keras.layers.LayerNormalization(
             axis=-1, epsilon=1e-12, name="transform/LayerNorm"
@@ -247,9 +246,17 @@ class BertPretrainer(keras.Model):
     def __init__(self, bert_model, **kwargs):
         super().__init__(**kwargs)
         self.bert_model = bert_model
-        self.masked_lm_head = MaskedLMHead(bert_model.get_embedding_table())
+        self.masked_lm_head = MaskedLMHead(
+            bert_model.get_embedding_table(),
+            initializer=bert_model.initializer,
+        )
         self.next_sentence_head = ClassificationHead(
-            inner_dim=768, num_classes=2, dropout_rate=0.1
+            inner_dim=768,
+            num_classes=2,
+            dropout_rate=0.1,
+            initializer=bert_model.initializer,
+            # Always use tanh for classification.
+            inner_activation="tanh",
         )
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.lm_loss_tracker = keras.metrics.Mean(name="lm_loss")
@@ -326,11 +333,14 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
         is_warmup = step < warmup
 
         # Linear Warmup will be implemented if current step is less than
-        # `num_warmup_steps`.
-        if is_warmup:
-            return peak_lr * (step / warmup)
-        # else Linear Decay will be implemented
-        return max(0.0, peak_lr * (training - step) / (training - warmup))
+        # `num_warmup_steps` else Linear Decay will be implemented.
+        return tf.cond(
+            is_warmup,
+            lambda: peak_lr * (step / warmup),
+            lambda: tf.math.maximum(
+                0.0, peak_lr * (training - step) / (training - warmup)
+            ),
+        )
 
 
 def decode_record(record):
@@ -379,6 +389,7 @@ def main(_):
         num_parallel_calls=tf.data.experimental.AUTOTUNE,
     )
     dataset = dataset.batch(FLAGS.batch_size, drop_remainder=True)
+    dataset = dataset.repeat()
 
     # Create a BERT model the input config.
     model = BertModel(

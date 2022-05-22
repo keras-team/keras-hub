@@ -73,15 +73,15 @@ class MLMMaskGenerator(keras.layers.Layer):
     Examples:
 
     Basic usage.
-    >>> masker = keras_nlp.layers.preprocessing.MLMMaskGenerator( \
-            vocabulary_size=10, mask_selection_rate=0.2, mask_token_id=0, \
-            mask_selection_length=5)
+    >>> masker = keras_nlp.layers.MLMMaskGenerator(
+    ...     vocabulary_size=10, mask_selection_rate=0.2, mask_token_id=0,
+    ...     mask_selection_length=5)
     >>> masker(tf.constant([1, 2, 3, 4, 5]))
 
     Ragged Input:
-    >>> masker = keras_nlp.layers.preprocessing.MLMMaskGenerator( \
-            vocabulary_size=10, mask_selection_rate=0.5, mask_token_id=0, \
-            mask_selection_length=5)
+    >>> masker = keras_nlp.layers.MLMMaskGenerator(
+    ...     vocabulary_size=10, mask_selection_rate=0.5, mask_token_id=0,
+    ...     mask_selection_length=5)
     >>> masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
     """
 
@@ -129,7 +129,7 @@ class MLMMaskGenerator(keras.layers.Layer):
 
     def call(self, inputs):
         input_is_ragged = isinstance(inputs, tf.RaggedTensor)
-        input_is_1d = tf.rank(inputs) == 1
+        input_is_1d = inputs.shape.rank == 1
         if input_is_1d:
             # If inputs is of rank 1, we manually add the batch axis.
             inputs = inputs[tf.newaxis, :]
@@ -137,6 +137,7 @@ class MLMMaskGenerator(keras.layers.Layer):
             # `tf_text.mask_language_model` requires a ragged tensor, so
             # convert dense to ragged.
             inputs = tf.RaggedTensor.from_tensor(inputs)
+
         (tokens, mask_positions, mask_ids,) = tf_text.mask_language_model(
             inputs,
             item_selector=self._random_selector,

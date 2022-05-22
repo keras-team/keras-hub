@@ -16,8 +16,9 @@
 import json
 
 import datasets
+import keras_tuner
 import tensorflow as tf
-import tensorflow_text as tftext
+import tensorflow_text as tf_text
 from absl import app
 from absl import flags
 from tensorflow import keras
@@ -68,8 +69,6 @@ flags.DEFINE_integer("batch_size", 32, "The batch size.")
 
 flags.DEFINE_integer("epochs", 3, "The number of training epochs.")
 
-flags.DEFINE_float("learning_rate", 2e-5, "The initial learning rate for Adam.")
-
 flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
 
 
@@ -82,20 +81,20 @@ def pack_inputs(
 ):
     # In case inputs weren't truncated (as they should have been),
     # fall back to some ad-hoc truncation.
-    trimmed_segments = tftext.RoundRobinTrimmer(
+    trimmed_segments = tf_text.RoundRobinTrimmer(
         seq_length - len(inputs) - 1
     ).trim(inputs)
     # Combine segments.
-    segments_combined, segment_ids = tftext.combine_segments(
+    segments_combined, segment_ids = tf_text.combine_segments(
         trimmed_segments,
         start_of_sequence_id=start_of_sequence_id,
         end_of_segment_id=end_of_segment_id,
     )
     # Pad to dense Tensors.
-    input_word_ids, _ = tftext.pad_model_inputs(
+    input_word_ids, _ = tf_text.pad_model_inputs(
         segments_combined, seq_length, pad_value=padding_id
     )
-    input_type_ids, input_mask = tftext.pad_model_inputs(
+    input_type_ids, input_mask = tf_text.pad_model_inputs(
         segment_ids, seq_length, pad_value=0
     )
     # Assemble nest of input tensors as expected by BERT model.
@@ -146,16 +145,20 @@ def load_data(task_name):
 class BertClassificationFinetuner(keras.Model):
     """Adds a classification head to a pre-trained BERT model for finetuning"""
 
-    def __init__(self, bert_model, hidden_size, num_classes, **kwargs):
+    def __init__(
+        self, bert_model, hidden_size, num_classes, initializer, **kwargs
+    ):
         super().__init__(**kwargs)
         self.bert_model = bert_model
         self._pooler_layer = keras.layers.Dense(
             hidden_size,
             activation="tanh",
+            kernel_initializer=initializer,
             name="pooler",
         )
         self._logit_layer = tf.keras.layers.Dense(
             num_classes,
+            kernel_initializer=initializer,
             name="logits",
         )
 
@@ -167,15 +170,41 @@ class BertClassificationFinetuner(keras.Model):
         return self._logit_layer(outputs)
 
 
+class BertHyperModel(keras_tuner.HyperModel):
+    """Creates a hypermodel to help with the search space for finetuning."""
+
+    def __init__(self, bert_config):
+        self.bert_config = bert_config
+
+    def build(self, hp):
+        model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
+        bert_config = self.bert_config
+        finetuning_model = BertClassificationFinetuner(
+            bert_model=model,
+            hidden_size=bert_config["hidden_size"],
+            num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
+            initializer=keras.initializers.TruncatedNormal(
+                stddev=bert_config["initializer_range"]
+            ),
+        )
+        finetuning_model.compile(
+            optimizer=keras.optimizers.Adam(
+                learning_rate=hp.Choice("lr", [5e-5, 4e-5, 3e-5, 2e-5])
+            ),
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            metrics=[keras.metrics.SparseCategoricalAccuracy()],
+        )
+        return finetuning_model
+
+
 def main(_):
     print(f"Reading input model from {FLAGS.saved_model_input}")
-    model = keras.models.load_model(FLAGS.saved_model_input)
 
     vocab = []
     with open(FLAGS.vocab_file, "r") as vocab_file:
         for line in vocab_file:
             vocab.append(line.strip())
-    tokenizer = tftext.BertTokenizer(
+    tokenizer = tf_text.BertTokenizer(
         FLAGS.vocab_file,
         lower_case=FLAGS.do_lower_case,
         token_out_type=tf.int32,
@@ -200,6 +229,7 @@ def main(_):
 
     # Read and preprocess GLUE task data.
     train_ds, test_ds, validation_ds = load_data(FLAGS.task_name)
+
     train_ds = train_ds.batch(FLAGS.batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
@@ -210,18 +240,27 @@ def main(_):
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
 
-    finetuning_model = BertClassificationFinetuner(
-        bert_model=model,
-        hidden_size=bert_config["hidden_size"],
-        num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
+    # Create a hypermodel object for a RandomSearch.
+    hypermodel = BertHyperModel(bert_config)
+
+    # Initialize the random search over the 4 learning rate parameters, for 4
+    # trials and 3 epochs for each trial.
+    tuner = keras_tuner.RandomSearch(
+        hypermodel=hypermodel,
+        objective=keras_tuner.Objective("val_loss", direction="min"),
+        max_trials=4,
+        overwrite=True,
+        project_name="hyperparameter_tuner_results",
     )
-    finetuning_model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=FLAGS.learning_rate),
-        loss="sparse_categorical_crossentropy",
-        metrics=["accuracy"],
-    )
-    finetuning_model.fit(
-        train_ds, epochs=FLAGS.epochs, validation_data=validation_ds
+
+    tuner.search(train_ds, epochs=FLAGS.epochs, validation_data=validation_ds)
+
+    # Extract the best hyperparameters after the search.
+    best_hp = tuner.get_best_hyperparameters()[0]
+    finetuning_model = tuner.get_best_models()[0]
+
+    print(
+        f"The best hyperparameters found are:\nLearning Rate: {best_hp['lr']}"
     )
 
     if FLAGS.do_evaluation:
