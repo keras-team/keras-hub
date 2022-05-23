@@ -41,12 +41,13 @@ try:
 except ImportError:
     pass
 
-class RougeL(keras.metrics.Metric):
+class Rouge(keras.metrics.Metric):
     def __init__(self):
-        if rouge_score is None:
+        if "rouge_score" not in sys.modules:
             raise ImportError(
-                'RougeL metrics requires the rouge_score package. '
-                '`pip install rouge-score`.')
+                "ROUGE metric requires the `rouge_score` package."
+                "Please install it with `pip install rouge_score`."
+            )
 ```
 
 ## Keep computation inside TensorFlow graph
