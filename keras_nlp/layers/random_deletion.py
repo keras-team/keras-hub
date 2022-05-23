@@ -262,7 +262,6 @@ class RandomDeletion(keras.layers.Layer):
         self, 
         probability, 
         max_replacements, 
-        stop_word_only: bool = False,
         split_pattern: str = None,
         **kwargs) -> None:
         # Check dtype and provide a default.
@@ -282,45 +281,114 @@ class RandomDeletion(keras.layers.Layer):
         super().__init__(**kwargs)
         self.probability = probability
         self.max_replacements = max_replacements
-        self.stop_word_only = stop_word_only
         self.split_pattern = split_pattern
 
     def call(self, inputs):
+        """Augments input by randomly deleting words
+
+        Args:
+            inputs: A tensor or nested tensor of strings to augment.
+
+        Returns:
+            A tensor or nested tensor of augmented strings.
+        """
+        # If input is not a tensor or ragged tensor convert it into a tensor
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
-        scalar_input = tf.convert_to_tensor(inputs).shape.rank == 0
-        if scalar_input:
-            inputs = tf.expand_dims(inputs, 0)
-        inputs = tf_text.regex_split(
-            inputs,
-            delim_regex_pattern=self.split_pattern,
-        )
-        replacementsPerformed = 0
-        indices_retained = []
-        i = 0
-        while (
-            i < len(inputs) and replacementsPerformed != self.max_replacements
-        ):
-            print(inputs[i])
-            if tf.random.uniform(()) < self.probability:
-                if self.stop_word_only:
-                    if inputs[i].numpy().lower() in stop_words:
-                        replacementsPerformed += 1
-                else:
-                    replacementsPerformed += 1
-            else:
-                indices_retained.append(i)
-            i += 1
-        # Track left over indices after max replacements are performed
-        while i < len(inputs):
-            indices_retained.append(i)
-            i += 1
-        inputs = tf.strings.reduce_join(
-            tf.gather(inputs, indices_retained), separator=" "
-        )
-        if scalar_input:
-            inputs = tf.squeeze(inputs, 0)
-        return inputs
+            inputs = tf.cast(inputs, tf.string)
+        # Iterate over each innermost in tensor and either delete or keep
+        # based on probability.
+        def _map_fn(input_):
+            # Split on whitespace and punctuation.
+            tokens = tf.strings.split(input_, self.split_pattern)
+            # Filter out empty strings.
+            tokens = tf.boolean_mask(tokens, tf.not_equal(tokens, ""))
+            # Filter out stopwords if requested.
+            # if self.stop_word_only:
+            #     tokens = tf.boolean_mask(tokens, tf.not_equal(tokens, STOP_WORDS))
+            # Randomly select a word to delete.
+            indices = tf.random.uniform(
+                shape = tf.shape(tokens),
+                minval = 0,
+                maxval = tf.size(tokens),
+                dtype = tf.int32,
+            )
+            # Randomly select the maximum number of replacements.
+            replacements = tf.random.uniform(
+                shape = [tf.minimum(tf.size(tokens), self.max_replacements)],
+                minval = 0,
+                maxval = tf.size(tokens),
+                dtype = tf.int32,
+            )
+            # Delete the word at the selected index.
+            tokens = tf.tensor_scatter_nd_update(tokens, indices, tf.zeros_like(indices))
+            # Replace the deleted word with a random word from the same
+            # vocabulary.
+            tokens = tf.tensor_scatter_nd_update(
+                tokens, replacements, tf.random.shuffle(tokens)
+            )
+            return tf.strings.reduce_join(tokens, separator = " ")
+
+        # If input is a tensor, use map_fn to apply to each element.
+        if isinstance(inputs, tf.Tensor):
+            return tf.map_fn(
+                _map_fn,
+                inputs,
+            )
+
+        
+
+
+
+    # def call(self, inputs):
+    #     if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+    #         inputs = tf.convert_to_tensor(inputs)
+    #     scalar_input = tf.convert_to_tensor(inputs).shape.rank == 0
+    #     if scalar_input:
+    #         inputs = tf.expand_dims(inputs, 0)
+    #     inputs = tf_text.regex_split(
+    #         inputs,
+    #         delim_regex_pattern=self.split_pattern,
+    #     )
+        # # Randomly Delete Words in Inputs upto max replacements
+        # for _ in range(self.max_replacements):
+        #     inputs = tf.cond(
+        #         tf.random.uniform([]) < self.probability,
+        #         lambda: tf.strings.join(
+        #             inputs,
+        #             separator=" ",
+        #         ),
+        #         lambda: inputs,
+        #     )
+        # if scalar_input:
+        #     inputs = tf.squeeze(inputs, 0)
+        # return inputs
+        # replacementsPerformed = 0
+        # indices_retained = []
+        # i = 0
+        # while (
+        #     i < len(inputs) and replacementsPerformed != self.max_replacements
+        # ):
+        #     print(inputs[i])
+        #     if tf.random.uniform(()) < self.probability:
+        #         if self.stop_word_only:
+        #             if inputs[i].numpy().lower() in stop_words:
+        #                 replacementsPerformed += 1
+        #         else:
+        #             replacementsPerformed += 1
+        #     else:
+        #         indices_retained.append(i)
+        #     i += 1
+        # # Track left over indices after max replacements are performed
+        # while i < len(inputs):
+        #     indices_retained.append(i)
+        #     i += 1
+        # inputs = tf.strings.reduce_join(
+        #     tf.gather(inputs, indices_retained), separator=" "
+        # )
+        # if scalar_input:
+        #     inputs = tf.squeeze(inputs, 0)
+        # return inputs
 
     def get_config(self) -> Dict[str, Any]:
         config = super().get_config()
