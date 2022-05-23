@@ -45,7 +45,6 @@ from absl import app
 from absl import flags
 
 from examples.bert.bert_utils import list_filenames_for_arg
-
 from keras_nlp.layers.mlm_mask_generator import MLMMaskGenerator
 
 # Tokenization will happen with tensorflow and can easily OOM a GPU.
@@ -365,17 +364,19 @@ def create_instances_from_document(
                     if i == "[MASK]":
                         mask_token_id = vocab_words[i]
                         break
-                
-                masker = MLMMaskGenerator(mask_selection_rate=masked_lm_prob, 
-                    mask_selection_length=max_predictions_per_seq, 
-                    vocabulary_size=len(vocab_words), 
-                    rng=rng, mask_token_id = mask_token_id)
+
+                masker = MLMMaskGenerator(
+                    vocabulary_size=len(vocab_words),
+                    mask_selection_rate=masked_lm_prob,
+                    mask_token_id=mask_token_id,
+                    mask_selection_length=max_predictions_per_seq,
+                )
 
                 (
                     tokens,
                     masked_lm_positions,
                     masked_lm_labels,
-                    mask_weights
+                    mask_weights,
                 ) = masker(tokens)
 
                 instance = TrainingInstance(
@@ -396,76 +397,6 @@ def create_instances_from_document(
 MaskedLmInstance = collections.namedtuple(
     "MaskedLmInstance", ["index", "label"]
 )
-
-
-def create_masked_lm_predictions(
-    tokens, masked_lm_prob, max_predictions_per_seq, vocab_words, rng
-):
-    """Creates the predictions for the masked LM objective."""
-
-    cand_indexes = []
-    for (i, token) in enumerate(tokens):
-        if token == "[CLS]" or token == "[SEP]":
-            continue
-        cand_indexes.append([i])
-
-    rng.shuffle(cand_indexes)
-
-    output_tokens = list(tokens)
-
-    num_to_predict = min(
-        max_predictions_per_seq,
-        max(1, int(round(len(tokens) * masked_lm_prob))),
-    )
-
-    masked_lms = []
-    covered_indexes = set()
-    for index_set in cand_indexes:
-        if len(masked_lms) >= num_to_predict:
-            break
-        # If adding a whole-word mask would exceed the maximum number of
-        # predictions, then just skip this candidate.
-        if len(masked_lms) + len(index_set) > num_to_predict:
-            continue
-        is_any_index_covered = False
-        for index in index_set:
-            if index in covered_indexes:
-                is_any_index_covered = True
-                break
-        if is_any_index_covered:
-            continue
-        for index in index_set:
-            covered_indexes.add(index)
-
-            masked_token = None
-            # 80% of the time, replace with [MASK]
-            if rng.random() < 0.8:
-                masked_token = "[MASK]"
-            else:
-                # 10% of the time, keep original
-                if rng.random() < 0.5:
-                    masked_token = tokens[index]
-                # 10% of the time, replace with random word
-                else:
-                    masked_token = vocab_words[
-                        rng.randint(0, len(vocab_words) - 1)
-                    ]
-
-            output_tokens[index] = masked_token
-
-            masked_lms.append(
-                MaskedLmInstance(index=index, label=tokens[index])
-            )
-    assert len(masked_lms) <= num_to_predict
-    masked_lms = sorted(masked_lms, key=lambda x: x.index)
-
-    masked_lm_positions = []
-    masked_lm_labels = []
-    for p in masked_lms:
-        masked_lm_positions.append(p.index)
-        masked_lm_labels.append(p.label)
-
-    return (output_tokens, masked_lm_positions, masked_lm_labels)
 
 
 def truncate_seq_pair(tokens_a, tokens_b, max_num_tokens, rng):
