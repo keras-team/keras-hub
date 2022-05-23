@@ -16,10 +16,10 @@
   part of the library itself, but rather a way to vet our components and show
   best practices.
 
-- **A community of NLP practioners.** KerasNLP is a actively growing project,
+- **A community of NLP practitioners.** KerasNLP is an actively growing project,
   and we welcome contributors on all fronts of our development. We hope that our
   guides and examples can be both a valuable resource to experienced
-  practitioners, and a accessible entry point to newcomers to the field.
+  practitioners and an accessible entry point to newcomers to the field.
 
 ## What KerasNLP is not
 
@@ -49,14 +49,14 @@
   easy to train and use within the library. However, we need to support other
   types of models, such as n-gram or word2vec approaches that might run more
   easily on limited hardware. We will always want the most practical tool for
-  the task, regardless of architecture.
+  the task, regardless of the architecture.
 
 ## Focus areas for 2022
 
 At this point in our development cycle, we are primarily interested in providing
 building blocks for a short list of "greatest hits" NLP models (such as BERT,
 GPT-2, word2vec). Given a popular model architecture (e.g. a
-sequence-to-sequence transformer like T5) and a end-to-end task (e.g.
+sequence-to-sequence transformer like T5) and an end-to-end task (e.g.
 summarization), we should have a clear code example in mind and a list of
 components to use.
 
@@ -74,11 +74,11 @@ The major tasks within this effort:
   like to add support for byte-level BPE tokenization (the RoBERTa and GPT
   tokenizer) within the Tensorflow graph.
 - Pre-trained sub-word tokenizers for any language. Training a tokenizer can
-  add a lot of friction to a project, particularly when working working in a
+  add a lot of friction to a project, particularly when working in a
   language where examples are less readily available. We would like to support
   a pre-trained tokenization offering that allows a user to choose a tokenizer,
   language, and vocabulary size and then download an off the shelf vocabulary.
-- A standardized way to training tokenizer vocabularies. As another way to
+- A standardized way to train tokenizer vocabularies. As another way to
   reduce the friction of training a tokenizer, we should offer a standardized
   experience for training new vocabularies.
 
@@ -104,7 +104,7 @@ As we move forward with KerasNLP as a whole, we expect development for new
 components (say, a new attention mechanism) to happen in tandem with an
 example demonstrating the component in an end-to-end architecture.
 
-By the end of 2022, we should have a actively growing collection of examples
+By the end of 2022, we should have an actively growing collection of examples
 models, with a standardized set of training scripts, that match expected
 performance as reported in publications.
 
@@ -125,7 +125,7 @@ the end of 2022.
 We are looking to develop simple, modular components that make it easy to build
 end-to-end workflows for each of these tasks.
 
-Currently projects in this area include:
+Currently, projects in this area include:
 
 - Utilities for generating sequences of text using greedy or beam search.
 - Metrics for evaluating the quality of generated sequences, such a ROUGE and
