@@ -13,4 +13,4 @@
 # limitations under the License.
 
 from keras_nlp.metrics.perplexity import Perplexity
-from keras_nlp.metrics.rouge_l import RougeL
+from keras_nlp.metrics.rouge import Rouge
