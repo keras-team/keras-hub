@@ -14,12 +14,14 @@
 
 """ROUGE metric implementation based on `keras.metrics.Metric`."""
 
+import sys
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.utils.tensor_utils import tensor_to_string_list
 
 try:
+    import rouge_score
     from rouge_score import rouge_scorer
 except:
     pass
@@ -55,7 +57,7 @@ class Rouge(keras.metrics.Metric):
     ):
         super().__init__(name=name, dtype=dtype, **kwargs)
 
-        if rouge_scorer is None:
+        if "rouge_score" not in sys.modules:
             raise ImportError(
                 "ROUGE metric requires the `rouge_score` package."
                 "Please install it with `pip install rouge_score`."
