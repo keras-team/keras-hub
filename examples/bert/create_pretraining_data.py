@@ -362,7 +362,7 @@ def create_instances_from_document(
                 mask_token_id = -1
                 for i in vocab_words:
                     if i == "[MASK]":
-                        mask_token_id = vocab_words[i]
+                        mask_token_id = i
                         break
 
                 masker = MLMMaskGenerator(
