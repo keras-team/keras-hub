@@ -360,20 +360,23 @@ def create_instances_from_document(
                 tokens.append("[SEP]")
                 segment_ids.append(1)
 
+                mask_token_id = -1
+                for i in vocab_words:
+                    if i == "[MASK]":
+                        mask_token_id = vocab_words[i]
+                        break
+                
+                masker = MLMMaskGenerator(mask_selection_rate=masked_lm_prob, 
+                    mask_selection_length=max_predictions_per_seq, 
+                    vocabulary_size=len(vocab_words), 
+                    rng=rng, mask_token_id = mask_token_id)
+
                 (
                     tokens,
                     masked_lm_positions,
                     masked_lm_labels,
-                ) = create_masked_lm_predictions(
-                    tokens,
-                    masked_lm_prob,
-                    max_predictions_per_seq,
-                    vocab_words,
-                    rng,
-                )
-                # Use MLMMaskGenerator instead of create_masked_lm_predictions
-                # (which is used in the original BERT code)
-                MLMMaskGenerator(mask_selection_rate=masked_lm_prob, mask_selection_length=max_predictions_per_seq, vocabulary_size=len(vocab_words), rng=rng)
+                    mask_weights
+                ) = masker(tokens)
 
                 instance = TrainingInstance(
                     tokens=tokens,
