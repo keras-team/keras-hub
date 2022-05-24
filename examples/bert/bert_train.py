@@ -21,7 +21,7 @@ from tensorflow import keras
 
 from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
-from examples.bert.bert_config import PRETRAINING_CONFIG
+from examples.bert.bert_config import TRAINING_CONFIG
 from examples.bert.bert_model import BertModel
 from examples.utils.scripting_utils import list_filenames_for_arg
 
@@ -370,9 +370,7 @@ def main(_):
         lambda record: decode_record(record),
         num_parallel_calls=tf.data.experimental.AUTOTUNE,
     )
-    dataset = dataset.batch(
-        PRETRAINING_CONFIG["batch_size"], drop_remainder=True
-    )
+    dataset = dataset.batch(TRAINING_CONFIG["batch_size"], drop_remainder=True)
     dataset = dataset.repeat()
 
     # Create a BERT model the input config.
@@ -388,15 +386,15 @@ def main(_):
     if FLAGS.num_train_steps is not None:
         num_train_steps = FLAGS.num_train_steps
     else:
-        num_train_steps = PRETRAINING_CONFIG["num_train_steps"]
+        num_train_steps = TRAINING_CONFIG["num_train_steps"]
     num_warmup_steps = int(
-        num_train_steps * PRETRAINING_CONFIG["warmup_percentage"]
+        num_train_steps * TRAINING_CONFIG["warmup_percentage"]
     )
-    epochs = PRETRAINING_CONFIG["epochs"]
+    epochs = TRAINING_CONFIG["epochs"]
     steps_per_epoch = num_train_steps // epochs
 
     learning_rate_schedule = LinearDecayWithWarmup(
-        learning_rate=PRETRAINING_CONFIG["learning_rate"],
+        learning_rate=TRAINING_CONFIG["learning_rate"],
         num_warmup_steps=num_warmup_steps,
         num_train_steps=num_train_steps,
     )

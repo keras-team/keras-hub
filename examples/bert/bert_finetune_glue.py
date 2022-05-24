@@ -182,7 +182,7 @@ class BertHyperModel(keras_tuner.HyperModel):
             hidden_size=model_config["hidden_size"],
             num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
             initializer=keras.initializers.TruncatedNormal(
-                stddev=bert_config["initializer_range"]
+                stddev=model_config["initializer_range"]
             ),
         )
         finetuning_model.compile(

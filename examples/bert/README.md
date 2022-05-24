@@ -35,7 +35,7 @@ python3 examples/bert/bert_preprocess.py \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --output_file $OUTPUT_DIR/pretraining-data/pretraining.tfrecord
 # Run pretraining for 100 train steps only.
-python3 examples/bert/bert_pretrain.py \
+python3 examples/bert/bert_train.py \
     --input_files $OUTPUT_DIR/pretraining-data/ \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --saved_model_output $OUTPUT_DIR/model/ \
@@ -48,12 +48,12 @@ python3 examples/bert/bert_finetune_glue.py \
 
 ## Installing dependencies
 
-Pip dependencies for all KerasNLP examples are listed in `setup.py`. To install
-both the KerasNLP library from source and all other dependencies required to
-run the example, run the below command. You may want to install to a self-contained
-environment (e.g. a container or a virtualenv).
+Pip dependencies for all KerasNLP examples are listed in `setup.py`. The
+following command will create a virtual environment, install all dependencies,
+and install KerasNLP from source.
 
 ```shell
+python3 -m venv path/to/venv && source path/to/venv/bin/activate
 pip install -e ".[examples]"
 ```
 
@@ -80,7 +80,7 @@ curl -O https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.x
 The dump can be extracted with the `wikiextractor` tool.
 
 ```shell
-python -m wikiextractor.WikiExtractor enwiki-latest-pages-articles.xml.bz2
+python3 -m wikiextractor.WikiExtractor enwiki-latest-pages-articles.xml.bz2
 ```
 
 BooksCorpus is no longer hosted by
@@ -107,7 +107,7 @@ bookscorpus in `~/datasets/bookscorpus`, the following command will output
 sentence split documents to a configurable number of output file shards:
 
 ```shell
-python examples/tools/split_sentences.py \
+python3 examples/tools/split_sentences.py \
     --input_files ~/datasets/wikipedia,~/datasets/bookscorpus \
     --output_directory ~/datasets/sentence-split-data
 ```
@@ -165,7 +165,7 @@ with the following:
 ```shell
 for file in path/to/sentence-split-data/*; do
     output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
-    python examples/bert/bert_preprocess.py \
+    python3 examples/bert/bert_preprocess.py \
         --input_files ${file} \
         --vocab_file bert_vocab_uncased.txt \
         --output_file ${output}
@@ -173,13 +173,14 @@ done
 ```
 
 If enough memory is available, this could be further sped up by running this script
-multiple times in parallel:
+multiple times in parallel. The following will take 3-4 hours on the entire dataset
+on an 8 core machine.
 
 ```shell
 NUM_JOBS=5
 for file in path/to/sentence-split-data/*; do
     output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
-    echo python examples/bert/bert_preprocess.py \
+    echo python3 examples/bert/bert_preprocess.py \
         --input_files ${file} \
         --vocab_file bert_vocab_uncased.txt \
         --output_file ${output}
@@ -189,17 +190,17 @@ done | parallel -j ${NUM_JOBS}
 To preview a sample of generated data files, you can run the command below:
 
 ```shell
-python -c "from examples.utils.data_utils import preview_tfrecord; preview_tfrecord('path/to/tfrecord_file')"
+python3 -c "from examples.utils.data_utils import preview_tfrecord; preview_tfrecord('path/to/tfrecord_file')"
 ```
 
 ### Running BERT pretraining
 
-After preprocessing, we can run pretraining with the `bert_pretrain.py`
+After preprocessing, we can run pretraining with the `bert_train.py`
 script. This will train a model and save it to the `--saved_model_output`
 directory.
 
 ```shell
-python3 examples/bert/bert_pretrain.py \
+python3 examples/bert/bert_train.py \
     --input_files path/to/data/ \
     --vocab_file path/to/bert_vocab_uncased.txt \
     --bert_config_file examples/bert/configs/bert_tiny.json \

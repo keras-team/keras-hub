@@ -80,13 +80,13 @@ MODEL_CONFIGS = {
 
 PREPROCESSING_CONFIG = {
     "max_seq_length": 512,
-    "max_predictions_per_seq": 20,
+    "max_predictions_per_seq": 76,
     "dupe_factor": 10,
     "masked_lm_prob": 0.15,
     "short_seq_prob": 0.1,
 }
 
-PRETRAINING_CONFIG = {
+TRAINING_CONFIG = {
     "batch_size": 256,
     "epochs": 10,
     "learning_rate": 1e-4,

@@ -31,7 +31,8 @@ modelname
 ├── __init__.py
 ├── modelname_config.py
 ├── modelname_model.py
-├── modelname_pretrain.py
+├── modelname_preprocess.py
+├── modelname_train.py
 └── modelname_finetune_X.py
 ```
 
@@ -41,17 +42,18 @@ modelname
 - `modelname_config.py`: This file should contain most of the configuration for
   the model architecture, learning rate, etc, using simple Python constants. We
   would like to avoid complex configuration setups (json, yaml, etc).
+- `modelname_preprocess.py`: If necessary. Standalone script to preprocess
+  inputs. If possible, prefer doing preprocessing dynamically with tf.data
+  inside the training and finetuning scripts.
 - `modelname_model.py`: This file should contain the actual `keras.Model` and
-  any custom layers needed for the example. In general, use KerasNLP components
-  where ever possible.
-- `modelname_pretrain.py`: This file should be a runnable training script for
+  any custom layers needed for the example. Use KerasNLP components where ever
+  possible.
+- `modelname_train.py`: This file should be a runnable training script for
   pretraining. If possible, this script should preprocess data dynamically
   during training using `tf.data` and KerasNLP components (e.g. tokenizers).
-- `modelname_finetune_X.py`: There can be any number of these files, for each
-  task `X` we would like to support for finetuning. The file should be a
-  runnable training script which loads and finetunes a pretrained model. If
-  possible, this script should preprocess data dynamically during training using
-  `tf.data` and KerasNLP components (e.g. tokenizers).
+- `modelname_finetune_X.py`: Optional. There can be any number of these files,
+  for each task `X` we would like to support for finetuning. The file should be
+  a runnable training script which loads and finetunes a pretrained model.
 
 ## Instructions for running on Google Cloud
 
