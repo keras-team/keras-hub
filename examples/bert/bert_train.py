@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import sys
 
 import tensorflow as tf
@@ -20,58 +19,42 @@ from absl import app
 from absl import flags
 from tensorflow import keras
 
+from examples.bert.bert_config import MODEL_CONFIGS
+from examples.bert.bert_config import PREPROCESSING_CONFIG
+from examples.bert.bert_config import TRAINING_CONFIG
 from examples.bert.bert_model import BertModel
-from examples.bert.bert_utils import list_filenames_for_arg
+from examples.utils.scripting_utils import list_filenames_for_arg
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
     "input_files",
     None,
-    "Comma seperated list of directories, files, or globs for input data.",
+    "Comma seperated list of directories, globs or files.",
 )
 
 flags.DEFINE_string(
-    "saved_model_output", None, "Output directory to save the model to."
-)
-
-flags.DEFINE_string(
-    "bert_config_file",
+    "saved_model_output",
     None,
-    "The json config file for the bert model parameters.",
+    "Output directory to save the model to.",
+)
+
+flags.DEFINE_string(
+    "model_size",
+    "tiny",
+    "One of: tiny, mini, small, medium, base, or large.",
 )
 
 flags.DEFINE_string(
     "vocab_file",
     None,
-    "The vocabulary file that the BERT model was trained on.",
-)
-
-flags.DEFINE_integer("epochs", 10, "The number of training epochs.")
-
-flags.DEFINE_integer("batch_size", 256, "The training batch size.")
-
-flags.DEFINE_float("learning_rate", 1e-4, "The initial learning rate for Adam.")
-
-flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
-
-flags.DEFINE_integer(
-    "max_predictions_per_seq",
-    20,
-    "Maximum number of masked LM predictions per sequence.",
-)
-
-flags.DEFINE_integer(
-    "num_warmup_steps",
-    10000,
-    "The number of warmup steps during which the learning rate will increase "
-    "till a threshold.",
+    "The vocabulary file for tokenization.",
 )
 
 flags.DEFINE_integer(
     "num_train_steps",
-    1000000,
-    "The total fixed number of steps till which the model will train.",
+    None,
+    "Override the pre-configured number of train steps..",
 )
 
 
@@ -345,8 +328,8 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
 
 def decode_record(record):
     """Decodes a record to a TensorFlow example."""
-    seq_length = FLAGS.max_seq_length
-    lm_length = FLAGS.max_predictions_per_seq
+    seq_length = PREPROCESSING_CONFIG["max_seq_length"]
+    lm_length = PREPROCESSING_CONFIG["max_predictions_per_seq"]
     name_to_features = {
         "input_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
         "input_mask": tf.io.FixedLenFeature([seq_length], tf.int64),
@@ -379,8 +362,7 @@ def main(_):
         for line in vocab_file:
             vocab.append(line.strip())
 
-    with open(FLAGS.bert_config_file, "r") as bert_config_file:
-        bert_config = json.loads(bert_config_file.read())
+    model_config = MODEL_CONFIGS[FLAGS.model_size]
 
     # Decode and batch data.
     dataset = tf.data.TFRecordDataset(input_filenames)
@@ -388,22 +370,33 @@ def main(_):
         lambda record: decode_record(record),
         num_parallel_calls=tf.data.experimental.AUTOTUNE,
     )
-    dataset = dataset.batch(FLAGS.batch_size, drop_remainder=True)
+    dataset = dataset.batch(TRAINING_CONFIG["batch_size"], drop_remainder=True)
     dataset = dataset.repeat()
 
     # Create a BERT model the input config.
     model = BertModel(
         vocab_size=len(vocab),
-        **bert_config,
+        **model_config,
     )
     # Make sure model has been called.
     model(model.inputs)
     model.summary()
 
+    # Allow overriding train steps from the command line for quick testing.
+    if FLAGS.num_train_steps is not None:
+        num_train_steps = FLAGS.num_train_steps
+    else:
+        num_train_steps = TRAINING_CONFIG["num_train_steps"]
+    num_warmup_steps = int(
+        num_train_steps * TRAINING_CONFIG["warmup_percentage"]
+    )
+    epochs = TRAINING_CONFIG["epochs"]
+    steps_per_epoch = num_train_steps // epochs
+
     learning_rate_schedule = LinearDecayWithWarmup(
-        learning_rate=FLAGS.learning_rate,
-        num_warmup_steps=FLAGS.num_warmup_steps,
-        num_train_steps=FLAGS.num_train_steps,
+        learning_rate=TRAINING_CONFIG["learning_rate"],
+        num_warmup_steps=num_warmup_steps,
+        num_train_steps=num_train_steps,
     )
 
     # Wrap with pretraining heads and call fit.
@@ -412,9 +405,8 @@ def main(_):
         optimizer=keras.optimizers.Adam(learning_rate=learning_rate_schedule)
     )
     # TODO(mattdangerw): Add TPU strategy support.
-    steps_per_epoch = FLAGS.num_train_steps // FLAGS.epochs
     pretraining_model.fit(
-        dataset, epochs=FLAGS.epochs, steps_per_epoch=steps_per_epoch
+        dataset, epochs=epochs, steps_per_epoch=steps_per_epoch
     )
 
     print(f"Saving to {FLAGS.saved_model_output}")
@@ -424,6 +416,5 @@ def main(_):
 if __name__ == "__main__":
     flags.mark_flag_as_required("input_files")
     flags.mark_flag_as_required("vocab_file")
-    flags.mark_flag_as_required("bert_config_file")
     flags.mark_flag_as_required("saved_model_output")
     app.run(main)

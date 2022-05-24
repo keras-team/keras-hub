@@ -44,7 +44,8 @@ import tensorflow_text as tf_text
 from absl import app
 from absl import flags
 
-from examples.bert.bert_utils import list_filenames_for_arg
+from examples.bert.bert_config import PREPROCESSING_CONFIG
+from examples.utils.scripting_utils import list_filenames_for_arg
 
 # Tokenization will happen with tensorflow and can easily OOM a GPU.
 # Restrict the script to run CPU as GPU will not offer speedup here anyway.
@@ -55,7 +56,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "input_files",
     None,
-    "Comma seperated list of directories, files, or globs.",
+    "Comma seperated list of directories, globs or files.",
 )
 
 flags.DEFINE_string(
@@ -67,39 +68,19 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     "vocab_file",
     None,
-    "The vocabulary file that the BERT model was trained on.",
+    "The vocabulary file for tokenization.",
 )
 
 flags.DEFINE_bool(
     "do_lower_case",
     True,
-    "Whether to lower case the input text. Should be True for uncased "
-    "models and False for cased models.",
+    "Whether to lower case the input text.",
 )
-
-flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
 
 flags.DEFINE_integer(
-    "max_predictions_per_seq",
-    20,
-    "Maximum number of masked LM predictions per sequence.",
-)
-
-flags.DEFINE_integer("random_seed", 12345, "Random seed for data generation.")
-
-flags.DEFINE_integer(
-    "dupe_factor",
-    10,
-    "Number of times to duplicate the input data (with different masks).",
-)
-
-flags.DEFINE_float("masked_lm_prob", 0.15, "Masked LM probability.")
-
-flags.DEFINE_float(
-    "short_seq_prob",
-    0.1,
-    "Probability of creating sequences which are shorter than the "
-    "maximum length.",
+    "random_seed",
+    12345,
+    "Random seed for data generation.",
 )
 
 
@@ -500,11 +481,11 @@ def main(_):
         input_filenames,
         tokenizer,
         vocab,
-        FLAGS.max_seq_length,
-        FLAGS.dupe_factor,
-        FLAGS.short_seq_prob,
-        FLAGS.masked_lm_prob,
-        FLAGS.max_predictions_per_seq,
+        PREPROCESSING_CONFIG["max_seq_length"],
+        PREPROCESSING_CONFIG["dupe_factor"],
+        PREPROCESSING_CONFIG["short_seq_prob"],
+        PREPROCESSING_CONFIG["masked_lm_prob"],
+        PREPROCESSING_CONFIG["max_predictions_per_seq"],
         rng,
     )
 
@@ -515,8 +496,8 @@ def main(_):
     write_instance_to_example_files(
         instances,
         vocab,
-        FLAGS.max_seq_length,
-        FLAGS.max_predictions_per_seq,
+        PREPROCESSING_CONFIG["max_seq_length"],
+        PREPROCESSING_CONFIG["max_predictions_per_seq"],
         FLAGS.output_file,
     )
 
