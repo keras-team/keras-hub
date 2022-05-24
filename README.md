@@ -22,9 +22,14 @@ We are a new and growing project, and welcome [contributions](CONTRIBUTING.md).
 
 ## Quick Links
 
+### For everyone
+
 - [Home Page](https://keras.io/keras_nlp)
 - [Developer Guides](https://keras.io/guides/keras_nlp)
 - [API Reference](https://keras.io/api/keras_nlp)
+
+### For contributors
+
 - [Contributing Guide](CONTRIBUTING.md)
 - [Roadmap](ROADMAP.md)
 - [Style Guide](STYLE_GUIDE.md)
