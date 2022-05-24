@@ -39,15 +39,19 @@ and add installation instructions for the specific symbol:
 try:
     import rouge_score
 except ImportError:
-    pass
+    rouge_score = None
 
-class RougeL(keras.metrics.Metric):
+class Rouge(keras.metrics.Metric):
     def __init__(self):
         if rouge_score is None:
             raise ImportError(
-                'RougeL metrics requires the rouge_score package. '
-                '`pip install rouge-score`.')
+                "ROUGE metric requires the `rouge_score` package."
+                "Please install it with `pip install rouge_score`."
+            )
 ```
+
+Additionally, to ensure that unit tests don't fail, please add the corresponding
+library to the `extras_require["tests"]` list in `setup.py`.
 
 ## Keep computation inside TensorFlow graph
 
