@@ -88,12 +88,12 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
             embedding_dim,
             embeddings_initializer=self.embeddings_initializer,
             mask_zero=mask_zero,
-            name="token_embedding",
+            name=keras.backend.get_uid("token_embedding"),
         )
         self.position_embedding = keras_nlp.layers.PositionEmbedding(
             sequence_length=sequence_length,
             initializer=self.embeddings_initializer,
-            name="position_embedding",
+            name=keras.backend.get_uid("position_embedding"),
         )
         self.supports_masking = self.token_embedding.supports_masking
 
