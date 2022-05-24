@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import os
 import shutil
 import sys
@@ -446,6 +445,7 @@ def main(_):
     pretraining_model.compile(
         optimizer=optimizer,
     )
+
     # TODO(mattdangerw): Add TPU strategy support.
     pretraining_model.fit(
         dataset,
