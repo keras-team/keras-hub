@@ -13,8 +13,6 @@
 # limitations under the License.
 """Run finetuning on a GLUE task."""
 
-import json
-
 import datasets
 import keras_tuner
 import tensorflow as tf
@@ -23,53 +21,53 @@ from absl import app
 from absl import flags
 from tensorflow import keras
 
+from examples.bert.bert_config import FINETUNING_CONFIG
+from examples.bert.bert_config import MODEL_CONFIGS
+from examples.bert.bert_config import PREPROCESSING_CONFIG
+
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "bert_config_file",
-    None,
-    "The json config file for the bert model parameters.",
+    "model_size",
+    "tiny",
+    "One of: tiny, mini, small, medium, base, or large.",
 )
 
 flags.DEFINE_string(
     "vocab_file",
     None,
-    "The vocabulary file that the BERT model was trained on.",
+    "The vocabulary file for tokenization.",
 )
 
 flags.DEFINE_string(
     "saved_model_input",
     None,
-    "The directory containing the input pretrained model to finetune.",
+    "The directory to load the pretrained model.",
 )
 
 flags.DEFINE_string(
-    "saved_model_output", None, "The directory to save the finetuned model in."
+    "saved_model_output",
+    None,
+    "The directory to save the finetuned model.",
 )
 
-
 flags.DEFINE_string(
-    "task_name", "mrpc", "The name of the GLUE task to finetune on."
+    "task_name",
+    "mrpc",
+    "The name of the GLUE task to finetune on.",
 )
 
 flags.DEFINE_bool(
     "do_lower_case",
     True,
-    "Whether to lower case the input text. Should be True for uncased "
-    "models and False for cased models.",
+    "Whether to lower case the input text.",
 )
 
 flags.DEFINE_bool(
     "do_evaluation",
     True,
-    "Whether to run evaluation on the validation set for a given task.",
+    "Whether to run evaluation on test data.",
 )
-
-flags.DEFINE_integer("batch_size", 32, "The batch size.")
-
-flags.DEFINE_integer("epochs", 3, "The number of training epochs.")
-
-flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
 
 
 def pack_inputs(
@@ -173,23 +171,25 @@ class BertClassificationFinetuner(keras.Model):
 class BertHyperModel(keras_tuner.HyperModel):
     """Creates a hypermodel to help with the search space for finetuning."""
 
-    def __init__(self, bert_config):
-        self.bert_config = bert_config
+    def __init__(self, model_config):
+        self.model_config = model_config
 
     def build(self, hp):
         model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
-        bert_config = self.bert_config
+        model_config = self.model_config
         finetuning_model = BertClassificationFinetuner(
             bert_model=model,
-            hidden_size=bert_config["hidden_size"],
+            hidden_size=model_config["hidden_size"],
             num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
             initializer=keras.initializers.TruncatedNormal(
-                stddev=bert_config["initializer_range"]
+                stddev=model_config["initializer_range"]
             ),
         )
         finetuning_model.compile(
             optimizer=keras.optimizers.Adam(
-                learning_rate=hp.Choice("lr", [5e-5, 4e-5, 3e-5, 2e-5])
+                learning_rate=hp.Choice(
+                    "lr", FINETUNING_CONFIG["learning_rates"]
+                ),
             ),
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
@@ -213,14 +213,13 @@ def main(_):
     end_id = vocab.index("[SEP]")
     pad_id = vocab.index("[PAD]")
 
-    with open(FLAGS.bert_config_file, "r") as bert_config_file:
-        bert_config = json.loads(bert_config_file.read())
+    model_config = MODEL_CONFIGS[FLAGS.model_size]
 
     def preprocess_data(inputs, labels):
         inputs = [tokenizer.tokenize(x).merge_dims(1, -1) for x in inputs]
         inputs = pack_inputs(
             inputs,
-            FLAGS.max_seq_length,
+            PREPROCESSING_CONFIG["max_seq_length"],
             start_of_sequence_id=start_id,
             end_of_segment_id=end_id,
             padding_id=pad_id,
@@ -230,18 +229,19 @@ def main(_):
     # Read and preprocess GLUE task data.
     train_ds, test_ds, validation_ds = load_data(FLAGS.task_name)
 
-    train_ds = train_ds.batch(FLAGS.batch_size).map(
+    batch_size = FINETUNING_CONFIG["batch_size"]
+    train_ds = train_ds.batch(batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
-    validation_ds = validation_ds.batch(FLAGS.batch_size).map(
+    validation_ds = validation_ds.batch(batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
-    test_ds = test_ds.batch(FLAGS.batch_size).map(
+    test_ds = test_ds.batch(batch_size).map(
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
 
     # Create a hypermodel object for a RandomSearch.
-    hypermodel = BertHyperModel(bert_config)
+    hypermodel = BertHyperModel(model_config)
 
     # Initialize the random search over the 4 learning rate parameters, for 4
     # trials and 3 epochs for each trial.
@@ -253,7 +253,11 @@ def main(_):
         project_name="hyperparameter_tuner_results",
     )
 
-    tuner.search(train_ds, epochs=FLAGS.epochs, validation_data=validation_ds)
+    tuner.search(
+        train_ds,
+        epochs=FINETUNING_CONFIG["epochs"],
+        validation_data=validation_ds,
+    )
 
     # Extract the best hyperparameters after the search.
     best_hp = tuner.get_best_hyperparameters()[0]
@@ -276,6 +280,5 @@ def main(_):
 
 if __name__ == "__main__":
     flags.mark_flag_as_required("vocab_file")
-    flags.mark_flag_as_required("bert_config_file")
     flags.mark_flag_as_required("saved_model_input")
     app.run(main)

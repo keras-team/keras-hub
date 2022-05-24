@@ -1,14 +1,14 @@
-# BERT with keras-nlp
+# BERT with KerasNLP
 
-This example will show how to train a Bidirectional Encoder
-Representations from Transformers (BERT) model end-to-end using the keras-nlp
+This example demonstrates how to train a Bidirectional Encoder
+Representations from Transformers (BERT) model end-to-end using the KerasNLP
 library. This README contains instructions on how to run pretraining directly
-from raw data, followed by fine tuning and evaluation on the GLUE dataset.
+from raw data, followed by finetuning and evaluation on the GLUE dataset.
 
 ## Quickly test out the code
 
 To exercise the code in this directory by training a tiny BERT model, you can
-run the following commands from the base of the keras-nlp repository. This can
+run the following commands from the base directory of the repository. This can
 be useful to validate any code changes, but note that a useful BERT model would
 need to be trained for much longer on a much larger dataset.
 
@@ -18,47 +18,42 @@ DATA_URL=https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert
 
 # Create a virtual env and install dependencies.
 mkdir $OUTPUT_DIR
-python3 -m venv $OUTPUT_DIR/env
-source $OUTPUT_DIR/env/bin/activate
+python3 -m venv $OUTPUT_DIR/env && source $OUTPUT_DIR/env/bin/activate
 pip install -e ".[tests,examples]"
 
 # Download example data.
 wget ${DATA_URL}/bert_vocab_uncased.txt -O $OUTPUT_DIR/bert_vocab_uncased.txt
 wget ${DATA_URL}/wiki_example_data.txt -O $OUTPUT_DIR/wiki_example_data.txt
 
-# Run preprocessing.
-python3 examples/bert/create_sentence_split_data.py \
+# Parse input data and split into sentences.
+python3 examples/tools/split_sentences.py \
     --input_files $OUTPUT_DIR/wiki_example_data.txt \
-    --output_directory $OUTPUT_DIR/sentence-split-data --num_shards 1
-python3 examples/bert/create_pretraining_data.py \
+    --output_directory $OUTPUT_DIR/sentence-split-data
+# Preprocess input for pretraining.
+python3 examples/bert/bert_preprocess.py \
     --input_files $OUTPUT_DIR/sentence-split-data/ \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --output_file $OUTPUT_DIR/pretraining-data/pretraining.tfrecord
-
-# Run pretraining.
-python3 examples/bert/run_pretraining.py \
+# Run pretraining for 100 train steps only.
+python3 examples/bert/bert_train.py \
     --input_files $OUTPUT_DIR/pretraining-data/ \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
-    --bert_config_file examples/bert/configs/bert_tiny.json \
-    --num_warmup_steps 20 \
-    --num_train_steps 200 \
-    --saved_model_output $OUTPUT_DIR/model/
-
+    --saved_model_output $OUTPUT_DIR/model/ \
+    --num_train_steps 100
 # Run finetuning.
-python3 examples/bert/run_glue_finetuning.py \
+python3 examples/bert/bert_finetune_glue.py \
     --saved_model_input $OUTPUT_DIR/model/ \
-    --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
-    --bert_config_file examples/bert/configs/bert_tiny.json
+    --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt
 ```
 
 ## Installing dependencies
 
-Pip dependencies for all keras-nlp examples are listed in `setup.py`. To install
-both the keras-nlp library from source and all other dependencies required to
-run the example, run the below command. You may want to install to a self
-contained environment (e.g. a container or a virtualenv).
+Pip dependencies for all KerasNLP examples are listed in `setup.py`. The
+following command will create a virtual environment, install all dependencies,
+and install KerasNLP from source.
 
 ```shell
+python3 -m venv path/to/venv && source path/to/venv/bin/activate
 pip install -e ".[examples]"
 ```
 
@@ -66,7 +61,7 @@ pip install -e ".[examples]"
 
 Training a BERT model happens in two stages. First, the model is "pretrained" on
 a large corpus of input text. This is computationally expensive. After
-pretraining, the model can be "fine tuned" on a downstream task with much
+pretraining, the model can be "finetuned" on a downstream task with a much
 smaller amount of labeled data.
 
 ### Downloading pretraining data
@@ -75,7 +70,8 @@ The GLUE pretraining data (Wikipedia + BooksCorpus) is fairly large. The raw
 input data takes roughly ~20GB of space, and after preprocessing, the full
 corpus will take ~400GB.
 
-The latest wikipedia dump can be downloaded [at this link](https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2),
+The latest wikipedia dump can be downloaded
+[at this link](https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2),
 or via command line:
 
 ```shell
@@ -84,14 +80,14 @@ curl -O https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.x
 The dump can be extracted with the `wikiextractor` tool.
 
 ```shell
-python -m wikiextractor.WikiExtractor enwiki-latest-pages-articles.xml.bz2
+python3 -m wikiextractor.WikiExtractor enwiki-latest-pages-articles.xml.bz2
 ```
 
 BooksCorpus is no longer hosted by
-[it's creators](https://yknzhu.wixsite.com/mbweb), but you can find instructions
-for downloading or reproducing the corpus in this
-[repository](https://github.com/soskek/bookcorpus). We suggest the pre-made file
-downloads listed at the top of the README. Alternatively, you can forgo it 
+[its creators](https://yknzhu.wixsite.com/mbweb), but you can find instructions
+for downloading or reproducing the corpus in
+[this repository](https://github.com/soskek/bookcorpus). We suggest the pre-made file
+downloads listed at the top of the README. Alternatively, you can forgo it
 entirely and pretrain solely on wikipedia.
 
 Preparing the pretraining data will happen in two stages. First, raw text needs
@@ -101,31 +97,27 @@ next sentence predictions.
 
 ### Splitting raw text into sentences
 
-The `create_sentence_split_data.py` will process raw input files and split them
-into output files where each line contains a sentence, and a blank line marks
-the start of a new document.
+Next, use `examples/tools/split_sentences.py` to process raw input files and
+split them into output files where each line contains a sentence, and a blank
+line marks the start of a new document. We need this for the next-sentence
+prediction task used by BERT.
 
-The script supports two types of inputs files. Plain text files, where each
-individual file is assumed to be an entire document, and wikipedia dump files
-in the format outputted by the wikiextractor tool (each document is enclosed in
-`<doc>` tags).
-
-For example, if wikipedia files are located in `~/datasets/wikipedia` and
+For example, if Wikipedia files are located in `~/datasets/wikipedia` and
 bookscorpus in `~/datasets/bookscorpus`, the following command will output
 sentence split documents to a configurable number of output file shards:
 
 ```shell
-python examples/bert/create_sentence_split_data.py \
+python3 examples/tools/split_sentences.py \
     --input_files ~/datasets/wikipedia,~/datasets/bookscorpus \
     --output_directory ~/datasets/sentence-split-data
 ```
 
 ### Computing a WordPiece vocabulary
 
-The `create_vocabulary.py` script allows you to compute your own WordPiece
-vocabulary for use with BERT. In most cases however, it is desirable to use the
-standard BERT vocabularies from the original models. You can download the
-English uncased vocabulary
+The easiest and best approach when training BERT is to use the official
+vocabularies from the original project, which have become somewhat standard.
+
+You can download the English uncased vocabulary
 [here](https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt),
 or in your terminal run:
 
@@ -133,11 +125,12 @@ or in your terminal run:
 curl -O https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt
 ```
 
+You can also use `examples/tools/train_word_piece_vocab.py` to train your own.
+
 ### Tokenize, mask, and combine sentences into training examples
 
-The `create_pretraining_data.py` scrip will take in a set of sentence split
-files, and set up training examples for the next sentence prediction and masked
-word tasks.
+The `bert_preprocess.py` script will take in a set of sentence split files, and
+set up training examples for the next sentence prediction and masked word tasks.
 
 The output of the script will be TFRecord files with a number of fields per
 example. Below shows a complete output example with the addition of a string
@@ -172,21 +165,22 @@ with the following:
 ```shell
 for file in path/to/sentence-split-data/*; do
     output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
-    python examples/bert/create_pretraining_data.py \
+    python3 examples/bert/bert_preprocess.py \
         --input_files ${file} \
         --vocab_file bert_vocab_uncased.txt \
         --output_file ${output}
 done
 ```
 
-If memory is available, this could be further sped up by running this script
-multiple times in parallel:
+If enough memory is available, this could be further sped up by running this script
+multiple times in parallel. The following will take 3-4 hours on the entire dataset
+on an 8 core machine.
 
 ```shell
 NUM_JOBS=5
 for file in path/to/sentence-split-data/*; do
     output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
-    echo python examples/bert/create_pretraining_data.py \
+    echo python3 examples/bert/bert_preprocess.py \
         --input_files ${file} \
         --vocab_file bert_vocab_uncased.txt \
         --output_file ${output}
@@ -196,17 +190,17 @@ done | parallel -j ${NUM_JOBS}
 To preview a sample of generated data files, you can run the command below:
 
 ```shell
-python -c "from keras_nlp.utils.tensor_utils import preview_tfrecord; preview_tfrecord('/path/to/tfrecord_file')"
+python3 -c "from examples.utils.data_utils import preview_tfrecord; preview_tfrecord('path/to/tfrecord_file')"
 ```
 
 ### Running BERT pretraining
 
-After preprocessing, we can run pretraining with the `run_pretraining.py`
+After preprocessing, we can run pretraining with the `bert_train.py`
 script. This will train a model and save it to the `--saved_model_output`
 directory.
 
 ```shell
-python3 examples/bert/run_pretraining.py \
+python3 examples/bert/bert_train.py \
     --input_files path/to/data/ \
     --vocab_file path/to/bert_vocab_uncased.txt \
     --bert_config_file examples/bert/configs/bert_tiny.json \
@@ -217,18 +211,18 @@ python3 examples/bert/run_pretraining.py \
 
 After pretraining, we can evaluate the performance of a BERT model with the
 General Language Understanding Evaluation (GLUE) benchmark. This will
-fine tune the model and running classification for a number of downstream tasks.
+finetune the model and running classification for a number of downstream tasks.
 
-The `run_glue_finetuning.py` script downloads the GLUE data for a specific
+The `bert_finetune_glue.py` script downloads the GLUE data for a specific
 tasks, reloads the pretraining model with appropriate finetuning heads, and runs
 training for a few epochs to finetune the model.
 
 ```shell
-python3 examples/bert/run_glue_finetuning.py \
+python3 examples/bert/bert_finetune_glue.py \
     --saved_model_input path/to/model/ \
     --vocab_file path/to/bert_vocab_uncased.txt \
     --bert_config_file examples/bert/configs/bert_tiny.json \
 ```
 
-The script could be easily adapted to any other text classification fine-tuning
+The script could be easily adapted to any other text classification finetuning
 tasks, where inputs can be any number of raw text sentences per sample.
