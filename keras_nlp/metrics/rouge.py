@@ -23,8 +23,8 @@ from keras_nlp.utils.tensor_utils import tensor_to_string_list
 try:
     import rouge_score
     from rouge_score import rouge_scorer
-except:
-    pass
+except ImportError:
+    rouge_score = None
 
 
 class Rouge(keras.metrics.Metric):
@@ -57,7 +57,7 @@ class Rouge(keras.metrics.Metric):
     ):
         super().__init__(name=name, dtype=dtype, **kwargs)
 
-        if "rouge_score" not in sys.modules:
+        if rouge_score is None:
             raise ImportError(
                 "ROUGE metric requires the `rouge_score` package."
                 "Please install it with `pip install rouge_score`."
