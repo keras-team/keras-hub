@@ -203,7 +203,6 @@ directory.
 python3 examples/bert/bert_train.py \
     --input_files path/to/data/ \
     --vocab_file path/to/bert_vocab_uncased.txt \
-    --bert_config_file examples/bert/configs/bert_tiny.json \
     --saved_model_output path/to/model/
 ```
 
@@ -220,8 +219,7 @@ training for a few epochs to finetune the model.
 ```shell
 python3 examples/bert/bert_finetune_glue.py \
     --saved_model_input path/to/model/ \
-    --vocab_file path/to/bert_vocab_uncased.txt \
-    --bert_config_file examples/bert/configs/bert_tiny.json \
+    --vocab_file path/to/bert_vocab_uncased.txt
 ```
 
 The script could be easily adapted to any other text classification finetuning
