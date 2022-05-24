@@ -16,6 +16,8 @@ import os
 import shutil
 import sys
 
+import os
+
 import tensorflow as tf
 from absl import app
 from absl import flags
@@ -339,6 +341,13 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
                 0.0, peak_lr * (training - step) / (training - warmup)
             ),
         )
+    
+    def get_config(self):
+        return {
+            "learning_rate": self.learning_rate,
+            "num_warmup_steps": self.warmup_steps,
+            "num_train_steps": self.train_steps,
+        }
 
     def get_config(self):
         return {
@@ -386,6 +395,12 @@ def main(_):
 
     model_config = MODEL_CONFIGS[FLAGS.model_size]
 
+    resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='local')
+    tf.config.experimental_connect_to_cluster(resolver)
+    # This is the TPU initialization code that has to be at the beginning.
+    tf.tpu.experimental.initialize_tpu_system(resolver)
+    strategy = tf.distribute.TPUStrategy(resolver)
+
     # Decode and batch data.
     dataset = tf.data.TFRecordDataset(input_filenames)
     dataset = dataset.map(
@@ -395,33 +410,41 @@ def main(_):
     dataset = dataset.batch(TRAINING_CONFIG["batch_size"], drop_remainder=True)
     dataset = dataset.repeat()
 
-    # Create a BERT model the input config.
-    model = BertModel(
-        vocab_size=len(vocab),
-        **model_config,
-    )
-    # Make sure model has been called.
-    model(model.inputs)
-    model.summary()
+    with strategy.scope():
+        # Create a BERT model the input config.
+        model = BertModel(
+            vocab_size=len(vocab),
+            **model_config,
+        )
+        # Make sure model has been called.
+        model(model.inputs)
+        model.summary()
 
-    # Allow overriding train steps from the command line for quick testing.
-    if FLAGS.num_train_steps is not None:
-        num_train_steps = FLAGS.num_train_steps
-    else:
-        num_train_steps = TRAINING_CONFIG["num_train_steps"]
-    num_warmup_steps = int(
-        num_train_steps * TRAINING_CONFIG["warmup_percentage"]
-    )
+        # Allow overriding train steps from the command line for quick testing.
+        if FLAGS.num_train_steps is not None:
+            num_train_steps = FLAGS.num_train_steps
+        else:
+            num_train_steps = TRAINING_CONFIG["num_train_steps"]
+        num_warmup_steps = int(
+            num_train_steps * TRAINING_CONFIG["warmup_percentage"]
+        )
+        learning_rate_schedule = LinearDecayWithWarmup(
+            learning_rate=TRAINING_CONFIG["learning_rate"],
+            num_warmup_steps=num_warmup_steps,
+            num_train_steps=num_train_steps,
+        )
+        optimizer = keras.optimizers.Adam(learning_rate=learning_rate_schedule)
+
+        pretraining_model = BertPretrainer(model)
+        pretraining_model.compile(
+            optimizer=optimizer,
+        )
+
+
+    
     epochs = TRAINING_CONFIG["epochs"]
     steps_per_epoch = num_train_steps // epochs
-
-    learning_rate_schedule = LinearDecayWithWarmup(
-        learning_rate=TRAINING_CONFIG["learning_rate"],
-        num_warmup_steps=num_warmup_steps,
-        num_train_steps=num_train_steps,
-    )
-    optimizer = keras.optimizers.Adam(learning_rate=learning_rate_schedule)
-
+    
     callbacks = []
     if FLAGS.checkpoint_save_directory is not None:
         if os.path.exists(FLAGS.checkpoint_save_directory):
@@ -439,12 +462,6 @@ def main(_):
         callbacks.append(
             tf.keras.callbacks.BackupAndRestore(backup_dir=checkpoint_path)
         )
-
-    # Wrap with pretraining heads and call fit.
-    pretraining_model = BertPretrainer(model)
-    pretraining_model.compile(
-        optimizer=optimizer,
-    )
 
     # TODO(mattdangerw): Add TPU strategy support.
     pretraining_model.fit(
