@@ -5,15 +5,6 @@ Representations from Transformers (BERT) model end-to-end using the KerasNLP
 library. This README contains instructions on how to run pretraining directly
 from raw data, followed by finetuning and evaluation on the GLUE dataset.
 
-## Test out the code
-
-You can use a pytest target to test changes to these scripts, with the same
-testing flow as the library itself.
-
-```shell
-pytest examples/bert/bert_test.py
-```
-
 ## Installing dependencies
 
 Pip dependencies for all KerasNLP examples are listed in `setup.py`. The
@@ -23,6 +14,15 @@ and install KerasNLP from source.
 ```shell
 python3 -m venv path/to/venv && source path/to/venv/bin/activate
 pip install -e ".[examples]"
+```
+
+## Test out the code
+
+You can use a pytest target to test changes to these scripts. Testing will
+run through all the scripts on a small amount of data.
+
+```shell
+pytest examples/bert/bert_test.py
 ```
 
 ## Pretraining BERT
