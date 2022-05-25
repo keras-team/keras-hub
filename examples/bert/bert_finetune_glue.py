@@ -221,8 +221,6 @@ def main(_):
     end_id = vocab.index("[SEP]")
     pad_id = vocab.index("[PAD]")
 
-    model_config = MODEL_CONFIGS[FLAGS.model_size]
-
     def preprocess_data(inputs, labels):
         inputs = [tokenizer.tokenize(x).merge_dims(1, -1) for x in inputs]
         inputs = pack_inputs(
@@ -249,6 +247,7 @@ def main(_):
     )
 
     # Create a hypermodel object for a RandomSearch.
+    model_config = MODEL_CONFIGS[FLAGS.model_size]
     hypermodel = BertHyperModel(model_config)
 
     # Initialize the random search over the 4 learning rate parameters, for 4
@@ -263,9 +262,10 @@ def main(_):
     )
 
     # Allow overriding total train steps for quick testing runs.
+    epochs = min(FINETUNING_CONFIG["epochs"], FLAGS.num_train_steps)
     steps_per_epoch = None
     if FLAGS.num_train_steps:
-        steps_per_epoch = FLAGS.num_train_steps // FINETUNING_CONFIG["epochs"]
+        steps_per_epoch = FLAGS.num_train_steps // epochs
 
     tuner.search(
         train_ds,

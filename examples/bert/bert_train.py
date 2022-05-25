@@ -69,7 +69,7 @@ flags.DEFINE_string(
 flags.DEFINE_integer(
     "num_train_steps",
     None,
-    "Override the pre-configured number of train steps..",
+    "Override the pre-configured number of train steps.",
 )
 
 
@@ -279,13 +279,12 @@ class BertPretrainer(keras.Model):
         return lm_preds, nsp_preds
 
     def train_step(self, data):
-        # TODO(mattdangerw): Add metrics (e.g nsp, lm accuracy).
         with tf.GradientTape() as tape:
             lm_preds, nsp_preds = self(data, training=True)
             lm_loss = keras.metrics.sparse_categorical_crossentropy(
                 data["masked_lm_ids"], lm_preds, from_logits=True
             )
-            lm_weights = data["masked_lm_weights"]
+            lm_weights = tf.cast(data["masked_lm_weights"], lm_loss.dtype)
             lm_weights_summed = tf.reduce_sum(lm_weights, -1)
             lm_loss = tf.reduce_sum(lm_loss * lm_weights, -1)
             lm_loss = tf.math.divide_no_nan(lm_loss, lm_weights_summed)
@@ -384,8 +383,6 @@ def main(_):
         for line in vocab_file:
             vocab.append(line.strip())
 
-    model_config = MODEL_CONFIGS[FLAGS.model_size]
-
     # Decode and batch data.
     dataset = tf.data.TFRecordDataset(input_filenames)
     dataset = dataset.map(
@@ -396,6 +393,7 @@ def main(_):
     dataset = dataset.repeat()
 
     # Create a BERT model the input config.
+    model_config = MODEL_CONFIGS[FLAGS.model_size]
     model = BertModel(
         vocab_size=len(vocab),
         **model_config,
@@ -413,6 +411,7 @@ def main(_):
         num_train_steps * TRAINING_CONFIG["warmup_percentage"]
     )
     epochs = TRAINING_CONFIG["epochs"]
+    epochs = min(TRAINING_CONFIG["epochs"], num_train_steps)
     steps_per_epoch = num_train_steps // epochs
 
     learning_rate_schedule = LinearDecayWithWarmup(

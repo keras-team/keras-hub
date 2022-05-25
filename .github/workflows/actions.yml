@@ -38,7 +38,7 @@ jobs:
         run: |
           pytest --cov=keras_nlp --cov-report xml:coverage.xml keras_nlp
   test:
-    name: Run examples/ integration tests
+    name: Model examples tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2

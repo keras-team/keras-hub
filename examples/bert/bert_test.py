@@ -33,6 +33,12 @@ class BertTest(tf.test.TestCase):
             origin=f"{ORIGIN}/wiki_example_data.txt",
             cache_dir=temp_dir,
         )
+
+        # Make the test vocab smaller for memory constraints.
+        with open(vocab_file, "r+") as file:
+            [file.readline() for x in range(5000)]
+            file.truncate()
+
         # Split sentences.
         cmd = (
             "python3 examples/tools/split_sentences.py"
@@ -65,7 +71,7 @@ class BertTest(tf.test.TestCase):
             "python3 examples/bert/bert_finetune_glue.py"
             f"    --saved_model_input {temp_dir}/model/"
             f"    --vocab_file {vocab_file}"
-            f"    --num_train_steps 5"
+            f"    --num_train_steps 3"
         )
         print(cmd)
         self.assertEqual(os.system(cmd), 0)
