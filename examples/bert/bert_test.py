@@ -41,7 +41,7 @@ class BertTest(tf.test.TestCase):
 
         # Split sentences.
         cmd = (
-            "python3 examples/tools/split_sentences.py"
+            f"python3 examples/tools/split_sentences.py"
             f"    --input_files {data_file}"
             f"    --output_directory {temp_dir}/split"
         )
@@ -49,7 +49,7 @@ class BertTest(tf.test.TestCase):
         self.assertEqual(os.system(cmd), 0)
         # Preprocess data.
         cmd = (
-            "python3 examples/bert/bert_preprocess.py"
+            f"python3 examples/bert/bert_preprocess.py"
             f"    --input_files {temp_dir}/split"
             f"    --vocab_file {vocab_file}"
             f"    --output_file {temp_dir}/data.tfrecord"
@@ -58,7 +58,7 @@ class BertTest(tf.test.TestCase):
         self.assertEqual(os.system(cmd), 0)
         # Run pretraining.
         cmd = (
-            "python3 examples/bert/bert_train.py"
+            f"python3 examples/bert/bert_train.py"
             f"    --input_files {temp_dir}/data.tfrecord"
             f"    --vocab_file {vocab_file}"
             f"    --saved_model_output {temp_dir}/model/"
@@ -68,7 +68,7 @@ class BertTest(tf.test.TestCase):
         self.assertEqual(os.system(cmd), 0)
         # Run fine-tuning.
         cmd = (
-            "python3 examples/bert/bert_finetune_glue.py"
+            f"python3 examples/bert/bert_finetune_glue.py"
             f"    --saved_model_input {temp_dir}/model/"
             f"    --vocab_file {vocab_file}"
             f"    --num_train_steps 1"
