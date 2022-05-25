@@ -23,6 +23,7 @@ ORIGIN = "https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert"
 class BertTest(tf.test.TestCase):
     def test_end_to_end(self):
         """Runs an end-to-end test of all BERT modeling scripts."""
+
         # Download test data.
         temp_dir = self.get_temp_dir()
         vocab_file = keras.utils.get_file(
@@ -33,7 +34,6 @@ class BertTest(tf.test.TestCase):
             origin=f"{ORIGIN}/wiki_example_data.txt",
             cache_dir=temp_dir,
         )
-
         # Make the test vocab smaller for memory constraints.
         with open(vocab_file, "r+") as file:
             [file.readline() for x in range(5000)]
