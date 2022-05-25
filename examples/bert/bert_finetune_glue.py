@@ -161,14 +161,12 @@ class BertClassificationFinetuner(keras.Model):
             kernel_initializer=initializer,
             name="logits",
         )
-        self._drop_out = tf.keras.layers.Dropout(0.1)
 
     def call(self, inputs):
         outputs = self.bert_model(inputs)
         # Get the first [CLS] token from each output.
         outputs = outputs[:, 0, :]
         outputs = self._pooler_layer(outputs)
-        outputs = self._drop_out(outputs)
         return self._logit_layer(outputs)
 
 

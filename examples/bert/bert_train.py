@@ -468,7 +468,7 @@ def main(_):
         dataset,
         epochs=epochs,
         steps_per_epoch=steps_per_epoch,
-        callbacks=[callbacks],
+        callbacks=callbacks,
     )
 
     print(f"Saving to {FLAGS.saved_model_output}")
