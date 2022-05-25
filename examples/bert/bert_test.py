@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import os
 
 import tensorflow as tf
@@ -33,34 +34,38 @@ class BertTest(tf.test.TestCase):
             cache_dir=temp_dir,
         )
         # Split sentences.
-        ret = os.system(
+        cmd = (
             "python3 examples/tools/split_sentences.py"
             f"    --input_files {data_file}"
             f"    --output_directory {temp_dir}/split"
         )
-        self.assertEqual(ret, 0)
+        print(cmd)
+        self.assertEqual(os.system(cmd), 0)
         # Preprocess data.
-        ret = os.system(
+        cmd = (
             "python3 examples/bert/bert_preprocess.py"
             f"    --input_files {temp_dir}/split"
             f"    --vocab_file {vocab_file}"
             f"    --output_file {temp_dir}/data.tfrecord"
         )
-        self.assertEqual(ret, 0)
+        print(cmd)
+        self.assertEqual(os.system(cmd), 0)
         # Run pretraining.
-        ret = os.system(
+        cmd = (
             "python3 examples/bert/bert_train.py"
             f"    --input_files {temp_dir}/data.tfrecord"
             f"    --vocab_file {vocab_file}"
             f"    --saved_model_output {temp_dir}/model/"
             f"    --num_train_steps 10"
         )
-        self.assertEqual(ret, 0)
+        print(cmd)
+        self.assertEqual(os.system(cmd), 0)
         # Run fine-tuning.
-        ret = os.system(
+        cmd = (
             "python3 examples/bert/bert_finetune_glue.py"
             f"    --saved_model_input {temp_dir}/model/"
             f"    --vocab_file {vocab_file}"
             f"    --num_train_steps 5"
         )
-        self.assertEqual(ret, 0)
+        print(cmd)
+        self.assertEqual(os.system(cmd), 0)

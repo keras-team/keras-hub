@@ -38,11 +38,8 @@ jobs:
         run: |
           pytest --cov=keras_nlp --cov-report xml:coverage.xml keras_nlp
   test:
-    name: Run example integration tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest]
+    name: Run examples/ integration tests
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python 3.7
@@ -67,7 +64,7 @@ jobs:
           pip install -e ".[tests,examples]" --progress-bar off --upgrade
       - name: Test with pytest
         run: |
-          pytest --cov=keras_nlp --cov-report xml:coverage.xml examples
+          pytest examples
   format:
     name: Check the code format
     runs-on: ubuntu-latest
