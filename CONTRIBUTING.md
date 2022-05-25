@@ -126,13 +126,13 @@ pytest keras_nlp/keras_nlp/integration_tests/import_test.py -k="import"
 
 ### Run all tests
 
-You can run the unit tests for KerasNLP by running:
+You can run the unit tests for the KerasNLP library by running:
 
 ```shell
 pytest keras_nlp/
 ```
 
-You can the integration test for modeling examples by running:
+You can run the integration test for modeling examples by running:
 
 ```shell
 pytest -s examples/

@@ -284,7 +284,7 @@ class BertPretrainer(keras.Model):
             lm_loss = keras.metrics.sparse_categorical_crossentropy(
                 data["masked_lm_ids"], lm_preds, from_logits=True
             )
-            lm_weights = tf.cast(data["masked_lm_weights"], lm_loss.dtype)
+            lm_weights = data["masked_lm_weights"]
             lm_weights_summed = tf.reduce_sum(lm_weights, -1)
             lm_loss = tf.reduce_sum(lm_loss * lm_weights, -1)
             lm_loss = tf.math.divide_no_nan(lm_loss, lm_weights_summed)
@@ -410,7 +410,6 @@ def main(_):
     num_warmup_steps = int(
         num_train_steps * TRAINING_CONFIG["warmup_percentage"]
     )
-    epochs = TRAINING_CONFIG["epochs"]
     epochs = min(TRAINING_CONFIG["epochs"], num_train_steps)
     steps_per_epoch = num_train_steps // epochs
 

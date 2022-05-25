@@ -262,14 +262,15 @@ def main(_):
     )
 
     # Allow overriding total train steps for quick testing runs.
-    epochs = min(FINETUNING_CONFIG["epochs"], FLAGS.num_train_steps)
+    epochs = FINETUNING_CONFIG["epochs"]
     steps_per_epoch = None
     if FLAGS.num_train_steps:
+        epochs = min(epochs, FLAGS.num_train_steps)
         steps_per_epoch = FLAGS.num_train_steps // epochs
 
     tuner.search(
         train_ds,
-        epochs=FINETUNING_CONFIG["epochs"],
+        epochs=epochs,
         steps_per_epoch=steps_per_epoch,
         validation_data=validation_ds,
     )
