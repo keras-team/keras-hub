@@ -55,6 +55,12 @@ flags.DEFINE_bool(
     "Skip restoring from checkpoint if True",
 )
 
+flags.DEFINE_bool(
+    "use_tpu",
+    False,
+    "Use TPU for training if True",
+)
+
 
 flags.DEFINE_string(
     "model_size",
@@ -395,11 +401,19 @@ def main(_):
 
     model_config = MODEL_CONFIGS[FLAGS.model_size]
 
-    resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='local')
-    tf.config.experimental_connect_to_cluster(resolver)
-    # This is the TPU initialization code that has to be at the beginning.
-    tf.tpu.experimental.initialize_tpu_system(resolver)
-    strategy = tf.distribute.TPUStrategy(resolver)
+    if FLAGS.use_tpu:
+        if not tf.config.list_logical_devices("TPU"):
+            raise RuntimeError("`use_tpu` is set to True while no TPU is found. "
+            "Please either set `use_tpu` as False or check if TPU is available.")
+
+        resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='local')
+        tf.config.experimental_connect_to_cluster(resolver)
+        # This is the TPU initialization code that has to be at the beginning.
+        tf.tpu.experimental.initialize_tpu_system(resolver)
+        strategy = tf.distribute.TPUStrategy(resolver)
+    else:
+        # Use default strategy if not using TPU. 
+        strategy = tf.distribute.get_strategy()
 
     # Decode and batch data.
     dataset = tf.data.TFRecordDataset(input_filenames)
@@ -440,8 +454,6 @@ def main(_):
             optimizer=optimizer,
         )
 
-
-    
     epochs = TRAINING_CONFIG["epochs"]
     steps_per_epoch = num_train_steps // epochs
     
@@ -463,12 +475,11 @@ def main(_):
             tf.keras.callbacks.BackupAndRestore(backup_dir=checkpoint_path)
         )
 
-    # TODO(mattdangerw): Add TPU strategy support.
     pretraining_model.fit(
         dataset,
         epochs=epochs,
         steps_per_epoch=steps_per_epoch,
-        callbacks=callbacks,
+        callbacks=[callbacks],
     )
 
     print(f"Saving to {FLAGS.saved_model_output}")
