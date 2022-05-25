@@ -1,18 +1,14 @@
-name: Test Nightly
+name: Test Model Examples
 
 on:
   push:
   pull_request:
-  schedule:
-    - cron: '0 0 * * *'
-
+  release:
+    types: [created]
 jobs:
-  build:
-    name: Run tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest]
+  test:
+    name: Model examples tests
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python 3.7
@@ -33,12 +29,8 @@ jobs:
             ${{ runner.os }}-pip-
       - name: Install dependencies
         run: |
-          pip install -e ".[tests]" --progress-bar off --upgrade
-          pip uninstall keras -y
-          pip uninstall tensorflow -y
-          pip uninstall tensorflow_text -y
-          pip install tf-nightly --progress-bar off --upgrade
-          pip install tensorflow-text-nightly --progress-bar off --upgrade
+          pip install tensorflow
+          pip install -e ".[tests,examples]" --progress-bar off --upgrade
       - name: Test with pytest
         run: |
-          pytest --cov=keras_nlp --cov-report xml:coverage.xml keras_nlp
+          pytest --cov=keras_nlp --cov-report xml:coverage.xml examples

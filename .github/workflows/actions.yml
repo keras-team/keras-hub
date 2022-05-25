@@ -1,4 +1,4 @@
-name: Tests
+name: Test Stable
 
 on:
   push:
@@ -37,34 +37,6 @@ jobs:
       - name: Test with pytest
         run: |
           pytest --cov=keras_nlp --cov-report xml:coverage.xml keras_nlp
-  test:
-    name: Model examples tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python 3.7
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.7
-      - name: Get pip cache dir
-        id: pip-cache
-        run: |
-          python -m pip install --upgrade pip setuptools
-          echo "::set-output name=dir::$(pip cache dir)"
-      - name: pip cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ steps.pip-cache.outputs.dir }}
-          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-      - name: Install dependencies
-        run: |
-          pip install tensorflow
-          pip install -e ".[tests,examples]" --progress-bar off --upgrade
-      - name: Test with pytest
-        run: |
-          pytest examples
   format:
     name: Check the code format
     runs-on: ubuntu-latest

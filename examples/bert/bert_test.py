@@ -62,7 +62,7 @@ class BertTest(tf.test.TestCase):
             f"    --input_files {temp_dir}/data.tfrecord"
             f"    --vocab_file {vocab_file}"
             f"    --saved_model_output {temp_dir}/model/"
-            f"    --num_train_steps 10"
+            f"    --num_train_steps 5"
         )
         print(cmd)
         self.assertEqual(os.system(cmd), 0)
@@ -71,7 +71,7 @@ class BertTest(tf.test.TestCase):
             "python3 examples/bert/bert_finetune_glue.py"
             f"    --saved_model_input {temp_dir}/model/"
             f"    --vocab_file {vocab_file}"
-            f"    --num_train_steps 3"
+            f"    --num_train_steps 1"
         )
         print(cmd)
         self.assertEqual(os.system(cmd), 0)
