@@ -71,6 +71,12 @@ flags.DEFINE_bool(
     "Whether to run evaluation on test data.",
 )
 
+flags.DEFINE_integer(
+    "num_train_steps",
+    None,
+    "Override the total number of train steps.",
+)
+
 
 def pack_inputs(
     inputs,
@@ -256,9 +262,15 @@ def main(_):
         directory=tempfile.mkdtemp(),
     )
 
+    # Allow overriding total train steps for quick testing runs.
+    steps_per_epoch = None
+    if FLAGS.num_train_steps:
+        steps_per_epoch = FLAGS.num_train_steps // FINETUNING_CONFIG["epochs"]
+
     tuner.search(
         train_ds,
         epochs=FINETUNING_CONFIG["epochs"],
+        steps_per_epoch=steps_per_epoch,
         validation_data=validation_ds,
     )
 

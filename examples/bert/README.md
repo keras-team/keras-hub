@@ -5,45 +5,13 @@ Representations from Transformers (BERT) model end-to-end using the KerasNLP
 library. This README contains instructions on how to run pretraining directly
 from raw data, followed by finetuning and evaluation on the GLUE dataset.
 
-## Quickly test out the code
+## Test out the code
 
-To exercise the code in this directory by training a tiny BERT model, you can
-run the following commands from the base directory of the repository. This can
-be useful to validate any code changes, but note that a useful BERT model would
-need to be trained for much longer on a much larger dataset.
+You can use a pytest target to test changes to these scripts, with the same
+testing flow as the library itself.
 
 ```shell
-OUTPUT_DIR=~/bert_test_output
-DATA_URL=https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert
-
-# Create a virtual env and install dependencies.
-mkdir $OUTPUT_DIR
-python3 -m venv $OUTPUT_DIR/env && source $OUTPUT_DIR/env/bin/activate
-pip install -e ".[tests,examples]"
-
-# Download example data.
-wget ${DATA_URL}/bert_vocab_uncased.txt -O $OUTPUT_DIR/bert_vocab_uncased.txt
-wget ${DATA_URL}/wiki_example_data.txt -O $OUTPUT_DIR/wiki_example_data.txt
-
-# Parse input data and split into sentences.
-python3 examples/tools/split_sentences.py \
-    --input_files $OUTPUT_DIR/wiki_example_data.txt \
-    --output_directory $OUTPUT_DIR/sentence-split-data
-# Preprocess input for pretraining.
-python3 examples/bert/bert_preprocess.py \
-    --input_files $OUTPUT_DIR/sentence-split-data/ \
-    --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
-    --output_file $OUTPUT_DIR/pretraining-data/pretraining.tfrecord
-# Run pretraining for 100 train steps only.
-python3 examples/bert/bert_train.py \
-    --input_files $OUTPUT_DIR/pretraining-data/ \
-    --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
-    --saved_model_output $OUTPUT_DIR/model/ \
-    --num_train_steps 100
-# Run finetuning.
-python3 examples/bert/bert_finetune_glue.py \
-    --saved_model_input $OUTPUT_DIR/model/ \
-    --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt
+pytest examples/bert/bert_test.py
 ```
 
 ## Installing dependencies
