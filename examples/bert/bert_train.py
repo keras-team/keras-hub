@@ -16,8 +16,6 @@ import os
 import shutil
 import sys
 
-import os
-
 import tensorflow as tf
 from absl import app
 from absl import flags
@@ -55,12 +53,7 @@ flags.DEFINE_bool(
     "Skip restoring from checkpoint if True",
 )
 
-flags.DEFINE_bool(
-    "use_tpu",
-    False,
-    "Use TPU for training if True",
-)
-
+flags.DEFINE_bool("use_tpu", False, "Use TPU for training if True")
 
 flags.DEFINE_string(
     "model_size",
@@ -347,13 +340,6 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
                 0.0, peak_lr * (training - step) / (training - warmup)
             ),
         )
-    
-    def get_config(self):
-        return {
-            "learning_rate": self.learning_rate,
-            "num_warmup_steps": self.warmup_steps,
-            "num_train_steps": self.train_steps,
-        }
 
     def get_config(self):
         return {
@@ -403,16 +389,19 @@ def main(_):
 
     if FLAGS.use_tpu:
         if not tf.config.list_logical_devices("TPU"):
-            raise RuntimeError("`use_tpu` is set to True while no TPU is found. "
-            "Please either set `use_tpu` as False or check if TPU is available.")
-
-        resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='local')
+            raise RuntimeError(
+                "`use_tpu` is set to True while no TPU is found. Please "
+                "check if your machine has TPU or set `use_tpu` as False."
+            )
+        # Connect to TPU and create TPU strategy.
+        resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
+            tpu="local"
+        )
         tf.config.experimental_connect_to_cluster(resolver)
-        # This is the TPU initialization code that has to be at the beginning.
         tf.tpu.experimental.initialize_tpu_system(resolver)
         strategy = tf.distribute.TPUStrategy(resolver)
     else:
-        # Use default strategy if not using TPU. 
+        # Use default strategy if not using TPU.
         strategy = tf.distribute.get_strategy()
 
     # Decode and batch data.
@@ -456,7 +445,7 @@ def main(_):
 
     epochs = TRAINING_CONFIG["epochs"]
     steps_per_epoch = num_train_steps // epochs
-    
+
     callbacks = []
     if FLAGS.checkpoint_save_directory is not None:
         if os.path.exists(FLAGS.checkpoint_save_directory):
