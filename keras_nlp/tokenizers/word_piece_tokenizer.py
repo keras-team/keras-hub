@@ -102,7 +102,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     be either an integer or string type.
 
     Args:
-        vocabulary: A list of strings or a string string filename path. If
+        vocabulary: A list of strings or a string filename path. If
             passing a list, each element of the list should be a single word
             piece token string. If passing a filename, the file should be a
             plain text file containing a single word piece token per line.
