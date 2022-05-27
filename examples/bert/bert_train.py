@@ -387,11 +387,9 @@ def main(_):
 
     if tf.config.list_logical_devices("TPU"):
         # Connect to TPU and create TPU strategy.
-        resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
+        resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
             tpu="local"
         )
-        tf.config.experimental_connect_to_cluster(resolver)
-        tf.tpu.experimental.initialize_tpu_system(resolver)
         strategy = tf.distribute.TPUStrategy(resolver)
     else:
         # Use default strategy if not using TPU.
