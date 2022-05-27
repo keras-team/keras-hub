@@ -20,6 +20,7 @@ from typing import Union
 
 import tensorflow as tf
 import tensorflow_text as tf_text
+import warnings
 
 from keras_nlp.tokenizers import tokenizer
 
@@ -176,6 +177,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     def __init__(
         self,
         vocabulary: Union[Iterable[str], str] = None,
+        vocabulary_size: int = None,
         sequence_length: int = None,
         lowercase: bool = True,
         strip_accents: bool = True,
@@ -199,13 +201,34 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         super().__init__(**kwargs)
 
+        if isinstance(vocabulary_size, int) == False:
+            raise ValueError(
+                f"Vocabulary_size expected type int, given {type(vocabulary_size)}"
+            )
+        
         if isinstance(vocabulary, str):
-            self.vocabulary = [
-                line.rstrip() for line in tf.io.gfile.GFile(vocabulary)
-            ]
+            if vocabulary_size is None:
+                self.vocabulary = [
+                    line.rstrip() for line in tf.io.gfile.GFile(vocabulary)
+                ]
+            else:
+                self.vocabulary = []
+                count = 0
+                for line in tf.io.gfile.GFile(vocabulary):
+                    if count > vocabulary_size:
+                        warnings.warn("Setting vocab size to a larger value than the input vocabulary file.\
+                        Some token ids will never be output from the tokenizer.")
+                    count = count + 1
+                    self.vocabulary.append( line.rstrip() )
+                
+                self.vocabulary = self.vocabulary[:vocabulary_size]
+
         elif isinstance(vocabulary, Iterable):
             # Make a copy.
-            self.vocabulary = list(vocabulary)
+            if vocabulary_size is None:
+                self.vocabulary = list(vocabulary)
+            else:
+                self.vocabulary = list(vocabulary)[:vocabulary_size]
         else:
             raise ValueError(
                 "Vocabulary must be an file path or list of terms. "
@@ -228,6 +251,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.keep_pattern = keep_pattern
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
+        self.vocabulary_size = vocabulary_size
 
         if oov_token not in self.vocabulary:
             raise RuntimeError(
@@ -253,7 +277,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def vocabulary_size(self) -> int:
         """Get the size of the tokenizer vocabulary."""
-        return len(self.vocabulary)
+        if self.vocabulary_size is None:
+            return len(self.vocabulary)
+        return self.vocabulary_size
 
     def id_to_token(self, id: int) -> str:
         """Convert an integer id to a string token."""
