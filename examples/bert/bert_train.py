@@ -53,8 +53,6 @@ flags.DEFINE_bool(
     "Skip restoring from checkpoint if True",
 )
 
-flags.DEFINE_bool("use_tpu", False, "Use TPU for training if True")
-
 flags.DEFINE_string(
     "model_size",
     "tiny",
@@ -387,12 +385,7 @@ def main(_):
 
     model_config = MODEL_CONFIGS[FLAGS.model_size]
 
-    if FLAGS.use_tpu:
-        if not tf.config.list_logical_devices("TPU"):
-            raise RuntimeError(
-                "`use_tpu` is set to True while no TPU is found. Please "
-                "check if your machine has TPU or set `use_tpu` as False."
-            )
+    if tf.config.list_logical_devices("TPU"):
         # Connect to TPU and create TPU strategy.
         resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
             tpu="local"
