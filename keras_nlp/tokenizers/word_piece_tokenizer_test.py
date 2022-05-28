@@ -19,7 +19,7 @@ import warnings
 
 from tensorflow import keras
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
-# from word_piece_tokenizer import WordPieceTokenizer
+
 
 class WordPieceTokenizerTest(tf.test.TestCase):
     def test_tokenize(self):
