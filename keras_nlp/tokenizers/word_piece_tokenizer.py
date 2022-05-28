@@ -215,11 +215,12 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 self.vocabulary = []
                 count = 0
                 for line in tf.io.gfile.GFile(vocabulary):
-                    if count > vocabulary_size:
-                        warnings.warn("Setting vocab size to a larger value than the input vocabulary file.\
-                        Some token ids will never be output from the tokenizer.")
                     count = count + 1
                     self.vocabulary.append( line.rstrip() )
+                
+                if  vocabulary_size > count:
+                        warnings.warn("Setting vocab size to a larger value than the input vocabulary file.\
+                        Some token ids will never be output from the tokenizer.")
                 
                 self.vocabulary = self.vocabulary[:vocabulary_size]
 

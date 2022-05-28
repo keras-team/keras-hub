@@ -15,8 +15,9 @@
 import os
 
 import tensorflow as tf
-from tensorflow import keras
+import warnings
 
+from tensorflow import keras
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 # from word_piece_tokenizer import WordPieceTokenizer
 
@@ -194,6 +195,30 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         tokenizer = WordPieceTokenizer(vocabulary=vocab_path)
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6, 7]])
+    
+    def test_from_file_with_vocabulary_size_arg(self):
+        vocab_path = os.path.join(self.get_temp_dir(), "vocab.txt")
+        input_data = ["the quick brown fox."]
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        vocab_size = 3
+        with tf.io.gfile.GFile(vocab_path, "w") as file:
+            for piece in vocab_data:
+                file.write(piece + "\n")
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_path, vocabulary_size=vocab_size)
+        call_output = tokenizer(input_data)
+        self.assertAllEqual(tokenizer.vocabulary_size, vocab_size)
+    
+    def test_from_file_output_with_vocabulary_size(self):
+        vocab_path = os.path.join(self.get_temp_dir(), "vocab.txt")
+        input_data = ["the quick brown fox."]
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        vocab_size = 4
+        with tf.io.gfile.GFile(vocab_path, "w") as file:
+            for piece in vocab_data:
+                file.write(piece + "\n")
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_path, vocabulary_size=vocab_size)
+        call_output = tokenizer(input_data)
+        self.assertAllEqual(call_output, [[1, 2, 3, 0, 0, 0]])
 
     def test_config(self):
         input_data = ["quick brOWN whale"]
