@@ -276,7 +276,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         """Get the tokenizer vocabulary as a list of strings tokens."""
         return self.vocabulary
 
-    def vocabulary_size(self) -> int:
+    def vocabulary_size_(self) -> int:
         """Get the size of the tokenizer vocabulary."""
         if self.vocabulary_size is None:
             return len(self.vocabulary)
