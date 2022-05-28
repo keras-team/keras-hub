@@ -14,7 +14,6 @@
 
 import os
 import tensorflow as tf
-
 from tensorflow import keras
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 

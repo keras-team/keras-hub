@@ -15,7 +15,6 @@
 import tensorflow as tf
 import tensorflow_text as tf_text
 import warnings
-
 from typing import Any
 from typing import Dict
 from typing import Iterable
