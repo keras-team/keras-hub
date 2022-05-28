@@ -17,8 +17,8 @@ import os
 import tensorflow as tf
 from tensorflow import keras
 
-# from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
-from word_piece_tokenizer import WordPieceTokenizer
+from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
+# from word_piece_tokenizer import WordPieceTokenizer
 
 class WordPieceTokenizerTest(tf.test.TestCase):
     def test_tokenize(self):
@@ -49,7 +49,8 @@ class WordPieceTokenizerTest(tf.test.TestCase):
             vocabulary=vocab_data, vocabulary_size=vocab_size
         )
         call_output = tokenizer(input_data)
-        self.assertEqual(tokenizer.vocabulary_size(), vocab_size)
+        self.assertEqual(tokenizer.vocabulary_size, vocab_size)
+    
 
     def test_string_tokenize(self):
         input_data = ["the quick brown fox"]

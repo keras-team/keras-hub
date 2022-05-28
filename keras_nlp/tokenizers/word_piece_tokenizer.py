@@ -201,7 +201,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         super().__init__(**kwargs)
 
-        if isinstance(vocabulary_size, int) == False:
+        if vocabulary_size != None and isinstance(vocabulary_size, int) == False:
             raise ValueError(
                 f"Vocabulary_size expected type int, given {type(vocabulary_size)}"
             )
