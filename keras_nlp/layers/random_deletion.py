@@ -63,11 +63,12 @@ class RandomDeletion(keras.layers.Layer):
         Returns:
             A tensor or nested tensor of augmented strings.
         """
-        # If input is not a tensor or ragged tensor convert it into a tensor
+        # If input is a simple String convert it into a list
         isString = False
         if isinstance(inputs, str):
             inputs = [inputs]
             isString = True
+        # If input is not a tensor convert it into a tensor
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
             inputs = tf.cast(inputs, tf.string)
@@ -77,14 +78,17 @@ class RandomDeletion(keras.layers.Layer):
             if scalar_input:
                 inputs = tf.expand_dims(inputs, 0)
             ragged_words = tf.strings.split(inputs)
+            # Get the row splits for the ragged tensor
             row_splits = ragged_words.row_splits.numpy()
             mask = (
                 tf.random.uniform(ragged_words.flat_values.shape)
                 > self.probability
             )
+            # Iterate to check for any cases where deletions exceed the maximum
             for i in range(len(row_splits) - 1):
                 mask_range = mask[row_splits[i] : row_splits[i + 1]]
                 mask_range_list = tf.unstack(mask_range)
+                # Get the number of deletions
                 FalseCount = tf.reduce_sum(
                     tf.cast(tf.equal(mask_range, False), tf.int32)
                 )
@@ -95,6 +99,8 @@ class RandomDeletion(keras.layers.Layer):
                     for j in range(len(idx)):
                         if idx[j] == false_ind:
                             False_idxs.append(j)
+                    # While deletions exceed the maximum, randomly convert some
+                    # to true
                     while len(False_idxs) > self.max_deletions:
                         rand_idx = random.randrange(len(False_idxs))
                         mask_range_list[False_idxs[rand_idx]] = True
