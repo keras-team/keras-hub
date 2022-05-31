@@ -64,6 +64,10 @@ class RandomDeletion(keras.layers.Layer):
             A tensor or nested tensor of augmented strings.
         """
         # If input is not a tensor or ragged tensor convert it into a tensor
+        isString = False
+        if isinstance(inputs, str):
+            inputs = [inputs]
+            isString = True
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
             inputs = tf.cast(inputs, tf.string)
@@ -108,10 +112,13 @@ class RandomDeletion(keras.layers.Layer):
             return deleted
 
         if isinstance(inputs, tf.Tensor):
-            return tf.map_fn(
+            inputs = tf.map_fn(
                 _map_fn,
                 inputs,
             )
+        if isString:
+            inputs = inputs[0]
+        return inputs
 
     def get_config(self) -> Dict[str, Any]:
         config = super().get_config()
