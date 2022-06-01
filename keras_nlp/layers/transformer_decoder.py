@@ -249,7 +249,7 @@ class TransformerDecoder(keras.layers.Layer):
                 self._feedforward_layernorm,
             )
         else:
-            # Skip Encoder-Decoder attention.
+            # Skip Encoder-Decoder attention, Feedforward.
             feed_forward_output = self._feed_forward(self_attended)
             return self._add_and_norm(
                 self_attended,
