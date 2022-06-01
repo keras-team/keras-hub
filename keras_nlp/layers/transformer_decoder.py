@@ -166,7 +166,7 @@ class TransformerDecoder(keras.layers.Layer):
     def call(
         self,
         decoder_sequence,
-        encoder_sequence,
+        encoder_sequence=None,
         decoder_padding_mask=None,
         decoder_attention_mask=None,
         encoder_padding_mask=None,
@@ -196,9 +196,7 @@ class TransformerDecoder(keras.layers.Layer):
         """
         if not self._built:
             self._build(decoder_sequence.shape)
-        encoder_mask = merge_padding_and_attention_mask(
-            encoder_sequence, encoder_padding_mask, encoder_attention_mask
-        )
+
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )
@@ -223,28 +221,42 @@ class TransformerDecoder(keras.layers.Layer):
         self_attended = self._add_and_norm(
             self_attended, decoder_sequence, self._decoder_attention_layernorm
         )
-        # Encoder-decoder attention.
-        encoder_decoder_attended = self._encoder_decoder_attention_layer(
-            query=self_attended,
-            value=encoder_sequence,
-            key=encoder_sequence,
-            attention_mask=encoder_mask,
-        )
-        encoder_decoder_attended = self._enc_dec_attentiondropout(
-            encoder_decoder_attended,
-        )
-        encoder_decoder_attended = self._add_and_norm(
-            encoder_decoder_attended,
-            self_attended,
-            self._enc_dec_attention_layernorm,
-        )
-        # Feedforward.
-        feed_forward_output = self._feed_forward(encoder_decoder_attended)
-        return self._add_and_norm(
-            encoder_decoder_attended,
-            feed_forward_output,
-            self._feedforward_layernorm,
-        )
+
+        if encoder_sequence is not None:
+            # Encoder-decoder attention.
+            encoder_mask = merge_padding_and_attention_mask(
+                encoder_sequence, encoder_padding_mask, encoder_attention_mask
+            )
+            encoder_decoder_attended = self._encoder_decoder_attention_layer(
+                query=self_attended,
+                value=encoder_sequence,
+                key=encoder_sequence,
+                attention_mask=encoder_mask,
+            )
+            encoder_decoder_attended = self._enc_dec_attentiondropout(
+                encoder_decoder_attended,
+            )
+            encoder_decoder_attended = self._add_and_norm(
+                encoder_decoder_attended,
+                self_attended,
+                self._enc_dec_attention_layernorm,
+            )
+            # Feedforward.
+            feed_forward_output = self._feed_forward(encoder_decoder_attended)
+            return self._add_and_norm(
+                encoder_decoder_attended,
+                feed_forward_output,
+                self._feedforward_layernorm,
+            )
+        else:
+            # Skip Encoder-Decoder attention.
+            feed_forward_output = self._feed_forward(self_attended)
+            return self._add_and_norm(
+                self_attended,
+                feed_forward_output,
+                self._feedforward_layernorm,
+            )
+
 
     def get_config(self):
         config = super().get_config()
