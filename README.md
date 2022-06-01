@@ -76,7 +76,7 @@ outputs = keras.layers.Dense(1, activation="sigmoid")(outputs)
 model = keras.Model(inputs, outputs)
 
 # Run a single batch of gradient descent.
-model.compile(loss="binary_crossentropy", jit_compile=True)
+model.compile(optimizer="adam", loss="binary_crossentropy", jit_compile=True)
 model.train_on_batch(x, y)
 ```
 
