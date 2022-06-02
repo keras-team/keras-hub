@@ -49,7 +49,7 @@ class TransformerDecoderTest(tf.test.TestCase):
         output = decoder(decoder_input)
         model = keras.Model(
             inputs=decoder_input,
-            outputs = output,
+            outputs=output,
         )
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model(decoder_sequence)
@@ -68,20 +68,6 @@ class TransformerDecoderTest(tf.test.TestCase):
             encoder_sequence,
             decoder_padding_mask=decoder_padding_mask,
             encoder_padding_mask=encoder_padding_mask,
-            use_causal_mask=True,
-        )
-
-    def test_valid_call_without_encoder_with_mask(self):
-        decoder = transformer_decoder.TransformerDecoder(
-            intermediate_dim=4,
-            num_heads=2,
-            decoder_only=True,
-        )
-        decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        decoder_padding_mask = decoder_sequence[:, :, 0] > 0.5
-        decoder(
-            decoder_sequence,
-            decoder_padding_mask=decoder_padding_mask,
             use_causal_mask=True,
         )
 

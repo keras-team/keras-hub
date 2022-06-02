@@ -56,7 +56,8 @@ class TransformerDecoder(keras.layers.Layer):
             defaults to "zeros". The bias initializer for
             the dense and multiheaded attention layers.
         name: string, defaults to None. The name of the layer.
-        decoder_only: bool, defaults to False. If True, only the decoder
+        decoder_only: bool, defaults to False. If True, only the decoder layers 
+            would be built. Useful for decoder only models such as GPT2.
         **kwargs: other keyword arguments.
 
     Examples:
@@ -191,7 +192,8 @@ class TransformerDecoder(keras.layers.Layer):
 
         Args:
             decoder_sequence: a Tensor. The decoder input sequence.
-            encoder_sequence: a Tensor. The decoder input sequence.
+            encoder_sequence: a Tensor. The decoder input sequence. For decoder
+                only models (like GPT2), this should be left None.
             decoder_padding_mask: a boolean Tensor, the padding mask of decoder
                 sequence, must of shape [batch_size, decoder_sequence_length].
             decoder_attention_mask: a boolean Tensor. Customized decoder
@@ -237,7 +239,8 @@ class TransformerDecoder(keras.layers.Layer):
         )
 
         if self.decoder_only or encoder_sequence is None:
-            # Skip Encoder-Decoder attention, Feedforward.
+            # Skip Encoder-Decoder attention if decoder_only set to True or
+            # no encoder_sequence is provided.
             feed_forward_output = self._feed_forward(self_attended)
             return self._add_and_norm(
                 self_attended,
@@ -245,10 +248,10 @@ class TransformerDecoder(keras.layers.Layer):
                 self._feedforward_layernorm,
             )
         else:
-            # Encoder-decoder attention.
             encoder_mask = merge_padding_and_attention_mask(
                 encoder_sequence, encoder_padding_mask, encoder_attention_mask
             )
+            # Encoder-decoder attention.
             encoder_decoder_attended = self._encoder_decoder_attention_layer(
                 query=self_attended,
                 value=encoder_sequence,
