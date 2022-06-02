@@ -37,9 +37,9 @@ class TransformerDecoder(keras.layers.Layer):
     for more details.
 
     If decoder_only is set to True, the encoder layer would not be built, 
-    the encoder output would not be used in TransformerDecoder and ignored. 
-    If decoder_only is set to False, but no encoder sequence is provided, 
-    TransformerDecoder would run as decoder only.
+    and there should not be an encoder sequence input. 
+    If decoder_only is set to False, encoder layer would be built, and there
+    should be an encoder sequence input.
 
     Args:
         intermediate_dim: int, the hidden size of feedforward network.
