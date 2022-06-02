@@ -36,6 +36,10 @@ class TransformerDecoder(keras.layers.Layer):
     [guide](https://keras.io/guides/understanding_masking_and_padding/)
     for more details.
 
+    If decoder_only is set to True, the encoder output would not be used in 
+    TransformerDecoder and ignored. If decoder_only is set to False, but no
+    encoder sequence is provided, TransformerDecoder would run as decoder only.
+
     Args:
         intermediate_dim: int, the hidden size of feedforward network.
         num_heads: int, the number of heads in MultiHeadAttention.
@@ -52,6 +56,7 @@ class TransformerDecoder(keras.layers.Layer):
             defaults to "zeros". The bias initializer for
             the dense and multiheaded attention layers.
         name: string, defaults to None. The name of the layer.
+        decoder_only: bool, defaults to False. If True, only the decoder
         **kwargs: other keyword arguments.
 
     Examples:
@@ -89,6 +94,7 @@ class TransformerDecoder(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         name=None,
+        decoder_only=False,
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
@@ -99,6 +105,7 @@ class TransformerDecoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.decoder_only = decoder_only
         self._built = False
         self.supports_masking = True
 
@@ -115,29 +122,35 @@ class TransformerDecoder(keras.layers.Layer):
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._encoder_decoder_attention_layer = keras.layers.MultiHeadAttention(
-            num_heads=self.num_heads,
-            key_dim=self._attention_head_size,
-            value_dim=feature_size,
-            dropout=self.dropout,
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
-        )
 
         self._decoder_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
-        self._enc_dec_attention_layernorm = keras.layers.LayerNormalization(
-            epsilon=self.layer_norm_epsilon,
-        )
+
+        if not self.decoder_only:
+            self._encoder_decoder_attention_layer = keras.layers.MultiHeadAttention(
+                num_heads=self.num_heads,
+                key_dim=self._attention_head_size,
+                value_dim=feature_size,
+                dropout=self.dropout,
+                kernel_initializer=self.kernel_initializer,
+                bias_initializer=self.bias_initializer,
+            )
+
+            self._enc_dec_attention_layernorm = keras.layers.LayerNormalization(
+                epsilon=self.layer_norm_epsilon,
+            )
+
+            self._enc_dec_attentiondropout = keras.layers.Dropout(
+                rate=self.dropout,
+            )
+        
         self._feedforward_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
 
         self._self_attention_dropout = keras.layers.Dropout(rate=self.dropout)
-        self._enc_dec_attentiondropout = keras.layers.Dropout(
-            rate=self.dropout,
-        )
+        
         # First dense layer in the feedforward network, which maps input
         # feauture size to dimension `self.intermediate_dim`.
         self._intermediate_dense = keras.layers.Dense(
@@ -154,6 +167,7 @@ class TransformerDecoder(keras.layers.Layer):
             bias_initializer=self.bias_initializer,
         )
         self._output_dropout = keras.layers.Dropout(rate=self.dropout)
+
 
     def _add_and_norm(self, input1, input2, norm_layer):
         return norm_layer(input1 + input2)
@@ -222,7 +236,15 @@ class TransformerDecoder(keras.layers.Layer):
             self_attended, decoder_sequence, self._decoder_attention_layernorm
         )
 
-        if encoder_sequence is not None:
+        if self.decoder_only or encoder_sequence is None:
+            # Skip Encoder-Decoder attention, Feedforward.
+            feed_forward_output = self._feed_forward(self_attended)
+            return self._add_and_norm(
+                self_attended,
+                feed_forward_output,
+                self._feedforward_layernorm,
+            )
+        else:
             # Encoder-decoder attention.
             encoder_mask = merge_padding_and_attention_mask(
                 encoder_sequence, encoder_padding_mask, encoder_attention_mask
@@ -247,16 +269,7 @@ class TransformerDecoder(keras.layers.Layer):
                 encoder_decoder_attended,
                 feed_forward_output,
                 self._feedforward_layernorm,
-            )
-        else:
-            # Skip Encoder-Decoder attention, Feedforward.
-            feed_forward_output = self._feed_forward(self_attended)
-            return self._add_and_norm(
-                self_attended,
-                feed_forward_output,
-                self._feedforward_layernorm,
-            )
-
+            )            
 
     def get_config(self):
         config = super().get_config()
@@ -273,6 +286,7 @@ class TransformerDecoder(keras.layers.Layer):
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
                 ),
+                "decoder_only": self.decoder_only,
             }
         )
         return config

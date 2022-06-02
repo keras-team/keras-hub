@@ -44,6 +44,7 @@ class TransformerDecoderTest(tf.test.TestCase):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
+            decoder_only=True,
         )
         output = decoder(decoder_input)
         model = keras.Model(
@@ -74,6 +75,7 @@ class TransformerDecoderTest(tf.test.TestCase):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
+            decoder_only=True,
         )
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         decoder_padding_mask = decoder_sequence[:, :, 0] > 0.5
@@ -105,6 +107,43 @@ class TransformerDecoderTest(tf.test.TestCase):
             "bias_initializer": keras.initializers.serialize(
                 keras.initializers.Zeros()
             ),
+        }
+
+        self.assertEqual(config, {**config, **expected_config_subset})
+        self.assertEqual(config, {**config, **expected_config_subset})
+
+        restored_decoder = transformer_decoder.TransformerDecoder.from_config(
+            config,
+        )
+
+        self.assertEqual(
+            restored_decoder.get_config(), {**config, **expected_config_subset}
+        )
+    
+    def test_get_config_and_from_config_without_encoder(self):
+        decoder = transformer_decoder.TransformerDecoder(
+            intermediate_dim=4,
+            num_heads=2,
+            kernel_initializer="HeNormal",
+            bias_initializer="Zeros",
+            decoder_only=True,
+        )
+
+        config = decoder.get_config()
+
+        expected_config_subset = {
+            "intermediate_dim": 4,
+            "num_heads": 2,
+            "dropout": 0,
+            "activation": "relu",
+            "layer_norm_epsilon": 1e-05,
+            "kernel_initializer": keras.initializers.serialize(
+                keras.initializers.HeNormal()
+            ),
+            "bias_initializer": keras.initializers.serialize(
+                keras.initializers.Zeros()
+            ),
+            "decoder_only": True,
         }
 
         self.assertEqual(config, {**config, **expected_config_subset})
@@ -160,7 +199,7 @@ class TransformerDecoderTest(tf.test.TestCase):
             def __init__(self):
                 super(MyModel, self).__init__()
                 self._decoder = transformer_decoder.TransformerDecoder(
-                    intermediate_dim=4, num_heads=2
+                    intermediate_dim=4, num_heads=2, decoder_only=True,
                 )
                 self._dense = keras.layers.Dense(1, activation="sigmoid")
 
@@ -220,12 +259,15 @@ class TransformerDecoderTest(tf.test.TestCase):
         decoder1 = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
+            decoder_only=True,
         )
 
         decoder2 = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
+            decoder_only=True,
         )
+
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         decoder1(decoder_sequence)
         decoder2(decoder_sequence)
@@ -264,6 +306,7 @@ class TransformerDecoderTest(tf.test.TestCase):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
+            decoder_only=True,
         )
         decoder_sequence = tf.random.uniform(shape=[1, 4, 6])
         mask = tf.constant([[True, True, False, False]])
