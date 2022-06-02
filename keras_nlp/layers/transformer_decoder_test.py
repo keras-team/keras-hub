@@ -29,6 +29,11 @@ class TransformerDecoderTest(tf.test.TestCase):
             intermediate_dim=4,
             num_heads=2,
         )
+        # should raise ValueError if encoder_input is not provided
+        try:
+            output = decoder(decoder_input)
+        except ValueError as e:
+            print(e)
         output = decoder(decoder_input, encoder_input)
         model = keras.Model(
             inputs=[decoder_input, encoder_input],
@@ -46,6 +51,12 @@ class TransformerDecoderTest(tf.test.TestCase):
             num_heads=2,
             decoder_only=True,
         )
+        # should raise ValueError if encoder_input is provided
+        try:
+            encoder_input = keras.Input(shape=[4, 6])
+            output = decoder(decoder_input, encoder_input)
+        except ValueError as e:
+            print(e)
         output = decoder(decoder_input)
         model = keras.Model(
             inputs=decoder_input,

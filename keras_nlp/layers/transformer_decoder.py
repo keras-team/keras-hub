@@ -36,9 +36,10 @@ class TransformerDecoder(keras.layers.Layer):
     [guide](https://keras.io/guides/understanding_masking_and_padding/)
     for more details.
 
-    If decoder_only is set to True, the encoder output would not be used in 
-    TransformerDecoder and ignored. If decoder_only is set to False, but no
-    encoder sequence is provided, TransformerDecoder would run as decoder only.
+    If decoder_only is set to True, the encoder layer would not be built, 
+    the encoder output would not be used in TransformerDecoder and ignored. 
+    If decoder_only is set to False, but no encoder sequence is provided, 
+    TransformerDecoder would run as decoder only.
 
     Args:
         intermediate_dim: int, the hidden size of feedforward network.
@@ -129,13 +130,15 @@ class TransformerDecoder(keras.layers.Layer):
         )
 
         if not self.decoder_only:
-            self._encoder_decoder_attention_layer = keras.layers.MultiHeadAttention(
-                num_heads=self.num_heads,
-                key_dim=self._attention_head_size,
-                value_dim=feature_size,
-                dropout=self.dropout,
-                kernel_initializer=self.kernel_initializer,
-                bias_initializer=self.bias_initializer,
+            self._encoder_decoder_attention_layer = (
+                keras.layers.MultiHeadAttention(
+                    num_heads=self.num_heads,
+                    key_dim=self._attention_head_size,
+                    value_dim=feature_size,
+                    dropout=self.dropout,
+                    kernel_initializer=self.kernel_initializer,
+                    bias_initializer=self.bias_initializer,
+                )
             )
 
             self._enc_dec_attention_layernorm = keras.layers.LayerNormalization(
@@ -238,7 +241,11 @@ class TransformerDecoder(keras.layers.Layer):
             self_attended, decoder_sequence, self._decoder_attention_layernorm
         )
 
-        if self.decoder_only or encoder_sequence is None:
+        if self.decoder_only:
+            if encoder_sequence is not None:
+                raise ValueError(
+                    "encoder_seq should be None for decoder-only models."
+                )
             # Skip Encoder-Decoder attention if decoder_only set to True or
             # no encoder_sequence is provided.
             feed_forward_output = self._feed_forward(self_attended)
@@ -248,6 +255,10 @@ class TransformerDecoder(keras.layers.Layer):
                 self._feedforward_layernorm,
             )
         else:
+            if encoder_sequence is None:
+                raise ValueError(
+                    "encoder_seq should not be None for encoder-decoder models."
+                )
             encoder_mask = merge_padding_and_attention_mask(
                 encoder_sequence, encoder_padding_mask, encoder_attention_mask
             )
