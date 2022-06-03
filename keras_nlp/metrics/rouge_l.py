@@ -14,25 +14,25 @@
 
 """ROUGE-L metric implementation based on `keras.metrics.Metric`."""
 
-import tensorflow as tf
-from tensorflow import keras
 
-from keras_nlp.utils.tensor_utils import tensor_to_string_list
-
-try:
-    import rouge_score
-    from rouge_score import rouge_scorer
-except ImportError:
-    rouge_score = None
+from keras_nlp.metrics.rouge import RougeBase
 
 
-class RougeL(keras.metrics.Metric):
+class RougeL(RougeBase):
     """ROUGE-L metric.
 
     This class implements the ROUGE-L variant of the ROUGE metric. The ROUGE-L
     metric is traditionally used for evaluating summarisation systems.
     Succinctly put, ROUGE-L is a score based on the length of the longest
     common subsequence present in the reference text and the hypothesis text.
+
+    Note on input shapes:
+    `y_true` and `y_pred` can be of the following types/shapes:
+    1. Python string/scalar input
+    2. Tensor/Python list
+        a. rank 0
+        b. rank 1 (every element in the tensor is a string)
+        c. rank 2 (shape: `(batch_size, 1)`)
 
     Args:
         use_stemmer: bool. Whether Porter Stemmer should be used to strip word
@@ -43,6 +43,92 @@ class RougeL(keras.metrics.Metric):
                not specified, it defaults to tf.float32.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
+
+    Examples:
+
+    1. Various Input Types.
+    1.1. Python string.
+    >>> rouge_l = keras_nlp.metrics.RougeL()
+    >>> y_true = "the tiny little cat was found under the big funny bed"
+    >>> y_pred = "the cat was under the bed"
+    >>> rouge_l(y_true, y_pred)
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.7058824>
+
+    1.2. rank 1 inputs.
+    a. Python list.
+    >>> rouge_l = keras_nlp.metrics.RougeL()
+    >>> y_true = [
+    ...     "the tiny little cat was found under the big funny bed",
+    ...     "i really love contributing to KerasNLP",
+    ... ]
+    >>> y_pred = [
+    ...     "the cat was under the bed",
+    ...     "i love contributing to KerasNLP",
+    ... ]
+    >>>
+    >>> rouge_l(y_true, y_pred)
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.80748665>
+
+    b. Tensor
+    >>> rouge_l = keras_nlp.metrics.RougeL()
+    >>> y_true = tf.constant(
+    ...     [
+    ...         "the tiny little cat was found under the big funny bed",
+    ...         "i really love contributing to KerasNLP",
+    ...     ]
+    ... )
+    >>> y_pred = tf.constant(
+    ...     [
+    ...         "the cat was under the bed",
+    ...         "i love contributing to KerasNLP",
+    ...     ]
+    ... )
+    >>> rouge_l(y_true, y_pred)
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.80748665>
+
+    1.3. rank 2 inputs.
+    >>> rouge_l = keras_nlp.metrics.RougeL()
+    >>> y_true = tf.constant(
+    ...     [
+    ...         ["the tiny little cat was found under the big funny bed"],
+    ...         ["i really love contributing to KerasNLP"],
+    ...     ]
+    ... )
+    >>> y_pred = tf.constant(
+    ...     [
+    ...         ["the cat was under the bed"],
+    ...         ["i love contributing to KerasNLP"],
+    ...     ]
+    ... )
+    >>> rouge_l(y_true, y_pred)
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.80748665>
+
+    3. Output the precision instead of the F1 Score.
+    >>> rouge_l = keras_nlp.metrics.RougeL(metric_type="precision")
+    >>> y_true = tf.constant(
+    ...     [
+    ...         "the tiny little cat was found under the big funny bed",
+    ...         "i really love contributing to KerasNLP",
+    ...     ]
+    ... )
+    >>> y_pred = tf.constant(
+    ...     [
+    ...         "the cat was under the bed",
+    ...         "i love contributing to KerasNLP",
+    ...     ]
+    ... )
+    >>> rouge_l(y_true, y_pred)
+    <tf.Tensor: shape=(), dtype=float32, numpy=1.0>
+
+    4. Pass the metric to `model.compile()`.
+    >>> inputs = keras.Input(shape=(), dtype='string')
+    >>> outputs = tf.strings.lower(inputs)
+    >>> model = keras.Model(inputs, outputs)
+    >>> model.compile(metrics=[keras_nlp.metrics.RougeL()])
+    >>> x = tf.constant(["HELLO THIS IS FUN"])
+    >>> y = tf.constant(["hello this is awesome"])
+    >>> model.evaluate(x, y, return_dict=True)
+    {'loss': 0.0, 'rouge-l': 0.75}
     """
 
     def __init__(
@@ -53,110 +139,16 @@ class RougeL(keras.metrics.Metric):
         name="rouge-l",
         **kwargs,
     ):
-        super().__init__(name=name, dtype=dtype, **kwargs)
-
-        if rouge_score is None:
-            raise ImportError(
-                "ROUGE metric requires the `rouge_score` package. "
-                "Please install it with `pip install rouge-score`."
-            )
-
-        if not tf.as_dtype(self.dtype).is_floating:
-            raise ValueError(
-                "`dtype` must be a floating point type. "
-                f"Received: dtype={dtype}"
-            )
-
-        if metric_type not in ("precision", "recall", "f1_score"):
-            raise ValueError(
-                '`metric_type` must be one of "precision", "recall", '
-                f'"f1_score". Received: metric_type={metric_type}'
-            )
-
-        self.metric_type = metric_type
-        self.use_stemmer = use_stemmer
-
-        # To-do: Add an option for adding custom tokenizer after the maintainers
-        # of rouge-score have released a new version.
-        self._rouge_l_scorer = rouge_scorer.RougeScorer(
-            rouge_types=["rougeL"],
+        super().__init__(
+            variant="rougeL",
+            metric_type=metric_type,
             use_stemmer=use_stemmer,
+            dtype=dtype,
+            name=name,
+            **kwargs,
         )
-
-        self._rouge_l_score = self.add_weight(
-            name="rouge_l_score",
-            initializer="zeros",
-            dtype=self.dtype,
-        )
-        self._number_of_samples = self.add_weight(
-            name="number_of_samples", initializer="zeros", dtype=self.dtype
-        )
-
-    def update_state(self, y_true, y_pred, sample_weight=None):
-        # Three possible shapes for y_true and y_pred: Python string,
-        # [batch_size] and [batch_size, 1]. In the latter two cases, we have
-        # strings in the tensor/list.
-
-        # Check if input is a raw string/list.
-        if isinstance(y_true, str):
-            y_true = tf.constant([y_true])
-        elif isinstance(y_true, list):
-            y_true = tf.constant(y_true)
-        if isinstance(y_pred, str):
-            y_pred = tf.constant([y_pred])
-        elif isinstance(y_pred, list):
-            y_pred = tf.constant(y_pred)
-
-        # If the shape of y_true and y_pred is [batch_size, 1], squeeze it to
-        # [batch_size].
-        if y_true.shape.rank == 2:
-            y_true = tf.squeeze(y_true, axis=1)
-        if y_pred.shape.rank == 2:
-            y_pred = tf.squeeze(y_pred, axis=1)
-
-        batch_size = tf.shape(y_true)[0]
-
-        def _calculate_rouge_l_score(reference, hypothesis):
-            reference = tensor_to_string_list(reference)
-            hypothesis = tensor_to_string_list(hypothesis)
-            score = self._rouge_l_scorer.score(reference, hypothesis)["rougeL"]
-
-            if self.metric_type == "precision":
-                score = score.precision
-            elif self.metric_type == "recall":
-                score = score.recall
-            else:
-                score = score.fmeasure
-            return score
-
-        for batch_idx in range(batch_size):
-            score = tf.py_function(
-                func=_calculate_rouge_l_score,
-                inp=[y_true[batch_idx], y_pred[batch_idx]],
-                Tout=self.dtype,
-            )
-            self._rouge_l_score.assign_add(score)
-
-        self._number_of_samples.assign_add(
-            tf.cast(batch_size, dtype=self.dtype)
-        )
-
-    def result(self):
-        if self._number_of_samples == 0:
-            return 0.0
-        rouge_l_score = self._rouge_l_score / self._number_of_samples
-        return rouge_l_score
-
-    def reset_state(self):
-        self._rouge_l_score.assign(0.0)
-        self._number_of_samples.assign(0.0)
 
     def get_config(self):
         config = super().get_config()
-        config.update(
-            {
-                "metric_type": self.metric_type,
-                "use_stemmer": self.use_stemmer,
-            }
-        )
+        del config["variant"]
         return config

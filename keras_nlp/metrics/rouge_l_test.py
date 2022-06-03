@@ -15,6 +15,7 @@
 """Tests for RougeL."""
 
 import tensorflow as tf
+from tensorflow import keras
 
 from keras_nlp.metrics import RougeL
 
@@ -75,6 +76,19 @@ class RougeLTest(tf.test.TestCase):
 
         rouge_val = rouge(y_true, y_pred)
         self.assertAlmostEqual(rouge_val.numpy(), 0.807, delta=1e-3)
+
+    def model_compile(self):
+        inputs = keras.Input(shape=(), dtype="string")
+        outputs = tf.strings.lower(inputs)
+        model = keras.Model(inputs, outputs)
+
+        model.compile(metrics=[RougeL()])
+
+        x = tf.constant(["HELLO THIS IS FUN"])
+        y = tf.constant(["hello this is awesome"])
+
+        output = model.evaluate(x, y, return_dict=True)
+        self.assertAlmostEqual(output["rouge-l"], 0.75, delta=1e-3)
 
     def test_precision(self):
         rouge = RougeL(metric_type="precision", use_stemmer=False)
@@ -187,10 +201,8 @@ class RougeLTest(tf.test.TestCase):
         )
 
         config = rouge.get_config()
-        expected_config = {
+        expected_config_subset = {
             "metric_type": "precision",
             "use_stemmer": True,
-            "dtype": tf.float32,
-            "name": "rouge_l_test",
         }
-        self.assertEqual(config, expected_config)
+        self.assertEqual(config, {**config, **expected_config_subset})

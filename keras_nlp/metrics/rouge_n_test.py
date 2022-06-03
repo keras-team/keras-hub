@@ -15,6 +15,7 @@
 """Tests for RougeN."""
 
 import tensorflow as tf
+from tensorflow import keras
 
 from keras_nlp.metrics import RougeN
 
@@ -75,6 +76,19 @@ class RougeNTest(tf.test.TestCase):
 
         rouge_val = rouge(y_true, y_pred)
         self.assertAlmostEqual(rouge_val.numpy(), 0.467, delta=1e-3)
+
+    def model_compile(self):
+        inputs = keras.Input(shape=(), dtype="string")
+        outputs = tf.strings.lower(inputs)
+        model = keras.Model(inputs, outputs)
+
+        model.compile(metrics=[RougeN()])
+
+        x = tf.constant(["HELLO THIS IS FUN"])
+        y = tf.constant(["hello this is awesome"])
+
+        output = model.evaluate(x, y, return_dict=True)
+        self.assertAlmostEqual(output["rouge-n"], 0.667, delta=1e-3)
 
     def test_incorrect_order(self):
         with self.assertRaises(ValueError):
@@ -207,11 +221,10 @@ class RougeNTest(tf.test.TestCase):
         )
 
         config = rouge.get_config()
-        expected_config = {
+        expected_config_subset = {
             "order": 5,
             "metric_type": "precision",
             "use_stemmer": True,
-            "dtype": tf.float32,
-            "name": "rouge_n_test",
         }
-        self.assertEqual(config, expected_config)
+
+        self.assertEqual(config, {**config, **expected_config_subset})
