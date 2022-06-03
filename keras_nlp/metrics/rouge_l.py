@@ -127,8 +127,9 @@ class RougeL(RougeBase):
     >>> model.compile(metrics=[keras_nlp.metrics.RougeL()])
     >>> x = tf.constant(["HELLO THIS IS FUN"])
     >>> y = tf.constant(["hello this is awesome"])
-    >>> model.evaluate(x, y, return_dict=True)
-    {'loss': 0.0, 'rouge-l': 0.75}
+    >>> metric_dict = model.evaluate(x, y, return_dict=True)
+    >>> metric_dict["rouge-l"]
+    0.75
     """
 
     def __init__(
