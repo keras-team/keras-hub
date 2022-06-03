@@ -20,7 +20,7 @@ from tensorflow import keras
 
 
 class RandomDeletion(keras.layers.Layer):
-    """Augments input by randomly deleting words
+    """Augments input by randomly deleting words.
 
     Args:
         probability: probability of a word being chosen for deletion
@@ -38,7 +38,7 @@ class RandomDeletion(keras.layers.Layer):
     dtype=object)>
     """
 
-    def __init__(self, probability, max_deletions, **kwargs) -> None:
+    def __init__(self, probability, max_deletions, **kwargs):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
@@ -46,7 +46,7 @@ class RandomDeletion(keras.layers.Layer):
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer and dtype != tf.string:
                 raise ValueError(
-                    "Output dtype must be an integer type of a string. "
+                    "Output dtype must be an integer type or a string. "
                     f"Received: dtype={dtype}"
                 )
 
@@ -126,7 +126,7 @@ class RandomDeletion(keras.layers.Layer):
             inputs = inputs[0]
         return inputs
 
-    def get_config(self) -> Dict[str, Any]:
+    def get_config(self):
         config = super().get_config()
         config.update(
             {
