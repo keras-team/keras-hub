@@ -15,7 +15,7 @@
 """ROUGE-N metric implementation based on `keras.metrics.Metric`."""
 
 
-from keras_nlp.metrics.rouge import RougeBase
+from keras_nlp.metrics.rouge_base import RougeBase
 
 
 class RougeN(RougeBase):
