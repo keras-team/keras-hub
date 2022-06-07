@@ -27,12 +27,8 @@ class RougeL(RougeBase):
     common subsequence present in the reference text and the hypothesis text.
 
     Note on input shapes:
-    `y_true` and `y_pred` can be of the following types/shapes:
-    1. Python string/scalar input
-    2. Tensor/Python list
-        a. rank 0
-        b. rank 1 (every element in the tensor is a string)
-        c. rank 2 (shape: `(batch_size, 1)`)
+    For `y_true` and `y_pred`, this class supports scalar values and batch
+    inputs of shapes `()`, `(batch_size, )` and `(batch_size, 1)`.
 
     Args:
         use_stemmer: bool. Whether Porter Stemmer should be used to strip word
