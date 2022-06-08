@@ -15,12 +15,12 @@
 
 import tensorflow as tf
 
-from keras_nlp.layers import random_deletion
+from keras_nlp.layers import random_word_deletion
 
 
 class RandomDeletionTest(tf.test.TestCase):
     def test_shape_with_scalar(self):
-        augmenter = random_deletion.RandomDeletion(
+        augmenter = random_word_deletion.RandomWordDeletion(
             probability=0.5, max_deletions=3
         )
         input = ["Running Around"]
@@ -28,18 +28,17 @@ class RandomDeletionTest(tf.test.TestCase):
         self.assertAllEqual(output.shape, tf.convert_to_tensor(input).shape)
 
     def test_shape_with_nested(self):
-        augmenter = random_deletion.RandomDeletion(
+        augmenter = random_word_deletion.RandomWordDeletion(
             probability=0.5, max_deletions=3
         )
         input = [
             ["dog dog dog dog dog", "I Like CATS"],
-            ["I Like to read comics", "Shinobis and Samurais"],
         ]
         output = augmenter(input)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(input).shape)
 
     def test_get_config_and_from_config(self):
-        augmenter = random_deletion.RandomDeletion(
+        augmenter = random_word_deletion.RandomWordDeletion(
             probability=0.5, max_deletions=3
         )
 
@@ -52,7 +51,7 @@ class RandomDeletionTest(tf.test.TestCase):
 
         self.assertEqual(config, {**config, **expected_config_subset})
 
-        restored_augmenter = random_deletion.RandomDeletion.from_config(
+        restored_augmenter = random_word_deletion.RandomWordDeletion.from_config(
             config,
         )
 
