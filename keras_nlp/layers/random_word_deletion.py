@@ -11,12 +11,41 @@ class RandomWordDeletion(keras.layers.Layer):
     Examples:
 
     Basic usage.
+    >>> tf.random.get_global_generator().reset_from_seed(30)
+    >>> tf.random.set_seed(30)
     >>> augmenter = keras_nlp.layers.RandomWordDeletion(
-    ...     probability = 1,
-    ...     max_deletions = 1,
+    ...     probability = 0.7,
+    ...     max_deletions = 2,
     ... )
-    >>> augmenter(["dog dog dog dog dog"])
-    <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'dog dog dog dog'], dtype=object)>
+    >>> augmenter(["I like to fly kites, do you?", "Can we go fly some kites later?"])
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I fly kites, do you?', b'Can we fly kites later?'], dtype=object)>
+
+    Augment first, then batch the dataset.
+    >>> tf.random.get_global_generator().reset_from_seed(30)
+    >>> tf.random.set_seed(30)
+    >>> inputs = ["I like to fly kites, do you?", "Can we go fly some kites later?"]
+    >>> augmenter = keras_nlp.layers.RandomWordDeletion(
+    ...     probability = 0.6,
+    ...     max_deletions = 3,
+    ... )
+    >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
+    >>> ds = ds.map(augmenter)
+    >>> ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(3))
+    >>> ds.take(1).get_single_element()
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'fly kites, do you?', b'we go some kites'], dtype=object)>
+
+    Batch the inputs and then Augment.
+    >>> tf.random.get_global_generator().reset_from_seed(30)
+    >>> tf.random.set_seed(30)
+    >>> inputs = ["I like to fly kites, do you?", "Can we go fly some kites later?"]
+    >>> augmenter = keras_nlp.layers.RandomWordDeletion(
+    ...     probability = 0.6,
+    ...     max_deletions = 3,
+    ... )
+    >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
+    >>> ds = ds.batch(3).map(augmenter)
+    >>> ds.take(1).get_single_element()
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'fly kites, do you?', b'we go some kites'], dtype=object)>
     """
 
     def __init__(
@@ -108,10 +137,10 @@ class RandomWordDeletion(keras.layers.Layer):
             return deleted
         
         if isinstance(inputs, tf.Tensor):
-            inputs = tf.map_fn(
-                _map_fn,
-                inputs,
-            )
+            if () == inputs.get_shape():
+                inputs = tf.reshape( tf.map_fn(_map_fn, tf.reshape( inputs, ( 1, ) ) ), () ) 
+            else:
+                inputs = tf.map_fn(_map_fn, inputs)
         if isString:
             inputs = inputs[0]
         return inputs
