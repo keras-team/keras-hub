@@ -30,16 +30,22 @@ class TransformerDecoder(keras.layers.Layer):
     paper [Attention is All You Need](https://arxiv.org/abs/1706.03762). Users
     can instantiate multiple instances of this class to stack up a decoder.
 
+    This layer will always apply a causal mask to the decoder attention layer.
     This layer will correctly compute an attention mask from an implicit
     Keras padding mask (for example, by passing `mask_zero=True` to a
     `keras.layers.Embedding` layer). See the Masking and Padding
     [guide](https://keras.io/guides/understanding_masking_and_padding/)
     for more details.
 
-    If decoder_only is set to True, the encoder layer would not be built, 
-    and there should not be an encoder sequence input. 
-    If decoder_only is set to False, encoder layer would be built, and there
-    should be an encoder sequence input.
+    This layer can be called with either one or two inputs. The number of inputs
+    must be consistent across all calls. The options are as follows:
+        `layer(decoder_sequence)`: no cross-attention will be built into the 
+            decoder block. This is useful when building a "decoder-only" 
+            transformer such as GPT-2.
+        `layer(decoder_sequence, encoder_sequence)`: cross-attention will be 
+            built into the encoder block. This is useful when building an 
+            "encoder-decoder" transformer, such as the original transformer 
+            model described in Attention is All You Need.
 
     Args:
         intermediate_dim: int, the hidden size of feedforward network.
@@ -57,8 +63,6 @@ class TransformerDecoder(keras.layers.Layer):
             defaults to "zeros". The bias initializer for
             the dense and multiheaded attention layers.
         name: string, defaults to None. The name of the layer.
-        decoder_only: bool, defaults to False. If True, only the decoder layers 
-            would be built. Useful for decoder only models such as GPT2.
         **kwargs: other keyword arguments.
 
     Examples:
@@ -109,7 +113,7 @@ class TransformerDecoder(keras.layers.Layer):
         self._built = False
         self.supports_masking = True
 
-    def _build(self, input_shape, cross_attention):
+    def _build(self, input_shape, include_cross_attention):
         # Create layers based on input shape.
         self._built = True
         feature_size = input_shape[-1]
@@ -127,10 +131,10 @@ class TransformerDecoder(keras.layers.Layer):
             epsilon=self.layer_norm_epsilon,
         )
 
-        self._encoder_decoder_attention_layer = None
-        if cross_attention:
+        self._cross_attention_layer = None
+        if include_cross_attention:
             # Create layers for cross attention.
-            self._encoder_decoder_attention_layer = (
+            self._cross_attention_layer = (
                 keras.layers.MultiHeadAttention(
                     num_heads=self.num_heads,
                     key_dim=self._attention_head_size,
@@ -141,11 +145,11 @@ class TransformerDecoder(keras.layers.Layer):
                 )
             )
 
-            self._enc_dec_attention_layernorm = keras.layers.LayerNormalization(
+            self._cross_attention_layernorm = keras.layers.LayerNormalization(
                 epsilon=self.layer_norm_epsilon,
             )
 
-            self._enc_dec_attentiondropout = keras.layers.Dropout(
+            self._cross_attention_dropout = keras.layers.Dropout(
                 rate=self.dropout,
             )
         
@@ -216,25 +220,25 @@ class TransformerDecoder(keras.layers.Layer):
         if not self._built:
             self._build(decoder_sequence.shape, encoder_sequence is not None)
 
-        if (self._encoder_decoder_attention_layer is None
+        if (self._cross_attention_layer is None
             and encoder_sequence is not None):
                 raise ValueError(
                     f"The number of call arguments to "
-                    f"`keras_nlp.layers.TransformerDecoder` should not change."
-                    f"\nUse `layer(decoder_sequence, encoder_sequence)` to "
+                    f"`keras_nlp.layers.TransformerDecoder` should not change. "
+                    f"Use `layer(decoder_sequence, encoder_sequence)` to "
                     f"build a layer with cross attention, or "
-                    f"`layer(decoder_sequence)` to build a layer without.\n"
+                    f"`layer(decoder_sequence)` to build a layer without. "
                     f"This layer has been built without cross attention, but "
                     f"you are trying to call it with encoder_sequence."
                 )
-        elif (self._encoder_decoder_attention_layer is not None
+        elif (self._cross_attention_layer is not None
             and encoder_sequence is None):
             raise ValueError(
                 f"The number of call arguments to "
-                f"`keras_nlp.layers.TransformerDecoder` should not change."
-                f"\nUse `layer(decoder_sequence, encoder_sequence)` to "
+                f"`keras_nlp.layers.TransformerDecoder` should not change. "
+                f"Use `layer(decoder_sequence, encoder_sequence)` to "
                 f"build a layer with cross attention, or "
-                f"`layer(decoder_sequence)` to build a layer without.\n"
+                f"`layer(decoder_sequence)` to build a layer without. "
                 f"This layer has been built with cross attention, but "
                 f"you did not provide encoder_sequence."
             )
@@ -262,24 +266,24 @@ class TransformerDecoder(keras.layers.Layer):
             self_attended, decoder_sequence, self._decoder_attention_layernorm
         )
 
-        if self._encoder_decoder_attention_layer is not None:
+        if self._cross_attention_layer is not None:
             encoder_mask = merge_padding_and_attention_mask(
                 encoder_sequence, encoder_padding_mask, encoder_attention_mask
             )
-            # Encoder-decoder attention.
-            encoder_decoder_attended = self._encoder_decoder_attention_layer(
+            # Cross attention.
+            cross_attended = self._cross_attention_layer(
                 query=attention_output,
                 value=encoder_sequence,
                 key=encoder_sequence,
                 attention_mask=encoder_mask,
             )
-            encoder_decoder_attended = self._enc_dec_attentiondropout(
-                encoder_decoder_attended,
+            cross_attended = self._cross_attention_dropout(
+                cross_attended,
             )
             attention_output = self._add_and_norm(
-                encoder_decoder_attended,
+                cross_attended,
                 attention_output,
-                self._enc_dec_attention_layernorm,
+                self._cross_attention_layernorm,
             )
 
         # Feedforward.

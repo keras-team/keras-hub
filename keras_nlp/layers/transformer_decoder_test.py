@@ -30,39 +30,52 @@ class TransformerDecoderTest(tf.test.TestCase):
             num_heads=2,
         )
         output = decoder(decoder_input, encoder_input)
-        # should raise ValueError if encoder_input is not provided
-        try:
-            output = decoder(decoder_input)
-        except ValueError as e:
-            print(e)
         model = keras.Model(
             inputs=[decoder_input, encoder_input],
             outputs=output,
         )
-
         encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model([decoder_sequence, encoder_sequence])
 
-    def test_valid_call_without_encoder(self):
+    def test_valid_call_without_cross_attention(self):
         decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
         )
         output = decoder(decoder_input)
-        # should raise ValueError if encoder_input is provided
-        try:
-            encoder_input = keras.Input(shape=[4, 6])
-            output = decoder(decoder_input, encoder_input)
-        except ValueError as e:
-            print(e)
         model = keras.Model(
             inputs=decoder_input,
             outputs=output,
         )
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model(decoder_sequence)
+
+    def test_invalid_calls(self):
+        encoder_input = keras.Input(shape=[4, 6])
+        decoder_input = keras.Input(shape=[4, 6])
+
+        # with cross-attention.
+        decoder = transformer_decoder.TransformerDecoder(
+            intermediate_dim=4,
+            num_heads=2,
+        )
+        decoder(decoder_input, encoder_input)
+        # should raise ValueError if encoder_input is not provided
+        with self.assertRaises(ValueError):
+            decoder(decoder_input)
+
+        # without cross-attention.
+        decoder = transformer_decoder.TransformerDecoder(
+            intermediate_dim=4,
+            num_heads=2,
+        )
+        decoder(decoder_input)
+        # should raise ValueError if encoder_input is provided
+        with self.assertRaises(ValueError):
+            decoder(decoder_input, encoder_input)
+
 
     def test_get_config_and_from_config(self):
         decoder = transformer_decoder.TransformerDecoder(
@@ -104,7 +117,7 @@ class TransformerDecoderTest(tf.test.TestCase):
                 kernel_initializer="Invalid",
             )
 
-    def test_one_training_step_of_transformer_encoder(self):
+    def test_one_training_step_of_transformer_with_cross_attention(self):
         class MyModel(keras.Model):
             def __init__(self):
                 super(MyModel, self).__init__()
@@ -132,7 +145,7 @@ class TransformerDecoderTest(tf.test.TestCase):
         self.assertGreater(len(grad), 1)
         optimizer.apply_gradients(zip(grad, model.trainable_variables))
 
-    def test_one_training_step_of_transformer_without_encoder(self):
+    def test_one_training_step_of_transformer_without_cross_attention(self):
         class MyModel(keras.Model):
             def __init__(self):
                 super(MyModel, self).__init__()
@@ -192,7 +205,7 @@ class TransformerDecoderTest(tf.test.TestCase):
         )
         self.assertAllClose(decoder1_output, decoder2_output)
 
-    def test_checkpointing_transformer_decoder_without_encoder(self):
+    def test_checkpointing_transformer_decoder_without_cross_attention(self):
         decoder1 = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
@@ -235,7 +248,7 @@ class TransformerDecoderTest(tf.test.TestCase):
         outputs = decoder(decoder_sequence, encoder_sequence)
         self.assertAllEqual(outputs._keras_mask, mask)
 
-    def test_mask_propagation_without_encoder(self):
+    def test_mask_propagation_without_cross_attention(self):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
@@ -270,7 +283,7 @@ class TransformerDecoderTest(tf.test.TestCase):
 
         self.assertAllClose(model_output, loaded_model_output)
     
-    def test_save_model_without_encoder(self):
+    def test_save_model_without_cross_attention(self):
 
         decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
@@ -291,7 +304,3 @@ class TransformerDecoderTest(tf.test.TestCase):
         model_output = model(decoder_sequence)
         loaded_model_output = loaded_model(decoder_sequence)
         self.assertAllClose(model_output, loaded_model_output)
-
-
-
-
