@@ -12,10 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for Random Word Deletion Layer."""
-import os
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.layers import random_word_deletion
 
@@ -46,21 +44,21 @@ class RandomDeletionTest(tf.test.TestCase):
             probability=0.5, max_deletions=3
         )
 
-        expected_config_subset = {
-            "probability":0.5,
-            "max_deletions":3
-        }
+        expected_config_subset = {"probability": 0.5, "max_deletions": 3}
 
         config = augmenter.get_config()
 
         self.assertEqual(config, {**config, **expected_config_subset})
 
-        restored_augmenter = random_word_deletion.RandomWordDeletion.from_config(
-            config,
+        restored_augmenter = (
+            random_word_deletion.RandomWordDeletion.from_config(
+                config,
+            )
         )
 
         self.assertEqual(
-            restored_augmenter.get_config(), {**config, **expected_config_subset}
+            restored_augmenter.get_config(),
+            {**config, **expected_config_subset},
         )
 
     def test_augment_first_batch_second(self):
@@ -77,7 +75,7 @@ class RandomDeletionTest(tf.test.TestCase):
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(3))
         output = ds.take(1).get_single_element()
 
-        exp_output = [b'samurai', b'is good', b'tensorflow a library']
+        exp_output = [b"samurai", b"is good", b"tensorflow a library"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -94,7 +92,7 @@ class RandomDeletionTest(tf.test.TestCase):
         ds = ds.batch(3).map(augmenter)
         output = ds.take(1).get_single_element()
 
-        exp_output = [b'samurai', b'is good', b'tensorflow a library']
+        exp_output = [b"samurai", b"is good", b"tensorflow a library"]
 
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
