@@ -36,7 +36,7 @@ class RandomWordDeletion(keras.layers.Layer):
     ...     max_deletions = 2,
     ... )
     >>> augmenter(["I like to fly kites, do you?",
-    "Can we go fly some kites later?"])
+    ...     "Can we go fly some kites later?"])
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I fly kites, do you?',
     b'Can we fly kites later?'], dtype=object)>
 
@@ -44,7 +44,7 @@ class RandomWordDeletion(keras.layers.Layer):
     >>> tf.random.get_global_generator().reset_from_seed(30)
     >>> tf.random.set_seed(30)
     >>> inputs = ["I like to fly kites, do you?",
-    "Can we go fly some kites later?"]
+    ...     "Can we go fly some kites later?"]
     >>> augmenter = keras_nlp.layers.RandomWordDeletion(
     ...     probability = 0.6,
     ...     max_deletions = 3,
@@ -60,7 +60,7 @@ class RandomWordDeletion(keras.layers.Layer):
     >>> tf.random.get_global_generator().reset_from_seed(30)
     >>> tf.random.set_seed(30)
     >>> inputs = ["I like to fly kites, do you?",
-    "Can we go fly some kites later?"]
+    ...     "Can we go fly some kites later?"]
     >>> augmenter = keras_nlp.layers.RandomWordDeletion(
     ...     probability = 0.6,
     ...     max_deletions = 3,
