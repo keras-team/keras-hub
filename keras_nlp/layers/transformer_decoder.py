@@ -96,7 +96,6 @@ class TransformerDecoder(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         name=None,
-        decoder_only=False,
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
@@ -107,11 +106,10 @@ class TransformerDecoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
-        self.decoder_only = decoder_only
         self._built = False
         self.supports_masking = True
 
-    def _build(self, input_shape):
+    def _build(self, input_shape, cross_attention):
         # Create layers based on input shape.
         self._built = True
         feature_size = input_shape[-1]
@@ -129,7 +127,9 @@ class TransformerDecoder(keras.layers.Layer):
             epsilon=self.layer_norm_epsilon,
         )
 
-        if not self.decoder_only:
+        self._encoder_decoder_attention_layer = None
+        if cross_attention:
+            # Create layers for cross attention.
             self._encoder_decoder_attention_layer = (
                 keras.layers.MultiHeadAttention(
                     num_heads=self.num_heads,
@@ -189,14 +189,15 @@ class TransformerDecoder(keras.layers.Layer):
         decoder_attention_mask=None,
         encoder_padding_mask=None,
         encoder_attention_mask=None,
-        use_causal_mask=False,
     ):
         """Forward pass of the TransformerDecoder.
 
         Args:
             decoder_sequence: a Tensor. The decoder input sequence.
-            encoder_sequence: a Tensor. The decoder input sequence. For decoder
-                only models (like GPT2), this should be left None.
+            encoder_sequence: a Tensor. The encoder input sequence. For decoder
+                only models (like GPT2), this should be left None. Once the 
+                model is called once without an encoder_sequence, you cannot
+                call it again with encoder_sequence.
             decoder_padding_mask: a boolean Tensor, the padding mask of decoder
                 sequence, must of shape [batch_size, decoder_sequence_length].
             decoder_attention_mask: a boolean Tensor. Customized decoder
@@ -207,27 +208,47 @@ class TransformerDecoder(keras.layers.Layer):
             encoder_attention_mask: a boolean Tensor. Customized encoder
                 sequence mask, must of shape
                 [batch_size, encoder_sequence_length, encoder_sequence_length].
-            use_causal_mask: bool, defaults to False. If true, causal mask
-                (masking out future input) is applied on the decoder sequence.
-
         Returns:
             A Tensor of the same shape as the `decoder_sequence`.
         """
-        if not self._built:
-            self._build(decoder_sequence.shape)
 
+        
+        if not self._built:
+            self._build(decoder_sequence.shape, encoder_sequence is not None)
+
+        if (self._encoder_decoder_attention_layer is None
+            and encoder_sequence is not None):
+                raise ValueError(
+                    f"The number of call arguments to "
+                    f"`keras_nlp.layers.TransformerDecoder` should not change."
+                    f"\nUse `layer(decoder_sequence, encoder_sequence)` to "
+                    f"build a layer with cross attention, or "
+                    f"`layer(decoder_sequence)` to build a layer without.\n"
+                    f"This layer has been built without cross attention, but "
+                    f"you are trying to call it with encoder_sequence."
+                )
+        elif (self._encoder_decoder_attention_layer is not None
+            and encoder_sequence is None):
+            raise ValueError(
+                f"The number of call arguments to "
+                f"`keras_nlp.layers.TransformerDecoder` should not change."
+                f"\nUse `layer(decoder_sequence, encoder_sequence)` to "
+                f"build a layer with cross attention, or "
+                f"`layer(decoder_sequence)` to build a layer without.\n"
+                f"This layer has been built with cross attention, but "
+                f"you did not provide encoder_sequence."
+            )
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )
-        if use_causal_mask:
-            causal_mask = tf.cast(
-                compute_causal_mask(decoder_sequence),
-                dtype=tf.int32,
-            )
-            if decoder_mask is None:
-                decoder_mask = causal_mask
-            else:
-                decoder_mask = tf.minimum(decoder_mask, causal_mask)
+        causal_mask = tf.cast(
+            compute_causal_mask(decoder_sequence),
+            dtype=tf.int32,
+        )
+        if decoder_mask is None:
+            decoder_mask = causal_mask
+        else:
+            decoder_mask = tf.minimum(decoder_mask, causal_mask)
 
         # Decoder input self-attention.
         self_attended = self._self_attention_layer(
@@ -241,13 +262,8 @@ class TransformerDecoder(keras.layers.Layer):
             self_attended, decoder_sequence, self._decoder_attention_layernorm
         )
 
-        if self.decoder_only:
-            if encoder_sequence is not None:
-                raise ValueError(
-                    "encoder_seq should be None for decoder-only models."
-                )
-            # Skip Encoder-Decoder attention if decoder_only set to True or
-            # no encoder_sequence is provided.
+        if self._encoder_decoder_attention_layer is None:
+            # Skip Encoder-Decoder attention if no enc-dec layer.
             feed_forward_output = self._feed_forward(self_attended)
             return self._add_and_norm(
                 self_attended,
@@ -255,10 +271,6 @@ class TransformerDecoder(keras.layers.Layer):
                 self._feedforward_layernorm,
             )
         else:
-            if encoder_sequence is None:
-                raise ValueError(
-                    "encoder_seq should not be None for encoder-decoder models."
-                )
             encoder_mask = merge_padding_and_attention_mask(
                 encoder_sequence, encoder_padding_mask, encoder_attention_mask
             )
@@ -300,7 +312,6 @@ class TransformerDecoder(keras.layers.Layer):
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
                 ),
-                "decoder_only": self.decoder_only,
             }
         )
         return config

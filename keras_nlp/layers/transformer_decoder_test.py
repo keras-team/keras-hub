@@ -29,12 +29,12 @@ class TransformerDecoderTest(tf.test.TestCase):
             intermediate_dim=4,
             num_heads=2,
         )
+        output = decoder(decoder_input, encoder_input)
         # should raise ValueError if encoder_input is not provided
         try:
             output = decoder(decoder_input)
         except ValueError as e:
             print(e)
-        output = decoder(decoder_input, encoder_input)
         model = keras.Model(
             inputs=[decoder_input, encoder_input],
             outputs=output,
@@ -49,38 +49,20 @@ class TransformerDecoderTest(tf.test.TestCase):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
-            decoder_only=True,
         )
+        output = decoder(decoder_input)
         # should raise ValueError if encoder_input is provided
         try:
             encoder_input = keras.Input(shape=[4, 6])
             output = decoder(decoder_input, encoder_input)
         except ValueError as e:
             print(e)
-        output = decoder(decoder_input)
         model = keras.Model(
             inputs=decoder_input,
             outputs=output,
         )
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model(decoder_sequence)
-
-    def test_valid_call_with_mask(self):
-        decoder = transformer_decoder.TransformerDecoder(
-            intermediate_dim=4,
-            num_heads=2,
-        )
-        encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        encoder_padding_mask = encoder_sequence[:, :, 0] > 0.5
-        decoder_padding_mask = decoder_sequence[:, :, 0] > 0.5
-        decoder(
-            decoder_sequence,
-            encoder_sequence,
-            decoder_padding_mask=decoder_padding_mask,
-            encoder_padding_mask=encoder_padding_mask,
-            use_causal_mask=True,
-        )
 
     def test_get_config_and_from_config(self):
         decoder = transformer_decoder.TransformerDecoder(
@@ -91,7 +73,6 @@ class TransformerDecoderTest(tf.test.TestCase):
         )
 
         config = decoder.get_config()
-
         expected_config_subset = {
             "intermediate_dim": 4,
             "num_heads": 2,
@@ -105,51 +86,11 @@ class TransformerDecoderTest(tf.test.TestCase):
                 keras.initializers.Zeros()
             ),
         }
-
         self.assertEqual(config, {**config, **expected_config_subset})
         self.assertEqual(config, {**config, **expected_config_subset})
-
         restored_decoder = transformer_decoder.TransformerDecoder.from_config(
             config,
         )
-
-        self.assertEqual(
-            restored_decoder.get_config(), {**config, **expected_config_subset}
-        )
-    
-    def test_get_config_and_from_config_without_encoder(self):
-        decoder = transformer_decoder.TransformerDecoder(
-            intermediate_dim=4,
-            num_heads=2,
-            kernel_initializer="HeNormal",
-            bias_initializer="Zeros",
-            decoder_only=True,
-        )
-
-        config = decoder.get_config()
-
-        expected_config_subset = {
-            "intermediate_dim": 4,
-            "num_heads": 2,
-            "dropout": 0,
-            "activation": "relu",
-            "layer_norm_epsilon": 1e-05,
-            "kernel_initializer": keras.initializers.serialize(
-                keras.initializers.HeNormal()
-            ),
-            "bias_initializer": keras.initializers.serialize(
-                keras.initializers.Zeros()
-            ),
-            "decoder_only": True,
-        }
-
-        self.assertEqual(config, {**config, **expected_config_subset})
-        self.assertEqual(config, {**config, **expected_config_subset})
-
-        restored_decoder = transformer_decoder.TransformerDecoder.from_config(
-            config,
-        )
-
         self.assertEqual(
             restored_decoder.get_config(), {**config, **expected_config_subset}
         )
@@ -196,7 +137,7 @@ class TransformerDecoderTest(tf.test.TestCase):
             def __init__(self):
                 super(MyModel, self).__init__()
                 self._decoder = transformer_decoder.TransformerDecoder(
-                    intermediate_dim=4, num_heads=2, decoder_only=True,
+                    intermediate_dim=4, num_heads=2,
                 )
                 self._dense = keras.layers.Dense(1, activation="sigmoid")
 
@@ -223,7 +164,6 @@ class TransformerDecoderTest(tf.test.TestCase):
             intermediate_dim=4,
             num_heads=2,
         )
-
         decoder2 = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
@@ -256,13 +196,11 @@ class TransformerDecoderTest(tf.test.TestCase):
         decoder1 = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
-            decoder_only=True,
         )
 
         decoder2 = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
-            decoder_only=True,
         )
 
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
@@ -282,9 +220,7 @@ class TransformerDecoderTest(tf.test.TestCase):
         checkpoint2.restore(save_path)
 
         decoder1_output = decoder1(decoder_sequence)
-        decoder2_output = decoder2(
-            decoder_sequence,
-        )
+        decoder2_output = decoder2(decoder_sequence)
         self.assertAllClose(decoder1_output, decoder2_output)
 
     def test_mask_propagation(self):
@@ -303,7 +239,6 @@ class TransformerDecoderTest(tf.test.TestCase):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
-            decoder_only=True,
         )
         decoder_sequence = tf.random.uniform(shape=[1, 4, 6])
         mask = tf.constant([[True, True, False, False]])
@@ -325,11 +260,38 @@ class TransformerDecoderTest(tf.test.TestCase):
         )
         encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        model([encoder_sequence, decoder_sequence])
+        model([decoder_sequence, encoder_sequence])
+        path = os.path.join(self.get_temp_dir(), "model")
+        model.save(path)
+        
+        loaded_model = keras.models.load_model(path)
+        model_output = model([decoder_sequence, encoder_sequence])
+        loaded_model_output = loaded_model([decoder_sequence, encoder_sequence])
+
+        self.assertAllClose(model_output, loaded_model_output)
+    
+    def test_save_model_without_encoder(self):
+
+        decoder_input = keras.Input(shape=[4, 6])
+        decoder = transformer_decoder.TransformerDecoder(
+            intermediate_dim=4,
+            num_heads=2,
+        )
+        output = decoder(decoder_input)
+        model = keras.Model(
+            inputs=decoder_input,
+            outputs=output,
+        )
+        decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
+        model(decoder_sequence)
         path = os.path.join(self.get_temp_dir(), "model")
         model.save(path)
         loaded_model = keras.models.load_model(path)
 
-        model_output = model([decoder_sequence, encoder_sequence])
-        loaded_model_output = loaded_model([decoder_sequence, encoder_sequence])
+        model_output = model(decoder_sequence)
+        loaded_model_output = loaded_model(decoder_sequence)
         self.assertAllClose(model_output, loaded_model_output)
+
+
+
+
