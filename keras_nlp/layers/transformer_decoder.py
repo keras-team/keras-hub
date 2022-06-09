@@ -263,13 +263,7 @@ class TransformerDecoder(keras.layers.Layer):
         )
 
         if self._encoder_decoder_attention_layer is None:
-            # Skip Encoder-Decoder attention if no enc-dec layer.
-            feed_forward_output = self._feed_forward(self_attended)
-            return self._add_and_norm(
-                self_attended,
-                feed_forward_output,
-                self._feedforward_layernorm,
-            )
+            attention_output = self_attended
         else:
             encoder_mask = merge_padding_and_attention_mask(
                 encoder_sequence, encoder_padding_mask, encoder_attention_mask
@@ -289,13 +283,15 @@ class TransformerDecoder(keras.layers.Layer):
                 self_attended,
                 self._enc_dec_attention_layernorm,
             )
-            # Feedforward.
-            feed_forward_output = self._feed_forward(encoder_decoder_attended)
-            return self._add_and_norm(
-                encoder_decoder_attended,
-                feed_forward_output,
-                self._feedforward_layernorm,
-            )            
+            attention_output = encoder_decoder_attended
+
+        # Feedforward.
+        feed_forward_output = self._feed_forward(attention_output)
+        return self._add_and_norm(
+            attention_output,
+            feed_forward_output,
+            self._feedforward_layernorm,
+        )            
 
     def get_config(self):
         config = super().get_config()
