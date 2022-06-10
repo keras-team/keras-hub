@@ -72,7 +72,7 @@ class RandomWordDeletion(keras.layers.Layer):
     b'we go some kites'], dtype=object)>
     """
 
-    def __init__(self, probability, max_deletions, **kwargs):
+    def __init__(self, probability, max_deletions, name = None, **kwargs):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
@@ -84,7 +84,7 @@ class RandomWordDeletion(keras.layers.Layer):
                     f"Received: dtype={dtype}"
                 )
 
-        super().__init__(**kwargs)
+        super().__init__(name=name, **kwargs)
         self.probability = probability
         self.max_deletions = max_deletions
 
@@ -96,14 +96,32 @@ class RandomWordDeletion(keras.layers.Layer):
             A tensor or nested tensor of augmented strings.
         """
 
+        def validate_and_fix_rank(inputs):
+            if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+                inputs = tf.convert_to_tensor(inputs)
+                inputs = tf.cast(inputs, tf.string)
+            if inputs.shape.rank == 0 or inputs.shape.rank == 1:
+                return inputs
+            elif inputs.shape.rank == 2:
+                if inputs.shape[1] != 1:
+                    raise ValueError(
+                        f"input must be of shape `[batch_size, 1]`. "
+                        f"Found shape: {inputs.shape}"
+                    )
+                else:
+                    return tf.squeeze(inputs, axis=1)
+            else:
+                raise ValueError(
+                    f"input must be of rank 0 (scalar input), 1 or 2. "
+                    f"Found rank: {inputs.shape.rank}"
+                )
+
         isString = False
         if isinstance(inputs, str):
             inputs = [inputs]
             isString = True
 
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
-            inputs = tf.cast(inputs, tf.string)
+        inputs = validate_and_fix_rank(inputs)
 
         scalar_input = inputs.shape.rank == 0
         if scalar_input:
