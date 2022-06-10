@@ -48,12 +48,7 @@ class RougeN(RougeBase):
     >>> y_true = "the tiny little cat was found under the big funny bed"
     >>> y_pred = "the cat was under the bed"
     >>> rouge_n(y_true, y_pred)
-    {
-        'rouge-n_precision': <tf.Tensor: shape=(), dtype=float32, numpy=0.4>,
-        'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.2>,
-        'rouge-n_f1_score':
-            <tf.Tensor: shape=(), dtype=float32, numpy=0.26666668>
-    }
+    {'rouge-n_precision': <tf.Tensor: shape=(), dtype=float32, numpy=0.4>, 'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.2>, 'rouge-n_f1_score': <tf.Tensor: shape=(), dtype=float32, numpy=0.26666668>}
 
     1.2. rank 1 inputs.
     a. Python list.
@@ -67,12 +62,7 @@ class RougeN(RougeBase):
     ...     "i love contributing to KerasNLP",
     ... ]
     >>> rouge_n(y_true, y_pred)
-    {
-        'rouge-n_precision': <tf.Tensor: shape=(), dtype=float32, numpy=0.575>,
-        'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.4>,
-        'rouge-n_f1_score':
-            <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>
-    }
+    {'rouge-n_precision': <tf.Tensor: shape=(), dtype=float32, numpy=0.575>, 'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.4>, 'rouge-n_f1_score': <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>}
 
     b. Tensor.
     >>> rouge_n = keras_nlp.metrics.RougeN(order=2)
@@ -89,12 +79,7 @@ class RougeN(RougeBase):
     ...     ]
     ... )
     >>> rouge_n(y_true, y_pred)
-    {
-        'rouge-n_precision': <tf.Tensor: shape=(), dtype=float32, numpy=0.575>,
-        'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.4>,
-        'rouge-n_f1_score':
-            <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>
-    }
+    {'rouge-n_precision': <tf.Tensor: shape=(), dtype=float32, numpy=0.575>, 'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.4>, 'rouge-n_f1_score': <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>}
 
     1.3. rank 2 inputs.
     >>> rouge_n = keras_nlp.metrics.RougeN(order=2)
@@ -111,12 +96,7 @@ class RougeN(RougeBase):
     ...     ]
     ... )
     >>> rouge_n(y_true, y_pred)
-    {
-        'rouge-n_precision': <tf.Tensor: shape=(), dtype=float32, numpy=0.575>,
-        'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.4>,
-        'rouge-n_f1_score':
-            <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>
-    }
+    {'rouge-n_precision': <tf.Tensor: shape=(), dtype=float32, numpy=0.575>, 'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.4>, 'rouge-n_f1_score': <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>}
 
     2. Consider trigrams for calculating ROUGE-N.
     >>> rouge_n = keras_nlp.metrics.RougeN(order=3)
@@ -133,13 +113,7 @@ class RougeN(RougeBase):
     ...     ]
     ... )
     >>> rouge_n(y_true, y_pred)
-    {
-        'rouge-n_precision':
-            <tf.Tensor: shape=(), dtype=float32, numpy=0.33333334>,
-        'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.25>,
-        'rouge-n_f1_score':
-            <tf.Tensor: shape=(), dtype=float32, numpy=0.2857143>
-    }
+    {'rouge-n_precision': <tf.Tensor: shape=(), dtype=float32, numpy=0.33333334>, 'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.25>, 'rouge-n_f1_score': <tf.Tensor: shape=(), dtype=float32, numpy=0.2857143>}
 
     3. Pass the metric to `model.compile()`.
     >>> inputs = keras.Input(shape=(), dtype='string')
@@ -150,12 +124,7 @@ class RougeN(RougeBase):
     >>> y = tf.constant(["hello this is awesome"])
     >>> metric_dict = model.evaluate(x, y, return_dict=True)
     >>> metric_dict
-    {
-        'loss': 0.0,
-        'rouge-n_precision': 0.6666666865348816,
-        'rouge-n_recall': 0.6666666865348816,
-        'rouge-n_f1_score': 0.6666666865348816
-    }
+    {'loss': 0.0, 'rouge-n_precision': 0.6666666865348816, 'rouge-n_recall': 0.6666666865348816, 'rouge-n_f1_score': 0.6666666865348816}
     """
 
     def __init__(
