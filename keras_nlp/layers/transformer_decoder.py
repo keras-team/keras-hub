@@ -214,11 +214,12 @@ class TransformerDecoder(keras.layers.Layer):
         Returns:
             A Tensor of the same shape as the `decoder_sequence`.
         """
+        has_encoder_sequence = encoder_sequence is not None
         if not self._built:
-            self._build(decoder_sequence.shape, encoder_sequence is not None)
+            self._build(decoder_sequence.shape, has_encoder_sequence)
 
-        if (self._cross_attention_layer is None
-            and encoder_sequence is not None):
+        is_cross_attention = self._cross_attention_layer is not None
+        if (not is_cross_attention and has_encoder_sequence):
             raise ValueError(
                 "The number of call arguments to "
                 "`keras_nlp.layers.TransformerDecoder` should not change. "
@@ -228,8 +229,7 @@ class TransformerDecoder(keras.layers.Layer):
                 "This layer has been built without cross attention, but "
                 "you are trying to call it with encoder_sequence."
             )
-        elif (self._cross_attention_layer is not None
-              and encoder_sequence is None):
+        elif (is_cross_attention and not has_encoder_sequence):
             raise ValueError(
                 "The number of call arguments to "
                 "`keras_nlp.layers.TransformerDecoder` should not change. "
