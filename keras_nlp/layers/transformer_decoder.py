@@ -39,12 +39,12 @@ class TransformerDecoder(keras.layers.Layer):
 
     This layer can be called with either one or two inputs. The number of inputs
     must be consistent across all calls. The options are as follows:
-        `layer(decoder_sequence)`: no cross-attention will be built into the 
-            decoder block. This is useful when building a "decoder-only" 
+        `layer(decoder_sequence)`: no cross-attention will be built into the
+            decoder block. This is useful when building a "decoder-only"
             transformer such as GPT-2.
-        `layer(decoder_sequence, encoder_sequence)`: cross-attention will be 
-            built into the encoder block. This is useful when building an 
-            "encoder-decoder" transformer, such as the original transformer 
+        `layer(decoder_sequence, encoder_sequence)`: cross-attention will be
+            built into the encoder block. This is useful when building an
+            "encoder-decoder" transformer, such as the original transformer
             model described in Attention is All You Need.
 
     Args:
@@ -152,13 +152,13 @@ class TransformerDecoder(keras.layers.Layer):
             self._cross_attention_dropout = keras.layers.Dropout(
                 rate=self.dropout,
             )
-        
+
         self._feedforward_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
 
         self._self_attention_dropout = keras.layers.Dropout(rate=self.dropout)
-        
+
         # First dense layer in the feedforward network, which maps input
         # feauture size to dimension `self.intermediate_dim`.
         self._intermediate_dense = keras.layers.Dense(
@@ -175,7 +175,6 @@ class TransformerDecoder(keras.layers.Layer):
             bias_initializer=self.bias_initializer,
         )
         self._output_dropout = keras.layers.Dropout(rate=self.dropout)
-
 
     def _add_and_norm(self, input1, input2, norm_layer):
         return norm_layer(input1 + input2)
@@ -199,7 +198,7 @@ class TransformerDecoder(keras.layers.Layer):
         Args:
             decoder_sequence: a Tensor. The decoder input sequence.
             encoder_sequence: a Tensor. The encoder input sequence. For decoder
-                only models (like GPT2), this should be left None. Once the 
+                only models (like GPT2), this should be left None. Once the
                 model is called once without an encoder_sequence, you cannot
                 call it again with encoder_sequence.
             decoder_padding_mask: a boolean Tensor, the padding mask of decoder
@@ -215,32 +214,30 @@ class TransformerDecoder(keras.layers.Layer):
         Returns:
             A Tensor of the same shape as the `decoder_sequence`.
         """
-
-        
         if not self._built:
             self._build(decoder_sequence.shape, encoder_sequence is not None)
 
-        if (self._cross_attention_layer is None
-            and encoder_sequence is not None):
-                raise ValueError(
-                    f"The number of call arguments to "
-                    f"`keras_nlp.layers.TransformerDecoder` should not change. "
-                    f"Use `layer(decoder_sequence, encoder_sequence)` to "
-                    f"build a layer with cross attention, or "
-                    f"`layer(decoder_sequence)` to build a layer without. "
-                    f"This layer has been built without cross attention, but "
-                    f"you are trying to call it with encoder_sequence."
-                )
-        elif (self._cross_attention_layer is not None
-            and encoder_sequence is None):
+        if (self._cross_attention_layer is None 
+        and encoder_sequence is not None):
             raise ValueError(
-                f"The number of call arguments to "
-                f"`keras_nlp.layers.TransformerDecoder` should not change. "
-                f"Use `layer(decoder_sequence, encoder_sequence)` to "
-                f"build a layer with cross attention, or "
-                f"`layer(decoder_sequence)` to build a layer without. "
-                f"This layer has been built with cross attention, but "
-                f"you did not provide encoder_sequence."
+                "The number of call arguments to "
+                "`keras_nlp.layers.TransformerDecoder` should not change. "
+                "Use `layer(decoder_sequence, encoder_sequence)` to "
+                "build a layer with cross attention, or "
+                "`layer(decoder_sequence)` to build a layer without. "
+                "This layer has been built without cross attention, but "
+                "you are trying to call it with encoder_sequence."
+            )
+        elif (self._cross_attention_layer is not None
+        and encoder_sequence is None):
+            raise ValueError(
+                "The number of call arguments to "
+                "`keras_nlp.layers.TransformerDecoder` should not change. "
+                "Use `layer(decoder_sequence, encoder_sequence)` to "
+                "build a layer with cross attention, or "
+                "`layer(decoder_sequence)` to build a layer without. "
+                "This layer has been built with cross attention, but "
+                "you did not provide encoder_sequence."
             )
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
@@ -292,7 +289,7 @@ class TransformerDecoder(keras.layers.Layer):
             attention_output,
             feed_forward_output,
             self._feedforward_layernorm,
-        )            
+        )
 
     def get_config(self):
         config = super().get_config()

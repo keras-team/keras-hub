@@ -76,7 +76,6 @@ class TransformerDecoderTest(tf.test.TestCase):
         with self.assertRaises(ValueError):
             decoder(decoder_input, encoder_input)
 
-
     def test_get_config_and_from_config(self):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
@@ -276,15 +275,13 @@ class TransformerDecoderTest(tf.test.TestCase):
         model([decoder_sequence, encoder_sequence])
         path = os.path.join(self.get_temp_dir(), "model")
         model.save(path)
-        
+
         loaded_model = keras.models.load_model(path)
         model_output = model([decoder_sequence, encoder_sequence])
         loaded_model_output = loaded_model([decoder_sequence, encoder_sequence])
-
         self.assertAllClose(model_output, loaded_model_output)
-    
-    def test_save_model_without_cross_attention(self):
 
+    def test_save_model_without_cross_attention(self):
         decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
