@@ -217,8 +217,8 @@ class TransformerDecoder(keras.layers.Layer):
         if not self._built:
             self._build(decoder_sequence.shape, encoder_sequence is not None)
 
-        if (self._cross_attention_layer is None 
-        and encoder_sequence is not None):
+        if (self._cross_attention_layer is None
+            and encoder_sequence is not None):
             raise ValueError(
                 "The number of call arguments to "
                 "`keras_nlp.layers.TransformerDecoder` should not change. "
@@ -229,7 +229,7 @@ class TransformerDecoder(keras.layers.Layer):
                 "you are trying to call it with encoder_sequence."
             )
         elif (self._cross_attention_layer is not None
-        and encoder_sequence is None):
+              and encoder_sequence is None):
             raise ValueError(
                 "The number of call arguments to "
                 "`keras_nlp.layers.TransformerDecoder` should not change. "

@@ -198,10 +198,7 @@ class TransformerDecoderTest(tf.test.TestCase):
         checkpoint2.restore(save_path)
 
         decoder1_output = decoder1(decoder_sequence, encoder_sequence)
-        decoder2_output = decoder2(
-            decoder_sequence,
-            encoder_sequence,
-        )
+        decoder2_output = decoder2(decoder_sequence, encoder_sequence)
         self.assertAllClose(decoder1_output, decoder2_output)
 
     def test_checkpointing_transformer_decoder_without_cross_attention(self):
