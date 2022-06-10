@@ -33,8 +33,6 @@ class RougeN(RougeBase):
     Args:
         order: The order of n-grams which are to be matched. It should lie in
             range [1, 9]. Defaults to 2.
-        metric_type: string. One of "precision", "recall", "f1_score". Defaults
-            to "f1_score".
         use_stemmer: bool. Whether Porter Stemmer should be used to strip word
             suffixes to improve matching. Defaults to False.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
@@ -50,7 +48,12 @@ class RougeN(RougeBase):
     >>> y_true = "the tiny little cat was found under the big funny bed"
     >>> y_pred = "the cat was under the bed"
     >>> rouge_n(y_true, y_pred)
-    <tf.Tensor: shape=(), dtype=float32, numpy=0.26666668>
+    {
+        'rouge-n_precision': <tf.Tensor: shape=(), dtype=float32, numpy=0.4>,
+        'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.2>,
+        'rouge-n_f1_score':
+            <tf.Tensor: shape=(), dtype=float32, numpy=0.26666668>
+    }
 
     1.2. rank 1 inputs.
     a. Python list.
@@ -64,7 +67,12 @@ class RougeN(RougeBase):
     ...     "i love contributing to KerasNLP",
     ... ]
     >>> rouge_n(y_true, y_pred)
-    <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>
+    {
+        'rouge-n_precision': <tf.Tensor: shape=(), dtype=float32, numpy=0.575>,
+        'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.4>,
+        'rouge-n_f1_score':
+            <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>
+    }
 
     b. Tensor.
     >>> rouge_n = keras_nlp.metrics.RougeN(order=2)
@@ -81,7 +89,12 @@ class RougeN(RougeBase):
     ...     ]
     ... )
     >>> rouge_n(y_true, y_pred)
-    <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>
+    {
+        'rouge-n_precision': <tf.Tensor: shape=(), dtype=float32, numpy=0.575>,
+        'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.4>,
+        'rouge-n_f1_score':
+            <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>
+    }
 
     1.3. rank 2 inputs.
     >>> rouge_n = keras_nlp.metrics.RougeN(order=2)
@@ -98,7 +111,12 @@ class RougeN(RougeBase):
     ...     ]
     ... )
     >>> rouge_n(y_true, y_pred)
-    <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>
+    {
+        'rouge-n_precision': <tf.Tensor: shape=(), dtype=float32, numpy=0.575>,
+        'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.4>,
+        'rouge-n_f1_score':
+            <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>
+    }
 
     2. Consider trigrams for calculating ROUGE-N.
     >>> rouge_n = keras_nlp.metrics.RougeN(order=3)
@@ -115,26 +133,15 @@ class RougeN(RougeBase):
     ...     ]
     ... )
     >>> rouge_n(y_true, y_pred)
-    <tf.Tensor: shape=(), dtype=float32, numpy=0.2857143>
+    {
+        'rouge-n_precision':
+            <tf.Tensor: shape=(), dtype=float32, numpy=0.33333334>,
+        'rouge-n_recall': <tf.Tensor: shape=(), dtype=float32, numpy=0.25>,
+        'rouge-n_f1_score':
+            <tf.Tensor: shape=(), dtype=float32, numpy=0.2857143>
+    }
 
-    3. Output the precision instead of the F1 Score.
-    >>> rouge_n = keras_nlp.metrics.RougeN(order=3, metric_type="precision")
-    >>> y_true = tf.constant(
-    ...     [
-    ...         "the tiny little cat was found under the big funny bed",
-    ...         "i really love contributing to KerasNLP",
-    ...     ]
-    ... )
-    >>> y_pred = tf.constant(
-    ...     [
-    ...         "the cat was under the bed",
-    ...         "i love contributing to KerasNLP",
-    ...     ]
-    ... )
-    >>> rouge_n(y_true, y_pred)
-    <tf.Tensor: shape=(), dtype=float32, numpy=0.33333334>
-
-    4. Pass the metric to `model.compile()`.
+    3. Pass the metric to `model.compile()`.
     >>> inputs = keras.Input(shape=(), dtype='string')
     >>> outputs = tf.strings.lower(inputs)
     >>> model = keras.Model(inputs, outputs)
@@ -142,14 +149,18 @@ class RougeN(RougeBase):
     >>> x = tf.constant(["HELLO THIS IS FUN"])
     >>> y = tf.constant(["hello this is awesome"])
     >>> metric_dict = model.evaluate(x, y, return_dict=True)
-    >>> metric_dict["rouge-n"]
-    0.6666666865348816
+    >>> metric_dict
+    {
+        'loss': 0.0,
+        'rouge-n_precision': 0.6666666865348816,
+        'rouge-n_recall': 0.6666666865348816,
+        'rouge-n_f1_score': 0.6666666865348816
+    }
     """
 
     def __init__(
         self,
         order=2,
-        metric_type="f1_score",
         use_stemmer=False,
         dtype=None,
         name="rouge-n",
@@ -163,7 +174,6 @@ class RougeN(RougeBase):
 
         super().__init__(
             variant=f"rouge{order}",
-            metric_type=metric_type,
             use_stemmer=use_stemmer,
             dtype=dtype,
             name=name,
