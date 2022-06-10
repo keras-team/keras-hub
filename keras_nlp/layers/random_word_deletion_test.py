@@ -27,17 +27,6 @@ class RandomDeletionTest(tf.test.TestCase):
         output = augmenter(input)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(input).shape)
 
-    def test_shape_with_nested(self):
-        augmenter = random_word_deletion.RandomWordDeletion(
-            probability=0.5, max_deletions=3
-        )
-        input = [
-            ["dog dog dog dog dog", "I Like CATS"],
-            ["I Like to read comics", "Shinobis and Samurais"],
-        ]
-        output = augmenter(input)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(input).shape)
-
     def test_get_config_and_from_config(self):
 
         augmenter = random_word_deletion.RandomWordDeletion(
@@ -92,7 +81,7 @@ class RandomDeletionTest(tf.test.TestCase):
         ds = ds.batch(3).map(augmenter)
         output = ds.take(1).get_single_element()
 
-        exp_output = [b"samurai", b"is good", b"tensorflow a library"]
+        exp_output = [b"samurai", b"is good", b"tensorflow"]
 
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
