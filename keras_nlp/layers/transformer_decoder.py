@@ -43,7 +43,7 @@ class TransformerDecoder(keras.layers.Layer):
             decoder block. This is useful when building a "decoder-only"
             transformer such as GPT-2.
         `layer(decoder_sequence, encoder_sequence)`: cross-attention will be
-            built into the encoder block. This is useful when building an
+            built into the decoder block. This is useful when building an
             "encoder-decoder" transformer, such as the original transformer
             model described in Attention is All You Need.
 
