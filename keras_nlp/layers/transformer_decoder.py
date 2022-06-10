@@ -134,15 +134,13 @@ class TransformerDecoder(keras.layers.Layer):
         self._cross_attention_layer = None
         if include_cross_attention:
             # Create layers for cross attention.
-            self._cross_attention_layer = (
-                keras.layers.MultiHeadAttention(
-                    num_heads=self.num_heads,
-                    key_dim=self._attention_head_size,
-                    value_dim=feature_size,
-                    dropout=self.dropout,
-                    kernel_initializer=self.kernel_initializer,
-                    bias_initializer=self.bias_initializer,
-                )
+            self._cross_attention_layer = keras.layers.MultiHeadAttention(
+                num_heads=self.num_heads,
+                key_dim=self._attention_head_size,
+                value_dim=feature_size,
+                dropout=self.dropout,
+                kernel_initializer=self.kernel_initializer,
+                bias_initializer=self.bias_initializer,
             )
 
             self._cross_attention_layernorm = keras.layers.LayerNormalization(
@@ -219,7 +217,7 @@ class TransformerDecoder(keras.layers.Layer):
             self._build(decoder_sequence.shape, has_encoder_sequence)
 
         is_cross_attention = self._cross_attention_layer is not None
-        if (not is_cross_attention and has_encoder_sequence):
+        if not is_cross_attention and has_encoder_sequence:
             raise ValueError(
                 "The number of call arguments to "
                 "`keras_nlp.layers.TransformerDecoder` should not change. "
@@ -229,7 +227,7 @@ class TransformerDecoder(keras.layers.Layer):
                 "This layer has been built without cross attention, but "
                 "you are trying to call it with encoder_sequence."
             )
-        elif (is_cross_attention and not has_encoder_sequence):
+        elif is_cross_attention and not has_encoder_sequence:
             raise ValueError(
                 "The number of call arguments to "
                 "`keras_nlp.layers.TransformerDecoder` should not change. "
