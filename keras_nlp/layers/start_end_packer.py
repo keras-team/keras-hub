@@ -59,6 +59,7 @@ class StartEndPacker(keras.layers.Layer):
     def call(self, inputs):
         input_is_tensor = isinstance(inputs, tf.Tensor)
         input_is_ragged = isinstance(inputs, tf.RaggedTensor)
+
         if input_is_tensor:
             if inputs.shape.rank != 1:
                 raise ValueError(
@@ -68,19 +69,19 @@ class StartEndPacker(keras.layers.Layer):
 
             # Add a new axis at the beginning and convert to ragged tensor.
             inputs = tf.RaggedTensor.from_tensor(tf.expand_dims(inputs, axis=0))
-            batch_size = 1
         elif input_is_ragged:
             if inputs.shape.rank != 2:
                 raise ValueError(
                     "Input ragged tensor must be of rank 2. "
                     f"Found rank={inputs.shape.rank}"
                 )
-            batch_size = tf.shape(inputs)[0]
         else:
             raise ValueError(
-                "Inputs must be a `tf.Tensor` or `tf.RaggedTensor`, "
+                "Input must be of type `tf.Tensor` or `tf.RaggedTensor`, "
                 f"but got {type(inputs)}"
             )
+
+        batch_size = inputs.shape[0]
 
         # Concatenate start and end tokens.
         if self.start_value is not None:
