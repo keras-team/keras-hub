@@ -38,6 +38,49 @@ class StartEndPacker(keras.layers.Layer):
         pad_value: int/str. The ID or token that is to be placed into the
             unused positions after the last segment in the sequence. If None,
             0 or "" will be added depending on the dtype of the input tensor.
+
+    Examples:
+
+    Unbatched input (int).
+    >>> input_data = tf.constant([5, 6, 7])
+    >>> start_end_packer = keras_nlp.layers.StartEndPacker(
+    ...     sequence_length=7, start_value=1, end_value=2, pad_value=0
+    ... )
+    >>> start_end_packer(input_data)
+    <tf.Tensor: shape=(7,), dtype=int32, numpy=
+    array([1, 5, 6, 7, 2, 0, 0], dtype=int32)>
+
+    Batched input (int).
+    >>> input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]])
+    >>> start_end_packer = keras_nlp.layers.StartEndPacker(
+    ...     sequence_length=6, start_value=1, end_value=2, pad_value=0
+    ... )
+    >>> start_end_packer(input_data)
+    <tf.Tensor: shape=(2, 6), dtype=int32, numpy=
+    array([[ 1,  5,  6,  7,  2,  0],
+           [ 1,  8,  9, 10, 11,  2]], dtype=int32)>
+
+    Unbatched input (str).
+    >>> input_data = tf.constant(["this", "is", "fun"])
+    >>> start_end_packer = keras_nlp.layers.StartEndPacker(
+    ...     sequence_length=6, start_value="<s>", end_value="</s>",
+    ...     pad_value="<pad>"
+    ... )
+    >>> start_end_packer(input_data)
+    <tf.Tensor: shape=(6,), dtype=string, numpy=
+    array([b'<s>', b'this', b'is', b'fun', b'</s>', b'<pad>'], dtype=object)>
+
+    Batched input (str).
+    >>> input_data = tf.ragged.constant([["this", "is", "fun"], ["awesome"]])
+    >>> start_end_packer = keras_nlp.layers.StartEndPacker(
+    ...     sequence_length=6, start_value="<s>", end_value="</s>",
+    ...     pad_value="<pad>"
+    ... )
+    >>> start_end_packer(input_data)
+    <tf.Tensor: shape=(2, 6), dtype=string, numpy=
+    array([[b'<s>', b'this', b'is', b'fun', b'</s>', b'<pad>'],
+           [b'<s>', b'awesome', b'</s>', b'<pad>', b'<pad>', b'<pad>']],
+          dtype=object)>
     """
 
     def __init__(
