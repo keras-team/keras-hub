@@ -20,18 +20,14 @@ from keras_nlp.layers import random_swaps
 
 class RandomDeletionTest(tf.test.TestCase):
     def test_shape_with_scalar(self):
-        augmenter = random_swaps.RandomSwaps(
-            swaps = 3
-        )
+        augmenter = random_swaps.RandomSwaps(swaps=3)
         input = ["Running Around"]
         output = augmenter(input)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(input).shape)
 
     def test_get_config_and_from_config(self):
 
-        augmenter = random_swaps.RandomSwaps(
-            swaps = 3
-        )
+        augmenter = random_swaps.RandomSwaps(swaps=3)
 
         expected_config_subset = {"swaps": 3}
 
@@ -39,10 +35,8 @@ class RandomDeletionTest(tf.test.TestCase):
 
         self.assertEqual(config, {**config, **expected_config_subset})
 
-        restored_augmenter = (
-            random_swaps.RandomSwaps.from_config(
-                config,
-            )
+        restored_augmenter = random_swaps.RandomSwaps.from_config(
+            config,
         )
 
         self.assertEqual(
@@ -52,9 +46,7 @@ class RandomDeletionTest(tf.test.TestCase):
 
     def test_augment_first_batch_second(self):
         tf.random.set_seed(30)
-        augmenter = random_swaps.RandomSwaps(
-            swaps=3
-        )
+        augmenter = random_swaps.RandomSwaps(swaps=3)
 
         ds = tf.data.Dataset.from_tensor_slices(
             ["samurai or ninja", "keras is good", "tensorflow is a library"]
@@ -63,15 +55,17 @@ class RandomDeletionTest(tf.test.TestCase):
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(3))
         output = ds.take(1).get_single_element()
 
-        exp_output = [b'samurai ninja or', b'is keras good', b'a is tensorflow library']
+        exp_output = [
+            b"samurai ninja or",
+            b"is keras good",
+            b"a is tensorflow library",
+        ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_batch_first_augment_second(self):
         tf.random.set_seed(30)
-        augmenter = random_swaps.RandomSwaps(
-            swaps=3
-        )
+        augmenter = random_swaps.RandomSwaps(swaps=3)
 
         ds = tf.data.Dataset.from_tensor_slices(
             ["samurai or ninja", "keras is good", "tensorflow is a library"]
@@ -79,7 +73,11 @@ class RandomDeletionTest(tf.test.TestCase):
         ds = ds.batch(3).map(augmenter)
         output = ds.take(1).get_single_element()
 
-        exp_output = [b'samurai ninja or', b'is keras good', b'a is tensorflow library']
+        exp_output = [
+            b"samurai ninja or",
+            b"is keras good",
+            b"a is tensorflow library",
+        ]
 
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])

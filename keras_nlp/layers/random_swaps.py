@@ -69,7 +69,8 @@ class RandomSwaps(keras.layers.Layer):
     array([b'fly like I to kites, do you?',
            b'Can fly go we later? kites some'], dtype=object)>
     """
-    def __init__(self, swaps, name = None, **kwargs):
+
+    def __init__(self, swaps, name=None, **kwargs):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
@@ -132,17 +133,24 @@ class RandomSwaps(keras.layers.Layer):
         # Swap items
         def _swap(positions):
             # swap n times
-            if (tf.size(positions) == 1):
-              return positions
+            if tf.size(positions) == 1:
+                return positions
             for _ in range(self.swaps):
                 index = tf.random.uniform(
-                    shape=tf.shape(positions), minval=0, maxval=tf.size(positions),  dtype=tf.int32
+                    shape=tf.shape(positions),
+                    minval=0,
+                    maxval=tf.size(positions),
+                    dtype=tf.int32,
                 )
                 # sample 2 random indices from the tensor
                 shuffled = tf.random.shuffle(index)
                 index1, index2 = shuffled[0], shuffled[1]
                 # swap items at the sampled indices with each other
-                positions = tf.tensor_scatter_nd_update(positions, [[index1], [index2]], [positions[index2], positions[index1]])
+                positions = tf.tensor_scatter_nd_update(
+                    positions,
+                    [[index1], [index2]],
+                    [positions[index2], positions[index1]],
+                )
             return positions
 
         shuffled = tf.map_fn(
@@ -156,12 +164,11 @@ class RandomSwaps(keras.layers.Layer):
         shuffled.flat_values.set_shape([None])
 
         swapped = tf.RaggedTensor.from_row_splits(
-              values=tf.gather(ragged_words.flat_values, shuffled.flat_values),
-              row_splits=row_splits)
-        
-        swapped = tf.strings.reduce_join(
-            swapped, axis=-1, separator=" "
+            values=tf.gather(ragged_words.flat_values, shuffled.flat_values),
+            row_splits=row_splits,
         )
+
+        swapped = tf.strings.reduce_join(swapped, axis=-1, separator=" ")
 
         if scalar_input:
             swapped = tf.squeeze(swapped, 0)
