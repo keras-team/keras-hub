@@ -16,7 +16,60 @@ from tensorflow import keras
 
 
 class RandomSwaps(keras.layers.Layer):
-    def __init__(self, name = None, **kwargs):
+    """Augments input by randomly swapping words.
+
+    The layer works by splitting the words using `tf.strings.split` computes
+    then repeats the following n times:
+        - Chooses 2 random indices from the input.
+        - Swaps the words present at those indices.
+    These 2 randomly sampled indices can also potentially be the same index.
+
+    Args:
+        swaps: Number of swaps to perform.
+
+    Examples:
+
+    Basic usage.
+    >>> tf.random.set_seed(30)
+    >>> augmenter = keras_nlp.layers.RandomSwaps(
+    ...     swaps = 3
+    ... )
+    >>> augmenter(["I like to fly kites, do you?",
+    ...     "Can we go fly some kites later?"])
+    <tf.Tensor: shape=(2,), dtype=string, numpy=
+    array([b'fly like do to kites, I you?',
+           b'Can fly go we later? kites some'], dtype=object)>
+
+    Augment first, then batch the dataset.
+    >>> tf.random.set_seed(30)
+    >>> inputs = ["I like to fly kites, do you?",
+    ...     "Can we go fly some kites later?"]
+    >>> augmenter = keras_nlp.layers.RandomSwaps(
+    ...     swaps = 3
+    ... )
+    >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
+    >>> ds = ds.map(augmenter)
+    >>> ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
+    >>> ds.take(1).get_single_element()
+    <tf.Tensor: shape=(2,), dtype=string, numpy=
+    array([b'fly like do to kites, I you?',
+           b'Can fly go we later? kites some'], dtype=object)>
+
+    Batch the inputs and then augment.
+    >>> tf.random.set_seed(30)
+    >>> inputs = ["I like to fly kites, do you?",
+    ...     "Can we go fly some kites later?"]
+    >>> augmenter = keras_nlp.layers.RandomSwaps(
+    ...     swaps = 2
+    ... )
+    >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
+    >>> ds = ds.batch(2).map(augmenter)
+    >>> ds.take(1).get_single_element()
+    <tf.Tensor: shape=(2,), dtype=string, numpy=
+    array([b'fly like I to kites, do you?',
+           b'Can fly go we later? kites some'], dtype=object)>
+    """
+    def __init__(self, swaps, name = None, **kwargs):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
@@ -29,7 +82,9 @@ class RandomSwaps(keras.layers.Layer):
                 )
 
         super().__init__(name=name, **kwargs)
+        self.swaps = swaps
 
+    @tf.function
     def call(self, inputs):
         """Augments input by randomly swapping words.
         Args:
@@ -74,13 +129,24 @@ class RandomSwaps(keras.layers.Layer):
         positions_flat = tf.range(tf.size(ragged_words.flat_values))
         positions = ragged_words.with_flat_values(positions_flat)
 
-        # Shuffle items
-        def _shuffle(positions):
-            shuffled = tf.random.shuffle(positions)
-            return shuffled
+        # Swap items
+        def _swap(positions):
+            # swap n times
+            if (tf.size(positions) == 1):
+              return positions
+            for _ in range(self.swaps):
+                index = tf.random.uniform(
+                    shape=tf.shape(positions), minval=0, maxval=tf.size(positions),  dtype=tf.int32
+                )
+                # sample 2 random indices from the tensor
+                shuffled = tf.random.shuffle(index)
+                index1, index2 = shuffled[0], shuffled[1]
+                # swap items at the sampled indices with each other
+                positions = tf.tensor_scatter_nd_update(positions, [[index1], [index2]], [positions[index2], positions[index1]])
+            return positions
 
         shuffled = tf.map_fn(
-            _shuffle,
+            _swap,
             (positions),
             fn_output_signature=tf.RaggedTensorSpec(
                 ragged_rank=positions.ragged_rank - 1, dtype=positions.dtype
@@ -107,6 +173,7 @@ class RandomSwaps(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
+                "swaps": self.swaps,
             }
         )
         return config
