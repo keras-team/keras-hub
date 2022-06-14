@@ -11,14 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Random Word Deletion Layer."""
+"""Tests for Random Word Swap Layer."""
 
 import tensorflow as tf
 
 from keras_nlp.layers import random_swaps
 
 
-class RandomDeletionTest(tf.test.TestCase):
+class RandomSwapTest(tf.test.TestCase):
     def test_shape_with_scalar(self):
         augmenter = random_swaps.RandomSwaps(swaps=3)
         input = ["Running Around"]
