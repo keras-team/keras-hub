@@ -16,170 +16,152 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers.bert_packer import BertPacker
+from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 
 
-class BertPackerTest(tf.test.TestCase):
+class MultiSegmentPackerTest(tf.test.TestCase):
     def test_trim_single_input_ints(self):
         input_data = tf.range(3, 10)
-        packer = BertPacker(8, start_value=1, end_value=2)
+        packer = MultiSegmentPacker(8, start_value=1, end_value=2)
         output = packer(input_data)
-        self.assertAllEqual(output["tokens"], [1, 3, 4, 5, 6, 7, 8, 2])
-        self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1])
-        self.assertAllEqual(output["segment_ids"], [0, 0, 0, 0, 0, 0, 0, 0])
+        self.assertAllEqual(
+            output, ([1, 3, 4, 5, 6, 7, 8, 2], [0, 0, 0, 0, 0, 0, 0, 0])
+        )
 
     def test_trim_single_input_strings(self):
         input_data = tf.constant(["a", "b", "c", "d"])
-        packer = BertPacker(5, start_value="[CLS]", end_value="[SEP]")
+        packer = MultiSegmentPacker(5, start_value="[CLS]", end_value="[SEP]")
         output = packer(input_data)
-        self.assertAllEqual(output["tokens"], ["[CLS]", "a", "b", "c", "[SEP]"])
-        self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1])
-        self.assertAllEqual(output["segment_ids"], [0, 0, 0, 0, 0])
+        self.assertAllEqual(
+            output, (["[CLS]", "a", "b", "c", "[SEP]"], [0, 0, 0, 0, 0])
+        )
 
     def test_trim_multiple_inputs_round_robin(self):
         seq1 = tf.constant(["a", "b", "c"])
         seq2 = tf.constant(["x", "y", "z"])
-        packer = BertPacker(
+        packer = MultiSegmentPacker(
             7, start_value="[CLS]", end_value="[SEP]", truncator="round_robin"
         )
         output = packer([seq1, seq2])
         self.assertAllEqual(
-            output["tokens"], ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"]
+            output,
+            (
+                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
+                [0, 0, 0, 0, 1, 1, 1],
+            ),
         )
-        self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1])
-        self.assertAllEqual(output["segment_ids"], [0, 0, 0, 0, 1, 1, 1])
 
     def test_trim_multiple_inputs_waterfall(self):
         seq1 = tf.constant(["a", "b", "c"])
         seq2 = tf.constant(["x", "y", "z"])
-        packer = BertPacker(
+        packer = MultiSegmentPacker(
             7, start_value="[CLS]", end_value="[SEP]", truncator="waterfall"
         )
         output = packer([seq1, seq2])
         self.assertAllEqual(
-            output["tokens"], ["[CLS]", "a", "b", "c", "[SEP]", "x", "[SEP]"]
+            output,
+            (
+                ["[CLS]", "a", "b", "c", "[SEP]", "x", "[SEP]"],
+                [0, 0, 0, 0, 0, 1, 1],
+            ),
         )
-        self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1])
-        self.assertAllEqual(output["segment_ids"], [0, 0, 0, 0, 0, 1, 1])
 
     def test_trim_batched_inputs_round_robin(self):
         seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b", "c"]])
         seq2 = tf.ragged.constant([["x", "y", "z"], ["x", "y", "z"]])
-        packer = BertPacker(
+        packer = MultiSegmentPacker(
             7, start_value="[CLS]", end_value="[SEP]", truncator="round_robin"
         )
         output = packer([seq1, seq2])
-        print(output["tokens"])
         self.assertAllEqual(
-            output["tokens"],
-            [
-                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
-                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
-            ],
-        )
-        self.assertAllEqual(
-            output["padding_mask"],
-            [
-                [1, 1, 1, 1, 1, 1, 1],
-                [1, 1, 1, 1, 1, 1, 1],
-            ],
-        )
-        self.assertAllEqual(
-            output["segment_ids"],
-            [
-                [0, 0, 0, 0, 1, 1, 1],
-                [0, 0, 0, 0, 1, 1, 1],
-            ],
+            output,
+            (
+                [
+                    ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
+                    ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
+                ],
+                [
+                    [0, 0, 0, 0, 1, 1, 1],
+                    [0, 0, 0, 0, 1, 1, 1],
+                ],
+            ),
         )
 
     def test_trim_batched_inputs_waterfall(self):
         seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b"]])
         seq2 = tf.ragged.constant([["x", "y", "z"], ["x", "y", "z"]])
-        packer = BertPacker(
+        packer = MultiSegmentPacker(
             7, start_value="[CLS]", end_value="[SEP]", truncator="waterfall"
         )
         output = packer([seq1, seq2])
-        print(output["tokens"])
         self.assertAllEqual(
-            output["tokens"],
-            [
-                ["[CLS]", "a", "b", "c", "[SEP]", "x", "[SEP]"],
-                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
-            ],
-        )
-        self.assertAllEqual(
-            output["padding_mask"],
-            [
-                [1, 1, 1, 1, 1, 1, 1],
-                [1, 1, 1, 1, 1, 1, 1],
-            ],
-        )
-        self.assertAllEqual(
-            output["segment_ids"],
-            [
-                [0, 0, 0, 0, 0, 1, 1],
-                [0, 0, 0, 0, 1, 1, 1],
-            ],
+            output,
+            (
+                [
+                    ["[CLS]", "a", "b", "c", "[SEP]", "x", "[SEP]"],
+                    ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
+                ],
+                [
+                    [0, 0, 0, 0, 0, 1, 1],
+                    [0, 0, 0, 0, 1, 1, 1],
+                ],
+            ),
         )
 
     def test_pad_inputs(self):
         seq1 = tf.constant(["a"])
         seq2 = tf.constant(["x"])
-        packer = BertPacker(
+        packer = MultiSegmentPacker(
             6, start_value="[CLS]", end_value="[SEP]", pad_value="[PAD]"
         )
         output = packer([seq1, seq2])
         self.assertAllEqual(
-            output["tokens"], ["[CLS]", "a", "[SEP]", "x", "[SEP]", "[PAD]"]
+            output,
+            (
+                ["[CLS]", "a", "[SEP]", "x", "[SEP]", "[PAD]"],
+                [0, 0, 0, 1, 1, 0],
+            ),
         )
-        self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 0])
-        self.assertAllEqual(output["segment_ids"], [0, 0, 0, 1, 1, 0])
 
     def test_pad_batched_inputs(self):
         seq1 = tf.ragged.constant([["a"], ["a"]])
         seq2 = tf.ragged.constant([["x"], ["x", "y"]])
-        packer = BertPacker(
+        packer = MultiSegmentPacker(
             7, start_value="[CLS]", end_value="[SEP]", pad_value="[PAD]"
         )
         output = packer([seq1, seq2])
         self.assertAllEqual(
-            output["tokens"],
-            [
-                ["[CLS]", "a", "[SEP]", "x", "[SEP]", "[PAD]", "[PAD]"],
-                ["[CLS]", "a", "[SEP]", "x", "y", "[SEP]", "[PAD]"],
-            ],
-        )
-        self.assertAllEqual(
-            output["padding_mask"],
-            [
-                [1, 1, 1, 1, 1, 0, 0],
-                [1, 1, 1, 1, 1, 1, 0],
-            ],
-        )
-        self.assertAllEqual(
-            output["segment_ids"],
-            [
-                [0, 0, 0, 1, 1, 0, 0],
-                [0, 0, 0, 1, 1, 1, 0],
-            ],
+            output,
+            (
+                [
+                    ["[CLS]", "a", "[SEP]", "x", "[SEP]", "[PAD]", "[PAD]"],
+                    ["[CLS]", "a", "[SEP]", "x", "y", "[SEP]", "[PAD]"],
+                ],
+                [
+                    [0, 0, 0, 1, 1, 0, 0],
+                    [0, 0, 0, 1, 1, 1, 0],
+                ],
+            ),
         )
 
     def test_config(self):
         seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b"]])
         seq2 = tf.ragged.constant([["x", "y", "z"], ["x", "y", "z"]])
-        original_packer = BertPacker(
+        original_packer = MultiSegmentPacker(
             7, start_value="[CLS]", end_value="[SEP]", truncator="waterfall"
         )
-        cloned_packer = BertPacker.from_config(original_packer.get_config())
+        cloned_packer = MultiSegmentPacker.from_config(
+            original_packer.get_config()
+        )
         self.assertAllEqual(
-            original_packer([seq1, seq2])["tokens"],
-            cloned_packer([seq1, seq2])["tokens"],
+            original_packer([seq1, seq2]),
+            cloned_packer([seq1, seq2]),
         )
 
     def test_saving(self):
         seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b"]])
         seq2 = tf.ragged.constant([["x", "y", "z"], ["x", "y", "z"]])
-        packer = BertPacker(
+        packer = MultiSegmentPacker(
             7, start_value="[CLS]", end_value="[SEP]", truncator="waterfall"
         )
         inputs = (
@@ -191,6 +173,6 @@ class BertPackerTest(tf.test.TestCase):
         model.save(self.get_temp_dir())
         restored_model = keras.models.load_model(self.get_temp_dir())
         self.assertAllEqual(
-            model((seq1, seq2))["tokens"],
-            restored_model((seq1, seq2))["tokens"],
+            model((seq1, seq2)),
+            restored_model((seq1, seq2)),
         )

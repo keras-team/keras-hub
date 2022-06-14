@@ -19,12 +19,12 @@ import tensorflow_text as tf_text
 from tensorflow import keras
 
 
-class BertPacker(keras.layers.Layer):
+class MultiSegmentPacker(keras.layers.Layer):
     """Packs multiple sequences into a single fixed width model input.
 
     This layer packs multiple input sequences into a single fixed width sequence
-    containing start and end delimeters, forming an input suitable for BERT and
-    BERT-like models.
+    containing start and end delimeters, forming an dense input suitable for a
+    classification task for BERT and BERT-like models.
 
     Takes as input a list or tuple of sequences with the layer will truncate and
     concatenate the sequences into a single sequence of `sequence_length`. The
@@ -38,13 +38,12 @@ class BertPacker(keras.layers.Layer):
     If inputs are unbatched, inputs should be dense rank-1 tensors of any shape,
     and will be packed to shape `[sequence_length]`.
 
-    Returns a python dictionary with three elements:
-      - `"tokens"`: The packed token `tf.Tensor`.
-      - `"padding_mask"`: A `tf.Tensor` with the same shape as `"tokens"`,
-        containing 0s where inputs have been padded and 1s elsewhere.
-      - `"segment_ids"`: A `tf.Tensor` with the same shape as `"tokens"`,
-        containing an int id maching tokens to the index of input sequence they
-        belonged to.
+    Returns:
+        A tuple with two elements. The first is the dense, packed token
+        sequence. The second is an integer tensor of the same shape, where each
+        element indicates the index of the original sequence that each token
+        belongs to.
+
 
     Args:
         sequence_length: The desired output length.
@@ -72,30 +71,24 @@ class BertPacker(keras.layers.Layer):
 
     *Pack a single input for classification.*
     >>> seq1 = tf.constant([1, 2, 3, 4])
-    >>> packer = keras_nlp.layers.BertPacker(8, start_value=101, end_value=102)
+    >>> packer = keras_nlp.layers.MultiSegmentPacker(
+    ...     8, start_value=101, end_value=102)
     >>> packer(seq1)
-    {
-        'tokens': <tf.Tensor: shape=(8,), dtype=int32, numpy=
-            array([101,   1,   2,   3,   4, 102,   0,   0], dtype=int32)>,
-        'padding_mask': <tf.Tensor: shape=(8,), dtype=float32, numpy=
-            array([1., 1., 1., 1., 1., 1., 0., 0.], dtype=float32)>,
-        'segment_ids': <tf.Tensor: shape=(8,), dtype=int32, numpy=
-            array([0, 0, 0, 0, 0, 0, 0, 0], dtype=int32)>
-    }
+    (<tf.Tensor: shape=(8,), dtype=int32,
+        numpy=array([101, 1, 2, 3, 4, 102, 0, 0], dtype=int32)>,
+     <tf.Tensor: shape=(8,), dtype=int32,
+        numpy=array([0, 0, 0, 0, 0, 0, 0, 0], dtype=int32)>)
 
     *Pack multiple inputs for classification.*
     >>> seq1 = tf.constant([1, 2, 3, 4])
     >>> seq2 = tf.constant([11, 12, 13, 14])
-    >>> packer = keras_nlp.layers.BertPacker(8, start_value=101, end_value=102)
+    >>> packer = keras_nlp.layers.MultiSegmentPacker(
+    ...     8, start_value=101, end_value=102)
     >>> packer((seq1, seq2))
-    {
-        'tokens': <tf.Tensor: shape=(8,), dtype=int32, numpy=
-            array([101,   1,   2,   3, 102,  11,  12, 102], dtype=int32)>,
-        'padding_mask': <tf.Tensor: shape=(8,), dtype=float32, numpy=
-            array([1., 1., 1., 1., 1., 1., 1., 1.], dtype=float32)>,
-        'segment_ids': <tf.Tensor: shape=(8,), dtype=int32, numpy=
-            array([0, 0, 0, 0, 0, 1, 1, 1], dtype=int32)>
-    }
+    (<tf.Tensor: shape=(8,), dtype=int32,
+        numpy=array([101,   1,   2,   3, 102,  11,  12, 102], dtype=int32)>,
+     <tf.Tensor: shape=(8,), dtype=int32,
+        numpy=array([0, 0, 0, 0, 0, 1, 1, 1], dtype=int32)>)
 
     Reference:
         [Devlin et al., 2018](https://arxiv.org/abs/1810.04805).
@@ -192,9 +185,9 @@ class BertPacker(keras.layers.Layer):
             segment_ids_to_combine.append(tf.ones_like(seg, dtype=tf.int32) * i)
             segment_ids_to_combine.append(ones_column * i)
 
-        tokens = tf.concat(segments_to_combine, 1)
+        token_ids = tf.concat(segments_to_combine, 1)
         segment_ids = tf.concat(segment_ids_to_combine, 1)
-        return tokens, segment_ids
+        return token_ids, segment_ids
 
     def call(self, inputs):
         inputs = self._sanitize_inputs(inputs)
@@ -206,23 +199,18 @@ class BertPacker(keras.layers.Layer):
             inputs = [tf.RaggedTensor.from_tensor(x) for x in inputs]
 
         segments = self._trim_inputs(inputs)
-        tokens, segment_ids = self._combine_inputs(segments)
-        padding_mask = tf.ones_like(segment_ids, self.compute_dtype)
+        token_ids, segment_ids = self._combine_inputs(segments)
 
         # Pad to dense tensor output.
         shape = tf.cast([-1, self.sequence_length], "int64")
-        tokens = tokens.to_tensor(shape=shape, default_value=self.pad_value)
+        token_ids = token_ids.to_tensor(
+            shape=shape, default_value=self.pad_value
+        )
         segment_ids = segment_ids.to_tensor(shape=shape)
-        padding_mask = padding_mask.to_tensor(shape=shape)
 
         # Remove the batch dim if added.
         if rank_1:
-            tokens = tf.squeeze(tokens, 0)
+            token_ids = tf.squeeze(token_ids, 0)
             segment_ids = tf.squeeze(segment_ids, 0)
-            padding_mask = tf.squeeze(padding_mask, 0)
 
-        return {
-            "tokens": tokens,
-            "padding_mask": padding_mask,
-            "segment_ids": segment_ids,
-        }
+        return (token_ids, segment_ids)

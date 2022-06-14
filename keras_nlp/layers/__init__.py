@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.layers.bert_packer import BertPacker
 from keras_nlp.layers.fnet_encoder import FNetEncoder
 from keras_nlp.layers.mlm_head import MLMHead
 from keras_nlp.layers.mlm_mask_generator import MLMMaskGenerator
+from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.sine_position_encoding import SinePositionEncoding
 from keras_nlp.layers.start_end_packer import StartEndPacker
