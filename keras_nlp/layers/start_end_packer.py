@@ -22,14 +22,14 @@ class StartEndPacker(keras.layers.Layer):
     """Adds start and end tokens to a sequence and pads to a fixed length.
 
     This layer is useful when tokenizing inputs for tasks like translation,
-    where each sequence should be marked with a start and end marker. It should
+    where each sequence should include a start and end marker. It should
     be called after tokenization. The layer will first trim inputs to fit, then
     add start/end tokens, and finally pad, if necessary, to `sequence_length`.
 
-    If inputs are batched, input should be a `tf.RaggedTensor`s with shape
+    If input is batched, input should be a `tf.RaggedTensor` with shape
     `[batch_size, None]` and will be packed and converted to a dense tensor with
     shape `[batch_size, sequence_length]`.
-    If inputs are unbatched, inputs should be dense rank-1 tensors of any shape,
+    If input is unbatched, input should be a dense rank-1 tensor of any shape,
     and will be packed to shape `[sequence_length]`.
 
     Args:
@@ -49,7 +49,7 @@ class StartEndPacker(keras.layers.Layer):
     Unbatched input (int).
     >>> input_data = tf.constant([5, 6, 7])
     >>> start_end_packer = keras_nlp.layers.StartEndPacker(
-    ...     sequence_length=7, start_value=1, end_value=2, pad_value=0
+    ...     sequence_length=7, start_value=1, end_value=2,
     ... )
     >>> start_end_packer(input_data)
     <tf.Tensor: shape=(7,), dtype=int32, numpy=
@@ -58,7 +58,7 @@ class StartEndPacker(keras.layers.Layer):
     Batched input (int).
     >>> input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11, 12, 13, 14]])
     >>> start_end_packer = keras_nlp.layers.StartEndPacker(
-    ...     sequence_length=6, start_value=1, end_value=2, pad_value=0
+    ...     sequence_length=6, start_value=1, end_value=2,
     ... )
     >>> start_end_packer(input_data)
     <tf.Tensor: shape=(2, 6), dtype=int32, numpy=
@@ -105,9 +105,7 @@ class StartEndPacker(keras.layers.Layer):
         self.pad_value = pad_value
 
     def call(self, inputs):
-        if not (
-            isinstance(inputs, tf.Tensor) or isinstance(inputs, tf.RaggedTensor)
-        ):
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
 
         input_is_tensor = isinstance(inputs, tf.Tensor)
