@@ -48,6 +48,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         - [Kudo and Richardson, 2018](https://arxiv.org/abs/1808.06226)
 
     Examples:
+
+    From bytes.
     ```python
     # Train a SentencePiece vocabulary.
     model = io.BytesIO()
@@ -60,6 +62,23 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     # Tokenize inputs
     tokenizer = SentencePieceTokenizer(model_bytes=model.getvalue())
+    ds = ds.map(tokenizer)
+    ```
+
+    From a file.
+    ```python
+    # Train a SentencePiece vocabulary and write it to a file.
+    ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
+    with open("model.proto", "wb") as model_file:
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=ds.as_numpy_iterator(),
+            model_writer=model_file,
+            vocab_size=20,
+        )
+
+    # Tokenize inputs
+    tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(
+        model_file="model.proto")
     ds = ds.map(tokenizer)
     ```
     """
@@ -95,15 +114,15 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         if isinstance(model_bytes, str):
             model_bytes = base64.b64decode(model_bytes)
 
-        # Keras cannot serialize a bytestring, so we base64 encode the model
-        # byte array for saving.
-        self.model_bytes = base64.b64encode(model_bytes).decode("ascii")
-        self.sequence_length = sequence_length
-
         self._sentence_piece = tf_text.SentencepieceTokenizer(
             model=model_bytes,
             out_type=self.compute_dtype,
         )
+
+        # Keras cannot serialize a bytestring, so we base64 encode the model
+        # byte array for saving.
+        self.model_bytes = base64.b64encode(model_bytes).decode("ascii")
+        self.sequence_length = sequence_length
 
     def vocabulary_size(self) -> int:
         """Get the size of the tokenizer vocabulary."""
@@ -131,14 +150,12 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         return config
 
     def tokenize(self, inputs):
-        # Check if Input is Scalar or Not
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
-        scalar_input = tf.convert_to_tensor(inputs).shape.rank == 0
+        scalar_input = inputs.shape.rank == 0
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
 
-        # Apply word piece and coerce shape for outputs.
         tokens = self._sentence_piece.tokenize(inputs)
 
         # Convert to a dense output if `sequence_length` is set.
@@ -146,7 +163,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             output_shape = tokens.shape.as_list()
             output_shape[-1] = self.sequence_length
             tokens = tokens.to_tensor(shape=output_shape)
-        # Convert to a dense output if input in scalar
+
+        # Convert to a dense output if input was a scalar.
         if scalar_input:
             tokens = tf.squeeze(tokens, 0)
             tf.ensure_shape(tokens, shape=[self.sequence_length])
