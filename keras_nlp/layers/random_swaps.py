@@ -130,9 +130,7 @@ class RandomSwaps(keras.layers.Layer):
         positions_flat = tf.range(tf.size(ragged_words.flat_values))
         positions = ragged_words.with_flat_values(positions_flat)
 
-        # Swap items
         def _swap(positions):
-            # swap n times
             if tf.size(positions) == 1:
                 return positions
             for _ in range(self.swaps):
