@@ -32,7 +32,11 @@ class StartEndPackerTest(tf.test.TestCase):
     def test_dense_input_error(self):
         input_data = tf.constant([[5, 6, 7]])
         start_end_packer = StartEndPacker(sequence_length=5)
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(
+            ValueError,
+            "Input must either be dense with rank 1, or ragged with rank 2. "
+            "Received dense input with rank=2",
+        ):
             start_end_packer(input_data)
 
     def test_ragged_input(self):
@@ -45,7 +49,12 @@ class StartEndPackerTest(tf.test.TestCase):
     def test_ragged_input_error(self):
         input_data = tf.ragged.constant([[[5, 6, 7], [8, 9, 10, 11]]])
         start_end_packer = StartEndPacker(sequence_length=5)
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(
+            ValueError,
+            "Input must either be dense with rank 1, or ragged with rank 2. "
+            "Received ragged input with "
+            "rank=3",
+        ):
             start_end_packer(input_data)
 
     def test_start_end_token(self):
