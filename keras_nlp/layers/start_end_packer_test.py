@@ -66,6 +66,15 @@ class StartEndPackerTest(tf.test.TestCase):
         expected_output = [[1, 5, 6, 7, 2, 3, 3], [1, 8, 9, 10, 11, 2, 3]]
         self.assertAllEqual(output, expected_output)
 
+    def test_end_token_value_during_truncation(self):
+        input_data = tf.ragged.constant([[5, 6], [8, 9, 10, 11, 12, 13]])
+        start_end_packer = StartEndPacker(
+            sequence_length=5, start_value=1, end_value=2, pad_value=0
+        )
+        output = start_end_packer(input_data)
+        expected_output = [[1, 5, 6, 2, 0], [1, 8, 9, 10, 2]]
+        self.assertAllEqual(output, expected_output)
+
     def test_string_input(self):
         input_data = tf.ragged.constant(
             [["KerasNLP", "is", "awesome"], ["amazing"]]
@@ -96,3 +105,22 @@ class StartEndPackerTest(tf.test.TestCase):
 
         expected_output = [[1, 5, 6, 7, 2, 3, 3], [1, 8, 9, 10, 11, 2, 3]]
         self.assertAllEqual(model_output, expected_output)
+
+    def test_get_config(self):
+        start_end_packer = StartEndPacker(
+            sequence_length=512,
+            start_value=10,
+            end_value=20,
+            pad_value=100,
+            name="start_end_packer_test",
+        )
+
+        config = start_end_packer.get_config()
+        expected_config_subset = {
+            "sequence_length": 512,
+            "start_value": 10,
+            "end_value": 20,
+            "pad_value": 100,
+        }
+
+        self.assertEqual(config, {**config, **expected_config_subset})

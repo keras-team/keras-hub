@@ -21,6 +21,11 @@ from tensorflow import keras
 class StartEndPacker(keras.layers.Layer):
     """Adds start and end tokens to a sequence and pads to a fixed length.
 
+    This layer is useful when tokenizing inputs for tasks like translation,
+    where each sequence should be marked with a start and end marker. It should
+    be called after tokenization. The layer will first trim inputs to fit, then
+    add start/end tokens, and finally pad, if necessary, to `sequence_length`.
+
     If inputs are batched, input should be a `tf.RaggedTensor`s with shape
     `[batch_size, None]` and will be packed and converted to a dense tensor with
     shape `[batch_size, sequence_length]`.
@@ -51,7 +56,7 @@ class StartEndPacker(keras.layers.Layer):
     array([1, 5, 6, 7, 2, 0, 0], dtype=int32)>
 
     Batched input (int).
-    >>> input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]])
+    >>> input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11, 12, 13, 14]])
     >>> start_end_packer = keras_nlp.layers.StartEndPacker(
     ...     sequence_length=6, start_value=1, end_value=2, pad_value=0
     ... )
@@ -100,14 +105,20 @@ class StartEndPacker(keras.layers.Layer):
         self.pad_value = pad_value
 
     def call(self, inputs):
+        if not (
+            isinstance(inputs, tf.Tensor) or isinstance(inputs, tf.RaggedTensor)
+        ):
+            inputs = tf.convert_to_tensor(inputs)
+
         input_is_tensor = isinstance(inputs, tf.Tensor)
         input_is_ragged = isinstance(inputs, tf.RaggedTensor)
 
         if input_is_tensor:
             if inputs.shape.rank != 1:
                 raise ValueError(
-                    "Input dense tensor must be of rank 1. "
-                    f"Found rank={inputs.shape.rank}"
+                    "Input must either be dense with rank 1, or ragged with "
+                    "rank 2. Received dense input with "
+                    f"rank={inputs.shape.rank}"
                 )
 
             # Add a new axis at the beginning and convert to ragged tensor.
@@ -115,14 +126,10 @@ class StartEndPacker(keras.layers.Layer):
         elif input_is_ragged:
             if inputs.shape.rank != 2:
                 raise ValueError(
-                    "Input ragged tensor must be of rank 2. "
-                    f"Found rank={inputs.shape.rank}"
+                    "Input must either be dense with rank 1, or ragged with "
+                    "rank 2. Received ragged input with "
+                    f"rank={inputs.shape.rank}"
                 )
-        else:
-            raise ValueError(
-                "Input must be of type `tf.Tensor` or `tf.RaggedTensor`, "
-                f"but got {type(inputs)}"
-            )
 
         batch_size = inputs.shape[0]
 
@@ -132,6 +139,9 @@ class StartEndPacker(keras.layers.Layer):
             inputs = tf.concat([start_token_id_tensor, inputs], axis=-1)
         if self.end_value is not None:
             end_token_id_tensor = tf.fill((batch_size, 1), self.end_value)
+
+            # Trim to leave room for end token.
+            inputs = inputs[..., : self.sequence_length - 1]
             inputs = tf.concat([inputs, end_token_id_tensor], axis=-1)
 
         # Pad to desired length.
