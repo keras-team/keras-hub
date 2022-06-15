@@ -108,10 +108,10 @@ class StartEndPacker(keras.layers.Layer):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
 
-        input_is_tensor = isinstance(inputs, tf.Tensor)
+        input_is_dense = isinstance(inputs, tf.Tensor)
         input_is_ragged = isinstance(inputs, tf.RaggedTensor)
 
-        if input_is_tensor:
+        if input_is_dense:
             if inputs.shape.rank != 1:
                 raise ValueError(
                     "Input must either be dense with rank 1, or ragged with "
@@ -148,7 +148,7 @@ class StartEndPacker(keras.layers.Layer):
             shape=(batch_size, self.sequence_length),
         )
 
-        if input_is_tensor:
+        if input_is_dense:
             inputs = tf.squeeze(inputs, axis=0)
 
         return inputs
