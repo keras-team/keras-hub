@@ -12,19 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
 import os
 import shutil
 import sys
 
+import google.cloud.logging
 import tensorflow as tf
 from absl import app
 from absl import flags
+from absl import logging
+from google.cloud import storage
 from tensorflow import keras
 
 from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
 from examples.bert.bert_config import TRAINING_CONFIG
 from examples.bert.bert_model import BertModel
+from examples.utils.google_cloud_utils import list_blobs_with_prefix
 from examples.utils.scripting_utils import list_filenames_for_arg
 
 FLAGS = flags.FLAGS
@@ -51,6 +56,30 @@ flags.DEFINE_bool(
     "skip_restore",
     False,
     "Skip restoring from checkpoint if True",
+)
+
+flags.DEFINE_bool(
+    "tpu_name",
+    None,
+    "The TPU to connect to. If None, TPU will not be used.",
+)
+
+flags.DEFINE_bool(
+    "use_cloud_storage",
+    False,
+    "If True, data I/O will use cloud storage instead of local disks.",
+)
+
+flags.DEFINE_string(
+    "gcs_bucket",
+    None,
+    "Name of GCS bucket.",
+)
+
+flags.DEFINE_string(
+    "tensorboard_log_path",
+    None,
+    "The path to save tensorboard log to.",
 )
 
 flags.DEFINE_string(
@@ -371,11 +400,76 @@ def decode_record(record):
     return example
 
 
+def get_checkpoint_callback():
+    if FLAGS.checkpoint_save_directory is not None:
+        if FLAGS.use_cloud_storage:
+            storage_client = storage.Client()
+            bucket = storage_client.get_bucket(FLAGS.gcs_bucket)
+            blobs = bucket.list_blobs(prefix=FLAGS.checkpoint_save_directory)
+            if FLAGS.skip_restore:
+                for blob in blobs:
+                    blob.delete()
+            checkpoint_path = (
+                "gs://"
+                + FLAGS.gcs_bucket
+                + "/"
+                + FLAGS.checkpoint_save_directory
+            )
+            return tf.keras.callbacks.BackupAndRestore(
+                backup_dir=checkpoint_path,
+            )
+
+        else:
+            if os.path.exists(FLAGS.checkpoint_save_directory):
+                if not os.path.isdir(FLAGS.checkpoint_save_directory):
+                    raise ValueError(
+                        "`checkpoint_save_directory` should be a directory, "
+                        f"but {FLAGS.checkpoint_save_directory} is not a "
+                        "directory. Please set `checkpoint_save_directory` as "
+                        "a directory."
+                    )
+
+                elif FLAGS.skip_restore:
+                    # Clear up the directory if users want to skip restoring.
+                    shutil.rmtree(FLAGS.checkpoint_save_directory)
+            checkpoint_path = FLAGS.checkpoint_save_directory
+            return tf.keras.callbacks.BackupAndRestore(
+                backup_dir=checkpoint_path,
+            )
+
+
+def get_tensorboard_callback():
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    if FLAGS.use_cloud_storage:
+        log_dir = (
+            "gs://"
+            + FLAGS.gcs_bucket
+            + "/"
+            + FLAGS.tensorboard_log_path
+            + timestamp
+        )
+    else:
+        log_dir = FLAGS.tensorboard_log_path + timestamp
+    return tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
+
 def main(_):
-    print(f"Reading input data from {FLAGS.input_files}")
-    input_filenames = list_filenames_for_arg(FLAGS.input_files)
+    if FLAGS.use_cloud_storage:
+        # If the job is on cloud, we will use cloud logging.
+        tf.keras.utils.disable_interactive_logging()
+        client = google.cloud.logging.Client()
+        client.setup_logging()
+
+    logging.info(f"Reading input data from {FLAGS.input_files}")
+    if FLAGS.read_from_gcs:
+        input_filenames = list_blobs_with_prefix(
+            FLAGS.gcs_bucket, FLAGS.input_files
+        )
+    else:
+        input_filenames = list_filenames_for_arg(FLAGS.input_files)
+
     if not input_filenames:
-        print("No input files found. Check `input_files` flag.")
+        logging.info("No input files found. Check `input_files` flag.")
         sys.exit(1)
 
     vocab = []
@@ -385,15 +479,15 @@ def main(_):
 
     model_config = MODEL_CONFIGS[FLAGS.model_size]
 
-    if tf.config.list_logical_devices("TPU"):
-        # Connect to TPU and create TPU strategy.
-        resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
-            tpu="local"
-        )
-        strategy = tf.distribute.TPUStrategy(resolver)
-    else:
+    if FLAGS.tpu_name is None:
         # Use default strategy if not using TPU.
         strategy = tf.distribute.get_strategy()
+    else:
+        # Connect to TPU and create TPU strategy.
+        resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
+            tpu=FLAGS.tpu_name
+        )
+        strategy = tf.distribute.TPUStrategy(resolver)
 
     # Decode and batch data.
     dataset = tf.data.TFRecordDataset(input_filenames)
@@ -437,23 +531,7 @@ def main(_):
     epochs = TRAINING_CONFIG["epochs"]
     steps_per_epoch = num_train_steps // epochs
 
-    callbacks = []
-    if FLAGS.checkpoint_save_directory is not None:
-        if os.path.exists(FLAGS.checkpoint_save_directory):
-            if not os.path.isdir(FLAGS.checkpoint_save_directory):
-                raise ValueError(
-                    "`checkpoint_save_directory` should be a directory, but "
-                    f"{FLAGS.checkpoint_save_directory} is not a directory."
-                    " Please set `checkpoint_save_directory` as a directory."
-                )
-
-            elif FLAGS.skip_restore:
-                # Clear up the directory if users want to skip restoring.
-                shutil.rmtree(FLAGS.checkpoint_save_directory)
-        checkpoint_path = FLAGS.checkpoint_save_directory + "/checkpoint"
-        callbacks.append(
-            tf.keras.callbacks.BackupAndRestore(backup_dir=checkpoint_path)
-        )
+    callbacks = [get_checkpoint_callback(), get_tensorboard_callback()]
 
     pretraining_model.fit(
         dataset,
@@ -462,8 +540,12 @@ def main(_):
         callbacks=callbacks,
     )
 
-    print(f"Saving to {FLAGS.saved_model_output}")
-    model.save(FLAGS.saved_model_output)
+    if FLAGS.use_cloud_storage:
+        model_path = "gs://" + FLAGS.gcs_bucket + "/" + FLAGS.saved_model_output
+    else:
+        model_path = FLAGS.saved_model_output
+    logging.info(f"Saving to {FLAGS.saved_model_output}")
+    model.save(model_path)
 
 
 if __name__ == "__main__":
