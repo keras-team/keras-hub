@@ -16,6 +16,59 @@
 
 import tensorflow as tf
 
+def _validate_prompt(prompt):
+    """
+    Validate the prompt and reformat for use.
+
+    Args:
+        prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
+            append generated tokens.
+    
+    Returns: 
+        a 2D Tensor, the prompt with shape [batch_size, max_length].
+    """
+    if isinstance(prompt, tf.RaggedTensor):
+        raise ValueError(
+            "RaggedTensor `prompt` is not supported, please "
+            "provide `prompt` as a list or Tensor."
+        )
+    if not isinstance(prompt, tf.Tensor):
+        prompt = tf.convert_to_tensor(prompt)
+    input_is_1d = prompt.shape.rank == 1
+    if input_is_1d:
+        prompt = prompt[tf.newaxis, :]
+    return prompt, input_is_1d
+
+def _mask_tokens_after_end_token(
+    prompt, 
+    max_length, 
+    end_token_id, 
+    pad_token_id
+):
+    """
+    Mask the tokens after the end token.
+
+    Args:
+        prompt: a 2D Tensor, the prompt with shape [batch_size, max_length].
+        max_length: an integer, the maximum length of the prompt.
+        end_token_id: an integer, the id of the end token.
+        pad_token_id: an integer, the id of the padding token.
+
+    Returns:
+        a 2D Tensor, the masked prompt with shape [batch_size, max_length]. All
+        tokens after encountering `end_token_id` will be replaced with
+        `pad_token_id`.
+    """
+    # Mask out tokens after `end_token_id` is encountered.
+    # Find index of first end_token_id.
+    end_indices = tf.math.argmax(prompt == end_token_id, -1)
+    # Use max_length if no `end_token_id` is found.
+    end_indices = tf.where(end_indices == 0, max_length, end_indices)
+    # Build a mask including end_token and replace tokens after end_token
+    # with `pad_token_id`.
+    valid_indices = tf.sequence_mask(end_indices + 1, maxlen=max_length)
+    prompt = tf.where(valid_indices, prompt, pad_token_id)
+    return prompt
 
 def greedy_search(
     token_probability_fn,
@@ -88,17 +141,8 @@ def greedy_search(
             "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
             "tf.function in eager mode."
         )
-    if isinstance(prompt, tf.RaggedTensor):
-        raise ValueError(
-            "RaggedTensor `prompt` is not supported, please "
-            "provide `prompt` as a list or Tensor."
-        )
-    if not isinstance(prompt, tf.Tensor):
-        prompt = tf.convert_to_tensor(prompt)
-    input_is_1d = prompt.shape.rank == 1
-    if input_is_1d:
-        prompt = prompt[tf.newaxis, :]
 
+    prompt, input_is_1d = _validate_prompt(prompt)
     i = prompt.shape[1]
     while i < max_length:
         # If the prompt has reached our desired length, exit while loop.
@@ -109,15 +153,12 @@ def greedy_search(
         i += 1
 
     if end_token_id is not None:
-        # Mask out tokens after `end_token_id` is encountered.
-        # Find index of first end_token_id.
-        end_indices = tf.math.argmax(prompt == end_token_id, -1)
-        # Use max_length if no `end_token_id` is found.
-        end_indices = tf.where(end_indices == 0, max_length, end_indices)
-        # Build a mask including end_token and replace tokens after end_token
-        # with `pad_token_id`.
-        valid_indices = tf.sequence_mask(end_indices + 1, maxlen=max_length)
-        prompt = tf.where(valid_indices, prompt, pad_token_id)
+        prompt = _mask_tokens_after_end_token(
+            prompt, 
+            max_length, 
+            end_token_id, 
+            pad_token_id
+        )
 
     if input_is_1d:
         return tf.squeeze(prompt)
