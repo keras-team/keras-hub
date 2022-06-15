@@ -129,7 +129,7 @@ class StartEndPacker(keras.layers.Layer):
                     f"rank={inputs.shape.rank}"
                 )
 
-        batch_size = inputs.shape[0]
+        batch_size = tf.shape(inputs)[0]
 
         # Concatenate start and end tokens.
         if self.start_value is not None:

@@ -115,6 +115,22 @@ class StartEndPackerTest(tf.test.TestCase):
         expected_output = [[1, 5, 6, 7, 2, 3, 3], [1, 8, 9, 10, 11, 2, 3]]
         self.assertAllEqual(model_output, expected_output)
 
+    def test_batch(self):
+        start_end_packer = StartEndPacker(
+            sequence_length=7, start_value=1, end_value=2, pad_value=3
+        )
+
+        ds = tf.data.Dataset.from_tensor_slices(
+            tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]])
+        )
+        ds = ds.batch(2).map(start_end_packer)
+        output = ds.take(1).get_single_element()
+
+        exp_output = [[1, 5, 6, 7, 2, 3, 3], [1, 8, 9, 10, 11, 2, 3]]
+
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
+
     def test_get_config(self):
         start_end_packer = StartEndPacker(
             sequence_length=512,
