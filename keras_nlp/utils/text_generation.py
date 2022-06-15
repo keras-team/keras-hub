@@ -16,6 +16,7 @@
 
 import tensorflow as tf
 
+
 def _validate_prompt(prompt):
     """
     Validate the prompt and reformat for use.
@@ -23,8 +24,8 @@ def _validate_prompt(prompt):
     Args:
         prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
             append generated tokens.
-    
-    Returns: 
+
+    Returns:
         a 2D Tensor, the prompt with shape [batch_size, max_length].
     """
     if isinstance(prompt, tf.RaggedTensor):
@@ -39,11 +40,9 @@ def _validate_prompt(prompt):
         prompt = prompt[tf.newaxis, :]
     return prompt, input_is_1d
 
+
 def _mask_tokens_after_end_token(
-    prompt, 
-    max_length, 
-    end_token_id, 
-    pad_token_id
+    prompt, max_length, end_token_id, pad_token_id
 ):
     """
     Mask the tokens after the end token.
@@ -69,6 +68,7 @@ def _mask_tokens_after_end_token(
     valid_indices = tf.sequence_mask(end_indices + 1, maxlen=max_length)
     prompt = tf.where(valid_indices, prompt, pad_token_id)
     return prompt
+
 
 def greedy_search(
     token_probability_fn,
@@ -154,15 +154,13 @@ def greedy_search(
 
     if end_token_id is not None:
         prompt = _mask_tokens_after_end_token(
-            prompt, 
-            max_length, 
-            end_token_id, 
-            pad_token_id
+            prompt, max_length, end_token_id, pad_token_id
         )
 
     if input_is_1d:
         return tf.squeeze(prompt)
     return prompt
+
 
 def random_sampling(
     token_probability_fn,
@@ -175,7 +173,7 @@ def random_sampling(
     """
     Text generation utility based on random sampling.
 
-    Random sampling samples the next token from the probability distribution 
+    Random sampling samples the next token from the probability distribution
     provided by `token_probability_fn` and appends it to the existing sequence.
 
     Args:
@@ -244,8 +242,8 @@ def random_sampling(
         # If the prompt has reached our desired length, exit while loop.
         pred = token_probability_fn(prompt)
         next_token = tf.cast(
-            tf.random.categorical(tf.math.log(pred), 1, seed=seed), 
-            dtype=prompt.dtype
+            tf.random.categorical(tf.math.log(pred), 1, seed=seed),
+            dtype=prompt.dtype,
         )
         # Append the next token to current sequence.
         prompt = tf.concat([prompt, next_token], axis=-1)
@@ -253,14 +251,12 @@ def random_sampling(
 
     if end_token_id is not None:
         prompt = _mask_tokens_after_end_token(
-            prompt,
-            max_length,
-            end_token_id,
-            pad_token_id
+            prompt, max_length, end_token_id, pad_token_id
         )
     if input_is_1d:
         return tf.squeeze(prompt)
     return prompt
+
 
 def top_k_sampling(
     token_probability_fn,
@@ -274,8 +270,8 @@ def top_k_sampling(
     """
     Text generation utility based on top k sampling.
 
-    Top k sampling samples the next token from the top k tokens in the 
-    probability distribution provided by `token_probability_fn` and appends it 
+    Top k sampling samples the next token from the top k tokens in the
+    probability distribution provided by `token_probability_fn` and appends it
     to the existing sequence.
 
     Args:
@@ -327,6 +323,7 @@ def top_k_sampling(
     keras_nlp.utils.top_k_sampling(
         token_probability_fn,
         prompt,
+        k=10,
         max_length=10,
         end_token_id=0,)
     ```
@@ -341,13 +338,13 @@ def top_k_sampling(
         )
     if k <= 0:
         raise ValueError("k should be strictly positive (greater than 0).")
-    
+
     prompt, input_is_1d = _validate_prompt(prompt)
     i = prompt.shape[1]
     while i < max_length:
         # If the prompt has reached our desired length, exit while loop.
         pred = token_probability_fn(prompt)
-        
+
         # If k is greater than the vocabulary size, use the entire vocabulary.
         k = min(k, pred.shape[-1])
 
@@ -355,15 +352,11 @@ def top_k_sampling(
         sorted_pred, sorted_indices = tf.math.top_k(pred, k=k, sorted=True)
         # Sample the next token from the probability distribution.
         sorted_next_tokens = tf.random.categorical(
-            tf.math.log(sorted_pred), 
-            1, 
-            seed=seed
+            tf.math.log(sorted_pred), 1, seed=seed
         )
         # Rearrange to get the next token idx from the original order.
         next_token = tf.gather_nd(
-            sorted_indices, 
-            sorted_next_tokens, 
-            batch_dims=len(pred.shape)-1
+            sorted_indices, sorted_next_tokens, batch_dims=len(pred.shape) - 1
         )
         next_token = tf.cast(next_token, dtype=prompt.dtype)
         # Append the next token to current sequence.
@@ -372,10 +365,131 @@ def top_k_sampling(
 
     if end_token_id is not None:
         prompt = _mask_tokens_after_end_token(
-            prompt,
-            max_length,
-            end_token_id,
-            pad_token_id
+            prompt, max_length, end_token_id, pad_token_id
+        )
+    if input_is_1d:
+        return tf.squeeze(prompt)
+    return prompt
+
+
+def top_p_sampling(
+    token_probability_fn,
+    prompt,
+    max_length,
+    p=0.8,
+    seed=None,
+    end_token_id=None,
+    pad_token_id=0,
+    filter_value=-float("Inf"),
+):
+    """
+    Text generation utility based on top p (nucleus) sampling.
+
+    Top p sampling get the top tokens with probabilities that sum up to p, and
+    samples from this subset to get the next token. The probability of each
+    token is provided by the `token_probability_fn`.
+
+    Args:
+        token_probability_fn: a callable, which takes in input_sequence
+            and output the probability distribution of the next token.
+        prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
+            append generated tokens.
+        max_length: int. The max length of generated text.
+        p: float, defaults to 0.8. The number of top tokens to sample from.
+            Should follow the following constraint: 0 < p < 1.
+        seed: int, defaults to None. The random seed used for sampling.
+        end_token_id: int, defaults to None. The token marking the end of the
+            sequence, once encountered the generation is finished for the exact
+            sequence. If None, every sequence is generated up to `max_length`.
+            If set, all tokens after encountering `end_token_id` will be
+            replaced with `pad_token_id`.
+        pad_token_id: int, defaults to 0. The pad token after `end_token_id`
+            is received.
+        filter_value: float, defaults to -Inf. The value for filtering out in
+            a probability distribution.
+
+    Returns:
+        A 1D int Tensor, or 2D int Tensor representing the generated
+        sequences.
+
+    Examples:
+    ```python
+    VOCAB_SIZE = 10
+    FEATURE_SIZE = 16
+
+    # Create a dummy model to predict the next token.
+    model = tf.keras.Sequential(
+        [
+            tf.keras.Input(shape=[None]),
+            tf.keras.layers.Embedding(
+                input_dim=VOCAB_SIZE,
+                output_dim=FEATURE_SIZE,
+            ),
+            tf.keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
+        ]
+    )
+
+    # Define a function that outputs the next token's probability given the
+    # input sequence.
+    def token_probability_fn(inputs):
+        return model(inputs)[:, -1, :]
+
+    prompt = tf.random.uniform(shape=[5, 5], maxval=VOCAB_SIZE, dtype=tf.int64)
+
+    # Print the generated sequence (token ids).
+    keras_nlp.utils.top_p_sampling(
+        token_probability_fn,
+        prompt,
+        p=0.8,
+        max_length=10,
+        end_token_id=0,)
+    ```
+
+    """
+    if not tf.executing_eagerly():
+        raise RuntimeError(
+            "`keras_nlp.utils.top_p_sampling` currently requires an eager "
+            "execution context. Please call `top_p_sampling` outside "
+            "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
+            "tf.function in eager mode."
+        )
+    if p <= 0 or p >= 1:
+        raise ValueError("p should be strictly between 0 and 1 (0 < p < 1).")
+
+    prompt, input_is_1d = _validate_prompt(prompt)
+    i = prompt.shape[1]
+    while i < max_length:
+        # If the prompt has reached our desired length, exit while loop.
+        pred = token_probability_fn(prompt)
+
+        # Sort the probabilities in descending order.
+        sorted_pred, sorted_indices = tf.math.top_k(
+            pred, k=pred.shape[-1], sorted=True
+        )
+        # Calculate the cumulative probabilities.
+        cum_prob = tf.math.cumsum(sorted_pred, axis=-1)
+        keep_mask = cum_prob <= p
+        shifted_keep_mask = tf.concat(
+            [tf.ones_like(keep_mask[:, :1]), keep_mask[:, :-1]], axis=-1
+        )
+        probs = tf.where(
+            shifted_keep_mask, sorted_pred, tf.fill(pred.shape, filter_value)
+        )
+        # Sample the next token from the filtered probability distribution.
+        sorted_next_token = tf.random.categorical(
+            tf.math.log(probs), 1, seed=seed
+        )
+        next_token = tf.gather_nd(
+            sorted_indices, sorted_next_token, batch_dims=len(pred.shape) - 1
+        )
+        next_token = tf.cast(next_token, dtype=prompt.dtype)
+        # Append the next token to current sequence.
+        prompt = tf.concat([prompt, next_token[:, tf.newaxis]], axis=-1)
+        i += 1
+
+    if end_token_id is not None:
+        prompt = _mask_tokens_after_end_token(
+            prompt, max_length, end_token_id, pad_token_id
         )
     if input_is_1d:
         return tf.squeeze(prompt)
