@@ -28,7 +28,7 @@ class RougeL(RougeBase):
 
     Note on input shapes:
     For `y_true` and `y_pred`, this class supports scalar values and batch
-    inputs of shapes `()`, `(batch_size, )` and `(batch_size, 1)`.
+    inputs of shapes `()`, `(batch_size,)` and `(batch_size, 1)`.
 
     Args:
         use_stemmer: bool. Whether Porter Stemmer should be used to strip word

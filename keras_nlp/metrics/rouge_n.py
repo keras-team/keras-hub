@@ -28,7 +28,7 @@ class RougeN(RougeBase):
 
     Note on input shapes:
     For `y_true` and `y_pred`, this class supports scalar values and batch
-    inputs of shapes `()`, `(batch_size, )` and `(batch_size, 1)`.
+    inputs of shapes `()`, `(batch_size,)` and `(batch_size, 1)`.
 
     Args:
         order: The order of n-grams which are to be matched. It should lie in
