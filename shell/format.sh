@@ -13,4 +13,4 @@ for i in $(find ${targets} -name '*.py'); do
   fi
 done
 
-flake8 --config "${base_dir}/setup.cfg" ${targets}
+flake8 --config "${base_dir}/setup.cfg" --max-line-length=200 ${targets}
