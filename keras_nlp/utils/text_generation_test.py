@@ -15,9 +15,9 @@
 
 
 import tensorflow as tf
-
+import numpy as np
 from keras_nlp.utils.text_generation import greedy_search
-
+from keras_nlp.utils.text_generation import random_sampling
 
 class TextGenerationTest(tf.test.TestCase):
     def setUp(self):
@@ -47,26 +47,41 @@ class TextGenerationTest(tf.test.TestCase):
         inputs = tf.constant([1])
         outputs = greedy_search(self.token_probability_fn, inputs, max_length=5)
         self.assertEquals(outputs.shape, [5])
+        outputs = random_sampling(
+            self.token_probability_fn, inputs, max_length=5
+        )
+        self.assertEquals(outputs.shape, [5])
 
     def test_generate_with_2d_prompt(self):
         inputs = tf.constant([[1], [1]])
         outputs = greedy_search(self.token_probability_fn, inputs, max_length=5)
         self.assertEquals(outputs.shape, [2, 5])
+        outputs = random_sampling(
+            self.token_probability_fn, inputs, max_length=5
+        )
+        self.assertEquals(outputs.shape, [2, 5])
+
 
     def test_generate_with_list_prompt(self):
         inputs = [[1], [1]]
         outputs = greedy_search(self.token_probability_fn, inputs, max_length=5)
+        self.assertEquals(outputs.shape, [2, 5])
+        outputs = random_sampling(
+            self.token_probability_fn, inputs, max_length=5
+        )
         self.assertEquals(outputs.shape, [2, 5])
 
     def test_generate_with_ragged_prompt(self):
         inputs = tf.ragged.constant([[1], [2, 3]])
         with self.assertRaises(ValueError):
             greedy_search(self.token_probability_fn, inputs, max_length=5)
+        with self.assertRaises(ValueError):
+            random_sampling(self.token_probability_fn, inputs, max_length=5)
 
     def test_assert_generation_is_correct(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.constant([[0.1, 0.2, 0.3, 0.4]])
+            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
             return tf.repeat(prob, batch_size, axis=0)
 
         batch_size = 10
@@ -78,11 +93,23 @@ class TextGenerationTest(tf.test.TestCase):
         self.assertAllEqual(
             outputs, 3 * tf.ones(shape=[batch_size, max_length])
         )
+        outputs = random_sampling(
+            token_probability_fn, inputs, max_length=max_length, seed=42
+        )
+        # Random sampling result with seed 42
+        seeded_result = 3 * np.ones(shape=[batch_size, max_length])
+        seeded_result[2][2] = 2
+        seeded_result[5][2] = 2
+        seeded_result[6][2] = 2
+        seeded_result[7][1] = 2
+        seeded_result[8][1] = 2
+        seeded_result[8][2] = 2
+        self.assertAllEqual(outputs, seeded_result)
 
     def test_end_token_id(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.constant([[0.1, 0.2, 0.3, 0.4]])
+            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
             return tf.repeat(prob, batch_size, axis=0)
 
         max_length = 5
@@ -96,5 +123,18 @@ class TextGenerationTest(tf.test.TestCase):
         )
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
-
         self.assertAllEqual(outputs, expected_outputs)
+
+        outputs = random_sampling(
+            token_probability_fn,
+            inputs,
+            max_length=max_length,
+            seed=42,
+            end_token_id=2,
+            pad_token_id=0,
+        )
+        # Random sampling result with seed 42
+        expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
+        expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+        self.assertAllEqual(outputs, expected_outputs)
+
