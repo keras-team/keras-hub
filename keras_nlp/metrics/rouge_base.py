@@ -32,8 +32,8 @@ except ImportError:
 class RougeBase(keras.metrics.Metric):
     """ROUGE metric.
 
-    This class implements all the variants of the ROUGE metric - ROUGE-N,
-    ROUGE-L and ROUGE-LSum.
+    This class implements two variants of the ROUGE metric - ROUGE-N,
+    and ROUGE-L.
 
     Note on input shapes:
     For `y_true` and `y_pred`, this class supports scalar values and batch
