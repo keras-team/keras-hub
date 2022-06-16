@@ -17,7 +17,7 @@
 import tensorflow as tf
 
 
-def _validate_prompt(prompt):
+def validate_prompt(prompt):
     """
     Validate the prompt and reformat for use.
 
@@ -26,7 +26,7 @@ def _validate_prompt(prompt):
             append generated tokens.
 
     Returns:
-        a 2D Tensor, the prompt with shape [batch_size, max_length].
+        a 1D or 2D Tensor, with the same shape as prompt.
     """
     if isinstance(prompt, tf.RaggedTensor):
         raise ValueError(
@@ -35,13 +35,10 @@ def _validate_prompt(prompt):
         )
     if not isinstance(prompt, tf.Tensor):
         prompt = tf.convert_to_tensor(prompt)
-    input_is_1d = prompt.shape.rank == 1
-    if input_is_1d:
-        prompt = prompt[tf.newaxis, :]
-    return prompt, input_is_1d
+    return prompt
 
 
-def _mask_tokens_after_end_token(
+def mask_tokens_after_end_token(
     prompt, max_length, end_token_id, pad_token_id
 ):
     """
@@ -66,8 +63,7 @@ def _mask_tokens_after_end_token(
     # Build a mask including end_token and replace tokens after end_token
     # with `pad_token_id`.
     valid_indices = tf.sequence_mask(end_indices + 1, maxlen=max_length)
-    prompt = tf.where(valid_indices, prompt, pad_token_id)
-    return prompt
+    return tf.where(valid_indices, prompt, pad_token_id)
 
 
 def greedy_search(
@@ -142,7 +138,12 @@ def greedy_search(
             "tf.function in eager mode."
         )
 
-    prompt, input_is_1d = _validate_prompt(prompt)
+    prompt = validate_prompt(prompt)
+
+    input_is_1d = prompt.shape.rank == 1
+    if input_is_1d:
+        prompt = prompt[tf.newaxis, :]
+
     i = prompt.shape[1]
     while i < max_length:
         # If the prompt has reached our desired length, exit while loop.
@@ -153,7 +154,7 @@ def greedy_search(
         i += 1
 
     if end_token_id is not None:
-        prompt = _mask_tokens_after_end_token(
+        prompt = mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
         )
 
@@ -171,7 +172,8 @@ def random_sampling(
     pad_token_id=0,
 ):
     """
-    Text generation utility based on random sampling.
+    Text generation utility based on randomly sampling the entire probability
+    distribution.
 
     Random sampling samples the next token from the probability distribution
     provided by `token_probability_fn` and appends it to the existing sequence.
@@ -236,7 +238,11 @@ def random_sampling(
             "tf.function in eager mode."
         )
 
-    prompt, input_is_1d = _validate_prompt(prompt)
+    prompt = validate_prompt(prompt)
+    input_is_1d = prompt.shape.rank == 1
+    if input_is_1d:
+        prompt = prompt[tf.newaxis, :]
+
     i = prompt.shape[1]
     while i < max_length:
         # If the prompt has reached our desired length, exit while loop.
@@ -250,7 +256,7 @@ def random_sampling(
         i += 1
 
     if end_token_id is not None:
-        prompt = _mask_tokens_after_end_token(
+        prompt = mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
         )
     if input_is_1d:
