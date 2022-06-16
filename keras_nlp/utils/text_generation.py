@@ -16,6 +16,7 @@
 
 import tensorflow as tf
 
+
 def _validate_prompt(prompt):
     """
     Validate the prompt and reformat for use.
@@ -159,6 +160,7 @@ def greedy_search(
     if input_is_1d:
         return tf.squeeze(prompt)
     return prompt
+
 
 def random_sampling(
     token_probability_fn,

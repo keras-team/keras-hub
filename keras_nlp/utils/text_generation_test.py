@@ -14,10 +14,12 @@
 """Tests for Text Generation Utils."""
 
 
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
+
 from keras_nlp.utils.text_generation import greedy_search
 from keras_nlp.utils.text_generation import random_sampling
+
 
 class TextGenerationTest(tf.test.TestCase):
     def setUp(self):
@@ -60,7 +62,6 @@ class TextGenerationTest(tf.test.TestCase):
             self.token_probability_fn, inputs, max_length=5
         )
         self.assertEquals(outputs.shape, [2, 5])
-
 
     def test_generate_with_list_prompt(self):
         inputs = [[1], [1]]
@@ -137,4 +138,3 @@ class TextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
-
