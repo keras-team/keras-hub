@@ -208,3 +208,33 @@ class TextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
+
+    def test_top_k_sampling(self):
+        def token_probability_fn(inputs):
+            batch_size = inputs.shape[0]
+            prob = tf.constant([[0.4, 0.3, 0.2, 0.1]])
+            return tf.repeat(prob, batch_size, axis=0)
+
+        # test that it only samples from top k tokens
+        for k in [1, 2, 3]:
+            inputs = tf.constant([[0, 0], [0, 0]])
+            for _ in range(10):
+                outputs = top_k_sampling(
+                    token_probability_fn, inputs, max_length=5, k=k
+                )
+                self.assertAllEqual(outputs < k, tf.ones_like(outputs))
+
+    def test_top_p_sampling(self):
+        def token_probability_fn(inputs):
+            batch_size = inputs.shape[0]
+            prob = tf.constant([[0.4, 0.3, 0.2, 0.1]])
+            return tf.repeat(prob, batch_size, axis=0)
+
+        # test that it only samples from tokens that sum up to p
+        for p, k in [(0.3, 1), (0.7, 2), (0.9, 3)]:
+            inputs = tf.constant([[0, 0], [0, 0]])
+            for _ in range(10):
+                outputs = top_p_sampling(
+                    token_probability_fn, inputs, max_length=5, p=p
+                )
+                self.assertAllEqual(outputs < k, tf.ones_like(outputs))
