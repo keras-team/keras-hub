@@ -26,10 +26,19 @@ class MultiSegmentPacker(keras.layers.Layer):
     containing start and end delimeters, forming an dense input suitable for a
     classification task for BERT and BERT-like models.
 
-    Takes as input a list or tuple of sequences with the layer will truncate and
-    concatenate the sequences into a single sequence of `sequence_length`. The
-    output sequence will always start with a `start_value` and contain an
-    `end_value` after each sequence.
+    Takes as input a list or tuple of token segments. The layer will process
+    inputs as follows:
+     - Truncate all input segments to fit within `sequence_length` according to
+       the `truncator` strategy.
+     - Concatenate all input segments, adding a single `start_value` at the
+       start of the entire sequence, and multiple `end_value`s at the end of
+       each segment.
+     - Pad the resulting sequence to `sequence_length` using `pad_tokens`.
+     - Calculate a separate tensor of "segment ids", with integer type and the
+       same shape as the packed token output, where each integer index of the
+       segment the token originated from. The segment id of the `start_value`
+       is always 0, and the segment id of each `end_value` is the segment that
+       precedes it.
 
     If inputs are batched, inputs should be `tf.RaggedTensor`s with shape
     `[batch_size, None]` and will be packed and converted to a dense tensor with
@@ -37,13 +46,6 @@ class MultiSegmentPacker(keras.layers.Layer):
 
     If inputs are unbatched, inputs should be dense rank-1 tensors of any shape,
     and will be packed to shape `[sequence_length]`.
-
-    Returns:
-        A tuple with two elements. The first is the dense, packed token
-        sequence. The second is an integer tensor of the same shape, where each
-        element indicates the index of the original sequence that each token
-        belongs to.
-
 
     Args:
         sequence_length: The desired output length.
@@ -66,6 +68,11 @@ class MultiSegmentPacker(keras.layers.Layer):
                     "waterfall" algorithm that allocates quota in a
                     left-to-right manner and fills up the buckets until we run
                     out of budget. It support arbitrary number of segments.
+
+    Returns:
+        A tuple with two elements. The first is the dense, packed token
+        sequence. The second is an integer tensor of the same shape, containing
+        the segment ids.
 
     Examples:
 
