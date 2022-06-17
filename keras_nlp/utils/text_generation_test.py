@@ -64,7 +64,7 @@ class GreedySearchTextGenerationTest(tf.test.TestCase):
         inputs = tf.ragged.constant([[1], [2, 3]])
         with self.assertRaises(ValueError):
             greedy_search(self.token_probability_fn, inputs, max_length=5)
-       
+
     def test_assert_generation_is_correct(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
@@ -99,6 +99,7 @@ class GreedySearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
+
 
 class RandomSamplingTextGenerationTest(tf.test.TestCase):
     def setUp(self):
@@ -187,9 +188,9 @@ class RandomSamplingTextGenerationTest(tf.test.TestCase):
             for pred in flatten_predictions:
                 outputs_count[pred] += 1
         self.assertAllClose(
-            outputs_count/np.sum(outputs_count), 
-            [0.01, 0.01, 0.08, 0.9], 
-            rtol=0.2
+            outputs_count / np.sum(outputs_count),
+            [0.01, 0.01, 0.08, 0.9],
+            rtol=0.2,
         )
 
     def test_seeded_end_token_id(self):

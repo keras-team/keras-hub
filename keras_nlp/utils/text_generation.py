@@ -38,9 +38,7 @@ def validate_prompt(prompt):
     return prompt
 
 
-def mask_tokens_after_end_token(
-    prompt, max_length, end_token_id, pad_token_id
-):
+def mask_tokens_after_end_token(prompt, max_length, end_token_id, pad_token_id):
     """
     Mask the tokens after the end token.
 
