@@ -17,12 +17,11 @@ from typing import Dict
 from typing import Iterable
 from typing import List
 from typing import Union
+from keras_nlp.tokenizers import tokenizer
 
+import warnings
 import tensorflow as tf
 import tensorflow_text as tf_text
-import warnings
-
-from keras_nlp.tokenizers import tokenizer
 
 # Matches whitespace and control characters.
 WHITESPACE_REGEX = r"|".join(
