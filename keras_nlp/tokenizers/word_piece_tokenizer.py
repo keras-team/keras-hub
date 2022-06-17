@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tensorflow as tf
-import tensorflow_text as tf_text
-import warnings
 from typing import Any
 from typing import Dict
 from typing import Iterable
 from typing import List
 from typing import Union
-from keras_nlp.tokenizers import tokenizer
 
+import tensorflow as tf
+import tensorflow_text as tf_text
+import warnings
+
+from keras_nlp.tokenizers import tokenizer
 
 # Matches whitespace and control characters.
 WHITESPACE_REGEX = r"|".join(
@@ -200,40 +201,26 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         super().__init__(**kwargs)
 
-        if vocabulary_size != None and isinstance(vocabulary_size, int) == False:
-            raise ValueError(
-                f"Vocabulary_size expected type int, given {type(vocabulary_size)}"
-            )
-        
         if isinstance(vocabulary, str):
-            if vocabulary_size is None:
-                self.vocabulary = [
-                    line.rstrip() for line in tf.io.gfile.GFile(vocabulary)
-                ]
-            else:
-                self.vocabulary = []
-                count = 0
-                for line in tf.io.gfile.GFile(vocabulary):
-                    count = count + 1
-                    self.vocabulary.append( line.rstrip() )
-                
-                if  vocabulary_size > count:
-                        warnings.warn("Setting vocab size to a larger value than the input vocabulary file.\
-                        Some token ids will never be output from the tokenizer.")
-                
-                self.vocabulary = self.vocabulary[:vocabulary_size]
+            self.vocabulary = []
+            count = 0
+            for line in tf.io.gfile.GFile(vocabulary):
+                count = count + 1
+                self.vocabulary.append(line.rstrip())
+            if vocabulary_size is not None and vocabulary_size > count:
+                warnings.warn("Setting vocab size to a larger value than the input vocabulary file.\
+                Some token ids will never be output from the tokenizer.")
 
         elif isinstance(vocabulary, Iterable):
             # Make a copy.
-            if vocabulary_size is None:
-                self.vocabulary = list(vocabulary)
-            else:
-                self.vocabulary = list(vocabulary)[:vocabulary_size]
+            self.vocabulary = list(vocabulary)
         else:
             raise ValueError(
                 "Vocabulary must be an file path or list of terms. "
                 f"Received: vocabulary={vocabulary}"
             )
+        if vocabulary_size is not None:
+            self.vocabulary = self.vocabulary[:vocabulary_size]
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
 
@@ -308,6 +295,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "keep_pattern": self.keep_pattern,
                 "suffix_indicator": self.suffix_indicator,
                 "oov_token": self.oov_token,
+                "vocabulary_size": self.vocabulary_size
             }
         )
         return config
