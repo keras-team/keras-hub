@@ -116,6 +116,7 @@ class RougeBase(keras.metrics.Metric):
         # Wraps `result()` with a python dictionary that also supports variable
         # assignment. We have to do this with __new__ because the base metric
         # class wraps the `results()` method.
+        # TODO: Remove this snippet of code once the Keras bug is fixed.
         obj = super().__new__(cls)
 
         class MetricDict(dict):
