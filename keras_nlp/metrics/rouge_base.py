@@ -192,18 +192,18 @@ class RougeBase(keras.metrics.Metric):
     def result(self):
         if self._number_of_samples == 0:
             return {
-                f"{self.name}_precision": 0.0,
-                f"{self.name}_recall": 0.0,
-                f"{self.name}_f1_score": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "f1_score": 0.0,
             }
 
         rouge_precision = self._rouge_precision / self._number_of_samples
         rouge_recall = self._rouge_recall / self._number_of_samples
         rouge_f1_score = self._rouge_f1_score / self._number_of_samples
         return {
-            f"{self.name}_precision": rouge_precision,
-            f"{self.name}_recall": rouge_recall,
-            f"{self.name}_f1_score": rouge_f1_score,
+            "precision": rouge_precision,
+            "recall": rouge_recall,
+            "f1_score": rouge_f1_score,
         }
 
     def reset_state(self):

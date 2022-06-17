@@ -23,18 +23,27 @@ from keras_nlp.metrics import RougeL
 class RougeLTest(tf.test.TestCase):
     def setUp(self):
         super().setUp()
-        self.metric_types = (
-            "rouge-l_precision",
-            "rouge-l_recall",
-            "rouge-l_f1_score",
-        )
+
+        def assertDictAlmostEqual(d1, d2, delta=1e-3, typecast_to_numpy=True):
+            for key, val in d1.items():
+                if typecast_to_numpy:
+                    val = val.numpy()
+                self.assertAlmostEqual(val, d2[key], delta=delta)
+
+        def assertDictAllValuesNotEqual(d1, d2):
+            for key, val in d1.items():
+                self.assertNotEqual(val, d2[key])
+
+        self.assertDictAlmostEqual = assertDictAlmostEqual
+        self.assertDictAllValuesNotEqual = assertDictAllValuesNotEqual
 
     def test_initialization(self):
         rouge = RougeL()
         result = rouge.result()
 
-        for metric_type in self.metric_types:
-            self.assertEqual(result[metric_type].numpy(), 0.0)
+        self.assertDictEqual(
+            result, {"precision": 0.0, "recall": 0.0, "f1_score": 0.0}
+        )
 
     def test_string_input(self):
         rouge = RougeL(use_stemmer=False)
@@ -42,12 +51,9 @@ class RougeLTest(tf.test.TestCase):
         y_pred = "the cat was under the bed"
 
         rouge_val = rouge(y_true, y_pred)
-        for metric_type, expected_val in zip(
-            self.metric_types, [1, 0.545, 0.706]
-        ):
-            self.assertAlmostEqual(
-                rouge_val[metric_type].numpy(), expected_val, delta=1e-3
-            )
+        self.assertDictAlmostEqual(
+            rouge_val, {"precision": 1.0, "recall": 0.545, "f1_score": 0.706}
+        )
 
     def test_string_list_input(self):
         rouge = RougeL(use_stemmer=False)
@@ -61,12 +67,9 @@ class RougeLTest(tf.test.TestCase):
         ]
 
         rouge_val = rouge(y_true, y_pred)
-        for metric_type, expected_val in zip(
-            self.metric_types, [1, 0.689, 0.807]
-        ):
-            self.assertAlmostEqual(
-                rouge_val[metric_type].numpy(), expected_val, delta=1e-3
-            )
+        self.assertDictAlmostEqual(
+            rouge_val, {"precision": 1.0, "recall": 0.689, "f1_score": 0.807}
+        )
 
     def test_tensor_input(self):
         rouge = RougeL(use_stemmer=False)
@@ -81,12 +84,9 @@ class RougeLTest(tf.test.TestCase):
         )
 
         rouge_val = rouge(y_true, y_pred)
-        for metric_type, expected_val in zip(
-            self.metric_types, [1, 0.689, 0.807]
-        ):
-            self.assertAlmostEqual(
-                rouge_val[metric_type].numpy(), expected_val, delta=1e-3
-            )
+        self.assertDictAlmostEqual(
+            rouge_val, {"precision": 1.0, "recall": 0.689, "f1_score": 0.807}
+        )
 
     def test_rank_2_input(self):
         rouge = RougeL(use_stemmer=False)
@@ -101,12 +101,9 @@ class RougeLTest(tf.test.TestCase):
         )
 
         rouge_val = rouge(y_true, y_pred)
-        for metric_type, expected_val in zip(
-            self.metric_types, [1, 0.689, 0.807]
-        ):
-            self.assertAlmostEqual(
-                rouge_val[metric_type].numpy(), expected_val, delta=1e-3
-            )
+        self.assertDictAlmostEqual(
+            rouge_val, {"precision": 1.0, "recall": 0.689, "f1_score": 0.807}
+        )
 
     def test_model_compile(self):
         inputs = keras.Input(shape=(), dtype="string")
@@ -119,12 +116,12 @@ class RougeLTest(tf.test.TestCase):
         y = tf.constant(["hello this is awesome"])
 
         output = model.evaluate(x, y, return_dict=True)
-        for metric_type, expected_val in zip(
-            self.metric_types, [0.75, 0.75, 0.75]
-        ):
-            self.assertAlmostEqual(
-                output[metric_type], expected_val, delta=1e-3
-            )
+        del output["loss"]
+        self.assertDictAlmostEqual(
+            output,
+            {"precision": 0.75, "recall": 0.75, "f1_score": 0.75},
+            typecast_to_numpy=False,
+        )
 
     def test_reset_state(self):
         rouge = RougeL()
@@ -140,17 +137,15 @@ class RougeLTest(tf.test.TestCase):
 
         rouge.update_state(y_true, y_pred)
         rouge_val = rouge.result()
-        for metric_type, unexpected_val in zip(
-            self.metric_types, [0.0, 0.0, 0.0]
-        ):
-            self.assertNotEqual(rouge_val[metric_type].numpy(), unexpected_val)
+        self.assertDictAllValuesNotEqual(
+            rouge_val, {"precision": 0.0, "recall": 0.0, "f1_score": 0.0}
+        )
 
         rouge.reset_state()
         rouge_val = rouge.result()
-        for metric_type, unexpected_val in zip(
-            self.metric_types, [0.0, 0.0, 0.0]
-        ):
-            self.assertEqual(rouge_val[metric_type].numpy(), unexpected_val)
+        self.assertDictEqual(
+            rouge_val, {"precision": 0.0, "recall": 0.0, "f1_score": 0.0}
+        )
 
     def test_update_state(self):
         rouge = RougeL()
@@ -166,24 +161,18 @@ class RougeLTest(tf.test.TestCase):
 
         rouge.update_state(y_true_1, y_pred_1)
         rouge_val = rouge.result()
-        for metric_type, expected_val in zip(
-            self.metric_types, [1, 0.689, 0.807]
-        ):
-            self.assertAlmostEqual(
-                rouge_val[metric_type].numpy(), expected_val, delta=1e-3
-            )
+        self.assertDictAlmostEqual(
+            rouge_val, {"precision": 1.0, "recall": 0.689, "f1_score": 0.807}
+        )
 
         y_true_2 = tf.constant(["what is your favourite show"])
         y_pred_2 = tf.constant(["my favourite show is silicon valley"])
 
         rouge.update_state(y_true_2, y_pred_2)
         rouge_val = rouge.result()
-        for metric_type, expected_val in zip(
-            self.metric_types, [0.778, 0.593, 0.66]
-        ):
-            self.assertAlmostEqual(
-                rouge_val[metric_type].numpy(), expected_val, delta=1e-3
-            )
+        self.assertDictAlmostEqual(
+            rouge_val, {"precision": 0.778, "recall": 0.593, "f1_score": 0.66}
+        )
 
     def test_merge_state(self):
         rouge_1 = RougeL()
@@ -208,31 +197,22 @@ class RougeLTest(tf.test.TestCase):
         rouge_1.update_state(y_true_1, y_pred_1)
         rouge_1.update_state(y_true_2, y_pred_2)
         rouge_val = rouge_1.result()
-        for metric_type, expected_val in zip(
-            self.metric_types, [0.778, 0.593, 0.66]
-        ):
-            self.assertAlmostEqual(
-                rouge_val[metric_type].numpy(), expected_val, delta=1e-3
-            )
+        self.assertDictAlmostEqual(
+            rouge_val, {"precision": 0.778, "recall": 0.593, "f1_score": 0.66}
+        )
 
         rouge_2.update_state(y_true_3, y_pred_3)
         rouge_val = rouge_2.result()
-        for metric_type, expected_val in zip(
-            self.metric_types, [0.333, 0.4, 0.364]
-        ):
-            self.assertAlmostEqual(
-                rouge_val[metric_type].numpy(), expected_val, delta=1e-3
-            )
+        self.assertDictAlmostEqual(
+            rouge_val, {"precision": 0.333, "recall": 0.4, "f1_score": 0.364}
+        )
 
         merged_rouge = RougeL()
         merged_rouge.merge_state([rouge_1, rouge_2])
         rouge_val = merged_rouge.result()
-        for metric_type, expected_val in zip(
-            self.metric_types, [0.667, 0.545, 0.586]
-        ):
-            self.assertAlmostEqual(
-                rouge_val[metric_type].numpy(), expected_val, delta=1e-3
-            )
+        self.assertDictAlmostEqual(
+            rouge_val, {"precision": 0.667, "recall": 0.545, "f1_score": 0.586}
+        )
 
     def test_get_config(self):
         rouge = RougeL(
