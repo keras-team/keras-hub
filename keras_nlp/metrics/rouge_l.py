@@ -45,7 +45,7 @@ class RougeL(RougeBase):
     >>> rouge_l = keras_nlp.metrics.RougeL()
     >>> y_true = "the tiny little cat was found under the big funny bed"
     >>> y_pred = "the cat was under the bed"
-    >>> rouge_l(y_true, y_pred)["rouge-l_f1_score"]
+    >>> rouge_l(y_true, y_pred)["f1_score"]
     <tf.Tensor: shape=(), dtype=float32, numpy=0.7058824>
 
     1.2. rank 1 inputs.
@@ -59,7 +59,7 @@ class RougeL(RougeBase):
     ...     "the cat was under the bed",
     ...     "i love contributing to KerasNLP",
     ... ]
-    >>> rouge_l(y_true, y_pred)["rouge-l_f1_score"]
+    >>> rouge_l(y_true, y_pred)["f1_score"]
     <tf.Tensor: shape=(), dtype=float32, numpy=0.80748665>
 
     b. Tensor
@@ -76,7 +76,7 @@ class RougeL(RougeBase):
     ...         "i love contributing to KerasNLP",
     ...     ]
     ... )
-    >>> rouge_l(y_true, y_pred)["rouge-l_f1_score"]
+    >>> rouge_l(y_true, y_pred)["f1_score"]
     <tf.Tensor: shape=(), dtype=float32, numpy=0.80748665>
 
     1.3. rank 2 inputs.
@@ -93,7 +93,7 @@ class RougeL(RougeBase):
     ...         ["i love contributing to KerasNLP"],
     ...     ]
     ... )
-    >>> rouge_l(y_true, y_pred)["rouge-l_f1_score"]
+    >>> rouge_l(y_true, y_pred)["f1_score"]
     <tf.Tensor: shape=(), dtype=float32, numpy=0.80748665>
 
     3. Pass the metric to `model.compile()`.
@@ -104,7 +104,7 @@ class RougeL(RougeBase):
     >>> x = tf.constant(["HELLO THIS IS FUN"])
     >>> y = tf.constant(["hello this is awesome"])
     >>> metric_dict = model.evaluate(x, y, return_dict=True)
-    >>> metric_dict["rouge-l_f1_score"]
+    >>> metric_dict["f1_score"]
      0.75
     """
 
