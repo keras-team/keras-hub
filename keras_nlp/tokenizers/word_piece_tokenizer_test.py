@@ -43,16 +43,16 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
         vocab_size = 5
         tokenizer = WordPieceTokenizer(
-            vocabulary=vocab_data, vocabulary_size=vocab_size
+            vocabulary=vocab_data, _vocabulary_size=vocab_size
         )
-        self.assertEqual(tokenizer.vocabulary_size_(), vocab_size)
+        self.assertEqual(tokenizer.vocabulary_size(), vocab_size)
 
     def test_vocabulary_as_list(self):
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
         input_data = ["the quick brown fox"]
         vocab_size = 4
         tokenizer = WordPieceTokenizer(
-            vocabulary=vocab_data, vocabulary_size=vocab_size
+            vocabulary=vocab_data, _vocabulary_size=vocab_size
         )
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 0, 0]])
@@ -77,7 +77,7 @@ class WordPieceTokenizerTest(tf.test.TestCase):
     def test_accessors(self):
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
         tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
-        self.assertEqual(tokenizer.vocabulary_size_(), 7)
+        self.assertEqual(tokenizer.vocabulary_size(), 7)
         self.assertEqual(
             tokenizer.get_vocabulary(),
             ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"],
@@ -210,10 +210,10 @@ class WordPieceTokenizerTest(tf.test.TestCase):
                 file.write(piece + "\n")
         tokenizer = WordPieceTokenizer(
             vocabulary=vocab_path,
-            vocabulary_size=vocab_size
+            _vocabulary_size=vocab_size
         )
         call_output = tokenizer(input_data)
-        self.assertAllEqual(tokenizer.vocabulary_size_(), vocab_size)
+        self.assertAllEqual(tokenizer.vocabulary_size(), vocab_size)
         self.assertAllEqual(call_output, [[1, 2, 3, 0, 0, 0]])
 
     def test_config(self):

@@ -177,7 +177,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     def __init__(
         self,
         vocabulary: Union[Iterable[str], str] = None,
-        vocabulary_size: int = None,
+        _vocabulary_size: int = None,
         sequence_length: int = None,
         lowercase: bool = True,
         strip_accents: bool = True,
@@ -207,7 +207,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             for line in tf.io.gfile.GFile(vocabulary):
                 count = count + 1
                 self.vocabulary.append(line.rstrip())
-            if vocabulary_size is not None and vocabulary_size > count:
+            if _vocabulary_size is not None and _vocabulary_size > count:
                 warnings.warn("Setting vocab size to a larger value than the input vocabulary file.\
                 Some token ids will never be output from the tokenizer.")
 
@@ -219,8 +219,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "Vocabulary must be an file path or list of terms. "
                 f"Received: vocabulary={vocabulary}"
             )
-        if vocabulary_size is not None:
-            self.vocabulary = self.vocabulary[:vocabulary_size]
+        if _vocabulary_size is not None:
+            self.vocabulary = self.vocabulary[:_vocabulary_size]
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
 
@@ -238,7 +238,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.keep_pattern = keep_pattern
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
-        self.vocabulary_size = vocabulary_size
+        self._vocabulary_size = _vocabulary_size
 
         if oov_token not in self.vocabulary:
             raise RuntimeError(
@@ -262,11 +262,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         """Get the tokenizer vocabulary as a list of strings tokens."""
         return self.vocabulary
 
-    def vocabulary_size_(self) -> int:
+    def vocabulary_size(self) -> int:
         """Get the size of the tokenizer vocabulary."""
-        if self.vocabulary_size is None:
+        if self._vocabulary_size is None:
             return len(self.vocabulary)
-        return self.vocabulary_size
+        return self._vocabulary_size
 
     def id_to_token(self, id: int) -> str:
         """Convert an integer id to a string token."""
@@ -295,7 +295,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "keep_pattern": self.keep_pattern,
                 "suffix_indicator": self.suffix_indicator,
                 "oov_token": self.oov_token,
-                "vocabulary_size": self.vocabulary_size
+                "_vocabulary_size": self._vocabulary_size
             }
         )
         return config
