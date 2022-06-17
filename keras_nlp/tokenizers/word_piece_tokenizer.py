@@ -15,6 +15,7 @@
 from typing import Iterable
 from typing import List
 
+import warnings
 import tensorflow as tf
 import tensorflow_text as tf_text
 
@@ -173,7 +174,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     def __init__(
         self,
         vocabulary=None,
-        sequence_length: int = None,
+        _vocabulary_size: int = None,
+        sequence_length :int = None,
         lowercase: bool = True,
         strip_accents: bool = True,
         split: bool = True,
@@ -197,9 +199,14 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         super().__init__(**kwargs)
 
         if isinstance(vocabulary, str):
-            self.vocabulary = [
-                line.rstrip() for line in tf.io.gfile.GFile(vocabulary)
-            ]
+            self.vocabulary = []
+            count = 0
+            for line in tf.io.gfile.GFile(vocabulary):
+                count = count + 1
+                self.vocabulary.append(line.rstrip())
+            if _vocabulary_size is not None and _vocabulary_size > count:
+                warnings.warn("Setting vocab size to a larger value than the input vocabulary file.\
+                Some token ids will never be output from the tokenizer.")
         elif isinstance(vocabulary, Iterable):
             # Make a copy.
             self.vocabulary = list(vocabulary)
@@ -208,6 +215,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "Vocabulary must be an file path or list of terms. "
                 f"Received: vocabulary={vocabulary}"
             )
+        if _vocabulary_size is not None:
+            self.vocabulary = self.vocabulary[:_vocabulary_size]
+
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
 
@@ -217,6 +227,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         if keep_pattern is None:
             keep_pattern = PUNCTUATION_REGEX
 
+        self._vocabulary_size = _vocabulary_size
         self.sequence_length = sequence_length
         self.lowercase = lowercase
         self.strip_accents = strip_accents
@@ -250,7 +261,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def vocabulary_size(self) -> int:
         """Get the size of the tokenizer vocabulary."""
-        return len(self.vocabulary)
+        if self._vocabulary_size is None:
+            return len(self.vocabulary)
+        return len(self._vocabulary_size)
 
     def id_to_token(self, id: int) -> str:
         """Convert an integer id to a string token."""
@@ -271,6 +284,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 # the saved model. We have no good way to support this
                 # currently, so we save the vocabulary in the config.
                 "vocabulary": self.vocabulary,
+                "_vocabulary_size": self._vocabulary_size
                 "sequence_length": self.sequence_length,
                 "lowercase": self.lowercase,
                 "strip_accents": self.strip_accents,
