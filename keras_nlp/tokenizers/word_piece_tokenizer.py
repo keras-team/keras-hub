@@ -263,7 +263,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         """Get the size of the tokenizer vocabulary."""
         if self._vocabulary_size is None:
             return len(self.vocabulary)
-        return len(self._vocabulary_size)
+        return self._vocabulary_size
 
     def id_to_token(self, id: int) -> str:
         """Convert an integer id to a string token."""
@@ -284,7 +284,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 # the saved model. We have no good way to support this
                 # currently, so we save the vocabulary in the config.
                 "vocabulary": self.vocabulary,
-                "_vocabulary_size": self._vocabulary_size
+                "_vocabulary_size": self._vocabulary_size,
                 "sequence_length": self.sequence_length,
                 "lowercase": self.lowercase,
                 "strip_accents": self.strip_accents,

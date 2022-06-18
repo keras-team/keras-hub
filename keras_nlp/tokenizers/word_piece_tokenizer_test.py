@@ -40,7 +40,25 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         call_output = tokenizer(input_data)
         self.assertIsInstance(call_output, tf.Tensor)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6, 7, 0, 0, 0]])
+    
+    def test_vocabulary_size(self):
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        vocab_size = 5
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data, _vocabulary_size=vocab_size
+        )
+        self.assertEqual(tokenizer.vocabulary_size(), vocab_size)
 
+    def test_vocabulary_as_list(self):
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        input_data = ["the quick brown fox"]
+        vocab_size = 4
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data, _vocabulary_size=vocab_size
+        )
+        call_output = tokenizer(input_data)
+        self.assertAllEqual(call_output, [[1, 2, 3, 0, 0]])
+    
     def test_string_tokenize(self):
         input_data = ["the quick brown fox"]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
@@ -184,6 +202,22 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6, 7]])
 
+    def test_from_file_with_vocabulary_size(self):
+        vocab_path = os.path.join(self.get_temp_dir(), "vocab.txt")
+        input_data = ["the quick brown fox."]
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        vocab_size = 4
+        with tf.io.gfile.GFile(vocab_path, "w") as file:
+            for piece in vocab_data:
+                file.write(piece + "\n")
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_path,
+            _vocabulary_size=vocab_size
+        )
+        call_output = tokenizer(input_data)
+        self.assertAllEqual(tokenizer.vocabulary_size(), vocab_size)
+        self.assertAllEqual(call_output, [[1, 2, 3, 0, 0, 0]])
+    
     def test_config(self):
         input_data = ["quick brOWN whale"]
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]
