@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
 from typing import Iterable
 from typing import List
 
-import warnings
 import tensorflow as tf
 import tensorflow_text as tf_text
 
@@ -175,7 +175,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self,
         vocabulary=None,
         _vocabulary_size: int = None,
-        sequence_length :int = None,
+        sequence_length: int = None,
         lowercase: bool = True,
         strip_accents: bool = True,
         split: bool = True,
@@ -205,8 +205,10 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 count = count + 1
                 self.vocabulary.append(line.rstrip())
             if _vocabulary_size is not None and _vocabulary_size > count:
-                warnings.warn("Setting vocab size to a larger value than the input vocabulary file.\
-                Some token ids will never be output from the tokenizer.")
+                warnings.warn(
+                    "Setting vocab size to a larger value than the input vocabulary file.\
+                Some token ids will never be output from the tokenizer."
+                )
         elif isinstance(vocabulary, Iterable):
             # Make a copy.
             self.vocabulary = list(vocabulary)

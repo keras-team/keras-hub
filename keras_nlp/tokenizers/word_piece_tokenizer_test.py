@@ -40,7 +40,7 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         call_output = tokenizer(input_data)
         self.assertIsInstance(call_output, tf.Tensor)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6, 7, 0, 0, 0]])
-    
+
     def test_vocabulary_size(self):
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
         vocab_size = 5
@@ -58,7 +58,7 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         )
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 0, 0]])
-    
+
     def test_string_tokenize(self):
         input_data = ["the quick brown fox"]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
@@ -211,13 +211,12 @@ class WordPieceTokenizerTest(tf.test.TestCase):
             for piece in vocab_data:
                 file.write(piece + "\n")
         tokenizer = WordPieceTokenizer(
-            vocabulary=vocab_path,
-            _vocabulary_size=vocab_size
+            vocabulary=vocab_path, _vocabulary_size=vocab_size
         )
         call_output = tokenizer(input_data)
         self.assertAllEqual(tokenizer.vocabulary_size(), vocab_size)
         self.assertAllEqual(call_output, [[1, 2, 3, 0, 0, 0]])
-    
+
     def test_config(self):
         input_data = ["quick brOWN whale"]
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]
