@@ -85,8 +85,6 @@ class EditDistance(keras.metrics.Metric):
         y_true = validate_and_fix_rank(y_true, "y_true")
         y_pred = validate_and_fix_rank(y_pred, "y_pred")
 
-        batch_size = tf.shape(y_true)[0]
-
         def calculate_edit_distance(args):
             reference, hypothesis = args
 
@@ -100,17 +98,17 @@ class EditDistance(keras.metrics.Metric):
                     normalize=self.normalize,
                 )
             )
-            return edit_distance
 
-        edit_distance = tf.map_fn(
+            self._aggregate_edit_distance.assign_add(
+                tf.cast(edit_distance, dtype=self.dtype)
+            )
+            self._number_of_samples.assign_add(tf.cast(1, dtype=self.dtype))
+            return 0
+
+        _ = tf.map_fn(
             fn=calculate_edit_distance,
             elems=(y_true, y_pred),
-            fn_output_signature=self.dtype,
-        )
-        self._aggregate_edit_distance.assign_add(tf.reduce_sum(edit_distance))
-
-        self._number_of_samples.assign_add(
-            tf.cast(batch_size, dtype=self.dtype)
+            fn_output_signature=tf.int8,
         )
 
     def result(self):
