@@ -48,6 +48,7 @@ setup(
             "isort",
             "pytest",
             "pytest-cov",
+            "rouge-score",
         ],
         "examples": [
             "datasets",  # For GLUE in BERT example.

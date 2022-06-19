@@ -130,7 +130,6 @@ class ByteTokenizerTest(tf.test.TestCase):
             [104, 97, 104, 97],
         ]
         for i in range(output.shape[0]):
-            print(output[i])
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_tokenize_first_batch_second_with_sequence_length(self):
@@ -150,7 +149,6 @@ class ByteTokenizerTest(tf.test.TestCase):
             [104, 97, 104, 97, 0, 0, 0, 0, 0, 0],
         ]
         for i in range(output.shape[0]):
-            print(output[i])
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_batch_first_tokenize_second(self):
@@ -169,7 +167,6 @@ class ByteTokenizerTest(tf.test.TestCase):
             [104, 97, 104, 97],
         ]
         for i in range(output.shape[0]):
-            print(output[i])
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_batch_first_tokenize_second_with_sequence_length(self):
@@ -188,7 +185,6 @@ class ByteTokenizerTest(tf.test.TestCase):
             [104, 97, 104, 97, 0, 0, 0, 0, 0, 0],
         ]
         for i in range(output.shape[0]):
-            print(output[i])
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_functional_model(self):
