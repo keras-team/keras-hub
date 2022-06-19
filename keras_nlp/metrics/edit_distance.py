@@ -32,6 +32,8 @@ class EditDistance(keras.metrics.Metric):
     rank 2.
 
     Args:
+        normalize: bool. If True, the output is divided by the number of tokens
+            in the reference text.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
             not specified, it defaults to tf.float32.
         name: string. Name of the metric instance.
