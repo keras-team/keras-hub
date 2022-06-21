@@ -161,7 +161,7 @@ def greedy_search(
     return prompt
 
 
-def random_sampling(
+def random_sampling_search(
     token_probability_fn,
     prompt,
     max_length,

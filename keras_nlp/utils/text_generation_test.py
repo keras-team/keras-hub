@@ -193,7 +193,7 @@ class RandomSamplingTextGenerationTest(tf.test.TestCase):
             rtol=0.2,
         )
 
-    def test_seeded_end_token_id(self):
+    def test_end_token_id(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
             prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
