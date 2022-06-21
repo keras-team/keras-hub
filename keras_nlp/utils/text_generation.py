@@ -19,14 +19,7 @@ import tensorflow as tf
 
 def validate_prompt(prompt):
     """
-    Validate the prompt and reformat for use.
-
-    Args:
-        prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
-            append generated tokens.
-
-    Returns:
-        a 1D or 2D Tensor, with the same shape as prompt.
+    Helper function to validate input to text_generation utils.
     """
     if isinstance(prompt, tf.RaggedTensor):
         raise ValueError(
@@ -40,18 +33,7 @@ def validate_prompt(prompt):
 
 def mask_tokens_after_end_token(prompt, max_length, end_token_id, pad_token_id):
     """
-    Mask the tokens after the end token.
-
-    Args:
-        prompt: a 2D Tensor, the prompt with shape [batch_size, max_length].
-        max_length: an integer, the maximum length of the prompt.
-        end_token_id: an integer, the id of the end token.
-        pad_token_id: an integer, the id of the padding token.
-
-    Returns:
-        a 2D Tensor, the masked prompt with shape [batch_size, max_length]. All
-        tokens after encountering `end_token_id` will be replaced with
-        `pad_token_id`.
+    Helper function to mask the tokens after the end token.
     """
     # Mask out tokens after `end_token_id` is encountered.
     # Find index of first end_token_id.
