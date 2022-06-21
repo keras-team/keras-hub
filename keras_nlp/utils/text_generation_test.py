@@ -18,7 +18,7 @@ import numpy as np
 import tensorflow as tf
 
 from keras_nlp.utils.text_generation import greedy_search
-from keras_nlp.utils.text_generation import random_sampling_search
+from keras_nlp.utils.text_generation import random_search
 
 
 class GreedySearchTextGenerationTest(tf.test.TestCase):
@@ -127,31 +127,23 @@ class RandomSamplingTextGenerationTest(tf.test.TestCase):
 
     def test_generate_with_1d_prompt(self):
         inputs = tf.constant([1])
-        outputs = random_sampling_search(
-            self.token_probability_fn, inputs, max_length=5
-        )
+        outputs = random_search(self.token_probability_fn, inputs, max_length=5)
         self.assertEquals(outputs.shape, [5])
 
     def test_generate_with_2d_prompt(self):
         inputs = tf.constant([[1], [1]])
-        outputs = random_sampling_search(
-            self.token_probability_fn, inputs, max_length=5
-        )
+        outputs = random_search(self.token_probability_fn, inputs, max_length=5)
         self.assertEquals(outputs.shape, [2, 5])
 
     def test_generate_with_list_prompt(self):
         inputs = [[1], [1]]
-        outputs = random_sampling_search(
-            self.token_probability_fn, inputs, max_length=5
-        )
+        outputs = random_search(self.token_probability_fn, inputs, max_length=5)
         self.assertEquals(outputs.shape, [2, 5])
 
     def test_generate_with_ragged_prompt(self):
         inputs = tf.ragged.constant([[1], [2, 3]])
         with self.assertRaises(ValueError):
-            random_sampling_search(
-                self.token_probability_fn, inputs, max_length=5
-            )
+            random_search(self.token_probability_fn, inputs, max_length=5)
 
     def test_assert_seeded_generation_is_correct(self):
         def token_probability_fn(inputs):
@@ -163,7 +155,7 @@ class RandomSamplingTextGenerationTest(tf.test.TestCase):
         inputs = 3 * tf.ones([batch_size, 1], dtype=tf.int32)
         max_length = 3
         tf.random.set_seed(42)
-        outputs = random_sampling_search(
+        outputs = random_search(
             token_probability_fn, inputs, max_length=max_length, seed=42
         )
         # Random sampling result with seed 42
@@ -183,7 +175,7 @@ class RandomSamplingTextGenerationTest(tf.test.TestCase):
         outputs_count = np.array([0, 0, 0, 0])
         tf.random.set_seed(42)
         for i in range(500):
-            outputs = random_sampling_search(
+            outputs = random_search(
                 token_probability_fn, inputs, max_length=max_length, seed=42
             )
             flatten_predictions = tf.reshape(outputs[:, 1:], [-1])
@@ -204,7 +196,7 @@ class RandomSamplingTextGenerationTest(tf.test.TestCase):
         max_length = 5
         inputs = tf.constant([[0, 1], [1, 2]])
 
-        outputs = random_sampling_search(
+        outputs = random_search(
             token_probability_fn,
             inputs,
             max_length=max_length,
