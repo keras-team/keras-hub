@@ -13,3 +13,4 @@
 # limitations under the License.
 
 from keras_nlp.utils.text_generation import greedy_search
+from keras_nlp.utils.text_generation import random_search
