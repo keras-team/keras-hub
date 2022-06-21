@@ -149,7 +149,9 @@ class RandomSamplingTextGenerationTest(tf.test.TestCase):
     def test_generate_with_ragged_prompt(self):
         inputs = tf.ragged.constant([[1], [2, 3]])
         with self.assertRaises(ValueError):
-            random_sampling_search(self.token_probability_fn, inputs, max_length=5)
+            random_sampling_search(
+                self.token_probability_fn, inputs, max_length=5
+            )
 
     def test_assert_seeded_generation_is_correct(self):
         def token_probability_fn(inputs):
