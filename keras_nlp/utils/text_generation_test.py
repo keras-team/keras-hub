@@ -159,7 +159,7 @@ class RandomSamplingTextGenerationTest(tf.test.TestCase):
         outputs = random_search(
             token_probability_fn, inputs, max_length=max_length, seed=42
         )
-        # Random sampling result with seed 42
+        # Random sampling result with seed 42.
         seeded_result = 3 * np.ones(shape=[batch_size, max_length])
         self.assertAllEqual(outputs, seeded_result)
 
@@ -205,7 +205,7 @@ class RandomSamplingTextGenerationTest(tf.test.TestCase):
             end_token_id=2,
             pad_token_id=0,
         )
-        # Random sampling result with seed 42
+        # Random sampling result with seed 42.
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
@@ -237,23 +237,29 @@ class TopKSamplingTextGenerationTest(tf.test.TestCase):
 
     def test_generate_with_1d_prompt(self):
         inputs = tf.constant([1])
-        outputs = top_k_search(self.token_probability_fn, inputs, max_length=5)
+        outputs = top_k_search(
+            self.token_probability_fn, inputs, max_length=5, k=2
+        )
         self.assertEquals(outputs.shape, [5])
 
     def test_generate_with_2d_prompt(self):
         inputs = tf.constant([[1], [1]])
-        outputs = top_k_search(self.token_probability_fn, inputs, max_length=5)
+        outputs = top_k_search(
+            self.token_probability_fn, inputs, max_length=5, k=2
+        )
         self.assertEquals(outputs.shape, [2, 5])
 
     def test_generate_with_list_prompt(self):
         inputs = [[1], [1]]
-        outputs = top_k_search(self.token_probability_fn, inputs, max_length=5)
+        outputs = top_k_search(
+            self.token_probability_fn, inputs, max_length=5, k=2
+        )
         self.assertEquals(outputs.shape, [2, 5])
 
     def test_generate_with_ragged_prompt(self):
         inputs = tf.ragged.constant([[1], [2, 3]])
         with self.assertRaises(ValueError):
-            top_k_search(self.token_probability_fn, inputs, max_length=5)
+            top_k_search(self.token_probability_fn, inputs, max_length=5, k=2)
 
     def test_assert_seeded_generation_is_correct(self):
         def token_probability_fn(inputs):
@@ -266,9 +272,9 @@ class TopKSamplingTextGenerationTest(tf.test.TestCase):
         max_length = 3
         tf.random.set_seed(42)
         outputs = top_k_search(
-            token_probability_fn, inputs, k=2, max_length=max_length, seed=42
+            token_probability_fn, inputs, max_length=max_length, k=2, seed=42
         )
-        # Random sampling result with seed 42
+        # Top-k sampling result with seed 42.
         seeded_result = 3 * np.ones(shape=[batch_size, max_length])
         seeded_result[3][1] = 2
         seeded_result[7][1] = 2
@@ -303,19 +309,22 @@ class TopKSamplingTextGenerationTest(tf.test.TestCase):
             rtol=0.2,
         )
 
-    def test_assert_top_k_generation_is_correct(self):
-        # test that there are only the top k tokens in the output
+    def test_only_choose_from_top_k_tokens(self):
+        # Test that there are only the top-k tokens in the output.
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
             prob = tf.constant([[0.4, 0.3, 0.2, 0.1]])
             return tf.repeat(prob, batch_size, axis=0)
 
-        # test that it only samples from top k tokens
+        # Test that it only samples from top-k tokens.
         for k in [1, 2, 3]:
             inputs = tf.constant([[0, 0], [0, 0]])
             for _ in range(10):
                 outputs = top_k_search(
-                    token_probability_fn, inputs, max_length=5, k=k
+                    token_probability_fn,
+                    inputs,
+                    max_length=5,
+                    k=k,
                 )
                 self.assertAllEqual(outputs < k, tf.ones_like(outputs))
 
@@ -332,11 +341,12 @@ class TopKSamplingTextGenerationTest(tf.test.TestCase):
             token_probability_fn,
             inputs,
             max_length=max_length,
+            k=4,
             seed=42,
             end_token_id=2,
             pad_token_id=0,
         )
-        # Random sampling result with seed 42
+        # Top-k sampling result with seed 42.
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)

@@ -18,9 +18,7 @@ import tensorflow as tf
 
 
 def validate_prompt(prompt):
-    """
-    Helper function to validate input to text_generation utils.
-    """
+    """Helper function to validate input to text_generation utils."""
     if isinstance(prompt, tf.RaggedTensor):
         raise ValueError(
             "RaggedTensor `prompt` is not supported, please "
@@ -31,10 +29,19 @@ def validate_prompt(prompt):
     return prompt
 
 
+def validate_token_probability_fn(token_probability_fn, prompt):
+    """Helper function to validate token probability fn output"""
+    test_pred = token_probability_fn(prompt)
+    if not len(test_pred.shape) == 2:
+        raise ValueError(
+            "Output of `token_probability_fn` is not a 2D tensor, "
+            "please provide a function with the output shape "
+            "[batch_size, vocab_size]."
+        )
+
+
 def mask_tokens_after_end_token(prompt, max_length, end_token_id, pad_token_id):
-    """
-    Helper function to mask the tokens after the end token.
-    """
+    """Helper function to mask the tokens after the end token."""
     # Mask out tokens after `end_token_id` is encountered.
     # Find index of first end_token_id.
     end_indices = tf.math.argmax(prompt == end_token_id, -1)
@@ -123,6 +130,7 @@ def greedy_search(
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
+    validate_token_probability_fn(token_probability_fn, prompt)
 
     i = prompt.shape[1]
     while i < max_length:
@@ -222,6 +230,7 @@ def random_search(
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
+    validate_token_probability_fn(token_probability_fn, prompt)
 
     i = prompt.shape[1]
     while i < max_length:
@@ -248,15 +257,15 @@ def top_k_search(
     token_probability_fn,
     prompt,
     max_length,
-    k=10,
+    k,
     seed=None,
     end_token_id=None,
     pad_token_id=0,
 ):
     """
-    Text generation utility based on top k sampling.
+    Text generation utility based on top-k sampling.
 
-    Top k search samples the next token from the top k tokens in the
+    Top-k search samples the next token from the top-k tokens in the
     probability distribution provided by `token_probability_fn` and appends it
     to the existing sequence.
 
@@ -266,8 +275,8 @@ def top_k_search(
         prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
             append generated tokens.
         max_length: int. The max length of generated text.
-        k: int, defaults to 10. The number of top tokens to sample from. Should
-            be non-negative and less than the vocabulary size.
+        k: int. The number of top tokens to sample from. Should be non-negative
+            and less than the vocabulary size.
         seed: int, defaults to None. The random seed used for sampling.
         end_token_id: int, defaults to None. The token marking the end of the
             sequence, once encountered the generation is finished for the exact
@@ -329,21 +338,23 @@ def top_k_search(
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
+    validate_token_probability_fn(token_probability_fn, prompt)
+
     i = prompt.shape[1]
     while i < max_length:
         # If the prompt has reached our desired length, exit while loop.
         pred = token_probability_fn(prompt)
         # If k is greater than the vocabulary size, use the entire vocabulary.
-        k = min(k, pred.shape[-1])
-        # Filter out top k tokens.
-        sorted_pred, sorted_indices = tf.math.top_k(pred, k=k, sorted=True)
+        k = min(k, pred.shape[1])
+        # Filter out top-k tokens.
+        top_k_pred, top_k_indices = tf.math.top_k(pred, k=k)
         # Sample the next token from the probability distribution.
-        sorted_next_tokens = tf.random.categorical(
-            tf.math.log(sorted_pred), 1, seed=seed
+        next_token = tf.random.categorical(
+            tf.math.log(top_k_pred), 1, seed=seed
         )
         # Rearrange to get the next token idx from the original order.
         next_token = tf.gather_nd(
-            sorted_indices, sorted_next_tokens, batch_dims=len(pred.shape) - 1
+            top_k_indices, next_token, batch_dims=len(pred.shape) - 1
         )
         next_token = tf.cast(next_token, dtype=prompt.dtype)
         # Append the next token to current sequence.
