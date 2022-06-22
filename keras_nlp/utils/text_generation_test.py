@@ -21,6 +21,7 @@ from keras_nlp.utils.text_generation import greedy_search
 from keras_nlp.utils.text_generation import random_search
 from keras_nlp.utils.text_generation import top_k_search
 
+
 class GreedySearchTextGenerationTest(tf.test.TestCase):
     def setUp(self):
         super().setUp()
@@ -209,6 +210,7 @@ class RandomSamplingTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
 
+
 class TopKSamplingTextGenerationTest(tf.test.TestCase):
     def setUp(self):
         super().setUp()
@@ -235,23 +237,17 @@ class TopKSamplingTextGenerationTest(tf.test.TestCase):
 
     def test_generate_with_1d_prompt(self):
         inputs = tf.constant([1])
-        outputs = top_k_search(
-            self.token_probability_fn, inputs, max_length=5
-        )
+        outputs = top_k_search(self.token_probability_fn, inputs, max_length=5)
         self.assertEquals(outputs.shape, [5])
 
     def test_generate_with_2d_prompt(self):
         inputs = tf.constant([[1], [1]])
-        outputs = top_k_search(
-            self.token_probability_fn, inputs, max_length=5
-        )
+        outputs = top_k_search(self.token_probability_fn, inputs, max_length=5)
         self.assertEquals(outputs.shape, [2, 5])
 
     def test_generate_with_list_prompt(self):
         inputs = [[1], [1]]
-        outputs = top_k_search(
-            self.token_probability_fn, inputs, max_length=5
-        )
+        outputs = top_k_search(self.token_probability_fn, inputs, max_length=5)
         self.assertEquals(outputs.shape, [2, 5])
 
     def test_generate_with_ragged_prompt(self):
@@ -270,11 +266,7 @@ class TopKSamplingTextGenerationTest(tf.test.TestCase):
         max_length = 3
         tf.random.set_seed(42)
         outputs = top_k_search(
-            token_probability_fn, 
-            inputs, 
-            k=2,
-            max_length=max_length,
-            seed=42
+            token_probability_fn, inputs, k=2, max_length=max_length, seed=42
         )
         # Random sampling result with seed 42
         seeded_result = 3 * np.ones(shape=[batch_size, max_length])
@@ -300,17 +292,17 @@ class TopKSamplingTextGenerationTest(tf.test.TestCase):
                 inputs,
                 max_length=max_length,
                 k=2,
-                seed=42
+                seed=42,
             )
             flatten_predictions = tf.reshape(outputs[:, 1:], [-1])
             for pred in flatten_predictions:
                 outputs_count[pred] += 1
         self.assertAllClose(
             outputs_count / np.sum(outputs_count),
-            [0.0, 0.0, 0.429, 0.571], 
+            [0.0, 0.0, 0.429, 0.571],
             rtol=0.2,
         )
-    
+
     def test_assert_top_k_generation_is_correct(self):
         # test that there are only the top k tokens in the output
         def token_probability_fn(inputs):

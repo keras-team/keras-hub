@@ -243,6 +243,7 @@ def random_search(
         return tf.squeeze(prompt)
     return prompt
 
+
 def top_k_search(
     token_probability_fn,
     prompt,
@@ -342,13 +343,13 @@ def top_k_search(
         )
         # Rearrange to get the next token idx from the original order.
         next_token = tf.gather_nd(
-            sorted_indices, sorted_next_tokens, batch_dims=len(pred.shape)-1
+            sorted_indices, sorted_next_tokens, batch_dims=len(pred.shape) - 1
         )
         next_token = tf.cast(next_token, dtype=prompt.dtype)
         # Append the next token to current sequence.
         prompt = tf.concat([prompt, next_token[:, tf.newaxis]], axis=-1)
         i += 1
-    
+
     if end_token_id is not None:
         prompt = mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
