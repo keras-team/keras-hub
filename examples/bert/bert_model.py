@@ -141,12 +141,9 @@ class BertModel(keras.Model):
         vocab_size: The size of the token vocabulary.
         num_layers: The number of transformer layers.
         hidden_size: The size of the transformer hidden layers.
-        hidden_dropout: Dropout probability for the post-attention and output
-            dropout.
+        dropout: Dropout probability for the Transformer encoder.
         num_attention_heads: The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
-        attention_dropout: The dropout rate to use for the attention layers
-            within the transformer layers.
         inner_size: The output dimension of the first Dense layer in a two-layer
             feedforward network for each transformer.
         inner_activation: The activation for the first Dense layer in a
@@ -169,9 +166,8 @@ class BertModel(keras.Model):
         vocab_size,
         num_layers=12,
         hidden_size=768,
-        hidden_dropout=0.1,
+        dropout=0.1,
         num_attention_heads=12,
-        attention_dropout=0.1,
         inner_size=3072,
         inner_activation="gelu",
         initializer_range=0.02,
@@ -193,8 +189,7 @@ class BertModel(keras.Model):
         self.initializer = keras.initializers.TruncatedNormal(
             stddev=initializer_range
         )
-        self.hidden_dropout = hidden_dropout
-        self.attention_dropout = attention_dropout
+        self.dropout = dropout
 
         self._embedding_layer = OnDeviceEmbedding(
             vocab_size=vocab_size,
@@ -225,7 +220,7 @@ class BertModel(keras.Model):
         )
 
         self._embedding_dropout = keras.layers.Dropout(
-            rate=hidden_dropout, name="embedding_dropout"
+            rate=dropout, name="embedding_dropout"
         )
 
         self._transformer_layers = []
@@ -234,7 +229,7 @@ class BertModel(keras.Model):
                 num_heads=num_attention_heads,
                 intermediate_dim=inner_size,
                 activation=self.inner_activation,
-                dropout=hidden_dropout,
+                dropout=dropout,
                 kernel_initializer=self.initializer,
                 name="transformer/layer_%d" % i,
             )
@@ -285,8 +280,7 @@ class BertModel(keras.Model):
                 "inner_activation": keras.activations.serialize(
                     self.inner_activation
                 ),
-                "hidden_dropout": self.hidden_dropout,
-                "attention_dropout": self.attention_dropout,
+                "dropout": self.dropout,
                 "initializer_range": self.initializer_range,
             }
         )
