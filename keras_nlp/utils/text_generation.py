@@ -89,8 +89,11 @@ def greedy_search(
 
     Examples:
     ```python
+    BATCH_SIZE = 8
     VOCAB_SIZE = 10
     FEATURE_SIZE = 16
+    START_ID = 1
+    END_ID = 2
 
     # Create a dummy model to predict the next token.
     model = tf.keras.Sequential(
@@ -109,14 +112,15 @@ def greedy_search(
     def token_probability_fn(inputs):
         return model(inputs)[:, -1, :]
 
-    prompt = tf.random.uniform(shape=[5, 5], maxval=VOCAB_SIZE, dtype=tf.int64)
+    prompt = tf.fill((BATCH_SIZE, 1), START_ID)
 
     # Print the generated sequence (token ids).
     keras_nlp.utils.greedy_search(
         token_probability_fn,
         prompt,
         max_length=10,
-        end_token_id=0,)
+        end_token_id=END_ID
+    )
     ```
 
     """
@@ -195,8 +199,11 @@ def random_search(
 
     Examples:
     ```python
+    BATCH_SIZE = 8
     VOCAB_SIZE = 10
     FEATURE_SIZE = 16
+    START_ID = 1
+    END_ID = 2
 
     # Create a dummy model to predict the next token.
     model = tf.keras.Sequential(
@@ -215,14 +222,15 @@ def random_search(
     def token_probability_fn(inputs):
         return model(inputs)[:, -1, :]
 
-    prompt = tf.random.uniform(shape=[5, 5], maxval=VOCAB_SIZE, dtype=tf.int64)
+    prompt = tf.fill((BATCH_SIZE, 1), START_ID)
 
     # Print the generated sequence (token ids).
-    keras_nlp.utils.random_sampling(
+    keras_nlp.utils.random_search(
         token_probability_fn,
         prompt,
         max_length=10,
-        end_token_id=0,)
+        end_token_id=END_ID
+    )
     ```
 
     """
@@ -233,26 +241,19 @@ def random_search(
             "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
             "tf.function in eager mode."
         )
-    if from_logits:
-
-        def logits_to_probabilities_fn(input):
-            logits = token_probability_fn(input)
-            return tf.keras.activations.softmax(logits, axis=-1)
-
-        token_fn = logits_to_probabilities_fn
-    else:
-        token_fn = token_probability_fn
 
     prompt = validate_prompt(prompt)
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
-    validate_token_probability_fn(token_fn, prompt)
+    validate_token_probability_fn(token_probability_fn, prompt)
 
     i = prompt.shape[1]
     while i < max_length:
         # If the prompt has reached our desired length, exit while loop.
-        pred = token_fn(prompt)
+        pred = token_probability_fn(prompt)
+        if from_logits:
+            pred = tf.keras.activations.softmax(pred, axis=-1)
         next_token = tf.cast(
             tf.random.categorical(tf.math.log(pred), 1, seed=seed),
             dtype=prompt.dtype,
@@ -314,8 +315,11 @@ def top_k_search(
 
     Examples:
     ```python
+    BATCH_SIZE = 8
     VOCAB_SIZE = 10
     FEATURE_SIZE = 16
+    START_ID = 1
+    END_ID = 2
 
     # Create a dummy model to predict the next token.
     model = tf.keras.Sequential(
@@ -334,15 +338,16 @@ def top_k_search(
     def token_probability_fn(inputs):
         return model(inputs)[:, -1, :]
 
-    prompt = tf.random.uniform(shape=[5, 5], maxval=VOCAB_SIZE, dtype=tf.int64)
+    prompt = tf.fill((BATCH_SIZE, 1), START_ID)
 
     # Print the generated sequence (token ids).
     keras_nlp.utils.top_k_search(
         token_probability_fn,
         prompt,
-        k=10,
         max_length=10,
-        end_token_id=0,)
+        k=4,
+        end_token_id=END_ID
+    )
     ```
 
     """
@@ -355,26 +360,19 @@ def top_k_search(
         )
     if k <= 0:
         raise ValueError("k should be strictly positive (greater than 0).")
-    if from_logits:
-
-        def logits_to_probabilities_fn(input):
-            logits = token_probability_fn(input)
-            return tf.keras.activations.softmax(logits, axis=-1)
-
-        token_fn = logits_to_probabilities_fn
-    else:
-        token_fn = token_probability_fn
 
     prompt = validate_prompt(prompt)
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
-    validate_token_probability_fn(token_fn, prompt)
+    validate_token_probability_fn(token_probability_fn, prompt)
 
     i = prompt.shape[1]
     while i < max_length:
         # If the prompt has reached our desired length, exit while loop.
-        pred = token_fn(prompt)
+        pred = token_probability_fn(prompt)
+        if from_logits:
+            pred = tf.keras.activations.softmax(pred, axis=-1)
         # If k is greater than the vocabulary size, use the entire vocabulary.
         k = min(k, pred.shape[1])
         # Filter out top-k tokens.
@@ -384,9 +382,7 @@ def top_k_search(
             tf.math.log(top_k_pred), 1, seed=seed
         )
         # Rearrange to get the next token idx from the original order.
-        next_token = tf.gather_nd(
-            top_k_indices, next_token, batch_dims=len(pred.shape) - 1
-        )
+        next_token = tf.gather_nd(top_k_indices, next_token, batch_dims=1)
         next_token = tf.cast(next_token, dtype=prompt.dtype)
         # Append the next token to current sequence.
         prompt = tf.concat([prompt, next_token[:, tf.newaxis]], axis=-1)
