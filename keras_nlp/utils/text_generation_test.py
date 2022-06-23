@@ -196,7 +196,7 @@ class RandomSamplingTextGenerationTest(tf.test.TestCase):
 
         max_length = 5
         inputs = tf.constant([[0, 1], [1, 2]])
-
+        tf.random.set_seed(42)
         outputs = random_search(
             token_probability_fn,
             inputs,
@@ -209,6 +209,39 @@ class RandomSamplingTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
+
+    def test_from_logits(self):
+        def token_logits_fn(inputs):
+            batch_size = inputs.shape[0]
+            prob = tf.constant([[1.0, 2.0, 3, 0, 4.0]])
+            return tf.repeat(prob, batch_size, axis=0)
+
+        def token_probability_fn(inputs):
+            batch_size = inputs.shape[0]
+            prob = tf.keras.activations.softmax(
+                tf.constant([[1.0, 2.0, 3, 0, 4.0]])
+            )
+            return tf.repeat(prob, batch_size, axis=0)
+
+        max_length = 5
+        inputs = tf.constant([[0, 1], [1, 2]])
+        tf.random.set_seed(42)
+        output_logit = random_search(
+            token_logits_fn,
+            inputs,
+            max_length=max_length,
+            from_logits=True,
+            seed=42,
+        )
+        tf.random.set_seed(42)
+        output_probs = random_search(
+            token_probability_fn,
+            inputs,
+            max_length=max_length,
+            from_logits=False,
+            seed=42,
+        )
+        self.assertAllEqual(output_logit, output_probs)
 
 
 class TopKSamplingTextGenerationTest(tf.test.TestCase):
@@ -336,7 +369,7 @@ class TopKSamplingTextGenerationTest(tf.test.TestCase):
 
         max_length = 5
         inputs = tf.constant([[0, 1], [1, 2]])
-
+        tf.random.set_seed(42)
         outputs = top_k_search(
             token_probability_fn,
             inputs,
@@ -350,3 +383,38 @@ class TopKSamplingTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
+
+    def test_from_logits(self):
+        def token_logits_fn(inputs):
+            batch_size = inputs.shape[0]
+            prob = tf.constant([[1.0, 2.0, 3, 0, 4.0]])
+            return tf.repeat(prob, batch_size, axis=0)
+
+        def token_probability_fn(inputs):
+            batch_size = inputs.shape[0]
+            prob = tf.keras.activations.softmax(
+                tf.constant([[1.0, 2.0, 3, 0, 4.0]])
+            )
+            return tf.repeat(prob, batch_size, axis=0)
+
+        max_length = 5
+        inputs = tf.constant([[0, 1], [1, 2]])
+        tf.random.set_seed(42)
+        output_logit = top_k_search(
+            token_logits_fn,
+            inputs,
+            max_length=max_length,
+            k=3,
+            from_logits=True,
+            seed=42,
+        )
+        tf.random.set_seed(42)
+        output_probs = top_k_search(
+            token_probability_fn,
+            inputs,
+            max_length=max_length,
+            k=3,
+            from_logits=False,
+            seed=42,
+        )
+        self.assertAllEqual(output_logit, output_probs)

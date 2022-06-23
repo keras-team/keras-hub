@@ -32,7 +32,7 @@ def validate_prompt(prompt):
 def validate_token_probability_fn(token_probability_fn, prompt):
     """Helper function to validate token probability fn output"""
     test_pred = token_probability_fn(prompt)
-    if not len(test_pred.shape) == 2:
+    if len(test_pred.shape) != 2:
         raise ValueError(
             "Output of `token_probability_fn` is not a 2D tensor, "
             "please provide a function with the output shape "
@@ -68,10 +68,13 @@ def greedy_search(
 
     Args:
         token_probability_fn: a callable, which takes in input_sequence
-            and output the probability distribution of the next token.
+            and output the probability distribution or the logits of the next
+            token.
         prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
             append generated tokens.
         max_length: int. The max length of generated text.
+        from_logits: bool. Indicates whether `token_probability_fn` outputs
+            logits or probabilities.
         end_token_id: int, defaults to None. The token marking the end of the
             sequence, once encountered the generation is finished for the exact
             sequence. If None, every sequence is generated up to `max_length`.
@@ -156,6 +159,7 @@ def random_search(
     prompt,
     max_length,
     seed=None,
+    from_logits=False,
     end_token_id=None,
     pad_token_id=0,
 ):
@@ -168,11 +172,15 @@ def random_search(
 
     Args:
         token_probability_fn: a callable, which takes in input_sequence
-            and output the probability distribution of the next token.
+            and output the probability distribution of the next token. If
+            `from_logits` set to True, it should output the logits of the next
+            token.
         prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
             append generated tokens.
         max_length: int. The max length of generated text.
         seed: int, defaults to None. The random seed used for sampling.
+        from_logits: bool. Indicates whether `token_probability_fn` outputs
+            logits or probabilities.
         end_token_id: int, defaults to None. The token marking the end of the
             sequence, once encountered the generation is finished for the exact
             sequence. If None, every sequence is generated up to `max_length`.
@@ -225,17 +233,26 @@ def random_search(
             "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
             "tf.function in eager mode."
         )
+    if from_logits:
+
+        def logits_to_probabilities_fn(input):
+            logits = token_probability_fn(input)
+            return tf.keras.activations.softmax(logits, axis=-1)
+
+        token_fn = logits_to_probabilities_fn
+    else:
+        token_fn = token_probability_fn
 
     prompt = validate_prompt(prompt)
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
-    validate_token_probability_fn(token_probability_fn, prompt)
+    validate_token_probability_fn(token_fn, prompt)
 
     i = prompt.shape[1]
     while i < max_length:
         # If the prompt has reached our desired length, exit while loop.
-        pred = token_probability_fn(prompt)
+        pred = token_fn(prompt)
         next_token = tf.cast(
             tf.random.categorical(tf.math.log(pred), 1, seed=seed),
             dtype=prompt.dtype,
@@ -259,6 +276,7 @@ def top_k_search(
     max_length,
     k,
     seed=None,
+    from_logits=False,
     end_token_id=None,
     pad_token_id=0,
 ):
@@ -271,13 +289,17 @@ def top_k_search(
 
     Args:
         token_probability_fn: a callable, which takes in input_sequence
-            and output the probability distribution of the next token.
+            and output the probability distribution of the next token. If
+            `from_logits` set to True, it should output the logits of the next
+            token.
         prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
             append generated tokens.
         max_length: int. The max length of generated text.
         k: int. The number of top tokens to sample from. Should be non-negative
             and less than the vocabulary size.
         seed: int, defaults to None. The random seed used for sampling.
+        from_logits: bool. Indicates whether `token_probability_fn` outputs
+            logits or probabilities.
         end_token_id: int, defaults to None. The token marking the end of the
             sequence, once encountered the generation is finished for the exact
             sequence. If None, every sequence is generated up to `max_length`.
@@ -333,17 +355,26 @@ def top_k_search(
         )
     if k <= 0:
         raise ValueError("k should be strictly positive (greater than 0).")
+    if from_logits:
+
+        def logits_to_probabilities_fn(input):
+            logits = token_probability_fn(input)
+            return tf.keras.activations.softmax(logits, axis=-1)
+
+        token_fn = logits_to_probabilities_fn
+    else:
+        token_fn = token_probability_fn
 
     prompt = validate_prompt(prompt)
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
-    validate_token_probability_fn(token_probability_fn, prompt)
+    validate_token_probability_fn(token_fn, prompt)
 
     i = prompt.shape[1]
     while i < max_length:
         # If the prompt has reached our desired length, exit while loop.
-        pred = token_probability_fn(prompt)
+        pred = token_fn(prompt)
         # If k is greater than the vocabulary size, use the entire vocabulary.
         k = min(k, pred.shape[1])
         # Filter out top-k tokens.
