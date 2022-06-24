@@ -25,22 +25,22 @@ from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 class SentencePieceTokenizerTest(tf.test.TestCase):
     def setUp(self):
         super().setUp()
-        model_stream = io.BytesIO()
+        bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
             ["the quick brown fox."]
         )
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=vocab_data.as_numpy_iterator(),
-            model_writer=model_stream,
+            model_writer=bytes_io,
             vocab_size=7,
             model_type="WORD",
         )
-        self.model_bytes = model_stream.getvalue()
+        self.proto = bytes_io.getvalue()
 
     def test_tokenize(self):
         input_data = ["the quick brown fox."]
         tokenizer = SentencePieceTokenizer(
-            model_bytes=self.model_bytes,
+            proto=self.proto,
         )
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
@@ -51,7 +51,7 @@ class SentencePieceTokenizerTest(tf.test.TestCase):
     def test_scalar_tokenize(self):
         input_data = "the quick brown fox."
         tokenizer = SentencePieceTokenizer(
-            model_bytes=self.model_bytes,
+            proto=self.proto,
         )
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
@@ -62,7 +62,7 @@ class SentencePieceTokenizerTest(tf.test.TestCase):
     def test_dense_output(self):
         input_data = ["the quick brown fox."]
         tokenizer = SentencePieceTokenizer(
-            model_bytes=self.model_bytes,
+            proto=self.proto,
             sequence_length=10,
         )
         output_data = tokenizer(input_data)
@@ -72,7 +72,7 @@ class SentencePieceTokenizerTest(tf.test.TestCase):
     def test_string_tokenize(self):
         input_data = ["the quick brown fox."]
         tokenizer = SentencePieceTokenizer(
-            model_bytes=self.model_bytes,
+            proto=self.proto,
             dtype="string",
         )
         output_data = tokenizer(input_data)
@@ -84,14 +84,14 @@ class SentencePieceTokenizerTest(tf.test.TestCase):
     def test_detokenize(self):
         input_data = [[6, 5, 3, 4]]
         tokenizer = SentencePieceTokenizer(
-            model_bytes=self.model_bytes,
+            proto=self.proto,
         )
         output_data = tokenizer.detokenize(input_data)
         self.assertAllEqual(output_data, ["the quick brown fox."])
 
     def test_accessors(self):
         tokenizer = SentencePieceTokenizer(
-            model_bytes=self.model_bytes,
+            proto=self.proto,
         )
         self.assertEqual(tokenizer.vocabulary_size(), 7)
         self.assertEqual(tokenizer.id_to_token(0), "<unk>")
@@ -102,7 +102,7 @@ class SentencePieceTokenizerTest(tf.test.TestCase):
     def test_functional_model(self):
         input_data = tf.constant(["the quick brown fox."])
         tokenizer = SentencePieceTokenizer(
-            model_bytes=self.model_bytes,
+            proto=self.proto,
         )
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer.detokenize(tokenizer.tokenize(inputs))
@@ -111,19 +111,19 @@ class SentencePieceTokenizerTest(tf.test.TestCase):
         self.assertAllEqual(model_output, ["the quick brown fox."])
 
     def test_from_file(self):
-        model_file = os.path.join(self.get_temp_dir(), "model.txt")
+        filepath = os.path.join(self.get_temp_dir(), "model.txt")
         input_data = ["the quick brown fox."]
-        with tf.io.gfile.GFile(model_file, "wb") as file:
-            file.write(self.model_bytes)
+        with tf.io.gfile.GFile(filepath, "wb") as file:
+            file.write(self.proto)
         tokenizer = SentencePieceTokenizer(
-            model_file=model_file,
+            proto=filepath,
         )
         output_data = tokenizer(input_data)
         self.assertAllEqual(output_data, [[6, 5, 3, 4]])
 
     def test_tokenize_then_batch(self):
         tokenizer = SentencePieceTokenizer(
-            model_bytes=self.model_bytes,
+            proto=self.proto,
         )
 
         ds = tf.data.Dataset.from_tensor_slices(
@@ -145,7 +145,7 @@ class SentencePieceTokenizerTest(tf.test.TestCase):
 
     def test_batch_then_tokenize(self):
         tokenizer = SentencePieceTokenizer(
-            model_bytes=self.model_bytes,
+            proto=self.proto,
         )
 
         ds = tf.data.Dataset.from_tensor_slices(
@@ -166,7 +166,7 @@ class SentencePieceTokenizerTest(tf.test.TestCase):
     def test_config(self):
         input_data = ["the quick brown whale."]
         original_tokenizer = SentencePieceTokenizer(
-            model_bytes=self.model_bytes,
+            proto=self.proto,
         )
         cloned_tokenizer = SentencePieceTokenizer.from_config(
             original_tokenizer.get_config()
@@ -177,12 +177,12 @@ class SentencePieceTokenizerTest(tf.test.TestCase):
         )
 
     def test_saving(self):
-        model_file = os.path.join(self.get_temp_dir(), "model.txt")
+        filepath = os.path.join(self.get_temp_dir(), "model.txt")
         input_data = tf.constant(["the quick brown whale."])
-        with tf.io.gfile.GFile(model_file, "wb") as file:
-            file.write(self.model_bytes)
+        with tf.io.gfile.GFile(filepath, "wb") as file:
+            file.write(self.proto)
         tokenizer = SentencePieceTokenizer(
-            model_file=model_file,
+            proto=filepath,
         )
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)

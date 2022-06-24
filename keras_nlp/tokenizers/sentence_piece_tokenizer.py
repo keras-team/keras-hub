@@ -37,10 +37,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     argument, which should be either an integer or string type.
 
     Args:
-        model_file: A path to a SentencePiece serialized model file. One
-            of `model_file` and `model_bytes` must be set.
-        model_bytes: A SentencePiece serialized model byte array. One of
-            `model_file` and `model_bytes` must be set.
+        proto: Either a `string` path to a SentencePiece proto file, or a
+            `bytes` object with a serialized SentencePiece proto.
         sequence_length: If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of sequence_length.
 
@@ -52,16 +50,16 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     From bytes.
     ```python
     # Train a SentencePiece vocabulary.
-    model = io.BytesIO()
+    bytes_io = io.BytesIO()
     ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
     sentencepiece.SentencePieceTrainer.train(
         sentence_iterator=ds.as_numpy_iterator(),
-        model_writer=model,
+        model_writer=bytes_io,
         vocab_size=20,
     )
 
     # Tokenize inputs
-    tokenizer = SentencePieceTokenizer(model_bytes=model.getvalue())
+    tokenizer = SentencePieceTokenizer(proto=bytes_io.getvalue())
     ds = ds.map(tokenizer)
     ```
 
@@ -69,7 +67,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     ```python
     # Train a SentencePiece vocabulary and write it to a file.
     ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
-    with open("model.proto", "wb") as model_file:
+    with open("model.spm", "wb") as model_file:
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=ds.as_numpy_iterator(),
             model_writer=model_file,
@@ -77,16 +75,14 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         )
 
     # Tokenize inputs
-    tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(
-        model_file="model.proto")
+    tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto="model.spm")
     ds = ds.map(tokenizer)
     ```
     """
 
     def __init__(
         self,
-        model_file: str = None,
-        model_bytes: bytes = None,
+        proto,
         sequence_length: int = None,
         **kwargs,
     ) -> None:
@@ -103,25 +99,23 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
         super().__init__(**kwargs)
 
-        if model_file is None and model_bytes is None:
-            raise ValueError(
-                "One of `model_file` or `model_bytes` must be set. "
-                "Received: `model_file=None`, `model_bytes=None`."
-            )
-
-        if model_file is not None:
-            model_bytes = tf.io.gfile.GFile(model_file, "rb").read()
-        if isinstance(model_bytes, str):
-            model_bytes = base64.b64decode(model_bytes)
+        if isinstance(proto, str):
+            # A string could be either a filepath, or a base64 encoded byte
+            # array (which we need for serialization). We can try to base64
+            # decode first, we get an error if string is incorrectly padded.
+            try:
+                proto = base64.b64decode(proto)
+            except:
+                proto = tf.io.gfile.GFile(proto, "rb").read()
 
         self._sentence_piece = tf_text.SentencepieceTokenizer(
-            model=model_bytes,
+            model=proto,
             out_type=self.compute_dtype,
         )
 
         # Keras cannot serialize a bytestring, so we base64 encode the model
-        # byte array for saving.
-        self.model_bytes = base64.b64encode(model_bytes).decode("ascii")
+        # byte array as a string for saving.
+        self.proto = base64.b64encode(proto).decode("ascii")
         self.sequence_length = sequence_length
 
     def vocabulary_size(self) -> int:
@@ -143,7 +137,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 # Ideally the model would be saved as a file asset in
                 # the saved model. We have no good way to support this
                 # currently, so we save the model string in the config.
-                "model_bytes": self.model_bytes,
+                "proto": self.proto,
                 "sequence_length": self.sequence_length,
             }
         )
