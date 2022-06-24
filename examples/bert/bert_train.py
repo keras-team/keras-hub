@@ -29,7 +29,7 @@ from examples.bert.bert_model import BertModel
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "data_directory",
+    "input_directory",
     None,
     "The directory of training data. It can be a local disk path, or the URL "
     "of Google cloud storage bucket.",
@@ -423,18 +423,18 @@ def main(_):
         client = google.cloud.logging.Client()
         client.setup_logging()
 
-    logging.info(f"Reading input data from {FLAGS.data_directory}")
-    if not tf.io.gfile.isdir(FLAGS.data_directory):
+    logging.info(f"Reading input data from {FLAGS.input_directory}")
+    if not tf.io.gfile.isdir(FLAGS.input_directory):
         raise ValueError(
-            "`data_directory` should be a directory, "
-            f"but {FLAGS.data_directory} is not a directory. Please "
-            "set `data_directory` flag as a directory."
+            "`input_directory` should be a directory, "
+            f"but {FLAGS.input_directory} is not a directory. Please "
+            "set `input_directory` flag as a directory."
         )
-    files = tf.io.gfile.listdir(FLAGS.data_directory)
-    input_filenames = [FLAGS.data_directory + "/" + file for file in files]
+    files = tf.io.gfile.listdir(FLAGS.input_directory)
+    input_filenames = [FLAGS.input_directory + "/" + file for file in files]
 
     if not input_filenames:
-        logging.info("No input files found. Check `data_directory` flag.")
+        logging.info("No input files found. Check `input_directory` flag.")
         sys.exit(1)
 
     vocab = []
@@ -515,7 +515,7 @@ def main(_):
 
 
 if __name__ == "__main__":
-    flags.mark_flag_as_required("data_directory")
+    flags.mark_flag_as_required("input_directory")
     flags.mark_flag_as_required("vocab_file")
     flags.mark_flag_as_required("saved_model_output")
     app.run(main)
