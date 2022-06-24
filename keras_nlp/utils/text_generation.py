@@ -73,8 +73,6 @@ def greedy_search(
         prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
             append generated tokens.
         max_length: int. The max length of generated text.
-        from_logits: bool. Indicates whether `token_probability_fn` outputs
-            logits or probabilities.
         end_token_id: int, defaults to None. The token marking the end of the
             sequence, once encountered the generation is finished for the exact
             sequence. If None, every sequence is generated up to `max_length`.
@@ -119,7 +117,7 @@ def greedy_search(
         token_probability_fn,
         prompt,
         max_length=10,
-        end_token_id=END_ID
+        end_token_id=END_ID,
     )
     ```
 
@@ -229,7 +227,7 @@ def random_search(
         token_probability_fn,
         prompt,
         max_length=10,
-        end_token_id=END_ID
+        end_token_id=END_ID,
     )
     ```
 
@@ -346,7 +344,7 @@ def top_k_search(
         prompt,
         max_length=10,
         k=4,
-        end_token_id=END_ID
+        end_token_id=END_ID,
     )
     ```
 
