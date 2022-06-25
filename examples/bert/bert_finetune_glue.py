@@ -48,9 +48,15 @@ flags.DEFINE_string(
 )
 
 flags.DEFINE_string(
-    "save_evaluations_path",
+    "saved_model_output",
     None,
-    "If saving the evaluations.",
+    "The directory to save the finetuned model.",
+)
+
+flags.DEFINE_string(
+    "saved_evaluations_output",
+    None,
+    "The directory to save the GLUE evaluations.",
 )
 
 flags.DEFINE_string(
@@ -152,7 +158,13 @@ class BertClassificationFinetuner(keras.Model):
     """Adds a classification head to a pre-trained BERT model for finetuning"""
 
     def __init__(
-        self, bert_model, hidden_size, num_classes, initializer, dropout, **kwargs
+        self,
+        bert_model,
+        hidden_size,
+        num_classes,
+        initializer,
+        dropout,
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.bert_model = bert_model
@@ -186,7 +198,10 @@ class BertHyperModel(keras_tuner.HyperModel):
 
     def build(self, hp):
         # model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
-        model = keras.models.load_model("gs://chenmoney-testing-east/" + FLAGS.saved_model_input, compile=False)
+        model = keras.models.load_model(
+            "gs://chenmoney-testing-east/" + FLAGS.saved_model_input,
+            compile=False,
+        )
         model = model.bert_model
         model_config = self.model_config
         finetuning_model = BertClassificationFinetuner(
@@ -209,6 +224,7 @@ class BertHyperModel(keras_tuner.HyperModel):
         )
         return finetuning_model
 
+
 def main(_):
     print(f"Reading input model from {FLAGS.saved_model_input}")
 
@@ -216,7 +232,7 @@ def main(_):
         resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
             tpu=FLAGS.tpu_name,
         )
-        strategy = tf.distribute.TPUStrategy(resolver)        
+        strategy = tf.distribute.TPUStrategy(resolver)
     else:
         strategy = tf.distribute.get_strategy()
 
@@ -290,7 +306,7 @@ def main(_):
         f"The best hyperparameters found are:\nLearning Rate: {best_hp['lr']}"
     )
 
-    if FLAGS.save_evaluations_path:
+    if FLAGS.saved_evaluations_output:
         filenames = {
             "cola": "CoLA.tsv",
             "sst2": "SST-2.tsv",
@@ -311,19 +327,19 @@ def main(_):
             "rte": ["entailment", "not_entailment"],
         }
 
-        filename = FLAGS.save_evaluations_path + "/" + filenames[FLAGS.task_name]
-        start_idx = 0
-        preds = []
+        filename = (
+            FLAGS.saved_evaluations_output + "/" + filenames[FLAGS.task_name]
+        )
+
         @tf.function
         def eval_step(iterator):
             def step_fn(inputs):
-                """The computation to run on each TPU device."""
-                x, y = inputs
+                x, _ = inputs
                 prob = finetuning_model(x)
                 pred = tf.argmax(prob, -1)
                 return pred
 
-            return strategy.run(step_fn, args=(next(iterator),)) 
+            return strategy.run(step_fn, args=(next(iterator),))
 
     labelname = labelnames.get(FLAGS.task_name)
     test_iterator = iter(test_ds)
