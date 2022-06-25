@@ -515,9 +515,9 @@ def top_p_search(
         )
         # Filter out unmasked tokens and sample from filtered distribution.
         probs = tf.where(
-            shifted_keep_mask, 
-            sorted_preds, 
-            tf.zeros(pred.shape, dtype=sorted_preds.dtype)
+            shifted_keep_mask,
+            sorted_preds,
+            tf.zeros(pred.shape, dtype=sorted_preds.dtype),
         )
         sorted_next_token = tf.random.categorical(
             tf.math.log(probs), 1, seed=seed
