@@ -48,9 +48,9 @@ flags.DEFINE_string(
 )
 
 flags.DEFINE_string(
-    "saved_model_output",
+    "save_evaluations_path",
     None,
-    "The directory to save the finetuned model.",
+    "If saving the evaluations.",
 )
 
 flags.DEFINE_string(
@@ -63,6 +63,12 @@ flags.DEFINE_bool(
     "do_lower_case",
     True,
     "Whether to lower case the input text.",
+)
+
+flags.DEFINE_bool(
+    "tpu_name",
+    None,
+    "The TPU to connect to, if None, no TPU will be used.",
 )
 
 flags.DEFINE_bool(
@@ -146,7 +152,7 @@ class BertClassificationFinetuner(keras.Model):
     """Adds a classification head to a pre-trained BERT model for finetuning"""
 
     def __init__(
-        self, bert_model, hidden_size, num_classes, initializer, **kwargs
+        self, bert_model, hidden_size, num_classes, initializer, dropout, **kwargs
     ):
         super().__init__(**kwargs)
         self.bert_model = bert_model
@@ -161,12 +167,14 @@ class BertClassificationFinetuner(keras.Model):
             kernel_initializer=initializer,
             name="logits",
         )
+        self._drop_out = tf.keras.layers.Dropout(dropout)
 
     def call(self, inputs):
         outputs = self.bert_model(inputs)
         # Get the first [CLS] token from each output.
         outputs = outputs[:, 0, :]
         outputs = self._pooler_layer(outputs)
+        outputs = self._drop_out(outputs)
         return self._logit_layer(outputs)
 
 
@@ -177,7 +185,9 @@ class BertHyperModel(keras_tuner.HyperModel):
         self.model_config = model_config
 
     def build(self, hp):
-        model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
+        # model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
+        model = keras.models.load_model("gs://chenmoney-testing-east/" + FLAGS.saved_model_input, compile=False)
+        model = model.bert_model
         model_config = self.model_config
         finetuning_model = BertClassificationFinetuner(
             bert_model=model,
@@ -186,6 +196,7 @@ class BertHyperModel(keras_tuner.HyperModel):
             initializer=keras.initializers.TruncatedNormal(
                 stddev=model_config["initializer_range"]
             ),
+            dropout=0.1,
         )
         finetuning_model.compile(
             optimizer=keras.optimizers.Adam(
@@ -198,9 +209,16 @@ class BertHyperModel(keras_tuner.HyperModel):
         )
         return finetuning_model
 
-
 def main(_):
     print(f"Reading input model from {FLAGS.saved_model_input}")
+
+    if FLAGS.tpu_name:
+        resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
+            tpu=FLAGS.tpu_name,
+        )
+        strategy = tf.distribute.TPUStrategy(resolver)        
+    else:
+        strategy = tf.distribute.get_strategy()
 
     vocab = []
     with open(FLAGS.vocab_file, "r") as vocab_file:
@@ -242,19 +260,21 @@ def main(_):
         preprocess_data, num_parallel_calls=tf.data.AUTOTUNE
     )
 
-    # Create a hypermodel object for a RandomSearch.
-    hypermodel = BertHyperModel(model_config)
+    with strategy.scope():
+        # Create a hypermodel object for a RandomSearch.
+        hypermodel = BertHyperModel(model_config)
 
-    # Initialize the random search over the 4 learning rate parameters, for 4
-    # trials and 3 epochs for each trial.
-    tuner = keras_tuner.RandomSearch(
-        hypermodel=hypermodel,
-        objective=keras_tuner.Objective("val_loss", direction="min"),
-        max_trials=4,
-        overwrite=True,
-        project_name="hyperparameter_tuner_results",
-        directory=tempfile.mkdtemp(),
-    )
+        # Initialize the random search over the 4 learning rate parameters, for 4
+        # trials and 3 epochs for each trial.
+        tuner = keras_tuner.RandomSearch(
+            hypermodel=hypermodel,
+            objective=keras_tuner.Objective("val_loss", direction="min"),
+            max_trials=4,
+            overwrite=True,
+            distribution_strategy=strategy,
+            project_name="hyperparameter_tuner_results",
+            directory=tempfile.mkdtemp(),
+        )
 
     tuner.search(
         train_ds,
@@ -269,6 +289,58 @@ def main(_):
     print(
         f"The best hyperparameters found are:\nLearning Rate: {best_hp['lr']}"
     )
+
+    if FLAGS.save_evaluations_path:
+        filenames = {
+            "cola": "CoLA.tsv",
+            "sst2": "SST-2.tsv",
+            "mrpc": "MRPC.tsv",
+            "qqp": "QQP.tsv",
+            "stsb": "STS-B.tsv",
+            "mnli_mismatched": "MNLI-mm.tsv",
+            "mnli_matched": "MNLI-m.tsv",
+            "qnli": "QNLI.tsv",
+            "rte": "RTE.tsv",
+            "wnli": "WNLI.tsv",
+        }
+
+        labelnames = {
+            "mnli_matched": ["entailment", "neutral", "contradiction"],
+            "mnli_matched": ["entailment", "neutral", "contradiction"],
+            "qnli": ["entailment", "not_entailment"],
+            "rte": ["entailment", "not_entailment"],
+        }
+
+        filename = FLAGS.save_evaluations_path + "/" + filenames[FLAGS.task_name]
+        start_idx = 0
+        preds = []
+        @tf.function
+        def eval_step(iterator):
+            def step_fn(inputs):
+                """The computation to run on each TPU device."""
+                x, y = inputs
+                prob = finetuning_model(x)
+                pred = tf.argmax(prob, -1)
+                return pred
+
+            return strategy.run(step_fn, args=(next(iterator),)) 
+
+    labelname = labelnames.get(FLAGS.task_name)
+    test_iterator = iter(test_ds)
+    with tf.io.gfile.GFile(filename, "w") as f:
+        # Write the required headline for GLUE.
+        f.write("index\tprediction\n")
+        for i in range(test_ds.cardinality()):
+            pred = eval_step(test_iterator)
+            pred = pred._values[0].numpy()
+            for j in range(len(pred)):
+                idx = i * batch_size + j
+                if labelname:
+                    pred_value = labelname[int(pred[j])]
+                else:
+                    pred_value = pred[j]
+                # GLUE requires a format of index + tab + prediction.
+                f.write(str(idx) + "\t" + str(pred_value) + "\n")
 
     if FLAGS.do_evaluation:
         print("Evaluating on test set.")
