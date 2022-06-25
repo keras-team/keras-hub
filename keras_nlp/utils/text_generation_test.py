@@ -103,7 +103,7 @@ class GreedySearchTextGenerationTest(tf.test.TestCase):
         self.assertAllEqual(outputs, expected_outputs)
 
 
-class RandomSamplingTextGenerationTest(tf.test.TestCase):
+class RandomSearchTextGenerationTest(tf.test.TestCase):
     def setUp(self):
         super().setUp()
         vocab_size = 10
@@ -245,7 +245,7 @@ class RandomSamplingTextGenerationTest(tf.test.TestCase):
         self.assertAllEqual(output_logit, output_probs)
 
 
-class TopKSamplingTextGenerationTest(tf.test.TestCase):
+class TopKSearchTextGenerationTest(tf.test.TestCase):
     def setUp(self):
         super().setUp()
         vocab_size = 10
@@ -421,7 +421,7 @@ class TopKSamplingTextGenerationTest(tf.test.TestCase):
         self.assertAllEqual(output_logit, output_probs)
 
 
-class TopPSamplingTextGenerationTest(tf.test.TestCase):
+class TopPSearchTextGenerationTest(tf.test.TestCase):
     def setUp(self):
         super().setUp()
         vocab_size = 10

@@ -404,7 +404,6 @@ def top_p_search(
     from_logits=False,
     end_token_id=None,
     pad_token_id=0,
-    filter_value=-float("Inf"),
 ):
     """
     Text generation utility based on top-p (nucleus) sampling.
@@ -504,7 +503,7 @@ def top_p_search(
             pred = tf.keras.activations.softmax(pred, axis=-1)
         # Sort preds in descending order.
         sorted_preds, sorted_indices = tf.math.top_k(
-            pred, k=pred.shape[-1], sorted=True
+            pred, k=pred.shape[1], sorted=True
         )
         # Calculate cumulative probability distribution.
         cumulative_probs = tf.math.cumsum(sorted_preds, axis=-1)
@@ -516,7 +515,9 @@ def top_p_search(
         )
         # Filter out unmasked tokens and sample from filtered distribution.
         probs = tf.where(
-            shifted_keep_mask, sorted_preds, tf.fill(pred.shape, filter_value)
+            shifted_keep_mask, 
+            sorted_preds, 
+            tf.zeros(pred.shape, dtype=sorted_preds.dtype)
         )
         sorted_next_token = tf.random.categorical(
             tf.math.log(probs), 1, seed=seed
