@@ -19,12 +19,12 @@ class RandomInsertion(keras.layers.Layer):
     """Augments input by randomly inserting words.
 
     Args:
-        probability: A float in [0, 1] that is the probability of replacement
-        max_replacements: An integer that is the maximum number of replacements
-        replacement_list: list of candidates to uniformly sample form to replace.
-            Either provide this of replacement_fn, not both.
-        replacement_fn: fn that takes in a token and returns a replacement token.
-        replacement_numpy_fn: python numpy version of replacement_fn.
+        probability: A float in [0, 1] that is the probability of insertion
+        max_replacements: An integer that is the maximum number of insertions
+        insertion_list: list of candidates to uniformly sample form to replace.
+            Either provide this of insertion_fn, not both.
+        insertion_fn: fn that takes in a token and returns a insertion token.
+        insertion_numpy_fn: python numpy version of insertion_fn.
     """
 
     def __init__(self, probability, max_insertions, insertion_list = None,
@@ -40,6 +40,10 @@ class RandomInsertion(keras.layers.Layer):
                     f"Received: dtype={dtype}"
                 )
 
+        if insertion_list is None and insertion_fn is None and insertion_numpy_fn is None:
+            raise ValueError("""No insertion_fn or insertion_list or 
+                            insertion_numpy_fn provided""")
+
         super().__init__(name=name, **kwargs)
         self.probability = probability
         self.max_insertions = max_insertions
@@ -49,7 +53,7 @@ class RandomInsertion(keras.layers.Layer):
 
     @tf.function
     def call(self, inputs):
-        """Augments input by randomly replacing words.
+        """Augments input by randomly inserting words.
         Args:
             inputs: A tensor or nested tensor of strings to augment.
         Returns:
@@ -65,16 +69,18 @@ class RandomInsertion(keras.layers.Layer):
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
 
-        # row_splits = inputs.row_splits
-        # positions_flat = tf.range(tf.size(inputs.flat_values))
-        # positions = inputs.with_flat_values(positions_flat)
-
         def _insert(inputs):
             """
             Replace words randomly
             """
-            for _ in range(self.max_insertions):
-                # randomly choose an index
+            # choose random number between 0 and self.max_insertions
+            num_insertions = tf.random.uniform(
+                    shape=(),
+                    minval=0,
+                    maxval=self.max_insertions,
+                    dtype=tf.int32,
+                )
+            for _ in range(num_insertions):
                 index = tf.random.uniform(
                     shape=tf.shape(inputs),
                     minval=0,
@@ -86,7 +92,6 @@ class RandomInsertion(keras.layers.Layer):
                 synonym = inputs[replacement_word]
                 if self.insertion_numpy_fn is not None:
                     synonym = tf.numpy_function(func=self.insertion_numpy_fn, inp=[synonym], Tout=tf.string)
-                    # Insert the synonym at insertion_location
                     inputs = tf.concat([inputs[:insertion_location], [synonym], inputs[insertion_location:]], axis=0)
             return inputs
         inserted = tf.map_fn(
