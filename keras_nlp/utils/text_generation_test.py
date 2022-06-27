@@ -525,7 +525,7 @@ class TopPSearchTextGenerationTest(tf.test.TestCase):
             prob = tf.constant([[0.4, 0.3, 0.2, 0.1]])
             return tf.repeat(prob, batch_size, axis=0)
 
-        # Test that it only samples from tokens that sum up to p
+        # Test that it only samples from tokens that sum up to p.
         for p, n in [(0.3, 1), (0.7, 2), (0.9, 3)]:
             inputs = tf.constant([[0, 0], [0, 0]])
             for _ in range(10):

@@ -432,8 +432,6 @@ def top_p_search(
             replaced with `pad_token_id`.
         pad_token_id: int, defaults to 0. The pad token after `end_token_id`
             is received.
-        filter_value: float, defaults to -Inf. The value for filtering out
-            unused tokens when sampling the probability distribution.
 
     Returns:
         A 1D int Tensor, or 2D int Tensor representing the generated
