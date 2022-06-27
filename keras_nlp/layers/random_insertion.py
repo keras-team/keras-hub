@@ -13,7 +13,7 @@
 # limitations under the License.
 import tensorflow as tf
 from tensorflow import keras
-
+from keras import backend
 
 class RandomInsertion(keras.layers.Layer):
     """Augments input by randomly inserting words.
@@ -28,7 +28,7 @@ class RandomInsertion(keras.layers.Layer):
     """
 
     def __init__(self, probability, max_insertions, insertion_list = None,
-                insertion_fn = None, insertion_numpy_fn = None, name=None, **kwargs):
+                insertion_fn = None, insertion_numpy_fn = None, seed = None, name=None, **kwargs):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
@@ -50,7 +50,9 @@ class RandomInsertion(keras.layers.Layer):
         self.insertion_list = insertion_list
         self.insertion_fn = insertion_fn
         self.insertion_numpy_fn = insertion_numpy_fn
-
+        self.seed = seed
+        self._random_generator = backend.RandomGenerator(seed)
+        
     @tf.function
     def call(self, inputs):
         """Augments input by randomly inserting words.
@@ -59,7 +61,6 @@ class RandomInsertion(keras.layers.Layer):
         Returns:
             A tensor or nested tensor of augmented strings.
         """
-
         isString = False
         if isinstance(inputs, str):
             inputs = [inputs]
@@ -79,6 +80,7 @@ class RandomInsertion(keras.layers.Layer):
                     minval=0,
                     maxval=self.max_insertions,
                     dtype=tf.int32,
+                    seed=self._random_generator.make_legacy_seed()
                 )
             for _ in range(num_insertions):
                 index = tf.random.uniform(
@@ -86,6 +88,7 @@ class RandomInsertion(keras.layers.Layer):
                     minval=0,
                     maxval=tf.size(inputs),
                     dtype=tf.int32,
+                    seed=self._random_generator.make_legacy_seed()
                 )
                 replacement_word = index[0]
                 insertion_location = index[1]
@@ -108,3 +111,17 @@ class RandomInsertion(keras.layers.Layer):
         if isString:
             inserted = inserted[0]
         return inserted
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "probability": self.probability,
+                "max_insertions": self.max_insertions,
+                "insertion_list": self.insertion_list,
+                "insertion_fn": self.insertion_fn,
+                "insertion_numpy_fn": self.insertion_numpy_fn,
+                "seed": self.seed
+            }
+        )
+        return config
