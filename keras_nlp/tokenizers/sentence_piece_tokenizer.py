@@ -101,21 +101,35 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
         if isinstance(proto, str):
             # A string could be either a filepath, or a base64 encoded byte
-            # array (which we need for serialization). We can try to base64
-            # decode first, we get an error if string is incorrectly padded.
-            try:
-                proto = base64.b64decode(proto)
-            except:
-                proto = tf.io.gfile.GFile(proto, "rb").read()
+            # array (which we need for serialization). We will heuristically
+            # try to distinguish, by checking if a string is both longer and
+            # than 2048 characters and valid base64 characters.
+            is_base64 = False
+            if len(proto) > 2048:
+                try:
+                    proto_bytes = base64.b64decode(proto, validate=True)
+                    is_base64 = True
+                except:
+                    pass
+            if not is_base64:
+                proto_bytes = tf.io.gfile.GFile(proto, "rb").read()
+        elif isinstance(proto, bytes):
+            proto_bytes = proto
+        else:
+            raise ValueError(
+                "SentencePiece `proto` argument should be either a `string` "
+                f"filepath or a `bytes` sequence. "
+                f"Received unknown type: {type(proto)}"
+            )
 
         self._sentence_piece = tf_text.SentencepieceTokenizer(
-            model=proto,
+            model=proto_bytes,
             out_type=self.compute_dtype,
         )
 
         # Keras cannot serialize a bytestring, so we base64 encode the model
         # byte array as a string for saving.
-        self.proto = base64.b64encode(proto).decode("ascii")
+        self.proto = base64.b64encode(proto_bytes).decode("ascii")
         self.sequence_length = sequence_length
 
     def vocabulary_size(self) -> int:
