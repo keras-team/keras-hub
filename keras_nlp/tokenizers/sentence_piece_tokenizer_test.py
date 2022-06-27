@@ -93,11 +93,19 @@ class SentencePieceTokenizerTest(tf.test.TestCase):
         tokenizer = SentencePieceTokenizer(
             proto=self.proto,
         )
+        self.assertEqual(
+            tokenizer.get_vocabulary(),
+            ["<unk>", "<s>", "</s>", "▁brown", "▁fox.", "▁quick", "▁the"],
+        )
+        self.assertEqual(type(tokenizer.get_vocabulary()), list)
         self.assertEqual(tokenizer.vocabulary_size(), 7)
+        self.assertEqual(type(tokenizer.vocabulary_size()), int)
         self.assertEqual(tokenizer.id_to_token(0), "<unk>")
         self.assertEqual(tokenizer.id_to_token(5), "▁quick")
+        self.assertEqual(type(tokenizer.id_to_token(0)), str)
         self.assertEqual(tokenizer.token_to_id("<unk>"), 0)
         self.assertEqual(tokenizer.token_to_id("▁quick"), 5)
+        self.assertEqual(type(tokenizer.token_to_id("<unk>")), int)
 
     def test_functional_model(self):
         input_data = tf.constant(["the quick brown fox."])

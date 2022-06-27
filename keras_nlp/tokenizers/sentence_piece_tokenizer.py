@@ -13,11 +13,13 @@
 # limitations under the License.
 
 import base64
+from typing import List
 
 import tensorflow as tf
 import tensorflow_text as tf_text
 
 from keras_nlp.tokenizers import tokenizer
+from keras_nlp.utils.tensor_utils import tensor_to_string_list
 
 
 class SentencePieceTokenizer(tokenizer.Tokenizer):
@@ -134,15 +136,21 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     def vocabulary_size(self) -> int:
         """Get the size of the tokenizer vocabulary."""
-        return self._sentence_piece.vocab_size()
+        return int(self._sentence_piece.vocab_size().numpy())
+
+    def get_vocabulary(self) -> List[str]:
+        """Get the size of the tokenizer vocabulary."""
+        return tensor_to_string_list(
+            self._sentence_piece.id_to_string(tf.range(self.vocabulary_size()))
+        )
 
     def id_to_token(self, id: int) -> str:
         """Convert an integer id to a string token."""
-        return self._sentence_piece.id_to_string(id)
+        return tensor_to_string_list(self._sentence_piece.id_to_string(id))
 
     def token_to_id(self, token: str) -> int:
         """Convert a string token to an integer id."""
-        return self._sentence_piece.string_to_id(token)
+        return int(self._sentence_piece.string_to_id(token).numpy())
 
     def get_config(self):
         config = super().get_config()
