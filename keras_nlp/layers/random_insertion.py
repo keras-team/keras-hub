@@ -69,7 +69,7 @@ class RandomInsertion(keras.layers.Layer):
         # positions_flat = tf.range(tf.size(inputs.flat_values))
         # positions = inputs.with_flat_values(positions_flat)
 
-        def _replace(inputs):
+        def _insert(inputs):
             """
             Replace words randomly
             """
@@ -89,18 +89,17 @@ class RandomInsertion(keras.layers.Layer):
                     # Insert the synonym at insertion_location
                     inputs = tf.concat([inputs[:insertion_location], [synonym], inputs[insertion_location:]], axis=0)
             return inputs
-        k = inputs
-        replaced = tf.map_fn(
-            _replace,
+        inserted = tf.map_fn(
+            _insert,
             (inputs),
             fn_output_signature=tf.RaggedTensorSpec(
                 ragged_rank=inputs.ragged_rank - 1, dtype=inputs.dtype
             ),
         )
-        replaced.flat_values.set_shape([None])
+        inserted.flat_values.set_shape([None])
 
         if scalar_input:
-            replaced = tf.squeeze(replaced, 0)
+            inserted = tf.squeeze(inserted, 0)
         if isString:
-            replaced = replaced[0]
-        return replaced
+            inserted = inserted[0]
+        return inserted
