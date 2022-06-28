@@ -12,18 +12,46 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BLEU score implementation based on `keras.metrics.Metric`."""
+import collections
+import math
 
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.metrics.ngram_utils import get_ngram_count
+from keras_nlp.utils.tensor_utils import tensor_to_string_list
+
+REPLACE_SUBSTRINGS = [
+    ("<skipped>", ""),
+    ("-\n", ""),
+    ("\n", " "),
+    ("&quot;", '"'),
+    ("&amp;", "&"),
+    ("&lt;", "<"),
+    ("&gt;", ">"),
+]
+
+
+REGEX_PATTERNS = [
+    # language-dependent part (assuming Western languages)
+    (r"([\{-\~\[-\` -\&\(-\+\:-\@\/])", r" \1 "),
+    # tokenize period and comma unless preceded by a digit
+    (r"([^0-9])([\.,])", r"\1 \2 "),
+    # tokenize period and comma unless followed by a digit
+    (r"([\.,])([^0-9])", r" \1 \2"),
+    # tokenize dash when preceded by a digit
+    (r"([0-9])(-)", r"\1 \2 "),
+    # If last character is "." or ",", add space.
+    (r"[\.,]$", r" \0 \1"),
+    # one space only between words
+    (r"\s+", r" "),
+]
 
 
 class Bleu(keras.metrics.Metric):
     def __init__(
         self,
-        max_order=2,
+        tokenizer=None,
+        max_order=4,
         smooth=False,
         dtype=None,
         name="bleu",
@@ -37,140 +65,247 @@ class Bleu(keras.metrics.Metric):
                 f"Received: dtype={dtype}"
             )
 
+        def default_tokenizer(inputs):
+            """
+            Default tokenizer. Replicates the behaviour of SacreBLEU's
+            default tokenizer, namely, `tokenizer_13a`.
+            """
+            for pattern, replacement in REPLACE_SUBSTRINGS + REGEX_PATTERNS:
+                inputs = tf.strings.regex_replace(
+                    input=inputs,
+                    pattern=pattern,
+                    rewrite=replacement,
+                    replace_global=True,
+                    name=None,
+                )
+            inputs = tf.strings.split(inputs)
+            return inputs
+
+        if tokenizer is None:
+            self.tokenizer = default_tokenizer
+        else:
+            self.tokenizer = tokenizer
         self.max_order = max_order
         self.smooth = smooth
+
+        self._matches = self.add_weight(
+            shape=(self.max_order,),
+            name="bleu_matches",
+            initializer="zeros",
+            dtype=self.dtype,
+        )
+        self._possible_matches = self.add_weight(
+            shape=(self.max_order,),
+            name="bleu_possible_matches",
+            initializer="zeros",
+            dtype=self.dtype,
+        )
+        self._translation_length = self.add_weight(
+            name="bleu_translation_length",
+            initializer="zeros",
+            dtype=self.dtype,
+        )
+        self._reference_length = self.add_weight(
+            name="bleu_reference_length", initializer="zeros", dtype=self.dtype
+        )
 
         self._bleu = self.add_weight(
             name="bleu",
             initializer="zeros",
             dtype=self.dtype,
         )
-        self._number_of_samples = self.add_weight(
-            name="number_of_samples", initializer="zeros", dtype=self.dtype
-        )
 
     def update_state(self, y_true, y_pred, sample_weight=None):
-        batch_size = tf.shape(y_true)[0]
+        def validate_and_fix_rank(inputs, tensor_name, base_rank=0):
+            if not isinstance(inputs, tf.Tensor):
+                inputs = tf.convert_to_tensor(inputs)
 
-        # Tokenise the strings (we will later replace this with a more
-        # complicated tokeniser)
-        y_true = tf.strings.split(y_true)
-        y_pred = tf.strings.split(y_pred)
-
-        agg_reference_len = tf.cast(0, dtype=self.dtype)
-        agg_translation_len = tf.cast(0, dtype=self.dtype)
-        p_log_sum = tf.cast(0, dtype=self.dtype)
-        for idx in range(batch_size):
-            reference = y_true[idx]
-            translation = y_pred[idx]
-            agg_reference_len += tf.cast(
-                tf.shape(reference)[0], dtype=self.dtype
-            )
-            agg_translation_len += tf.cast(
-                tf.shape(translation)[0], dtype=self.dtype
-            )
-
-        min_precision = tf.cast(1, dtype=self.dtype)
-        for order in range(1, self.max_order + 1):
-            matches = tf.cast(0, dtype=self.dtype)
-            possible_matches = tf.cast(0, dtype=self.dtype)
-
-            for idx in range(batch_size):
-                reference = y_true[idx]
-                translation = y_pred[idx]
-                translation_len = tf.cast(
-                    tf.shape(translation)[0], dtype=self.dtype
-                )
-
-                # Get n-grams and ngram count.
-                reference_ngrams, reference_ngram_freq = get_ngram_count(
-                    reference, order
-                )
-                translation_ngrams, translation_ngram_freq = get_ngram_count(
-                    translation, order
-                )
-
-                # Get the intersection of the two ngram tensors.
-                common_ngrams = tf.sets.intersection(
-                    reference_ngrams[tf.newaxis, :],
-                    translation_ngrams[tf.newaxis, :],
-                ).values
-
-                common_reference_ngram_freq = tf.gather(
-                    reference_ngram_freq,
-                    tf.argmax(
-                        (reference_ngrams[:, None] == common_ngrams), axis=0
-                    ),
-                )
-                common_translation_ngram_freq = tf.gather(
-                    translation_ngram_freq,
-                    tf.argmax(
-                        (translation_ngrams[:, None] == common_ngrams), axis=0
-                    ),
-                )
-
-                # Compute number of ngram matches.
-                matches += tf.cast(
-                    tf.reduce_sum(
-                        tf.minimum(
-                            common_reference_ngram_freq,
-                            common_translation_ngram_freq,
-                        )
-                    ),
-                    dtype=self.dtype,
-                )
-                if translation_len - order + 1 > 0:
-                    possible_matches += translation_len
-
-            if self.smooth:
-                precision = (matches + tf.cast(1, dtype=self.dtype)) / (
-                    possible_matches + tf.cast(1, dtype=self.dtype)
-                )
+            if inputs.shape.rank == base_rank:
+                return inputs[tf.newaxis]
+            elif inputs.shape.rank == base_rank + 1:
+                return inputs
             else:
-                if possible_matches > 0:
-                    precision = matches / possible_matches
+                raise ValueError(
+                    f"{tensor_name} must be of rank {base_rank} or {base_rank+1}. "
+                    f"Found rank: {inputs.shape.rank}"
+                )
+
+        def _get_ngrams(segment, max_order):
+            """Extracts all n-grams upto a given maximum order from an input
+            segment. Uses Python ops. Inspired from
+            https://github.com/tensorflow/nmt/blob/master/nmt/scripts/bleu.py.
+
+            Args:
+                segment: string. Text segment from which n-grams will be
+                    extracted.
+                max_order: int. Maximum length in tokens of the n-grams returned
+                    by this methods.
+            """
+            ngram_counts = collections.Counter()
+            for order in range(1, max_order + 1):
+                for i in range(0, len(segment) - order + 1):
+                    ngram = tuple(segment[i : i + order])
+                    ngram_counts[ngram] += 1
+            return ngram_counts
+
+        def compute_bleu(
+            reference_corpus,
+            translation_corpus,
+            matches_by_order,
+            possible_matches_by_order,
+            translation_length,
+            reference_length,
+            max_order=4,
+            smooth=False,
+        ):
+            """Computes BLEU score of translated segments against one or more
+            references. Uses Python ops. Inspired from
+            https://github.com/tensorflow/nmt/blob/master/nmt/scripts/bleu.py.
+
+            Args:
+                reference_corpus: list of lists of references for each
+                    translation. Each reference should be tokenized into a list
+                    of tokens.
+                translation_corpus: list of translations to score. Each
+                    translation should be tokenized into a list of tokens.
+                max_order: int. Maximum n-gram order to use when computing
+                    BLEU score.
+                smooth: boolean. Whether or not to apply Lin et al. 2004
+                    smoothing.
+            """
+            for (references, translation) in zip(
+                reference_corpus, translation_corpus
+            ):
+                reference_length += min(len(r) for r in references)
+                translation_length += len(translation)
+
+                merged_ref_ngram_counts = collections.Counter()
+                for reference in references:
+                    merged_ref_ngram_counts |= _get_ngrams(reference, max_order)
+                translation_ngram_counts = _get_ngrams(translation, max_order)
+                overlap = translation_ngram_counts & merged_ref_ngram_counts
+                for ngram in overlap:
+                    matches_by_order[len(ngram) - 1] += overlap[ngram]
+                for order in range(1, max_order + 1):
+                    possible_matches = len(translation) - order + 1
+                    if possible_matches > 0:
+                        possible_matches_by_order[order - 1] += possible_matches
+
+            precisions = [0] * max_order
+            for i in range(0, max_order):
+                if smooth:
+                    precisions[i] = (matches_by_order[i] + 1.0) / (
+                        possible_matches_by_order[i] + 1.0
+                    )
                 else:
-                    precision = tf.cast(0, dtype=self.dtype)
+                    if possible_matches_by_order[i] > 0:
+                        precisions[i] = (
+                            float(matches_by_order[i])
+                            / possible_matches_by_order[i]
+                        )
+                    else:
+                        precisions[i] = 0.0
 
-            if precision > 0:
-                p_log_sum += (
-                    tf.cast(1, dtype=self.dtype)
-                    / tf.cast(self.max_order, dtype=self.dtype)
-                ) * tf.math.log(precision)
-            min_precision = tf.minimum(min_precision, precision)
+            if min(precisions) > 0:
+                p_log_sum = sum(
+                    (1.0 / max_order) * math.log(p) for p in precisions
+                )
+                geo_mean = math.exp(p_log_sum)
+            else:
+                geo_mean = 0
 
-        if min_precision > 0:
-            geo_mean = tf.exp(p_log_sum)
-        else:
-            geo_mean = tf.cast(0, dtype=self.dtype)
+            ratio = float(translation_length) / reference_length
 
-        # Compute the brevity penalty.
-        ratio = agg_translation_len / agg_reference_len
-        if ratio > 1:
-            bp = tf.cast(1, dtype=self.dtype)
-        else:
-            bp = tf.exp(
-                tf.cast(1, dtype=self.dtype)
-                - tf.cast(1, dtype=self.dtype) / ratio
+            if ratio > 1.0:
+                bp = 1.0
+            else:
+                bp = math.exp(1 - 1.0 / ratio)
+
+            bleu = geo_mean * bp
+
+            return (
+                bleu,
+                matches_by_order,
+                possible_matches_by_order,
+                translation_length,
+                reference_length,
             )
 
-        self._bleu.assign_add(geo_mean * bp)
-        self._number_of_samples.assign_add(
-            tf.cast(batch_size, dtype=tf.float32)
+        def calculate_bleu_score(references, translation):
+            references = tensor_to_string_list(references)
+            translation = tensor_to_string_list(translation)
+
+            matches = self._matches.numpy().tolist()
+            possible_matches = self._possible_matches.numpy().tolist()
+            translation_length = self._translation_length.numpy()
+            reference_length = self._reference_length.numpy()
+
+            (
+                bleu_score,
+                matches,
+                possible_matches,
+                translation_length,
+                reference_length,
+            ) = compute_bleu(
+                reference_corpus=references,
+                translation_corpus=translation,
+                matches_by_order=matches,
+                possible_matches_by_order=possible_matches,
+                translation_length=translation_length,
+                reference_length=reference_length,
+                max_order=self.max_order,
+                smooth=self.smooth,
+            )
+            return (
+                tf.constant(bleu_score, dtype=self.dtype),
+                tf.constant(matches, dtype=self.dtype),
+                tf.constant(possible_matches, dtype=self.dtype),
+                tf.constant(translation_length, dtype=self.dtype),
+                tf.constant(reference_length, dtype=self.dtype),
+            )
+
+        y_true = validate_and_fix_rank(y_true, "y_true", 1)
+        y_pred = validate_and_fix_rank(y_pred, "y_pred", 0)
+
+        # Tokenize the inputs.
+        y_true = self.tokenizer(y_true)
+        y_pred = self.tokenizer(y_pred)
+
+        (
+            bleu_score,
+            matches,
+            possible_matches,
+            translation_length,
+            reference_length,
+        ) = tf.py_function(
+            func=calculate_bleu_score,
+            inp=[y_true, y_pred],
+            Tout=[self.dtype, self.dtype, self.dtype, self.dtype, self.dtype],
         )
 
-    def result(self):
-        if self._number_of_samples == 0:
-            return 0.0
-        bleu = self._bleu / self._number_of_samples
+        self._matches.assign(matches)
+        self._possible_matches.assign(possible_matches)
+        self._translation_length.assign(translation_length)
+        self._reference_length.assign(reference_length)
+        self._bleu.assign(bleu_score)
 
-        return bleu
+    def result(self):
+        return self._bleu
 
     def reset_state(self):
+        self._matches.assign(0.0)
+        self._possible_matches.assign(0.0)
+        self._translation_length.assign(0.0)
+        self._reference_length.assign(0.0)
         self._bleu.assign(0.0)
-        self._number_of_samples.assign(0.0)
 
     def get_config(self):
         config = super().get_config()
-        config.update({"max_order": self.max_order, "smooth": self.smooth})
+        config.update(
+            {
+                "tokenizer": self.tokenizer,
+                "max_order": self.max_order,
+                "smooth": self.smooth,
+            }
+        )
         return config
