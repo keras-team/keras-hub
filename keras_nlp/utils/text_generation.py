@@ -248,7 +248,7 @@ def beam_search(
         )
     if beam_width <= 0:
         raise ValueError(
-            f"`beam_width` should strictly positive. Received: `beam_width={beam_width}`."
+            f"`beam_width` should be strictly positive. Received: `beam_width={beam_width}`."
         )
 
     prompt = validate_prompt(prompt)
@@ -509,7 +509,7 @@ def top_k_search(
             "tf.function in eager mode."
         )
     if k <= 0:
-        raise ValueError(f"`k` should strictly positive. Received: `k={k}`.")
+        raise ValueError(f"`k` should be strictly positive. Received: `k={k}`.")
 
     prompt = validate_prompt(prompt)
     input_is_1d = prompt.shape.rank == 1
