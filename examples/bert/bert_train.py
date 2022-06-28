@@ -12,27 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import shutil
+import datetime
 import sys
 
 import tensorflow as tf
 from absl import app
 from absl import flags
+from absl import logging
 from tensorflow import keras
 
 from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
 from examples.bert.bert_config import TRAINING_CONFIG
 from examples.bert.bert_model import BertModel
-from examples.utils.scripting_utils import list_filenames_for_arg
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "input_files",
+    "input_directory",
     None,
-    "Comma seperated list of directories, globs or files.",
+    "The directory of training data. It can be a local disk path, or the URL "
+    "of Google cloud storage bucket.",
 )
 
 flags.DEFINE_string(
@@ -51,6 +51,24 @@ flags.DEFINE_bool(
     "skip_restore",
     False,
     "Skip restoring from checkpoint if True",
+)
+
+flags.DEFINE_bool(
+    "tpu_name",
+    None,
+    "The TPU to connect to. If None, TPU will not be used.",
+)
+
+flags.DEFINE_bool(
+    "enable_cloud_logging",
+    False,
+    "If True, the script will use cloud logging.",
+)
+
+flags.DEFINE_string(
+    "tensorboard_log_path",
+    None,
+    "The path to save tensorboard log to.",
 )
 
 flags.DEFINE_string(
@@ -371,29 +389,70 @@ def decode_record(record):
     return example
 
 
+def get_checkpoint_callback():
+    if tf.io.gfile.exists(FLAGS.checkpoint_save_directory):
+        if not tf.io.gfile.isdir(FLAGS.checkpoint_save_directory):
+            raise ValueError(
+                "`checkpoint_save_directory` should be a directory, "
+                f"but {FLAGS.checkpoint_save_directory} is not a "
+                "directory. Please set `checkpoint_save_directory` as "
+                "a directory."
+            )
+
+        elif FLAGS.skip_restore:
+            # Clear up the directory if users want to skip restoring.
+            tf.io.gfile.rmtree(FLAGS.checkpoint_save_directory)
+    checkpoint_path = FLAGS.checkpoint_save_directory
+    return tf.keras.callbacks.BackupAndRestore(
+        backup_dir=checkpoint_path,
+    )
+
+
+def get_tensorboard_callback():
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_dir = FLAGS.tensorboard_log_path + timestamp
+    return tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
+
 def main(_):
-    print(f"Reading input data from {FLAGS.input_files}")
-    input_filenames = list_filenames_for_arg(FLAGS.input_files)
+    if FLAGS.enable_cloud_logging:
+        # If the job is on cloud, we will use cloud logging.
+        import google.cloud.logging
+
+        tf.keras.utils.disable_interactive_logging()
+        client = google.cloud.logging.Client()
+        client.setup_logging()
+
+    logging.info(f"Reading input data from {FLAGS.input_directory}")
+    if not tf.io.gfile.isdir(FLAGS.input_directory):
+        raise ValueError(
+            "`input_directory` should be a directory, "
+            f"but {FLAGS.input_directory} is not a directory. Please "
+            "set `input_directory` flag as a directory."
+        )
+    files = tf.io.gfile.listdir(FLAGS.input_directory)
+    input_filenames = [FLAGS.input_directory + "/" + file for file in files]
+
     if not input_filenames:
-        print("No input files found. Check `input_files` flag.")
+        logging.info("No input files found. Check `input_directory` flag.")
         sys.exit(1)
 
     vocab = []
-    with open(FLAGS.vocab_file, "r") as vocab_file:
+    with tf.io.gfile.GFile(FLAGS.vocab_file) as vocab_file:
         for line in vocab_file:
             vocab.append(line.strip())
 
     model_config = MODEL_CONFIGS[FLAGS.model_size]
 
-    if tf.config.list_logical_devices("TPU"):
-        # Connect to TPU and create TPU strategy.
-        resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
-            tpu="local"
-        )
-        strategy = tf.distribute.TPUStrategy(resolver)
-    else:
+    if FLAGS.tpu_name is None:
         # Use default strategy if not using TPU.
         strategy = tf.distribute.get_strategy()
+    else:
+        # Connect to TPU and create TPU strategy.
+        resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
+            tpu=FLAGS.tpu_name
+        )
+        strategy = tf.distribute.TPUStrategy(resolver)
 
     # Decode and batch data.
     dataset = tf.data.TFRecordDataset(input_filenames)
@@ -438,22 +497,10 @@ def main(_):
     steps_per_epoch = num_train_steps // epochs
 
     callbacks = []
-    if FLAGS.checkpoint_save_directory is not None:
-        if os.path.exists(FLAGS.checkpoint_save_directory):
-            if not os.path.isdir(FLAGS.checkpoint_save_directory):
-                raise ValueError(
-                    "`checkpoint_save_directory` should be a directory, but "
-                    f"{FLAGS.checkpoint_save_directory} is not a directory."
-                    " Please set `checkpoint_save_directory` as a directory."
-                )
-
-            elif FLAGS.skip_restore:
-                # Clear up the directory if users want to skip restoring.
-                shutil.rmtree(FLAGS.checkpoint_save_directory)
-        checkpoint_path = FLAGS.checkpoint_save_directory + "/checkpoint"
-        callbacks.append(
-            tf.keras.callbacks.BackupAndRestore(backup_dir=checkpoint_path)
-        )
+    if FLAGS.checkpoint_save_directory:
+        callbacks.append(get_checkpoint_callback())
+    if FLAGS.tensorboard_log_path:
+        callbacks.append(get_tensorboard_callback())
 
     pretraining_model.fit(
         dataset,
@@ -462,12 +509,13 @@ def main(_):
         callbacks=callbacks,
     )
 
-    print(f"Saving to {FLAGS.saved_model_output}")
-    model.save(FLAGS.saved_model_output)
+    model_path = FLAGS.saved_model_output
+    logging.info(f"Saving to {FLAGS.saved_model_output}")
+    model.save(model_path)
 
 
 if __name__ == "__main__":
-    flags.mark_flag_as_required("input_files")
+    flags.mark_flag_as_required("input_directory")
     flags.mark_flag_as_required("vocab_file")
     flags.mark_flag_as_required("saved_model_output")
     app.run(main)
