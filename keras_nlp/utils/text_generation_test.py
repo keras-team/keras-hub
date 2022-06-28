@@ -14,11 +14,12 @@
 """Tests for Text Generation Utils."""
 
 import random
+
 import numpy as np
 import tensorflow as tf
 
-from keras_nlp.utils.text_generation import greedy_search
 from keras_nlp.utils.text_generation import beam_search
+from keras_nlp.utils.text_generation import greedy_search
 from keras_nlp.utils.text_generation import random_search
 from keras_nlp.utils.text_generation import top_k_search
 from keras_nlp.utils.text_generation import top_p_search
