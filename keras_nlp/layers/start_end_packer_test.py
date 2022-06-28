@@ -29,7 +29,7 @@ class StartEndPackerTest(tf.test.TestCase):
         expected_output = [5, 6, 7, 0, 0]
         self.assertAllEqual(output, expected_output)
 
-    def test_dense_input_error(self):
+    def test_dense_2D_input(self):
         input_data = tf.constant([[5, 6, 7]])
         start_end_packer = StartEndPacker(sequence_length=5)
         output = start_end_packer(input_data)
