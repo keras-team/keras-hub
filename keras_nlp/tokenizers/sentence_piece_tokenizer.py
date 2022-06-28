@@ -54,32 +54,37 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     From bytes.
     ```python
-    # Train a SentencePiece vocabulary.
-    bytes_io = io.BytesIO()
-    ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
-    sentencepiece.SentencePieceTrainer.train(
-        sentence_iterator=ds.as_numpy_iterator(),
-        model_writer=bytes_io,
-        vocab_size=20,
-    )
+    def train_sentence_piece_bytes(ds, size):
+        bytes_io = io.BytesIO()
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=ds.as_numpy_iterator(),
+            model_writer=bytes_io,
+            vocab_size=size,
+        )
+        return bytes_io.getvalue()
 
-    # Tokenize inputs
-    tokenizer = SentencePieceTokenizer(proto=bytes_io.getvalue())
+    # Train a sentencepiece proto.
+    ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
+    proto = train_sentence_piece_bytes(ds, 20)
+    # Tokenize inputs.
+    tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto=proto)
     ds = ds.map(tokenizer)
     ```
 
     From a file.
     ```python
-    # Train a SentencePiece vocabulary and write it to a file.
-    ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
-    with open("model.spm", "wb") as model_file:
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=ds.as_numpy_iterator(),
-            model_writer=model_file,
-            vocab_size=20,
-        )
+    def train_sentence_piece_file(ds, path, size):
+        with open(path, "wb") as model_file:
+            sentencepiece.SentencePieceTrainer.train(
+                sentence_iterator=ds.as_numpy_iterator(),
+                model_writer=model_file,
+                vocab_size=size,
+            )
 
-    # Tokenize inputs
+    # Train a sentencepiece proto.
+    ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
+    proto = train_sentence_piece_file(ds, "model.spm", 20)
+    # Tokenize inputs.
     tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto="model.spm")
     ds = ds.map(tokenizer)
     ```
