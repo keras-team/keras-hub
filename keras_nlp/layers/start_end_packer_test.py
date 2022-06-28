@@ -48,7 +48,7 @@ class StartEndPackerTest(tf.test.TestCase):
         start_end_packer = StartEndPacker(sequence_length=5)
         with self.assertRaisesRegex(
             ValueError,
-            "Input must either be dense with rank 1, or ragged with rank 2. "
+            "Input must either be dense with rank 1 or 2, or ragged with rank 2. "
             "Received ragged input with "
             "rank=3",
         ):

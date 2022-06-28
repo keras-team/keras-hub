@@ -28,7 +28,7 @@ class StartEndPacker(keras.layers.Layer):
 
     If input is batched, input should be either a `tf.RaggedTensor` with shape
     `[batch_size, None]` or a dense tensor rank-2 tensor with shape
-    `[batch_size, length]` and will be packed and converted to a dense tensor
+    `[batch_size, length]`. It will be packed and converted to a dense tensor
     with shape `[batch_size, sequence_length]`.
     If input is unbatched, input should be a dense rank-1 tensor of any shape,
     and will be packed to shape `[sequence_length]`.
