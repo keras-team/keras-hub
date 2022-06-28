@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import base64
+import binascii
 from typing import List
 
 import tensorflow as tf
@@ -40,9 +41,11 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     Args:
         proto: Either a `string` path to a SentencePiece proto file, or a
-            `bytes` object with a serialized SentencePiece proto.
+            `bytes` object with a serialized SentencePiece proto. See the
+            [SentencePiece repository](https://github.com/google/sentencepiece)
+            for more details on the format.
         sequence_length: If set, the output will be converted to a dense
-            tensor and padded/trimmed so all outputs are of sequence_length.
+            tensor and padded/trimmed so all outputs are of `sequence_length`.
 
     References:
         - [Kudo and Richardson, 2018](https://arxiv.org/abs/1808.06226)
@@ -95,8 +98,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer and dtype != tf.string:
                 raise ValueError(
-                    "Output dtype must be an integer type or a string. "
-                    f"Received: dtype={dtype}"
+                    "Output dtype must be one of `'string'`, `'int32'`, and "
+                    f"`'int64'`. Received: dtype={dtype}"
                 )
 
         super().__init__(**kwargs)
@@ -111,7 +114,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 try:
                     proto_bytes = base64.b64decode(proto, validate=True)
                     is_base64 = True
-                except:
+                except binascii.Error:
                     pass
             if not is_base64:
                 proto_bytes = tf.io.gfile.GFile(proto, "rb").read()
