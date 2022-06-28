@@ -172,8 +172,10 @@ def beam_search(
     """
     Text generation utility based on beam search algorithm.
 
-    Beam search keeps the top beams (sequences) at each time step, then predicts
-    the next token from the kept beams.
+    At each time-step, beam search keeps the top `beam_width` beams (sequences),
+    and uses each one of the beams to predict candidate next tokens. The top
+    `beam_width` most probable next tokens are kept and appended to their
+    respective beams, before beginning the next iteration.
 
     Args:
         token_probability_fn: a callable, which takes in input_sequence
@@ -231,7 +233,7 @@ def beam_search(
         token_probability_fn,
         prompt,
         max_length=10,
-        p=0.8,
+        beam_width=5,
         end_token_id=END_ID,
     )
     ```
@@ -246,7 +248,7 @@ def beam_search(
         )
     if beam_width <= 0:
         raise ValueError(
-            "beam_width should be strictly positive (greater than 0)."
+            f"`beam_width` should strictly positive. Received: `beam_width={beam_width}`."
         )
 
     prompt = validate_prompt(prompt)
@@ -258,7 +260,7 @@ def beam_search(
 
     batch_size, length = prompt.shape
     if length < max_length:
-        # initialize beam
+        # Initialize beam.
         beams = tf.expand_dims(prompt, 1)
         beams_prob = tf.zeros([batch_size, beam_width])
         i = length
