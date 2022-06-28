@@ -53,6 +53,7 @@ class Bleu(keras.metrics.Metric):
         tokenizer=None,
         max_order=4,
         smooth=False,
+        variant="corpus",
         dtype=None,
         name="bleu",
         **kwargs,
@@ -63,6 +64,12 @@ class Bleu(keras.metrics.Metric):
             raise ValueError(
                 "`dtype` must be a floating point type. "
                 f"Received: dtype={dtype}"
+            )
+
+        if variant not in ("corpus_bleu", "sentence_bleu"):
+            raise ValueError(
+                "`variant` must be either 'corpus_bleu' or 'sentence_bleu'. "
+                f"Received: variant={variant}"
             )
 
         def default_tokenizer(inputs):
@@ -87,27 +94,37 @@ class Bleu(keras.metrics.Metric):
             self.tokenizer = tokenizer
         self.max_order = max_order
         self.smooth = smooth
+        self.variant = variant
 
-        self._matches = self.add_weight(
-            shape=(self.max_order,),
-            name="bleu_matches",
-            initializer="zeros",
-            dtype=self.dtype,
-        )
-        self._possible_matches = self.add_weight(
-            shape=(self.max_order,),
-            name="bleu_possible_matches",
-            initializer="zeros",
-            dtype=self.dtype,
-        )
-        self._translation_length = self.add_weight(
-            name="bleu_translation_length",
-            initializer="zeros",
-            dtype=self.dtype,
-        )
-        self._reference_length = self.add_weight(
-            name="bleu_reference_length", initializer="zeros", dtype=self.dtype
-        )
+        if variant == "corpus_bleu":
+            self._matches = self.add_weight(
+                shape=(self.max_order,),
+                name="bleu_matches",
+                initializer="zeros",
+                dtype=self.dtype,
+            )
+            self._possible_matches = self.add_weight(
+                shape=(self.max_order,),
+                name="bleu_possible_matches",
+                initializer="zeros",
+                dtype=self.dtype,
+            )
+            self._translation_length = self.add_weight(
+                name="bleu_translation_length",
+                initializer="zeros",
+                dtype=self.dtype,
+            )
+            self._reference_length = self.add_weight(
+                name="bleu_reference_length",
+                initializer="zeros",
+                dtype=self.dtype,
+            )
+        else:
+            self._number_of_samples = self.add_weight(
+                name="number_of_samples",
+                initializer="zeros",
+                dtype=self.dtype,
+            )
 
         self._bleu = self.add_weight(
             name="bleu",
@@ -148,7 +165,7 @@ class Bleu(keras.metrics.Metric):
                     ngram_counts[ngram] += 1
             return ngram_counts
 
-        def compute_bleu(
+        def corpus_bleu(
             reference_corpus,
             translation_corpus,
             matches_by_order,
@@ -231,66 +248,121 @@ class Bleu(keras.metrics.Metric):
                 reference_length,
             )
 
+        def sentence_bleu(
+            reference_corpus,
+            translation_corpus,
+            max_order=4,
+            smooth=False,
+        ):
+            bleu_score = 0.0
+            for references, translation in zip(
+                reference_corpus, translation_corpus
+            ):
+                bleu_score += corpus_bleu(
+                    reference_corpus=[references],
+                    translation_corpus=translation,
+                    matches_by_order=[0] * max_order,
+                    possible_matches_by_order=[0] * max_order,
+                    translation_length=0,
+                    reference_length=0,
+                    max_order=max_order,
+                    smooth=smooth,
+                )
+            return bleu_score
+
         def calculate_bleu_score(references, translation):
             references = tensor_to_string_list(references)
             translation = tensor_to_string_list(translation)
 
-            matches = self._matches.numpy().tolist()
-            possible_matches = self._possible_matches.numpy().tolist()
-            translation_length = self._translation_length.numpy()
-            reference_length = self._reference_length.numpy()
+            if self.variant == "corpus_bleu":
+                matches = self._matches.numpy().tolist()
+                possible_matches = self._possible_matches.numpy().tolist()
+                translation_length = self._translation_length.numpy()
+                reference_length = self._reference_length.numpy()
 
+                (
+                    bleu_score,
+                    matches,
+                    possible_matches,
+                    translation_length,
+                    reference_length,
+                ) = corpus_bleu(
+                    reference_corpus=references,
+                    translation_corpus=translation,
+                    matches_by_order=matches,
+                    possible_matches_by_order=possible_matches,
+                    translation_length=translation_length,
+                    reference_length=reference_length,
+                    max_order=self.max_order,
+                    smooth=self.smooth,
+                )
+                return (
+                    tf.constant(bleu_score, dtype=self.dtype),
+                    tf.constant(matches, dtype=self.dtype),
+                    tf.constant(possible_matches, dtype=self.dtype),
+                    tf.constant(translation_length, dtype=self.dtype),
+                    tf.constant(reference_length, dtype=self.dtype),
+                )
+            else:
+                bleu_score = sentence_bleu(
+                    reference_corpus=references,
+                    translation_corpus=translation,
+                    max_order=self.max_order,
+                    smooth=self.smooth,
+                )
+                return tf.constant(bleu_score, dtype=self.dtype)
+
+        y_true = validate_and_fix_rank(y_true, "y_true", 1)
+        y_pred = validate_and_fix_rank(y_pred, "y_pred", 0)
+
+        if self.variant == "sentence_bleu":
+            batch_size = tf.cast(tf.shape(y_true)[0], dtype=self.dtype)
+            self._number_of_samples.assign_add(batch_size)
+
+        # Tokenize the inputs.
+        y_true = self.tokenizer(y_true)
+        y_pred = self.tokenizer(y_pred)
+
+        if self.variant == "corpus_bleu":
             (
                 bleu_score,
                 matches,
                 possible_matches,
                 translation_length,
                 reference_length,
-            ) = compute_bleu(
-                reference_corpus=references,
-                translation_corpus=translation,
-                matches_by_order=matches,
-                possible_matches_by_order=possible_matches,
-                translation_length=translation_length,
-                reference_length=reference_length,
-                max_order=self.max_order,
-                smooth=self.smooth,
-            )
-            return (
-                tf.constant(bleu_score, dtype=self.dtype),
-                tf.constant(matches, dtype=self.dtype),
-                tf.constant(possible_matches, dtype=self.dtype),
-                tf.constant(translation_length, dtype=self.dtype),
-                tf.constant(reference_length, dtype=self.dtype),
+            ) = tf.py_function(
+                func=calculate_bleu_score,
+                inp=[y_true, y_pred],
+                Tout=[
+                    self.dtype,
+                    self.dtype,
+                    self.dtype,
+                    self.dtype,
+                    self.dtype,
+                ],
             )
 
-        y_true = validate_and_fix_rank(y_true, "y_true", 1)
-        y_pred = validate_and_fix_rank(y_pred, "y_pred", 0)
-
-        # Tokenize the inputs.
-        y_true = self.tokenizer(y_true)
-        y_pred = self.tokenizer(y_pred)
-
-        (
-            bleu_score,
-            matches,
-            possible_matches,
-            translation_length,
-            reference_length,
-        ) = tf.py_function(
-            func=calculate_bleu_score,
-            inp=[y_true, y_pred],
-            Tout=[self.dtype, self.dtype, self.dtype, self.dtype, self.dtype],
-        )
-
-        self._matches.assign(matches)
-        self._possible_matches.assign(possible_matches)
-        self._translation_length.assign(translation_length)
-        self._reference_length.assign(reference_length)
-        self._bleu.assign(bleu_score)
+            self._matches.assign(matches)
+            self._possible_matches.assign(possible_matches)
+            self._translation_length.assign(translation_length)
+            self._reference_length.assign(reference_length)
+            self._bleu.assign(bleu_score)
+        else:
+            bleu_score = tf.py_function(
+                func=calculate_bleu_score,
+                inp=[y_true, y_pred],
+                Tout=self.dtype,
+            )
+            self._bleu.assign_add(bleu_score)
 
     def result(self):
-        return self._bleu
+        if self.variant == "corpus_bleu":
+            return self._bleu
+        else:
+            if self._number_of_samples == 0:
+                return 0.0
+            else:
+                return self._bleu / self._number_of_samples
 
     def reset_state(self):
         self._matches.assign(0.0)
@@ -306,6 +378,7 @@ class Bleu(keras.metrics.Metric):
                 "tokenizer": self.tokenizer,
                 "max_order": self.max_order,
                 "smooth": self.smooth,
+                "variant": self.variant,
             }
         )
         return config
