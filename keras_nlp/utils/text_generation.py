@@ -116,7 +116,7 @@ def greedy_search(
 
     prompt = tf.fill((BATCH_SIZE, 1), START_ID)
 
-    # Print the generated Asequence (token ids).
+    # Print the generated sequence (token ids).
     keras_nlp.utils.greedy_search(
         token_probability_fn,
         prompt,
