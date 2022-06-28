@@ -26,9 +26,10 @@ class StartEndPacker(keras.layers.Layer):
     be called after tokenization. The layer will first trim inputs to fit, then
     add start/end tokens, and finally pad, if necessary, to `sequence_length`.
 
-    If input is batched, input should be a `tf.RaggedTensor` with shape
-    `[batch_size, None]` and will be packed and converted to a dense tensor with
-    shape `[batch_size, sequence_length]`.
+    If input is batched, input should be either a `tf.RaggedTensor` with shape
+    `[batch_size, None]` or a dense tensor rank-2 tensor with shape
+    `[batch_size, length]` and will be packed and converted to a dense tensor
+    with shape `[batch_size, sequence_length]`.
     If input is unbatched, input should be a dense rank-1 tensor of any shape,
     and will be packed to shape `[sequence_length]`.
 
@@ -111,11 +112,12 @@ class StartEndPacker(keras.layers.Layer):
         input_is_dense = isinstance(inputs, tf.Tensor)
         input_is_ragged = isinstance(inputs, tf.RaggedTensor)
 
+        input_is_1d = inputs.shape.rank == 1
         if input_is_dense:
-            if inputs.shape.rank != 1:
+            if inputs.shape.rank > 2:
                 raise ValueError(
-                    "Input must either be dense with rank 1, or ragged with "
-                    "rank 2. Received dense input with "
+                    "Input must either be dense with rank 1 or 2, or ragged "
+                    "with rank 2. Received dense input with "
                     f"rank={inputs.shape.rank}"
                 )
 
@@ -124,8 +126,8 @@ class StartEndPacker(keras.layers.Layer):
         elif input_is_ragged:
             if inputs.shape.rank != 2:
                 raise ValueError(
-                    "Input must either be dense with rank 1, or ragged with "
-                    "rank 2. Received ragged input with "
+                    "Input must either be dense with rank 1 or 2, or ragged "
+                    "with rank 2. Received ragged input with "
                     f"rank={inputs.shape.rank}"
                 )
 
@@ -148,7 +150,7 @@ class StartEndPacker(keras.layers.Layer):
             shape=(batch_size, self.sequence_length),
         )
 
-        if input_is_dense:
+        if input_is_1d:
             inputs = tf.squeeze(inputs, axis=0)
 
         return inputs
