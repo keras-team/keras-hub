@@ -120,9 +120,10 @@ class StartEndPacker(keras.layers.Layer):
                     "with rank 2. Received dense input with "
                     f"rank={inputs.shape.rank}"
                 )
-
+            if input_is_1d:
+                inputs = tf.expand_dims(inputs, axis=0)
             # Add a new axis at the beginning and convert to ragged tensor.
-            inputs = tf.RaggedTensor.from_tensor(tf.expand_dims(inputs, axis=0))
+            inputs = tf.RaggedTensor.from_tensor(inputs)
         elif input_is_ragged:
             if inputs.shape.rank != 2:
                 raise ValueError(
