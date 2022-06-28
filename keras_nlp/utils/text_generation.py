@@ -160,6 +160,152 @@ def greedy_search(
     return prompt
 
 
+def beam_search(
+    token_probability_fn,
+    prompt,
+    max_length,
+    beam_width,
+    from_logits=False,
+    end_token_id=None,
+    pad_token_id=0,
+):
+    """
+    Text generation utility based on beam search algorithm.
+
+    Beam search keeps the top beams (sequences) at each time step, then predicts
+    the next token from the kept beams.
+
+    Args:
+        token_probability_fn: a callable, which takes in input_sequence
+            and output the probability distribution of the next token. If
+            `from_logits` set to True, it should output the logits of the next
+            token.
+        prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
+            append generated tokens. The initial beam for beam search.
+        max_length: int. The max length of generated text.
+        beam_width: int. The number of beams that should be kept at each
+            time-step. `beam_width` should be strictly positive.
+        from_logits: bool. Indicates whether `token_probability_fn` outputs
+            logits or probabilities.
+        end_token_id: int, defaults to None. The token marking the end of the
+            sequence, once encountered the generation is finished for the exact
+            sequence. If None, every sequence is generated up to `max_length`.
+            If set, all tokens after encountering `end_token_id` will be
+            replaced with `pad_token_id`.
+        pad_token_id: int, defaults to 0. The pad token after `end_token_id`
+            is received.
+
+    Returns:
+        A 1D int Tensor, or 2D int Tensor representing the generated
+        sequences.
+
+    Examples:
+    ```python
+    BATCH_SIZE = 8
+    VOCAB_SIZE = 10
+    FEATURE_SIZE = 16
+    START_ID = 1
+    END_ID = 2
+
+    # Create a dummy model to predict the next token.
+    model = tf.keras.Sequential(
+        [
+            tf.keras.Input(shape=[None]),
+            tf.keras.layers.Embedding(
+                input_dim=VOCAB_SIZE,
+                output_dim=FEATURE_SIZE,
+            ),
+            tf.keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
+        ]
+    )
+
+    # Define a function that outputs the next token's probability given the
+    # input sequence.
+    def token_probability_fn(inputs):
+        return model(inputs)[:, -1, :]
+
+    prompt = tf.fill((BATCH_SIZE, 1), START_ID)
+
+    # Print the generated sequence (token ids).
+    keras_nlp.utils.beam_search(
+        token_probability_fn,
+        prompt,
+        max_length=10,
+        p=0.8,
+        end_token_id=END_ID,
+    )
+    ```
+
+    """
+    if not tf.executing_eagerly():
+        raise RuntimeError(
+            "`keras_nlp.utils.beam_search` currently requires an eager "
+            "execution context. Please call `beam_search` outside "
+            "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
+            "tf.function in eager mode."
+        )
+    if beam_width <= 0:
+        raise ValueError(
+            "beam_width should be strictly positive (greater than 0)."
+        )
+
+    prompt = validate_prompt(prompt)
+
+    input_is_1d = prompt.shape.rank == 1
+    if input_is_1d:
+        prompt = prompt[tf.newaxis, :]
+    validate_token_probability_fn(token_probability_fn, prompt)
+
+    batch_size, length = prompt.shape
+    if length < max_length:
+        # initialize beam
+        beams = tf.expand_dims(prompt, 1)
+        beams_prob = tf.zeros([batch_size, beam_width])
+        i = length
+        while i < max_length:
+            beam_size = beams.shape[1]
+            reshaped_beam = tf.reshape(beams, [batch_size * beam_size, i])
+            reshaped_preds = token_probability_fn(reshaped_beam)
+            if from_logits:
+                reshaped_preds = tf.keras.activations.softmax(
+                    reshaped_preds, axis=-1
+                )
+            vocab_size = reshaped_preds.shape[1]
+            logits = tf.reshape(
+                reshaped_preds, [batch_size, beam_size * vocab_size]
+            )
+            beam_width = min(beam_size * vocab_size, beam_width)
+            candidate_prob, candidate_indexes = tf.math.top_k(
+                logits, k=beam_width
+            )
+            candidate_beam_indexes = candidate_indexes // vocab_size
+            next_token = candidate_indexes % vocab_size
+
+            beams = tf.gather(
+                beams, candidate_beam_indexes, axis=1, batch_dims=1
+            )
+            beams_prob = tf.gather(
+                beams_prob, candidate_beam_indexes, axis=1, batch_dims=1
+            )
+            beams = tf.concat([beams, next_token[..., tf.newaxis]], axis=-1)
+            beams_prob += tf.math.log(candidate_prob)
+            i += 1
+        # Get the beam with the maximum probability.
+        max_indexes = tf.math.argmax(beams_prob, axis=-1)
+        max_beams = tf.gather(
+            beams, max_indexes[:, tf.newaxis], axis=1, batch_dims=1
+        )
+        prompt = tf.squeeze(max_beams)
+
+    if end_token_id is not None:
+        prompt = mask_tokens_after_end_token(
+            prompt, max_length, end_token_id, pad_token_id
+        )
+    if input_is_1d:
+        return tf.squeeze(prompt)
+    return prompt
+
+
 def random_search(
     token_probability_fn,
     prompt,
