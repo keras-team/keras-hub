@@ -248,7 +248,7 @@ class Bleu(keras.metrics.Metric):
                 reference_length,
             )
 
-        def sentence_bleu(
+        def aggregate_sentence_bleu(
             reference_corpus,
             translation_corpus,
             max_order=4,
@@ -260,7 +260,7 @@ class Bleu(keras.metrics.Metric):
             ):
                 bleu_score += corpus_bleu(
                     reference_corpus=[references],
-                    translation_corpus=translation,
+                    translation_corpus=[translation],
                     matches_by_order=[0] * max_order,
                     possible_matches_by_order=[0] * max_order,
                     translation_length=0,
@@ -304,7 +304,7 @@ class Bleu(keras.metrics.Metric):
                     tf.constant(reference_length, dtype=self.dtype),
                 )
             else:
-                bleu_score = sentence_bleu(
+                bleu_score = aggregate_sentence_bleu(
                     reference_corpus=references,
                     translation_corpus=translation,
                     max_order=self.max_order,
