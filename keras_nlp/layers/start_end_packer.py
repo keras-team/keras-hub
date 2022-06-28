@@ -26,12 +26,8 @@ class StartEndPacker(keras.layers.Layer):
     be called after tokenization. The layer will first trim inputs to fit, then
     add start/end tokens, and finally pad, if necessary, to `sequence_length`.
 
-    If input is batched, input should be either a `tf.RaggedTensor` with shape
-    `[batch_size, None]` or a dense tensor rank-2 tensor with shape
-    `[batch_size, length]`. It will be packed and converted to a dense tensor
-    with shape `[batch_size, sequence_length]`.
-    If input is unbatched, input should be a dense rank-1 tensor of any shape,
-    and will be packed to shape `[sequence_length]`.
+    Input should be either a `tf.RaggedTensor` or a dense `tf.Tensor`, and
+    either rank-1 or rank-2.
 
     Args:
         sequence_length: int. The desired output length.
@@ -109,28 +105,20 @@ class StartEndPacker(keras.layers.Layer):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
 
-        input_is_dense = isinstance(inputs, tf.Tensor)
-        input_is_ragged = isinstance(inputs, tf.RaggedTensor)
-
-        input_is_1d = inputs.shape.rank == 1
-        if input_is_dense:
-            if inputs.shape.rank > 2:
-                raise ValueError(
-                    "Input must either be dense with rank 1 or 2, or ragged "
-                    "with rank 2. Received dense input with "
-                    f"rank={inputs.shape.rank}"
-                )
-            if input_is_1d:
-                inputs = tf.expand_dims(inputs, axis=0)
-            # Add a new axis at the beginning and convert to ragged tensor.
+        input_is_1d = False
+        if inputs.shape.rank < 1 or inputs.shape.rank > 2:
+            raise ValueError(
+                "Input must either be dense with rank 1 or 2, or ragged "
+                "with rank 2. Received dense input with "
+                f"rank={inputs.shape.rank}"
+            )
+        elif inputs.shape.rank == 1:
+            input_is_1d = True
+            # Add a new axis at the beginning.
+            inputs = tf.expand_dims(inputs, axis=0)
+        if isinstance(inputs, tf.Tensor):
+            # Convert to ragged tensor.
             inputs = tf.RaggedTensor.from_tensor(inputs)
-        elif input_is_ragged:
-            if inputs.shape.rank != 2:
-                raise ValueError(
-                    "Input must either be dense with rank 1 or 2, or ragged "
-                    "with rank 2. Received ragged input with "
-                    f"rank={inputs.shape.rank}"
-                )
 
         batch_size = tf.shape(inputs)[0]
 
