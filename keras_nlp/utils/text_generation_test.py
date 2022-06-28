@@ -47,6 +47,14 @@ class GreedySearchTextGenerationTest(tf.test.TestCase):
 
         self.token_probability_fn = token_probability_fn
 
+    def test_generate_with_empty_prompt(self):
+        inputs = tf.constant([])
+        with self.assertRaises(ValueError):
+            greedy_search(self.token_probability_fn, inputs, max_length=5)
+        inputs = tf.constant([[]])
+        with self.assertRaises(ValueError):
+            greedy_search(self.token_probability_fn, inputs, max_length=5)
+
     def test_generate_with_1d_prompt(self):
         inputs = tf.constant([1])
         outputs = greedy_search(self.token_probability_fn, inputs, max_length=5)
@@ -126,6 +134,14 @@ class RandomSearchTextGenerationTest(tf.test.TestCase):
             return model(inputs)[:, -1, :]
 
         self.token_probability_fn = token_probability_fn
+
+    def test_generate_with_empty_prompt(self):
+        inputs = tf.constant([])
+        with self.assertRaises(ValueError):
+            random_search(self.token_probability_fn, inputs, max_length=5)
+        inputs = tf.constant([[]])
+        with self.assertRaises(ValueError):
+            random_search(self.token_probability_fn, inputs, max_length=5)
 
     def test_generate_with_1d_prompt(self):
         inputs = tf.constant([1])
@@ -268,6 +284,14 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
             return model(inputs)[:, -1, :]
 
         self.token_probability_fn = token_probability_fn
+
+    def test_generate_with_empty_prompt(self):
+        inputs = tf.constant([])
+        with self.assertRaises(ValueError):
+            top_k_search(self.token_probability_fn, inputs, max_length=5, k=2)
+        inputs = tf.constant([[]])
+        with self.assertRaises(ValueError):
+            top_k_search(self.token_probability_fn, inputs, max_length=5, k=2)
 
     def test_generate_with_1d_prompt(self):
         inputs = tf.constant([1])
@@ -444,6 +468,14 @@ class TopPSearchTextGenerationTest(tf.test.TestCase):
             return model(inputs)[:, -1, :]
 
         self.token_probability_fn = token_probability_fn
+
+    def test_generate_with_empty_prompt(self):
+        inputs = tf.constant([])
+        with self.assertRaises(ValueError):
+            top_p_search(self.token_probability_fn, inputs, max_length=5, p=0.8)
+        inputs = tf.constant([[]])
+        with self.assertRaises(ValueError):
+            top_p_search(self.token_probability_fn, inputs, max_length=5, p=0.8)
 
     def test_generate_with_1d_prompt(self):
         inputs = tf.constant([1])

@@ -26,6 +26,10 @@ def validate_prompt(prompt):
         )
     if not isinstance(prompt, tf.Tensor):
         prompt = tf.convert_to_tensor(prompt)
+    if prompt.shape[-1] == 0:
+        raise ValueError(
+            "Length of `prompt` is 0, please provide a non-empty `prompt`."
+        )
     return prompt
 
 
@@ -112,7 +116,7 @@ def greedy_search(
 
     prompt = tf.fill((BATCH_SIZE, 1), START_ID)
 
-    # Print the generated sequence (token ids).
+    # Print the generated Asequence (token ids).
     keras_nlp.utils.greedy_search(
         token_probability_fn,
         prompt,
@@ -357,7 +361,7 @@ def top_k_search(
             "tf.function in eager mode."
         )
     if k <= 0:
-        raise ValueError("k should be strictly positive (greater than 0).")
+        raise ValueError(f"`k` should strictly positive. Received: `k={k}`.")
 
     prompt = validate_prompt(prompt)
     input_is_1d = prompt.shape.rank == 1
@@ -408,8 +412,10 @@ def top_p_search(
     """
     Text generation utility based on top-p (nucleus) sampling.
 
-    Top-p search filters the top token with probabilities that sum up to p, and
-    samples from this subset to get the next token. The probability of each
+    Top-p search selects tokens from the smallest subset of output probabilities
+    that sum to greater than `p`. Put another way, top-p will first order
+    token predictions by likelihood, and ignore all tokens after the cumulative
+    probability of selected tokens exceeds `p`. The probability of each
     token is provided by `token_probability_fn`.
 
     Args:
@@ -477,14 +483,14 @@ def top_p_search(
     """
     if not tf.executing_eagerly():
         raise RuntimeError(
-            "`keras_nlp.utils.top_k_search` currently requires an eager "
-            "execution context. Please call `top_k_search` outside "
+            "`keras_nlp.utils.top_p_search` currently requires an eager "
+            "execution context. Please call `top_p_search` outside "
             "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
             "tf.function in eager mode."
         )
     if p <= 0 or p >= 1:
         raise ValueError(
-            "p should be a float strictly between 0 and 1 (0 < p < 1)."
+            f"`p` should be in the range (0, 1). Received: `p={p}`."
         )
 
     prompt = validate_prompt(prompt)
