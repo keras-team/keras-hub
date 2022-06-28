@@ -53,7 +53,7 @@ class Bleu(keras.metrics.Metric):
         tokenizer=None,
         max_order=4,
         smooth=False,
-        variant="corpus",
+        variant="corpus_bleu",
         dtype=None,
         name="bleu",
         **kwargs,
@@ -267,7 +267,7 @@ class Bleu(keras.metrics.Metric):
                     reference_length=0,
                     max_order=max_order,
                     smooth=smooth,
-                )
+                )[0]
             return bleu_score
 
         def calculate_bleu_score(references, translation):
