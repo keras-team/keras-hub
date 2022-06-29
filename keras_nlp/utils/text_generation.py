@@ -262,7 +262,7 @@ def beam_search(
     if length < max_length:
         # Initialize beam.
         beams = tf.expand_dims(prompt, 1)
-        beams_prob = tf.zeros([batch_size, beam_width])
+        beams_prob = tf.zeros([batch_size, 1])
         i = length
         while i < max_length:
             beam_size = beams.shape[1]
@@ -276,9 +276,12 @@ def beam_search(
             logits = tf.reshape(
                 reshaped_preds, [batch_size, beam_size * vocab_size]
             )
+            probs = tf.math.log(logits) + tf.repeat(
+                beams_prob, repeats=vocab_size, axis=1
+            )
             beam_width = min(beam_size * vocab_size, beam_width)
             candidate_prob, candidate_indexes = tf.math.top_k(
-                logits, k=beam_width
+                probs, k=beam_width, sorted=False
             )
             candidate_beam_indexes = candidate_indexes // vocab_size
             next_token = candidate_indexes % vocab_size
@@ -286,11 +289,8 @@ def beam_search(
             beams = tf.gather(
                 beams, candidate_beam_indexes, axis=1, batch_dims=1
             )
-            beams_prob = tf.gather(
-                beams_prob, candidate_beam_indexes, axis=1, batch_dims=1
-            )
             beams = tf.concat([beams, next_token[..., tf.newaxis]], axis=-1)
-            beams_prob += tf.math.log(candidate_prob)
+            beams_prob = candidate_prob
             i += 1
         # Get the beam with the maximum probability.
         max_indexes = tf.math.argmax(beams_prob, axis=-1)
@@ -526,7 +526,7 @@ def top_k_search(
         # If k is greater than the vocabulary size, use the entire vocabulary.
         k = min(k, pred.shape[1])
         # Filter out top-k tokens.
-        top_k_pred, top_k_indices = tf.math.top_k(pred, k=k)
+        top_k_pred, top_k_indices = tf.math.top_k(pred, k=k, sorted=False)
         # Sample the next token from the probability distribution.
         next_token = tf.random.categorical(
             tf.math.log(top_k_pred), 1, seed=seed

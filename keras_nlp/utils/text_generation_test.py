@@ -211,7 +211,10 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
                 prob = tf.constant([[0.1, 0.2, 0.3, 0.4]])
             else:
                 prob = tf.constant(
-                    [[0.9, 0.08, 0.01, 0.01], [0.25, 0.25, 0.25, 0.25]]
+                    [
+                        [0.9, 0.08, 0.01, 0.01],
+                        [0.25, 0.25, 0.25, 0.25],
+                    ]
                 )
             return prob
 
@@ -223,7 +226,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
             beam_width=2,
         )
         self.assertAllEqual(
-            beam_output, tf.constant([1, 3, 0], dtype=beam_output.dtype)
+            beam_output, tf.constant([1, 2, 0], dtype=beam_output.dtype)
         )
 
     def test_assert_generation_is_correct(self):
@@ -490,8 +493,6 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
         )
         # Top-k sampling result with seed 42.
         seeded_result = 3 * np.ones(shape=[batch_size, max_length])
-        seeded_result[3][1] = 2
-        seeded_result[7][1] = 2
         self.assertAllEqual(outputs, seeded_result)
 
     def test_assert_probability_distribution_generation_is_correct(self):
