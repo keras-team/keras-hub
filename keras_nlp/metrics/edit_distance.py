@@ -27,17 +27,27 @@ class EditDistance(keras.metrics.Metric):
     can be one of substitution, deletion or insertion. In the normalized version,
     the above score is divided by the number of tokens in the reference text.
 
+    This class can be used to compute character error rate (CER)/word error rate
+    (WER). You simply have to pass the appropriate tokenized text, and set
+    `normalize` to True.
+
     Note on input shapes:
     `y_true` and `y_pred` can either be tensors of rank 1 or ragged tensors of
-    rank 2.
+    rank 2. These tensors contain tokenized text.
 
     Args:
-        normalize: bool. If True, the output is divided by the number of tokens
-            in the reference text.
+        normalize: bool. If True, the computed number of operations
+            (substitutions + deletions + insertions) across all samples is
+            divided by the aggregate number of tokens in all reference texts. If
+            False, number of operations are calculated for every sample, and
+            averaged over all the samples. 
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
             not specified, it defaults to tf.float32.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
+
+    References:
+        - [Morris et al.](https://www.researchgate.net/publication/221478089_From_WER_and_RIL_to_MER_and_WIL_improved_evaluation_measures_for_connected_speech_recognition)
     """
 
     def __init__(
@@ -57,15 +67,23 @@ class EditDistance(keras.metrics.Metric):
 
         self.normalize = normalize
 
-        self._aggregate_edit_distance = self.add_weight(
-            name="aggregate_edit_distance",
+        self._aggregate_unnormalized_edit_distance = self.add_weight(
+            name="aggregate_unnormalized_edit_distance",
             initializer="zeros",
             dtype=self.dtype,
         )
-
-        self._number_of_samples = self.add_weight(
-            name="number_of_samples", initializer="zeros", dtype=self.dtype
-        )
+        if normalize:
+            self._aggregate_reference_length = self.add_weight(
+                name="aggregate_reference_length",
+                initializer="zeros",
+                dtype=self.dtype,
+            )
+        else:
+            self._number_of_samples = self.add_weight(
+                name="number_of_samples",
+                initializer="zeros",
+                dtype=self.dtype,
+            )    
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         def validate_and_fix_rank(inputs, tensor_name):
@@ -73,17 +91,20 @@ class EditDistance(keras.metrics.Metric):
                 inputs = tf.ragged.constant(inputs)
 
             if inputs.shape.rank == 1:
-                return inputs[tf.newaxis]
+                return tf.RaggedTensor.from_tensor(inputs[tf.newaxis])
             elif inputs.shape.rank == 2:
                 return inputs
             else:
                 raise ValueError(
-                    f"Tokenized {tensor_name} must be of rank 1 or "
-                    f"2. Found rank: {inputs.shape.rank}"
+                    f"{tensor_name} must be of rank 1 or 2. "
+                    f"Found rank: {inputs.shape.rank}"
                 )
 
         y_true = validate_and_fix_rank(y_true, "y_true")
         y_pred = validate_and_fix_rank(y_pred, "y_pred")
+
+        if self.normalize:
+            self._aggregate_reference_length.assign_add(tf.cast(tf.size(y_true.flat_values), dtype=self.dtype))
 
         def calculate_edit_distance(args):
             reference, hypothesis = args
@@ -95,14 +116,15 @@ class EditDistance(keras.metrics.Metric):
                 tf.edit_distance(
                     hypothesis=hypothesis,
                     truth=reference,
-                    normalize=self.normalize,
+                    normalize=False,
                 )
             )
 
-            self._aggregate_edit_distance.assign_add(
+            self._aggregate_unnormalized_edit_distance.assign_add(
                 tf.cast(edit_distance, dtype=self.dtype)
             )
-            self._number_of_samples.assign_add(tf.cast(1, dtype=self.dtype))
+            if not self.normalize:
+                self._number_of_samples.assign_add(tf.cast(1, dtype=self.dtype))
             return 0
 
         _ = tf.map_fn(
@@ -112,14 +134,19 @@ class EditDistance(keras.metrics.Metric):
         )
 
     def result(self):
-        if self._number_of_samples == 0:
-            return 0.0
-
-        return self._aggregate_edit_distance / self._number_of_samples
+        if self.normalize:
+            return self._aggregate_unnormalized_edit_distance / self._aggregate_reference_length
+        return self._aggregate_unnormalized_edit_distance / self._number_of_samples
 
     def reset_state(self):
-        self._aggregate_edit_distance.assign(0.0)
+        if self.normalize:
+            self._aggregate_unnormalized_edit_distance.assign(0.0)
+            self_aggregate_reference_length.assign(0.0)
+        else:
+            self._aggregate_unnormalized_edit_distance.assign(0.0)
+            self._number_of_samples.assign(0.0)
 
     def get_config(self):
         config = super().get_config()
+        config.update({"normalize": self.normalize})
         return config
