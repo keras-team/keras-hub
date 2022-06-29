@@ -164,7 +164,7 @@ def beam_search(
     token_probability_fn,
     prompt,
     max_length,
-    beam_width,
+    num_beams,
     from_logits=False,
     end_token_id=None,
     pad_token_id=0,
@@ -172,21 +172,23 @@ def beam_search(
     """
     Text generation utility based on beam search algorithm.
 
-    At each time-step, beam search keeps the top `beam_width` beams (sequences),
+    At each time-step, beam search keeps the top `num_beams` beams (sequences),
     and uses each one of the beams to predict candidate next tokens. The top
-    `beam_width` most probable next tokens are kept and appended to their
+    `num_beams` most probable next tokens are kept and appended to their
     respective beams, before beginning the next iteration.
 
     Args:
         token_probability_fn: a callable, which takes in input_sequence
             and output the probability distribution of the next token. If
             `from_logits` set to True, it should output the logits of the next
-            token.
+            token. The input shape would be `[batch_size, length]` and the
+            output should be `[batch_size, vocab_size]`, where batch_size is
+            variable.
         prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
             append generated tokens. The initial beam for beam search.
         max_length: int. The max length of generated text.
-        beam_width: int. The number of beams that should be kept at each
-            time-step. `beam_width` should be strictly positive.
+        num_beams: int. The number of beams that should be kept at each
+            time-step. `num_beams` should be strictly positive.
         from_logits: bool. Indicates whether `token_probability_fn` outputs
             logits or probabilities.
         end_token_id: int, defaults to None. The token marking the end of the
@@ -233,7 +235,7 @@ def beam_search(
         token_probability_fn,
         prompt,
         max_length=10,
-        beam_width=5,
+        num_beams=5,
         end_token_id=END_ID,
     )
     ```
@@ -246,9 +248,9 @@ def beam_search(
             "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
             "tf.function in eager mode."
         )
-    if beam_width <= 0:
+    if num_beams <= 0:
         raise ValueError(
-            f"`beam_width` should be strictly positive. Received: `beam_width={beam_width}`."
+            f"`num_beams` should be strictly positive. Received: `num_beams={num_beams}`."
         )
 
     prompt = validate_prompt(prompt)
@@ -279,9 +281,9 @@ def beam_search(
             probs = tf.math.log(logits) + tf.repeat(
                 beams_prob, repeats=vocab_size, axis=1
             )
-            beam_width = min(beam_size * vocab_size, beam_width)
+            num_beams = min(beam_size * vocab_size, num_beams)
             candidate_prob, candidate_indexes = tf.math.top_k(
-                probs, k=beam_width, sorted=False
+                probs, k=num_beams, sorted=False
             )
             candidate_beam_indexes = candidate_indexes // vocab_size
             next_token = candidate_indexes % vocab_size

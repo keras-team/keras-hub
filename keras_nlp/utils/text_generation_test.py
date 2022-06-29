@@ -141,12 +141,12 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
         inputs = tf.constant([])
         with self.assertRaises(ValueError):
             beam_search(
-                self.token_probability_fn, inputs, max_length=5, beam_width=5
+                self.token_probability_fn, inputs, max_length=5, num_beams=5
             )
         inputs = tf.constant([[]])
         with self.assertRaises(ValueError):
             beam_search(
-                self.token_probability_fn, inputs, max_length=5, beam_width=5
+                self.token_probability_fn, inputs, max_length=5, num_beams=5
             )
 
     def test_generate_with_1d_prompt(self):
@@ -155,7 +155,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
             self.token_probability_fn,
             inputs,
             max_length=5,
-            beam_width=5,
+            num_beams=5,
         )
         self.assertEquals(outputs.shape, [5])
 
@@ -165,7 +165,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
             self.token_probability_fn,
             inputs,
             max_length=5,
-            beam_width=5,
+            num_beams=5,
         )
         self.assertEquals(outputs.shape, [2, 5])
 
@@ -175,7 +175,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
             self.token_probability_fn,
             inputs,
             max_length=5,
-            beam_width=5,
+            num_beams=5,
         )
         self.assertEquals(outputs.shape, [2, 5])
 
@@ -186,7 +186,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
                 self.token_probability_fn,
                 inputs,
                 max_length=5,
-                beam_width=5,
+                num_beams=5,
             )
 
     def test_one_beam_generation(self):
@@ -196,7 +196,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
                 self.token_probability_fn,
                 inputs,
                 max_length=5,
-                beam_width=1,
+                num_beams=1,
             )
             greedy_output = greedy_search(
                 self.token_probability_fn,
@@ -223,7 +223,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
             token_probability_fn,
             inputs,
             max_length=3,
-            beam_width=2,
+            num_beams=2,
         )
         self.assertAllEqual(
             beam_output, tf.constant([1, 2, 0], dtype=beam_output.dtype)
@@ -243,7 +243,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
                 token_probability_fn,
                 inputs,
                 max_length=max_length,
-                beam_width=i,
+                num_beams=i,
             )
             self.assertAllEqual(
                 outputs, 3 * tf.ones(shape=[batch_size, max_length])
@@ -261,7 +261,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
             token_probability_fn,
             inputs,
             max_length=max_length,
-            beam_width=2,
+            num_beams=2,
             end_token_id=2,
             pad_token_id=0,
         )

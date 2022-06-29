@@ -40,10 +40,9 @@ class MultiSegmentPacker(keras.layers.Layer):
        is always 0, and the segment id of each `end_value` is the segment that
        precedes it.
 
-    If inputs are batched, inputs should either be `tf.RaggedTensor`s with shape
-    `[batch_size, None]` or a dense rank-2 tensor of shape
-    `[batch_size, length]`. It will be packed and converted to a dense tensor
-    with shape `[batch_size, sequence_length]`.
+    If inputs are batched, inputs should be `tf.RaggedTensor`s with shape
+    `[batch_size, None]` and will be packed and converted to a dense tensor with
+    shape `[batch_size, sequence_length]`.
 
     If inputs are unbatched, inputs should be dense rank-1 tensors of any shape,
     and will be packed to shape `[sequence_length]`.
