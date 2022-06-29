@@ -52,7 +52,7 @@ class EditDistance(keras.metrics.Metric):
 
     def __init__(
         self,
-        normalize=False,
+        normalize=True,
         dtype=None,
         name="edit_distance",
         **kwargs,
@@ -137,20 +137,23 @@ class EditDistance(keras.metrics.Metric):
 
     def result(self):
         if self.normalize:
+            if self._aggregate_reference_length == 0:
+                return 0.0
             return (
                 self._aggregate_unnormalized_edit_distance
                 / self._aggregate_reference_length
             )
+        if self._number_of_samples == 0:
+            return 0.0
         return (
             self._aggregate_unnormalized_edit_distance / self._number_of_samples
         )
 
     def reset_state(self):
+        self._aggregate_unnormalized_edit_distance.assign(0.0)
         if self.normalize:
-            self._aggregate_unnormalized_edit_distance.assign(0.0)
             self._aggregate_reference_length.assign(0.0)
         else:
-            self._aggregate_unnormalized_edit_distance.assign(0.0)
             self._number_of_samples.assign(0.0)
 
     def get_config(self):
