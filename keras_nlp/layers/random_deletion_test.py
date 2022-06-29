@@ -15,12 +15,12 @@
 
 import tensorflow as tf
 
-from keras_nlp.layers import random_word_deletion
+from keras_nlp.layers import random_deletion
 
 
 class RandomDeletionTest(tf.test.TestCase):
     def test_shape_with_scalar(self):
-        augmenter = random_word_deletion.RandomWordDeletion(
+        augmenter = random_deletion.RandomWordDeletion(
             probability=0.5, max_deletions=3
         )
         input = ["Running Around"]
@@ -29,7 +29,7 @@ class RandomDeletionTest(tf.test.TestCase):
 
     def test_get_config_and_from_config(self):
 
-        augmenter = random_word_deletion.RandomWordDeletion(
+        augmenter = random_deletion.RandomWordDeletion(
             probability=0.5, max_deletions=3
         )
 
@@ -40,7 +40,7 @@ class RandomDeletionTest(tf.test.TestCase):
         self.assertEqual(config, {**config, **expected_config_subset})
 
         restored_augmenter = (
-            random_word_deletion.RandomWordDeletion.from_config(
+            random_deletion.RandomWordDeletion.from_config(
                 config,
             )
         )
@@ -53,7 +53,7 @@ class RandomDeletionTest(tf.test.TestCase):
     def test_augment_first_batch_second(self):
         tf.random.get_global_generator().reset_from_seed(30)
         tf.random.set_seed(30)
-        augmenter = random_word_deletion.RandomWordDeletion(
+        augmenter = random_deletion.RandomWordDeletion(
             probability=0.5, max_deletions=3
         )
 
@@ -71,7 +71,7 @@ class RandomDeletionTest(tf.test.TestCase):
     def test_batch_first_augment_second(self):
         tf.random.get_global_generator().reset_from_seed(30)
         tf.random.set_seed(30)
-        augmenter = random_word_deletion.RandomWordDeletion(
+        augmenter = random_deletion.RandomWordDeletion(
             probability=0.5, max_deletions=3
         )
 
