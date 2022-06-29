@@ -17,4 +17,4 @@ from keras_nlp import metrics
 from keras_nlp import tokenizers
 from keras_nlp import utils
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
