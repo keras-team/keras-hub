@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import tensorflow as tf
-from tensorflow import keras
 from keras import backend
+from tensorflow import keras
+
 
 class RandomInsertion(keras.layers.Layer):
     """Augments input by randomly inserting words.
@@ -53,8 +54,16 @@ class RandomInsertion(keras.layers.Layer):
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey IlI like', b'byye ybye'], dtype=object)>
     """
 
-    def __init__(self, probability, max_insertions, insertion_fn = None, insertion_list = None,
-        seed = None, name=None, **kwargs):
+    def __init__(
+        self,
+        probability,
+        max_insertions,
+        insertion_fn=None,
+        insertion_list=None,
+        seed=None,
+        name=None,
+        **kwargs,
+    ):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
@@ -76,7 +85,7 @@ class RandomInsertion(keras.layers.Layer):
         self.seed = seed
         self._random_generator = backend.RandomGenerator(seed)
         self.insertion_list = insertion_list
-        
+
     @tf.function
     def call(self, inputs):
         """Augments input by randomly inserting words.
@@ -100,36 +109,48 @@ class RandomInsertion(keras.layers.Layer):
             """
             # choose random number between 0 and self.max_insertions
             num_insertions = tf.random.uniform(
-                    shape=(),
-                    minval=0,
-                    maxval=self.max_insertions,
-                    dtype=tf.int32,
-                    seed=self._random_generator.make_legacy_seed()
-                )
+                shape=(),
+                minval=0,
+                maxval=self.max_insertions,
+                dtype=tf.int32,
+                seed=self._random_generator.make_legacy_seed(),
+            )
             for _ in range(num_insertions):
                 index = tf.random.uniform(
                     shape=tf.shape(inputs),
                     minval=0,
                     maxval=tf.size(inputs),
                     dtype=tf.int32,
-                    seed=self._random_generator.make_legacy_seed()
+                    seed=self._random_generator.make_legacy_seed(),
                 )
                 replacement_word = index[0]
                 insertion_location = index[1]
                 original_word = inputs[replacement_word]
                 if self.insertion_fn is not None:
-                    synonym = tf.numpy_function(func=self.insertion_fn, inp=[original_word], Tout=tf.string)
+                    synonym = tf.numpy_function(
+                        func=self.insertion_fn,
+                        inp=[original_word],
+                        Tout=tf.string,
+                    )
                 else:
                     synonym_index = tf.random.uniform(
-                            shape=(),
-                            minval=0,
-                            maxval=len(self.insertion_list),
-                            dtype=tf.int32,
-                            seed=self._random_generator.make_legacy_seed()
-                        )
+                        shape=(),
+                        minval=0,
+                        maxval=len(self.insertion_list),
+                        dtype=tf.int32,
+                        seed=self._random_generator.make_legacy_seed(),
+                    )
                     synonym = self.insertion_list[synonym_index]
-                inputs = tf.concat([inputs[:insertion_location], [synonym], inputs[insertion_location:]], axis=0)
+                inputs = tf.concat(
+                    [
+                        inputs[:insertion_location],
+                        [synonym],
+                        inputs[insertion_location:],
+                    ],
+                    axis=0,
+                )
             return inputs
+
         inserted = tf.map_fn(
             _insert,
             (inputs),
@@ -152,7 +173,7 @@ class RandomInsertion(keras.layers.Layer):
                 "probability": self.probability,
                 "max_insertions": self.max_insertions,
                 "insertion_fn": self.insertion_fn,
-                "seed": self.seed
+                "seed": self.seed,
             }
         )
         return config

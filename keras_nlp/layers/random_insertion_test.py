@@ -24,16 +24,19 @@ class RandomInsertionTest(tf.test.TestCase):
             if isinstance(word, bytes):
                 word = word.decode()
             dict_replacement = {"like": "admire", "bye": "ciao", "Hey": "Hi"}
-            if (word in dict_replacement.keys()):
+            if word in dict_replacement.keys():
                 return dict_replacement[word]
             return word
+
         inputs = ["Hey I like", "bye bye"]
         split = tf.strings.split(inputs)
-        augmenter = random_insertion.RandomInsertion(1, 5, insertion_fn = replace_word, seed = 42)
+        augmenter = random_insertion.RandomInsertion(
+            1, 5, insertion_fn=replace_word, seed=42
+        )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b'Hey I admire Hi like', b'ciao bye ciao bye']
+        exp_output = [b"Hey I admire Hi like", b"ciao bye ciao bye"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -41,16 +44,19 @@ class RandomInsertionTest(tf.test.TestCase):
         def random_chars(word):
             if isinstance(word, bytes):
                 word = word.decode()
-            if (len(word) == 0):
+            if len(word) == 0:
                 return "a"
             return word[0]
+
         inputs = ["Hey I like", "bye bye"]
         split = tf.strings.unicode_split(inputs, "UTF-8")
-        augmenter = random_insertion.RandomInsertion(1, 5, insertion_fn = random_chars, seed = 42)
+        augmenter = random_insertion.RandomInsertion(
+            1, 5, insertion_fn=random_chars, seed=42
+        )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b'Hey IlI like', b'byye ybye']
+        exp_output = [b"Hey IlI like", b"byye ybye"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -65,7 +71,7 @@ class RandomInsertionTest(tf.test.TestCase):
 
     #     augmenter = random_insertion.RandomInsertion(1, 5, insertion_fn = random_chars, seed = 42)
 
-    #     expected_config_subset = { 
+    #     expected_config_subset = {
     #         'insertion_fn': <function __main__.random_chars>,
     #         'max_insertions': 5,
     #         'probability': 1,
