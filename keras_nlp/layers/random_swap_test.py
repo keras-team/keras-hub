@@ -26,7 +26,7 @@ class RandomSwapTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b'I like Hey', b'and Tensorflow Keras']
+        exp_output = [b"I like Hey", b"and Tensorflow Keras"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -37,7 +37,7 @@ class RandomSwapTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b'HeI y like', b'b eybye']
+        exp_output = [b"HeI y like", b"b eybye"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -46,18 +46,16 @@ class RandomSwapTest(tf.test.TestCase):
         augmenter = random_swaps.RandomSwaps(1, seed=42)
 
         expected_config_subset = {
-            'seed': 42,
-            'swaps': 1,
+            "seed": 42,
+            "swaps": 1,
         }
 
         config = augmenter.get_config()
 
         self.assertEqual(config, {**config, **expected_config_subset})
 
-        restored_augmenter = (
-            random_swaps.RandomSwaps.from_config(
-                config,
-            )
+        restored_augmenter = random_swaps.RandomSwaps.from_config(
+            config,
         )
 
         self.assertEqual(

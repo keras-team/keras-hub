@@ -27,6 +27,7 @@ class RandomSwaps(keras.layers.Layer):
 
     Args:
         swaps: Number of swaps to perform.
+        seed: Optional random seed.
 
 
     Examples:
@@ -94,7 +95,7 @@ class RandomSwaps(keras.layers.Layer):
                     minval=0,
                     maxval=tf.size(positions),
                     dtype=tf.int32,
-                    seed=self._random_generator.make_legacy_seed()
+                    seed=self._random_generator.make_legacy_seed(),
                 )
                 index1, index2 = index[0], index[1]
                 # swap items at the sampled indices with each other
