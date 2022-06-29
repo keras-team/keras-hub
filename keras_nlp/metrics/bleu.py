@@ -52,39 +52,43 @@ class Bleu(keras.metrics.Metric):
 
     This class implements the BLEU metric. BLEU is generally used to evaluate
     machine translation systems. Succinctly put, in BLEU score, we count the
-    number of matching n-grams in the candidate translation to n-grams in the
-    reference text. We find the "clipped count" of matching n-grams so as to not
-    give a high score to a reference, prediction pair with repeated tokens.
-    Secondly, BLEU score tends to reward shorter predictions more, which is why
-    a brevity penalty is applied to penalise short predictions.
+    number of matching n-grams in the candidate translation and the reference
+    text. We find the "clipped count" of matching n-grams so as to not
+    give a high score to a (reference, prediction) pair with redundant, repeated
+    tokens. Secondly, BLEU score tends to reward shorter predictions more, which
+    is why a brevity penalty is applied to penalise short predictions.
 
     Note on input shapes:
     For `y_true` and `y_pred`, this class supports scalar values and batch
     inputs of shapes `()`, `(batch_size,)` and `(batch_size, 1)`.
 
     Args:
-        tokenizer: callable. A function that takes a string `tf.Tensor` (of
-            any shape), and tokenizes the strings in the tensor. This function
-            should use TensorFlow graph ops. If the tokenizer is not specified,
-            the default tokenizer (`"tokenizer_13a"` present in the SacreBLEU
-            package) will be used.
+        tokenizer: callable. A function that takes a string `tf.RaggedTensor`
+            (of any shape), and tokenizes the strings in the tensor. This
+            function should use TensorFlow graph ops. If the tokenizer is not
+            specified, the default tokenizer is used. The default tokenizer
+            replicates the behaviour of SacreBLEU's `"tokenizer_13a"` tokenizer
+            (https://github.com/mjpost/sacrebleu/blob/v2.1.0/sacrebleu/tokenizers/tokenizer_13a.py).
         max_order: int. The maximum n-gram order to use. For example, if
             `max_order` is set to 3, unigrams, bigrams, and trigrams will be
             considered. Defaults to 4.
         smooth: bool. Whether to apply Lin et al. 2004 smoothing to the BLEU
             score. Defaults to False.
         variant: string. Either `"corpus_bleu"` or `"sentence_bleu"`. The former
-            computes the micro-average precision, which is equivalent to
-            passing all samples (across batches) all at once. In other words,
-            summing the numerators and denominators for each
-            hypothesis-reference(s) pairs before the division (in order to
-            calculate the precision). The latter is the macro-average BLEU score
-            , which means that it computes the per sample BLEU score and
-            averages it. Defaults to `"corpus_bleu"`.
+            computes micro-average precision, which is equivalent to passing all
+            samples (across batches) all at once. In other words, summing the
+            numerators and denominators for each hypothesis-reference(s) pairs
+            before the division (in order to calculate precision). The latter is
+            the macro-averaged BLEU score which means that it computes the  BLEU
+            score for every sample separately and averages over these scores.
+            Defaults to `"corpus_bleu"`.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
                not specified, it defaults to tf.float32.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
+
+    References:
+        - [Papineni et al., 2002](https://aclanthology.org/P02-1040/)
     """
 
     def __init__(
@@ -302,7 +306,7 @@ class Bleu(keras.metrics.Metric):
             smooth=False,
         ):
             """Computes the per-sample BLEU score and returns the aggregate of
-            all samples. Uses Python ops.
+            BLEU scores over all samples. Uses Python ops.
 
             Args:
                 reference_corpus: list of lists of references for each

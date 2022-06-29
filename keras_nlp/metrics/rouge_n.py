@@ -40,6 +40,9 @@ class RougeN(RougeBase):
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
 
+    References:
+        - [Lin et al., 2004](https://aclanthology.org/W04-1013/)
+
     Examples:
 
     1. Various Input Types.
