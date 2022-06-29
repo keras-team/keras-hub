@@ -15,7 +15,6 @@
 """Tests for EditDistance."""
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.metrics import EditDistance
 
@@ -25,9 +24,7 @@ class EditDistanceTest(tf.test.TestCase):
         edit_distance = EditDistance()
         result = edit_distance.result()
 
-        self.assertEqual(
-            result, 0.0
-        )
+        self.assertEqual(result, 0.0)
 
     def test_list_input(self):
         edit_distance = EditDistance(normalize=True)
@@ -35,19 +32,21 @@ class EditDistanceTest(tf.test.TestCase):
         y_pred = "the cat was found under the bed".split()
 
         edit_distance_val = edit_distance(y_true, y_pred)
-        self.assertAlmostEqual(
-            edit_distance_val.numpy(),  0.364, delta=1e-3
-        )
+        self.assertAlmostEqual(edit_distance_val.numpy(), 0.364, delta=1e-3)
 
     def test_nested_list_input(self):
         edit_distance = EditDistance(normalize=True)
-        y_true = ["the tiny little cat was found under the big funny bed".split(), "it is sunny today".split()]
-        y_pred = ["the cat was found under the bed".split(), "it is sunny but with a hint of cloud cover".split()]
+        y_true = [
+            "the tiny little cat was found under the big funny bed".split(),
+            "it is sunny today".split(),
+        ]
+        y_pred = [
+            "the cat was found under the bed".split(),
+            "it is sunny but with a hint of cloud cover".split(),
+        ]
 
         edit_distance_val = edit_distance(y_true, y_pred)
-        self.assertAlmostEqual(
-            edit_distance_val.numpy(),  0.364, delta=1e-3
-        )
+        self.assertAlmostEqual(edit_distance_val.numpy(), 0.364, delta=1e-3)
 
     # def test_string_list_input(self):
     #     rouge = RougeL(use_stemmer=False)

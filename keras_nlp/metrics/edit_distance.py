@@ -40,7 +40,7 @@ class EditDistance(keras.metrics.Metric):
             (substitutions + deletions + insertions) across all samples is
             divided by the aggregate number of tokens in all reference texts. If
             False, number of operations are calculated for every sample, and
-            averaged over all the samples. 
+            averaged over all the samples.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
             not specified, it defaults to tf.float32.
         name: string. Name of the metric instance.
@@ -83,7 +83,7 @@ class EditDistance(keras.metrics.Metric):
                 name="number_of_samples",
                 initializer="zeros",
                 dtype=self.dtype,
-            )    
+            )
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         def validate_and_fix_rank(inputs, tensor_name):
@@ -104,7 +104,9 @@ class EditDistance(keras.metrics.Metric):
         y_pred = validate_and_fix_rank(y_pred, "y_pred")
 
         if self.normalize:
-            self._aggregate_reference_length.assign_add(tf.cast(tf.size(y_true.flat_values), dtype=self.dtype))
+            self._aggregate_reference_length.assign_add(
+                tf.cast(tf.size(y_true.flat_values), dtype=self.dtype)
+            )
 
         def calculate_edit_distance(args):
             reference, hypothesis = args
@@ -135,13 +137,18 @@ class EditDistance(keras.metrics.Metric):
 
     def result(self):
         if self.normalize:
-            return self._aggregate_unnormalized_edit_distance / self._aggregate_reference_length
-        return self._aggregate_unnormalized_edit_distance / self._number_of_samples
+            return (
+                self._aggregate_unnormalized_edit_distance
+                / self._aggregate_reference_length
+            )
+        return (
+            self._aggregate_unnormalized_edit_distance / self._number_of_samples
+        )
 
     def reset_state(self):
         if self.normalize:
             self._aggregate_unnormalized_edit_distance.assign(0.0)
-            self_aggregate_reference_length.assign(0.0)
+            self._aggregate_reference_length.assign(0.0)
         else:
             self._aggregate_unnormalized_edit_distance.assign(0.0)
             self._number_of_samples.assign(0.0)
