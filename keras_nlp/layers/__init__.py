@@ -22,3 +22,4 @@ from keras_nlp.layers.token_and_position_embedding import (
 )
 from keras_nlp.layers.transformer_decoder import TransformerDecoder
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
+from keras_nlp.layers.random_insertion import RandomInsertion

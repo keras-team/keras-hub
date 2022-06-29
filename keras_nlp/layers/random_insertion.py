@@ -21,14 +21,40 @@ class RandomInsertion(keras.layers.Layer):
     Args:
         probability: A float in [0, 1] that is the probability of insertion
         max_replacements: An integer that is the maximum number of insertions
-        insertion_list: list of candidates to uniformly sample form to replace.
-            Either provide this of insertion_fn, not both.
         insertion_fn: fn that takes in a token and returns a insertion token.
-        insertion_numpy_fn: python numpy version of insertion_fn.
+
+    Examples:
+
+    Word Level usage
+    >>> def replace_word(word):
+    ...    if isinstance(word, bytes):
+    ...        word = word.decode()
+    ...    dict_replacement = {"like": "admire", "bye": "ciao", "Hey": "Hi"}
+    ...    if (word in dict_replacement.keys()):
+    ...        return dict_replacement[word]
+    ...    return word
+    >>> inputs = tf.strings.split(["Hey I like", "bye bye"])
+    >>> augmenter = RandomInsertion(1, 5, insertion_fn = replace_word, seed = 42)
+    >>> augmented = augmenter(inputs)
+    >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I admire Hi like', b'ciao bye ciao bye'], dtype=object)>
+
+    Character Level Usage
+    >>> def random_chars(word):
+    ...    if isinstance(word, bytes):
+    ...        word = word.decode()
+    ...    if (len(word) == 0):
+    ...        return "a"
+    ...    return word[0]
+    >>> inputs = tf.strings.unicode_split(["Hey I like", "bye bye"], "UTF-8")
+    >>> augmenter = RandomInsertion(1, 5, insertion_fn = random_chars, seed = 42)
+    >>> augmented = augmenter(inputs)
+    >>> tf.strings.reduce_join(augmented, axis=-1)
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey IlI like', b'byye ybye'], dtype=object)>
     """
 
-    def __init__(self, probability, max_insertions, insertion_list = None,
-                insertion_fn = None, insertion_numpy_fn = None, seed = None, name=None, **kwargs):
+    def __init__(self, probability, max_insertions, insertion_fn = None, insertion_list = None,
+        seed = None, name=None, **kwargs):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
@@ -40,18 +66,16 @@ class RandomInsertion(keras.layers.Layer):
                     f"Received: dtype={dtype}"
                 )
 
-        if insertion_list is None and insertion_fn is None and insertion_numpy_fn is None:
-            raise ValueError("""No insertion_fn or insertion_list or 
-                            insertion_numpy_fn provided""")
+        if insertion_fn is None and insertion_list is None:
+            raise ValueError("""No insertion method provided""")
 
         super().__init__(name=name, **kwargs)
         self.probability = probability
         self.max_insertions = max_insertions
-        self.insertion_list = insertion_list
         self.insertion_fn = insertion_fn
-        self.insertion_numpy_fn = insertion_numpy_fn
         self.seed = seed
         self._random_generator = backend.RandomGenerator(seed)
+        self.insertion_list = insertion_list
         
     @tf.function
     def call(self, inputs):
@@ -92,10 +116,19 @@ class RandomInsertion(keras.layers.Layer):
                 )
                 replacement_word = index[0]
                 insertion_location = index[1]
-                synonym = inputs[replacement_word]
-                if self.insertion_numpy_fn is not None:
-                    synonym = tf.numpy_function(func=self.insertion_numpy_fn, inp=[synonym], Tout=tf.string)
-                    inputs = tf.concat([inputs[:insertion_location], [synonym], inputs[insertion_location:]], axis=0)
+                original_word = inputs[replacement_word]
+                if self.insertion_fn is not None:
+                    synonym = tf.numpy_function(func=self.insertion_fn, inp=[original_word], Tout=tf.string)
+                else:
+                    synonym_index = tf.random.uniform(
+                            shape=(),
+                            minval=0,
+                            maxval=len(self.insertion_list),
+                            dtype=tf.int32,
+                            seed=self._random_generator.make_legacy_seed()
+                        )
+                    synonym = self.insertion_list[synonym_index]
+                inputs = tf.concat([inputs[:insertion_location], [synonym], inputs[insertion_location:]], axis=0)
             return inputs
         inserted = tf.map_fn(
             _insert,
@@ -118,9 +151,7 @@ class RandomInsertion(keras.layers.Layer):
             {
                 "probability": self.probability,
                 "max_insertions": self.max_insertions,
-                "insertion_list": self.insertion_list,
                 "insertion_fn": self.insertion_fn,
-                "insertion_numpy_fn": self.insertion_numpy_fn,
                 "seed": self.seed
             }
         )
