@@ -209,13 +209,10 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
         def token_probability_fn(inputs):
             if inputs.shape[1] == 1:
                 prob = tf.constant([[0.1, 0.2, 0.3, 0.4]])
-            else:
-                prob = tf.constant(
-                    [
-                        [0.9, 0.08, 0.01, 0.01],
-                        [0.25, 0.25, 0.25, 0.25],
-                    ]
-                )
+            elif inputs[0][1] == 2:
+                prob = tf.constant([[0.9, 0.08, 0.01, 0.01]])
+            elif inputs[0][1] == 3:
+                prob = tf.constant([[0.25, 0.25, 0.25, 0.25]])
             return prob
 
         inputs = tf.constant([[1]])

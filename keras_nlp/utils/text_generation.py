@@ -268,15 +268,18 @@ def beam_search(
         i = length
         while i < max_length:
             beam_size = beams.shape[1]
-            reshaped_beam = tf.reshape(beams, [batch_size * beam_size, i])
-            reshaped_preds = token_probability_fn(reshaped_beam)
-            if from_logits:
-                reshaped_preds = tf.keras.activations.softmax(
-                    reshaped_preds, axis=-1
-                )
-            vocab_size = reshaped_preds.shape[1]
+            beam_preds = []
+            for j in range(beam_size):
+                preds = token_probability_fn(beams[:, j, :])
+                if from_logits:
+                    preds = tf.keras.activations.softmax(
+                        preds, axis=-1
+                    )
+                beam_preds.append(preds)
+            stacked_preds = tf.stack(beam_preds, axis=1)
+            vocab_size = stacked_preds.shape[2]
             logits = tf.reshape(
-                reshaped_preds, [batch_size, beam_size * vocab_size]
+                stacked_preds, [batch_size, beam_size * vocab_size]
             )
             probs = tf.math.log(logits) + tf.repeat(
                 beams_prob, repeats=vocab_size, axis=1
