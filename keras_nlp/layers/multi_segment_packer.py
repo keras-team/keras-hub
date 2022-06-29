@@ -151,15 +151,12 @@ class MultiSegmentPacker(keras.layers.Layer):
             )
         return inputs
 
-    def _convert_inputs(self, inputs):
+    def _convert_dense(self, x):
         """Converts inputs to rank 2 ragged tensors."""
-        new_inputs = []
-        for x in inputs:
-            if isinstance(x, tf.Tensor):
-                new_inputs.append(tf.RaggedTensor.from_tensor(x))
-            else:
-                new_inputs.append(x)
-        return new_inputs
+        if isinstance(x, tf.Tensor):
+            return tf.RaggedTensor.from_tensor(x)
+        else:
+            return x
 
     def _trim_inputs(self, inputs):
         """Trim inputs to desired length."""
@@ -209,7 +206,7 @@ class MultiSegmentPacker(keras.layers.Layer):
         rank_1 = inputs[0].shape.rank == 1
         if rank_1:
             inputs = [tf.expand_dims(x, 0) for x in inputs]
-        inputs = self._convert_inputs(inputs)
+        inputs = [self._convert_dense(x) for x in inputs]
 
         segments = self._trim_inputs(inputs)
         token_ids, segment_ids = self._combine_inputs(segments)
