@@ -40,12 +40,8 @@ class MultiSegmentPacker(keras.layers.Layer):
        is always 0, and the segment id of each `end_value` is the segment that
        precedes it.
 
-    If inputs are batched, inputs should be `tf.RaggedTensor`s with shape
-    `[batch_size, None]` and will be packed and converted to a dense tensor with
-    shape `[batch_size, sequence_length]`.
-
-    If inputs are unbatched, inputs should be dense rank-1 tensors of any shape,
-    and will be packed to shape `[sequence_length]`.
+    Input should be either a `tf.RaggedTensor` or a dense `tf.Tensor`, and
+    either rank-1 or rank-2.
 
     Args:
         sequence_length: The desired output length.
@@ -155,6 +151,13 @@ class MultiSegmentPacker(keras.layers.Layer):
             )
         return inputs
 
+    def _convert_dense(self, x):
+        """Converts inputs to rank 2 ragged tensors."""
+        if isinstance(x, tf.Tensor):
+            return tf.RaggedTensor.from_tensor(x)
+        else:
+            return x
+
     def _trim_inputs(self, inputs):
         """Trim inputs to desired length."""
         num_special_tokens = len(inputs) + 1
@@ -199,22 +202,20 @@ class MultiSegmentPacker(keras.layers.Layer):
     def call(self, inputs):
         inputs = self._sanitize_inputs(inputs)
 
-        # If rank 1, add a batch dim and convert to ragged.
+        # If rank 1, add a batch dim.
         rank_1 = inputs[0].shape.rank == 1
         if rank_1:
             inputs = [tf.expand_dims(x, 0) for x in inputs]
-            inputs = [tf.RaggedTensor.from_tensor(x) for x in inputs]
+        inputs = [self._convert_dense(x) for x in inputs]
 
         segments = self._trim_inputs(inputs)
         token_ids, segment_ids = self._combine_inputs(segments)
-
         # Pad to dense tensor output.
         shape = tf.cast([-1, self.sequence_length], "int64")
         token_ids = token_ids.to_tensor(
             shape=shape, default_value=self.pad_value
         )
         segment_ids = segment_ids.to_tensor(shape=shape)
-
         # Remove the batch dim if added.
         if rank_1:
             token_ids = tf.squeeze(token_ids, 0)
