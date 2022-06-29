@@ -172,10 +172,9 @@ def beam_search(
     """
     Text generation utility based on beam search algorithm.
 
-    At each time-step, beam search keeps the top `num_beams` beams (sequences),
-    and uses each one of the beams to predict candidate next tokens. The top
-    `num_beams` most probable next tokens are kept and appended to their
-    respective beams, before beginning the next iteration.
+    At each time-step, beam search keeps the beams (sequences) of the top
+    `num_beams` highest accumulated probabilities, and uses each one of the
+    beams to predict candidate next tokens.
 
     Args:
         token_probability_fn: a callable, which takes in input_sequence
@@ -272,9 +271,7 @@ def beam_search(
             for j in range(beam_size):
                 preds = token_probability_fn(beams[:, j, :])
                 if from_logits:
-                    preds = tf.keras.activations.softmax(
-                        preds, axis=-1
-                    )
+                    preds = tf.keras.activations.softmax(preds, axis=-1)
                 beam_preds.append(preds)
             stacked_preds = tf.stack(beam_preds, axis=1)
             vocab_size = stacked_preds.shape[2]
