@@ -108,8 +108,7 @@ class StartEndPacker(keras.layers.Layer):
         input_is_1d = False
         if inputs.shape.rank < 1 or inputs.shape.rank > 2:
             raise ValueError(
-                "Input must either be dense with rank 1 or 2, or ragged "
-                "with rank 2. Received dense input with "
+                "Input must either be rank 1 or rank 2. Received input with "
                 f"rank={inputs.shape.rank}"
             )
         elif inputs.shape.rank == 1:
