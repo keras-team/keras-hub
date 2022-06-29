@@ -48,6 +48,67 @@ class EditDistance(keras.metrics.Metric):
 
     References:
         - [Morris et al.](https://www.researchgate.net/publication/221478089_From_WER_and_RIL_to_MER_and_WIL_improved_evaluation_measures_for_connected_speech_recognition)
+
+    Examples:
+
+    1. Various Input Types.
+    1.1. Rank 1 input.
+    a. Python list
+    >>> edit_distance = keras_nlp.metrics.EditDistance()
+    >>> y_true = "the tiny little cat was found under the big funny bed".split()
+    >>> y_pred = "the cat was found under the bed".split()
+    >>> edit_distance(y_true, y_pred)
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.36363637>
+
+    a. Tensor
+    >>> edit_distance = keras_nlp.metrics.EditDistance()
+    >>> y_true = tf.strings.split("the tiny little cat was found under the big funny bed")
+    >>> y_pred = tf.strings.split("the cat was found under the bed")
+    >>> edit_distance(y_true, y_pred)
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.36363637>
+
+    1.2. Rank 2 input.
+    a. Python list.
+    >>> edit_distance = keras_nlp.metrics.EditDistance()
+    >>> y_true = [
+    ...     "the tiny little cat was found under the big funny bed".split(),
+    ...     "it is sunny today".split(),
+    ... ]
+    >>> y_pred = [
+    ...     "the cat was found under the bed".split(),
+    ...     "it is sunny but with a hint of cloud cover".split(),
+    ... ]
+    >>> edit_distance(y_true, y_pred)
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.73333335>
+
+    b. Tensor.
+    >>> edit_distance = keras_nlp.metrics.EditDistance()
+    >>> y_true = tf.strings.split([
+    ...     "the tiny little cat was found under the big funny bed",
+    ...     "it is sunny today",
+    ... ])
+    >>> y_pred = tf.strings.split([
+    ...     "the cat was found under the bed",
+    ...     "it is sunny but with a hint of cloud cover",
+    ... ])
+    >>> edit_distance(y_true, y_pred)
+    <tf.Tensor: shape=(), dtype=float32, numpy=0.73333335>
+
+    2. Pass the metric to `model.compile()`.
+    >>> inputs = keras.Input(shape=(None,), dtype="string")
+    >>> outputs = tf.strings.lower(inputs)
+    >>> model = keras.Model(inputs, outputs)
+    >>> model.compile(metrics=[keras_nlp.metrics.EditDistance()])
+    >>> x = tf.strings.split(
+    ...     tf.constant(
+    ...         ["the tiny little cat was found under the big funny bed"]
+    ...     )
+    ... )
+    >>> y = tf.strings.split(["the cat was found under the bed"])
+    >>> y = tf.strings.split(["the cat was found under the bed"])
+    >>> output = model.evaluate(y, x, return_dict=True)
+    >>> output["edit_distance"]
+    0.3636363744735718
     """
 
     def __init__(
