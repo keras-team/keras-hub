@@ -19,65 +19,48 @@ from keras_nlp.layers import random_swaps
 
 
 class RandomSwapTest(tf.test.TestCase):
-    def test_shape_with_scalar(self):
-        augmenter = random_swaps.RandomSwaps(swaps=3)
-        input = ["Running Around"]
-        output = augmenter(input)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(input).shape)
+    def test_shape_and_output_from_word_swaps(self):
+        inputs = ["Hey I like", "Keras and Tensorflow"]
+        split = tf.strings.split(inputs)
+        augmenter = random_swaps.RandomSwaps(3, seed=42)
+        augmented = augmenter(split)
+        output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
+        exp_output = [b'I like Hey', b'and Tensorflow Keras']
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
+
+    def test_shape_and_output_from_character_swaps(self):
+        inputs = ["Hey I like", "bye bye"]
+        split = tf.strings.unicode_split(inputs, "UTF-8")
+        augmenter = random_swaps.RandomSwaps(1, seed=42)
+        augmented = augmenter(split)
+        output = tf.strings.reduce_join(augmented, axis=-1)
+        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
+        exp_output = [b'HeI y like', b'b eybye']
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
 
     def test_get_config_and_from_config(self):
 
-        augmenter = random_swaps.RandomSwaps(swaps=3)
+        augmenter = random_swaps.RandomSwaps(1, seed=42)
 
-        expected_config_subset = {"swaps": 3}
+        expected_config_subset = {
+            'seed': 42,
+            'swaps': 1,
+        }
 
         config = augmenter.get_config()
 
         self.assertEqual(config, {**config, **expected_config_subset})
 
-        restored_augmenter = random_swaps.RandomSwaps.from_config(
-            config,
+        restored_augmenter = (
+            random_swaps.RandomSwaps.from_config(
+                config,
+            )
         )
 
         self.assertEqual(
             restored_augmenter.get_config(),
             {**config, **expected_config_subset},
         )
-
-    def test_augment_first_batch_second(self):
-        tf.random.set_seed(30)
-        augmenter = random_swaps.RandomSwaps(swaps=3)
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["samurai or ninja", "keras is good", "tensorflow is a library"]
-        )
-        ds = ds.map(augmenter)
-        ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(3))
-        output = ds.take(1).get_single_element()
-
-        exp_output = [
-            b"samurai ninja or",
-            b"is keras good",
-            b"a is tensorflow library",
-        ]
-        for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])
-
-    def test_batch_first_augment_second(self):
-        tf.random.set_seed(30)
-        augmenter = random_swaps.RandomSwaps(swaps=3)
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["samurai or ninja", "keras is good", "tensorflow is a library"]
-        )
-        ds = ds.batch(3).map(augmenter)
-        output = ds.take(1).get_single_element()
-
-        exp_output = [
-            b"samurai ninja or",
-            b"is keras good",
-            b"a is tensorflow library",
-        ]
-
-        for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])

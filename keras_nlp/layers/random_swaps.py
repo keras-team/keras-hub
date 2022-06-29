@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import tensorflow as tf
+from keras import backend
 from tensorflow import keras
 
 
@@ -27,50 +28,25 @@ class RandomSwaps(keras.layers.Layer):
     Args:
         swaps: Number of swaps to perform.
 
+
     Examples:
 
-    Basic usage.
-    >>> tf.random.set_seed(30)
-    >>> augmenter = keras_nlp.layers.RandomSwaps(
-    ...     swaps = 3
-    ... )
-    >>> augmenter(["I like to fly kites, do you?",
-    ...     "Can we go fly some kites later?"])
-    <tf.Tensor: shape=(2,), dtype=string, numpy=
-    array([b'fly like do to kites, I you?',
-           b'Can fly go we later? kites some'], dtype=object)>
+    Word Level usage
+    >>> inputs = tf.strings.split(["Hey I like", "Keras and Tensorflow"])
+    >>> augmenter = RandomSwaps(swaps = 3, seed = 42)
+    >>> augmented = augmenter(inputs)
+    >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I like Hey', b'and Tensorflow Keras'], dtype=object)>
 
-    Augment first, then batch the dataset.
-    >>> tf.random.set_seed(30)
-    >>> inputs = ["I like to fly kites, do you?",
-    ...     "Can we go fly some kites later?"]
-    >>> augmenter = keras_nlp.layers.RandomSwaps(
-    ...     swaps = 3
-    ... )
-    >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
-    >>> ds = ds.map(augmenter)
-    >>> ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
-    >>> ds.take(1).get_single_element()
-    <tf.Tensor: shape=(2,), dtype=string, numpy=
-    array([b'fly like do to kites, I you?',
-           b'Can fly go we later? kites some'], dtype=object)>
-
-    Batch the inputs and then augment.
-    >>> tf.random.set_seed(30)
-    >>> inputs = ["I like to fly kites, do you?",
-    ...     "Can we go fly some kites later?"]
-    >>> augmenter = keras_nlp.layers.RandomSwaps(
-    ...     swaps = 2
-    ... )
-    >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
-    >>> ds = ds.batch(2).map(augmenter)
-    >>> ds.take(1).get_single_element()
-    <tf.Tensor: shape=(2,), dtype=string, numpy=
-    array([b'fly like I to kites, do you?',
-           b'Can fly go we later? kites some'], dtype=object)>
+    Character Level usage
+    >>> inputs = tf.strings.unicode_split(["Hey I like", "bye bye"], "UTF-8")
+    >>> augmenter = RandomSwaps(swaps = 1, seed = 42)
+    >>> augmented = augmenter(inputs)
+    >>> tf.strings.reduce_join(augmented, axis=-1)
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'HeI y like', b'b eybye'], dtype=object)>
     """
 
-    def __init__(self, swaps, name=None, **kwargs):
+    def __init__(self, swaps, seed=None, name=None, **kwargs):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
@@ -84,6 +60,8 @@ class RandomSwaps(keras.layers.Layer):
 
         super().__init__(name=name, **kwargs)
         self.swaps = swaps
+        self.seed = seed
+        self._random_generator = backend.RandomGenerator(seed)
 
     @tf.function
     def call(self, inputs):
@@ -94,41 +72,18 @@ class RandomSwaps(keras.layers.Layer):
             A tensor or nested tensor of augmented strings.
         """
 
-        def validate_and_fix_rank(inputs):
-            if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-                inputs = tf.convert_to_tensor(inputs)
-                inputs = tf.cast(inputs, tf.string)
-            if inputs.shape.rank == 0 or inputs.shape.rank == 1:
-                return inputs
-            elif inputs.shape.rank == 2:
-                if inputs.shape[1] != 1:
-                    raise ValueError(
-                        f"input must be of shape `[batch_size, 1]`. "
-                        f"Found shape: {inputs.shape}"
-                    )
-                else:
-                    return tf.squeeze(inputs, axis=1)
-            else:
-                raise ValueError(
-                    f"input must be of rank 0 (scalar input), 1 or 2. "
-                    f"Found rank: {inputs.shape.rank}"
-                )
-
         isString = False
         if isinstance(inputs, str):
             inputs = [inputs]
             isString = True
 
-        inputs = validate_and_fix_rank(inputs)
-
         scalar_input = inputs.shape.rank == 0
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
 
-        ragged_words = tf.strings.split(inputs)
-        row_splits = ragged_words.row_splits
-        positions_flat = tf.range(tf.size(ragged_words.flat_values))
-        positions = ragged_words.with_flat_values(positions_flat)
+        row_splits = inputs.row_splits
+        positions_flat = tf.range(tf.size(inputs.flat_values))
+        positions = inputs.with_flat_values(positions_flat)
 
         def _swap(positions):
             if tf.size(positions) == 1:
@@ -139,10 +94,9 @@ class RandomSwaps(keras.layers.Layer):
                     minval=0,
                     maxval=tf.size(positions),
                     dtype=tf.int32,
+                    seed=self._random_generator.make_legacy_seed()
                 )
-                # sample 2 random indices from the tensor
-                shuffled = tf.random.shuffle(index)
-                index1, index2 = shuffled[0], shuffled[1]
+                index1, index2 = index[0], index[1]
                 # swap items at the sampled indices with each other
                 positions = tf.tensor_scatter_nd_update(
                     positions,
@@ -162,11 +116,9 @@ class RandomSwaps(keras.layers.Layer):
         shuffled.flat_values.set_shape([None])
 
         swapped = tf.RaggedTensor.from_row_splits(
-            values=tf.gather(ragged_words.flat_values, shuffled.flat_values),
+            values=tf.gather(inputs.flat_values, shuffled.flat_values),
             row_splits=row_splits,
         )
-
-        swapped = tf.strings.reduce_join(swapped, axis=-1, separator=" ")
 
         if scalar_input:
             swapped = tf.squeeze(swapped, 0)
@@ -179,6 +131,7 @@ class RandomSwaps(keras.layers.Layer):
         config.update(
             {
                 "swaps": self.swaps,
+                "seed": self.seed,
             }
         )
         return config
