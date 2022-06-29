@@ -9,7 +9,7 @@ if ! [ $? -eq 0 ]; then
   exit 1
 fi
 
-flake8 --config "${base_dir}/setup.cfg" ${targets}
+flake8 --config "${base_dir}/setup.cfg" --max-line-length=200 ${targets}
 if ! [ $? -eq 0 ]; then
   echo "Please fix the code style issue."
   exit 1
