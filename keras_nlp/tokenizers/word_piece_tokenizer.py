@@ -190,7 +190,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer and dtype != tf.string:
                 raise ValueError(
-                    "Output dtype must be an integer type of a string. "
+                    "Output dtype must be an integer type or a string. "
                     f"Received: dtype={dtype}"
                 )
 
