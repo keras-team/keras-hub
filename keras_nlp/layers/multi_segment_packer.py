@@ -151,6 +151,16 @@ class MultiSegmentPacker(keras.layers.Layer):
             )
         return inputs
 
+    def _convert_inputs(self, inputs):
+        """Converts inputs to rank 2 ragged tensors."""
+        new_inputs = []
+        for x in inputs:
+            if isinstance(x, tf.Tensor):
+                new_inputs.append(tf.RaggedTensor.from_tensor(x))
+            else:
+                new_inputs.append(x)
+        return new_inputs
+
     def _trim_inputs(self, inputs):
         """Trim inputs to desired length."""
         num_special_tokens = len(inputs) + 1
@@ -195,22 +205,20 @@ class MultiSegmentPacker(keras.layers.Layer):
     def call(self, inputs):
         inputs = self._sanitize_inputs(inputs)
 
-        # If rank 1, add a batch dim and convert to ragged.
+        # If rank 1, add a batch dim.
         rank_1 = inputs[0].shape.rank == 1
         if rank_1:
             inputs = [tf.expand_dims(x, 0) for x in inputs]
-        inputs = [tf.RaggedTensor.from_tensor(x) for x in inputs]
+        inputs = self._convert_inputs(inputs)
 
         segments = self._trim_inputs(inputs)
         token_ids, segment_ids = self._combine_inputs(segments)
-
         # Pad to dense tensor output.
         shape = tf.cast([-1, self.sequence_length], "int64")
         token_ids = token_ids.to_tensor(
             shape=shape, default_value=self.pad_value
         )
         segment_ids = segment_ids.to_tensor(shape=shape)
-
         # Remove the batch dim if added.
         if rank_1:
             token_ids = tf.squeeze(token_ids, 0)
