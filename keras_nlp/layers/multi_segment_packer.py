@@ -175,13 +175,12 @@ class MultiSegmentPacker(keras.layers.Layer):
     def _combine_inputs(self, segments):
         """Combine inputs with start and end values added."""
         dtype = segments[0].dtype
+        batch_size = segments[0].nrows()
         start_value = tf.convert_to_tensor(self.start_value, dtype=dtype)
         end_value = tf.convert_to_tensor(self.end_value, dtype=dtype)
 
-        start_column = tf.tile([start_value], [segments[0].nrows()])
-        start_column = tf.expand_dims(start_column, 1)
-        end_column = tf.tile([end_value], [segments[0].nrows()])
-        end_column = tf.expand_dims(end_column, 1)
+        start_column = tf.fill((batch_size, 1), start_value)
+        end_column = tf.fill((batch_size, 1), end_value)
         ones_column = tf.ones_like(start_column, dtype=tf.int32)
 
         segments_to_combine = [start_column]
@@ -211,7 +210,7 @@ class MultiSegmentPacker(keras.layers.Layer):
         segments = self._trim_inputs(inputs)
         token_ids, segment_ids = self._combine_inputs(segments)
         # Pad to dense tensor output.
-        shape = tf.cast([-1, self.sequence_length], "int64")
+        shape = tf.cast([-1, self.sequence_length], tf.int64)
         token_ids = token_ids.to_tensor(
             shape=shape, default_value=self.pad_value
         )
