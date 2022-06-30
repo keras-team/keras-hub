@@ -16,11 +16,11 @@ from keras import backend
 from tensorflow import keras
 
 
-class RandomDeletion(keras.layers.Layer):
+class RandomDeletion(keras.__internal__.layers.BaseRandomLayer):
     """Augments input by randomly deleting words.
 
     Args:
-        probability: probability of a word being chosen for deletion
+        rate: rate of a word being chosen for deletion
         max_deletions: The maximum number of words to delete
         seed: A seed for the random number generator.
 
@@ -30,7 +30,7 @@ class RandomDeletion(keras.layers.Layer):
     >>> tf.random.get_global_generator().reset_from_seed(30)
     >>> tf.random.set_seed(30)
     >>> augmenter = keras_nlp.layers.RandomWordDeletion(
-    ...     probability = 0.7,
+    ...     rate = 0.7,
     ...     max_deletions = 2,
     ... )
     >>> augmenter(["I like to fly kites, do you?",
@@ -44,7 +44,7 @@ class RandomDeletion(keras.layers.Layer):
     >>> inputs = ["I like to fly kites, do you?",
     ...     "Can we go fly some kites later?"]
     >>> augmenter = keras_nlp.layers.RandomWordDeletion(
-    ...     probability = 0.6,
+    ...     rate = 0.6,
     ...     max_deletions = 3,
     ... )
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
@@ -60,7 +60,7 @@ class RandomDeletion(keras.layers.Layer):
     >>> inputs = ["I like to fly kites, do you?",
     ...     "Can we go fly some kites later?"]
     >>> augmenter = keras_nlp.layers.RandomWordDeletion(
-    ...     probability = 0.6,
+    ...     rate = 0.6,
     ...     max_deletions = 3,
     ... )
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
@@ -70,7 +70,7 @@ class RandomDeletion(keras.layers.Layer):
     b'we go some kites'], dtype=object)>
     """
 
-    def __init__(self, probability, max_deletions, seed = None, name = None, **kwargs):
+    def __init__(self, rate, max_deletions, seed = None, name = None, **kwargs):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
@@ -82,8 +82,8 @@ class RandomDeletion(keras.layers.Layer):
                     f"Received: dtype={dtype}"
                 )
 
-        super().__init__(name=name, **kwargs)
-        self.probability = probability
+        super().__init__(name=name, seed = seed, **kwargs)
+        self.rate = rate
         self.max_deletions = max_deletions
         self.seed = seed
         self._random_generator = backend.RandomGenerator(seed)
@@ -114,8 +114,8 @@ class RandomDeletion(keras.layers.Layer):
             shape=tf.shape(word_counts),
             seed=tf.random.get_global_generator().make_seeds()[:, 0],
             counts=word_counts,
-            probs=self.probability,
-            seed=self._random_generator.make_seed_for_stateless_op(),
+            probs=self.rate,
+            # seed=self._random_generator.make_seed_for_stateless_op(),
         )
         num_to_select = tf.math.minimum(num_to_select, self.max_deletions)
         num_to_select = tf.cast(num_to_select, "int64")
@@ -161,7 +161,7 @@ class RandomDeletion(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "probability": self.probability,
+                "rate": self.rate,
                 "max_deletions": self.max_deletions,
             }
         )
