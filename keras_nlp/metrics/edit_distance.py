@@ -53,7 +53,7 @@ class EditDistance(keras.metrics.Metric):
 
     Examples:
 
-    1. Various Input Types.
+    Various Input Types.
 
     Single-level Python list.
     >>> edit_distance = keras_nlp.metrics.EditDistance()
@@ -95,7 +95,7 @@ class EditDistance(keras.metrics.Metric):
     >>> edit_distance(y_true, y_pred)
     <tf.Tensor: shape=(), dtype=float32, numpy=0.73333335>
 
-    2. Pass the metric to `model.compile()`.
+    Pass the metric to `model.compile()`.
     >>> inputs = keras.Input(shape=(None,), dtype="string")
     >>> outputs = tf.strings.lower(inputs)
     >>> model = keras.Model(inputs, outputs)
