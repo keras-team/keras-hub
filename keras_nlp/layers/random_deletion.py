@@ -32,18 +32,21 @@ class RandomDeletion(keras.layers.Layer):
     >>> augmenter = RandomDeletion(rate = 0.4, max_deletions = 1, seed = 42)
     >>> augmented = augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I', b'Keras and'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I', b'Keras and'],
+    dtype=object)>
 
     Character level usage
     >>> tf.random.set_seed(30)
-    >>> inputs = tf.strings.unicode_split(["Hey I like", "Keras and Tensorflow"], "UTF-8")
+    >>> inputs = tf.strings.unicode_split(
+        ["Hey I like", "Keras and Tensorflow"], "UTF-8")
     >>> augmenter = RandomDeletion(rate = 0.4, max_deletions = 1, seed = 42)
     >>> augmented = augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'He I like', b'Keras ad Tensorflow'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'He I like', b'Keras ad Tensorflow'], dtype=object)>
     """
 
-    def __init__(self, rate, max_deletions, seed = None, name = None, **kwargs):
+    def __init__(self, rate, max_deletions, seed=None, name=None, **kwargs):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
@@ -95,7 +98,9 @@ class RandomDeletion(keras.layers.Layer):
         # Shuffle and trim to items that are going to be selected.
         def _shuffle_and_trim(x):
             positions, top_n = x
-            shuffled = tf.random.shuffle(positions, seed=self._random_generator.make_legacy_seed())
+            shuffled = tf.random.shuffle(
+                positions, seed=self._random_generator.make_legacy_seed()
+            )
             return shuffled[:top_n]
 
         selected_for_mask = tf.map_fn(
@@ -109,9 +114,7 @@ class RandomDeletion(keras.layers.Layer):
 
         # Construct the mask which is a boolean RT
         # Scatter 0's to positions that have been selector for deletion.
-        update_values = tf.zeros_like(
-            selected_for_mask.flat_values, "int32"
-        )
+        update_values = tf.zeros_like(selected_for_mask.flat_values, "int32")
         update_indices = selected_for_mask.flat_values
         update_indices = tf.expand_dims(update_indices, -1)
         update_indices = tf.cast(update_indices, "int32")
