@@ -12,23 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Edit Distance metric implementation based on `keras.metrics.Metric`."""
+"""Edit Distance metric."""
 
 import tensorflow as tf
 from tensorflow import keras
 
 
 class EditDistance(keras.metrics.Metric):
-    """Edit Distance.
+    """Edit Distance metric.
 
     This class implements the edit distance metric, sometimes called
-    Levenshtein Distance. Essentially, edit distance is the least number of
-    operations required to convert one string to another, where a operation
-    can be one of substitution, deletion or insertion. In the normalized version,
+    Levenshtein Distance, as a `keras.metrics.Metric`. Essentially, edit
+    distance is the least number of operations required to convert one string to
+    another, where an operation can be one of substitution, deletion or
+    insertion. By default, this metric will compute the normalized score, where
     the above score is divided by the number of tokens in the reference text.
 
-    This class can be used to compute character error rate (CER)/word error rate
-    (WER). You simply have to pass the appropriate tokenized text, and set
+    This class can be used to compute character error rate (CER) and word error
+    rate (WER). You simply have to pass the appropriate tokenized text, and set
     `normalize` to True.
 
     Note on input shapes:
@@ -47,28 +48,27 @@ class EditDistance(keras.metrics.Metric):
         **kwargs: Other keyword arguments.
 
     References:
-        - [Morris et al.](https://www.researchgate.net/publication/221478089_From_WER_and_RIL_to_MER_and_WIL_improved_evaluation_measures_for_connected_speech_recognition)
+        - [Morris et al.](https://www.researchgate.net/publication/221478089)
 
     Examples:
 
     1. Various Input Types.
-    1.1. Rank 1 input.
-    a. Python list
+
+    Single-level Python list.
     >>> edit_distance = keras_nlp.metrics.EditDistance()
     >>> y_true = "the tiny little cat was found under the big funny bed".split()
     >>> y_pred = "the cat was found under the bed".split()
     >>> edit_distance(y_true, y_pred)
     <tf.Tensor: shape=(), dtype=float32, numpy=0.36363637>
 
-    a. Tensor
+    Rank 1 tensor.
     >>> edit_distance = keras_nlp.metrics.EditDistance()
     >>> y_true = tf.strings.split("the tiny little cat was found under the big funny bed")
     >>> y_pred = tf.strings.split("the cat was found under the bed")
     >>> edit_distance(y_true, y_pred)
     <tf.Tensor: shape=(), dtype=float32, numpy=0.36363637>
 
-    1.2. Rank 2 input.
-    a. Python list.
+    Nested Python list.
     >>> edit_distance = keras_nlp.metrics.EditDistance()
     >>> y_true = [
     ...     "the tiny little cat was found under the big funny bed".split(),
@@ -81,7 +81,7 @@ class EditDistance(keras.metrics.Metric):
     >>> edit_distance(y_true, y_pred)
     <tf.Tensor: shape=(), dtype=float32, numpy=0.73333335>
 
-    b. Tensor.
+    Rank 2 tensor.
     >>> edit_distance = keras_nlp.metrics.EditDistance()
     >>> y_true = tf.strings.split([
     ...     "the tiny little cat was found under the big funny bed",
