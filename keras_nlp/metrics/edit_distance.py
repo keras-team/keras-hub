@@ -26,7 +26,8 @@ class EditDistance(keras.metrics.Metric):
     distance is the least number of operations required to convert one string to
     another, where an operation can be one of substitution, deletion or
     insertion. By default, this metric will compute the normalized score, where
-    the above score is divided by the number of tokens in the reference text.
+    the unnormalized edit distance score is divided by the number of tokens in
+    the reference text.
 
     This class can be used to compute character error rate (CER) and word error
     rate (WER). You simply have to pass the appropriate tokenized text, and set
