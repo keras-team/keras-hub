@@ -242,7 +242,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         self.replacement_char = replacement_char
         self.input_encoding = input_encoding
         self.output_encoding = output_encoding
-        self.vocabulary_size = vocabulary_size
+        self._vocabulary_size = vocabulary_size
 
     def get_config(self):
         config = super().get_config()
@@ -255,7 +255,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
                 "replacement_char": self.replacement_char,
                 "input_encoding": self.input_encoding,
                 "output_encoding": self.output_encoding,
-                "vocabulary_size": self.vocabulary_size,
+                "vocabulary_size": self._vocabulary_size,
             }
         )
         return config
@@ -263,7 +263,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     def vocabulary_size(self) -> int:
         """Get the size of the tokenizer vocabulary. None implies no vocabulary
         size was provided"""
-        return self.vocabulary_size
+        return self._vocabulary_size
 
     def tokenize(self, inputs):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
@@ -299,8 +299,8 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
         # Optionally clamps the output code point values to be in the
         # range [0, vocabulary_size)
-        if self.vocabulary_size:
-            tokens = tf.clip_by_value(tokens, 0, self.vocabulary_size - 1)
+        if self._vocabulary_size:
+            tokens = tf.clip_by_value(tokens, 0, self._vocabulary_size - 1)
 
         return tokens
 

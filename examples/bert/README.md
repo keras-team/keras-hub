@@ -36,7 +36,7 @@ python3 examples/bert/bert_preprocess.py \
     --output_file $OUTPUT_DIR/pretraining-data/pretraining.tfrecord
 # Run pretraining for 100 train steps only.
 python3 examples/bert/bert_train.py \
-    --input_files $OUTPUT_DIR/pretraining-data/ \
+    --input_directory $OUTPUT_DIR/pretraining-data/ \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --saved_model_output $OUTPUT_DIR/model/ \
     --num_train_steps 100
@@ -197,12 +197,14 @@ python3 -c "from examples.utils.data_utils import preview_tfrecord; preview_tfre
 
 After preprocessing, we can run pretraining with the `bert_train.py`
 script. This will train a model and save it to the `--saved_model_output`
-directory.
+directory. If you are willing to train from data stored on google cloud storage bucket (GCS), you can do it by setting the file path to
+the URL of GCS bucket. For example, `--input_directory=gs://your-bucket-name/you-data-path`. You can also save models directly to GCS by the same approach.
 
 ```shell
 python3 examples/bert/bert_train.py \
-    --input_files path/to/data/ \
+    --input_directory path/to/data/ \
     --vocab_file path/to/bert_vocab_uncased.txt \
+    --model_size tiny \
     --saved_model_output path/to/model/
 ```
 
@@ -219,7 +221,8 @@ training for a few epochs to finetune the model.
 ```shell
 python3 examples/bert/bert_finetune_glue.py \
     --saved_model_input path/to/model/ \
-    --vocab_file path/to/bert_vocab_uncased.txt
+    --vocab_file path/to/bert_vocab_uncased.txt \
+    --task_name mrpc
 ```
 
 The script could be easily adapted to any other text classification finetuning
