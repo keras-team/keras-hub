@@ -16,7 +16,7 @@ from keras import backend
 from tensorflow import keras
 
 
-class RandomDeletion(keras.__internal__.layers.BaseRandomLayer):
+class RandomDeletion(keras.layers.Layer):
     """Augments input by randomly deleting words.
 
     Args:
@@ -26,48 +26,21 @@ class RandomDeletion(keras.__internal__.layers.BaseRandomLayer):
 
     Examples:
 
-    Basic usage.
-    >>> tf.random.get_global_generator().reset_from_seed(30)
+    Word level usage
     >>> tf.random.set_seed(30)
-    >>> augmenter = keras_nlp.layers.RandomWordDeletion(
-    ...     rate = 0.7,
-    ...     max_deletions = 2,
-    ... )
-    >>> augmenter(["I like to fly kites, do you?",
-    ...     "Can we go fly some kites later?"])
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I fly kites, do you?',
-    b'Can we fly kites later?'], dtype=object)>
+    >>> inputs = tf.strings.split(["Hey I like", "Keras and Tensorflow"])
+    >>> augmenter = RandomDeletion(rate = 0.4, max_deletions = 1, seed = 42)
+    >>> augmented = augmenter(inputs)
+    >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I', b'Keras and'], dtype=object)>
 
-    Augment first, then batch the dataset.
-    >>> tf.random.get_global_generator().reset_from_seed(30)
+    Character level usage
     >>> tf.random.set_seed(30)
-    >>> inputs = ["I like to fly kites, do you?",
-    ...     "Can we go fly some kites later?"]
-    >>> augmenter = keras_nlp.layers.RandomWordDeletion(
-    ...     rate = 0.6,
-    ...     max_deletions = 3,
-    ... )
-    >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
-    >>> ds = ds.map(augmenter)
-    >>> ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(3))
-    >>> ds.take(1).get_single_element()
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'fly kites, do you?',
-    b'we go some kites'], dtype=object)>
-
-    Batch the inputs and then Augment.
-    >>> tf.random.get_global_generator().reset_from_seed(30)
-    >>> tf.random.set_seed(30)
-    >>> inputs = ["I like to fly kites, do you?",
-    ...     "Can we go fly some kites later?"]
-    >>> augmenter = keras_nlp.layers.RandomWordDeletion(
-    ...     rate = 0.6,
-    ...     max_deletions = 3,
-    ... )
-    >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
-    >>> ds = ds.batch(3).map(augmenter)
-    >>> ds.take(1).get_single_element()
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'fly kites, do you?',
-    b'we go some kites'], dtype=object)>
+    >>> inputs = tf.strings.unicode_split(["Hey I like", "Keras and Tensorflow"], "UTF-8")
+    >>> augmenter = RandomDeletion(rate = 0.4, max_deletions = 1, seed = 42)
+    >>> augmented = augmenter(inputs)
+    >>> tf.strings.reduce_join(augmented, axis=-1)
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'He I like', b'Keras ad Tensorflow'], dtype=object)>
     """
 
     def __init__(self, rate, max_deletions, seed = None, name = None, **kwargs):
@@ -82,7 +55,7 @@ class RandomDeletion(keras.__internal__.layers.BaseRandomLayer):
                     f"Received: dtype={dtype}"
                 )
 
-        super().__init__(name=name, seed = seed, **kwargs)
+        super().__init__(name=name, **kwargs)
         self.rate = rate
         self.max_deletions = max_deletions
         self.seed = seed
@@ -115,7 +88,6 @@ class RandomDeletion(keras.__internal__.layers.BaseRandomLayer):
             seed=tf.random.get_global_generator().make_seeds()[:, 0],
             counts=word_counts,
             probs=self.rate,
-            # seed=self._random_generator.make_seed_for_stateless_op(),
         )
         num_to_select = tf.math.minimum(num_to_select, self.max_deletions)
         num_to_select = tf.cast(num_to_select, "int64")
@@ -163,6 +135,7 @@ class RandomDeletion(keras.__internal__.layers.BaseRandomLayer):
             {
                 "rate": self.rate,
                 "max_deletions": self.max_deletions,
+                "seed": self.seed,
             }
         )
         return config

@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Random Word Deletion Layer."""
+"""Tests for Random Swap Layer."""
 
 import tensorflow as tf
 
@@ -19,69 +19,49 @@ from keras_nlp.layers import random_deletion
 
 
 class RandomDeletionTest(tf.test.TestCase):
-    def test_shape_with_scalar(self):
-        augmenter = random_deletion.RandomWordDeletion(
-            probability=0.5, max_deletions=3
-        )
-        input = ["Running Around"]
-        output = augmenter(input)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(input).shape)
+    def test_shape_and_output_from_word_deletion(self):
+        tf.random.set_seed(30)
+        inputs = ["Hey I like", "Keras and Tensorflow"]
+        split = tf.strings.split(inputs)
+        augmenter = random_deletion.RandomDeletion(rate = 0.4, max_deletions = 1, seed = 42)
+        augmented = augmenter(split)
+        output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
+        exp_output = [b'Hey like', b'Keras and']
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
+
+    def test_shape_and_output_from_character_swaps(self):
+        tf.random.set_seed(30)
+        inputs = ["Hey I like", "Keras and Tensorflow"]
+        split = tf.strings.unicode_split(inputs, "UTF-8")
+        augmenter = random_deletion.RandomDeletion(rate = 0.4, max_deletions = 1, seed = 42)
+        augmented = augmenter(split)
+        output = tf.strings.reduce_join(augmented, axis=-1)
+        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
+        exp_output = [b'Hey I lik', b'Keras an Tensorflow']
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
 
     def test_get_config_and_from_config(self):
 
-        augmenter = random_deletion.RandomWordDeletion(
-            probability=0.5, max_deletions=3
-        )
+        augmenter = random_deletion.RandomDeletion(rate = 0.4, max_deletions = 1, seed = 42)
 
-        expected_config_subset = {"probability": 0.5, "max_deletions": 3}
+        expected_config_subset = {
+            "seed": 42,
+            "max_deletions": 1,
+            "rate": 0.4
+        }
 
         config = augmenter.get_config()
 
         self.assertEqual(config, {**config, **expected_config_subset})
 
-        restored_augmenter = (
-            random_deletion.RandomWordDeletion.from_config(
-                config,
-            )
+        restored_augmenter = random_deletion.RandomDeletion.from_config(
+            config,
         )
 
         self.assertEqual(
             restored_augmenter.get_config(),
             {**config, **expected_config_subset},
         )
-
-    def test_augment_first_batch_second(self):
-        tf.random.get_global_generator().reset_from_seed(30)
-        tf.random.set_seed(30)
-        augmenter = random_deletion.RandomWordDeletion(
-            probability=0.5, max_deletions=3
-        )
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["samurai or ninja", "keras is good", "tensorflow is a library"]
-        )
-        ds = ds.map(augmenter)
-        ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(3))
-        output = ds.take(1).get_single_element()
-
-        exp_output = [b"samurai", b"is good", b"tensorflow a library"]
-        for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])
-
-    def test_batch_first_augment_second(self):
-        tf.random.get_global_generator().reset_from_seed(30)
-        tf.random.set_seed(30)
-        augmenter = random_deletion.RandomWordDeletion(
-            probability=0.5, max_deletions=3
-        )
-
-        ds = tf.data.Dataset.from_tensor_slices(
-            ["samurai or ninja", "keras is good", "tensorflow is a library"]
-        )
-        ds = ds.batch(3).map(augmenter)
-        output = ds.take(1).get_single_element()
-
-        exp_output = [b"samurai", b"is good", b"tensorflow"]
-
-        for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])
