@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""ROUGE-N metric implementation based on `keras.metrics.Metric`."""
+"""ROUGE-N metric."""
 
 
 from keras_nlp.metrics.rouge_base import RougeBase
