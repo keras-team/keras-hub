@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""BLEU metric implementation."""
+
 import collections
 import math
 
@@ -51,12 +53,16 @@ class Bleu(keras.metrics.Metric):
     """BLEU metric.
 
     This class implements the BLEU metric. BLEU is generally used to evaluate
-    machine translation systems. Succinctly put, in BLEU score, we count the
-    number of matching n-grams in the candidate translation and the reference
-    text. We find the "clipped count" of matching n-grams so as to not
-    give a high score to a (reference, prediction) pair with redundant, repeated
-    tokens. Secondly, BLEU score tends to reward shorter predictions more, which
-    is why a brevity penalty is applied to penalise short predictions.
+    machine translation systems. by default, this implementation replicates
+    SacreBLEU, but user-defined tokenizers can be passed to deal with other
+    languages.
+
+    For BLEU score, we count the number of matching n-grams in the candidate
+    translation and the reference text. We find the "clipped count" of matching
+    n-grams so as to not give a high score to a (reference, prediction) pair
+    with redundant, repeated tokens. Secondly, BLEU score tends to reward
+    shorter predictions more, which is why a brevity penalty is applied to
+    penalise short predictions.
 
     Note on input shapes:
     For `y_true` and `y_pred`, this class supports scalar values and batch
@@ -73,7 +79,9 @@ class Bleu(keras.metrics.Metric):
             `max_order` is set to 3, unigrams, bigrams, and trigrams will be
             considered. Defaults to 4.
         smooth: bool. Whether to apply Lin et al. 2004 smoothing to the BLEU
-            score. Defaults to False.
+            score. Adds 1 to the matched n-gram count (i.e., numerator) and 1
+            to the total n-gram count (i.e., denominator) for every order while
+            calculating precision. Defaults to False.
         variant: string. Either `"corpus_bleu"` or `"sentence_bleu"`. The former
             computes micro-average precision, which is equivalent to passing all
             samples (across batches) all at once. In other words, summing the
@@ -89,6 +97,8 @@ class Bleu(keras.metrics.Metric):
 
     References:
         - [Papineni et al., 2002](https://aclanthology.org/P02-1040/)
+        - [SacreBLEU](https://github.com/mjpost/sacrebleu)
+        - [Lin et al., 2004](https://aclanthology.org/P04-1077/)
     """
 
     def __init__(
@@ -175,6 +185,158 @@ class Bleu(keras.metrics.Metric):
             dtype=self.dtype,
         )
 
+    def _get_ngrams(self, segment, max_order):
+        """Extracts all n-grams upto a given maximum order from an input segment.
+
+        Uses Python ops. Inspired from
+        https://github.com/tensorflow/nmt/blob/master/nmt/scripts/bleu.py.
+
+        Args:
+            segment: string. Text segment from which n-grams will be
+                extracted.
+            max_order: int. Maximum length in tokens of the n-grams returned
+                by this methods.
+        """
+        ngram_counts = collections.Counter()
+        for order in range(1, max_order + 1):
+            for i in range(0, len(segment) - order + 1):
+                ngram = tuple(segment[i : i + order])
+                ngram_counts[ngram] += 1
+        return ngram_counts
+
+    def _corpus_bleu(
+        self,
+        reference_corpus,
+        translation_corpus,
+        matches_by_order,
+        possible_matches_by_order,
+        translation_length,
+        reference_length,
+        max_order=4,
+        smooth=False,
+    ):
+        """Corpus BLEU implementation using Python ops.
+
+        Computes BLEU score of translated segments against one or more
+        references. Inspired from
+        https://github.com/tensorflow/nmt/blob/master/nmt/scripts/bleu.py.
+
+        Args:
+            reference_corpus: list of lists of references for each
+                translation. Each reference should be tokenized into a list
+                of tokens.
+            translation_corpus: list of translations to score. Each
+                translation should be tokenized into a list of tokens.
+            matches_by_order: list of floats containing the initial number
+                of matches for each order.
+            possible_matches_by_order: list of floats containing the initial
+                number of possible matches for each order.
+            translation_length: float. Initial number of tokens in all the
+                translations.
+            reference_length: float. Initial number of tokens in all the
+                references.
+            max_order: int. Maximum n-gram order to use when computing
+                BLEU score.
+            smooth: boolean. Whether or not to apply Lin et al. 2004
+                smoothing.
+        """
+        for (references, translation) in zip(
+            reference_corpus, translation_corpus
+        ):
+            reference_length += min(len(r) for r in references)
+            translation_length += len(translation)
+
+            merged_ref_ngram_counts = collections.Counter()
+            for reference in references:
+                merged_ref_ngram_counts |= self._get_ngrams(
+                    reference, max_order
+                )
+            translation_ngram_counts = self._get_ngrams(translation, max_order)
+            overlap = translation_ngram_counts & merged_ref_ngram_counts
+            for ngram in overlap:
+                matches_by_order[len(ngram) - 1] += overlap[ngram]
+            for order in range(1, max_order + 1):
+                possible_matches = len(translation) - order + 1
+                if possible_matches > 0:
+                    possible_matches_by_order[order - 1] += possible_matches
+
+        precisions = [0] * max_order
+        for i in range(0, max_order):
+            if smooth:
+                precisions[i] = (matches_by_order[i] + 1.0) / (
+                    possible_matches_by_order[i] + 1.0
+                )
+            else:
+                if possible_matches_by_order[i] > 0:
+                    precisions[i] = (
+                        float(matches_by_order[i])
+                        / possible_matches_by_order[i]
+                    )
+                else:
+                    precisions[i] = 0.0
+
+        if min(precisions) > 0:
+            p_log_sum = sum((1.0 / max_order) * math.log(p) for p in precisions)
+            geo_mean = math.exp(p_log_sum)
+        else:
+            geo_mean = 0
+
+        ratio = float(translation_length) / reference_length
+
+        if ratio > 1.0:
+            bp = 1.0
+        else:
+            bp = math.exp(1 - 1.0 / ratio)
+
+        bleu = geo_mean * bp
+
+        return (
+            bleu,
+            matches_by_order,
+            possible_matches_by_order,
+            translation_length,
+            reference_length,
+        )
+
+    def _aggregate_sentence_bleu(
+        self,
+        reference_corpus,
+        translation_corpus,
+        max_order=4,
+        smooth=False,
+    ):
+        """Aggregate Sentence BLEU implementation using Python ops.
+
+        Computes the per-sample BLEU score and returns the aggregate of BLEU
+        scores over all samples.
+
+        Args:
+            reference_corpus: list of lists of references for each
+                translation. Each reference should be tokenized into a list
+                of tokens.
+            translation_corpus: list of translations to score. Each
+                translation should be tokenized into a list of tokens.
+            max_order: int. Maximum n-gram order to use when computing
+                BLEU score.
+            smooth: boolean. Whether or not to apply Lin et al. 2004
+                smoothing.
+        """
+        bleu_score = 0.0
+        for references, translation in zip(
+            reference_corpus, translation_corpus
+        ):
+            bleu_score += self._corpus_bleu(
+                reference_corpus=[references],
+                translation_corpus=[translation],
+                matches_by_order=[0] * max_order,
+                possible_matches_by_order=[0] * max_order,
+                translation_length=0,
+                reference_length=0,
+                max_order=max_order,
+                smooth=smooth,
+            )[0]
+        return bleu_score
+
     def update_state(self, y_true, y_pred, sample_weight=None):
         def validate_and_fix_rank(inputs, tensor_name, base_rank=0):
             if not isinstance(inputs, tf.Tensor):
@@ -189,151 +351,6 @@ class Bleu(keras.metrics.Metric):
                     f"{tensor_name} must be of rank {base_rank} or {base_rank+1}. "
                     f"Found rank: {inputs.shape.rank}"
                 )
-
-        def _get_ngrams(segment, max_order):
-            """Extracts all n-grams upto a given maximum order from an input
-            segment. Uses Python ops. Inspired from
-            https://github.com/tensorflow/nmt/blob/master/nmt/scripts/bleu.py.
-
-            Args:
-                segment: string. Text segment from which n-grams will be
-                    extracted.
-                max_order: int. Maximum length in tokens of the n-grams returned
-                    by this methods.
-            """
-            ngram_counts = collections.Counter()
-            for order in range(1, max_order + 1):
-                for i in range(0, len(segment) - order + 1):
-                    ngram = tuple(segment[i : i + order])
-                    ngram_counts[ngram] += 1
-            return ngram_counts
-
-        def corpus_bleu(
-            reference_corpus,
-            translation_corpus,
-            matches_by_order,
-            possible_matches_by_order,
-            translation_length,
-            reference_length,
-            max_order=4,
-            smooth=False,
-        ):
-            """Computes BLEU score of translated segments against one or more
-            references. Uses Python ops. Inspired from
-            https://github.com/tensorflow/nmt/blob/master/nmt/scripts/bleu.py.
-
-            Args:
-                reference_corpus: list of lists of references for each
-                    translation. Each reference should be tokenized into a list
-                    of tokens.
-                translation_corpus: list of translations to score. Each
-                    translation should be tokenized into a list of tokens.
-                matches_by_order: list of floats containing the initial number
-                    of matches for each order.
-                possible_matches_by_order: list of floats containing the initial
-                    number of possible matches for each order.
-                translation_length: float. Initial number of tokens in all the
-                    translations.
-                reference_length: float. Initial number of tokens in all the
-                    references.
-                max_order: int. Maximum n-gram order to use when computing
-                    BLEU score.
-                smooth: boolean. Whether or not to apply Lin et al. 2004
-                    smoothing.
-            """
-            for (references, translation) in zip(
-                reference_corpus, translation_corpus
-            ):
-                reference_length += min(len(r) for r in references)
-                translation_length += len(translation)
-
-                merged_ref_ngram_counts = collections.Counter()
-                for reference in references:
-                    merged_ref_ngram_counts |= _get_ngrams(reference, max_order)
-                translation_ngram_counts = _get_ngrams(translation, max_order)
-                overlap = translation_ngram_counts & merged_ref_ngram_counts
-                for ngram in overlap:
-                    matches_by_order[len(ngram) - 1] += overlap[ngram]
-                for order in range(1, max_order + 1):
-                    possible_matches = len(translation) - order + 1
-                    if possible_matches > 0:
-                        possible_matches_by_order[order - 1] += possible_matches
-
-            precisions = [0] * max_order
-            for i in range(0, max_order):
-                if smooth:
-                    precisions[i] = (matches_by_order[i] + 1.0) / (
-                        possible_matches_by_order[i] + 1.0
-                    )
-                else:
-                    if possible_matches_by_order[i] > 0:
-                        precisions[i] = (
-                            float(matches_by_order[i])
-                            / possible_matches_by_order[i]
-                        )
-                    else:
-                        precisions[i] = 0.0
-
-            if min(precisions) > 0:
-                p_log_sum = sum(
-                    (1.0 / max_order) * math.log(p) for p in precisions
-                )
-                geo_mean = math.exp(p_log_sum)
-            else:
-                geo_mean = 0
-
-            ratio = float(translation_length) / reference_length
-
-            if ratio > 1.0:
-                bp = 1.0
-            else:
-                bp = math.exp(1 - 1.0 / ratio)
-
-            bleu = geo_mean * bp
-
-            return (
-                bleu,
-                matches_by_order,
-                possible_matches_by_order,
-                translation_length,
-                reference_length,
-            )
-
-        def aggregate_sentence_bleu(
-            reference_corpus,
-            translation_corpus,
-            max_order=4,
-            smooth=False,
-        ):
-            """Computes the per-sample BLEU score and returns the aggregate of
-            BLEU scores over all samples. Uses Python ops.
-
-            Args:
-                reference_corpus: list of lists of references for each
-                    translation. Each reference should be tokenized into a list
-                    of tokens.
-                translation_corpus: list of translations to score. Each
-                    translation should be tokenized into a list of tokens.
-                max_order: int. Maximum n-gram order to use when computing
-                    BLEU score.
-                smooth: boolean. Whether or not to apply Lin et al. 2004
-                    smoothing.
-            """
-            bleu_score = 0.0
-            for references, translation in zip(
-                reference_corpus, translation_corpus
-            ):
-                bleu_score += corpus_bleu(
-                    reference_corpus=[references],
-                    translation_corpus=[translation],
-                    matches_by_order=[0] * max_order,
-                    possible_matches_by_order=[0] * max_order,
-                    translation_length=0,
-                    reference_length=0,
-                    max_order=max_order,
-                    smooth=smooth,
-                )[0]
-            return bleu_score
 
         def calculate_bleu_score(references, translation):
             references = tensor_to_string_list(references)
@@ -351,7 +368,7 @@ class Bleu(keras.metrics.Metric):
                     possible_matches,
                     translation_length,
                     reference_length,
-                ) = corpus_bleu(
+                ) = self._corpus_bleu(
                     reference_corpus=references,
                     translation_corpus=translation,
                     matches_by_order=matches,
@@ -369,7 +386,7 @@ class Bleu(keras.metrics.Metric):
                     tf.constant(reference_length, dtype=self.dtype),
                 )
             else:
-                bleu_score = aggregate_sentence_bleu(
+                bleu_score = self._aggregate_sentence_bleu(
                     reference_corpus=references,
                     translation_corpus=translation,
                     max_order=self.max_order,
