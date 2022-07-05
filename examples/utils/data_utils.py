@@ -1,4 +1,4 @@
-# Copyright 2021 The KerasNLP Authors
+# Copyright 2022 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,12 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Utility functions for data handling."""
+
+import os
 
 import tensorflow as tf
+from google import protobuf
 
-import keras_nlp
 
-
-class ImportTest(tf.test.TestCase):
-    def test_version(self):
-        self.assertIsNotNone(keras_nlp.__version__)
+def preview_tfrecord(filepath):
+    """Pretty prints a single record from a tfrecord file."""
+    dataset = tf.data.TFRecordDataset(os.path.expanduser(filepath))
+    example = tf.train.Example()
+    example.ParseFromString(next(iter(dataset)).numpy())
+    formatted = protobuf.text_format.MessageToString(
+        example, use_short_repeated_primitives=True
+    )
+    print(formatted)

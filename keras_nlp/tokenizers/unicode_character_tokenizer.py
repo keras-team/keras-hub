@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any
-from typing import Dict
-
 import tensorflow as tf
 import tensorflow_text as tf_text
 
@@ -26,6 +23,24 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     This tokenizer is a vocabulary free tokenizer which tokenizes text as
     unicode characters codepoints.
+
+    Tokenizer outputs can either be padded and truncated with a
+    `sequence_length` argument, or left un-truncated. The exact output will
+    depend on the rank of the input tensors.
+
+    If input is a batch of strings (rank > 0):
+    By default, the layer will output a `tf.RaggedTensor` where the last
+    dimension of the output is ragged. If `sequence_length` is set, the layer
+    will output a dense `tf.Tensor` where all inputs have been padded or
+    truncated to `sequence_length`.
+
+    If input is a scalar string (rank == 0):
+    By default, the layer will output a dense `tf.Tensor` with static shape
+    `[None]`. If `sequence_length` is set, the output will be
+    a dense `tf.Tensor` of shape `[sequence_length]`.
+
+    The output dtype can be controlled via the `dtype` argument, which should be
+    an integer type (tf.int16, tf.int32, etc.).
 
     Args:
         lowercase: If true, the input text will be first lowered before
@@ -45,6 +60,10 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
             One of The encoding of the input text. Defaults to "UTF-8".
         output_encoding: One of ("UTF-8", "UTF-16-BE", or "UTF-32-BE").
             The encoding of the output text. Defaults to "UTF-8".
+        vocabulary_size: Set the vocabulary `vocabulary_size`,
+            by clamping all codepoints to the range [0, vocabulary_size).
+            Effectively this will make the `vocabulary_size - 1` id the
+            the OOV value.
 
     Examples:
 
@@ -74,7 +93,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         [2346, 2369, 2360, 2381, 2340, 2325,    0,    0],
         [1705, 1578, 1575, 1576,    0,    0,    0,    0]], dtype=int32)>
 
-    Tokenize first, then batch the dataset.
+    Tokenize, then batch for ragged outputs.
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
@@ -85,7 +104,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         [2346, 2369, 2360, 2381, 2340, 2325],
         [1705, 1578, 1575, 1576]]>
 
-    Batch the inputs and then tokenize.
+    Batch, then tokenize for ragged outputs.
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
@@ -95,7 +114,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         [2346, 2369, 2360, 2381, 2340, 2325],
         [1705, 1578, 1575, 1576]]>
 
-    Tokenize first, then batch for dense outputs (`sequence_length` provided).
+    Tokenize, then batch for dense outputs (`sequence_length` provided).
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
     ...     sequence_length=5)
@@ -108,8 +127,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         [2346, 2369, 2360, 2381, 2340],
         [1705, 1578, 1575, 1576,    0]], dtype=int32)>
 
-    Batch first, then tokenize for dense outputs (`sequence_length` provided).
-    (`sequence_length` provided).
+    Batch, then tokenize for dense outputs (`sequence_length` provided).
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
     ...     sequence_length=5)
@@ -121,7 +139,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         [2346, 2369, 2360, 2381, 2340],
         [1705, 1578, 1575, 1576,    0]], dtype=int32)>
 
-    Tokenization showcasing truncation of long sequences.
+    Tokenization with truncation.
     >>> inputs = ["I Like to Travel a Lot", "मैं किताबें पढ़ना पसंद करता हूं"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
     ...     sequence_length=5)
@@ -130,13 +148,26 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         numpy=array([[ 105,   32,  108,  105,  107],
        [2350, 2376, 2306,   32, 2325]], dtype=int32)>
 
+    Tokenization with vocabulary_size.
+    >>> latin_ext_cutoff = 592
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+    ...     vocabulary_size=latin_ext_cutoff)
+    >>> tokenizer("¿Cómo estás?")
+    <tf.Tensor: shape=(10,), dtype=int32,
+    numpy=array([191,  99, 243, 109, 111,  32, 101, 115, 116, 225, 115,  63],
+    dtype=int32)>
+    >>> tokenizer("आप कैसे हैं")
+    <tf.Tensor: shape=(11,), dtype=int32,
+    numpy=array([591, 591,  32, 591, 591, 591, 591,  32, 591, 591, 591],
+    dtype=int32)>
+
     Detokenization.
     >>> inputs = tf.constant([110, 105, 110, 106,  97], dtype=tf.int32)
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
     >>> tokenizer.detokenize(inputs)
     <tf.Tensor: shape=(), dtype=string, numpy=b'ninja'>
 
-    Detokenization while showcasing padded characters being removed
+    Detokenization with padding.
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
     ...     sequence_length=7)
     >>> dataset = tf.data.Dataset.from_tensor_slices(["a b c", "b c", "a"])
@@ -145,18 +176,15 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
     <tf.Tensor: shape=(7,), dtype=int32,
         numpy=array([97, 32, 98, 32, 99,  0,  0], dtype=int32)>
     >>> detokunbatched = dataset.map(tokenizer.detokenize)
-    >>> detokunbatched = dataset.map(tokenizer.detokenize)
     >>> detokunbatched.take(1).get_single_element()
     <tf.Tensor: shape=(), dtype=string, numpy=b'a b c'>
 
     Detokenization with invalid bytes.
-    >>> # The 10000000 in the inputs tensor below is an invalid value
-    >>> # Hence it replaces to the replacement_char 75 which represents 'K'
     >>> inputs = tf.constant([110, 105, 10000000, 110, 106,  97])
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
-    ...     errors="replace", replacement_char=75)
+    ...     errors="replace", replacement_char=88)
     >>> tokenizer.detokenize(inputs).numpy().decode('utf-8')
-    'niKnja'
+    'niXnja'
     """
 
     def __init__(
@@ -168,6 +196,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         replacement_char: int = 65533,
         input_encoding: str = "UTF-8",
         output_encoding: str = "UTF-8",
+        vocabulary_size: int = None,
         **kwargs,
     ) -> None:
         # Check dtype and provide a default.
@@ -213,8 +242,9 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         self.replacement_char = replacement_char
         self.input_encoding = input_encoding
         self.output_encoding = output_encoding
+        self._vocabulary_size = vocabulary_size
 
-    def get_config(self) -> Dict[str, Any]:
+    def get_config(self):
         config = super().get_config()
         config.update(
             {
@@ -225,9 +255,15 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
                 "replacement_char": self.replacement_char,
                 "input_encoding": self.input_encoding,
                 "output_encoding": self.output_encoding,
+                "vocabulary_size": self._vocabulary_size,
             }
         )
         return config
+
+    def vocabulary_size(self) -> int:
+        """Get the size of the tokenizer vocabulary. None implies no vocabulary
+        size was provided"""
+        return self._vocabulary_size
 
     def tokenize(self, inputs):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
@@ -260,6 +296,12 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
         if scalar_input:
             tokens = tf.squeeze(tokens, 0)
+
+        # Optionally clamps the output code point values to be in the
+        # range [0, vocabulary_size)
+        if self._vocabulary_size:
+            tokens = tf.clip_by_value(tokens, 0, self._vocabulary_size - 1)
+
         return tokens
 
     def detokenize(self, inputs):

@@ -35,7 +35,7 @@ class SinePositionEncoding(keras.layers.Layer):
             curves, as described in Attention is All You Need. Defaults to
             10000.
 
-    Example:
+    Examples:
     ```python
     # create a simple embedding layer with sinusoidal positional encoding
     seq_len = 100
@@ -50,7 +50,7 @@ class SinePositionEncoding(keras.layers.Layer):
     ```
 
     References:
-      [Attention is All You Need](https://arxiv.org/abs/1706.03762)
+     - [Vaswani et al., 2017](https://arxiv.org/abs/1706.03762)
     """
 
     def __init__(
