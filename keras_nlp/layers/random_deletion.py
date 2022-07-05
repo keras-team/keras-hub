@@ -27,23 +27,26 @@ class RandomDeletion(keras.layers.Layer):
     Examples:
 
     Word level usage
+    >>> tf.random.get_global_generator().reset_from_seed(30)
     >>> tf.random.set_seed(30)
     >>> inputs = tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter = RandomDeletion(rate = 0.4, max_deletions = 1, seed = 42)
+    >>> augmenter = keras_nlp.layers.RandomDeletion(rate = 0.4,
+    ... max_deletions = 1, seed = 42)
     >>> augmented = augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I', b'Keras and'],
-    dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'Hey I', b'and Tensorflow'], dtype=object)>
 
     Character level usage
+    >>> tf.random.get_global_generator().reset_from_seed(30)
     >>> tf.random.set_seed(30)
-    >>> inputs = tf.strings.unicode_split(
-        ["Hey I like", "Keras and Tensorflow"], "UTF-8")
-    >>> augmenter = RandomDeletion(rate = 0.4, max_deletions = 1, seed = 42)
+    >>> inputs = tf.strings.unicode_split(["Hey Dude", "Speed Up"], "UTF-8")
+    >>> augmenter = keras_nlp.layers.RandomDeletion(rate = 0.4,
+    ... max_deletions = 1, seed = 42)
     >>> augmented = augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, axis=-1)
     <tf.Tensor: shape=(2,), dtype=string,
-    numpy=array([b'He I like', b'Keras ad Tensorflow'], dtype=object)>
+    numpy=array([b'Hey Dde', b'Sped Up'], dtype=object)>
     """
 
     def __init__(self, rate, max_deletions, seed=None, name=None, **kwargs):
@@ -63,6 +66,12 @@ class RandomDeletion(keras.layers.Layer):
         self.max_deletions = max_deletions
         self.seed = seed
         self._random_generator = backend.RandomGenerator(seed)
+
+        if self.rate > 1 or self.rate < 0:
+            raise ValueError(
+                "Rate must be between 0 and 1 (both inclusive)."
+                f"Received: rate={rate}"
+            )
 
     def call(self, inputs):
         """Augments input by randomly deleting words.

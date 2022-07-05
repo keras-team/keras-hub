@@ -20,6 +20,7 @@ from keras_nlp.layers import random_deletion
 
 class RandomDeletionTest(tf.test.TestCase):
     def test_shape_and_output_from_word_deletion(self):
+        tf.random.get_global_generator().reset_from_seed(30)
         tf.random.set_seed(30)
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
@@ -29,11 +30,12 @@ class RandomDeletionTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey like", b"Keras and"]
+        exp_output = [b"Hey I", b"and Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_shape_and_output_from_character_swaps(self):
+        tf.random.get_global_generator().reset_from_seed(30)
         tf.random.set_seed(30)
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.unicode_split(inputs, "UTF-8")
@@ -43,7 +45,7 @@ class RandomDeletionTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I lik", b"Keras an Tensorflow"]
+        exp_output = [b"HeyI like", b"Keras ad Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
