@@ -29,7 +29,7 @@ setup(
     ),
     long_description=README,
     long_description_content_type="text/markdown",
-    version="0.2.0-dev.1",
+    version="0.3.0",
     url="https://github.com/keras-team/keras-nlp",
     author="Keras team",
     author_email="keras-nlp@google.com",
@@ -39,7 +39,7 @@ setup(
         "numpy",
         "packaging",
         "tensorflow",
-        "tensorflow_text",
+        "tensorflow-text",
     ],
     extras_require={
         "tests": [
@@ -48,11 +48,14 @@ setup(
             "isort",
             "pytest",
             "pytest-cov",
+            "rouge-score",
+            "sentencepiece",
         ],
         "examples": [
             "datasets",  # For GLUE in BERT example.
             "nltk",
             "wikiextractor",
+            "keras-tuner",
         ],
     },
     classifiers=[

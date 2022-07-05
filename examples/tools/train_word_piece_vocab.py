@@ -16,7 +16,7 @@
 This script will create wordpiece vocabularies suitable for pretraining BERT.
 
 Usage:
-python create_vocabulary.py \
+python examples/tools/train_word_piece_vocabulary.py \
     --input_files ~/datasets/bert-sentence-split-data/ \
     --output_file vocab.txt
 """
@@ -29,7 +29,7 @@ from absl import app
 from absl import flags
 from tensorflow_text.tools.wordpiece_vocab import bert_vocab_from_dataset
 
-from examples.bert.bert_utils import list_filenames_for_arg
+from examples.utils.scripting_utils import list_filenames_for_arg
 
 FLAGS = flags.FLAGS
 

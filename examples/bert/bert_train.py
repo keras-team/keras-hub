@@ -12,66 +12,81 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
+import datetime
 import sys
 
 import tensorflow as tf
 from absl import app
 from absl import flags
+from absl import logging
 from tensorflow import keras
 
+from examples.bert.bert_config import MODEL_CONFIGS
+from examples.bert.bert_config import PREPROCESSING_CONFIG
+from examples.bert.bert_config import TRAINING_CONFIG
 from examples.bert.bert_model import BertModel
-from examples.bert.bert_utils import list_filenames_for_arg
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "input_files",
+    "input_directory",
     None,
-    "Comma seperated list of directories, files, or globs for input data.",
+    "The directory of training data. It can be a local disk path, or the URL "
+    "of Google cloud storage bucket.",
 )
 
 flags.DEFINE_string(
-    "saved_model_output", None, "Output directory to save the model to."
+    "saved_model_output",
+    None,
+    "Output directory to save the model to.",
 )
 
 flags.DEFINE_string(
-    "bert_config_file",
+    "checkpoint_save_directory",
     None,
-    "The json config file for the bert model parameters.",
+    "Output directory to save checkpoints to.",
+)
+
+flags.DEFINE_bool(
+    "skip_restore",
+    False,
+    "Skip restoring from checkpoint if True",
+)
+
+flags.DEFINE_bool(
+    "tpu_name",
+    None,
+    "The TPU to connect to. If None, TPU will not be used.",
+)
+
+flags.DEFINE_bool(
+    "enable_cloud_logging",
+    False,
+    "If True, the script will use cloud logging.",
+)
+
+flags.DEFINE_string(
+    "tensorboard_log_path",
+    None,
+    "The path to save tensorboard log to.",
+)
+
+flags.DEFINE_string(
+    "model_size",
+    "tiny",
+    "One of: tiny, mini, small, medium, base, or large.",
 )
 
 flags.DEFINE_string(
     "vocab_file",
     None,
-    "The vocabulary file that the BERT model was trained on.",
-)
-
-flags.DEFINE_integer("epochs", 10, "The number of training epochs.")
-
-flags.DEFINE_integer("batch_size", 256, "The training batch size.")
-
-flags.DEFINE_float("learning_rate", 1e-4, "The initial learning rate for Adam.")
-
-flags.DEFINE_integer("max_seq_length", 128, "Maximum sequence length.")
-
-flags.DEFINE_integer(
-    "max_predictions_per_seq",
-    20,
-    "Maximum number of masked LM predictions per sequence.",
-)
-
-flags.DEFINE_integer(
-    "num_warmup_steps",
-    10000,
-    "The number of warmup steps during which the learning rate will increase "
-    "till a threshold.",
+    "The vocabulary file for tokenization.",
 )
 
 flags.DEFINE_integer(
     "num_train_steps",
-    1000000,
-    "The total fixed number of steps till which the model will train.",
+    None,
+    "Override the pre-configured number of train steps..",
 )
 
 
@@ -83,7 +98,7 @@ class ClassificationHead(tf.keras.layers.Layer):
             then only the output projection layer is created.
         num_classes: Number of output classes.
         cls_token_idx: The index inside the sequence to pool.
-        activation: Dense layer activation.
+        inner_activation: Inner layer activation.
         dropout_rate: Dropout probability.
         initializer: Initializer for dense layer kernels.
         **kwargs: Keyword arguments.
@@ -94,7 +109,7 @@ class ClassificationHead(tf.keras.layers.Layer):
         inner_dim,
         num_classes,
         cls_token_idx=0,
-        activation="tanh",
+        inner_activation="tanh",
         dropout_rate=0.0,
         initializer="glorot_uniform",
         **kwargs,
@@ -103,14 +118,14 @@ class ClassificationHead(tf.keras.layers.Layer):
         self.dropout_rate = dropout_rate
         self.inner_dim = inner_dim
         self.num_classes = num_classes
-        self.activation = keras.activations.get(activation)
+        self.inner_activation = keras.activations.get(inner_activation)
         self.initializer = keras.initializers.get(initializer)
         self.cls_token_idx = cls_token_idx
 
         if self.inner_dim:
             self.dense = keras.layers.Dense(
                 units=self.inner_dim,
-                activation=self.activation,
+                activation=self.inner_activation,
                 kernel_initializer=self.initializer,
                 name="pooler_dense",
             )
@@ -142,18 +157,6 @@ class ClassificationHead(tf.keras.layers.Layer):
         x = self.out_proj(x)
         return x
 
-    def get_config(self):
-        config = {
-            "cls_token_idx": self.cls_token_idx,
-            "dropout_rate": self.dropout_rate,
-            "num_classes": self.num_classes,
-            "inner_dim": self.inner_dim,
-            "activation": tf.keras.activations.serialize(self.activation),
-            "initializer": tf.keras.initializers.serialize(self.initializer),
-        }
-        config.update(super(ClassificationHead, self).get_config())
-        return config
-
 
 class MaskedLMHead(keras.layers.Layer):
     """Masked language model network head for BERT.
@@ -170,21 +173,32 @@ class MaskedLMHead(keras.layers.Layer):
 
     Args:
         embedding_table: The embedding table from encoder network.
-        activation: The activation, if any, for the dense layer.
+        inner_activation: The activation, if any, for the inner dense layer.
         initializer: The initializer for the dense layer. Defaults to a Glorot
             uniform initializer.
         output: The output style for this layer. Can be either 'logits' or
             'predictions'.
     """
 
-    def __init__(self, embedding_table, **kwargs):
+    def __init__(
+        self,
+        embedding_table,
+        inner_activation="gelu",
+        initializer="glorot_uniform",
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.embedding_table = embedding_table
+        self.inner_activation = keras.activations.get(inner_activation)
+        self.initializer = initializer
 
     def build(self, input_shape):
         self._vocab_size, hidden_size = self.embedding_table.shape
         self.dense = keras.layers.Dense(
-            hidden_size, activation=None, name="transform/dense"
+            hidden_size,
+            activation=self.inner_activation,
+            kernel_initializer=self.initializer,
+            name="transform/dense",
         )
         self.layer_norm = keras.layers.LayerNormalization(
             axis=-1, epsilon=1e-12, name="transform/LayerNorm"
@@ -247,9 +261,17 @@ class BertPretrainer(keras.Model):
     def __init__(self, bert_model, **kwargs):
         super().__init__(**kwargs)
         self.bert_model = bert_model
-        self.masked_lm_head = MaskedLMHead(bert_model.get_embedding_table())
+        self.masked_lm_head = MaskedLMHead(
+            bert_model.get_embedding_table(),
+            initializer=bert_model.initializer,
+        )
         self.next_sentence_head = ClassificationHead(
-            inner_dim=768, num_classes=2, dropout_rate=0.1
+            inner_dim=768,
+            num_classes=2,
+            dropout_rate=0.1,
+            initializer=bert_model.initializer,
+            # Always use tanh for classification.
+            inner_activation="tanh",
         )
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.lm_loss_tracker = keras.metrics.Mean(name="lm_loss")
@@ -335,11 +357,18 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
             ),
         )
 
+    def get_config(self):
+        return {
+            "learning_rate": self.learning_rate,
+            "num_warmup_steps": self.warmup_steps,
+            "num_train_steps": self.train_steps,
+        }
+
 
 def decode_record(record):
     """Decodes a record to a TensorFlow example."""
-    seq_length = FLAGS.max_seq_length
-    lm_length = FLAGS.max_predictions_per_seq
+    seq_length = PREPROCESSING_CONFIG["max_seq_length"]
+    lm_length = PREPROCESSING_CONFIG["max_predictions_per_seq"]
     name_to_features = {
         "input_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
         "input_mask": tf.io.FixedLenFeature([seq_length], tf.int64),
@@ -360,20 +389,70 @@ def decode_record(record):
     return example
 
 
+def get_checkpoint_callback():
+    if tf.io.gfile.exists(FLAGS.checkpoint_save_directory):
+        if not tf.io.gfile.isdir(FLAGS.checkpoint_save_directory):
+            raise ValueError(
+                "`checkpoint_save_directory` should be a directory, "
+                f"but {FLAGS.checkpoint_save_directory} is not a "
+                "directory. Please set `checkpoint_save_directory` as "
+                "a directory."
+            )
+
+        elif FLAGS.skip_restore:
+            # Clear up the directory if users want to skip restoring.
+            tf.io.gfile.rmtree(FLAGS.checkpoint_save_directory)
+    checkpoint_path = FLAGS.checkpoint_save_directory
+    return tf.keras.callbacks.BackupAndRestore(
+        backup_dir=checkpoint_path,
+    )
+
+
+def get_tensorboard_callback():
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_dir = FLAGS.tensorboard_log_path + timestamp
+    return tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
+
 def main(_):
-    print(f"Reading input data from {FLAGS.input_files}")
-    input_filenames = list_filenames_for_arg(FLAGS.input_files)
+    if FLAGS.enable_cloud_logging:
+        # If the job is on cloud, we will use cloud logging.
+        import google.cloud.logging
+
+        tf.keras.utils.disable_interactive_logging()
+        client = google.cloud.logging.Client()
+        client.setup_logging()
+
+    logging.info(f"Reading input data from {FLAGS.input_directory}")
+    if not tf.io.gfile.isdir(FLAGS.input_directory):
+        raise ValueError(
+            "`input_directory` should be a directory, "
+            f"but {FLAGS.input_directory} is not a directory. Please "
+            "set `input_directory` flag as a directory."
+        )
+    files = tf.io.gfile.listdir(FLAGS.input_directory)
+    input_filenames = [FLAGS.input_directory + "/" + file for file in files]
+
     if not input_filenames:
-        print("No input files found. Check `input_files` flag.")
+        logging.info("No input files found. Check `input_directory` flag.")
         sys.exit(1)
 
     vocab = []
-    with open(FLAGS.vocab_file, "r") as vocab_file:
+    with tf.io.gfile.GFile(FLAGS.vocab_file) as vocab_file:
         for line in vocab_file:
             vocab.append(line.strip())
 
-    with open(FLAGS.bert_config_file, "r") as bert_config_file:
-        bert_config = json.loads(bert_config_file.read())
+    model_config = MODEL_CONFIGS[FLAGS.model_size]
+
+    if FLAGS.tpu_name is None:
+        # Use default strategy if not using TPU.
+        strategy = tf.distribute.get_strategy()
+    else:
+        # Connect to TPU and create TPU strategy.
+        resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
+            tpu=FLAGS.tpu_name
+        )
+        strategy = tf.distribute.TPUStrategy(resolver)
 
     # Decode and batch data.
     dataset = tf.data.TFRecordDataset(input_filenames)
@@ -381,41 +460,62 @@ def main(_):
         lambda record: decode_record(record),
         num_parallel_calls=tf.data.experimental.AUTOTUNE,
     )
-    dataset = dataset.batch(FLAGS.batch_size, drop_remainder=True)
+    dataset = dataset.batch(TRAINING_CONFIG["batch_size"], drop_remainder=True)
+    dataset = dataset.repeat()
 
-    # Create a BERT model the input config.
-    model = BertModel(
-        vocab_size=len(vocab),
-        **bert_config,
-    )
-    # Make sure model has been called.
-    model(model.inputs)
-    model.summary()
+    with strategy.scope():
+        # Create a BERT model the input config.
+        model = BertModel(
+            vocab_size=len(vocab),
+            **model_config,
+        )
+        # Make sure model has been called.
+        model(model.inputs)
+        model.summary()
 
-    learning_rate_schedule = LinearDecayWithWarmup(
-        learning_rate=FLAGS.learning_rate,
-        num_warmup_steps=FLAGS.num_warmup_steps,
-        num_train_steps=FLAGS.num_train_steps,
-    )
+        # Allow overriding train steps from the command line for quick testing.
+        if FLAGS.num_train_steps is not None:
+            num_train_steps = FLAGS.num_train_steps
+        else:
+            num_train_steps = TRAINING_CONFIG["num_train_steps"]
+        num_warmup_steps = int(
+            num_train_steps * TRAINING_CONFIG["warmup_percentage"]
+        )
+        learning_rate_schedule = LinearDecayWithWarmup(
+            learning_rate=TRAINING_CONFIG["learning_rate"],
+            num_warmup_steps=num_warmup_steps,
+            num_train_steps=num_train_steps,
+        )
+        optimizer = keras.optimizers.Adam(learning_rate=learning_rate_schedule)
 
-    # Wrap with pretraining heads and call fit.
-    pretraining_model = BertPretrainer(model)
-    pretraining_model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=learning_rate_schedule)
-    )
-    # TODO(mattdangerw): Add TPU strategy support.
-    steps_per_epoch = FLAGS.num_train_steps // FLAGS.epochs
+        pretraining_model = BertPretrainer(model)
+        pretraining_model.compile(
+            optimizer=optimizer,
+        )
+
+    epochs = TRAINING_CONFIG["epochs"]
+    steps_per_epoch = num_train_steps // epochs
+
+    callbacks = []
+    if FLAGS.checkpoint_save_directory:
+        callbacks.append(get_checkpoint_callback())
+    if FLAGS.tensorboard_log_path:
+        callbacks.append(get_tensorboard_callback())
+
     pretraining_model.fit(
-        dataset, epochs=FLAGS.epochs, steps_per_epoch=steps_per_epoch
+        dataset,
+        epochs=epochs,
+        steps_per_epoch=steps_per_epoch,
+        callbacks=callbacks,
     )
 
-    print(f"Saving to {FLAGS.saved_model_output}")
-    model.save(FLAGS.saved_model_output)
+    model_path = FLAGS.saved_model_output
+    logging.info(f"Saving to {FLAGS.saved_model_output}")
+    model.save(model_path)
 
 
 if __name__ == "__main__":
-    flags.mark_flag_as_required("input_files")
+    flags.mark_flag_as_required("input_directory")
     flags.mark_flag_as_required("vocab_file")
-    flags.mark_flag_as_required("bert_config_file")
     flags.mark_flag_as_required("saved_model_output")
     app.run(main)

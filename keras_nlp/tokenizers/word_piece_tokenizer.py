@@ -12,11 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any
-from typing import Dict
 from typing import Iterable
 from typing import List
-from typing import Union
 
 import tensorflow as tf
 import tensorflow_text as tf_text
@@ -83,15 +80,26 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     `lowercase=False`, `strip_accents=False` and `split=False`. In
     this case, inputs should be pre-split string tensors or ragged tensors.
 
+    Tokenizer outputs can either be padded and truncated with a
+    `sequence_length` argument, or left un-truncated. The exact output will
+    depend on the rank of the input tensors.
+
+    If input is a batch of strings (rank > 0):
     By default, the layer will output a `tf.RaggedTensor` where the last
-    dimension of the output is ragged after whitespace splitting and sub-word
-    tokenizing. If `sequence_length` is set, the layer will output a dense
-    `tf.Tensor` where all inputs have been padded or truncated to
-    `sequence_length`. The output dtype can be controlled via the `dtype`
-    argument, which should be either an integer or string type.
+    dimension of the output is ragged. If `sequence_length` is set, the layer
+    will output a dense `tf.Tensor` where all inputs have been padded or
+    truncated to `sequence_length`.
+
+    If input is a scalar string (rank == 0):
+    By default, the layer will output a dense `tf.Tensor` with static shape
+    `[None]`. If `sequence_length` is set, the output will be
+    a dense `tf.Tensor` of shape `[sequence_length]`.
+
+    The output dtype can be controlled via the `dtype` argument, which should
+    be either an integer or string type.
 
     Args:
-        vocabulary: A list of strings or a string string filename path. If
+        vocabulary: A list of strings or a string filename path. If
             passing a list, each element of the list should be a single word
             piece token string. If passing a filename, the file should be a
             plain text file containing a single word piece token per line.
@@ -115,8 +123,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             must be included in the vocab.
 
     References:
-        - [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)
-        - [Song et al., 2020](https://arxiv.org/abs/2012.15524)
+     - [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)
+     - [Song et al., 2020](https://arxiv.org/abs/2012.15524)
 
     Examples:
 
@@ -164,7 +172,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def __init__(
         self,
-        vocabulary: Union[Iterable[str], str] = None,
+        vocabulary=None,
         sequence_length: int = None,
         lowercase: bool = True,
         strip_accents: bool = True,
@@ -182,7 +190,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer and dtype != tf.string:
                 raise ValueError(
-                    "Output dtype must be an integer type of a string. "
+                    "Output dtype must be an integer type or a string. "
                     f"Received: dtype={dtype}"
                 )
 
@@ -251,11 +259,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     def token_to_id(self, token: str) -> int:
         """Convert a string token to an integer id."""
         # This will be slow, but keep memory usage down compared to building a
-        # dict. Assuming the main use case is looking up a few special tokens
+        # . Assuming the main use case is looking up a few special tokens
         # early in the vocab, this should be fine.
         return self.vocabulary.index(token)
 
-    def get_config(self) -> Dict[str, Any]:
+    def get_config(self):
         config = super().get_config()
         config.update(
             {

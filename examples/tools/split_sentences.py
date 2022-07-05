@@ -22,7 +22,7 @@ This script will run muliprocessed, and the number of concurrent process and
 output file shards can be controlled with `--num_jobs` and `--num_shards`.
 
 Usage:
-python create_sentence_split_data.py \
+python examples/tools/create_sentence_split_data.py \
     --input_files ~/datasets/wikipedia,~/datasets/bookscorpus \
     --output_directory ~/datasets/bert-sentence-split-data
 """
@@ -38,7 +38,7 @@ from absl import app
 from absl import flags
 from tensorflow import keras
 
-from examples.bert.bert_utils import list_filenames_for_arg
+from examples.utils.scripting_utils import list_filenames_for_arg
 
 FLAGS = flags.FLAGS
 

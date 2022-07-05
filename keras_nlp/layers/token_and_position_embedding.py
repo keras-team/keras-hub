@@ -26,8 +26,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
     to the sequence dimension.
 
     Args:
-        vocabulary_size: The size of the vocabulary (should be no larger
-            than 999)
+        vocabulary_size: The size of the vocabulary.
         sequence_length: The maximum length of input sequence
         embedding_dim: The output dimension of the embedding layer
         embeddings_initializer: The initializer to use for the Embedding
@@ -41,12 +40,12 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
             used in the vocabulary
             (input_dim should equal size of vocabulary + 1).
 
-    Example:
+    Examples:
     ```python
     seq_length = 50
     vocab_size = 5000
     embed_dim = 128
-    inputs = tf.keras.Input(shape=(seq_length,))
+    inputs = keras.Input(shape=(seq_length,))
     embedding_layer = keras_nlp.layers.TokenAndPositionEmbedding(
         vocabulary_size=vocab_size,
         sequence_length=seq_length,
@@ -81,15 +80,22 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         self.vocabulary_size = int(vocabulary_size)
         self.sequence_length = int(sequence_length)
         self.embedding_dim = int(embedding_dim)
+        self.embeddings_initializer = keras.initializers.get(
+            embeddings_initializer
+        )
         self.token_embedding = keras.layers.Embedding(
             vocabulary_size,
             embedding_dim,
-            embeddings_initializer=embeddings_initializer,
+            embeddings_initializer=self.embeddings_initializer,
             mask_zero=mask_zero,
+            name="token_embedding"
+            + str(keras.backend.get_uid("token_embedding")),
         )
         self.position_embedding = keras_nlp.layers.PositionEmbedding(
             sequence_length=sequence_length,
-            initializer=embeddings_initializer,
+            initializer=self.embeddings_initializer,
+            name="position_embedding"
+            + str(keras.backend.get_uid("position_embedding")),
         )
         self.supports_masking = self.token_embedding.supports_masking
 
@@ -101,7 +107,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
                 "sequence_length": self.sequence_length,
                 "embedding_dim": self.embedding_dim,
                 "embeddings_initializer": keras.initializers.serialize(
-                    self.token_embedding.embeddings_initializer
+                    self.embeddings_initializer
                 ),
                 "mask_zero": self.token_embedding.mask_zero,
             },
