@@ -63,6 +63,8 @@ class RandomSwaps(keras.layers.Layer):
         self.swaps = swaps
         self.seed = seed
         self._random_generator = backend.RandomGenerator(seed)
+        if self.swaps < 0:
+            raise ValueError("Swaps must be non negative")
 
     @tf.function
     def call(self, inputs):
