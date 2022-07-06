@@ -83,7 +83,7 @@ class RandomDeletionTest(tf.test.TestCase):
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
 
-        exp_output =  [[b'Hey', b'I'],[b'and', b'Tensorflow']]
+        exp_output = [[b"Hey", b"I"], [b"and", b"Tensorflow"]]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -99,7 +99,7 @@ class RandomDeletionTest(tf.test.TestCase):
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
 
-        exp_output = [[b'Hey', b'I'],[b'and', b'Tensorflow']]
+        exp_output = [[b"Hey", b"I"], [b"and", b"Tensorflow"]]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -114,8 +114,4 @@ class RandomDeletionTest(tf.test.TestCase):
         outputs = augmenter(tf.strings.split(inputs))
         model = tf.keras.Model(inputs, outputs)
         model_output = model(input_data)
-        self.assertAllEqual(
-            model_output,
-            [[b'I', b'like'],
-            [b'Keras', b'and']]
-        )
+        self.assertAllEqual(model_output, [[b"I", b"like"], [b"Keras", b"and"]])
