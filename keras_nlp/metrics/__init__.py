@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from keras_nlp.metrics.bleu import Bleu
+from keras_nlp.metrics.edit_distance import EditDistance
 from keras_nlp.metrics.perplexity import Perplexity
 from keras_nlp.metrics.rouge_l import RougeL
 from keras_nlp.metrics.rouge_n import RougeN

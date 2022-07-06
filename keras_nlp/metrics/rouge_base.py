@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""ROUGE metric implementation based on `keras.metrics.Metric`."""
+"""ROUGE metric."""
 
 
 import types
