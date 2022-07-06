@@ -25,6 +25,23 @@ def _decode_strings_to_utf8(inputs):
         return [_decode_strings_to_utf8(x) for x in inputs]
 
 
+def tensor_to_list(inputs):
+    """Converts a tensor to nested lists.
+
+    Args:
+        inputs: Input tensor, or dict/list/tuple of input tensors.
+    """
+    if not isinstance(inputs, (tf.RaggedTensor, tf.Tensor)):
+        inputs = tf.convert_to_tensor(inputs)
+    if isinstance(inputs, tf.RaggedTensor):
+        list_outputs = inputs.to_list()
+    elif isinstance(inputs, tf.Tensor):
+        list_outputs = inputs.numpy()
+        if inputs.shape.rank != 0:
+            list_outputs = list_outputs.tolist()
+    return list_outputs
+
+
 def tensor_to_string_list(inputs):
     """Detokenize and convert tensor to nested lists of python strings.
 
@@ -36,12 +53,5 @@ def tensor_to_string_list(inputs):
         *args: Additional positional arguments.
         **kwargs: Additional keyword arguments.
     """
-    if not isinstance(inputs, (tf.RaggedTensor, tf.Tensor)):
-        inputs = tf.convert_to_tensor(inputs)
-    if isinstance(inputs, tf.RaggedTensor):
-        list_outputs = inputs.to_list()
-    elif isinstance(inputs, tf.Tensor):
-        list_outputs = inputs.numpy()
-        if inputs.shape.rank != 0:
-            list_outputs = list_outputs.tolist()
+    list_outputs = tensor_to_list(inputs)
     return _decode_strings_to_utf8(list_outputs)
