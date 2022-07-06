@@ -69,3 +69,53 @@ class RandomDeletionTest(tf.test.TestCase):
             restored_augmenter.get_config(),
             {**config, **expected_config_subset},
         )
+
+    def test_augment_first_batch_second(self):
+        tf.random.get_global_generator().reset_from_seed(30)
+        tf.random.set_seed(30)
+        augmenter = random_deletion.RandomDeletion(
+            rate=0.4, max_deletions=1, seed=42
+        )
+        inputs = ["Hey I like", "Keras and Tensorflow"]
+        split = tf.strings.split(inputs)
+        ds = tf.data.Dataset.from_tensor_slices(split)
+        ds = ds.map(augmenter)
+        ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
+        output = ds.take(1).get_single_element()
+
+        exp_output =  [[b'Hey', b'I'],[b'and', b'Tensorflow']]
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
+
+    def test_batch_first_augment_second(self):
+        tf.random.get_global_generator().reset_from_seed(30)
+        tf.random.set_seed(30)
+        augmenter = random_deletion.RandomDeletion(
+            rate=0.4, max_deletions=1, seed=42
+        )
+        inputs = ["Hey I like", "Keras and Tensorflow"]
+        split = tf.strings.split(inputs)
+        ds = tf.data.Dataset.from_tensor_slices(split)
+        ds = ds.batch(5).map(augmenter)
+        output = ds.take(1).get_single_element()
+
+        exp_output = [[b'Hey', b'I'],[b'and', b'Tensorflow']]
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
+
+    def test_functional_model(self):
+        tf.random.get_global_generator().reset_from_seed(30)
+        tf.random.set_seed(30)
+        input_data = tf.constant(["Hey I like", "Keras and Tensorflow"])
+        augmenter = random_deletion.RandomDeletion(
+            rate=0.4, max_deletions=1, seed=42
+        )
+        inputs = tf.keras.Input(dtype="string", shape=())
+        outputs = augmenter(tf.strings.split(inputs))
+        model = tf.keras.Model(inputs, outputs)
+        model_output = model(input_data)
+        self.assertAllEqual(
+            model_output,
+            [[b'I', b'like'],
+            [b'Keras', b'and']]
+        )
