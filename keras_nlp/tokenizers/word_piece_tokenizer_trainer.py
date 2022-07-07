@@ -13,10 +13,8 @@
 # limitations under the License.
 """Trainer for Word Piece Tokenizer."""
 
-from collections import Counter
-
-import tensorflow as tf
 import tensorflow_text as tf_text
+import tensoUrflow as tf
 from tensorflow_text.tools.wordpiece_vocab import (
     wordpiece_tokenizer_learner_lib as learner,
 )
@@ -29,30 +27,33 @@ from keras_nlp.tokenizers.word_piece_tokenizer import (
 
 def compute_word_piece_vocabulary(
     data,
-    vocabulary_size: int,
-    split=True,
-    lowercase: bool = True,
-    strip_accents: bool = True,
+    vocabulary_size,
     vocabulary_output_file=None,
-    reserved_tokens=["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]"],
+    lowercase=True,
+    strip_accents=True,
+    split=True,
     suffix_indicator="##",
+    reserved_tokens=["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]"],
 ):
     """A utility to train a Word Piece vocabulary.
 
     This function can be used to train a Word Piece vocabulary from an input
-    dataset, or a list of text strings.
+    dataset, or a list of filenames.
 
     Args:
-        data: A tf.data.Dataset, or a list of text strings.
+        data: A tf.data.Dataset, or a list of filenames.
         vocabulary_size: The maximum size of a vocabulary to be trained.
+        vocabulary_output_file: The location to write a vocabulary file.
         lowercase: If true, the input text will be first lowered before
             tokenization.
         strip_accents: If true, all accent marks will be removed from text
             before tokenization.
-        vocabulary_output_file: The location to write a vocabulary file.
-        reserved_tokens: A list of tokens that must be included in the vocabulary.
+        split: If true, the input text would be split by whitespace and
+            punctuation, while keeping the punctuation. Required when reading
+            from a list of filenames.
         suffix_indicator: The characters prepended to a wordpiece to indicate
             that it is a suffix to another subword.
+        reserved_tokens: A list of tokens that must be included in the vocabulary.
 
     Returns:
         Returns a list of vocabulary terms.
@@ -64,24 +65,25 @@ def compute_word_piece_vocabulary(
             "The `data` argument must be either `tf.data.Dataset` or `list`. "
             f"Recieved: {type(data)}."
         )
-
-    word_counts = Counter()
-
-    for text in data:
-        # Preprocess, lowercase, strip and split input data.
-        if isinstance(text, (tf.Tensor, tf.RaggedTensor)):
-            if text.dtype != tf.string:
-                raise ValueError(
-                    "The dataset elements in `data` must have string dtype. "
-                    f"Recieved: {text.dtype}."
-                )
-        elif not isinstance(text, str):
+    if isinstance(data, list):
+        if not split:
             raise ValueError(
-                "The elements in `data` must be string type. "
-                f"Recieved: {type(text)}."
+                "When learning a vocab from files, `split` must be `True`. "
+                "To compute a vocabulary with custom split rules, load your "
+                "data as a dataset, split it, and pass it to "
+                "`compute_word_piece_vocabulary()` with split=False."
             )
-        text = tf.convert_to_tensor(text)
+        data = tf.data.TextLineDataset(data)
 
+    def preprocess(text):
+        """Takes in a dataset element and preprocesses it."""
+        # Check for correct types.
+        if text.dtype != tf.string:
+            raise ValueError(
+                "The dataset elements in `data` must have string dtype. "
+                f"Recieved: {text.dtype}."
+            )
+        # Preprocess, lowercase, strip and split input data.
         if text.shape.rank == 0:
             text = tf.expand_dims(text, 0)
         if lowercase:
@@ -97,16 +99,16 @@ def compute_word_piece_vocabulary(
                 delim_regex_pattern=WHITESPACE_AND_PUNCTUATION_REGEX,
                 keep_delim_regex_pattern=PUNCTUATION_REGEX,
             )
-        # Generate word counts.
-        word_counts += learner.count_words(text)
+        return text
+
+    words_data = data.map(preprocess)
+    word_counts = learner.count_words(words_data)
     # Train tokenizer.
-    word_counts = list(word_counts.items())
-    include_joiner_token = suffix_indicator is not None
     vocab = learner.learn(
         word_counts,
         vocab_size=vocabulary_size,
         reserved_tokens=reserved_tokens,
-        include_joiner_token=include_joiner_token,
+        include_joiner_token=True,
         joiner=suffix_indicator,
     )
 
@@ -115,4 +117,5 @@ def compute_word_piece_vocabulary(
         # Write vocab to file.
         with open(vocabulary_output_file, "w") as vocab_file:
             vocab_file.write(vocab_text)
-    return vocab
+    else:
+        return vocab

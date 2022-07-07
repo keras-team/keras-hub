@@ -56,8 +56,10 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         )
         self.assertAllEqual(set(vocab), set(test_output))
 
-    def test_string_input(self):
-        test_text = ["bat mat cat sat pat."]
+    def test_filenames_input(self):
+        test_text = "bat mat cat sat pat."
+        with open("test.txt", "w+") as f:
+            f.write(test_text + "\n")
         test_output = [
             "[PAD]",
             "[CLS]",
@@ -83,27 +85,35 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             "##t",
         ]
         vocab = compute_word_piece_vocabulary(
-            test_text,
+            ["test.txt"],
             10,
         )
         self.assertAllEqual(set(vocab), set(test_output))
+        os.remove("test.txt")
 
-    def test_invalid_input(self):
-        test_text_invalid = [1, 2, 3, 4]
+    def test_filenames_without_split(self):
+        test_text = "bat mat cat sat pat."
+        with open("test.txt", "w+") as f:
+            f.write(test_text + "\n")
+
         with self.assertRaisesRegex(
             ValueError,
-            "The elements in `data` must be string type. "
-            "Recieved: <class 'int'>.",
+            "When learning a vocab from files, `split` must be `True`. "
+            "To compute a vocabulary with custom split rules, load your "
+            "data as a dataset, split it, and pass it to "
+            r"`compute_word_piece_vocabulary\(\)` with split=False.",
         ):
-            compute_word_piece_vocabulary(test_text_invalid, 10)
+            compute_word_piece_vocabulary(["test.txt"], 10, split=False)
+        os.remove("test.txt")
+
+    def test_invalid_input(self):
+        test_text_invalid = tf.data.Dataset.from_tensor_slices([1, 2, 3, 4])
         with self.assertRaisesRegex(
             ValueError,
             "The dataset elements in `data` must have string dtype. "
             "Recieved: <dtype: 'int32'>.",
         ):
-            compute_word_piece_vocabulary(
-                tf.data.Dataset.from_tensor_slices(test_text_invalid), 10
-            )
+            compute_word_piece_vocabulary(test_text_invalid, 10)
         with self.assertRaisesRegex(
             ValueError,
             "The `data` argument must be either `tf.data.Dataset` or `list`. "
@@ -112,7 +122,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             compute_word_piece_vocabulary(4, 4)
 
     def test_lowercase(self):
-        test_text = ["Bat Mat Cat Sat Pat."]
+        test_text = tf.data.Dataset.from_tensor_slices(["Bat Mat Cat Sat Pat."])
         test_output = [
             "[PAD]",
             "[CLS]",
@@ -142,7 +152,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         self.assertAllEqual(set(vocab), set(test_output))
 
     def test_skip_lowercase(self):
-        test_text = ["Bat Mat Cat Sat Pat."]
+        test_text = tf.data.Dataset.from_tensor_slices(["Bat Mat Cat Sat Pat."])
         test_output = [
             "[PAD]",
             "[CLS]",
@@ -172,9 +182,11 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         self.assertAllEqual(set(vocab), set(test_output))
 
     def test_split(self):
-        test_text = [
-            "This is a long line that would not be split up, since it exceeds maximum length."
-        ]
+        test_text = tf.data.Dataset.from_tensor_slices(
+            [
+                "This is a long line that would not be split up, since it exceeds maximum length."
+            ]
+        )
         # The token would be removed for being too long.
         vocab = compute_word_piece_vocabulary(
             test_text, 20, split=False, reserved_tokens=[]
@@ -182,17 +194,21 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         self.assertAllEqual(vocab, [])
 
     def test_skip_split(self):
-        test_text = ["This string: would be split up."]
-        test_text_split = [
-            "This",
-            "string",
-            ":",
-            "would",
-            "be",
-            "split",
-            "up",
-            ".",
-        ]
+        test_text = tf.data.Dataset.from_tensor_slices(
+            ["This string: would be split up."]
+        )
+        test_text_split = tf.data.Dataset.from_tensor_slices(
+            [
+                "This",
+                "string",
+                ":",
+                "would",
+                "be",
+                "split",
+                "up",
+                ".",
+            ]
+        )
         output_vocab_1 = compute_word_piece_vocabulary(
             test_text, 20, split=True, lowercase=False, strip_accents=False
         )
@@ -206,7 +222,9 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         self.assertAllEqual(set(output_vocab_1), set(output_vocab_2))
 
     def test_strip_accents(self):
-        test_text = ["áááá éááá íááá óááá úááá"]
+        test_text = tf.data.Dataset.from_tensor_slices(
+            ["áááá éááá íááá óááá úááá"]
+        )
         output = [
             "a",
             "e",
@@ -226,7 +244,9 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         self.assertAllEqual(set(vocab), set(output))
 
     def test_skip_strip_accents(self):
-        test_text = ["áááá éááá íááá óááá úááá"]
+        test_text = tf.data.Dataset.from_tensor_slices(
+            ["áááá éááá íááá óááá úááá"]
+        )
         output = [
             "á",
             "é",
@@ -246,7 +266,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         self.assertAllEqual(set(vocab), set(output))
 
     def test_output_file(self):
-        test_text = ["Bat Mat Cat Sat Pat."]
+        test_text = tf.data.Dataset.from_tensor_slices(["Bat Mat Cat Sat Pat."])
         test_output = [
             "[PAD]",
             "[CLS]",
@@ -272,7 +292,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             "##t",
         ]
 
-        vocab = compute_word_piece_vocabulary(
+        compute_word_piece_vocabulary(
             test_text, 20, vocabulary_output_file="test.txt"
         )
         vocab_from_file = []
@@ -280,14 +300,15 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             for line in f:
                 vocab_from_file.append(line.strip())
         self.assertAllEqual(set(vocab_from_file), set(test_output))
-        self.assertAllEqual(set(vocab_from_file), set(vocab))
         os.remove("test.txt")
 
     def test_reserved_tokens(self):
         # This dummy text/token would be removed for being too long.
-        test_text = [
-            "The learner requires at least one input here, but this should be removed."
-        ]
+        test_text = tf.data.Dataset.from_tensor_slices(
+            [
+                "The learner requires at least one input here, but this should be removed."
+            ]
+        )
         output = ["token1", "token2", "token3", "token4"]
         vocab = compute_word_piece_vocabulary(
             test_text, 20, reserved_tokens=output, split=False
@@ -295,7 +316,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         self.assertAllEqual(set(vocab), set(output))
 
     def test_suffix_indicator(self):
-        test_text = ["bat mat cat sat pat."]
+        test_text = tf.data.Dataset.from_tensor_slices(["bat mat cat sat pat."])
         test_output = [
             "[PAD]",
             "[CLS]",
