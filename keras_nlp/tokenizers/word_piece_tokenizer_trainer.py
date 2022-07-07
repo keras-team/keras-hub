@@ -25,7 +25,6 @@ from keras_nlp.tokenizers.word_piece_tokenizer import PUNCTUATION_REGEX
 from keras_nlp.tokenizers.word_piece_tokenizer import (
     WHITESPACE_AND_PUNCTUATION_REGEX,
 )
-from keras_nlp.tokenizers.word_piece_tokenizer import WHITESPACE_REGEX
 
 
 def compute_word_piece_vocabulary(
