@@ -48,10 +48,11 @@ def compute_word_piece_vocabulary(
             tokenization.
         strip_accents: If true, all accent marks will be removed from text
             before tokenization.
-        split: If true, the input text would be split by whitespace and
-            punctuation, and punctuations would be kept. If false, dataset input
-            should be split before calling the layer. `split` is required to be
-            `True` when `data` is a list of filenames.
+        split: If true, input will be split on whitespace and punctuation
+            marks, and all punctuation marks will be kept as tokens. If false,
+            input should be split ("pre-tokenized") before calling the
+            tokenizer, and passed as a dense or ragged tensor of whole words.
+            `split` is required to be`True` when `data` is a list of filenames.
         suffix_indicator: The characters prepended to a wordpiece to indicate
             that it is a suffix to another subword.
         reserved_tokens: A list of tokens that must be included in the vocabulary.
