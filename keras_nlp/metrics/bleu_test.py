@@ -52,6 +52,20 @@ class BleuTest(tf.test.TestCase):
         bleu_val = bleu(y_true, y_pred)
         self.assertAlmostEqual(bleu_val.numpy(), 0.243, delta=1e-3)
 
+    def test_2d_list_input(self):
+        bleu = Bleu()
+        y_true = [
+            [["He eats a sweet apple."]],
+            [["Silicon Valley is one of my favourite shows!"]],
+        ]
+        y_pred = [
+            ["He He He eats sweet apple which is a fruit."],
+            ["I love Silicon Valley, it's one of my favourite shows."],
+        ]
+
+        bleu_val = bleu(y_true, y_pred)
+        self.assertAlmostEqual(bleu_val.numpy(), 0.243, delta=1e-3)
+
     def test_1d_tensor_input(self):
         bleu = Bleu()
         y_true = tf.ragged.constant(
@@ -64,6 +78,24 @@ class BleuTest(tf.test.TestCase):
             [
                 "He He He eats sweet apple which is a fruit.",
                 "I love Silicon Valley, it's one of my favourite shows.",
+            ]
+        )
+
+        bleu_val = bleu(y_true, y_pred)
+        self.assertAlmostEqual(bleu_val.numpy(), 0.243, delta=1e-3)
+
+    def test_2d_tensor_input(self):
+        bleu = Bleu()
+        y_true = tf.constant(
+            [
+                [["He eats a sweet apple."]],
+                [["Silicon Valley is one of my favourite shows!"]],
+            ]
+        )
+        y_pred = tf.constant(
+            [
+                ["He He He eats sweet apple which is a fruit."],
+                ["I love Silicon Valley, it's one of my favourite shows."],
             ]
         )
 

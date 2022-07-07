@@ -54,7 +54,7 @@ class Bleu(keras.metrics.Metric):
     """BLEU metric.
 
     This class implements the BLEU metric. BLEU is generally used to evaluate
-    machine translation systems. by default, this implementation replicates
+    machine translation systems. By default, this implementation replicates
     SacreBLEU, but user-defined tokenizers can be passed to deal with other
     languages.
 
@@ -63,13 +63,15 @@ class Bleu(keras.metrics.Metric):
     n-grams so as to not give a high score to a (reference, prediction) pair
     with redundant, repeated tokens. Secondly, BLEU score tends to reward
     shorter predictions more, which is why a brevity penalty is applied to
-    penalise short predictions.
+    penalise short predictions. For more details, see the following article:
+    https://cloud.google.com/translate/automl/docs/evaluate#bleu.
 
     Note on input shapes:
-    For `y_true` and `y_pred`, this class supports the following shapes:
-    If `y_pred` is a scalar value, `y_true` has to be a 1D dense tensor.
-    For batched inputs, if `y_pred` is a 1D dense tensor, `y_true` has to be
-    a dense/ragged tensor with shape `(batch_size, None)`.
+    `y_pred` can be a scalar (of shape `()`), or a dense tensor of shape
+    `(batch_size,)` or `(batch_size, 1)`. `y_true` can either be a dense tensor
+    of shape `(num_references,)`, or a ragged tensor of shapes
+    `(batch_size, None)` or `(batch_size, None, 1)`. This is because every
+    sample can have multiple references.
 
     Args:
         tokenizer: callable. A function that takes a string `tf.RaggedTensor`
@@ -171,7 +173,7 @@ class Bleu(keras.metrics.Metric):
         https://github.com/tensorflow/nmt/blob/master/nmt/scripts/bleu.py.
 
         Args:
-            segment: string. Text segment from which n-grams will be
+            segment: list. Text segment from which n-grams will be
                 extracted.
             max_order: int. Maximum length in tokens of the n-grams returned
                 by this methods.
@@ -286,10 +288,17 @@ class Bleu(keras.metrics.Metric):
                 return inputs[tf.newaxis]
             elif inputs.shape.rank == base_rank + 1:
                 return inputs
+            elif inputs.shape.rank == base_rank + 2:
+                if tf.shape(inputs)[-1] != 1:
+                    raise ValueError(
+                        f"{tensor_name} is of rank {input.shape.rank}. The "
+                        f"last dimension must be of size 1."
+                    )
+                return tf.squeeze(inputs, axis=-1)
             else:
                 raise ValueError(
-                    f"{tensor_name} must be of rank {base_rank} or {base_rank+1}. "
-                    f"Found rank: {inputs.shape.rank}"
+                    f"{tensor_name} must be of rank {base_rank}, {base_rank+1} "
+                    f"or {base_rank+2}. Found rank: {inputs.shape.rank}"
                 )
 
         def calculate_bleu_score(references, translation):
