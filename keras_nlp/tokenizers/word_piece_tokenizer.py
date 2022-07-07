@@ -109,9 +109,10 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             tokenization.
         strip_accents: If true, all accent marks will be removed from text
             before tokenization.
-        split: If true, input will be split according to `split_pattern`
-            and `keep_pattern`. If false, input should be split before calling
-            the layer.
+        split: If true, input will be split on whitespace and punctuation
+            marks, and all punctuation marks will be kept as tokens. If false,
+            input should be split ("pre-tokenized") before calling the
+            tokenizer, and passed as a dense or ragged tensor of whole words.
         suffix_indicator: The characters prepended to a wordpiece to indicate
             that it is a suffix to another subword.
         oov_token: The string value to substitute for an unknown token. It
