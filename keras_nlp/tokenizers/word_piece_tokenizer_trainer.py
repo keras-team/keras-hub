@@ -50,8 +50,8 @@ def compute_word_piece_vocabulary(
             before tokenization.
         split: If true, the input text would be split by whitespace and
             punctuation, and punctuations would be kept. If false, dataset input
-            should be split before calling the layer. `split` is required to be 
-            `True` when `data` is a list of filenames. 
+            should be split before calling the layer. `split` is required to be
+            `True` when `data` is a list of filenames.
         suffix_indicator: The characters prepended to a wordpiece to indicate
             that it is a suffix to another subword.
         reserved_tokens: A list of tokens that must be included in the vocabulary.
