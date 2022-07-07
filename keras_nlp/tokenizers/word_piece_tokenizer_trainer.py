@@ -14,7 +14,7 @@
 """Trainer for Word Piece Tokenizer."""
 
 import tensorflow_text as tf_text
-import tensoUrflow as tf
+import tensorflow as tf
 from tensorflow_text.tools.wordpiece_vocab import (
     wordpiece_tokenizer_learner_lib as learner,
 )
