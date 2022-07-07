@@ -151,7 +151,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         with open("test.txt", "r") as f:
             for line in f:
                 vocab_from_file.append(line.strip())
-        self.assertAllEqual(set(vocab_from_file), set(test_output))
+        self.assertAllEqual(vocab_from_file, test_output)
         os.remove("test.txt")
 
     def test_reserved_tokens(self):
@@ -165,7 +165,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         vocab = compute_word_piece_vocabulary(
             test_text, 20, reserved_tokens=output, split=False
         )
-        self.assertAllEqual(set(vocab), set(output))
+        self.assertAllEqual(vocab, output)
 
     def test_suffix_indicator(self):
         test_text = tf.data.Dataset.from_tensor_slices(["baa maa caa saa aaa"])
@@ -173,4 +173,4 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         vocab = compute_word_piece_vocabulary(
             test_text, 8, suffix_indicator="@@", reserved_tokens=[]
         )
-        self.assertAllEqual(set(vocab), set(test_output))
+        self.assertAllEqual(vocab, test_output)
