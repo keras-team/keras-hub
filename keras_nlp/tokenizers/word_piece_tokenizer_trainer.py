@@ -13,8 +13,8 @@
 # limitations under the License.
 """Trainer for Word Piece Tokenizer."""
 
-import tensorflow_text as tf_text
 import tensorflow as tf
+import tensorflow_text as tf_text
 from tensorflow_text.tools.wordpiece_vocab import (
     wordpiece_tokenizer_learner_lib as learner,
 )
@@ -49,8 +49,9 @@ def compute_word_piece_vocabulary(
         strip_accents: If true, all accent marks will be removed from text
             before tokenization.
         split: If true, the input text would be split by whitespace and
-            punctuation, while keeping the punctuation. Required when reading
-            from a list of filenames.
+            punctuation, and punctuations would be kept. If false, dataset input
+            should be split before calling the layer. `split` is required to be 
+            `True` when `data` is a list of filenames. 
         suffix_indicator: The characters prepended to a wordpiece to indicate
             that it is a suffix to another subword.
         reserved_tokens: A list of tokens that must be included in the vocabulary.
