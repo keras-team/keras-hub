@@ -24,75 +24,25 @@ from keras_nlp.tokenizers.word_piece_tokenizer_trainer import (
 
 class WordPieceTokenizerTrainerTest(tf.test.TestCase):
     def test_dataset_input(self):
-        test_text = ["bat mat cat sat pat."]
-        test_output = [
-            "[PAD]",
-            "[CLS]",
-            "[SEP]",
-            "[UNK]",
-            "[MASK]",
-            ".",
-            "a",
-            "b",
-            "c",
-            "m",
-            "p",
-            "s",
-            "t",
-            "##at",
-            "##.",
-            "##a",
-            "##b",
-            "##c",
-            "##m",
-            "##p",
-            "##s",
-            "##t",
-        ]
+        test_text = ["baa maa caa saa aaa"]
+        test_output = ["a", "b", "c", "m", "s", "##aa", "##a", "##b"]
         data = tf.data.Dataset.from_tensor_slices(test_text)
-        vocab = compute_word_piece_vocabulary(
-            data,
-            10,
-        )
-        self.assertAllEqual(set(vocab), set(test_output))
+        vocab = compute_word_piece_vocabulary(data, 8, reserved_tokens=[])
+        self.assertAllEqual(vocab, test_output)
 
     def test_filenames_input(self):
-        test_text = "bat mat cat sat pat."
+        test_text = "baa maa caa saa aaa"
         with open("test.txt", "w+") as f:
             f.write(test_text + "\n")
-        test_output = [
-            "[PAD]",
-            "[CLS]",
-            "[SEP]",
-            "[UNK]",
-            "[MASK]",
-            ".",
-            "a",
-            "b",
-            "c",
-            "m",
-            "p",
-            "s",
-            "t",
-            "##at",
-            "##.",
-            "##a",
-            "##b",
-            "##c",
-            "##m",
-            "##p",
-            "##s",
-            "##t",
-        ]
+        test_output = ["a", "b", "c", "m", "s", "##aa", "##a", "##b"]
         vocab = compute_word_piece_vocabulary(
-            ["test.txt"],
-            10,
+            ["test.txt"], 8, reserved_tokens=[]
         )
-        self.assertAllEqual(set(vocab), set(test_output))
+        self.assertAllEqual(vocab, test_output)
         os.remove("test.txt")
 
     def test_filenames_without_split(self):
-        test_text = "bat mat cat sat pat."
+        test_text = "baa maa caa saa aaa"
         with open("test.txt", "w+") as f:
             f.write(test_text + "\n")
 
@@ -122,69 +72,27 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             compute_word_piece_vocabulary(4, 4)
 
     def test_lowercase(self):
-        test_text = tf.data.Dataset.from_tensor_slices(["Bat Mat Cat Sat Pat."])
-        test_output = [
-            "[PAD]",
-            "[CLS]",
-            "[SEP]",
-            "[UNK]",
-            "[MASK]",
-            ".",
-            "b",
-            "c",
-            "m",
-            "p",
-            "s",
-            "a",
-            "t",
-            "##at",
-            "##.",
-            "##b",
-            "##c",
-            "##m",
-            "##p",
-            "##s",
-            "##a",
-            "##t",
-        ]
+        test_text = tf.data.Dataset.from_tensor_slices(["BaA Maa Caa Saa AAa"])
+        test_output = ["a", "b", "c", "m", "s", "##aa", "##a", "##b"]
 
-        vocab = compute_word_piece_vocabulary(test_text, 20, lowercase=True)
-        self.assertAllEqual(set(vocab), set(test_output))
+        vocab = compute_word_piece_vocabulary(
+            test_text, 8, lowercase=True, reserved_tokens=[]
+        )
+        self.assertAllEqual(vocab, test_output)
 
     def test_skip_lowercase(self):
-        test_text = tf.data.Dataset.from_tensor_slices(["Bat Mat Cat Sat Pat."])
-        test_output = [
-            "[PAD]",
-            "[CLS]",
-            "[SEP]",
-            "[UNK]",
-            "[MASK]",
-            ".",
-            "B",
-            "C",
-            "M",
-            "P",
-            "S",
-            "a",
-            "t",
-            "##at",
-            "##.",
-            "##B",
-            "##C",
-            "##M",
-            "##P",
-            "##S",
-            "##a",
-            "##t",
-        ]
+        test_text = tf.data.Dataset.from_tensor_slices(["BAA MAA CAA SAA AAA"])
+        test_output = ["A", "B", "C", "M", "S", "##AA", "##A", "##B"]
 
-        vocab = compute_word_piece_vocabulary(test_text, 20, lowercase=False)
-        self.assertAllEqual(set(vocab), set(test_output))
+        vocab = compute_word_piece_vocabulary(
+            test_text, 8, lowercase=False, reserved_tokens=[]
+        )
+        self.assertAllEqual(vocab, test_output)
 
     def test_split(self):
         test_text = tf.data.Dataset.from_tensor_slices(
             [
-                "This is a long line that would not be split up, since it exceeds maximum length."
+                "This is a long line that isn't split up, and it exceeds maximum length."
             ]
         )
         # The token would be removed for being too long.
@@ -198,16 +106,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             ["This string: would be split up."]
         )
         test_text_split = tf.data.Dataset.from_tensor_slices(
-            [
-                "This",
-                "string",
-                ":",
-                "would",
-                "be",
-                "split",
-                "up",
-                ".",
-            ]
+            ["This", "string", ":", "would", "be", "split", "up", "."]
         )
         output_vocab_1 = compute_word_piece_vocabulary(
             test_text, 20, split=True, lowercase=False, strip_accents=False
@@ -219,81 +118,34 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             lowercase=False,
             strip_accents=False,
         )
-        self.assertAllEqual(set(output_vocab_1), set(output_vocab_2))
+        self.assertAllEqual(output_vocab_1, output_vocab_2)
 
     def test_strip_accents(self):
         test_text = tf.data.Dataset.from_tensor_slices(
             ["áááá éááá íááá óááá úááá"]
         )
-        output = [
-            "a",
-            "e",
-            "i",
-            "o",
-            "u",
-            "##aaa",
-            "##a",
-            "##e",
-            "##i",
-            "##o",
-            "##u",
-        ]
+        output = ["a", "e", "i", "o", "u", "##aaa", "##a", "##e"]
         vocab = compute_word_piece_vocabulary(
-            test_text, 20, strip_accents=True, reserved_tokens=[]
+            test_text, 8, strip_accents=True, reserved_tokens=[]
         )
-        self.assertAllEqual(set(vocab), set(output))
+        self.assertAllEqual(vocab, output)
 
     def test_skip_strip_accents(self):
         test_text = tf.data.Dataset.from_tensor_slices(
             ["áááá éááá íááá óááá úááá"]
         )
-        output = [
-            "á",
-            "é",
-            "í",
-            "ó",
-            "ú",
-            "##ááá",
-            "##á",
-            "##é",
-            "##í",
-            "##ó",
-            "##ú",
-        ]
+        output = ["á", "é", "í", "ó", "ú", "##ááá", "##á", "##é"]
         vocab = compute_word_piece_vocabulary(
-            test_text, 20, strip_accents=False, reserved_tokens=[]
+            test_text, 8, strip_accents=False, reserved_tokens=[]
         )
-        self.assertAllEqual(set(vocab), set(output))
+        self.assertAllEqual(vocab, output)
 
     def test_output_file(self):
-        test_text = tf.data.Dataset.from_tensor_slices(["Bat Mat Cat Sat Pat."])
-        test_output = [
-            "[PAD]",
-            "[CLS]",
-            "[SEP]",
-            "[UNK]",
-            "[MASK]",
-            ".",
-            "b",
-            "c",
-            "m",
-            "p",
-            "s",
-            "a",
-            "t",
-            "##at",
-            "##.",
-            "##b",
-            "##c",
-            "##m",
-            "##p",
-            "##s",
-            "##a",
-            "##t",
-        ]
+        test_text = tf.data.Dataset.from_tensor_slices(["BaA Maa Caa Saa AAa"])
+        test_output = ["a", "b", "c", "m", "s", "##aa", "##a", "##b"]
 
         compute_word_piece_vocabulary(
-            test_text, 20, vocabulary_output_file="test.txt"
+            test_text, 8, vocabulary_output_file="test.txt", reserved_tokens=[]
         )
         vocab_from_file = []
         with open("test.txt", "r") as f:
@@ -316,32 +168,9 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         self.assertAllEqual(set(vocab), set(output))
 
     def test_suffix_indicator(self):
-        test_text = tf.data.Dataset.from_tensor_slices(["bat mat cat sat pat."])
-        test_output = [
-            "[PAD]",
-            "[CLS]",
-            "[SEP]",
-            "[UNK]",
-            "[MASK]",
-            ".",
-            "a",
-            "b",
-            "c",
-            "m",
-            "p",
-            "s",
-            "t",
-            "@@at",
-            "@@.",
-            "@@a",
-            "@@b",
-            "@@c",
-            "@@m",
-            "@@p",
-            "@@s",
-            "@@t",
-        ]
+        test_text = tf.data.Dataset.from_tensor_slices(["baa maa caa saa aaa"])
+        test_output = ["a", "b", "c", "m", "s", "@@aa", "@@a", "@@b"]
         vocab = compute_word_piece_vocabulary(
-            test_text, 10, suffix_indicator="@@"
+            test_text, 8, suffix_indicator="@@", reserved_tokens=[]
         )
         self.assertAllEqual(set(vocab), set(test_output))
