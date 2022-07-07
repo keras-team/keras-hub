@@ -13,23 +13,30 @@
 # limitations under the License.
 """Trainer for Word Piece Tokenizer."""
 
-import tensorflow as tf
-import tensorflow_text as tf_text
-from tensorflow_text.tools.wordpiece_vocab import wordpiece_tokenizer_learner_lib as learner
-
 from collections import Counter
 
-from keras_nlp.tokenizers.word_piece_tokenizer import WHITESPACE_REGEX, PUNCTUATION_REGEX, WHITESPACE_AND_PUNCTUATION_REGEX
+import tensorflow as tf
+import tensorflow_text as tf_text
+from tensorflow_text.tools.wordpiece_vocab import (
+    wordpiece_tokenizer_learner_lib as learner,
+)
+
+from keras_nlp.tokenizers.word_piece_tokenizer import PUNCTUATION_REGEX
+from keras_nlp.tokenizers.word_piece_tokenizer import (
+    WHITESPACE_AND_PUNCTUATION_REGEX,
+)
+from keras_nlp.tokenizers.word_piece_tokenizer import WHITESPACE_REGEX
+
 
 def compute_word_piece_vocabulary(
     data,
     vocabulary_size: int,
-    split = True,
+    split=True,
     lowercase: bool = True,
     strip_accents: bool = True,
-    vocabulary_output_file = None,
-    reserved_tokens = ["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]"],
-    suffix_indicator = "##",
+    vocabulary_output_file=None,
+    reserved_tokens=["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]"],
+    suffix_indicator="##",
 ):
     """A utility to train a Word Piece vocabulary.
 
@@ -58,7 +65,7 @@ def compute_word_piece_vocabulary(
             "The `data` argument must be either `tf.data.Dataset` or `list`. "
             f"Recieved: {type(data)}."
         )
-    
+
     word_counts = Counter()
 
     for text in data:
@@ -105,8 +112,8 @@ def compute_word_piece_vocabulary(
     )
 
     if vocabulary_output_file is not None:
-        vocab_text = ''.join([line + '\n' for line in vocab])
+        vocab_text = "".join([line + "\n" for line in vocab])
         # Write vocab to file.
-        with open(vocabulary_output_file, 'w') as vocab_file:
+        with open(vocabulary_output_file, "w") as vocab_file:
             vocab_file.write(vocab_text)
     return vocab
