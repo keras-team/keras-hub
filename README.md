@@ -44,8 +44,8 @@ To install the latest official release:
 pip install keras-nlp --upgrade
 ```
 
-To install the bleeding edge, we recommend using pip to install directly from
-the master branch on github:
+To install the latest unreleased changes to the library, we recommend using
+pip to install directly from the master branch on github:
 
 ```
 pip install git+https://github.com/keras-team/keras-nlp.git --upgrade
