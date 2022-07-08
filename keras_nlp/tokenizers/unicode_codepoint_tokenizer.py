@@ -52,11 +52,11 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
             form before tokenizing.
         errors: One of ('replace', 'remove', 'strict'). Specifies the
             `detokenize()` behavior when an invalid codepoint is encountered.
-            The value of `'strict'` will cause the operation to produce a
+            The value of `'strict'` will cause the tokenizer to produce a
             `InvalidArgument` error on any invalid input formatting. A value of
-            `'replace'` will cause the operation to replace any invalid
+            `'replace'` will cause the tokenizer to replace any invalid
             formatting in the input with the replacement_char codepoint.
-            A value of `'ignore'` will cause the operation to skip any invalid
+            A value of `'ignore'` will cause the tokenizer to skip any invalid
             formatting in the input and produce no corresponding output
             character.
         replacement_char: The unicode codepoint to use in place of invalid
