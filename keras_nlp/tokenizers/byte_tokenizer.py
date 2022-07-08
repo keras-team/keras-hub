@@ -55,12 +55,12 @@ class ByteTokenizer(tokenizer.Tokenizer):
             "NFKC", "NFD", "NFKD"). If set, every UTF-8 string in the input
             tensor text will be normalized to the given form before tokenizing.
         errors: One of ('replace', 'remove', 'strict'). Specifies the
-            `detokenize()` behavior when an invalid codepoint is encountered.
+            `detokenize()` behavior when an invalid tokenizer is encountered.
             The value of `'strict'` will cause the operation to produce a
             `InvalidArgument` error on any invalid input formatting. A value of
-            `'replace'` will cause the operation to replace any invalid
-            formatting in the input with the replacement_char codepoint.
-            A value of `'ignore'` will cause the operation to skip any invalid
+            `'replace'` will cause the tokenizer to replace any invalid
+            formatting in the input with the `replacement_char` codepoint.
+            A value of `'ignore'` will cause the tokenizer to skip any invalid
             formatting in the input and produce no corresponding output
             character.
         replacement_char: int. Defaults to 65533. The replacement character to
