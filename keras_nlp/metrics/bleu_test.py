@@ -260,13 +260,8 @@ class BleuTest(tf.test.TestCase):
         )
 
         config = bleu.get_config()
-        self.assertIsInstance(
-            keras.utils.deserialize_keras_object(
-                identifier=config.pop("tokenizer"), module_objects=globals()
-            ),
-            ByteTokenizer,
-        )
         expected_config_subset = {
+            "tokenizer": byte_tokenizer,
             "max_order": 8,
             "smooth": True,
         }

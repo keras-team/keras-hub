@@ -21,7 +21,6 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.utils.tensor_utils import tensor_to_list
-from keras_nlp.utils.tensor_utils import tensor_to_string_list
 
 REPLACE_SUBSTRINGS = [
     ("<skipped>", ""),
@@ -67,18 +66,19 @@ class Bleu(keras.metrics.Metric):
     https://cloud.google.com/translate/automl/docs/evaluate#bleu.
 
     Note on input shapes:
-    `y_pred` can be a scalar (of shape `()`), or a dense tensor of shape
-    `(batch_size,)` or `(batch_size, 1)`. `y_true` can either be a dense tensor
-    of shape `(num_references,)`, or a ragged tensor of shapes
-    `(batch_size, None)` or `(batch_size, None, 1)`. This is because every
-    sample can have multiple references.
+    For unbatched inputs, `y_pred` should be a tensor of shape `()`, and
+    `y_true` should be a tensor of shape `(num_references,)`. For batched
+    inputs, `y_pred` should be a tensor of shape `(batch_size,)`,
+    and `y_true` should be a tensor of shape `(batch_size, num_references)`. In
+    case of batched inputs, `y_true` can also be of shape `(batch_size, None)`
+    in case different samples have different number of references.
 
     Args:
         tokenizer: callable. A function that takes a string `tf.RaggedTensor`
-            (of any shape), and tokenizes the strings in the tensor. This
-            function should use TensorFlow graph ops. If the tokenizer is not
-            specified, the default tokenizer is used. The default tokenizer
-            replicates the behaviour of SacreBLEU's `"tokenizer_13a"` tokenizer
+            (of any shape), and tokenizes the strings in the tensor. If the
+            tokenizer is not specified, the default tokenizer is used. The
+            default tokenizer replicates the behaviour of SacreBLEU's
+            `"tokenizer_13a"` tokenizer
             (https://github.com/mjpost/sacrebleu/blob/v2.1.0/sacrebleu/tokenizers/tokenizer_13a.py).
         max_order: int. The maximum n-gram order to use. For example, if
             `max_order` is set to 3, unigrams, bigrams, and trigrams will be
@@ -116,13 +116,6 @@ class Bleu(keras.metrics.Metric):
             )
 
         self.tokenizer = tokenizer
-        try:
-            self.tokenizer = keras.utils.register_keras_serializable(
-                package="keras_nlp.metrics.Bleu", name="tokenizer"
-            )(self.tokenizer)
-        except:
-            pass
-
         self.max_order = max_order
         self.smooth = smooth
 
@@ -287,12 +280,8 @@ class Bleu(keras.metrics.Metric):
         )
 
     def _calculate_bleu_score(self, references, translation):
-        if references.dtype == tf.string:
-            references = tensor_to_string_list(references)
-            translation = tensor_to_string_list(translation)
-        else:
-            references = tensor_to_list(references)
-            translation = tensor_to_list(translation)
+        references = tensor_to_list(references)
+        translation = tensor_to_list(translation)
 
         matches = self._matches.numpy()
         possible_matches = self._possible_matches.numpy()
@@ -388,9 +377,7 @@ class Bleu(keras.metrics.Metric):
         config = super().get_config()
         config.update(
             {
-                "tokenizer": None
-                if self.tokenizer is None
-                else keras.utils.serialize_keras_object(self.tokenizer),
+                "tokenizer": self.tokenizer,
                 "max_order": self.max_order,
                 "smooth": self.smooth,
             }
