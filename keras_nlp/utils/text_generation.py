@@ -516,8 +516,8 @@ def top_k_search(
     pred = token_probability_fn(prompt)
     if k > pred.shape[1]:
         logging.warning(
-            f"`k`={k} larger than vocabulary size of {pred.shape[1]}. "
-            f"Setting `k`={pred.shape[1]}."
+            f"`k` larger than vocabulary size={pred.shape[1]}."
+            f"Setting `k` to vocabulary size. Received: `k={k}`."
         )
         k = pred.shape[1]
 
