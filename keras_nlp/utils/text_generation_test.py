@@ -159,6 +159,25 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
         )
         self.assertEquals(outputs.shape, [5])
 
+    def test_generate_with_max_length_prompt(self):
+        inputs = tf.ones(shape=(5,))
+        outputs = beam_search(
+            self.token_probability_fn,
+            inputs,
+            max_length=5,
+            num_beams=5,
+        )
+        self.assertEquals(outputs.shape, [5])
+
+        inputs = tf.ones(shape=(6,))
+        outputs = beam_search(
+            self.token_probability_fn,
+            inputs,
+            max_length=5,
+            num_beams=5,
+        )
+        self.assertEquals(outputs.shape, [6])
+
     def test_generate_with_2d_prompt(self):
         inputs = tf.constant([[1], [1]])
         outputs = beam_search(
