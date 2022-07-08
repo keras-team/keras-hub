@@ -24,6 +24,31 @@ from keras_nlp.tokenizers.word_piece_tokenizer import (
     WHITESPACE_AND_PUNCTUATION_REGEX,
 )
 
+def preprocess(text, lowercase, strip_accents, split):
+    """Helper function that takes in a dataset element and preprocesses it."""
+    # Check for correct types.
+    if text.dtype != tf.string:
+        raise ValueError(
+            "The dataset elements in `data` must have string dtype. "
+            f"Recieved: {text.dtype}."
+        )
+    # Preprocess, lowercase, strip and split input data.
+    if text.shape.rank == 0:
+        text = tf.expand_dims(text, 0)
+    if lowercase:
+        text = tf_text.case_fold_utf8(text)
+    if strip_accents:
+        # Normalize unicode to NFD, which splits out accent mark characters.
+        text = tf_text.normalize_utf8(text, "NFD")
+        # Remove the accent marks.
+        text = tf.strings.regex_replace(text, r"\p{Mn}", "")
+    if split:
+        text = tf_text.regex_split(
+            text,
+            delim_regex_pattern=WHITESPACE_AND_PUNCTUATION_REGEX,
+            keep_delim_regex_pattern=PUNCTUATION_REGEX,
+        )
+    return text
 
 def compute_word_piece_vocabulary(
     data,
@@ -37,8 +62,12 @@ def compute_word_piece_vocabulary(
 ):
     """A utility to train a Word Piece vocabulary.
 
-    This function can be used to train a Word Piece vocabulary from an input
-    dataset, or a list of filenames.
+    Trains a Word Piece vocabulary from an input dataset or a list of filenames. 
+    
+    For custom data loading and pretokenization (`split=False`), the input 
+    `data` should be a `tf.data.Dataset`. If `data` is a list of filenames, 
+    the file format is required to be plain text files, and the text would be 
+    read in line by line during training.
 
     Args:
         data: A tf.data.Dataset, or a list of filenames.
@@ -59,6 +88,60 @@ def compute_word_piece_vocabulary(
 
     Returns:
         Returns a list of vocabulary terms.
+
+    Examples:
+    
+    Basic Usage (from Dataset).
+    >>> inputs = tf.data.Dataset.from_tensor_slices(["bat sat pat mat rat"])
+    >>> vocab = compute_word_piece_vocabulary(inputs, 9, reserved_tokens=["[UNK]"])
+    >>> vocab
+    ['[UNK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
+    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+    >>>     vocabulary=vocab,
+    >>>     oov_token="[UNK]"
+    >>> )
+    >>> outputs = inputs.map(tokenizer.tokenize)
+    >>> for x in outputs:
+    >>>     print(x)
+    tf.Tensor([2 8 6 8 4 8 3 8 5 8], shape=(10,), dtype=int32)
+
+    Basic Usage (from filenames).
+    >>> with open("test.txt", "w+") as f:
+    >>>     f.write("bat sat pat mat rat\n")
+    >>> inputs = ["test.txt"]
+    >>> vocab = compute_word_piece_vocabulary(inputs, 9, reserved_tokens=["[UNK]"])
+
+    Custom Split Usage (from Dataset).
+    >>> def normalize_and_split(x):
+    >>>     "Strip punctuation and split on whitespace."
+    >>>     x = tf.strings.regex_replace(x, r"\p{P}", "")
+    >>>     return tf.strings.split(x)
+    >>> inputs = tf.data.Dataset.from_tensor_slices(["bat sat: pat mat rat.\n"])
+    >>> split_inputs = inputs.map(normalize_and_split)
+    >>> vocab = compute_word_piece_vocabulary(
+    >>>     split_inputs, 8, split=False, reserved_tokens=["[UNK]"]
+    >>> )
+    >>> vocab
+    ['[UNK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
+    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
+    >>> inputs.map(tokenizer.tokenize)
+
+    Custom Split Usage (from filenames).
+    >>> def normalize_and_split(x):
+    >>>     "Strip punctuation and split on whitespace."
+    >>>     x = tf.strings.regex_replace(x, r"\p{P}", "")
+    >>>     return tf.strings.split(x)
+    >>> with open("test.txt", "w+") as f:
+    >>>     f.write("bat sat: pat mat rat.\n")
+    >>> inputs = tf.data.TextLineDataset(["test.txt"])
+    >>> split_inputs = inputs.map(normalize_and_split)
+    >>> vocab = compute_word_piece_vocabulary(
+    >>>     split_inputs, 8, split=False, reserved_tokens=["[UNK]"]
+    >>> )
+    >>> vocab
+    ['[UNK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
+    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
+    >>> inputs.map(tokenizer.tokenize)
     """
     # Read data files.
 
@@ -77,33 +160,10 @@ def compute_word_piece_vocabulary(
             )
         data = tf.data.TextLineDataset(data)
 
-    def preprocess(text):
-        """Takes in a dataset element and preprocesses it."""
-        # Check for correct types.
-        if text.dtype != tf.string:
-            raise ValueError(
-                "The dataset elements in `data` must have string dtype. "
-                f"Recieved: {text.dtype}."
-            )
-        # Preprocess, lowercase, strip and split input data.
-        if text.shape.rank == 0:
-            text = tf.expand_dims(text, 0)
-        if lowercase:
-            text = tf_text.case_fold_utf8(text)
-        if strip_accents:
-            # Normalize unicode to NFD, which splits out accent mark characters.
-            text = tf_text.normalize_utf8(text, "NFD")
-            # Remove the accent marks.
-            text = tf.strings.regex_replace(text, r"\p{Mn}", "")
-        if split:
-            text = tf_text.regex_split(
-                text,
-                delim_regex_pattern=WHITESPACE_AND_PUNCTUATION_REGEX,
-                keep_delim_regex_pattern=PUNCTUATION_REGEX,
-            )
-        return text
-
-    words_data = data.map(preprocess)
+    words_data = data.map(
+        lambda text : preprocess(text, lowercase, strip_accents, split),
+        num_parallel_calls=tf.data.AUTOTUNE
+    )
     word_counts = learner.count_words(words_data)
     # Train tokenizer.
     vocab = learner.learn(

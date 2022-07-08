@@ -19,3 +19,4 @@ from keras_nlp.tokenizers.unicode_character_tokenizer import (
     UnicodeCharacterTokenizer,
 )
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
+from keras_nlp.tokenizers.word_piece_tokenizer_trainer import compute_word_piece_vocabulary

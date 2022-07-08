@@ -21,7 +21,6 @@ from keras_nlp.tokenizers.word_piece_tokenizer_trainer import (
     compute_word_piece_vocabulary,
 )
 
-
 class WordPieceTokenizerTrainerTest(tf.test.TestCase):
     def test_dataset_input(self):
         test_text = ["baa maa caa saa aaa"]
