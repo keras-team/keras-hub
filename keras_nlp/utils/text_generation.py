@@ -155,9 +155,7 @@ def greedy_search(
             prompt, max_length, end_token_id, pad_token_id
         )
 
-    if input_is_1d:
-        return tf.squeeze(prompt)
-    return prompt
+    return tf.squeeze(prompt) if input_is_1d else prompt
 
 
 def beam_search(
@@ -260,54 +258,50 @@ def beam_search(
     validate_token_probability_fn(token_probability_fn, prompt)
 
     batch_size, length = prompt.shape
-    if length < max_length:
-        # Initialize beam.
-        beams = tf.expand_dims(prompt, 1)
-        beams_prob = tf.zeros([batch_size, 1])
-        i = length
-        while i < max_length:
-            beam_size = beams.shape[1]
-            beam_preds = []
-            for j in range(beam_size):
-                preds = token_probability_fn(beams[:, j, :])
-                if from_logits:
-                    preds = tf.keras.activations.softmax(preds, axis=-1)
-                beam_preds.append(preds)
-            stacked_preds = tf.stack(beam_preds, axis=1)
-            vocab_size = stacked_preds.shape[2]
-            logits = tf.reshape(
-                stacked_preds, [batch_size, beam_size * vocab_size]
-            )
-            probs = tf.math.log(logits) + tf.repeat(
-                beams_prob, repeats=vocab_size, axis=1
-            )
-            num_beams = min(beam_size * vocab_size, num_beams)
-            candidate_prob, candidate_indexes = tf.math.top_k(
-                probs, k=num_beams, sorted=False
-            )
-            candidate_beam_indexes = candidate_indexes // vocab_size
-            next_token = candidate_indexes % vocab_size
+    if length >= max_length:
+        return tf.squeeze(prompt) if input_is_1d else prompt
 
-            beams = tf.gather(
-                beams, candidate_beam_indexes, axis=1, batch_dims=1
-            )
-            beams = tf.concat([beams, next_token[..., tf.newaxis]], axis=-1)
-            beams_prob = candidate_prob
-            i += 1
-        # Get the beam with the maximum probability.
-        max_indexes = tf.math.argmax(beams_prob, axis=-1)
-        max_beams = tf.gather(
-            beams, max_indexes[:, tf.newaxis], axis=1, batch_dims=1
+    # Initialize beam.
+    beams = tf.expand_dims(prompt, 1)
+    beams_prob = tf.zeros([batch_size, 1])
+    i = length
+    while i < max_length:
+        beam_size = beams.shape[1]
+        beam_preds = []
+        for j in range(beam_size):
+            preds = token_probability_fn(beams[:, j, :])
+            if from_logits:
+                preds = tf.keras.activations.softmax(preds, axis=-1)
+            beam_preds.append(preds)
+        stacked_preds = tf.stack(beam_preds, axis=1)
+        vocab_size = stacked_preds.shape[2]
+        logits = tf.reshape(stacked_preds, [batch_size, beam_size * vocab_size])
+        probs = tf.math.log(logits) + tf.repeat(
+            beams_prob, repeats=vocab_size, axis=1
         )
-        prompt = tf.squeeze(max_beams)
+        num_beams = min(beam_size * vocab_size, num_beams)
+        candidate_prob, candidate_indexes = tf.math.top_k(
+            probs, k=num_beams, sorted=False
+        )
+        candidate_beam_indexes = candidate_indexes // vocab_size
+        next_token = candidate_indexes % vocab_size
+
+        beams = tf.gather(beams, candidate_beam_indexes, axis=1, batch_dims=1)
+        beams = tf.concat([beams, next_token[..., tf.newaxis]], axis=-1)
+        beams_prob = candidate_prob
+        i += 1
+    # Get the beam with the maximum probability.
+    max_indexes = tf.math.argmax(beams_prob, axis=-1)
+    max_beams = tf.gather(
+        beams, max_indexes[:, tf.newaxis], axis=1, batch_dims=1
+    )
+    prompt = tf.squeeze(max_beams)
 
     if end_token_id is not None:
         prompt = mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
         )
-    if input_is_1d:
-        return tf.squeeze(prompt)
-    return prompt
+    return tf.squeeze(prompt) if input_is_1d else prompt
 
 
 def random_search(
@@ -418,9 +412,7 @@ def random_search(
         prompt = mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
         )
-    if input_is_1d:
-        return tf.squeeze(prompt)
-    return prompt
+    return tf.squeeze(prompt) if input_is_1d else prompt
 
 
 def top_k_search(
@@ -544,9 +536,7 @@ def top_k_search(
         prompt = mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
         )
-    if input_is_1d:
-        return tf.squeeze(prompt)
-    return prompt
+    return tf.squeeze(prompt) if input_is_1d else prompt
 
 
 def top_p_search(
@@ -688,6 +678,4 @@ def top_p_search(
         prompt = mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
         )
-    if input_is_1d:
-        return tf.squeeze(prompt)
-    return prompt
+    return tf.squeeze(prompt) if input_is_1d else prompt
