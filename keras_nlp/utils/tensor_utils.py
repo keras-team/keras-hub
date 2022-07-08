@@ -50,8 +50,6 @@ def tensor_to_string_list(inputs):
 
     Args:
         inputs: Input tensor, or dict/list/tuple of input tensors.
-        *args: Additional positional arguments.
-        **kwargs: Additional keyword arguments.
     """
     list_outputs = tensor_to_list(inputs)
     return _decode_strings_to_utf8(list_outputs)

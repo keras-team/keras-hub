@@ -15,6 +15,7 @@
 """Tests for Bleu."""
 
 import tensorflow as tf
+from tensorflow import keras
 
 from keras_nlp.metrics import Bleu
 from keras_nlp.tokenizers import ByteTokenizer
@@ -139,6 +140,29 @@ class BleuTest(tf.test.TestCase):
         bleu_val = bleu(y_true, y_pred)
         self.assertAlmostEqual(bleu_val.numpy(), 0.188, delta=1e-3)
 
+    def test_model_compile(self):
+        inputs = keras.Input(shape=(), dtype="string")
+        outputs = tf.identity(inputs)
+        model = keras.Model(inputs, outputs)
+
+        model.compile(metrics=[Bleu()])
+
+        x = tf.constant(
+            [
+                "He He He eats sweet apple which is a fruit.",
+                "I love Silicon Valley, it's one of my favourite shows.",
+            ]
+        )
+        y = tf.constant(
+            [
+                ["He eats a sweet apple."],
+                ["Silicon Valley is one of my favourite shows!"],
+            ]
+        )
+
+        output = model.evaluate(x, y, return_dict=True)
+        self.assertAlmostEqual(output["bleu"], 0.243, delta=1e-3)
+
     def test_reset_state(self):
         bleu = Bleu()
         y_true = tf.ragged.constant(
@@ -226,8 +250,9 @@ class BleuTest(tf.test.TestCase):
         self.assertAlmostEqual(bleu_val.numpy(), 0.495, delta=1e-3)
 
     def test_get_config(self):
+        byte_tokenizer = ByteTokenizer()
         bleu = Bleu(
-            tokenizer=None,
+            tokenizer=byte_tokenizer.tokenize,
             max_order=8,
             smooth=True,
             dtype=tf.float64,

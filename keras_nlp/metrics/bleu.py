@@ -115,26 +115,7 @@ class Bleu(keras.metrics.Metric):
                 f"Received: dtype={dtype}"
             )
 
-        def default_tokenizer(inputs):
-            """
-            Default tokenizer. Replicates the behaviour of SacreBLEU's
-            default tokenizer, namely, `tokenizer_13a`.
-            """
-            for pattern, replacement in REPLACE_SUBSTRINGS + REGEX_PATTERNS:
-                inputs = tf.strings.regex_replace(
-                    input=inputs,
-                    pattern=pattern,
-                    rewrite=replacement,
-                    replace_global=True,
-                    name=None,
-                )
-            inputs = tf.strings.split(inputs)
-            return inputs
-
-        if tokenizer is None:
-            self.tokenizer = default_tokenizer
-        else:
-            self.tokenizer = tokenizer
+        self.tokenizer = tokenizer
         self.max_order = max_order
         self.smooth = smooth
 
@@ -166,6 +147,25 @@ class Bleu(keras.metrics.Metric):
             dtype=self.dtype,
         )
 
+    def _tokenizer(self, inputs):
+        """
+        Tokenizes the input strings. By default, replicates the behaviour of
+        SacreBLEU's default tokenizer, namely, `tokenizer_13a`.
+        """
+        if self.tokenizer:
+            return self.tokenizer(inputs)
+
+        for pattern, replacement in REPLACE_SUBSTRINGS + REGEX_PATTERNS:
+            inputs = tf.strings.regex_replace(
+                input=inputs,
+                pattern=pattern,
+                rewrite=replacement,
+                replace_global=True,
+                name=None,
+            )
+        inputs = tf.strings.split(inputs)
+        return inputs
+
     def _get_ngrams(self, segment, max_order):
         """Extracts all n-grams upto a given maximum order from an input segment.
 
@@ -176,7 +176,7 @@ class Bleu(keras.metrics.Metric):
             segment: list. Text segment from which n-grams will be
                 extracted.
             max_order: int. Maximum length in tokens of the n-grams returned
-                by this methods.
+                by this method.
         """
         ngram_counts = collections.Counter()
         for order in range(1, max_order + 1):
@@ -279,6 +279,43 @@ class Bleu(keras.metrics.Metric):
             reference_length,
         )
 
+    def _calculate_bleu_score(self, references, translation):
+        if references.dtype == tf.string:
+            references = tensor_to_string_list(references)
+            translation = tensor_to_string_list(translation)
+        else:
+            references = tensor_to_list(references)
+            translation = tensor_to_list(translation)
+
+        matches = self._matches.numpy()
+        possible_matches = self._possible_matches.numpy()
+        translation_length = self._translation_length.numpy()
+        reference_length = self._reference_length.numpy()
+
+        (
+            bleu_score,
+            matches,
+            possible_matches,
+            translation_length,
+            reference_length,
+        ) = self._corpus_bleu(
+            reference_corpus=references,
+            translation_corpus=translation,
+            matches_by_order=matches,
+            possible_matches_by_order=possible_matches,
+            translation_length=translation_length,
+            reference_length=reference_length,
+            max_order=self.max_order,
+            smooth=self.smooth,
+        )
+        return (
+            tf.constant(bleu_score, dtype=self.dtype),
+            tf.constant(matches, dtype=self.dtype),
+            tf.constant(possible_matches, dtype=self.dtype),
+            tf.constant(translation_length, dtype=self.dtype),
+            tf.constant(reference_length, dtype=self.dtype),
+        )
+
     def update_state(self, y_true, y_pred, sample_weight=None):
         def validate_and_fix_rank(inputs, tensor_name, base_rank=0):
             if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
@@ -301,49 +338,12 @@ class Bleu(keras.metrics.Metric):
                     f"or {base_rank+2}. Found rank: {inputs.shape.rank}"
                 )
 
-        def calculate_bleu_score(references, translation):
-            if references.dtype == tf.string:
-                references = tensor_to_string_list(references)
-                translation = tensor_to_string_list(translation)
-            else:
-                references = tensor_to_list(references)
-                translation = tensor_to_list(translation)
-
-            matches = self._matches.numpy().tolist()
-            possible_matches = self._possible_matches.numpy().tolist()
-            translation_length = self._translation_length.numpy()
-            reference_length = self._reference_length.numpy()
-
-            (
-                bleu_score,
-                matches,
-                possible_matches,
-                translation_length,
-                reference_length,
-            ) = self._corpus_bleu(
-                reference_corpus=references,
-                translation_corpus=translation,
-                matches_by_order=matches,
-                possible_matches_by_order=possible_matches,
-                translation_length=translation_length,
-                reference_length=reference_length,
-                max_order=self.max_order,
-                smooth=self.smooth,
-            )
-            return (
-                tf.constant(bleu_score, dtype=self.dtype),
-                tf.constant(matches, dtype=self.dtype),
-                tf.constant(possible_matches, dtype=self.dtype),
-                tf.constant(translation_length, dtype=self.dtype),
-                tf.constant(reference_length, dtype=self.dtype),
-            )
-
         y_true = validate_and_fix_rank(y_true, "y_true", 1)
         y_pred = validate_and_fix_rank(y_pred, "y_pred", 0)
 
         # Tokenize the inputs.
-        y_true = self.tokenizer(y_true)
-        y_pred = self.tokenizer(y_pred)
+        y_true = self._tokenizer(y_true)
+        y_pred = self._tokenizer(y_pred)
 
         (
             bleu_score,
@@ -352,15 +352,9 @@ class Bleu(keras.metrics.Metric):
             translation_length,
             reference_length,
         ) = tf.py_function(
-            func=calculate_bleu_score,
+            func=self._calculate_bleu_score,
             inp=[y_true, y_pred],
-            Tout=[
-                self.dtype,
-                self.dtype,
-                self.dtype,
-                self.dtype,
-                self.dtype,
-            ],
+            Tout=[self.dtype, self.dtype, self.dtype, self.dtype, self.dtype],
         )
 
         self._matches.assign(matches)
