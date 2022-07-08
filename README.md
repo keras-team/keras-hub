@@ -112,6 +112,8 @@ Here is the BibTeX entry:
 }
 ```
 
+## Acknowledgements
+
 Thank you to all of our wonderful contributors!
 
 <a href="https://github.com/keras-team/keras-nlp/graphs/contributors">
