@@ -116,6 +116,13 @@ class Bleu(keras.metrics.Metric):
             )
 
         self.tokenizer = tokenizer
+        try:
+            self.tokenizer = keras.utils.register_keras_serializable(
+                package="keras_nlp.metrics.Bleu", name="tokenizer"
+            )(self.tokenizer)
+        except:
+            pass
+
         self.max_order = max_order
         self.smooth = smooth
 
@@ -381,6 +388,9 @@ class Bleu(keras.metrics.Metric):
         config = super().get_config()
         config.update(
             {
+                "tokenizer": None
+                if self.tokenizer is None
+                else keras.utils.serialize_keras_object(self.tokenizer),
                 "max_order": self.max_order,
                 "smooth": self.smooth,
             }

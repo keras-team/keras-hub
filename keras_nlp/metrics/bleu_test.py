@@ -252,7 +252,7 @@ class BleuTest(tf.test.TestCase):
     def test_get_config(self):
         byte_tokenizer = ByteTokenizer()
         bleu = Bleu(
-            tokenizer=byte_tokenizer.tokenize,
+            tokenizer=byte_tokenizer,
             max_order=8,
             smooth=True,
             dtype=tf.float64,
@@ -260,6 +260,12 @@ class BleuTest(tf.test.TestCase):
         )
 
         config = bleu.get_config()
+        self.assertIsInstance(
+            keras.utils.deserialize_keras_object(
+                identifier=config.pop("tokenizer"), module_objects=globals()
+            ),
+            ByteTokenizer,
+        )
         expected_config_subset = {
             "max_order": 8,
             "smooth": True,
