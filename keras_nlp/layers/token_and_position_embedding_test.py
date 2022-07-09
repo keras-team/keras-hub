@@ -68,11 +68,11 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase):
         )
         # Create a 2-dimensional ragged input
         # (the first dimension is implicit).
-        input_tensor = tf.keras.Input(
+        input_tensor = keras.Input(
             shape=(sequence_length,), dtype=tf.float32, ragged=True
         )
         output_tensor = test_layer(input_tensor)
-        model = tf.keras.Model(input_tensor, output_tensor)
+        model = keras.Model(input_tensor, output_tensor)
 
         input_data = tf.ragged.constant(
             [
@@ -112,9 +112,9 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase):
         )
         # Create a 2-dimensional input
         # (the first dimension is implicit).
-        inputs = tf.keras.Input(shape=(sequence_length,), dtype="int32")
+        inputs = keras.Input(shape=(sequence_length,), dtype="int32")
         outputs = test_layer(inputs)
-        model = tf.keras.Model(inputs, outputs)
+        model = keras.Model(inputs, outputs)
 
         input_data = tf.ones((2, sequence_length), dtype="int32")
         expected_output_data = tf.ones((2, sequence_length, embedding_dim)) * 2
