@@ -16,6 +16,7 @@
 
 import tensorflow as tf
 from absl import logging
+from tensorflow import keras
 
 
 def validate_prompt(prompt):
@@ -99,14 +100,14 @@ def greedy_search(
     END_ID = 2
 
     # Create a dummy model to predict the next token.
-    model = tf.keras.Sequential(
+    model = keras.Sequential(
         [
-            tf.keras.Input(shape=[None]),
-            tf.keras.layers.Embedding(
+            keras.Input(shape=[None]),
+            keras.layers.Embedding(
                 input_dim=VOCAB_SIZE,
                 output_dim=FEATURE_SIZE,
             ),
-            tf.keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
+            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
         ]
     )
 
@@ -210,14 +211,14 @@ def beam_search(
     END_ID = 2
 
     # Create a dummy model to predict the next token.
-    model = tf.keras.Sequential(
+    model = keras.Sequential(
         [
-            tf.keras.Input(shape=[None]),
-            tf.keras.layers.Embedding(
+            keras.Input(shape=[None]),
+            keras.layers.Embedding(
                 input_dim=VOCAB_SIZE,
                 output_dim=FEATURE_SIZE,
             ),
-            tf.keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
+            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
         ]
     )
 
@@ -272,7 +273,7 @@ def beam_search(
         for j in range(beam_size):
             preds = token_probability_fn(beams[:, j, :])
             if from_logits:
-                preds = tf.keras.activations.softmax(preds, axis=-1)
+                preds = keras.activations.softmax(preds, axis=-1)
             beam_preds.append(preds)
         stacked_preds = tf.stack(beam_preds, axis=1)
         vocab_size = stacked_preds.shape[2]
@@ -353,14 +354,14 @@ def random_search(
     END_ID = 2
 
     # Create a dummy model to predict the next token.
-    model = tf.keras.Sequential(
+    model = keras.Sequential(
         [
-            tf.keras.Input(shape=[None]),
-            tf.keras.layers.Embedding(
+            keras.Input(shape=[None]),
+            keras.layers.Embedding(
                 input_dim=VOCAB_SIZE,
                 output_dim=FEATURE_SIZE,
             ),
-            tf.keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
+            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
         ]
     )
 
@@ -400,7 +401,7 @@ def random_search(
         # If the prompt has reached our desired length, exit while loop.
         pred = token_probability_fn(prompt)
         if from_logits:
-            pred = tf.keras.activations.softmax(pred, axis=-1)
+            pred = keras.activations.softmax(pred, axis=-1)
         next_token = tf.cast(
             tf.random.categorical(tf.math.log(pred), 1, seed=seed),
             dtype=prompt.dtype,
@@ -467,14 +468,14 @@ def top_k_search(
     END_ID = 2
 
     # Create a dummy model to predict the next token.
-    model = tf.keras.Sequential(
+    model = keras.Sequential(
         [
-            tf.keras.Input(shape=[None]),
-            tf.keras.layers.Embedding(
+            keras.Input(shape=[None]),
+            keras.layers.Embedding(
                 input_dim=VOCAB_SIZE,
                 output_dim=FEATURE_SIZE,
             ),
-            tf.keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
+            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
         ]
     )
 
@@ -525,7 +526,7 @@ def top_k_search(
     while i < max_length:
         pred = token_probability_fn(prompt)
         if from_logits:
-            pred = tf.keras.activations.softmax(pred, axis=-1)
+            pred = keras.activations.softmax(pred, axis=-1)
 
         # Filter out top-k tokens.
         top_k_pred, top_k_indices = tf.math.top_k(pred, k=k, sorted=False)
@@ -600,14 +601,14 @@ def top_p_search(
     END_ID = 2
 
     # Create a dummy model to predict the next token.
-    model = tf.keras.Sequential(
+    model = keras.Sequential(
         [
-            tf.keras.Input(shape=[None]),
-            tf.keras.layers.Embedding(
+            keras.Input(shape=[None]),
+            keras.layers.Embedding(
                 input_dim=VOCAB_SIZE,
                 output_dim=FEATURE_SIZE,
             ),
-            tf.keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
+            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
         ]
     )
 
@@ -652,7 +653,7 @@ def top_p_search(
         # If the prompt has reached our desired length, exit while loop.
         pred = token_probability_fn(prompt)
         if from_logits:
-            pred = tf.keras.activations.softmax(pred, axis=-1)
+            pred = keras.activations.softmax(pred, axis=-1)
         # Sort preds in descending order.
         sorted_preds, sorted_indices = tf.math.top_k(
             pred, k=pred.shape[1], sorted=True

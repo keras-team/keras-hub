@@ -17,6 +17,7 @@ import random
 
 import numpy as np
 import tensorflow as tf
+from tensorflow import keras
 
 from keras_nlp.utils.text_generation import beam_search
 from keras_nlp.utils.text_generation import greedy_search
@@ -32,15 +33,15 @@ class GreedySearchTextGenerationTest(tf.test.TestCase):
         self.feature_size = 16
 
         # Create a dummy model to predict the next token.
-        model = tf.keras.Sequential(
+        model = keras.Sequential(
             [
-                tf.keras.Input(shape=[None]),
-                tf.keras.layers.Embedding(
+                keras.Input(shape=[None]),
+                keras.layers.Embedding(
                     input_dim=self.vocab_size,
                     output_dim=self.feature_size,
                 ),
-                tf.keras.layers.Dense(self.vocab_size),
-                tf.keras.layers.Softmax(),
+                keras.layers.Dense(self.vocab_size),
+                keras.layers.Softmax(),
             ]
         )
 
@@ -120,15 +121,15 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
         self.feature_size = 16
 
         # Create a dummy model to predict the next token.
-        model = tf.keras.Sequential(
+        model = keras.Sequential(
             [
-                tf.keras.Input(shape=[None]),
-                tf.keras.layers.Embedding(
+                keras.Input(shape=[None]),
+                keras.layers.Embedding(
                     input_dim=self.vocab_size,
                     output_dim=self.feature_size,
                 ),
-                tf.keras.layers.Dense(self.vocab_size),
-                tf.keras.layers.Softmax(),
+                keras.layers.Dense(self.vocab_size),
+                keras.layers.Softmax(),
             ]
         )
 
@@ -293,15 +294,15 @@ class RandomSearchTextGenerationTest(tf.test.TestCase):
         self.feature_size = 16
 
         # Create a dummy model to predict the next token.
-        model = tf.keras.Sequential(
+        model = keras.Sequential(
             [
-                tf.keras.Input(shape=[None]),
-                tf.keras.layers.Embedding(
+                keras.Input(shape=[None]),
+                keras.layers.Embedding(
                     input_dim=self.vocab_size,
                     output_dim=self.feature_size,
                 ),
-                tf.keras.layers.Dense(self.vocab_size),
-                tf.keras.layers.Softmax(),
+                keras.layers.Dense(self.vocab_size),
+                keras.layers.Softmax(),
             ]
         )
 
@@ -410,7 +411,7 @@ class RandomSearchTextGenerationTest(tf.test.TestCase):
 
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.keras.activations.softmax(
+            prob = keras.activations.softmax(
                 tf.constant([[1.0, 2.0, 3, 0, 4.0]])
             )
             return tf.repeat(prob, batch_size, axis=0)
@@ -443,15 +444,15 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
         self.feature_size = 16
 
         # Create a dummy model to predict the next token.
-        model = tf.keras.Sequential(
+        model = keras.Sequential(
             [
-                tf.keras.Input(shape=[None]),
-                tf.keras.layers.Embedding(
+                keras.Input(shape=[None]),
+                keras.layers.Embedding(
                     input_dim=self.vocab_size,
                     output_dim=self.feature_size,
                 ),
-                tf.keras.layers.Dense(self.vocab_size),
-                tf.keras.layers.Softmax(),
+                keras.layers.Dense(self.vocab_size),
+                keras.layers.Softmax(),
             ]
         )
 
@@ -600,7 +601,7 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
 
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.keras.activations.softmax(
+            prob = keras.activations.softmax(
                 tf.constant([[1.0, 2.0, 3.0, 4.0]])
             )
             return tf.repeat(prob, batch_size, axis=0)
@@ -635,15 +636,15 @@ class TopPSearchTextGenerationTest(tf.test.TestCase):
         self.feature_size = 16
 
         # Create a dummy model to predict the next token.
-        model = tf.keras.Sequential(
+        model = keras.Sequential(
             [
-                tf.keras.Input(shape=[None]),
-                tf.keras.layers.Embedding(
+                keras.Input(shape=[None]),
+                keras.layers.Embedding(
                     input_dim=self.vocab_size,
                     output_dim=self.feature_size,
                 ),
-                tf.keras.layers.Dense(self.vocab_size),
-                tf.keras.layers.Softmax(),
+                keras.layers.Dense(self.vocab_size),
+                keras.layers.Softmax(),
             ]
         )
 
@@ -780,7 +781,7 @@ class TopPSearchTextGenerationTest(tf.test.TestCase):
 
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.keras.activations.softmax(
+            prob = keras.activations.softmax(
                 tf.constant([[1.0, 2.0, 3.0, 4.0]])
             )
             return tf.repeat(prob, batch_size, axis=0)
