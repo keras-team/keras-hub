@@ -16,6 +16,7 @@ import tensorflow as tf
 from absl import app
 from absl import flags
 from absl import logging
+from tensorflow import keras
 
 # Import data module to include the customized serializable, required for
 # loading tokenizer.
@@ -101,7 +102,7 @@ def decode_sequence(input_sentence, model, max_sequence_length, lookup_table):
 
 
 def main(_):
-    loaded_model = tf.keras.models.load_model(FLAGS.saved_model_path)
+    loaded_model = keras.models.load_model(FLAGS.saved_model_path)
 
     decoder_tokenizer = loaded_model.decoder_tokenizer
     vocab = decoder_tokenizer.get_vocabulary()

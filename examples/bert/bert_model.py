@@ -47,7 +47,7 @@ def make_attention_mask(inputs, mask):
 
 
 # TODO(mattdangerw): This class is needed for TPU friendly embeddings, we should
-# remove it entirely and fix tf.keras.layers.Embedding as needed.
+# remove it entirely and fix keras.layers.Embedding as needed.
 class OnDeviceEmbedding(keras.layers.Layer):
     """Performs an embedding lookup suitable for TPU devices.
 

@@ -117,9 +117,7 @@ class MLMHeadTest(tf.test.TestCase):
         )
         label_data = tf.random.uniform(shape=(4, 5), maxval=100, dtype="int32")
 
-        loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(
-            from_logits=False
-        )
+        loss_fn = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
         optimizer = keras.optimizers.Adam()
         with tf.GradientTape() as tape:
             model((token_data, position_data))

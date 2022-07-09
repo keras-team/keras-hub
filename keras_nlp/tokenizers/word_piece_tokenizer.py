@@ -109,14 +109,10 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             tokenization.
         strip_accents: If true, all accent marks will be removed from text
             before tokenization.
-        split: If true, input will be split according to `split_pattern`
-            and `keep_pattern`. If false, input should be split before calling
-            the layer.
-        split_pattern: A regex pattern to match delimiters to split. By default,
-            all whitespace and punctuation marks will be split on.
-        keep_pattern: A regex pattern of delimiters contained in the
-            `split_pattern` of delimeters that should be kept as independent
-            tokens. By default, all punctuation marks will be kept as tokens.
+        split: If true, input will be split on whitespace and punctuation
+            marks, and all punctuation marks will be kept as tokens. If false,
+            input should be split ("pre-tokenized") before calling the
+            tokenizer, and passed as a dense or ragged tensor of whole words.
         suffix_indicator: The characters prepended to a wordpiece to indicate
             that it is a suffix to another subword.
         oov_token: The string value to substitute for an unknown token. It
@@ -160,14 +156,13 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     'the quick brown fox .'
 
     Custom splitting.
-    >>> vocab = ["[UNK]", "fox", ","]
-    >>> inputs = ["fox,,fox,fox"]
-    >>> keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab,
-    ...     split_pattern=",", keep_pattern=",", dtype='string')(inputs)
-    <tf.RaggedTensor [[b'fox', b',', b',', b'fox', b',', b'fox']]>
-    >>> keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab,
-    ...     split_pattern=",", keep_pattern="", dtype='string')(inputs)
-    <tf.RaggedTensor [[b'fox', b'fox', b'fox']]>
+    >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+    >>> inputs = ["The$quick$brown$fox"]
+    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab,
+    ...     split=False, dtype='string')
+    >>> split_inputs = tf.strings.split(inputs, sep="$")
+    >>> tokenizer(split_inputs)
+    <tf.RaggedTensor [[b'the', b'qu', b'##ick', b'br', b'##own', b'fox']]>
     """
 
     def __init__(
@@ -177,8 +172,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         lowercase: bool = True,
         strip_accents: bool = True,
         split: bool = True,
-        split_pattern: str = None,
-        keep_pattern: str = None,
         suffix_indicator: str = "##",
         oov_token: str = "[UNK]",
         **kwargs,
@@ -211,18 +204,10 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
 
-        if split_pattern is None:
-            split_pattern = WHITESPACE_AND_PUNCTUATION_REGEX
-
-        if keep_pattern is None:
-            keep_pattern = PUNCTUATION_REGEX
-
         self.sequence_length = sequence_length
         self.lowercase = lowercase
         self.strip_accents = strip_accents
         self.split = split
-        self.split_pattern = split_pattern
-        self.keep_pattern = keep_pattern
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
 
@@ -275,8 +260,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "lowercase": self.lowercase,
                 "strip_accents": self.strip_accents,
                 "split": self.split,
-                "split_pattern": self.split_pattern,
-                "keep_pattern": self.keep_pattern,
                 "suffix_indicator": self.suffix_indicator,
                 "oov_token": self.oov_token,
             }
@@ -284,12 +267,12 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         return config
 
     def tokenize(self, inputs):
-        # Check if Input is Scalar or Not
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
-        scalar_input = tf.convert_to_tensor(inputs).shape.rank == 0
+        scalar_input = inputs.shape.rank == 0
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
+
         # Optionally normalize and split inputs.
         if self.lowercase:
             inputs = tf_text.case_fold_utf8(inputs)
@@ -301,8 +284,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         if self.split:
             inputs = tf_text.regex_split(
                 inputs,
-                delim_regex_pattern=self.split_pattern,
-                keep_delim_regex_pattern=self.keep_pattern,
+                delim_regex_pattern=WHITESPACE_AND_PUNCTUATION_REGEX,
+                keep_delim_regex_pattern=PUNCTUATION_REGEX,
             )
 
         # Apply word piece and coerce shape for outputs.
@@ -311,6 +294,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         # split words and one for split subwords). We will collapse to a single
         # ragged dimension which is a better out of box default.
         tokens = tokens.merge_dims(-2, -1)
+
         # Convert to a dense output if `sequence_length` is set.
         if self.sequence_length:
             output_shape = tokens.shape.as_list()
