@@ -1,0 +1,78 @@
+substitutions:
+  # GCS location to write temporary checkpoints and summaries.
+  _GCS_BUCKET: 'gs://chenmoney-gke-test'
+  # Name of GKE cluster in which to run Job.
+  _CLUSTER_NAME: 'tutorial-cluster'
+  # Location of GKE cluster.
+  _CLUSTER_ZONE: 'us-central1-b'
+  _TAG_NAME: '2022-07-08-3pm'
+steps:
+- name: 'docker'
+  id: build-image
+  args: [
+    'build',
+    '.',
+    '-f', 'cloudbuild/Dockerfile',
+    '-t', 'us-central1-docker.pkg.dev/keras-team-gcp/keras-nlp-test/test-image:$_TAG_NAME',
+  ]
+- name: 'docker'
+  id: push-image
+  waitFor:
+  - build-image
+  args: ['push', 'us-central1-docker.pkg.dev/keras-team-gcp/keras-nlp-test/test-image:$_TAG_NAME']
+- name: 'golang'
+  id: download-jsonnet
+  waitFor: ['-']
+  entrypoint: 'go'
+  args: [
+    'install',
+    'github.com/google/go-jsonnet/cmd/jsonnet@latest',
+  ]
+- name: 'google/cloud-sdk'
+  id: clone-templates
+  waitFor: ['-']
+  entrypoint: 'git'
+  args: [
+    'clone',
+    'https://github.com/GoogleCloudPlatform/ml-testing-accelerators.git',
+  ]
+- name: 'golang'
+  id: build-templates
+  waitFor:
+  - download-jsonnet
+  - clone-templates
+  entrypoint: 'jsonnet'
+  args: [
+    'cloudbuild/unit_test_jobs.jsonnet',
+    '--string',
+    '-J', 'ml-testing-accelerators',
+    '--ext-str', 'image=us-central1-docker.pkg.dev/keras-team-gcp/keras-nlp-test/test-image',
+    '--ext-str', 'tag_name=$_TAG_NAME',
+    '--ext-str', 'gcs_bucket=$_GCS_BUCKET',
+    '-o', 'output.yaml',
+  ]
+- name: 'google/cloud-sdk'
+  id: create-job
+  waitFor:
+  - push-image
+  - build-templates
+  entrypoint: bash
+  args:
+  - -c
+  - |
+    set -u
+    set -e
+    set -x
+
+    gcloud container clusters get-credentials $_CLUSTER_NAME --zone $_CLUSTER_ZONE --project keras-team-gcp
+    job_name=$(kubectl create -f output.yaml -o name)
+    sleep 5
+    pod_name=$(kubectl wait --for condition=ready --timeout=10m pod -l job-name=${job_name#job.batch/} -o name)
+    kubectl logs -f $pod_name --container=train
+    sleep 5
+    exit $(kubectl get $pod_name -o jsonpath={.status.containerStatuses[0].state.terminated.exitCode})
+timeout: 1800s  # 30 minutes
+options:
+  volumes:
+  - name: go-modules
+    path: /go
