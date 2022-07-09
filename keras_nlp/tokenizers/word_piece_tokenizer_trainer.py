@@ -14,16 +14,12 @@
 """Trainer for Word Piece Tokenizer."""
 
 import tensorflow as tf
-import tensorflow_text as tf_text
 from tensorflow_text.tools.wordpiece_vocab import (
     wordpiece_tokenizer_learner_lib as learner,
 )
 
-from keras_nlp.tokenizers.word_piece_tokenizer import PUNCTUATION_REGEX
-from keras_nlp.tokenizers.word_piece_tokenizer import (
-    WHITESPACE_AND_PUNCTUATION_REGEX,
-)
 from keras_nlp.tokenizers.word_piece_tokenizer import pretokenize
+
 
 def compute_word_piece_vocabulary(
     data,

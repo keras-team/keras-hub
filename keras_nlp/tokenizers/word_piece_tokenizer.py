@@ -62,6 +62,7 @@ WHITESPACE_AND_PUNCTUATION_REGEX = r"|".join(
     ]
 )
 
+
 def pretokenize(text, lowercase, strip_accents, split):
     """Helper function that takes in a dataset element and pretokenizes it."""
     # Check for correct types.
@@ -295,7 +296,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     def tokenize(self, inputs):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
-        
+
         scalar_input = inputs.shape.rank == 0
         inputs = pretokenize(
             inputs, self.lowercase, self.strip_accents, self.split
