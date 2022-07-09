@@ -15,6 +15,7 @@
 """Text generation utilities."""
 
 import tensorflow as tf
+from absl import logging
 
 
 def validate_prompt(prompt):
@@ -502,8 +503,6 @@ def top_k_search(
             "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
             "tf.function in eager mode."
         )
-    if k <= 0:
-        raise ValueError(f"`k` should be strictly positive. Received: `k={k}`.")
 
     prompt = validate_prompt(prompt)
     input_is_1d = prompt.shape.rank == 1
@@ -511,14 +510,23 @@ def top_k_search(
         prompt = prompt[tf.newaxis, :]
     validate_token_probability_fn(token_probability_fn, prompt)
 
+    if k <= 0:
+        raise ValueError(f"`k` should be strictly positive. Received: `k={k}`.")
+    # If k is greater than the vocabulary size, use the entire vocabulary.
+    pred = token_probability_fn(prompt)
+    if k > pred.shape[1]:
+        logging.warning(
+            f"`k` larger than vocabulary size={pred.shape[1]}."
+            f"Setting `k` to vocabulary size. Received: `k={k}`."
+        )
+        k = pred.shape[1]
+
     i = prompt.shape[1]
     while i < max_length:
-        # If the prompt has reached our desired length, exit while loop.
         pred = token_probability_fn(prompt)
         if from_logits:
             pred = tf.keras.activations.softmax(pred, axis=-1)
-        # If k is greater than the vocabulary size, use the entire vocabulary.
-        k = min(k, pred.shape[1])
+
         # Filter out top-k tokens.
         top_k_pred, top_k_indices = tf.math.top_k(pred, k=k, sorted=False)
         # Sample the next token from the probability distribution.
