@@ -62,6 +62,32 @@ WHITESPACE_AND_PUNCTUATION_REGEX = r"|".join(
     ]
 )
 
+def pretokenize(text, lowercase, strip_accents, split):
+    """Helper function that takes in a dataset element and pretokenizes it."""
+    # Check for correct types.
+    if text.dtype != tf.string:
+        raise ValueError(
+            "The dataset elements in `data` must have string dtype. "
+            f"Recieved: {text.dtype}."
+        )
+    # Preprocess, lowercase, strip and split input data.
+    if text.shape.rank == 0:
+        text = tf.expand_dims(text, 0)
+    if lowercase:
+        text = tf_text.case_fold_utf8(text)
+    if strip_accents:
+        # Normalize unicode to NFD, which splits out accent mark characters.
+        text = tf_text.normalize_utf8(text, "NFD")
+        # Remove the accent marks.
+        text = tf.strings.regex_replace(text, r"\p{Mn}", "")
+    if split:
+        text = tf_text.regex_split(
+            text,
+            delim_regex_pattern=WHITESPACE_AND_PUNCTUATION_REGEX,
+            keep_delim_regex_pattern=PUNCTUATION_REGEX,
+        )
+    return text
+
 
 class WordPieceTokenizer(tokenizer.Tokenizer):
     """A word piece tokenizer layer.
@@ -269,24 +295,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     def tokenize(self, inputs):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
+        
         scalar_input = inputs.shape.rank == 0
-        if scalar_input:
-            inputs = tf.expand_dims(inputs, 0)
-
-        # Optionally normalize and split inputs.
-        if self.lowercase:
-            inputs = tf_text.case_fold_utf8(inputs)
-        if self.strip_accents:
-            # Normalize unicode to NFD, which splits out accent mark characters.
-            inputs = tf_text.normalize_utf8(inputs, "NFD")
-            # Remove the accent marks.
-            inputs = tf.strings.regex_replace(inputs, r"\p{Mn}", "")
-        if self.split:
-            inputs = tf_text.regex_split(
-                inputs,
-                delim_regex_pattern=WHITESPACE_AND_PUNCTUATION_REGEX,
-                keep_delim_regex_pattern=PUNCTUATION_REGEX,
-            )
+        inputs = pretokenize(
+            inputs, self.lowercase, self.strip_accents, self.split
+        )
 
         # Apply word piece and coerce shape for outputs.
         tokens = self._fast_word_piece.tokenize(inputs)
