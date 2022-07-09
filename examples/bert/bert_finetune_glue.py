@@ -156,7 +156,7 @@ class BertClassificationFinetuner(keras.Model):
             kernel_initializer=initializer,
             name="pooler",
         )
-        self._logit_layer = tf.keras.layers.Dense(
+        self._logit_layer = keras.layers.Dense(
             num_classes,
             kernel_initializer=initializer,
             name="logits",
