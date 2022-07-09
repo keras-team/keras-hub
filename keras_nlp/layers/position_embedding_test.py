@@ -36,7 +36,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         test_layer = position_embedding.PositionEmbedding(
             sequence_length=sequence_length
         )
-        input_tensor = tf.keras.Input(shape=(sequence_length, feature_size))
+        input_tensor = keras.Input(shape=(sequence_length, feature_size))
         output_tensor = test_layer(input_tensor)
 
         # When using static position embedding shapes, the output is expected
@@ -53,7 +53,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         test_layer = position_embedding.PositionEmbedding(
             sequence_length=sequence_length
         )
-        input_tensor = tf.keras.Input(
+        input_tensor = keras.Input(
             shape=(feature_size, sequence_length, feature_size)
         )
         output_tensor = test_layer(input_tensor)
@@ -77,7 +77,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         test_layer = position_embedding.PositionEmbedding(
             sequence_length=sequence_length, dtype="float16"
         )
-        input_tensor = tf.keras.Input(shape=(sequence_length, feature_size))
+        input_tensor = keras.Input(shape=(sequence_length, feature_size))
         output_tensor = test_layer(input_tensor)
 
         # When using static position embedding shapes, the output is expected
@@ -94,7 +94,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
             sequence_length=max_sequence_length
         )
         # Create a 3-dimensional input (the first dimension is implicit).
-        input_tensor = tf.keras.Input(shape=(None, feature_size))
+        input_tensor = keras.Input(shape=(None, feature_size))
         output_tensor = test_layer(input_tensor)
 
         # When using dynamic position embedding shapes, the output is expected
@@ -110,7 +110,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
             sequence_length=max_sequence_length
         )
         # Create a 4-dimensional input (the first dimension is implicit).
-        input_tensor = tf.keras.Input(shape=(None, None, feature_size))
+        input_tensor = keras.Input(shape=(None, None, feature_size))
         output_tensor = test_layer(input_tensor)
 
         # When using dynamic position embedding shapes, the output is expected
@@ -126,10 +126,10 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
             sequence_length=max_sequence_length
         )
         # Create a 3-dimensional input (the first dimension is implicit).
-        input_tensor = tf.keras.Input(shape=(None, feature_size))
+        input_tensor = keras.Input(shape=(None, feature_size))
         output_tensor = test_layer(input_tensor)
 
-        model = tf.keras.Model(input_tensor, output_tensor)
+        model = keras.Model(input_tensor, output_tensor)
 
         # Create input data that is shorter than max_sequence_length, which
         # should trigger a down-slice.
@@ -151,7 +151,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
             sequence_length=max_sequence_length,
             initializer=custom_init,
         )
-        inputs = tf.keras.Input(shape=(max_sequence_length, feature_size))
+        inputs = keras.Input(shape=(max_sequence_length, feature_size))
         outputs = test_layer(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)
 
@@ -176,11 +176,11 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
             initializer=custom_init,
         )
         # Create a 3-dimensional ragged input (the first dimension is implicit).
-        input_tensor = tf.keras.Input(
+        input_tensor = keras.Input(
             shape=(None, feature_size), dtype=tf.float32, ragged=True
         )
         output_tensor = test_layer(input_tensor)
-        model = tf.keras.Model(input_tensor, output_tensor)
+        model = keras.Model(input_tensor, output_tensor)
 
         input_data = tf.ragged.constant(
             [
@@ -213,11 +213,11 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
             initializer=custom_init,
         )
         # Create a 4-dimensional ragged input (the first dimension is implicit).
-        input_tensor = tf.keras.Input(
+        input_tensor = keras.Input(
             shape=(None, None, feature_size), dtype=tf.float32, ragged=True
         )
         output_tensor = test_layer(input_tensor)
-        model = tf.keras.Model(input_tensor, output_tensor)
+        model = keras.Model(input_tensor, output_tensor)
 
         input_data = tf.ragged.constant(
             [
@@ -256,7 +256,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         test_layer = position_embedding.PositionEmbedding(
             sequence_length=max_sequence_length
         )
-        inputs = tf.keras.Input(shape=(max_sequence_length, feature_size))
+        inputs = keras.Input(shape=(max_sequence_length, feature_size))
         outputs = test_layer(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)
 
@@ -308,7 +308,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         test_layer = position_embedding.PositionEmbedding(
             sequence_length=max_sequence_length
         )
-        inputs = tf.keras.Input(shape=(max_sequence_length, feature_size))
+        inputs = keras.Input(shape=(max_sequence_length, feature_size))
         outputs = test_layer(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)
 

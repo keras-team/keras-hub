@@ -249,9 +249,9 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
         )
         tokenizer = UnicodeCharacterTokenizer()
-        inputs = tf.keras.Input(dtype="string", shape=())
+        inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer.detokenize(tokenizer.tokenize(inputs))
-        model = tf.keras.Model(inputs, outputs)
+        model = keras.Model(inputs, outputs)
         model_output = model(input_data)
         self.assertAllEqual(
             model_output,
