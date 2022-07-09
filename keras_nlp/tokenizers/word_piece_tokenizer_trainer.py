@@ -24,6 +24,7 @@ from keras_nlp.tokenizers.word_piece_tokenizer import (
     WHITESPACE_AND_PUNCTUATION_REGEX,
 )
 
+
 def preprocess(text, lowercase, strip_accents, split):
     """Helper function that takes in a dataset element and preprocesses it."""
     # Check for correct types.
@@ -50,6 +51,7 @@ def preprocess(text, lowercase, strip_accents, split):
         )
     return text
 
+
 def compute_word_piece_vocabulary(
     data,
     vocabulary_size,
@@ -60,13 +62,13 @@ def compute_word_piece_vocabulary(
     suffix_indicator="##",
     reserved_tokens=["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]"],
 ):
-    """A utility to train a Word Piece vocabulary.
+    r"""A utility to train a Word Piece vocabulary.
 
-    Trains a Word Piece vocabulary from an input dataset or a list of filenames. 
-    
-    For custom data loading and pretokenization (`split=False`), the input 
-    `data` should be a `tf.data.Dataset`. If `data` is a list of filenames, 
-    the file format is required to be plain text files, and the text would be 
+    Trains a Word Piece vocabulary from an input dataset or a list of filenames.
+
+    For custom data loading and pretokenization (`split=False`), the input
+    `data` should be a `tf.data.Dataset`. If `data` is a list of filenames,
+    the file format is required to be plain text files, and the text would be
     read in line by line during training.
 
     Args:
@@ -90,7 +92,7 @@ def compute_word_piece_vocabulary(
         Returns a list of vocabulary terms.
 
     Examples:
-    
+
     Basic Usage (from Dataset).
     >>> inputs = tf.data.Dataset.from_tensor_slices(["bat sat pat mat rat"])
     >>> vocab = compute_word_piece_vocabulary(inputs, 9, reserved_tokens=["[UNK]"])
@@ -161,8 +163,8 @@ def compute_word_piece_vocabulary(
         data = tf.data.TextLineDataset(data)
 
     words_data = data.map(
-        lambda text : preprocess(text, lowercase, strip_accents, split),
-        num_parallel_calls=tf.data.AUTOTUNE
+        lambda text: preprocess(text, lowercase, strip_accents, split),
+        num_parallel_calls=tf.data.AUTOTUNE,
     )
     word_counts = learner.count_words(words_data)
     # Train tokenizer.
