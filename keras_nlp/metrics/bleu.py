@@ -70,8 +70,9 @@ class Bleu(keras.metrics.Metric):
     `y_true` should be a tensor of shape `(num_references,)`. For batched
     inputs, `y_pred` should be a tensor of shape `(batch_size,)`,
     and `y_true` should be a tensor of shape `(batch_size, num_references)`. In
-    case of batched inputs, `y_true` can also be of shape `(batch_size, None)`
-    in case different samples have different number of references.
+    case of batched inputs, `y_true` can also be a ragged tensor of shape
+    `(batch_size, None)` if different samples have different number of
+    references.
 
     Args:
         tokenizer: callable. A function that takes a string `tf.RaggedTensor`
@@ -167,7 +168,7 @@ class Bleu(keras.metrics.Metric):
         return inputs
 
     def _get_ngrams(self, segment, max_order):
-        """Extracts all n-grams upto a given maximum order from an input segment.
+        """Extracts all n-grams up to a given maximum order from an input segment.
 
         Uses Python ops. Inspired from
         https://github.com/tensorflow/nmt/blob/master/nmt/scripts/bleu.py.
