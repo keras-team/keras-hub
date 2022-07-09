@@ -85,7 +85,7 @@ def compute_word_piece_vocabulary(
     >>> inputs = tf.data.Dataset.from_tensor_slices(["bat sat: pat mat rat.\n"])
     >>> split_inputs = inputs.map(normalize_and_split)
     >>> vocab = compute_word_piece_vocabulary(
-    ...     split_inputs, 8, split=False, reserved_tokens=["[UNK]"]
+    ...     split_inputs, 9, split=False, reserved_tokens=["[UNK]"]
     ... )
     >>> vocab
     ['[UNK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
@@ -96,11 +96,11 @@ def compute_word_piece_vocabulary(
     >>> def normalize_and_split(x):
     ...     "Strip punctuation and split on whitespace."
     ...     x = tf.strings.regex_replace(x, r"\p{P}", "")
-         return tf.strings.split(x)
+    ...     return tf.strings.split(x)
     >>> with open("test.txt", "w+") as f: f.write("bat sat: pat mat rat.\n")
     >>> inputs = tf.data.TextLineDataset(["test.txt"])
     >>> split_inputs = inputs.map(normalize_and_split)
-    >>> vocab = compute_word_piece_vocabulary(split_inputs, 8, split=False, reserved_tokens=["[UNK]"])
+    >>> vocab = compute_word_piece_vocabulary(split_inputs, 9, split=False, reserved_tokens=["[UNK]"])
     >>> vocab
     ['[UNK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
