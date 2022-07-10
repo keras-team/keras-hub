@@ -54,7 +54,7 @@ flags.DEFINE_string(
 )
 
 flags.DEFINE_string(
-    "saved_evaluations_output",
+    "tsv_prediction_output",
     None,
     "The directory to save the GLUE evaluations.",
 )
@@ -75,12 +75,6 @@ flags.DEFINE_bool(
     "tpu_name",
     None,
     "The TPU to connect to, if None, no TPU will be used.",
-)
-
-flags.DEFINE_bool(
-    "do_evaluation",
-    True,
-    "Whether to run evaluation on test data.",
 )
 
 
@@ -179,14 +173,14 @@ class BertClassificationFinetuner(keras.Model):
             kernel_initializer=initializer,
             name="logits",
         )
-        self._drop_out = tf.keras.layers.Dropout(dropout)
+        self._drop_out_layer = tf.keras.layers.Dropout(dropout)
 
     def call(self, inputs):
         outputs = self.bert_model(inputs)
         # Get the first [CLS] token from each output.
         outputs = outputs[:, 0, :]
         outputs = self._pooler_layer(outputs)
-        outputs = self._drop_out(outputs)
+        outputs = self._drop_out_layer(outputs)
         return self._logit_layer(outputs)
 
 
@@ -197,11 +191,7 @@ class BertHyperModel(keras_tuner.HyperModel):
         self.model_config = model_config
 
     def build(self, hp):
-        # model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
-        model = keras.models.load_model(
-            "gs://chenmoney-testing-east/" + FLAGS.saved_model_input,
-            compile=False,
-        )
+        model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
         model = model.bert_model
         model_config = self.model_config
         finetuning_model = BertClassificationFinetuner(
@@ -292,21 +282,32 @@ def main(_):
             directory=tempfile.mkdtemp(),
         )
 
-    tuner.search(
-        train_ds,
-        epochs=FINETUNING_CONFIG["epochs"],
-        validation_data=validation_ds,
-    )
+    # tuner.search(
+    #     train_ds,
+    #     epochs=FINETUNING_CONFIG["epochs"],
+    #     validation_data=validation_ds,
+    # )
 
-    # Extract the best hyperparameters after the search.
-    best_hp = tuner.get_best_hyperparameters()[0]
-    finetuning_model = tuner.get_best_models()[0]
+    # # Extract the best hyperparameters after the search.
+    # best_hp = tuner.get_best_hyperparameters()[0]
+    # finetuning_model = tuner.get_best_models()[0]
+    model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
+    model = model.bert_model
+    finetuning_model = BertClassificationFinetuner(
+        bert_model=model,
+        hidden_size=model_config["hidden_size"],
+        num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
+        initializer=keras.initializers.TruncatedNormal(
+            stddev=model_config["initializer_range"]
+        ),
+        dropout=0.1,
+    )
 
     print(
         f"The best hyperparameters found are:\nLearning Rate: {best_hp['lr']}"
     )
 
-    if FLAGS.saved_evaluations_output:
+    if FLAGS.tsv_prediction_output:
         filenames = {
             "cola": "CoLA.tsv",
             "sst2": "SST-2.tsv",
@@ -328,39 +329,35 @@ def main(_):
         }
 
         filename = (
-            FLAGS.saved_evaluations_output + "/" + filenames[FLAGS.task_name]
+            FLAGS.tsv_prediction_output + "/" + filenames[FLAGS.task_name]
         )
 
         @tf.function
-        def eval_step(iterator):
+        def eval_step(inputs):
             def step_fn(inputs):
-                x, _ = inputs
-                prob = finetuning_model(x)
+                prob = finetuning_model(inputs)
                 pred = tf.argmax(prob, -1)
                 return pred
 
-            return strategy.run(step_fn, args=(next(iterator),))
+            return strategy.run(step_fn, args=(inputs,))
 
-    labelname = labelnames.get(FLAGS.task_name)
-    test_iterator = iter(test_ds)
-    with tf.io.gfile.GFile(filename, "w") as f:
-        # Write the required headline for GLUE.
-        f.write("index\tprediction\n")
-        for i in range(test_ds.cardinality()):
-            pred = eval_step(test_iterator)
-            pred = pred._values[0].numpy()
-            for j in range(len(pred)):
-                idx = i * batch_size + j
-                if labelname:
-                    pred_value = labelname[int(pred[j])]
-                else:
-                    pred_value = pred[j]
-                # GLUE requires a format of index + tab + prediction.
-                f.write(str(idx) + "\t" + str(pred_value) + "\n")
-
-    if FLAGS.do_evaluation:
-        print("Evaluating on test set.")
-        finetuning_model.evaluate(test_ds)
+        labelname = labelnames.get(FLAGS.task_name)
+        with tf.io.gfile.GFile(filename, "w") as f:
+            # Write the required headline for GLUE.
+            f.write("index\tprediction\n")
+            for i, x in enumerate(test_ds):
+                pred = eval_step(x)
+                pred = pred._values[0].numpy()
+                for j in range(len(pred)):
+                    idx = i * batch_size + j
+                    if labelname:
+                        pred_value = labelname[int(pred[j])]
+                    else:
+                        pred_value = pred[j]
+                    # A GLUE submission requires a tsv file with an index and
+                    # prediction per line.
+                    f.write(str(idx) + "\t" + str(pred_value) + "\n")
+                break
 
     # TODO(mattdangerw): After incorporating keras_nlp tokenization, save an
     # end-to-end model includeing preprocessing that operates on raw strings.
