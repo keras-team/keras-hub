@@ -282,26 +282,15 @@ def main(_):
             directory=tempfile.mkdtemp(),
         )
 
-    # tuner.search(
-    #     train_ds,
-    #     epochs=FINETUNING_CONFIG["epochs"],
-    #     validation_data=validation_ds,
-    # )
-
-    # # Extract the best hyperparameters after the search.
-    # best_hp = tuner.get_best_hyperparameters()[0]
-    # finetuning_model = tuner.get_best_models()[0]
-    model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
-    model = model.bert_model
-    finetuning_model = BertClassificationFinetuner(
-        bert_model=model,
-        hidden_size=model_config["hidden_size"],
-        num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
-        initializer=keras.initializers.TruncatedNormal(
-            stddev=model_config["initializer_range"]
-        ),
-        dropout=0.1,
+    tuner.search(
+        train_ds,
+        epochs=FINETUNING_CONFIG["epochs"],
+        validation_data=validation_ds,
     )
+
+    # Extract the best hyperparameters after the search.
+    best_hp = tuner.get_best_hyperparameters()[0]
+    finetuning_model = tuner.get_best_models()[0]
 
     print(
         f"The best hyperparameters found are:\nLearning Rate: {best_hp['lr']}"
@@ -323,7 +312,7 @@ def main(_):
 
         labelnames = {
             "mnli_matched": ["entailment", "neutral", "contradiction"],
-            "mnli_matched": ["entailment", "neutral", "contradiction"],
+            "mnli_mismatched": ["entailment", "neutral", "contradiction"],
             "qnli": ["entailment", "not_entailment"],
             "rte": ["entailment", "not_entailment"],
         }
