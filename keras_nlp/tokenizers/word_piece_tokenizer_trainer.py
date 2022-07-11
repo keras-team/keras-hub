@@ -64,9 +64,9 @@ def compute_word_piece_vocabulary(
 
     Basic Usage (from Dataset).
     >>> inputs = tf.data.Dataset.from_tensor_slices(["bat sat pat mat rat"])
-    >>> vocab = compute_word_piece_vocabulary(inputs, 9, reserved_tokens=["[UNK]"])
+    >>> vocab = compute_word_piece_vocabulary(inputs, 9)
     >>> vocab
-    ['[UNK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
+    ['[PAD]', '[CLS]', '[SEP]', '[UNK]', '[MASK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab, oov_token="[UNK]")
     >>> outputs = inputs.map(tokenizer.tokenize)
     >>> for x in outputs: print(x)
@@ -75,7 +75,7 @@ def compute_word_piece_vocabulary(
     Basic Usage (from filenames).
     >>> with open("test.txt", "w+") as f: f.write("bat sat pat mat rat\n")
     >>> inputs = ["test.txt"]
-    >>> vocab = compute_word_piece_vocabulary(inputs, 9, reserved_tokens=["[UNK]"])
+    >>> vocab = compute_word_piece_vocabulary(inputs, 9)
 
     Custom Split Usage (from Dataset).
     >>> def normalize_and_split(x):
@@ -85,10 +85,10 @@ def compute_word_piece_vocabulary(
     >>> inputs = tf.data.Dataset.from_tensor_slices(["bat sat: pat mat rat.\n"])
     >>> split_inputs = inputs.map(normalize_and_split)
     >>> vocab = compute_word_piece_vocabulary(
-    ...     split_inputs, 9, split=False, reserved_tokens=["[UNK]"]
+    ...     split_inputs, 9, split=False
     ... )
     >>> vocab
-    ['[UNK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
+    ['[PAD]', '[CLS]', '[SEP]', '[UNK]', '[MASK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
     >>> inputs.map(tokenizer.tokenize)
 
@@ -100,9 +100,9 @@ def compute_word_piece_vocabulary(
     >>> with open("test.txt", "w+") as f: f.write("bat sat: pat mat rat.\n")
     >>> inputs = tf.data.TextLineDataset(["test.txt"])
     >>> split_inputs = inputs.map(normalize_and_split)
-    >>> vocab = compute_word_piece_vocabulary(split_inputs, 9, split=False, reserved_tokens=["[UNK]"])
+    >>> vocab = compute_word_piece_vocabulary(split_inputs, 9, split=False)
     >>> vocab
-    ['[UNK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
+    ['[PAD]', '[CLS]', '[SEP]', '[UNK]', '[MASK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
     >>> inputs.map(tokenizer.tokenize)
     """
