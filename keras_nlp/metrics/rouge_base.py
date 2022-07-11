@@ -48,6 +48,9 @@ class RougeBase(keras.metrics.Metric):
             not specified, it defaults to tf.float32.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
+
+    References:
+        - [Lin et al., 2004](https://aclanthology.org/W04-1013/)
     """
 
     def __init__(
