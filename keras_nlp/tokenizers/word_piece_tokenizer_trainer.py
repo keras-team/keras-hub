@@ -70,7 +70,7 @@ def compute_word_piece_vocabulary(
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab, oov_token="[UNK]")
     >>> outputs = inputs.map(tokenizer.tokenize)
     >>> for x in outputs: print(x)
-    tf.Tensor([6 12 10 12 8 12 7 12 9 12], shape=(10,), dtype=int32)
+    tf.Tensor([ 6 12 10 12  8 12  7 12  9 12], shape=(10,), dtype=int32)
 
     Basic Usage (from filenames).
     >>> with open("test.txt", "w+") as f: f.write("bat sat pat mat rat\n")
