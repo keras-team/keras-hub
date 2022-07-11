@@ -6,13 +6,13 @@ local tagName = std.extVar('tag_name');
 local gcsBucket = std.extVar('gcs_bucket');
 
 local unittest = base.BaseTest {
-  // Configure job name
+  // Configure job name.
   frameworkPrefix: "tf",
   modelName: "keras-nlp",
   mode: "unit-tests",
   timeout: 3600, # 1 hour, in seconds
 
-  // Set up runtime environment
+  // Set up runtime environment.
   image: image,
   imageTag: tagName,
   accelerator: gpus.teslaV100,
@@ -22,14 +22,14 @@ local unittest = base.BaseTest {
     'bash',
     '-c',
     |||
-      # Run whatever is in `command` here
+      # Run whatever is in `command` here.
       cd keras-nlp
       ${@:0}
     |||
   ],
   command: [
     'pytest',
-    'keras_nlp/layers',
+    'keras_nlp',
   ],
 };
 

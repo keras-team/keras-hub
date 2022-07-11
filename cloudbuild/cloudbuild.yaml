@@ -1,11 +1,16 @@
 substitutions:
   # GCS location to write temporary checkpoints and summaries.
-  _GCS_BUCKET: 'gs://chenmoney-gke-test'
+  # TODO(chenmoneygithub): Change the bucket to a stable one after GPU is 
+  # granted for keras-team-test.
+  _GCS_BUCKET: 'gs://keras-nlp-test'
   # Name of GKE cluster in which to run Job.
+  # TODO(chenmoneygithub): Change the cluster to a stable one after GPU is 
+  # granted for keras-team-test.
   _CLUSTER_NAME: 'tutorial-cluster'
   # Location of GKE cluster.
   _CLUSTER_ZONE: 'us-central1-b'
-  _TAG_NAME: '2022-07-08-3pm'
+  # Image name.
+  _IMAGE_NAME: 'us-central1-docker.pkg.dev/keras-team-gcp/keras-nlp-test/test-image'
 steps:
 - name: 'docker'
   id: build-image
@@ -13,13 +18,13 @@ steps:
     'build',
     '.',
     '-f', 'cloudbuild/Dockerfile',
-    '-t', 'us-central1-docker.pkg.dev/keras-team-gcp/keras-nlp-test/test-image:$_TAG_NAME',
+    '-t', '$_IMAGE_NAME:$BUILD_ID',
   ]
 - name: 'docker'
   id: push-image
   waitFor:
   - build-image
-  args: ['push', 'us-central1-docker.pkg.dev/keras-team-gcp/keras-nlp-test/test-image:$_TAG_NAME']
+  args: ['push', '$_IMAGE_NAME:$BUILD_ID']
 - name: 'golang'
   id: download-jsonnet
   waitFor: ['-']
@@ -46,8 +51,8 @@ steps:
     'cloudbuild/unit_test_jobs.jsonnet',
     '--string',
     '-J', 'ml-testing-accelerators',
-    '--ext-str', 'image=us-central1-docker.pkg.dev/keras-team-gcp/keras-nlp-test/test-image',
-    '--ext-str', 'tag_name=$_TAG_NAME',
+    '--ext-str', 'image=$_IMAGE_NAME',
+    '--ext-str', 'tag_name=$BUILD_ID',
     '--ext-str', 'gcs_bucket=$_GCS_BUCKET',
     '-o', 'output.yaml',
   ]
