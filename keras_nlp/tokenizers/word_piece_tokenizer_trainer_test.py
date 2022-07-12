@@ -17,8 +17,8 @@ import os
 
 import tensorflow as tf
 
-from keras_nlp.tokenizers.wordpiece_tokenizer_trainer import (
-    compute_wordpiece_vocabulary,
+from keras_nlp.tokenizers.word_piece_tokenizer_trainer import (
+    compute_word_piece_vocabulary,
 )
 
 
@@ -27,7 +27,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         test_text = ["baa maa caa saa aaa"]
         test_output = ["a", "b", "c", "m", "s", "##aa", "##a", "##b"]
         data = tf.data.Dataset.from_tensor_slices(test_text)
-        vocab = compute_wordpiece_vocabulary(data, 8, reserved_tokens=[])
+        vocab = compute_word_piece_vocabulary(data, 8, reserved_tokens=[])
         self.assertAllEqual(vocab, test_output)
 
     def test_filenames_input(self):
@@ -35,7 +35,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         with open("test.txt", "w+") as f:
             f.write(test_text + "\n")
         test_output = ["a", "b", "c", "m", "s", "##aa", "##a", "##b"]
-        vocab = compute_wordpiece_vocabulary(
+        vocab = compute_word_piece_vocabulary(
             ["test.txt"], 8, reserved_tokens=[]
         )
         self.assertAllEqual(vocab, test_output)
@@ -51,9 +51,9 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             "When learning a vocab from files, `split` must be `True`. "
             "To compute a vocabulary with custom split rules, load your "
             "data as a dataset, split it, and pass it to "
-            r"`compute_wordpiece_vocabulary\(\)` with split=False.",
+            r"`compute_word_piece_vocabulary\(\)` with split=False.",
         ):
-            compute_wordpiece_vocabulary(["test.txt"], 10, split=False)
+            compute_word_piece_vocabulary(["test.txt"], 10, split=False)
         os.remove("test.txt")
 
     def test_invalid_input(self):
@@ -63,19 +63,19 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             "The dataset elements in `data` must have string dtype. "
             "Recieved: <dtype: 'int32'>.",
         ):
-            compute_wordpiece_vocabulary(test_text_invalid, 10)
+            compute_word_piece_vocabulary(test_text_invalid, 10)
         with self.assertRaisesRegex(
             ValueError,
             "The `data` argument must be either `tf.data.Dataset` or `list`. "
             "Recieved: <class 'int'>.",
         ):
-            compute_wordpiece_vocabulary(4, 4)
+            compute_word_piece_vocabulary(4, 4)
 
     def test_lowercase(self):
         test_text = tf.data.Dataset.from_tensor_slices(["BaA Maa Caa Saa AAa"])
         test_output = ["a", "b", "c", "m", "s", "##aa", "##a", "##b"]
 
-        vocab = compute_wordpiece_vocabulary(
+        vocab = compute_word_piece_vocabulary(
             test_text, 8, lowercase=True, reserved_tokens=[]
         )
         self.assertAllEqual(vocab, test_output)
@@ -84,7 +84,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         test_text = tf.data.Dataset.from_tensor_slices(["BAA MAA CAA SAA AAA"])
         test_output = ["A", "B", "C", "M", "S", "##AA", "##A", "##B"]
 
-        vocab = compute_wordpiece_vocabulary(
+        vocab = compute_word_piece_vocabulary(
             test_text, 8, lowercase=False, reserved_tokens=[]
         )
         self.assertAllEqual(vocab, test_output)
@@ -96,7 +96,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             ]
         )
         # The token would be removed for being too long.
-        vocab = compute_wordpiece_vocabulary(
+        vocab = compute_word_piece_vocabulary(
             test_text, 20, split=False, reserved_tokens=[]
         )
         self.assertAllEqual(vocab, [])
@@ -108,10 +108,10 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         test_text_split = tf.data.Dataset.from_tensor_slices(
             ["This", "string", ":", "would", "be", "split", "up", "."]
         )
-        output_vocab_1 = compute_wordpiece_vocabulary(
+        output_vocab_1 = compute_word_piece_vocabulary(
             test_text, 20, split=True, lowercase=False, strip_accents=False
         )
-        output_vocab_2 = compute_wordpiece_vocabulary(
+        output_vocab_2 = compute_word_piece_vocabulary(
             test_text_split,
             20,
             split=False,
@@ -125,7 +125,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             ["áááá éááá íááá óááá úááá"]
         )
         output = ["a", "e", "i", "o", "u", "##aaa", "##a", "##e"]
-        vocab = compute_wordpiece_vocabulary(
+        vocab = compute_word_piece_vocabulary(
             test_text, 8, strip_accents=True, reserved_tokens=[]
         )
         self.assertAllEqual(vocab, output)
@@ -135,7 +135,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             ["áááá éááá íááá óááá úááá"]
         )
         output = ["á", "é", "í", "ó", "ú", "##ááá", "##á", "##é"]
-        vocab = compute_wordpiece_vocabulary(
+        vocab = compute_word_piece_vocabulary(
             test_text, 8, strip_accents=False, reserved_tokens=[]
         )
         self.assertAllEqual(vocab, output)
@@ -144,7 +144,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         test_text = tf.data.Dataset.from_tensor_slices(["BaA Maa Caa Saa AAa"])
         test_output = ["a", "b", "c", "m", "s", "##aa", "##a", "##b"]
 
-        compute_wordpiece_vocabulary(
+        compute_word_piece_vocabulary(
             test_text, 8, vocabulary_output_file="test.txt", reserved_tokens=[]
         )
         vocab_from_file = []
@@ -162,7 +162,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             ]
         )
         output = ["token1", "token2", "token3", "token4"]
-        vocab = compute_wordpiece_vocabulary(
+        vocab = compute_word_piece_vocabulary(
             test_text, 20, reserved_tokens=output, split=False
         )
         self.assertAllEqual(vocab, output)
@@ -170,7 +170,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
     def test_suffix_indicator(self):
         test_text = tf.data.Dataset.from_tensor_slices(["baa maa caa saa aaa"])
         test_output = ["a", "b", "c", "m", "s", "@@aa", "@@a", "@@b"]
-        vocab = compute_wordpiece_vocabulary(
+        vocab = compute_word_piece_vocabulary(
             test_text, 8, suffix_indicator="@@", reserved_tokens=[]
         )
         self.assertAllEqual(vocab, test_output)

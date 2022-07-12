@@ -18,10 +18,10 @@ from tensorflow_text.tools.wordpiece_vocab import (
     wordpiece_tokenizer_learner_lib as learner,
 )
 
-from keras_nlp.tokenizers.wordpiece_tokenizer import pretokenize
+from keras_nlp.tokenizers.word_piece_tokenizer import pretokenize
 
 
-def compute_wordpiece_vocabulary(
+def compute_word_piece_vocabulary(
     data,
     vocabulary_size,
     vocabulary_output_file=None,
@@ -56,7 +56,7 @@ def compute_wordpiece_vocabulary(
             of whole words. `split` is required to be `True` when `data` is a
             list of filenames.
         suffix_indicator: str, defaults to "##". The characters prepended to a
-            wordpiece to indicate that it is a suffix to another subword.
+            WordPiece to indicate that it is a suffix to another subword.
             E.g. "##ing".
         reserved_tokens: list of strings. A list of tokens that must be included in the vocabulary.
 
@@ -67,7 +67,7 @@ def compute_wordpiece_vocabulary(
 
     Basic Usage (from Dataset).
     >>> inputs = tf.data.Dataset.from_tensor_slices(["bat sat pat mat rat"])
-    >>> vocab = compute_wordpiece_vocabulary(inputs, 13)
+    >>> vocab = compute_word_piece_vocabulary(inputs, 13)
     >>> vocab
     ['[PAD]', '[CLS]', '[SEP]', '[UNK]', '[MASK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab, oov_token="[UNK]")
@@ -79,7 +79,7 @@ def compute_wordpiece_vocabulary(
     Basic Usage (from filenames).
     >>> with open("test.txt", "w+") as f: f.write("bat sat pat mat rat\n")
     >>> inputs = ["test.txt"]
-    >>> vocab = compute_wordpiece_vocabulary(inputs, 13)
+    >>> vocab = compute_word_piece_vocabulary(inputs, 13)
 
     Custom Split Usage (from Dataset).
     >>> def normalize_and_split(x):
@@ -88,7 +88,7 @@ def compute_wordpiece_vocabulary(
     ...     return tf.strings.split(x)
     >>> inputs = tf.data.Dataset.from_tensor_slices(["bat sat: pat mat rat.\n"])
     >>> split_inputs = inputs.map(normalize_and_split)
-    >>> vocab = compute_wordpiece_vocabulary(
+    >>> vocab = compute_word_piece_vocabulary(
     ...     split_inputs, 13, split=False
     ... )
     >>> vocab
@@ -104,7 +104,7 @@ def compute_wordpiece_vocabulary(
     >>> with open("test.txt", "w+") as f: f.write("bat sat: pat mat rat.\n")
     >>> inputs = tf.data.TextLineDataset(["test.txt"])
     >>> split_inputs = inputs.map(normalize_and_split)
-    >>> vocab = compute_wordpiece_vocabulary(split_inputs, 13, split=False)
+    >>> vocab = compute_word_piece_vocabulary(split_inputs, 13, split=False)
     >>> vocab
     ['[PAD]', '[CLS]', '[SEP]', '[UNK]', '[MASK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
@@ -123,7 +123,7 @@ def compute_wordpiece_vocabulary(
                 "When learning a vocab from files, `split` must be `True`. "
                 "To compute a vocabulary with custom split rules, load your "
                 "data as a dataset, split it, and pass it to "
-                "`compute_wordpiece_vocabulary()` with split=False."
+                "`compute_word_piece_vocabulary()` with split=False."
             )
         data = tf.data.TextLineDataset(data)
 

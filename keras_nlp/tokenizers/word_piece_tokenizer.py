@@ -107,7 +107,7 @@ def pretokenize(text, lowercase, strip_accents, split):
 
 
 class WordPieceTokenizer(tokenizer.Tokenizer):
-    """A wordpiece tokenizer layer.
+    """A WordPiece tokenizer layer.
 
     This layer provides an efficient, in graph, implementation of the WordPiece
     algorithm used by BERT and other models.
@@ -144,8 +144,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     Args:
         vocabulary: A list of strings or a string filename path. If
             passing a list, each element of the list should be a single
-            wordpiece token string. If passing a filename, the file should be a
-            plain text file containing a single wordpiece token per line.
+            WordPiece token string. If passing a filename, the file should be a
+            plain text file containing a single WordPiece token per line.
         sequence_length: int. If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of sequence_length.
         lowercase: bool, defaults to `True`. If true, the input text will be
@@ -158,7 +158,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             before calling the tokenizer, and passed as a dense or ragged tensor
             of whole words.
         suffix_indicator: str, defaults to "##". The characters prepended to a
-            wordpiece to indicate that it is a suffix to another subword.
+            WordPiece to indicate that it is a suffix to another subword.
             E.g. "##ing".
         oov_token: str, defaults to "[UNK]". The string value to substitute for
             an unknown token. It must be included in the vocab.
@@ -265,7 +265,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "the `oov_token` argument when creating the tokenizer."
             )
 
-        self._fast_wordpiece = tf_text.FastWordpieceTokenizer(
+        self._fast_word_piece = tf_text.FastWordpieceTokenizer(
             vocab=self.vocabulary,
             token_out_type=self.compute_dtype,
             suffix_indicator=suffix_indicator,
@@ -320,8 +320,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             inputs, self.lowercase, self.strip_accents, self.split
         )
 
-        # Apply wordpiece and coerce shape for outputs.
-        tokens = self._fast_wordpiece.tokenize(inputs)
+        # Apply WordPiece and coerce shape for outputs.
+        tokens = self._fast_word_piece.tokenize(inputs)
         # By default tf.text tokenizes text with two ragged dimensions (one for
         # split words and one for split subwords). We will collapse to a single
         # ragged dimension which is a better out of box default.
@@ -340,4 +340,4 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        return self._fast_wordpiece.detokenize(inputs)
+        return self._fast_word_piece.detokenize(inputs)
