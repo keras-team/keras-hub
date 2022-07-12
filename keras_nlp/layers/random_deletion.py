@@ -11,10 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from unittest import skip
 import tensorflow as tf
 from keras import backend
 from tensorflow import keras
-
+from tensorflow.python.ops.ragged import ragged_array_ops
 
 class RandomDeletion(keras.layers.Layer):
     """Augments input by randomly deleting words.
@@ -58,7 +59,7 @@ class RandomDeletion(keras.layers.Layer):
     """
 
     def __init__(
-        self, rate, max_deletions=None, seed=None, name=None, **kwargs
+        self, rate, max_deletions=None, skip_list=None, skip_fn=None, py_skip_fn=None, seed=None, name=None, **kwargs
     ):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
@@ -76,12 +77,28 @@ class RandomDeletion(keras.layers.Layer):
         self.max_deletions = max_deletions
         self.seed = seed
         self._random_generator = backend.RandomGenerator(seed)
+        self.skip_list = skip_list
+        self.skip_fn = skip_fn
+        self.py_skip_fn = py_skip_fn
 
         if self.rate > 1 or self.rate < 0:
             raise ValueError(
                 "Rate must be between 0 and 1 (both inclusive)."
                 f"Received: rate={rate}"
             )
+
+        if [self.skip_list, self.skip_fn, self.py_skip_fn].count(None) < 2:
+            raise ValueError(
+                "Exactly one of skip_list, skip_fn, py_skip_fn must be "
+                "provided."
+            )
+
+        if self.skip_list:
+            self.StaticHashTable = tf.lookup.StaticHashTable(
+                tf.lookup.KeyValueTensorInitializer(
+                    tf.convert_to_tensor(self.skip_list), 
+                    tf.convert_to_tensor([False]*len(self.skip_list))),
+                    default_value=True)
 
     def call(self, inputs):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
@@ -101,8 +118,22 @@ class RandomDeletion(keras.layers.Layer):
             # Convert to ragged tensor.
             inputs = tf.RaggedTensor.from_tensor(inputs)
 
+        # skip words that are in the skip_list
+        skip_masks = None
+        if self.skip_list:
+            skip_masks = self.StaticHashTable.lookup(inputs.flat_values)
+        elif self.skip_fn:
+            skip_masks = tf.map_fn(self.skip_fn, inputs)
+        elif self.py_skip_fn:
+            skip_masks = tf.py_function(self.py_skip_fn, [inputs.flat_values], tf.bool)
+
         positions_flat = tf.range(tf.size(inputs.flat_values))
         positions = inputs.with_flat_values(positions_flat)
+
+        if skip_masks is not None:
+            positions = ragged_array_ops.boolean_mask(positions, 
+                                inputs.with_flat_values(skip_masks))
+        
 
         # Figure out how many we are going to select.
         word_counts = tf.cast(inputs.row_lengths(), "float32")
