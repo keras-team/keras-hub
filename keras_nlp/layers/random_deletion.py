@@ -11,12 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from unittest import skip
 import tensorflow as tf
-from keras import backend
 from tensorflow import keras
 from tensorflow.python.ops.ragged import ragged_array_ops
-
+import random
 class RandomDeletion(keras.layers.Layer):
     """Augments input by randomly deleting words.
 
@@ -75,8 +73,8 @@ class RandomDeletion(keras.layers.Layer):
         super().__init__(name=name, **kwargs)
         self.rate = rate
         self.max_deletions = max_deletions
-        self.seed = seed
-        self._random_generator = backend.RandomGenerator(seed)
+        self.seed = random.randint(1, 1e9) if seed is None else seed
+        self._generator = tf.random.Generator.from_seed(self.seed)
         self.skip_list = skip_list
         self.skip_fn = skip_fn
         self.py_skip_fn = py_skip_fn
@@ -126,20 +124,18 @@ class RandomDeletion(keras.layers.Layer):
             skip_masks = tf.map_fn(self.skip_fn, inputs)
         elif self.py_skip_fn:
             skip_masks = tf.py_function(self.py_skip_fn, [inputs.flat_values], tf.bool)
-
+            
         positions_flat = tf.range(tf.size(inputs.flat_values))
         positions = inputs.with_flat_values(positions_flat)
-
         if skip_masks is not None:
-            positions = ragged_array_ops.boolean_mask(positions, 
-                                inputs.with_flat_values(skip_masks))
+            positions = ragged_array_ops.boolean_mask(positions, inputs.with_flat_values(skip_masks))
         
 
         # Figure out how many we are going to select.
         word_counts = tf.cast(inputs.row_lengths(), "float32")
         num_to_select = tf.random.stateless_binomial(
             shape=tf.shape(word_counts),
-            seed=tf.random.get_global_generator().make_seeds()[:, 0],
+            seed=self._generator.make_seeds()[:, 0],
             counts=word_counts,
             probs=self.rate,
         )
@@ -151,7 +147,7 @@ class RandomDeletion(keras.layers.Layer):
         def _shuffle_and_trim(x):
             positions, top_n = x
             shuffled = tf.random.shuffle(
-                positions, seed=self._random_generator.make_legacy_seed()
+                positions, seed=self.seed
             )
             return shuffled[:top_n]
 
