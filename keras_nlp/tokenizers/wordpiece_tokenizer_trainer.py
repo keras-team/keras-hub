@@ -11,17 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Trainer for Word Piece Tokenizer."""
+"""Trainer for WordPiece Tokenizer."""
 
 import tensorflow as tf
 from tensorflow_text.tools.wordpiece_vocab import (
     wordpiece_tokenizer_learner_lib as learner,
 )
 
-from keras_nlp.tokenizers.word_piece_tokenizer import pretokenize
+from keras_nlp.tokenizers.wordpiece_tokenizer import pretokenize
 
 
-def compute_word_piece_vocabulary(
+def compute_wordpiece_vocabulary(
     data,
     vocabulary_size,
     vocabulary_output_file=None,
@@ -31,9 +31,9 @@ def compute_word_piece_vocabulary(
     suffix_indicator="##",
     reserved_tokens=["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]"],
 ):
-    r"""A utility to train a Word Piece vocabulary.
+    r"""A utility to train a WordPiece vocabulary.
 
-    Trains a Word Piece vocabulary from an input dataset or a list of filenames.
+    Trains a WordPiece vocabulary from an input dataset or a list of filenames.
 
     For custom data loading and pretokenization (`split=False`), the input
     `data` should be a `tf.data.Dataset`. If `data` is a list of filenames,
@@ -41,21 +41,24 @@ def compute_word_piece_vocabulary(
     read in line by line during training.
 
     Args:
-        data: A tf.data.Dataset, or a list of filenames.
-        vocabulary_size: The maximum size of a vocabulary to be trained.
-        vocabulary_output_file: The location to write a vocabulary file.
-        lowercase: If true, the input text will be first lowered before
-            tokenization.
-        strip_accents: If true, all accent marks will be removed from text
-            before tokenization.
-        split: If true, input will be split on whitespace and punctuation
-            marks, and all punctuation marks will be kept as tokens. If false,
-            input should be split ("pre-tokenized") before calling the
-            tokenizer, and passed as a dense or ragged tensor of whole words.
-            `split` is required to be`True` when `data` is a list of filenames.
-        suffix_indicator: The characters prepended to a wordpiece to indicate
-            that it is a suffix to another subword.
-        reserved_tokens: A list of tokens that must be included in the vocabulary.
+        data: A `tf.data.Dataset`, or a list of filenames.
+        vocabulary_size: int. The maximum size of a vocabulary to be trained.
+        vocabulary_output_file: str, defaults to `None`. The location to write a
+            vocabulary file.
+        lowercase: bool, defaults to `True`. If true, the input text will be
+            lowercased before tokenization.
+        strip_accents: bool, defaults to `True`. If true, all accent marks will
+            be removed from text before tokenization.
+        split: bool, defaults to `True`. If true, input will be split on
+            whitespace and punctuation marks, and all punctuation marks will be
+            kept as tokens. If false, input should be split ("pre-tokenized")
+            before calling the tokenizer, and passed as a dense or ragged tensor
+            of whole words. `split` is required to be `True` when `data` is a
+            list of filenames.
+        suffix_indicator: str, defaults to "##". The characters prepended to a
+            wordpiece to indicate that it is a suffix to another subword.
+            E.g. "##ing".
+        reserved_tokens: list of strings. A list of tokens that must be included in the vocabulary.
 
     Returns:
         Returns a list of vocabulary terms.
@@ -64,18 +67,19 @@ def compute_word_piece_vocabulary(
 
     Basic Usage (from Dataset).
     >>> inputs = tf.data.Dataset.from_tensor_slices(["bat sat pat mat rat"])
-    >>> vocab = compute_word_piece_vocabulary(inputs, 13)
+    >>> vocab = compute_wordpiece_vocabulary(inputs, 13)
     >>> vocab
     ['[PAD]', '[CLS]', '[SEP]', '[UNK]', '[MASK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab, oov_token="[UNK]")
     >>> outputs = inputs.map(tokenizer.tokenize)
-    >>> for x in outputs: print(x)
+    >>> for x in outputs:
+    ...     print(x)
     tf.Tensor([ 6 12 10 12  8 12  7 12  9 12], shape=(10,), dtype=int32)
 
     Basic Usage (from filenames).
     >>> with open("test.txt", "w+") as f: f.write("bat sat pat mat rat\n")
     >>> inputs = ["test.txt"]
-    >>> vocab = compute_word_piece_vocabulary(inputs, 13)
+    >>> vocab = compute_wordpiece_vocabulary(inputs, 13)
 
     Custom Split Usage (from Dataset).
     >>> def normalize_and_split(x):
@@ -84,7 +88,7 @@ def compute_word_piece_vocabulary(
     ...     return tf.strings.split(x)
     >>> inputs = tf.data.Dataset.from_tensor_slices(["bat sat: pat mat rat.\n"])
     >>> split_inputs = inputs.map(normalize_and_split)
-    >>> vocab = compute_word_piece_vocabulary(
+    >>> vocab = compute_wordpiece_vocabulary(
     ...     split_inputs, 13, split=False
     ... )
     >>> vocab
@@ -100,7 +104,7 @@ def compute_word_piece_vocabulary(
     >>> with open("test.txt", "w+") as f: f.write("bat sat: pat mat rat.\n")
     >>> inputs = tf.data.TextLineDataset(["test.txt"])
     >>> split_inputs = inputs.map(normalize_and_split)
-    >>> vocab = compute_word_piece_vocabulary(split_inputs, 13, split=False)
+    >>> vocab = compute_wordpiece_vocabulary(split_inputs, 13, split=False)
     >>> vocab
     ['[PAD]', '[CLS]', '[SEP]', '[UNK]', '[MASK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
@@ -119,7 +123,7 @@ def compute_word_piece_vocabulary(
                 "When learning a vocab from files, `split` must be `True`. "
                 "To compute a vocabulary with custom split rules, load your "
                 "data as a dataset, split it, and pass it to "
-                "`compute_word_piece_vocabulary()` with split=False."
+                "`compute_wordpiece_vocabulary()` with split=False."
             )
         data = tf.data.TextLineDataset(data)
 

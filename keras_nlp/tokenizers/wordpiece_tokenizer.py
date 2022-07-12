@@ -64,7 +64,23 @@ WHITESPACE_AND_PUNCTUATION_REGEX = r"|".join(
 
 
 def pretokenize(text, lowercase, strip_accents, split):
-    """Helper function that takes in a dataset element and pretokenizes it."""
+    """Helper function that takes in a dataset element and pretokenizes it.
+
+    Args:
+        text: `tf.Tensor` or `tf.RaggedTensor`. Input to be pretokenized.
+        lowercase: bool, defaults to `True`. If true, the input text will be
+            lowercased before tokenization.
+        strip_accents: bool, defaults to `True`. If true, all accent marks will
+            be removed from text before tokenization.
+        split: bool, defaults to `True`. If true, input will be split on
+            whitespace and punctuation marks, and all punctuation marks will be
+            kept as tokens. If false, input should be split ("pre-tokenized")
+            before calling the tokenizer, and passed as a dense or ragged tensor
+            of whole words.
+
+    Returns:
+        A tensor containing the pre-processed and pre-tokenized `text`.
+    """
     # Check for correct types.
     if text.dtype != tf.string:
         raise ValueError(
@@ -91,7 +107,7 @@ def pretokenize(text, lowercase, strip_accents, split):
 
 
 class WordPieceTokenizer(tokenizer.Tokenizer):
-    """A word piece tokenizer layer.
+    """A wordpiece tokenizer layer.
 
     This layer provides an efficient, in graph, implementation of the WordPiece
     algorithm used by BERT and other models.
@@ -127,23 +143,25 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     Args:
         vocabulary: A list of strings or a string filename path. If
-            passing a list, each element of the list should be a single word
-            piece token string. If passing a filename, the file should be a
-            plain text file containing a single word piece token per line.
-        sequence_length: If set, the output will be converted to a dense
+            passing a list, each element of the list should be a single
+            wordpiece token string. If passing a filename, the file should be a
+            plain text file containing a single wordpiece token per line.
+        sequence_length: int. If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of sequence_length.
-        lowercase: If true, the input text will be first lowered before
-            tokenization.
-        strip_accents: If true, all accent marks will be removed from text
-            before tokenization.
-        split: If true, input will be split on whitespace and punctuation
-            marks, and all punctuation marks will be kept as tokens. If false,
-            input should be split ("pre-tokenized") before calling the
-            tokenizer, and passed as a dense or ragged tensor of whole words.
-        suffix_indicator: The characters prepended to a wordpiece to indicate
-            that it is a suffix to another subword.
-        oov_token: The string value to substitute for an unknown token. It
-            must be included in the vocab.
+        lowercase: bool, defaults to `True`. If true, the input text will be
+            lowercased before tokenization.
+        strip_accents: bool, defaults to `True`. If true, all accent marks will
+            be removed from text before tokenization.
+        split: bool, defaults to `True`. If true, input will be split on
+            whitespace and punctuation marks, and all punctuation marks will be
+            kept as tokens. If false, input should be split ("pre-tokenized")
+            before calling the tokenizer, and passed as a dense or ragged tensor
+            of whole words.
+        suffix_indicator: str, defaults to "##". The characters prepended to a
+            wordpiece to indicate that it is a suffix to another subword.
+            E.g. "##ing".
+        oov_token: str, defaults to "[UNK]". The string value to substitute for
+            an unknown token. It must be included in the vocab.
 
     References:
      - [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)
@@ -247,7 +265,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "the `oov_token` argument when creating the tokenizer."
             )
 
-        self._fast_word_piece = tf_text.FastWordpieceTokenizer(
+        self._fast_wordpiece = tf_text.FastWordpieceTokenizer(
             vocab=self.vocabulary,
             token_out_type=self.compute_dtype,
             suffix_indicator=suffix_indicator,
@@ -302,8 +320,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             inputs, self.lowercase, self.strip_accents, self.split
         )
 
-        # Apply word piece and coerce shape for outputs.
-        tokens = self._fast_word_piece.tokenize(inputs)
+        # Apply wordpiece and coerce shape for outputs.
+        tokens = self._fast_wordpiece.tokenize(inputs)
         # By default tf.text tokenizes text with two ragged dimensions (one for
         # split words and one for split subwords). We will collapse to a single
         # ragged dimension which is a better out of box default.
@@ -322,4 +340,4 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        return self._fast_word_piece.detokenize(inputs)
+        return self._fast_wordpiece.detokenize(inputs)
