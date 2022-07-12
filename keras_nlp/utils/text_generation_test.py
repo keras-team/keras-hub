@@ -348,7 +348,7 @@ class RandomSearchTextGenerationTest(tf.test.TestCase):
         batch_size = 10
         inputs = 3 * tf.ones([batch_size, 1], dtype=tf.int32)
         max_length = 3
-        tf.random.set_seed(42)
+        tf.keras.utils.set_random_seed(42)
         outputs = random_search(
             token_probability_fn, inputs, max_length=max_length, seed=42
         )
@@ -514,7 +514,7 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
         batch_size = 10
         inputs = 3 * tf.ones([batch_size, 1], dtype=tf.int32)
         max_length = 3
-        tf.random.set_seed(42)
+        tf.keras.utils.set_random_seed(42)
         outputs = top_k_search(
             token_probability_fn, inputs, max_length=max_length, k=2, seed=42
         )
@@ -696,7 +696,7 @@ class TopPSearchTextGenerationTest(tf.test.TestCase):
         batch_size = 10
         inputs = 3 * tf.ones([batch_size, 1], dtype=tf.int32)
         max_length = 3
-        tf.random.set_seed(42)
+        tf.keras.utils.set_random_seed(42)
         outputs = top_p_search(
             token_probability_fn, inputs, max_length=max_length, p=0.91, seed=42
         )
