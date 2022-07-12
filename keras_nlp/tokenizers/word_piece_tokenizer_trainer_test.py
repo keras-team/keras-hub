@@ -91,18 +91,6 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
 
     def test_split(self):
         test_text = tf.data.Dataset.from_tensor_slices(
-            [
-                "This is a long line that isn't split up, and it exceeds maximum length."
-            ]
-        )
-        # The token would be removed for being too long.
-        vocab = compute_word_piece_vocabulary(
-            test_text, 20, split=False, reserved_tokens=[]
-        )
-        self.assertAllEqual(vocab, [])
-
-    def test_skip_split(self):
-        test_text = tf.data.Dataset.from_tensor_slices(
             ["This string: would be split up."]
         )
         test_text_split = tf.data.Dataset.from_tensor_slices(
@@ -119,6 +107,18 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             strip_accents=False,
         )
         self.assertAllEqual(output_vocab_1, output_vocab_2)
+
+    def test_skip_split(self):
+        test_text = tf.data.Dataset.from_tensor_slices(
+            [
+                "This is a long line that isn't split up, and it exceeds maximum length."
+            ]
+        )
+        # The token would be removed for being too long.
+        vocab = compute_word_piece_vocabulary(
+            test_text, 20, split=False, reserved_tokens=[]
+        )
+        self.assertAllEqual(vocab, [])
 
     def test_strip_accents(self):
         test_text = tf.data.Dataset.from_tensor_slices(
