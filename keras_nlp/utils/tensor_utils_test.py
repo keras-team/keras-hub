@@ -14,7 +14,25 @@
 
 import tensorflow as tf
 
+from keras_nlp.utils.tensor_utils import tensor_to_list
 from keras_nlp.utils.tensor_utils import tensor_to_string_list
+
+
+class TensorToListTest(tf.test.TestCase):
+    def test_ragged_input(self):
+        input_data = tf.ragged.constant([[1, 2], [4, 5, 6]])
+        list_output = tensor_to_list(input_data)
+        self.assertAllEqual(list_output, [[1, 2], [4, 5, 6]])
+
+    def test_dense_input(self):
+        input_data = tf.constant([[1, 2], [3, 4]])
+        list_output = tensor_to_list(input_data)
+        self.assertAllEqual(list_output, [[1, 2], [3, 4]])
+
+    def test_scalar_input(self):
+        input_data = tf.constant(1)
+        list_output = tensor_to_list(input_data)
+        self.assertEqual(list_output, 1)
 
 
 class TensorToStringListTest(tf.test.TestCase):
