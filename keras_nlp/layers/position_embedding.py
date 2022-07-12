@@ -43,7 +43,7 @@ class PositionEmbedding(keras.layers.Layer):
 
     Examples:
 
-    Called directly on input.
+    Called directly on inputs.
     >>> layer = keras_nlp.layers.PositionEmbedding(sequence_length=10)
     >>> layer(tf.zeros((8, 10, 16))).shape
     TensorShape([8, 10, 16])
