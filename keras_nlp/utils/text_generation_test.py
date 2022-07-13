@@ -113,6 +113,46 @@ class GreedySearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
 
+    def test_model_compile(self):
+        def token_probability_fn(inputs):
+            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            return tf.repeat(prob, 2, axis=0)
+
+        max_length = 5
+
+        class TestModel(tf.keras.Model):
+            def call(self, inputs, training=False):
+                if not training:
+                    generated = greedy_search(
+                        token_probability_fn,
+                        inputs,
+                        max_length=max_length,
+                        end_token_id=2,
+                        pad_token_id=0,
+                    )
+                    return generated
+                else:
+                    return inputs
+
+        def dummy_metric(y_true, y_pred):
+            if tf.reduce_all(tf.equal(y_true, y_pred)):
+                return 1
+            else:
+                return 0
+
+        inputs = tf.constant([[0, 1], [1, 2]])
+        model = TestModel()
+        model.compile(metrics=[dummy_metric])
+
+        expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
+        expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+        self.assertEqual(
+            model.evaluate(inputs, expected_outputs, return_dict=True)[
+                "dummy_metric"
+            ],
+            1,
+        )
+
 
 class BeamSearchTextGenerationTest(tf.test.TestCase):
     def setUp(self):
@@ -386,6 +426,47 @@ class RandomSearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
 
+    def test_model_compile(self):
+        def token_probability_fn(inputs):
+            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            return tf.repeat(prob, 2, axis=0)
+
+        max_length = 5
+
+        class TestModel(tf.keras.Model):
+            def call(self, inputs, training=False):
+                if not training:
+                    generated = random_search(
+                        token_probability_fn,
+                        inputs,
+                        max_length=max_length,
+                        seed=42,
+                        end_token_id=2,
+                        pad_token_id=0,
+                    )
+                    return generated
+                else:
+                    return inputs
+
+        def dummy_metric(y_true, y_pred):
+            if tf.reduce_all(tf.equal(y_true, y_pred)):
+                return 1
+            else:
+                return 0
+
+        inputs = tf.constant([[0, 1], [1, 2]])
+        model = TestModel()
+        model.compile(metrics=[dummy_metric])
+
+        expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
+        expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+        self.assertEqual(
+            model.evaluate(inputs, expected_outputs, return_dict=True)[
+                "dummy_metric"
+            ],
+            1,
+        )
+
     def test_from_logits(self):
         def token_logits_fn(inputs):
             batch_size = inputs.shape[0]
@@ -559,6 +640,48 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
 
+    def test_model_compile(self):
+        def token_probability_fn(inputs):
+            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            return tf.repeat(prob, 2, axis=0)
+
+        max_length = 5
+
+        class TestModel(tf.keras.Model):
+            def call(self, inputs, training=False):
+                if not training:
+                    generated = top_k_search(
+                        token_probability_fn,
+                        inputs,
+                        max_length=max_length,
+                        seed=42,
+                        k=4,
+                        end_token_id=2,
+                        pad_token_id=0,
+                    )
+                    return generated
+                else:
+                    return inputs
+
+        def dummy_metric(y_true, y_pred):
+            if tf.reduce_all(tf.equal(y_true, y_pred)):
+                return 1
+            else:
+                return 0
+
+        inputs = tf.constant([[0, 1], [1, 2]])
+        model = TestModel()
+        model.compile(metrics=[dummy_metric])
+
+        expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
+        expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+        self.assertEqual(
+            model.evaluate(inputs, expected_outputs, return_dict=True)[
+                "dummy_metric"
+            ],
+            1,
+        )
+
     def test_from_logits(self):
         def token_logits_fn(inputs):
             batch_size = inputs.shape[0]
@@ -719,6 +842,48 @@ class TopPSearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
+
+    def test_model_compile(self):
+        def token_probability_fn(inputs):
+            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            return tf.repeat(prob, 2, axis=0)
+
+        max_length = 5
+
+        class TestModel(tf.keras.Model):
+            def call(self, inputs, training=False):
+                if not training:
+                    generated = top_p_search(
+                        token_probability_fn,
+                        inputs,
+                        max_length=max_length,
+                        p=0.92,
+                        seed=1,
+                        end_token_id=2,
+                        pad_token_id=0,
+                    )
+                    return generated
+                else:
+                    return inputs
+
+        def dummy_metric(y_true, y_pred):
+            if tf.reduce_all(tf.equal(y_true, y_pred)):
+                return 1
+            else:
+                return 0
+
+        inputs = tf.constant([[0, 1], [1, 2]])
+        model = TestModel()
+        model.compile(metrics=[dummy_metric])
+
+        expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
+        expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+        self.assertEqual(
+            model.evaluate(inputs, expected_outputs, return_dict=True)[
+                "dummy_metric"
+            ],
+            1,
+        )
 
     def test_from_logits(self):
         def token_logits_fn(inputs):
