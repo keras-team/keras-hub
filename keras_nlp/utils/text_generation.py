@@ -152,7 +152,7 @@ def greedy_search(
     # Run a while loop till text of length `max_length` has been generated.
     prompt = tf.while_loop(
         cond=lambda prompt: tf.less(
-            tf.cast(tf.shape(prompt)[1], dtype=tf.int64),
+            tf.cast(tf.shape(prompt)[-1], dtype=tf.int64),
             tf.cast(max_length, dtype=tf.int64),
         ),
         body=one_step,
@@ -414,7 +414,7 @@ def random_search(
     # Run a while loop till text of length `max_length` has been generated.
     prompt = tf.while_loop(
         cond=lambda prompt: tf.less(
-            tf.cast(tf.shape(prompt)[1], dtype=tf.int64),
+            tf.cast(tf.shape(prompt)[-1], dtype=tf.int64),
             tf.cast(max_length, dtype=tf.int64),
         ),
         body=one_step,
@@ -550,7 +550,7 @@ def top_k_search(
     # Run a while loop till text of length `max_length` has been generated.
     prompt = tf.while_loop(
         cond=lambda prompt: tf.less(
-            tf.cast(tf.shape(prompt)[1], dtype=tf.int64),
+            tf.cast(tf.shape(prompt)[-1], dtype=tf.int64),
             tf.cast(max_length, dtype=tf.int64),
         ),
         body=one_step,
@@ -697,7 +697,7 @@ def top_p_search(
     # Run a while loop till text of length `max_length` has been generated.
     prompt = tf.while_loop(
         cond=lambda prompt: tf.less(
-            tf.cast(tf.shape(prompt)[1], dtype=tf.int64),
+            tf.cast(tf.shape(prompt)[-1], dtype=tf.int64),
             tf.cast(max_length, dtype=tf.int64),
         ),
         body=one_step,
