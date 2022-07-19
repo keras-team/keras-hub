@@ -1,16 +1,12 @@
 substitutions:
-  # GCS location to write temporary checkpoints and summaries.
-  # TODO(chenmoneygithub): Change the bucket to a stable one after GPU is 
-  # granted for keras-team-test.
-  _GCS_BUCKET: 'gs://keras-nlp-test'
-  # Name of GKE cluster in which to run Job.
-  # TODO(chenmoneygithub): Change the cluster to a stable one after GPU is 
-  # granted for keras-team-test.
-  _CLUSTER_NAME: 'tutorial-cluster'
+  # GCS bucket name. 
+  _GCS_BUCKET: 'gs://keras-nlp-github-test'
+  # GKE cluster name.
+  _CLUSTER_NAME: 'keras-nlp-test-cluster'
   # Location of GKE cluster.
-  _CLUSTER_ZONE: 'us-central1-b'
+  _CLUSTER_ZONE: 'us-west1-b'
   # Image name.
-  _IMAGE_NAME: 'us-central1-docker.pkg.dev/keras-team-gcp/keras-nlp-test/test-image'
+  _IMAGE_NAME: 'us-west1-docker.pkg.dev/keras-team-test/keras-nlp-test/keras-nlp-image'
 steps:
 - name: 'docker'
   id: build-image
@@ -68,13 +64,13 @@ steps:
     set -u
     set -e
     set -x
-
-    gcloud container clusters get-credentials $_CLUSTER_NAME --zone $_CLUSTER_ZONE --project keras-team-gcp
+    gcloud container clusters get-credentials $_CLUSTER_NAME --zone $_CLUSTER_ZONE --project keras-team-test
     job_name=$(kubectl create -f output.yaml -o name)
     sleep 5
     pod_name=$(kubectl wait --for condition=ready --timeout=10m pod -l job-name=${job_name#job.batch/} -o name)
     kubectl logs -f $pod_name --container=train
     sleep 5
+    gcloud artifacts docker images delete $_IMAGE_NAME:$BUILD_ID
     exit $(kubectl get $pod_name -o jsonpath={.status.containerStatuses[0].state.terminated.exitCode})
 timeout: 1800s  # 30 minutes
 options:
