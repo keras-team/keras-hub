@@ -91,14 +91,14 @@ class RandomDeletionTest(tf.test.TestCase):
         exp_output = [b"Hey like", b"Keras Tensorflow"]
 
     def test_get_config_and_from_config(self):
-
         def skip_py_fn(word):
             return len(word) < 4
+
         augmenter = random_deletion.RandomDeletion(
             rate=0.4, max_deletions=1, seed=42, skip_py_fn=skip_py_fn
         )
 
-        expected_config_subset = {'max_deletions': 1, 'rate': 0.4, 'seed': 42}
+        expected_config_subset = {"max_deletions": 1, "rate": 0.4, "seed": 42}
 
         config = augmenter.get_config()
 
@@ -130,36 +130,32 @@ class RandomDeletionTest(tf.test.TestCase):
             self.assertAllEqual(output[i], exp_output[i])
 
         def skip_fn(word):
-            if word == "Tensorflow" or word == "like":
-                return True
-            return False
+            return tf.strings.regex_full_match(word, r"\pP")
 
         def skip_py_fn(word):
-            if word == "Tensorflow" or word == "like":
-                return True
-            return False
+            return len(word) < 4
 
         augmenter = random_deletion.RandomDeletion(
             rate=0.8, max_deletions=1, seed=42, skip_fn=skip_fn
-        ) 
+        )
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-        exp_output = [[b'I', b'like'], [b'and', b'Tensorflow']]
+        exp_output = [[b"I", b"like"], [b"and", b"Tensorflow"]]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
         augmenter = random_deletion.RandomDeletion(
             rate=0.8, max_deletions=1, seed=42, skip_py_fn=skip_py_fn
-        ) 
+        )
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-        exp_output = [[b'I', b'like'], [b'and', b'Tensorflow']]
+        exp_output = [[b"Hey", b"I"], [b"and", b"Tensorflow"]]
         for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])     
+            self.assertAllEqual(output[i], exp_output[i])
 
     def test_batch_first_augment_second(self):
         keras.utils.set_random_seed(1337)
@@ -177,34 +173,30 @@ class RandomDeletionTest(tf.test.TestCase):
             self.assertAllEqual(output[i], exp_output[i])
 
         def skip_fn(word):
-            if word == "Tensorflow" or word == "like":
-                return True
-            return False
+            return tf.strings.regex_full_match(word, r"\pP")
 
         def skip_py_fn(word):
-            if word == "Tensorflow" or word == "like":
-                return True
-            return False
+            return len(word) < 4
 
         augmenter = random_deletion.RandomDeletion(
             rate=0.8, max_deletions=1, seed=42, skip_fn=skip_fn
-        ) 
+        )
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        exp_output = [[b'I', b'like'], [b'and', b'Tensorflow']]
+        exp_output = [[b"I", b"like"], [b"and", b"Tensorflow"]]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
         augmenter = random_deletion.RandomDeletion(
             rate=0.8, max_deletions=1, seed=42, skip_py_fn=skip_py_fn
-        ) 
+        )
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        exp_output = [[b'I', b'like'], [b'and', b'Tensorflow']]
+        exp_output = [[b"Hey", b"I"], [b"and", b"Tensorflow"]]
         for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])    
+            self.assertAllEqual(output[i], exp_output[i])
 
     def test_functional_model(self):
         keras.utils.set_random_seed(1337)

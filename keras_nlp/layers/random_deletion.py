@@ -36,10 +36,10 @@ class RandomDeletion(keras.layers.Layer):
         max_deletions: The maximum number of words to delete.
         skip_list: A list of words to skip.
         skip_fn: A function that takes a word and returns True if the word
-            should be skipped. This must be a traceable function of tf 
+            should be skipped. This must be a traceable function of tf
             operations.
         skip_py_fn: A function that takes a word and returns True if the words
-            should be skipped. Unlike skip_fn, this can be any python function 
+            should be skipped. Unlike skip_fn, this can be any python function
             that operates on strings, and does not need to use tf operations.
         seed: A seed for the rng.
 
@@ -75,16 +75,14 @@ class RandomDeletion(keras.layers.Layer):
 
     Usage with skip_fn.
     >>> def skip_fn(word):
-    ...     if word == "Keras":
-    ...         return True
-    ...     return False
+    ...     return tf.strings.regex_full_match(word, r"\\pP")
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
     >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4,
     ...     skip_fn=skip_fn, seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I like', b'Keras'],
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I like', b'and'],
     dtype=object)>
 
     Usage with skip_py_fn.
@@ -96,7 +94,7 @@ class RandomDeletion(keras.layers.Layer):
     ...     skip_py_fn=skip_py_fn, seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I', b'and'], 
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I', b'and'],
     dtype=object)>
     """
 
@@ -179,8 +177,10 @@ class RandomDeletion(keras.layers.Layer):
                 self.skip_fn, inputs.flat_values, dtype=tf.bool
             )
         elif self.skip_py_fn:
+
             def _preprocess_fn(word):
-                return self.skip_py_fn(word.numpy().decode('utf-8'))
+                return self.skip_py_fn(word.numpy().decode("utf-8"))
+
             skip_masks = tf.map_fn(
                 lambda x: tf.py_function(_preprocess_fn, [x], tf.bool),
                 inputs.flat_values,
