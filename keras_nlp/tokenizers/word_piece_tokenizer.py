@@ -85,7 +85,7 @@ def pretokenize(text, lowercase, strip_accents, split):
     if text.dtype != tf.string:
         raise ValueError(
             "The dataset elements in `data` must have string dtype. "
-            f"Recieved: {text.dtype}."
+            f"Received: {text.dtype}."
         )
     # Preprocess, lowercase, strip and split input data.
     if text.shape.rank == 0:

@@ -115,7 +115,7 @@ def compute_word_piece_vocabulary(
     if not isinstance(data, (list, tf.data.Dataset)):
         raise ValueError(
             "The `data` argument must be either `tf.data.Dataset` or `list`. "
-            f"Recieved: {type(data)}."
+            f"Received: {type(data)}."
         )
     if isinstance(data, list):
         if not split:
