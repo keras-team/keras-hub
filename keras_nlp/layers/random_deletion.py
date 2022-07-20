@@ -32,19 +32,20 @@ class RandomDeletion(keras.layers.Layer):
     either rank-1 or rank-2.
 
     Args:
-        rate: rate of a word being chosen for deletion
-        max_deletions: The maximum number of words to delete
+        rate: rate of a word being chosen for deletion.
+        max_deletions: The maximum number of words to delete.
         skip_list: A list of words to skip.
         skip_fn: A function that takes a word and returns True if the word
-            should be skipped.
-        py_skip_fn: A function that takes a word and returns True if the words
-            should be skipped. This is a Python function, and not a TensorFlow
-            function.
+            should be skipped. This must be a traceable function of tf 
+            operations.
+        skip_py_fn: A function that takes a word and returns True if the words
+            should be skipped. Unlike skip_fn, this can be any python function 
+            that operates on strings, and does not need to use tf operations.
         seed: A seed for the rng.
 
     Examples:
 
-    Word level usage
+    Word level usage.
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
     >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4, seed=42)
@@ -53,7 +54,7 @@ class RandomDeletion(keras.layers.Layer):
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I like', b'and'],
     dtype=object)>
 
-    Character level usage
+    Character level usage.
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.unicode_split(["Hey Dude", "Speed Up"], "UTF-8")
     >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4, seed=42)
@@ -62,7 +63,7 @@ class RandomDeletion(keras.layers.Layer):
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'H Dude', b'pedUp'],
     dtype=object)>
 
-    Usage with skip_list
+    Usage with skip_list.
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
     >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4,
@@ -72,7 +73,7 @@ class RandomDeletion(keras.layers.Layer):
     <tf.Tensor: shape=(2,), dtype=string,
     numpy=array([b'I like', b'Keras Tensorflow'], dtype=object)>
 
-    Usage with skip_fn
+    Usage with skip_fn.
     >>> def skip_fn(word):
     ...     if word == "Keras":
     ...         return True
@@ -86,18 +87,16 @@ class RandomDeletion(keras.layers.Layer):
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I like', b'Keras'],
     dtype=object)>
 
-    Usage with py_skip_fn
-    >>> def py_skip_fn(word):
-    ...     if word == "Keras":
-    ...         return True
-    ...     return False
+    Usage with skip_py_fn.
+    >>> def skip_py_fn(word):
+    ...     return len(word) < 4
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4,
-    ...     py_skip_fn=py_skip_fn, seed=42)
+    >>> augmenter=RandomDeletion(rate=0.4,
+    ...     skip_py_fn=skip_py_fn, seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I like', b'Keras'],
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I', b'and'], 
     dtype=object)>
     """
 
@@ -107,7 +106,7 @@ class RandomDeletion(keras.layers.Layer):
         max_deletions=None,
         skip_list=None,
         skip_fn=None,
-        py_skip_fn=None,
+        skip_py_fn=None,
         seed=None,
         name=None,
         **kwargs,
@@ -130,7 +129,7 @@ class RandomDeletion(keras.layers.Layer):
         self._generator = tf.random.Generator.from_seed(self.seed)
         self.skip_list = skip_list
         self.skip_fn = skip_fn
-        self.py_skip_fn = py_skip_fn
+        self.skip_py_fn = skip_py_fn
 
         if self.rate > 1 or self.rate < 0:
             raise ValueError(
@@ -138,9 +137,9 @@ class RandomDeletion(keras.layers.Layer):
                 f"Received: rate={rate}"
             )
 
-        if [self.skip_list, self.skip_fn, self.py_skip_fn].count(None) < 2:
+        if [self.skip_list, self.skip_fn, self.skip_py_fn].count(None) < 2:
             raise ValueError(
-                "Exactly one of skip_list, skip_fn, py_skip_fn must be "
+                "Exactly one of skip_list, skip_fn, skip_py_fn must be "
                 "provided."
             )
 
@@ -179,9 +178,11 @@ class RandomDeletion(keras.layers.Layer):
             skip_masks = tf.map_fn(
                 self.skip_fn, inputs.flat_values, dtype=tf.bool
             )
-        elif self.py_skip_fn:
+        elif self.skip_py_fn:
+            def _preprocess_fn(word):
+                return self.skip_py_fn(word.numpy().decode('utf-8'))
             skip_masks = tf.map_fn(
-                lambda x: tf.py_function(self.py_skip_fn, [x], tf.bool),
+                lambda x: tf.py_function(_preprocess_fn, [x], tf.bool),
                 inputs.flat_values,
                 dtype=tf.bool,
             )
@@ -189,6 +190,7 @@ class RandomDeletion(keras.layers.Layer):
         positions = inputs.with_flat_values(positions_flat)
         if skip_masks is not None:
             skip_masks = tf.logical_not(skip_masks)
+            skip_masks.set_shape([None])
             positions = ragged_array_ops.boolean_mask(
                 positions, inputs.with_flat_values(skip_masks)
             )
@@ -246,6 +248,9 @@ class RandomDeletion(keras.layers.Layer):
                 "rate": self.rate,
                 "max_deletions": self.max_deletions,
                 "seed": self.seed,
+                "skip_list": self.skip_list,
+                "skip_fn": self.skip_fn,
+                "skip_py_fn": self.skip_py_fn,
             }
         )
         return config
