@@ -90,7 +90,7 @@ flags.DEFINE_integer(
 )
 
 
-class ClassificationHead(tf.keras.layers.Layer):
+class ClassificationHead(keras.layers.Layer):
     """Pooling head for sentence-level classification tasks.
 
     Args:
@@ -403,7 +403,7 @@ def get_checkpoint_callback():
             # Clear up the directory if users want to skip restoring.
             tf.io.gfile.rmtree(FLAGS.checkpoint_save_directory)
     checkpoint_path = FLAGS.checkpoint_save_directory
-    return tf.keras.callbacks.BackupAndRestore(
+    return keras.callbacks.BackupAndRestore(
         backup_dir=checkpoint_path,
     )
 
@@ -411,7 +411,7 @@ def get_checkpoint_callback():
 def get_tensorboard_callback():
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = FLAGS.tensorboard_log_path + timestamp
-    return tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+    return keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
 
 def main(_):
@@ -419,7 +419,7 @@ def main(_):
         # If the job is on cloud, we will use cloud logging.
         import google.cloud.logging
 
-        tf.keras.utils.disable_interactive_logging()
+        keras.utils.disable_interactive_logging()
         client = google.cloud.logging.Client()
         client.setup_logging()
 

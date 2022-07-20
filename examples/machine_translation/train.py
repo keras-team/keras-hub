@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tensorflow as tf
 from absl import app
 from absl import flags
+from tensorflow import keras
 
 from examples.machine_translation.data import get_dataset_and_tokenizer
 from examples.machine_translation.model import TranslationModel
@@ -57,16 +57,16 @@ flags.DEFINE_string(
 
 
 def run_training(model, train_ds, val_ds):
-    learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(
+    learning_rate = keras.optimizers.schedules.ExponentialDecay(
         initial_learning_rate=FLAGS.learning_rate,
         decay_steps=20,
         decay_rate=0.98,
     )
-    optimizer = tf.keras.optimizers.Adam(learning_rate)
-    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(
-        reduction=tf.keras.losses.Reduction.NONE
+    optimizer = keras.optimizers.Adam(learning_rate)
+    loss_fn = keras.losses.SparseCategoricalCrossentropy(
+        reduction=keras.losses.Reduction.NONE
     )
-    metrics = tf.keras.metrics.SparseCategoricalAccuracy()
+    metrics = keras.metrics.SparseCategoricalAccuracy()
     model.compile(optimizer=optimizer, metrics=[metrics], loss=loss_fn)
     model.fit(
         train_ds,

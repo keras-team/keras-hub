@@ -1,0 +1,12 @@
+absl-py
+numpy
+packaging
+tensorflow
+tensorflow-text
+black
+flake8
+isort
+pytest
+pytest-cov
+rouge-score
+sentencepiece

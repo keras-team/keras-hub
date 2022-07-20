@@ -63,8 +63,51 @@ WHITESPACE_AND_PUNCTUATION_REGEX = r"|".join(
 )
 
 
+def pretokenize(text, lowercase, strip_accents, split):
+    """Helper function that takes in a dataset element and pretokenizes it.
+
+    Args:
+        text: `tf.Tensor` or `tf.RaggedTensor`. Input to be pretokenized.
+        lowercase: bool, defaults to `True`. If true, the input text will be
+            lowercased before tokenization.
+        strip_accents: bool, defaults to `True`. If true, all accent marks will
+            be removed from text before tokenization.
+        split: bool, defaults to `True`. If true, input will be split on
+            whitespace and punctuation marks, and all punctuation marks will be
+            kept as tokens. If false, input should be split ("pre-tokenized")
+            before calling the tokenizer, and passed as a dense or ragged tensor
+            of whole words.
+
+    Returns:
+        A tensor containing the pre-processed and pre-tokenized `text`.
+    """
+    # Check for correct types.
+    if text.dtype != tf.string:
+        raise ValueError(
+            "The dataset elements in `data` must have string dtype. "
+            f"Recieved: {text.dtype}."
+        )
+    # Preprocess, lowercase, strip and split input data.
+    if text.shape.rank == 0:
+        text = tf.expand_dims(text, 0)
+    if lowercase:
+        text = tf_text.case_fold_utf8(text)
+    if strip_accents:
+        # Normalize unicode to NFD, which splits out accent mark characters.
+        text = tf_text.normalize_utf8(text, "NFD")
+        # Remove the accent marks.
+        text = tf.strings.regex_replace(text, r"\p{Mn}", "")
+    if split:
+        text = tf_text.regex_split(
+            text,
+            delim_regex_pattern=WHITESPACE_AND_PUNCTUATION_REGEX,
+            keep_delim_regex_pattern=PUNCTUATION_REGEX,
+        )
+    return text
+
+
 class WordPieceTokenizer(tokenizer.Tokenizer):
-    """A word piece tokenizer layer.
+    """A WordPiece tokenizer layer.
 
     This layer provides an efficient, in graph, implementation of the WordPiece
     algorithm used by BERT and other models.
@@ -100,27 +143,25 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     Args:
         vocabulary: A list of strings or a string filename path. If
-            passing a list, each element of the list should be a single word
-            piece token string. If passing a filename, the file should be a
-            plain text file containing a single word piece token per line.
-        sequence_length: If set, the output will be converted to a dense
+            passing a list, each element of the list should be a single
+            WordPiece token string. If passing a filename, the file should be a
+            plain text file containing a single WordPiece token per line.
+        sequence_length: int. If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of sequence_length.
-        lowercase: If true, the input text will be first lowered before
-            tokenization.
-        strip_accents: If true, all accent marks will be removed from text
-            before tokenization.
-        split: If true, input will be split according to `split_pattern`
-            and `keep_pattern`. If false, input should be split before calling
-            the layer.
-        split_pattern: A regex pattern to match delimiters to split. By default,
-            all whitespace and punctuation marks will be split on.
-        keep_pattern: A regex pattern of delimiters contained in the
-            `split_pattern` of delimeters that should be kept as independent
-            tokens. By default, all punctuation marks will be kept as tokens.
-        suffix_indicator: The characters prepended to a wordpiece to indicate
-            that it is a suffix to another subword.
-        oov_token: The string value to substitute for an unknown token. It
-            must be included in the vocab.
+        lowercase: bool, defaults to `True`. If true, the input text will be
+            lowercased before tokenization.
+        strip_accents: bool, defaults to `True`. If true, all accent marks will
+            be removed from text before tokenization.
+        split: bool, defaults to `True`. If true, input will be split on
+            whitespace and punctuation marks, and all punctuation marks will be
+            kept as tokens. If false, input should be split ("pre-tokenized")
+            before calling the tokenizer, and passed as a dense or ragged tensor
+            of whole words.
+        suffix_indicator: str, defaults to "##". The characters prepended to a
+            WordPiece to indicate that it is a suffix to another subword.
+            E.g. "##ing".
+        oov_token: str, defaults to "[UNK]". The string value to substitute for
+            an unknown token. It must be included in the vocab.
 
     References:
      - [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)
@@ -160,14 +201,13 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     'the quick brown fox .'
 
     Custom splitting.
-    >>> vocab = ["[UNK]", "fox", ","]
-    >>> inputs = ["fox,,fox,fox"]
-    >>> keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab,
-    ...     split_pattern=",", keep_pattern=",", dtype='string')(inputs)
-    <tf.RaggedTensor [[b'fox', b',', b',', b'fox', b',', b'fox']]>
-    >>> keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab,
-    ...     split_pattern=",", keep_pattern="", dtype='string')(inputs)
-    <tf.RaggedTensor [[b'fox', b'fox', b'fox']]>
+    >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+    >>> inputs = ["The$quick$brown$fox"]
+    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab,
+    ...     split=False, dtype='string')
+    >>> split_inputs = tf.strings.split(inputs, sep="$")
+    >>> tokenizer(split_inputs)
+    <tf.RaggedTensor [[b'the', b'qu', b'##ick', b'br', b'##own', b'fox']]>
     """
 
     def __init__(
@@ -177,8 +217,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         lowercase: bool = True,
         strip_accents: bool = True,
         split: bool = True,
-        split_pattern: str = None,
-        keep_pattern: str = None,
         suffix_indicator: str = "##",
         oov_token: str = "[UNK]",
         **kwargs,
@@ -211,18 +249,10 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
 
-        if split_pattern is None:
-            split_pattern = WHITESPACE_AND_PUNCTUATION_REGEX
-
-        if keep_pattern is None:
-            keep_pattern = PUNCTUATION_REGEX
-
         self.sequence_length = sequence_length
         self.lowercase = lowercase
         self.strip_accents = strip_accents
         self.split = split
-        self.split_pattern = split_pattern
-        self.keep_pattern = keep_pattern
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
 
@@ -275,8 +305,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "lowercase": self.lowercase,
                 "strip_accents": self.strip_accents,
                 "split": self.split,
-                "split_pattern": self.split_pattern,
-                "keep_pattern": self.keep_pattern,
                 "suffix_indicator": self.suffix_indicator,
                 "oov_token": self.oov_token,
             }
@@ -284,33 +312,21 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         return config
 
     def tokenize(self, inputs):
-        # Check if Input is Scalar or Not
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
-        scalar_input = tf.convert_to_tensor(inputs).shape.rank == 0
-        if scalar_input:
-            inputs = tf.expand_dims(inputs, 0)
-        # Optionally normalize and split inputs.
-        if self.lowercase:
-            inputs = tf_text.case_fold_utf8(inputs)
-        if self.strip_accents:
-            # Normalize unicode to NFD, which splits out accent mark characters.
-            inputs = tf_text.normalize_utf8(inputs, "NFD")
-            # Remove the accent marks.
-            inputs = tf.strings.regex_replace(inputs, r"\p{Mn}", "")
-        if self.split:
-            inputs = tf_text.regex_split(
-                inputs,
-                delim_regex_pattern=self.split_pattern,
-                keep_delim_regex_pattern=self.keep_pattern,
-            )
 
-        # Apply word piece and coerce shape for outputs.
+        scalar_input = inputs.shape.rank == 0
+        inputs = pretokenize(
+            inputs, self.lowercase, self.strip_accents, self.split
+        )
+
+        # Apply WordPiece and coerce shape for outputs.
         tokens = self._fast_word_piece.tokenize(inputs)
         # By default tf.text tokenizes text with two ragged dimensions (one for
         # split words and one for split subwords). We will collapse to a single
         # ragged dimension which is a better out of box default.
         tokens = tokens.merge_dims(-2, -1)
+
         # Convert to a dense output if `sequence_length` is set.
         if self.sequence_length:
             output_shape = tokens.shape.as_list()

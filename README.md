@@ -36,13 +36,22 @@ We are a new and growing project, and welcome [contributions](CONTRIBUTING.md).
 - [API Design Guide](API_DESIGN_GUIDE.md)
 - [Call for Contributions](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22)
 
-## Quick Start
+## Installation
 
-Install the latest release:
+To install the latest official release:
 
 ```
 pip install keras-nlp --upgrade
 ```
+
+To install the latest unreleased changes to the library, we recommend using
+pip to install directly from the master branch on github:
+
+```
+pip install git+https://github.com/keras-team/keras-nlp.git --upgrade
+```
+
+## Quickstart
 
 Tokenize text, build a tiny transformer, and train a single batch:
 
@@ -80,6 +89,8 @@ model.compile(optimizer="adam", loss="binary_crossentropy", jit_compile=True)
 model.train_on_batch(x, y)
 ```
 
+For more in depth guides and examples, visit https://keras.io/keras_nlp/.
+
 ## Compatibility
 
 We follow [Semantic Versioning](https://semver.org/), and plan to
@@ -100,6 +111,8 @@ Here is the BibTeX entry:
   howpublished={\url{https://github.com/keras-team/keras-nlp}},
 }
 ```
+
+## Acknowledgements
 
 Thank you to all of our wonderful contributors!
 
