@@ -11,10 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import random
+
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.python.ops.ragged import ragged_array_ops
-import random
+
+
 class RandomDeletion(keras.layers.Layer):
     """Augments input by randomly deleting words.
 
@@ -31,33 +34,83 @@ class RandomDeletion(keras.layers.Layer):
     Args:
         rate: rate of a word being chosen for deletion
         max_deletions: The maximum number of words to delete
-        seed: A seed for the random number generator.
+        skip_list: A list of words to skip.
+        skip_fn: A function that takes a word and returns True if the word
+            should be skipped.
+        py_skip_fn: A function that takes a word and returns True if the words
+            should be skipped. This is a Python function, and not a TensorFlow
+            function.
+        seed: A seed for the rng.
 
     Examples:
 
     Word level usage
-    >>> tf.random.get_global_generator().reset_from_seed(30)
-    >>> tf.random.set_seed(30)
+    >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
     >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4, seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string,
-    numpy=array([b'Hey I', b'and Tensorflow'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I like', b'and'],
+    dtype=object)>
 
     Character level usage
-    >>> tf.random.get_global_generator().reset_from_seed(30)
-    >>> tf.random.set_seed(30)
+    >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.unicode_split(["Hey Dude", "Speed Up"], "UTF-8")
     >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4, seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'eDde', b'Se p'],
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'H Dude', b'pedUp'],
+    dtype=object)>
+
+    Usage with skip_list
+    >>> keras.utils.set_random_seed(1337)
+    >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
+    >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4,
+    ...     skip_list=["Keras", "Tensorflow"], seed=42)
+    >>> augmented=augmenter(inputs)
+    >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'I like', b'Keras Tensorflow'], dtype=object)>
+
+    Usage with skip_fn
+    >>> def skip_fn(word):
+    ...     if word == "Keras":
+    ...         return True
+    ...     return False
+    >>> keras.utils.set_random_seed(1337)
+    >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
+    >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4,
+    ...     skip_fn=skip_fn, seed=42)
+    >>> augmented=augmenter(inputs)
+    >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I like', b'Keras'],
+    dtype=object)>
+
+    Usage with py_skip_fn
+    >>> def py_skip_fn(word):
+    ...     if word == "Keras":
+    ...         return True
+    ...     return False
+    >>> keras.utils.set_random_seed(1337)
+    >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
+    >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4,
+    ...     py_skip_fn=py_skip_fn, seed=42)
+    >>> augmented=augmenter(inputs)
+    >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I like', b'Keras'],
     dtype=object)>
     """
 
     def __init__(
-        self, rate, max_deletions=None, skip_list=None, skip_fn=None, py_skip_fn=None, seed=None, name=None, **kwargs
+        self,
+        rate,
+        max_deletions=None,
+        skip_list=None,
+        skip_fn=None,
+        py_skip_fn=None,
+        seed=None,
+        name=None,
+        **kwargs,
     ):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
@@ -94,9 +147,11 @@ class RandomDeletion(keras.layers.Layer):
         if self.skip_list:
             self.StaticHashTable = tf.lookup.StaticHashTable(
                 tf.lookup.KeyValueTensorInitializer(
-                    tf.convert_to_tensor(self.skip_list), 
-                    tf.convert_to_tensor([False]*len(self.skip_list))),
-                    default_value=True)
+                    tf.convert_to_tensor(self.skip_list),
+                    tf.convert_to_tensor([True] * len(self.skip_list)),
+                ),
+                default_value=False,
+            )
 
     def call(self, inputs):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
@@ -121,15 +176,22 @@ class RandomDeletion(keras.layers.Layer):
         if self.skip_list:
             skip_masks = self.StaticHashTable.lookup(inputs.flat_values)
         elif self.skip_fn:
-            skip_masks = tf.map_fn(self.skip_fn, inputs)
+            skip_masks = tf.map_fn(
+                self.skip_fn, inputs.flat_values, dtype=tf.bool
+            )
         elif self.py_skip_fn:
-            skip_masks = tf.py_function(self.py_skip_fn, [inputs.flat_values], tf.bool)
-            
+            skip_masks = tf.map_fn(
+                lambda x: tf.py_function(self.py_skip_fn, [x], tf.bool),
+                inputs.flat_values,
+                dtype=tf.bool,
+            )
         positions_flat = tf.range(tf.size(inputs.flat_values))
         positions = inputs.with_flat_values(positions_flat)
         if skip_masks is not None:
-            positions = ragged_array_ops.boolean_mask(positions, inputs.with_flat_values(skip_masks))
-        
+            skip_masks = tf.logical_not(skip_masks)
+            positions = ragged_array_ops.boolean_mask(
+                positions, inputs.with_flat_values(skip_masks)
+            )
 
         # Figure out how many we are going to select.
         word_counts = tf.cast(inputs.row_lengths(), "float32")
@@ -146,9 +208,7 @@ class RandomDeletion(keras.layers.Layer):
         # Shuffle and trim to items that are going to be selected.
         def _shuffle_and_trim(x):
             positions, top_n = x
-            shuffled = tf.random.shuffle(
-                positions, seed=self.seed
-            )
+            shuffled = tf.random.shuffle(positions, seed=self.seed)
             return shuffled[:top_n]
 
         selected_for_mask = tf.map_fn(
