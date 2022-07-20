@@ -14,7 +14,8 @@
 import tensorflow as tf
 from keras import backend
 from tensorflow import keras
-
+import random
+from tensorflow.python.ops.ragged import ragged_array_ops
 
 class RandomSwaps(keras.layers.Layer):
     """Augments input by randomly swapping words.
@@ -27,6 +28,7 @@ class RandomSwaps(keras.layers.Layer):
 
     Args:
         swaps: Number of swaps to perform.
+
         seed: Optional random seed.
 
 
@@ -47,7 +49,8 @@ class RandomSwaps(keras.layers.Layer):
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'HeI y like', b'b eybye'], dtype=object)>
     """
 
-    def __init__(self, swaps, seed=None, name=None, **kwargs):
+    def __init__(self, swaps, skip_list=None, skip_fn=None, py_skip_fn=None, 
+        seed=None, name=None, **kwargs):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
@@ -61,10 +64,28 @@ class RandomSwaps(keras.layers.Layer):
 
         super().__init__(name=name, **kwargs)
         self.swaps = swaps
-        self.seed = seed
-        self._random_generator = backend.RandomGenerator(seed)
+        self.seed = random.randint(1, 1e9) if seed is None else seed
+        self._generator = tf.random.Generator.from_seed(self.seed)
+        self.skip_list = skip_list
+        self.skip_fn = skip_fn
+        self.py_skip_fn = py_skip_fn
         if self.swaps < 0:
             raise ValueError("Swaps must be non negative")
+
+        if [self.skip_list, self.skip_fn, self.py_skip_fn].count(None) < 2:
+            raise ValueError(
+                "Exactly one of skip_list, skip_fn, py_skip_fn must be "
+                "provided."
+            )
+
+        if self.skip_list:
+            self.StaticHashTable = tf.lookup.StaticHashTable(
+                tf.lookup.KeyValueTensorInitializer(
+                    tf.convert_to_tensor(self.skip_list),
+                    tf.convert_to_tensor([True] * len(self.skip_list)),
+                ),
+                default_value=False,
+            )
 
     @tf.function
     def call(self, inputs):
@@ -75,18 +96,45 @@ class RandomSwaps(keras.layers.Layer):
             A tensor or nested tensor of augmented strings.
         """
 
-        isString = False
-        if isinstance(inputs, str):
-            inputs = [inputs]
-            isString = True
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            inputs = tf.convert_to_tensor(inputs)
 
-        scalar_input = inputs.shape.rank == 0
-        if scalar_input:
-            inputs = tf.expand_dims(inputs, 0)
+        input_is_1d = False
+        if inputs.shape.rank < 1 or inputs.shape.rank > 2:
+            raise ValueError(
+                "Input must either be rank 1 or rank 2. Received input with "
+                f"rank={inputs.shape.rank}"
+            )
+        elif inputs.shape.rank == 1:
+            input_is_1d = True
+            # Add a new axis at the beginning.
+            inputs = tf.expand_dims(inputs, axis=0)
+        if isinstance(inputs, tf.Tensor):
+            # Convert to ragged tensor.
+            inputs = tf.RaggedTensor.from_tensor(inputs)
 
         row_splits = inputs.row_splits
+        # skip words that are in the skip_list
+        skip_masks = None
+        if self.skip_list:
+            skip_masks = self.StaticHashTable.lookup(inputs.flat_values)
+        elif self.skip_fn:
+            skip_masks = tf.map_fn(
+                self.skip_fn, inputs.flat_values, dtype=tf.bool
+            )
+        elif self.py_skip_fn:
+            skip_masks = tf.map_fn(
+                lambda x: tf.py_function(self.py_skip_fn, [x], tf.bool),
+                inputs.flat_values,
+                dtype=tf.bool,
+            )
         positions_flat = tf.range(tf.size(inputs.flat_values))
         positions = inputs.with_flat_values(positions_flat)
+        if skip_masks is not None:
+            skip_masks = tf.logical_not(skip_masks)
+            positions = ragged_array_ops.boolean_mask(
+                positions, inputs.with_flat_values(skip_masks)
+            )
 
         def _swap(positions):
             if tf.size(positions) == 1:
@@ -97,7 +145,7 @@ class RandomSwaps(keras.layers.Layer):
                     minval=0,
                     maxval=tf.size(positions),
                     dtype=tf.int32,
-                    seed=self._random_generator.make_legacy_seed(),
+                    seed=self.seed,
                 )
                 index1, index2 = index[0], index[1]
                 # swap items at the sampled indices with each other
@@ -123,10 +171,8 @@ class RandomSwaps(keras.layers.Layer):
             row_splits=row_splits,
         )
 
-        if scalar_input:
-            swapped = tf.squeeze(swapped, 0)
-        if isString:
-            swapped = swapped[0]
+        if input_is_1d:
+            inputs = tf.squeeze(swapped, axis=0)
         return swapped
 
     def get_config(self):
