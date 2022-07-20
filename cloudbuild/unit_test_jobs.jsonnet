@@ -15,7 +15,7 @@ local unittest = base.BaseTest {
   // Set up runtime environment.
   image: image,
   imageTag: tagName,
-  accelerator: gpus.teslaV100,
+  accelerator: gpus.teslaT4,
   outputBucket: gcsBucket,
 
   entrypoint: [
