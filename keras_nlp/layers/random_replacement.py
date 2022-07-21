@@ -41,8 +41,9 @@ class RandomReplacement(keras.layers.Layer):
     ... replacement_list=['Random1', 'Random2', 'Random3'])
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy= array([b'Random1 Random1 like', 
-    b'Random3 Random3 Tensorflow'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy= array([b'Random1 Random2 like', b'Random1 Random2 Tensorflow'],
+    dtype=object)>
 
     Character level usage
     >>> keras.utils.set_random_seed(1337)
@@ -51,8 +52,8 @@ class RandomReplacement(keras.layers.Layer):
     ... replacement_list=['x', 'y', 'z'])
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'yyy Dude', 
-    b'xxeed Up'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'HexyDude', b'Spxed Uy'], dtype=object)>
 
     Usage with replacement_fn
     >>> def replacement_fn(word):
@@ -65,8 +66,8 @@ class RandomReplacement(keras.layers.Layer):
     ... replacement_fn=replacement_fn)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I like',
-    b'KerasNLP and Tensorflow'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'Hey I like', b'Keras and Tensorflow'], dtype=object)>
 
     Usage with py_replacement_fn
     >>> def py_replacement_fn(word):
@@ -79,8 +80,8 @@ class RandomReplacement(keras.layers.Layer):
     ... py_replacement_fn=py_replacement_fn)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I KerasNLP',
-    b'KerasNLP and Tensorflow'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'Hey I KerasNLP', b'KerasNLP and Tensorflow'], dtype=object)>
 
     Usage with skip_list
     >>> def py_replacement_fn(word):
@@ -93,8 +94,8 @@ class RandomReplacement(keras.layers.Layer):
     ... py_replacement_fn=py_replacement_fn, skip_list=['Keras'])
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I KerasNLP',
-    b'Keras and Tensorflow'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'Hey I KerasNLP', b'Keras and Tensorflow'], dtype=object)>
 
     Usage with skip_fn
     >>> def py_replacement_fn(word):
@@ -111,8 +112,8 @@ class RandomReplacement(keras.layers.Layer):
     ... py_replacement_fn=py_replacement_fn, skip_fn=skip_fn)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I like',
-    b'KerasNLP and Tensorflow'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'Hey I like', b'KerasNLP and Tensorflow'], dtype=object)>
 
     Usage with py_skip_fn
     >>> def py_replacement_fn(word):
@@ -129,8 +130,8 @@ class RandomReplacement(keras.layers.Layer):
     ... py_replacement_fn=py_replacement_fn, py_skip_fn=py_skip_fn)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I like',
-    b'KerasNLP and Tensorflow'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'Hey I like', b'KerasNLP and Tensorflow'], dtype=object)>
     """
 
     def __init__(
@@ -149,9 +150,9 @@ class RandomReplacement(keras.layers.Layer):
     ):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"]=tf.int32
+            kwargs["dtype"] = tf.int32
         else:
-            dtype=tf.dtypes.as_dtype(kwargs["dtype"])
+            dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer and dtype != tf.string:
                 raise ValueError(
                     "Output dtype must be an integer type or a string. "
@@ -159,16 +160,16 @@ class RandomReplacement(keras.layers.Layer):
                 )
 
         super().__init__(name=name, **kwargs)
-        self.rate=rate
-        self.max_replacements=max_replacements
-        self.replacement_list=replacement_list
-        self.replacement_fn=replacement_fn
-        self.py_replacement_fn=py_replacement_fn
-        self.skip_list=skip_list
-        self.skip_fn=skip_fn
-        self.py_skip_fn=py_skip_fn
-        self.seed=random.randint(1, 1e9) if seed is None else seed
-        self._generator=tf.random.Generator.from_seed(self.seed)
+        self.rate = rate
+        self.max_replacements = max_replacements
+        self.replacement_list = replacement_list
+        self.replacement_fn = replacement_fn
+        self.py_replacement_fn = py_replacement_fn
+        self.skip_list = skip_list
+        self.skip_fn = skip_fn
+        self.py_skip_fn = py_skip_fn
+        self.seed = random.randint(1, 1e9) if seed is None else seed
+        self._generator = tf.random.Generator.from_seed(self.seed)
         if self.rate > 1 or self.rate < 0:
             raise ValueError(
                 "Rate must be between 0 and 1 (both inclusive)."
@@ -181,7 +182,7 @@ class RandomReplacement(keras.layers.Layer):
                 "provided."
             )
 
-        countReplaceOptions=[
+        countReplaceOptions = [
             self.replacement_list,
             self.replacement_fn,
             self.py_replacement_fn,
@@ -193,7 +194,7 @@ class RandomReplacement(keras.layers.Layer):
             )
 
         if self.skip_list:
-            self.StaticHashTable=tf.lookup.StaticHashTable(
+            self.StaticHashTable = tf.lookup.StaticHashTable(
                 tf.lookup.KeyValueTensorInitializer(
                     tf.convert_to_tensor(self.skip_list),
                     tf.convert_to_tensor([True] * len(self.skip_list)),
@@ -204,21 +205,21 @@ class RandomReplacement(keras.layers.Layer):
     @tf.function
     def call(self, inputs):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs=tf.convert_to_tensor(inputs)
+            inputs = tf.convert_to_tensor(inputs)
 
-        input_is_1d=False
+        input_is_1d = False
         if inputs.shape.rank < 1 or inputs.shape.rank > 2:
             raise ValueError(
                 "Input must either be rank 1 or rank 2. Received input with "
                 f"rank={inputs.shape.rank}"
             )
         elif inputs.shape.rank == 1:
-            input_is_1d=True
+            input_is_1d = True
             # Add a new axis at the beginning.
-            inputs=tf.expand_dims(inputs, axis=0)
+            inputs = tf.expand_dims(inputs, axis=0)
         if isinstance(inputs, tf.Tensor):
             # Convert to ragged tensor.
-            inputs=tf.RaggedTensor.from_tensor(inputs)
+            inputs = tf.RaggedTensor.from_tensor(inputs)
 
         def _check_skip(token):
             if self.skip_list:
@@ -226,7 +227,11 @@ class RandomReplacement(keras.layers.Layer):
             elif self.skip_fn:
                 return self.skip_fn(token)
             elif self.py_skip_fn:
-                return tf.numpy_function(self.py_skip_fn, [token], tf.bool)
+
+                def _preprocess_skip_fn(word):
+                    return self.py_skip_fn(word.numpy().decode("utf-8"))
+
+                return tf.py_function(_preprocess_skip_fn, [token], tf.bool)
             else:
                 return False
 
@@ -234,48 +239,53 @@ class RandomReplacement(keras.layers.Layer):
             """
             Replace words randomly
             """
-            for _ in range(self.max_replacements):
-                # randomly choose an index
-                _, _, count = tf.unique_with_counts(inputs)
-                count = tf.cast(count, tf.float32)
-                index=tf.random.stateless_binomial(
-                    shape=tf.shape(count),
-                    seed=self._generator.make_seeds()[:, 0],
-                    counts=count,
-                    probs=self.rate,
-                )[0]
-                synonym=inputs[index]
+            for i in range(self.max_replacements):
+                # Choose a Random Index
+                index = tf.random.uniform(
+                    shape=(),
+                    minval=0,
+                    maxval=tf.size(inputs),
+                    dtype=tf.int32,
+                    seed=self.seed + i,
+                )
+                synonym = inputs[index]
                 if _check_skip(synonym):
                     continue
                 if self.replacement_fn is not None:
                     self.replacement_fn(synonym)
-                    inputs=tf.tensor_scatter_nd_update(
+                    inputs = tf.tensor_scatter_nd_update(
                         inputs, [[index]], [synonym]
                     )
                 elif self.py_replacement_fn is not None:
-                    synonym=tf.numpy_function(
-                        self.py_replacement_fn, [synonym], tf.string
+
+                    def _preprocess_replace_fn(word):
+                        return self.py_replacement_fn(
+                            word.numpy().decode("utf-8")
+                        )
+
+                    synonym = tf.py_function(
+                        _preprocess_replace_fn, [synonym], tf.string
                     )
-                    inputs=tf.tensor_scatter_nd_update(
+                    inputs = tf.tensor_scatter_nd_update(
                         inputs, [[index]], [synonym]
                     )
                 elif self.replacement_list is not None:
-                    replace_list_index=tf.random.uniform(
-                        shape=tf.shape(inputs),
+                    replace_list_index = tf.random.uniform(
+                        shape=(),
                         minval=0,
                         maxval=tf.size(self.replacement_list),
                         dtype=tf.int32,
-                        seed=self.seed,
-                    )[0]
-                    synonym=tf.gather(
+                        seed=self.seed + i,
+                    )
+                    synonym = tf.gather(
                         self.replacement_list, replace_list_index
                     )
-                    inputs=tf.tensor_scatter_nd_update(
+                    inputs = tf.tensor_scatter_nd_update(
                         inputs, [[index]], [synonym]
                     )
             return inputs
 
-        replaced=tf.map_fn(
+        replaced = tf.map_fn(
             _replace,
             (inputs),
             fn_output_signature=tf.RaggedTensorSpec(
@@ -285,5 +295,22 @@ class RandomReplacement(keras.layers.Layer):
         replaced.flat_values.set_shape([None])
 
         if input_is_1d:
-            replaced=tf.squeeze(replaced, axis=0)
+            replaced = tf.squeeze(replaced, axis=0)
         return replaced
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "rate": self.rate,
+                "max_replacements": self.max_replacements,
+                "seed": self.seed,
+                "skip_list": self.skip_list,
+                "skip_fn": self.skip_fn,
+                "skip_py_fn": self.skip_py_fn,
+                "replacement_list": self.replacement_list,
+                "replacement_fn": self.replacement_fn,
+                "py_replacement_fn": self.py_replacement_fn,
+            }
+        )
+        return config
