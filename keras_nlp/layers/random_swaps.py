@@ -28,8 +28,14 @@ class RandomSwaps(keras.layers.Layer):
 
     Args:
         swaps: Number of swaps to perform.
-
-        seed: Optional random seed.
+        skip_list: A list of words to skip.
+        skip_fn: A function that takes a word and returns True if the word
+            should be skipped. This must be a traceable function of tf
+            operations.
+        skip_py_fn: A function that takes a word and returns True if the words
+            should be skipped. Unlike skip_fn, this can be any python function
+            that operates on strings, and does not need to use tf operations.
+        seed: A seed for the rng.
 
 
     Examples:
@@ -89,12 +95,6 @@ class RandomSwaps(keras.layers.Layer):
 
     @tf.function
     def call(self, inputs):
-        """Augments input by randomly swapping words.
-        Args:
-            inputs: A tensor or nested tensor of strings to augment.
-        Returns:
-            A tensor or nested tensor of augmented strings.
-        """
 
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
