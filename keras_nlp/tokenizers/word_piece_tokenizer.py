@@ -17,6 +17,7 @@ from typing import List
 
 import tensorflow as tf
 import tensorflow_text as tf_text
+from tensorflow import keras
 
 from keras_nlp.tokenizers import tokenizer
 
@@ -106,6 +107,7 @@ def pretokenize(text, lowercase, strip_accents, split):
     return text
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class WordPieceTokenizer(tokenizer.Tokenizer):
     """A WordPiece tokenizer layer.
 

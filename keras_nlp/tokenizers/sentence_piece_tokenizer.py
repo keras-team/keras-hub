@@ -18,11 +18,13 @@ from typing import List
 
 import tensorflow as tf
 import tensorflow_text as tf_text
+from tensorflow import keras
 
 from keras_nlp.tokenizers import tokenizer
 from keras_nlp.utils.tensor_utils import tensor_to_string_list
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class SentencePieceTokenizer(tokenizer.Tokenizer):
     """A SentencePiece tokenizer layer.
 

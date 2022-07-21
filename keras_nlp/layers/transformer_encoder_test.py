@@ -163,11 +163,10 @@ class TransformerEncoderTest(tf.test.TestCase):
             ]
         )
         data = tf.random.uniform(shape=[2, 4, 6])
-        model(data)
+        model_output = model(data)
         path = os.path.join(self.get_temp_dir(), "model")
         model.save(path)
-        loaded_model = keras.models.load_model(path)
 
-        model_output = model(data)
+        loaded_model = keras.models.load_model(path)
         loaded_model_output = loaded_model(data)
         self.assertAllClose(model_output, loaded_model_output)

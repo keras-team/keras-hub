@@ -18,6 +18,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class StartEndPacker(keras.layers.Layer):
     """Adds start and end tokens to a sequence and pads to a fixed length.
 

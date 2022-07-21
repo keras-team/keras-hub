@@ -49,6 +49,7 @@ REGEX_PATTERNS = [
 ]
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class Bleu(keras.metrics.Metric):
     """BLEU metric.
 

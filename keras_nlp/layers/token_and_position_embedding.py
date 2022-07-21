@@ -19,6 +19,7 @@ from tensorflow import keras
 import keras_nlp.layers
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class TokenAndPositionEmbedding(keras.layers.Layer):
     """A layer which sums a token and position embedding.
 
