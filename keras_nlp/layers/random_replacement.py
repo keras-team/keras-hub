@@ -239,14 +239,11 @@ class RandomReplacement(keras.layers.Layer):
             """
             Replace words randomly
             """
-            for i in range(self.max_replacements):
+            for _ in range(self.max_replacements):
                 # Choose a Random Index
-                index = tf.random.uniform(
-                    shape=(),
-                    minval=0,
-                    maxval=tf.size(inputs),
-                    dtype=tf.int32,
-                    seed=self.seed + i,
+                index = tf.random.stateless_uniform(
+                    shape=[], minval=0, maxval=tf.size(inputs), dtype=tf.int32, 
+                    seed=self._generator.make_seeds()[:, 0],
                 )
                 synonym = inputs[index]
                 if _check_skip(synonym):
@@ -270,12 +267,9 @@ class RandomReplacement(keras.layers.Layer):
                         inputs, [[index]], [synonym]
                     )
                 elif self.replacement_list is not None:
-                    replace_list_index = tf.random.uniform(
-                        shape=(),
-                        minval=0,
-                        maxval=tf.size(self.replacement_list),
-                        dtype=tf.int32,
-                        seed=self.seed + i,
+                    replace_list_index = tf.random.stateless_uniform(
+                        shape=[], minval=0, maxval=len(self.replacement_list), 
+                        dtype=tf.int32, seed=self._generator.make_seeds()[:, 0],
                     )
                     synonym = tf.gather(
                         self.replacement_list, replace_list_index
