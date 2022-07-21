@@ -26,104 +26,6 @@ from tensorflow import keras
 import keras_nlp
 
 
-def make_attention_mask(inputs, mask):
-    """Make a 3D attention mask from a 2D input mask.
-
-    Given `inputs` with shape `[batch, from_seq_length, ...]` and a mask with
-    shape `[batch_size, to_seq_length]`, this will output a mask with dtype
-    matching `inputs` with shape `[batch, from_seq_length, to_seq_length]`.
-
-    Args:
-        inputs: The inputs to the attention layer.
-        mask: The 2D input mask.
-    """
-    inputs_shape = tf.shape(inputs)
-    batch_size = inputs_shape[0]
-    from_seq_length = inputs_shape[1]
-    to_seq_length = tf.shape(mask)[1]
-    mask = tf.reshape(mask, [batch_size, 1, to_seq_length])
-    mask = tf.cast(mask, dtype=inputs.dtype)
-    return tf.ones([batch_size, from_seq_length, 1], dtype=inputs.dtype) * mask
-
-
-# TODO(mattdangerw): This class is needed for TPU friendly embeddings, we should
-# remove it entirely and fix keras.layers.Embedding as needed.
-class OnDeviceEmbedding(keras.layers.Layer):
-    """Performs an embedding lookup suitable for TPU devices.
-
-    This layer uses either tf.gather or tf.one_hot to translate integer indices
-    to float embeddings.
-
-    Args:
-        vocab_size: Number of elements in the vocabulary.
-        embedding_width: Output size of the embedding layer.
-        initializer: The initializer to use for the embedding weights. Defaults
-            to "glorot_uniform".
-        use_one_hot: Whether to use tf.one_hot over tf.gather for the embedding
-            lookup. Defaults to False (that is, using tf.gather). Setting this
-            option to True may improve performance, especially on small
-            vocabulary sizes, but will generally require more memory.
-      scale_factor: Whether to scale the output embeddings. Defaults to None
-        (that is, not to scale). Setting this option to a float will let values
-        in output embeddings multiplied by scale_factor.
-    """
-
-    def __init__(
-        self,
-        vocab_size,
-        embedding_width,
-        initializer="glorot_uniform",
-        use_one_hot=False,
-        scale_factor=None,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self._vocab_size = vocab_size
-        self._embedding_width = embedding_width
-        self._initializer = initializer
-        self._use_one_hot = use_one_hot
-        self._scale_factor = scale_factor
-
-    def get_config(self):
-        config = {
-            "vocab_size": self._vocab_size,
-            "embedding_width": self._embedding_width,
-            "initializer": self._initializer,
-            "use_one_hot": self._use_one_hot,
-            "scale_factor": self._scale_factor,
-        }
-        base_config = super().get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-    def build(self, input_shape):
-        self.embeddings = self.add_weight(
-            "embeddings",
-            shape=[self._vocab_size, self._embedding_width],
-            initializer=self._initializer,
-            dtype=tf.float32,
-        )
-
-        super().build(input_shape)
-
-    def call(self, inputs):
-        flat_inputs = tf.reshape(inputs, [-1])
-        if self._use_one_hot:
-            one_hot_data = tf.one_hot(
-                flat_inputs, depth=self._vocab_size, dtype=self.compute_dtype
-            )
-            embeddings = tf.matmul(one_hot_data, self.embeddings)
-        else:
-            embeddings = tf.gather(self.embeddings, flat_inputs)
-        embeddings = tf.reshape(
-            embeddings,
-            tf.concat([tf.shape(inputs), [self._embedding_width]], axis=0),
-        )
-        embeddings.set_shape(inputs.shape.as_list() + [self._embedding_width])
-        if self._scale_factor:
-            embeddings *= self._scale_factor
-        return embeddings
-
-
 class BertModel(keras.Model):
     """Bi-directional Transformer-based encoder network.
 
@@ -191,10 +93,10 @@ class BertModel(keras.Model):
         )
         self.dropout = dropout
 
-        self._embedding_layer = OnDeviceEmbedding(
-            vocab_size=vocab_size,
-            embedding_width=hidden_size,
-            initializer=self.initializer,
+        self._embedding_layer = keras.layers.Embedding(
+            input_dim=vocab_size,
+            output_dim=hidden_size,
+            embeddings_initializer=self.initializer,
             name="word_embeddings",
         )
 
@@ -204,11 +106,10 @@ class BertModel(keras.Model):
             name="position_embedding",
         )
 
-        self._type_embedding_layer = OnDeviceEmbedding(
-            vocab_size=type_vocab_size,
-            embedding_width=hidden_size,
-            initializer=self.initializer,
-            use_one_hot=True,
+        self._type_embedding_layer = keras.layers.Embedding(
+            input_dim=type_vocab_size,
+            output_dim=hidden_size,
+            embeddings_initializer=self.initializer,
             name="type_embeddings",
         )
 
