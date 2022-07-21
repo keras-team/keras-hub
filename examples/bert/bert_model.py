@@ -235,6 +235,16 @@ class BertModel(keras.Model):
             )
             self._transformer_layers.append(layer)
 
+        # This is used as the intermediate output for the NSP prediction head.
+        # It is important we include this in the mode, as we want to preserve
+        # these weights for fine-tuning tasks.
+        self._pooler_layer = keras.layers.Dense(
+            units=hidden_size,
+            activation="tanh",
+            kernel_initializer=self.initializer,
+            name="pooler_dense",
+        )
+
         self.inputs = dict(
             input_ids=keras.Input(shape=(None,), dtype=tf.int32),
             input_mask=keras.Input(shape=(None,), dtype=tf.int32),
@@ -261,7 +271,9 @@ class BertModel(keras.Model):
         x = embeddings
         for layer in self._transformer_layers:
             x = layer(x, padding_mask=input_mask)
-        return x
+        sequence_output = x
+        pooled_output = self._pooler_layer(x[:, 0, :])  # 0 is the [CLS] token.
+        return sequence_output, pooled_output
 
     def get_embedding_table(self):
         return self._embedding_layer.embeddings
