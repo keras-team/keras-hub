@@ -19,7 +19,7 @@ from tensorflow.python.ops.ragged import ragged_array_ops
 
 
 class RandomDeletion(keras.layers.Layer):
-    """Augments input by randomly deleting words.
+    """Augments input by randomly deleting tokens.
 
     This layer comes in handy when you need to generate new data using deletion
     augmentation as described in the paper [EDA: Easy Data Augmentation
@@ -32,15 +32,20 @@ class RandomDeletion(keras.layers.Layer):
     either rank-1 or rank-2.
 
     Args:
-        rate: rate of a word being chosen for deletion.
-        max_deletions: The maximum number of words to delete.
-        skip_list: A list of words to skip.
-        skip_fn: A function that takes a word and returns True if the word
-            should be skipped. This must be a traceable function of tf
-            operations.
-        skip_py_fn: A function that takes a word and returns True if the words
-            should be skipped. Unlike skip_fn, this can be any python function
-            that operates on strings, and does not need to use tf operations.
+        rate: The probability of a token being chosen for deletion.
+        max_deletions: The maximum number of tokens to delete.
+        skip_list: A list of token values that should not be considered
+            candidates for deletion.
+        skip_fn: A function that takes as input a scalar tensor token and
+            returns as output a scalar tensor True/False value. A value of
+            True indicates that the token should not be considered a
+            candidate for deletion. This function must be tracable--it
+            should consist of tensorflow operations.
+        skip_py_fn: A function that takes as input a python token value and
+            returns as output `True` or `False`. A value of True
+            indicates that should not be considered a candidate for deletion.
+            Unlike the `skip_fn` argument, this argument need not be
+            tracable--it can be any python function.
         seed: A seed for the rng.
 
     Examples:
