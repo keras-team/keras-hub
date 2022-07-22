@@ -14,15 +14,27 @@
 import tensorflow as tf
 from keras import backend
 from tensorflow import keras
-
+import random
 
 class RandomInsertion(keras.layers.Layer):
     """Augments input by randomly inserting words.
 
     Args:
-        probability: A float in [0, 1] that is the probability of insertion
+        rate: A float in [0, 1] that is the rate of insertion
         max_replacements: An integer that is the maximum number of insertions
+        insertion_list: A list of strings that are the words to insert
         insertion_fn: fn that takes in a token and returns a insertion token.
+        insertion_py_fn: A python function that takes in a token and returns a
+            insertion token.
+        skip_list: A list of words to skip.
+        skip_fn: A function that takes a word and returns True if the word
+            should be skipped. This must be a traceable function of tf
+            operations.
+        skip_py_fn: A function that takes a word and returns True if the words
+            should be skipped. Unlike skip_fn, this can be any python function
+            that operates on strings, and does not need to use tf operations.
+        seed: A seed for the rng.
+
 
     Examples:
 
@@ -56,10 +68,14 @@ class RandomInsertion(keras.layers.Layer):
 
     def __init__(
         self,
-        probability,
+        rate,
         max_insertions,
-        insertion_fn=None,
         insertion_list=None,
+        insertion_fn=None,
+        insertion_py_fn=None,
+        skip_list=None,
+        skip_fn=None,
+        skip_py_fn=None,
         seed=None,
         name=None,
         **kwargs,
@@ -75,80 +91,110 @@ class RandomInsertion(keras.layers.Layer):
                     f"Received: dtype={dtype}"
                 )
 
-        if insertion_fn is None and insertion_list is None:
-            raise ValueError("""No insertion method provided""")
-
         super().__init__(name=name, **kwargs)
-        self.probability = probability
+        self.rate = rate
         self.max_insertions = max_insertions
-        self.insertion_fn = insertion_fn
-        self.seed = seed
-        self._random_generator = backend.RandomGenerator(seed)
         self.insertion_list = insertion_list
+        self.insertion_fn = insertion_fn
+        self.insertion_py_fn = insertion_py_fn
+        self.skip_list = skip_list
+        self.skip_fn = skip_fn
+        self.skip_py_fn = skip_py_fn
+        self.seed = random.randint(1, 1e9) if seed is None else seed
+        self._generator = tf.random.Generator.from_seed(self.seed)
+
+        if self.rate > 1 or self.rate < 0:
+            raise ValueError(
+                "Rate must be between 0 and 1 (both inclusive)."
+                f"Received: rate={rate}"
+            )
+
+        if [self.skip_list, self.skip_fn, self.skip_py_fn].count(None) < 2:
+            raise ValueError(
+                "Exactly one of skip_list, skip_fn, skip_py_fn must be "
+                "provided."
+            )
+
+        if [self.insertion_list, self.insertion_fn, self.insertion_py_fn].count(None) != 2:
+            raise ValueError(
+                "Exactly one of insertion_list, insertion_fn, insertion_py_fn "
+                "must be provided."
+            )
+
+        if self.skip_list:
+            self.StaticHashTable = tf.lookup.StaticHashTable(
+                tf.lookup.KeyValueTensorInitializer(
+                    tf.convert_to_tensor(self.skip_list),
+                    tf.convert_to_tensor([True] * len(self.skip_list)),
+                ),
+                default_value=False,
+            )
 
     @tf.function
     def call(self, inputs):
-        """Augments input by randomly inserting words.
-        Args:
-            inputs: A tensor or nested tensor of strings to augment.
-        Returns:
-            A tensor or nested tensor of augmented strings.
-        """
-        isString = False
-        if isinstance(inputs, str):
-            inputs = [inputs]
-            isString = True
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            inputs = tf.convert_to_tensor(inputs)
 
-        scalar_input = inputs.shape.rank == 0
-        if scalar_input:
-            inputs = tf.expand_dims(inputs, 0)
+        input_is_1d = False
+        if inputs.shape.rank < 1 or inputs.shape.rank > 2:
+            raise ValueError(
+                "Input must either be rank 1 or rank 2. Received input with "
+                f"rank={inputs.shape.rank}"
+            )
+        elif inputs.shape.rank == 1:
+            input_is_1d = True
+            # Add a new axis at the beginning.
+            inputs = tf.expand_dims(inputs, axis=0)
+        if isinstance(inputs, tf.Tensor):
+            # Convert to ragged tensor.
+            inputs = tf.RaggedTensor.from_tensor(inputs)
+
+        def _check_skip(token):
+            if self.skip_list:
+                return self.StaticHashTable.lookup(token)
+            elif self.skip_fn:
+                return self.skip_fn(token)
+            elif self.skip_py_fn:
+
+                def _preprocess_skip_fn(word):
+                    return self.skip_py_fn(word.numpy().decode("utf-8"))
+
+                return tf.py_function(_preprocess_skip_fn, [token], tf.bool)
+            else:
+                return False
 
         def _insert(inputs):
             """
             Replace words randomly
             """
-            # choose random number between 0 and self.max_insertions
-            num_insertions = tf.random.uniform(
-                shape=(),
-                minval=0,
-                maxval=self.max_insertions,
-                dtype=tf.int32,
-                seed=self._random_generator.make_legacy_seed(),
-            )
-            for _ in range(num_insertions):
-                index = tf.random.uniform(
-                    shape=tf.shape(inputs),
-                    minval=0,
-                    maxval=tf.size(inputs),
-                    dtype=tf.int32,
-                    seed=self._random_generator.make_legacy_seed(),
+            for _ in range(self.max_insertions):
+                index = tf.random.stateless_uniform(
+                    shape=tf.shape(inputs), minval=0, maxval=tf.size(inputs), 
+                    dtype=tf.int32, 
+                    seed=self._generator.make_seeds()[:, 0],
                 )
                 replacement_word = index[0]
                 insertion_location = index[1]
                 original_word = inputs[replacement_word]
+                if _check_skip(original_word):
+                    continue
                 if self.insertion_fn is not None:
-                    synonym = tf.numpy_function(
-                        func=self.insertion_fn,
-                        inp=[original_word],
-                        Tout=tf.string,
-                    )
-                else:
-                    synonym_index = tf.random.uniform(
+                    synonym = self.insertion_fn(original_word)
+                elif self.insertion_list is not None:
+                    synonym_index = tf.random.stateless_uniform(
                         shape=(),
                         minval=0,
                         maxval=len(self.insertion_list),
                         dtype=tf.int32,
-                        seed=self._random_generator.make_legacy_seed(),
+                        seed=self._generator.make_seeds()[:, 0],
                     )
-                    synonym = self.insertion_list[synonym_index]
-                inputs = tf.concat(
-                    [
-                        inputs[:insertion_location],
-                        [synonym],
-                        inputs[insertion_location:],
-                    ],
-                    axis=0,
-                )
+                    synonym = tf.gather(self.insertion_list, synonym_index)
+                else:
+                    def _preprocess_insertion_fn(word):
+                        return self.insertion_py_fn(word.numpy().decode("utf-8"))
+                    synonym = tf.py_function(_preprocess_insertion_fn, [original_word], tf.string)
+                # Insert the synonym at the location.
+                inputs = tf.concat([inputs[:insertion_location+1], [synonym], inputs[insertion_location + 1 :]], axis=0)
             return inputs
 
         inserted = tf.map_fn(
@@ -160,20 +206,22 @@ class RandomInsertion(keras.layers.Layer):
         )
         inserted.flat_values.set_shape([None])
 
-        if scalar_input:
-            inserted = tf.squeeze(inserted, 0)
-        if isString:
-            inserted = inserted[0]
+        if input_is_1d:
+            inserted = tf.squeeze(inserted, axis=0)
         return inserted
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "probability": self.probability,
+                "rate": self.rate,
                 "max_insertions": self.max_insertions,
+                "insertion_list": self.insertion_list,
                 "insertion_fn": self.insertion_fn,
-                "seed": self.seed,
+                "insertion_py_fn": self.insertion_py_fn,
+                "skip_list": self.skip_list,
+                "skip_fn": self.skip_fn,
+                "skip_py_fn": self.skip_py_fn,
             }
         )
         return config
