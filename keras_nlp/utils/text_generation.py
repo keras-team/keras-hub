@@ -139,9 +139,6 @@ def greedy_search(
         prompt = prompt[tf.newaxis, :]
     validate_token_probability_fn(token_probability_fn, prompt)
 
-    shape_invariants = prompt.shape.as_list()
-    shape_invariants[-1] = None
-
     def one_step(prompt):
         pred = token_probability_fn(prompt)
         next_token = tf.cast(tf.argmax(pred, axis=-1), dtype=prompt.dtype)
@@ -157,7 +154,7 @@ def greedy_search(
         ),
         body=one_step,
         loop_vars=[prompt],
-        shape_invariants=[tf.TensorShape(shape_invariants)],
+        shape_invariants=[tf.TensorShape([None, None])],
     )[0]
 
     if end_token_id is not None:
@@ -396,9 +393,6 @@ def random_search(
         prompt = prompt[tf.newaxis, :]
     validate_token_probability_fn(token_probability_fn, prompt)
 
-    shape_invariants = prompt.shape.as_list()
-    shape_invariants[-1] = None
-
     def one_step(prompt):
         pred = token_probability_fn(prompt)
         if from_logits:
@@ -419,7 +413,7 @@ def random_search(
         ),
         body=one_step,
         loop_vars=[prompt],
-        shape_invariants=[tf.TensorShape(shape_invariants)],
+        shape_invariants=[tf.TensorShape([None, None])],
     )[0]
 
     if end_token_id is not None:
@@ -526,9 +520,6 @@ def top_k_search(
         )
         k = pred.shape[1]
 
-    shape_invariants = prompt.shape.as_list()
-    shape_invariants[-1] = None
-
     def one_step(prompt):
         pred = token_probability_fn(prompt)
         if from_logits:
@@ -555,7 +546,7 @@ def top_k_search(
         ),
         body=one_step,
         loop_vars=[prompt],
-        shape_invariants=[tf.TensorShape(shape_invariants)],
+        shape_invariants=[tf.TensorShape([None, None])],
     )[0]
 
     if end_token_id is not None:
@@ -658,9 +649,6 @@ def top_p_search(
         prompt = prompt[tf.newaxis, :]
     validate_token_probability_fn(token_probability_fn, prompt)
 
-    shape_invariants = prompt.shape.as_list()
-    shape_invariants[-1] = None
-
     def one_step(prompt):
         pred = token_probability_fn(prompt)
         if from_logits:
@@ -702,7 +690,7 @@ def top_p_search(
         ),
         body=one_step,
         loop_vars=[prompt],
-        shape_invariants=[tf.TensorShape(shape_invariants)],
+        shape_invariants=[tf.TensorShape([None, None])],
     )[0]
 
     if end_token_id is not None:
