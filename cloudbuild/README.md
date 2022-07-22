@@ -1,6 +1,6 @@
 # KerasNLP Accelerators Testing 
 
-This `cloudbuild/` directory contains configurations for accelerator (GPU/TPU) 
+This `cloudbuild/` directory contains configurations for accelerators (GPU/TPU) 
 testing. Briefly for each PR, it copies the PR's code to a base docker image 
 which contains KerasNLP dependencies to make a new docker image, and deploy the 
 new image to Google Kubernetes Engine cluster, then run all tests in 
