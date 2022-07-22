@@ -11,84 +11,173 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Random Word Deletion Layer."""
+"""Tests for Random Word Insertion Layer."""
 
 import tensorflow as tf
+from tensorflow import keras
 
 from keras_nlp.layers import random_insertion
 
 
 class RandomInsertionTest(tf.test.TestCase):
     def test_shape_and_output_from_word_insertion(self):
-        def replace_word(word):
-            if isinstance(word, bytes):
-                word = word.decode()
-            dict_replacement = {"like": "admire", "bye": "ciao", "Hey": "Hi"}
-            if word in dict_replacement.keys():
-                return dict_replacement[word]
-            return word
-
-        inputs = ["Hey I like", "bye bye"]
+        keras.utils.set_random_seed(1337)
+        inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         augmenter = random_insertion.RandomInsertion(
-            1, 5, insertion_fn=replace_word, seed=42
+            rate=0.3,
+            max_insertions=2,
+            seed=42,
+            insertion_list=["Random1", "Random2", "Random3"],
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I admire Hi like", b"ciao bye ciao bye"]
+        exp_output = [b"Random1 Random2 like", b"Random1 Random2 Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
-    def test_shape_and_output_from_character_insertion(self):
-        def random_chars(word):
-            if isinstance(word, bytes):
-                word = word.decode()
-            if len(word) == 0:
-                return "a"
-            return word[0]
-
-        inputs = ["Hey I like", "bye bye"]
+    def test_shape_and_output_from_character_replacement(self):
+        keras.utils.set_random_seed(1337)
+        inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.unicode_split(inputs, "UTF-8")
         augmenter = random_insertion.RandomInsertion(
-            1, 5, insertion_fn=random_chars, seed=42
+            rate=0.3,
+            max_replacements=2,
+            seed=42,
+            replacement_list=["x", "y", "z"],
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey IlI like", b"byye ybye"]
+        exp_output = [b"Hey I lyxe", b"Keras and Tynsorflxw"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
-    # def test_get_config_and_from_config(self):
+    def test_skip_options(self):
+        def insertion_py_fn(word):
+            if len(word) < 4:
+                return word[:2]
+            return word[:4]
 
-    #     def random_chars(word):
-    #         if isinstance(word, bytes):
-    #             word = word.decode()
-    #         if (len(word) == 0):
-    #             return "a"
-    #         return word[0]
+        keras.utils.set_random_seed(23)
+        inputs = ["Hey I like", "Keras and Tensorflow and Food"]
+        split = tf.strings.split(inputs)
+        augmenter = random_insertion.RandomInsertion(
+            rate=0.5,
+            max_replacements=6,
+            seed=42,
+            insertion_py_fn=insertion_py_fn,
+            skip_list=["Keras"],
+        )
+        augmented = augmenter(split)
+        output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
+        exp_output = [b"He I like", b"Keras an Tens an Food"]
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
 
-    #     augmenter = random_insertion.RandomInsertion(1, 5, insertion_fn = random_chars, seed = 42)
+        def skip_fn(word):
+            if word == "Hey":
+                return True
+            return False
 
-    #     expected_config_subset = {
-    #         'insertion_fn': <function __main__.random_chars>,
-    #         'max_insertions': 5,
-    #         'probability': 1,
-    #         'seed': 42,
-    #     }
+        keras.utils.set_random_seed(1337)
+        augmenter = random_insertion.RandomInsertion(
+            rate=0.5,
+            max_replacements=6,
+            seed=42,
+            insertion_py_fn=insertion_py_fn,
+            skip_fn=skip_fn,
+        )
+        augmented = augmenter(split)
+        output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
+        exp_output = [b"Hey I like", b"Kera an Tens an Food"]
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
 
-    #     config = augmenter.get_config()
+        def skip_py_fn(word):
+            if len(word) == 3:
+                return True
+            return False
 
-    #     self.assertEqual(config, {**config, **expected_config_subset})
+        keras.utils.set_random_seed(1337)
+        augmenter = random_insertion.RandomInsertion(
+            rate=0.5,
+            max_replacements=6,
+            seed=42,
+            insertion_py_fn=insertion_py_fn,
+            skip_py_fn=skip_py_fn,
+        )
+        augmented = augmenter(split)
+        output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
+        exp_output = [b"Hey I like", b"Kera and Tens and Food"]
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
+        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
 
-    #     restored_augmenter = (
-    #         random_insertion.RandomInsertion.from_config(
-    #             config,
-    #         )
-    #     )
+    def test_augment_first_batch_second(self):
+        keras.utils.set_random_seed(1337)
+        augmenter = random_insertion.RandomInsertion(
+            rate=0.3,
+            max_replacements=2,
+            seed=42,
+            replacement_list=["Random1", "Random2", "Random3"],
+        )
+        inputs = ["Hey I like", "Keras and Tensorflow"]
+        split = tf.strings.split(inputs)
+        ds = tf.data.Dataset.from_tensor_slices(split)
+        ds = ds.map(augmenter)
+        ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
+        output = ds.take(1).get_single_element()
 
-    #     self.assertEqual(
-    #         restored_augmenter.get_config(),
-    #         {**config, **expected_config_subset},
-    #     )
+        exp_output = [
+            [b"Random1", b"Random2", b"like"],
+            [b"Random1", b"Random2", b"Tensorflow"],
+        ]
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
+
+    def test_batch_first_augment_second(self):
+        keras.utils.set_random_seed(1337)
+        augmenter = random_insertion.RandomInsertion(
+            rate=0.3,
+            max_replacements=2,
+            seed=42,
+            replacement_list=["Random1", "Random2", "Random3"],
+        )
+        inputs = ["Hey I like", "Keras and Tensorflow"]
+        split = tf.strings.split(inputs)
+        ds = tf.data.Dataset.from_tensor_slices(split)
+        ds = ds.batch(5).map(augmenter)
+        output = ds.take(1).get_single_element()
+
+        exp_output = [
+            [b"Random1", b"Random2", b"like"],
+            [b"Random1", b"Random2", b"Tensorflow"],
+        ]
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
+
+    def test_functional_model(self):
+        keras.utils.set_random_seed(1337)
+        input_data = tf.constant(["Hey I like", "Keras and Tensorflow"])
+        augmenter = random_insertion.RandomInsertion(
+            rate=0.3,
+            max_replacements=2,
+            seed=42,
+            replacement_list=["Random1", "Random2", "Random3"],
+        )
+        inputs = tf.keras.Input(dtype="string", shape=())
+        outputs = augmenter(tf.strings.split(inputs))
+        model = tf.keras.Model(inputs, outputs)
+        model_output = model(input_data)
+        self.assertAllEqual(
+            model_output,
+            [
+                [b"Random1", b"Random2", b"like"],
+                [b"Random1", b"Random2", b"Tensorflow"],
+            ],
+        )
