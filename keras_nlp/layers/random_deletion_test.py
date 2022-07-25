@@ -17,7 +17,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers import random_deletion
-from keras_nlp.tokenizers import UnicodeCharacterTokenizer
+from keras_nlp.tokenizers import UnicodeCodepointTokenizer
 
 
 class RandomDeletionTest(tf.test.TestCase):
@@ -52,7 +52,7 @@ class RandomDeletionTest(tf.test.TestCase):
     def test_with_integer_tokens(self):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]
-        tokenizer = UnicodeCharacterTokenizer(lowercase=False)
+        tokenizer = UnicodeCodepointTokenizer(lowercase=False)
         tokenized = tokenizer.tokenize(inputs)
         augmenter = random_deletion.RandomDeletion(
             rate=0.4, max_deletions=4, seed=42
