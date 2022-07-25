@@ -27,7 +27,7 @@ def validate_prompt(prompt):
             "provide `prompt` as a list or Tensor."
         )
     if not isinstance(prompt, tf.Tensor):
-        prompt = tf.convert_to_tensor(prompt)
+        prompt = tf.convert_to_tensor(prompt, dtype=tf.int32)
     return prompt
 
 
