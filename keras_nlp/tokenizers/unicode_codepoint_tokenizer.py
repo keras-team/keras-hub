@@ -18,11 +18,11 @@ import tensorflow_text as tf_text
 from keras_nlp.tokenizers import tokenizer
 
 
-class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
+class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     """A unicode character tokenizer layer.
 
     This tokenizer is a vocabulary free tokenizer which tokenizes text as
-    unicode characters codepoints.
+    unicode character codepoints.
 
     Tokenizer outputs can either be padded and truncated with a
     `sequence_length` argument, or left un-truncated. The exact output will
@@ -52,8 +52,13 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
             form before tokenizing.
         errors: One of ('replace', 'remove', 'strict'). Specifies the
             `detokenize()` behavior when an invalid codepoint is encountered.
-            (same behavior as
-            https://www.tensorflow.org/api_docs/python/tf/strings/unicode_transcode)
+            The value of `'strict'` will cause the tokenizer to produce a
+            `InvalidArgument` error on any invalid input formatting. A value of
+            `'replace'` will cause the tokenizer to replace any invalid
+            formatting in the input with the replacement_char codepoint.
+            A value of `'ignore'` will cause the tokenizer to skip any invalid
+            formatting in the input and produce no corresponding output
+            character.
         replacement_char: The unicode codepoint to use in place of invalid
             codepoints. Defaults to 65533 (U+FFFD).
         input_encoding: One of ("UTF-8", "UTF-16-BE", or "UTF-32-BE").
@@ -69,7 +74,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     Basic Usage.
     >>> inputs = "Unicode Tokenizer"
-    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer()
     >>> tokenizer(inputs)
     <tf.Tensor: shape=(17,), dtype=int32, numpy=
     array([117, 110, 105,  99, 111, 100, 101,  32, 116, 111, 107, 101, 110,
@@ -77,7 +82,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     Ragged outputs.
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
-    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer()
     >>> tokenizer(inputs)
     <tf.RaggedTensor [[98, 111, 111, 107],
         [2346, 2369, 2360, 2381, 2340, 2325],
@@ -85,7 +90,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     Dense outputs.
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
-    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
     ...     sequence_length=8)
     >>> tokenizer(inputs)
     <tf.Tensor: shape=(3, 8), dtype=int32, numpy=
@@ -95,7 +100,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     Tokenize, then batch for ragged outputs.
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
-    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer()
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
     >>> ds = ds.map(tokenizer)
     >>> ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(3))
@@ -106,7 +111,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     Batch, then tokenize for ragged outputs.
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
-    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer()
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
     >>> ds = ds.batch(3).map(tokenizer)
     >>> ds.take(1).get_single_element()
@@ -116,7 +121,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     Tokenize, then batch for dense outputs (`sequence_length` provided).
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
-    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
     ...     sequence_length=5)
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
     >>> ds = ds.map(tokenizer)
@@ -129,7 +134,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     Batch, then tokenize for dense outputs (`sequence_length` provided).
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
-    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
     ...     sequence_length=5)
     >>> ds = tf.data.Dataset.from_tensor_slices(inputs)
     >>> ds = ds.batch(3).map(tokenizer)
@@ -141,7 +146,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     Tokenization with truncation.
     >>> inputs = ["I Like to Travel a Lot", "मैं किताबें पढ़ना पसंद करता हूं"]
-    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
     ...     sequence_length=5)
     >>> tokenizer(inputs)
     <tf.Tensor: shape=(5,), dtype=int32,
@@ -150,7 +155,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     Tokenization with vocabulary_size.
     >>> latin_ext_cutoff = 592
-    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
     ...     vocabulary_size=latin_ext_cutoff)
     >>> tokenizer("¿Cómo estás?")
     <tf.Tensor: shape=(10,), dtype=int32,
@@ -163,12 +168,12 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     Detokenization.
     >>> inputs = tf.constant([110, 105, 110, 106,  97], dtype=tf.int32)
-    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer()
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer()
     >>> tokenizer.detokenize(inputs)
     <tf.Tensor: shape=(), dtype=string, numpy=b'ninja'>
 
     Detokenization with padding.
-    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
     ...     sequence_length=7)
     >>> dataset = tf.data.Dataset.from_tensor_slices(["a b c", "b c", "a"])
     >>> dataset = dataset.map(tokenizer)
@@ -181,7 +186,7 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
     Detokenization with invalid bytes.
     >>> inputs = tf.constant([110, 105, 10000000, 110, 106,  97])
-    >>> tokenizer = keras_nlp.tokenizers.UnicodeCharacterTokenizer(
+    >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
     ...     errors="replace", replacement_char=88)
     >>> tokenizer.detokenize(inputs).numpy().decode('utf-8')
     'niXnja'
