@@ -121,8 +121,8 @@ class RandomDeletion(keras.layers.Layer):
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer and dtype != tf.string:
                 raise ValueError(
-                    "Output dtype must be an integer type or a string. "
-                    f"Received: dtype={dtype}"
+                    "Output dtype must be one of `'string'`, `'int32'`, and "
+                    f"`'int64'`. Received: dtype={dtype}"
                 )
 
         super().__init__(name=name, **kwargs)
@@ -142,7 +142,7 @@ class RandomDeletion(keras.layers.Layer):
 
         if [self.skip_list, self.skip_fn, self.skip_py_fn].count(None) < 2:
             raise ValueError(
-                "Exactly one of skip_list, skip_fn, skip_py_fn must be "
+                "Exactly one of `skip_list`, `skip_fn`, `skip_py_fn` must be "
                 "provided."
             )
 
@@ -183,14 +183,28 @@ class RandomDeletion(keras.layers.Layer):
             )
         elif self.skip_py_fn:
 
-            def _preprocess_fn(word):
+            def _preprocess_string_fn(word):
                 return self.skip_py_fn(word.numpy().decode("utf-8"))
 
-            skip_masks = tf.map_fn(
-                lambda x: tf.py_function(_preprocess_fn, [x], tf.bool),
-                inputs.flat_values,
-                dtype=tf.bool,
-            )
+            def _preprocess_int_fn(word):
+                return self.skip_py_fn(word.numpy())
+
+            # If Tensor is String
+            if inputs.dtype == tf.string:
+                skip_masks = tf.map_fn(
+                    lambda x: tf.py_function(
+                        _preprocess_string_fn, [x], tf.bool
+                    ),
+                    inputs.flat_values,
+                    dtype=tf.bool,
+                )
+            elif inputs.dtype in [tf.int32, tf.int64]:
+                skip_masks = tf.map_fn(
+                    lambda x: tf.py_function(_preprocess_int_fn, [x], tf.bool),
+                    inputs.flat_values,
+                    dtype=tf.bool,
+                )
+
         positions_flat = tf.range(tf.size(inputs.flat_values))
         positions = inputs.with_flat_values(positions_flat)
         if skip_masks is not None:
