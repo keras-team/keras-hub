@@ -28,10 +28,6 @@ def validate_prompt(prompt):
         )
     if not isinstance(prompt, tf.Tensor):
         prompt = tf.convert_to_tensor(prompt)
-    if prompt.shape[-1] == 0:
-        raise ValueError(
-            "Length of `prompt` is 0, please provide a non-empty `prompt`."
-        )
     return prompt
 
 
