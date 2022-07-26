@@ -173,37 +173,28 @@ class RandomDeletion(keras.layers.Layer):
             # Convert to ragged tensor.
             inputs = tf.RaggedTensor.from_tensor(inputs)
 
-        # skip words that are in the skip_list
         skip_masks = None
         if self.skip_list:
             skip_masks = self.StaticHashTable.lookup(inputs.flat_values)
         elif self.skip_fn:
             skip_masks = tf.map_fn(
-                self.skip_fn, inputs.flat_values, dtype=tf.bool
+                self.skip_fn, inputs.flat_values, fn_output_signature=tf.bool
             )
         elif self.skip_py_fn:
 
-            def _preprocess_string_fn(word):
-                return self.skip_py_fn(word.numpy().decode("utf-8"))
+            def string_fn(token):
+                return self.skip_py_fn(token.numpy().decode("utf-8"))
 
-            def _preprocess_int_fn(word):
-                return self.skip_py_fn(word.numpy())
+            def int_fn(token):
+                return self.skip_py_fn(token.numpy())
 
-            # If Tensor is String
-            if inputs.dtype == tf.string:
-                skip_masks = tf.map_fn(
-                    lambda x: tf.py_function(
-                        _preprocess_string_fn, [x], tf.bool
-                    ),
-                    inputs.flat_values,
-                    dtype=tf.bool,
-                )
-            elif inputs.dtype in [tf.int32, tf.int64]:
-                skip_masks = tf.map_fn(
-                    lambda x: tf.py_function(_preprocess_int_fn, [x], tf.bool),
-                    inputs.flat_values,
-                    dtype=tf.bool,
-                )
+            py_fn = string_fn if inputs.dtype == tf.string else int_fn
+
+            skip_masks = tf.map_fn(
+                lambda x: tf.py_function(py_fn, [x], tf.bool),
+                inputs.flat_values,
+                fn_output_signature=tf.bool,
+            )
 
         positions_flat = tf.range(tf.size(inputs.flat_values))
         positions = inputs.with_flat_values(positions_flat)
@@ -215,11 +206,11 @@ class RandomDeletion(keras.layers.Layer):
             )
 
         # Figure out how many we are going to select.
-        word_counts = tf.cast(inputs.row_lengths(), "float32")
+        token_counts = tf.cast(inputs.row_lengths(), "float32")
         num_to_select = tf.random.stateless_binomial(
-            shape=tf.shape(word_counts),
+            shape=tf.shape(token_counts),
             seed=self._generator.make_seeds()[:, 0],
-            counts=word_counts,
+            counts=token_counts,
             probs=self.rate,
         )
         if self.max_deletions is not None:

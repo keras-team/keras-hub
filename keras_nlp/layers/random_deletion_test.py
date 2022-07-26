@@ -107,11 +107,8 @@ class RandomDeletionTest(tf.test.TestCase):
         exp_output = [b"Hey like", b"Keras Tensorflow"]
 
     def test_get_config_and_from_config(self):
-        def skip_py_fn(word):
-            return len(word) < 4
-
         augmenter = random_deletion.RandomDeletion(
-            rate=0.4, max_deletions=1, seed=42, skip_py_fn=skip_py_fn
+            rate=0.4, max_deletions=1, seed=42
         )
 
         expected_config_subset = {"max_deletions": 1, "rate": 0.4, "seed": 42}
