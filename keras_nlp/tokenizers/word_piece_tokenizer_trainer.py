@@ -118,6 +118,7 @@ def compute_word_piece_vocabulary(
             f"Received: {type(data)}."
         )
     if isinstance(data, list):
+        # Processing list of file paths.
         if not split:
             raise ValueError(
                 "When learning a vocab from files, `split` must be `True`. "
