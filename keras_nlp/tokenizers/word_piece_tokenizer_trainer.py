@@ -30,7 +30,6 @@ def compute_word_piece_vocabulary(
     split=True,
     suffix_indicator="##",
     reserved_tokens=["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]"],
-    verbose=False,
 ):
     r"""A utility to train a WordPiece vocabulary.
 
