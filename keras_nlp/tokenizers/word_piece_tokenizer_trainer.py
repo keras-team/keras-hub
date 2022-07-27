@@ -30,6 +30,7 @@ def compute_word_piece_vocabulary(
     split=True,
     suffix_indicator="##",
     reserved_tokens=["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]"],
+    verbose=False,
 ):
     r"""A utility to train a WordPiece vocabulary.
 
@@ -125,7 +126,12 @@ def compute_word_piece_vocabulary(
                 "data as a dataset, split it, and pass it to "
                 "`compute_word_piece_vocabulary()` with split=False."
             )
-        data = tf.data.TextLineDataset(data)
+        path_ds = tf.data.Dataset.from_tensor_slices(data)
+        # Uses map to read filepaths.
+        data = path_ds.map(
+            lambda path: tf.io.read_file(path),
+            num_parallel_calls=tf.data.AUTOTUNE,
+        )
 
     words_data = data.map(
         lambda text: pretokenize(text, lowercase, strip_accents, split),
