@@ -15,6 +15,7 @@
 
 import tempfile
 
+import csv
 import datasets
 import keras_tuner
 import tensorflow as tf
@@ -173,14 +174,14 @@ class BertClassificationFinetuner(keras.Model):
             kernel_initializer=initializer,
             name="logits",
         )
-        self._drop_out_layer = tf.keras.layers.Dropout(dropout)
+        self._dropout_layer = tf.keras.layers.Dropout(dropout)
 
     def call(self, inputs):
         outputs = self.bert_model(inputs)
         # Get the first [CLS] token from each output.
         outputs = outputs[:, 0, :]
         outputs = self._pooler_layer(outputs)
-        outputs = self._drop_out_layer(outputs)
+        outputs = self._dropout_layer(outputs)
         return self._logit_layer(outputs)
 
 
@@ -192,7 +193,6 @@ class BertHyperModel(keras_tuner.HyperModel):
 
     def build(self, hp):
         model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
-        model = model.bert_model
         model_config = self.model_config
         finetuning_model = BertClassificationFinetuner(
             bert_model=model,
@@ -332,8 +332,12 @@ def main(_):
 
         labelname = labelnames.get(FLAGS.task_name)
         with tf.io.gfile.GFile(filename, "w") as f:
+            writer = csv.writer(f, delimiter="\t")
             # Write the required headline for GLUE.
-            f.write("index\tprediction\n")
+            writer.writerow(["index", "prediction"])
+            writer.writerow([3, 5])
+            return
+
             for i, x in enumerate(test_ds):
                 pred = eval_step(x)
                 pred = pred._values[0].numpy()
@@ -345,7 +349,7 @@ def main(_):
                         pred_value = pred[j]
                     # A GLUE submission requires a tsv file with an index and
                     # prediction per line.
-                    f.write(str(idx) + "\t" + str(pred_value) + "\n")
+                    writer.writerow([idx, pred_value])
                 break
 
     # TODO(mattdangerw): After incorporating keras_nlp tokenization, save an
