@@ -31,10 +31,10 @@ def compute_sentencepiece_vocabulary(
 ):
     r"""A utility to train a SentencePiece vocabulary.
 
-    Trains a SentencePiece vocabulary from an input dataset or a list of 
+    Trains a SentencePiece vocabulary from an input dataset or a list of
     filenames.
 
-    If `data` is a list of filenames, the file format is required to be plain 
+    If `data` is a list of filenames, the file format is required to be plain
     text files, and the text would be read in line by line during training.
 
     Args:
@@ -42,14 +42,14 @@ def compute_sentencepiece_vocabulary(
         vocabulary_size: int. The maximum size of a vocabulary to be trained.
         model_type: str, defaults to `unigram`. The model algorithm must be one
             of `unigram`, `bpe`, `word` or `char`.
-        proto_output_file: str, defaults to `None`. If provided it will be used 
-            as model_file proto_output_file which is passed to model_writer. 
+        proto_output_file: str, defaults to `None`. If provided it will be used
+            as model_file proto_output_file which is passed to model_writer.
             If `None`, the model_file will be `io.BytesIO` object.
         lowercase: bool, defaults to `False`. If true, the input text will be
             lowercased before tokenization.
 
     Returns:
-        Returns a string proto_output_file to a SentencePiece proto file or a 
+        Returns a string proto_output_file to a SentencePiece proto file or a
         bytes object with a serialized SentencePiece proto
 
     Examples:
@@ -61,7 +61,8 @@ def compute_sentencepiece_vocabulary(
     >>> outputs = inputs.map(tokenizer)
     >>> for output in outputs:
     ...   print(output)
-    tf.Tensor([ 4  8 12  5  9 14  5  6 13  4  7 10 11  6 13], shape=(15,), dtype=int32)
+    tf.Tensor([ 4  8 12  5  9 14  5  6 13  4  7 10 11  6 13],
+    shape=(15,), dtype=int32)
 
     # Basic Usage (from filenames).
     >>> with open("test.txt", "w+") as f: f.write("Drifting Along\n")
@@ -76,13 +77,15 @@ def compute_sentencepiece_vocabulary(
 
     # Basic Usage (with proto_output_file)
     >>> inputs = tf.data.Dataset.from_tensor_slices(["Drifting Along"])
-    >>> proto = compute_sentencepiece_vocabulary(inputs, vocabulary_size = 15, proto_output_file = "model.spm")
+    >>> proto = compute_sentencepiece_vocabulary(inputs, vocabulary_size = 15,
+    ...     proto_output_file = "model.spm")
     >>> tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto="model.spm")
     >>> ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
     >>> ds = ds.map(tokenizer)
     >>> for output in ds:
     ...   print(output)
-    tf.Tensor([ 4 14  1  4  1  5  1  4  1 12 11  1  6  4  9 11  1], shape=(17,), dtype=int32)
+    tf.Tensor([ 4 14  1  4  1  5  1  4  1 12 11  1  6  4  9 11  1],
+    shape=(17,), dtype=int32)
 
     # Usage with lowercase
     >>> inputs = tf.data.Dataset.from_tensor_slices(["Drifting Along"])
@@ -91,7 +94,8 @@ def compute_sentencepiece_vocabulary(
     >>> outputs = inputs.map(tokenizer)
     >>> for output in outputs:
     ...   print(output)
-    tf.Tensor([ 4  8 12  5  9 14  5  6 13  4  7 10 11  6 13], shape=(15,), dtype=int32)
+    tf.Tensor([ 4  8 12  5  9 14  5  6 13  4  7 10 11  6 13],
+    shape=(15,), dtype=int32)
     """
 
     if not isinstance(data, (list, tf.data.Dataset)):

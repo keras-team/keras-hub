@@ -39,31 +39,10 @@ class SentencePieceTokenizerTrainerTest(tf.test.TestCase):
         test_text = "Ninja Land"
         with open("test.txt", "w+") as f:
             f.write(test_text + "\n")
-        expected_output = [
-            5,
-            9,
-            6,
-            7,
-            11,
-            4,
-            8,
-            5,
-            4,
-            7,
-            10,
-            5,
-            12,
-            4,
-            13,
-            15,
-            14,
-            4,
-            6,
-            8,
-        ]
+        expected_output = [6, 8, 9, 5, 11, 4, 6, 7, 4, 5, 10]
         proto = compute_sentencepiece_vocabulary(
             ["test.txt"],
-            16,
+            12,
         )
         tokenizer = SentencePieceTokenizer(proto=proto)
         test_output = tokenizer(test_text)
