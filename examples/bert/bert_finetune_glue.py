@@ -49,15 +49,9 @@ flags.DEFINE_string(
 )
 
 flags.DEFINE_string(
-    "saved_model_output",
+    "save_evaluations_path",
     None,
-    "The directory to save the finetuned model.",
-)
-
-flags.DEFINE_string(
-    "tsv_prediction_output",
-    None,
-    "The directory to save the GLUE evaluations.",
+    "If saving the evaluations.",
 )
 
 flags.DEFINE_string(
@@ -76,6 +70,12 @@ flags.DEFINE_bool(
     "tpu_name",
     None,
     "The TPU to connect to, if None, no TPU will be used.",
+)
+
+flags.DEFINE_bool(
+    "do_evaluation",
+    True,
+    "Whether to run evaluation on test data.",
 )
 
 
@@ -152,19 +152,7 @@ def load_data(task_name):
 class BertClassificationFinetuner(keras.Model):
     """Adds a classification head to a pre-trained BERT model for finetuning"""
 
-<<<<<<< HEAD
-    def __init__(
-        self,
-        bert_model,
-        hidden_size,
-        num_classes,
-        initializer,
-        dropout,
-        **kwargs,
-    ):
-=======
-    def __init__(self, bert_model, num_classes, initializer, **kwargs):
->>>>>>> master
+    def __init__(self, bert_model, num_classes, initializer, dropout, **kwargs):
         super().__init__(**kwargs)
         self.bert_model = bert_model
         self._logit_layer = keras.layers.Dense(
@@ -172,21 +160,13 @@ class BertClassificationFinetuner(keras.Model):
             kernel_initializer=initializer,
             name="logits",
         )
-        self._dropout_layer = tf.keras.layers.Dropout(dropout)
+        self._dropout = tf.keras.layers.Dropout(dropout)
 
     def call(self, inputs):
-<<<<<<< HEAD
-        outputs = self.bert_model(inputs)
-        # Get the first [CLS] token from each output.
-        outputs = outputs[:, 0, :]
-        outputs = self._pooler_layer(outputs)
-        outputs = self._dropout_layer(outputs)
-        return self._logit_layer(outputs)
-=======
         # Ignore the sequence output, use the pooled output.
         _, pooled_output = self.bert_model(inputs)
+        pooled_output = self._dropout(pooled_output)
         return self._logit_layer(pooled_output)
->>>>>>> master
 
 
 class BertHyperModel(keras_tuner.HyperModel):
@@ -299,7 +279,7 @@ def main(_):
         f"The best hyperparameters found are:\nLearning Rate: {best_hp['lr']}"
     )
 
-    if FLAGS.tsv_prediction_output:
+    if FLAGS.save_evaluations_path:
         filenames = {
             "cola": "CoLA.tsv",
             "sst2": "SST-2.tsv",
@@ -315,45 +295,47 @@ def main(_):
 
         labelnames = {
             "mnli_matched": ["entailment", "neutral", "contradiction"],
-            "mnli_mismatched": ["entailment", "neutral", "contradiction"],
+            "mnli_matched": ["entailment", "neutral", "contradiction"],
             "qnli": ["entailment", "not_entailment"],
             "rte": ["entailment", "not_entailment"],
         }
 
         filename = (
-            FLAGS.tsv_prediction_output + "/" + filenames[FLAGS.task_name]
+            FLAGS.save_evaluations_path + "/" + filenames[FLAGS.task_name]
         )
 
         @tf.function
-        def eval_step(inputs):
+        def eval_step(iterator):
             def step_fn(inputs):
-                prob = finetuning_model(inputs)
+                """The computation to run on each TPU device."""
+                x, _ = inputs
+                prob = finetuning_model(x)
                 pred = tf.argmax(prob, -1)
                 return pred
 
-            return strategy.run(step_fn, args=(inputs,))
+            return strategy.run(step_fn, args=(next(iterator),))
 
-        labelname = labelnames.get(FLAGS.task_name)
-        with tf.io.gfile.GFile(filename, "w") as f:
-            writer = csv.writer(f, delimiter="\t")
-            # Write the required headline for GLUE.
-            writer.writerow(["index", "prediction"])
-            writer.writerow([3, 5])
-            return
+    labelname = labelnames.get(FLAGS.task_name)
+    test_iterator = iter(test_ds)
+    with tf.io.gfile.GFile(filename, "w") as f:
+        writer = csv.writer(f, delimiter="\t")
+        # Write the required headline for GLUE.
+        writer.writerow(["index", "prediction"])
+        for i in range(test_ds.cardinality()):
+            pred = eval_step(test_iterator)
+            pred = pred._values[0].numpy()
+            for j in range(len(pred)):
+                idx = i * batch_size + j
+                if labelname:
+                    pred_value = labelname[int(pred[j])]
+                else:
+                    pred_value = pred[j]
+                # GLUE requires a format of index + tab + prediction.
+                writer.writerow([idx, pred_value])
 
-            for i, x in enumerate(test_ds):
-                pred = eval_step(x)
-                pred = pred._values[0].numpy()
-                for j in range(len(pred)):
-                    idx = i * batch_size + j
-                    if labelname:
-                        pred_value = labelname[int(pred[j])]
-                    else:
-                        pred_value = pred[j]
-                    # A GLUE submission requires a tsv file with an index and
-                    # prediction per line.
-                    writer.writerow([idx, pred_value])
-                break
+    if FLAGS.do_evaluation:
+        print("Evaluating on test set.")
+        finetuning_model.evaluate(test_ds)
 
     # TODO(mattdangerw): After incorporating keras_nlp tokenization, save an
     # end-to-end model includeing preprocessing that operates on raw strings.
