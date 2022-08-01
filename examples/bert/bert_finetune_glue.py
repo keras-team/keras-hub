@@ -152,6 +152,7 @@ def load_data(task_name):
 class BertClassificationFinetuner(keras.Model):
     """Adds a classification head to a pre-trained BERT model for finetuning"""
 
+<<<<<<< HEAD
     def __init__(
         self,
         bert_model,
@@ -161,14 +162,11 @@ class BertClassificationFinetuner(keras.Model):
         dropout,
         **kwargs,
     ):
+=======
+    def __init__(self, bert_model, num_classes, initializer, **kwargs):
+>>>>>>> master
         super().__init__(**kwargs)
         self.bert_model = bert_model
-        self._pooler_layer = keras.layers.Dense(
-            hidden_size,
-            activation="tanh",
-            kernel_initializer=initializer,
-            name="pooler",
-        )
         self._logit_layer = keras.layers.Dense(
             num_classes,
             kernel_initializer=initializer,
@@ -177,12 +175,18 @@ class BertClassificationFinetuner(keras.Model):
         self._dropout_layer = tf.keras.layers.Dropout(dropout)
 
     def call(self, inputs):
+<<<<<<< HEAD
         outputs = self.bert_model(inputs)
         # Get the first [CLS] token from each output.
         outputs = outputs[:, 0, :]
         outputs = self._pooler_layer(outputs)
         outputs = self._dropout_layer(outputs)
         return self._logit_layer(outputs)
+=======
+        # Ignore the sequence output, use the pooled output.
+        _, pooled_output = self.bert_model(inputs)
+        return self._logit_layer(pooled_output)
+>>>>>>> master
 
 
 class BertHyperModel(keras_tuner.HyperModel):
@@ -196,7 +200,6 @@ class BertHyperModel(keras_tuner.HyperModel):
         model_config = self.model_config
         finetuning_model = BertClassificationFinetuner(
             bert_model=model,
-            hidden_size=model_config["hidden_size"],
             num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
             initializer=keras.initializers.TruncatedNormal(
                 stddev=model_config["initializer_range"]

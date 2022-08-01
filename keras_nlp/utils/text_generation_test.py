@@ -339,23 +339,6 @@ class RandomSearchTextGenerationTest(tf.test.TestCase):
         with self.assertRaises(ValueError):
             random_search(self.token_probability_fn, inputs, max_length=5)
 
-    def test_assert_seeded_generation_is_correct(self):
-        def token_probability_fn(inputs):
-            batch_size = inputs.shape[0]
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
-            return tf.repeat(prob, batch_size, axis=0)
-
-        batch_size = 10
-        inputs = 3 * tf.ones([batch_size, 1], dtype=tf.int32)
-        max_length = 3
-        tf.random.set_seed(42)
-        outputs = random_search(
-            token_probability_fn, inputs, max_length=max_length, seed=42
-        )
-        # Random sampling result with seed 42.
-        seeded_result = 3 * np.ones(shape=[batch_size, max_length])
-        self.assertAllEqual(outputs, seeded_result)
-
     def test_assert_probability_distribution_generation_is_correct(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
@@ -504,23 +487,6 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
         inputs = tf.ragged.constant([[1], [2, 3]])
         with self.assertRaises(ValueError):
             top_k_search(self.token_probability_fn, inputs, max_length=5, k=2)
-
-    def test_assert_seeded_generation_is_correct(self):
-        def token_probability_fn(inputs):
-            batch_size = inputs.shape[0]
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
-            return tf.repeat(prob, batch_size, axis=0)
-
-        batch_size = 10
-        inputs = 3 * tf.ones([batch_size, 1], dtype=tf.int32)
-        max_length = 3
-        tf.random.set_seed(42)
-        outputs = top_k_search(
-            token_probability_fn, inputs, max_length=max_length, k=2, seed=42
-        )
-        # Top-k sampling result with seed 42.
-        seeded_result = 3 * np.ones(shape=[batch_size, max_length])
-        self.assertAllEqual(outputs, seeded_result)
 
     def test_assert_probability_distribution_generation_is_correct(self):
         def token_probability_fn(inputs):
@@ -686,25 +652,6 @@ class TopPSearchTextGenerationTest(tf.test.TestCase):
         inputs = tf.ragged.constant([[1], [2, 3]])
         with self.assertRaises(ValueError):
             top_p_search(self.token_probability_fn, inputs, max_length=5, p=0.8)
-
-    def test_assert_seeded_generation_is_correct(self):
-        def token_probability_fn(inputs):
-            batch_size = inputs.shape[0]
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
-            return tf.repeat(prob, batch_size, axis=0)
-
-        batch_size = 10
-        inputs = 3 * tf.ones([batch_size, 1], dtype=tf.int32)
-        max_length = 3
-        tf.random.set_seed(42)
-        outputs = top_p_search(
-            token_probability_fn, inputs, max_length=max_length, p=0.91, seed=42
-        )
-        # Top-p sampling result with seed 42.
-        seeded_result = 3 * np.ones(shape=[batch_size, max_length])
-        seeded_result[3][1] = 2
-        seeded_result[7][1] = 2
-        self.assertAllEqual(outputs, seeded_result)
 
     def test_assert_probability_distribution_generation_is_correct(self):
         def token_probability_fn(inputs):

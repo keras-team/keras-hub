@@ -15,15 +15,15 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.tokenizers.unicode_character_tokenizer import (
-    UnicodeCharacterTokenizer,
+from keras_nlp.tokenizers.unicode_codepoint_tokenizer import (
+    UnicodeCodepointTokenizer,
 )
 
 
-class UnicodeCharacterTokenizerTest(tf.test.TestCase):
+class UnicodeCodepointTokenizerTest(tf.test.TestCase):
     def test_tokenize(self):
         input_data = tf.constant(["ninja", "samurai", "▀▁▂▃"])
-        tokenizer = UnicodeCharacterTokenizer()
+        tokenizer = UnicodeCodepointTokenizer()
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
         self.assertIsInstance(call_output, tf.RaggedTensor)
@@ -38,7 +38,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
 
     def test_tokenize_scalar(self):
         input_data = "ninja"
-        tokenizer = UnicodeCharacterTokenizer()
+        tokenizer = UnicodeCodepointTokenizer()
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
 
@@ -47,7 +47,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
 
     def test_dense_output(self):
         input_data = tf.constant(["ninja", "samurai", "▀▁▂▃"])
-        tokenizer = UnicodeCharacterTokenizer(sequence_length=10)
+        tokenizer = UnicodeCodepointTokenizer(sequence_length=10)
         call_output = tokenizer(input_data)
         self.assertIsInstance(call_output, tf.Tensor)
         self.assertAllEqual(
@@ -61,7 +61,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
 
     def test_tokenize_scalar_with_vocabulary_size(self):
         input_data = "ninja"
-        tokenizer = UnicodeCharacterTokenizer(vocabulary_size=105)
+        tokenizer = UnicodeCodepointTokenizer(vocabulary_size=105)
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
 
@@ -70,7 +70,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
 
     def test_tokenize_dense_with_vocabulary_size(self):
         input_data = tf.constant(["ninja", "samurai", "▀▁▂▃"])
-        tokenizer = UnicodeCharacterTokenizer(
+        tokenizer = UnicodeCodepointTokenizer(
             sequence_length=10, vocabulary_size=105
         )
         call_output = tokenizer(input_data)
@@ -86,7 +86,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
 
     def test_tokenize_ragged_with_vocabulary_size(self):
         input_data = tf.constant(["ninja", "samurai", "▀▁▂▃"])
-        tokenizer = UnicodeCharacterTokenizer(vocabulary_size=105)
+        tokenizer = UnicodeCodepointTokenizer(vocabulary_size=105)
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
         self.assertIsInstance(call_output, tf.RaggedTensor)
@@ -108,7 +108,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             ]
         )
 
-        tokenizer = UnicodeCharacterTokenizer()
+        tokenizer = UnicodeCodepointTokenizer()
         detokenize_output = tokenizer.detokenize(input_data)
         self.assertAllEqual(
             detokenize_output,
@@ -122,7 +122,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
     def test_detokenize_replace_error(self):
         # 10000000 is an invalid value
         input_data = tf.ragged.constant([[110, 105, 10000000, 110, 106, 97]])
-        tokenizer = UnicodeCharacterTokenizer(
+        tokenizer = UnicodeCodepointTokenizer(
             errors="replace", replacement_char=75
         )
         detokenize_output = tokenizer.detokenize(input_data)
@@ -130,19 +130,19 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
 
     def test_detokenize_ignore_error(self):
         input_data = tf.ragged.constant([[110, 105, 10000000, 110, 106, 97]])
-        tokenizer = UnicodeCharacterTokenizer(errors="ignore")
+        tokenizer = UnicodeCodepointTokenizer(errors="ignore")
         detokenize_output = tokenizer.detokenize(input_data)
         self.assertAllEqual(detokenize_output, [b"ninja"])
 
     def test_detokenize_strict_error(self):
         input_data = tf.ragged.constant([[110, 105, 10000000, 110, 106, 97]])
-        tokenizer = UnicodeCharacterTokenizer(errors="strict")
+        tokenizer = UnicodeCodepointTokenizer(errors="strict")
         with self.assertRaises(tf.errors.InvalidArgumentError):
             _ = tokenizer.detokenize(input_data)
 
     def test_normalization_without_UTF8_valueerror(self):
         with self.assertRaises(ValueError):
-            _ = UnicodeCharacterTokenizer(
+            _ = UnicodeCodepointTokenizer(
                 errors="strict",
                 input_encoding="UTF-16",
                 normalization_form="NFC",
@@ -150,7 +150,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
 
     def test_lowercase(self):
         input_data = tf.constant(["NiNJaS"])
-        tokenizer = UnicodeCharacterTokenizer()
+        tokenizer = UnicodeCodepointTokenizer()
         call_output = tokenizer(input_data)
         self.assertAllEqual(
             call_output,
@@ -159,7 +159,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
 
     def test_skip_lowercase(self):
         input_data = tf.constant(["NiNJaS"])
-        tokenizer = UnicodeCharacterTokenizer(lowercase=False)
+        tokenizer = UnicodeCodepointTokenizer(lowercase=False)
         call_output = tokenizer(input_data)
         self.assertAllEqual(
             call_output,
@@ -167,7 +167,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         )
 
     def test_tokenize_first_batch_second(self):
-        tokenizer = UnicodeCharacterTokenizer()
+        tokenizer = UnicodeCodepointTokenizer()
 
         ds = tf.data.Dataset.from_tensor_slices(
             ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
@@ -187,7 +187,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_tokenize_first_batch_second_with_sequence_length(self):
-        tokenizer = UnicodeCharacterTokenizer(sequence_length=10)
+        tokenizer = UnicodeCodepointTokenizer(sequence_length=10)
 
         ds = tf.data.Dataset.from_tensor_slices(
             ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
@@ -207,7 +207,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_batch_first_tokenize_second(self):
-        tokenizer = UnicodeCharacterTokenizer()
+        tokenizer = UnicodeCodepointTokenizer()
 
         ds = tf.data.Dataset.from_tensor_slices(
             ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
@@ -226,7 +226,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_batch_first_tokenize_second_with_sequence_length(self):
-        tokenizer = UnicodeCharacterTokenizer(sequence_length=10)
+        tokenizer = UnicodeCodepointTokenizer(sequence_length=10)
 
         ds = tf.data.Dataset.from_tensor_slices(
             ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
@@ -248,7 +248,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         input_data = tf.constant(
             ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
         )
-        tokenizer = UnicodeCharacterTokenizer()
+        tokenizer = UnicodeCodepointTokenizer()
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer.detokenize(tokenizer.tokenize(inputs))
         model = keras.Model(inputs, outputs)
@@ -267,14 +267,14 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
     def test_load_model_with_config(self):
         input_data = tf.constant(["hello"])
 
-        original_tokenizer = UnicodeCharacterTokenizer(
+        original_tokenizer = UnicodeCodepointTokenizer(
             lowercase=False,
             sequence_length=11,
             normalization_form="NFC",
             errors="strict",
             vocabulary_size=None,
         )
-        cloned_tokenizer = UnicodeCharacterTokenizer.from_config(
+        cloned_tokenizer = UnicodeCodepointTokenizer.from_config(
             original_tokenizer.get_config()
         )
         self.assertAllEqual(
@@ -289,7 +289,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         )
 
     def test_config(self):
-        tokenizer = UnicodeCharacterTokenizer(
+        tokenizer = UnicodeCodepointTokenizer(
             name="unicode_character_tokenizer_config_gen",
             lowercase=False,
             sequence_length=8,
@@ -313,7 +313,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
         }
         self.assertEqual(tokenizer.get_config(), exp_config)
 
-        tokenize_different_encoding = UnicodeCharacterTokenizer(
+        tokenize_different_encoding = UnicodeCodepointTokenizer(
             name="unicode_character_tokenizer_config_gen",
             lowercase=False,
             sequence_length=8,
@@ -344,7 +344,7 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
     def test_saving(self):
         input_data = tf.constant(["ninjas and samurais", "time travel"])
 
-        tokenizer = UnicodeCharacterTokenizer(
+        tokenizer = UnicodeCodepointTokenizer(
             name="unicode_character_tokenizer_config_gen",
             lowercase=False,
             sequence_length=20,
