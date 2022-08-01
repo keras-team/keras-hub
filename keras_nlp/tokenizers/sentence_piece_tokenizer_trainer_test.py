@@ -35,7 +35,7 @@ class SentencePieceTokenizerTrainerTest(tf.test.TestCase):
         test_output = tokenizer(test_text)
         self.assertAllEqual(expected_output, test_output)
 
-    def test_filenames_input(self):
+    def test_file_input(self):
         test_text = "Ninja Land"
         with open("test.txt", "w+") as f:
             f.write(test_text + "\n")
@@ -48,6 +48,21 @@ class SentencePieceTokenizerTrainerTest(tf.test.TestCase):
         test_output = tokenizer(test_text)
         self.assertAllEqual(expected_output, test_output)
         os.remove("test.txt")
+
+    def test_multiple_file_input(self):
+        with open("test1.txt", "w+") as f:
+            f.write("Drifting Along\n")
+        with open("test2.txt", "w+") as f:
+            f.write("Woah look there\n")
+        inputs = ["test1.txt", "test2.txt"]
+        proto = compute_sentencepiece_vocabulary(inputs, 20)
+        tokenizer = SentencePieceTokenizer(proto=proto)
+        test_text = "Woah Along"
+        test_output = tokenizer(test_text)
+        expected_output = [4, 16, 5, 17, 9, 4, 15, 12, 5, 11, 18]
+        self.assertAllEqual(expected_output, test_output)
+        os.remove("test1.txt")
+        os.remove("test2.txt")
 
     def test_invalid_input(self):
         test_text_invalid = {"file1": "test.txt"}
