@@ -19,7 +19,9 @@ import tensorflow as tf
 try:
     import sentencepiece as spm
 except ImportError:
-    sentencepiece = None
+    print("Couldn't find sentencepiece module")
+    print("Try running `pip install sentencepiece`")
+    spm = None
 
 
 def compute_sentencepiece_vocabulary(
@@ -43,20 +45,20 @@ def compute_sentencepiece_vocabulary(
         model_type: str, defaults to `unigram`. The model algorithm must be one
             of `unigram`, `bpe`, `word` or `char`.
         proto_output_file: str, defaults to `None`. If provided it will be used
-            as model_file proto_output_file which is passed to model_writer.
+            as model_file which is passed to model_writer.
             If `None`, the model_file will be `io.BytesIO` object.
         lowercase: bool, defaults to `False`. If true, the input text will be
             lowercased before tokenization.
 
     Returns:
-        Returns a string proto_output_file to a SentencePiece proto file or a
-        bytes object with a serialized SentencePiece proto
+        Returns a bytes object with a serialized SentencePiece proto or
+        writes to proto_output_file if provided
 
     Examples:
 
     Basic Usage (from Dataset).
     >>> inputs = tf.data.Dataset.from_tensor_slices(["Drifting Along"])
-    >>> proto = compute_sentencepiece_vocabulary(inputs, vocabulary_size = 15)
+    >>> proto = keras_nlp.tokenizers.compute_sentencepiece_vocabulary(inputs, vocabulary_size=15)
     >>> tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto=proto)
     >>> outputs = inputs.map(tokenizer)
     >>> for output in outputs:
@@ -67,17 +69,17 @@ def compute_sentencepiece_vocabulary(
     # Basic Usage (from filenames).
     >>> with open("test.txt", "w+") as f: f.write("Drifting Along\n")
     >>> inputs = ["test.txt"]
-    >>> proto = compute_sentencepiece_vocabulary(inputs, 15)
+    >>> proto = keras_nlp.tokenizers.compute_sentencepiece_vocabulary(inputs, 15)
 
     # Basic Usage (with multiple files).
     >>> with open("test1.txt", "w+") as f: f.write("Drifting Along\n")
     >>> with open("test2.txt", "w+") as f: f.write("Woah look there\n")
     >>> inputs = ["test1.txt", "test2.txt"]
-    >>> proto = compute_sentencepiece_vocabulary(inputs, 20)
+    >>> proto = keras_nlp.tokenizers.compute_sentencepiece_vocabulary(inputs, 20)
 
-    # Basic Usage (with proto_output_file)
+    # Basic Usage (with `proto_output_file`)
     >>> inputs = tf.data.Dataset.from_tensor_slices(["Drifting Along"])
-    >>> proto = compute_sentencepiece_vocabulary(inputs, vocabulary_size = 15,
+    >>> proto = keras_nlp.tokenizers.compute_sentencepiece_vocabulary(inputs, vocabulary_size=15,
     ...     proto_output_file = "model.spm")
     >>> tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto="model.spm")
     >>> ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
@@ -89,7 +91,7 @@ def compute_sentencepiece_vocabulary(
 
     # Usage with lowercase
     >>> inputs = tf.data.Dataset.from_tensor_slices(["Drifting Along"])
-    >>> proto = compute_sentencepiece_vocabulary(inputs, vocabulary_size = 15, lowercase =True)
+    >>> proto = keras_nlp.tokenizers.compute_sentencepiece_vocabulary(inputs, vocabulary_size=15, lowercase =True)
     >>> tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto=proto)
     >>> outputs = inputs.map(tokenizer)
     >>> for output in outputs:
@@ -107,8 +109,7 @@ def compute_sentencepiece_vocabulary(
     if model_type not in ["unigram", "bpe", "word", "char"]:
         raise ValueError(
             "The `model_type` argument must be one of `unigram`, `bpe`, `word`"
-            "or `char``."
-            f"Received: {model_type}."
+            f"or `char`. Received: {model_type}."
         )
 
     model_writer = (
