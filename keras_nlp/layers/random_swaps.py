@@ -55,7 +55,7 @@ class RandomSwaps(keras.layers.Layer):
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'HeI y like', b'b eybye'], dtype=object)>
     """
 
-    def __init__(self, swaps, skip_list=None, skip_fn=None, py_skip_fn=None, 
+    def __init__(self, swaps, skip_list=None, skip_fn=None, skip_py_fn=None, 
         seed=None, name=None, **kwargs):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
@@ -74,13 +74,13 @@ class RandomSwaps(keras.layers.Layer):
         self._generator = tf.random.Generator.from_seed(self.seed)
         self.skip_list = skip_list
         self.skip_fn = skip_fn
-        self.py_skip_fn = py_skip_fn
+        self.skip_py_fn = skip_py_fn
         if self.swaps < 0:
             raise ValueError("Swaps must be non negative")
 
-        if [self.skip_list, self.skip_fn, self.py_skip_fn].count(None) < 2:
+        if [self.skip_list, self.skip_fn, self.skip_py_fn].count(None) < 2:
             raise ValueError(
-                "Exactly one of skip_list, skip_fn, py_skip_fn must be "
+                "Exactly one of skip_list, skip_fn, skip_py_fn must be "
                 "provided."
             )
 
@@ -114,29 +114,24 @@ class RandomSwaps(keras.layers.Layer):
             inputs = tf.RaggedTensor.from_tensor(inputs)
 
         row_splits = inputs.row_splits
-        # skip words that are in the skip_list
-        skip_masks = None
-        if self.skip_list:
-            skip_masks = self.StaticHashTable.lookup(inputs.flat_values)
-        elif self.skip_fn:
-            skip_masks = tf.map_fn(
-                self.skip_fn, inputs.flat_values, dtype=tf.bool
-            )
-        elif self.py_skip_fn:
-            skip_masks = tf.map_fn(
-                lambda x: tf.py_function(self.py_skip_fn, [x], tf.bool),
-                inputs.flat_values,
-                dtype=tf.bool,
-            )
+        def _check_skip(token):
+            if self.skip_list:
+                return self.StaticHashTable.lookup(token)
+            elif self.skip_fn:
+                return self.skip_fn(token)
+            elif self.skip_py_fn:
+
+                def _preprocess_skip_fn(word):
+                    return self.skip_py_fn(word.numpy().decode("utf-8"))
+
+                return tf.py_function(_preprocess_skip_fn, [token], tf.bool)
+            else:
+                return False
         positions_flat = tf.range(tf.size(inputs.flat_values))
         positions = inputs.with_flat_values(positions_flat)
-        if skip_masks is not None:
-            skip_masks = tf.logical_not(skip_masks)
-            positions = ragged_array_ops.boolean_mask(
-                positions, inputs.with_flat_values(skip_masks)
-            )
 
-        def _swap(positions):
+        def _swap(x):
+            positions, inputs = x
             if tf.size(positions) == 1:
                 return positions
             for _ in range(self.swaps):
@@ -148,6 +143,10 @@ class RandomSwaps(keras.layers.Layer):
                     seed=self.seed,
                 )
                 index1, index2 = index[0], index[1]
+                word1 = inputs[index1]
+                word2 = inputs[index2]
+                if _check_skip(word1) or _check_skip(word2):
+                    continue
                 # swap items at the sampled indices with each other
                 positions = tf.tensor_scatter_nd_update(
                     positions,
@@ -158,7 +157,7 @@ class RandomSwaps(keras.layers.Layer):
 
         shuffled = tf.map_fn(
             _swap,
-            (positions),
+            (positions, inputs),
             fn_output_signature=tf.RaggedTensorSpec(
                 ragged_rank=positions.ragged_rank - 1, dtype=positions.dtype
             ),
