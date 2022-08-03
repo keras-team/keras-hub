@@ -235,11 +235,24 @@ class RandomReplacement(keras.layers.Layer):
             else:
                 return False
 
-        def _replace(inputs):
+        # Figure out how many we are going to select.
+        token_counts = tf.cast(inputs.row_lengths(), "float32")
+        num_to_select = tf.random.stateless_binomial(
+            shape=tf.shape(token_counts),
+            seed=self._generator.make_seeds()[:, 0],
+            counts=token_counts,
+            probs=self.rate,
+        )
+        if self.max_replacements is not None:
+            num_to_select = tf.math.minimum(num_to_select, self.max_replacements)
+        num_to_select = tf.cast(num_to_select, "int64")
+
+        def _replace(x):
             """
             Replace words randomly
             """
-            for _ in range(self.max_replacements):
+            inputs, num_to_select = x
+            for _ in range(num_to_select):
                 # Choose a Random Index
                 index = tf.random.stateless_uniform(
                     shape=[], minval=0, maxval=tf.size(inputs), dtype=tf.int32, 
@@ -281,7 +294,7 @@ class RandomReplacement(keras.layers.Layer):
 
         replaced = tf.map_fn(
             _replace,
-            (inputs),
+            (inputs, num_to_select),
             fn_output_signature=tf.RaggedTensorSpec(
                 ragged_rank=inputs.ragged_rank - 1, dtype=inputs.dtype
             ),
