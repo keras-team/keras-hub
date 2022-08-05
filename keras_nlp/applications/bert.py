@@ -23,6 +23,8 @@ components with components from the keras-nlp library.
 import tensorflow as tf
 from tensorflow import keras
 
+import keras_nlp.layers
+
 # isort: off
 from tensorflow.python.util.tf_export import keras_export
 
@@ -310,7 +312,7 @@ class BertLanguageModel(keras.Model):
         self.encoder = encoder
         # TODO(jbischof): replace with keras_nlp.layers.MLMHead
         self.masked_lm_head = MaskedLMHead(
-            embedding_weights=encoder.get_embedding_table(),
+            embedding_table=encoder.get_embedding_table(),
             initializer=encoder.initializer,
         )
         self.next_sentence_head = keras.layers.Dense(

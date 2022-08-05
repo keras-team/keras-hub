@@ -28,7 +28,6 @@ from keras_nlp.applications.bert import (
 from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
 from examples.bert.bert_config import TRAINING_CONFIG
-from examples.bert.bert_model import BertModel
 
 FLAGS = flags.FLAGS
 
@@ -232,13 +231,13 @@ def main(_):
 
     with strategy.scope():
         # Create a BERT model the input config.
-        model = BertEncoder(
+        encoder = BertEncoder(
             vocab_size=len(vocab),
             **model_config,
         )
         # Make sure model has been called.
-        model(model.inputs)
-        model.summary()
+        encoder(encoder.inputs)
+        encoder.summary()
 
         # Allow overriding train steps from the command line for quick testing.
         if FLAGS.num_train_steps is not None:
@@ -255,8 +254,8 @@ def main(_):
         )
         optimizer = keras.optimizers.Adam(learning_rate=learning_rate_schedule)
 
-        pretraining_model = BertLanguageModel(model)
-        pretraining_model.compile(
+        language_model = BertLanguageModel(encoder)
+        language_model.compile(
             optimizer=optimizer,
         )
 
@@ -269,7 +268,7 @@ def main(_):
     if FLAGS.tensorboard_log_path:
         callbacks.append(get_tensorboard_callback())
 
-    pretraining_model.fit(
+    language_model.fit(
         dataset,
         epochs=epochs,
         steps_per_epoch=steps_per_epoch,
@@ -278,7 +277,7 @@ def main(_):
 
     model_path = FLAGS.saved_model_output
     logging.info(f"Saving to {FLAGS.saved_model_output}")
-    model.save(model_path)
+    encoder.save(model_path)
 
 
 if __name__ == "__main__":
