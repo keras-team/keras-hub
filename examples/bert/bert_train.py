@@ -21,6 +21,10 @@ from absl import flags
 from absl import logging
 from tensorflow import keras
 
+from keras_nlp.applications.bert import (
+    BertLanguageModel,
+    BertEncoder,
+)
 from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
 from examples.bert.bert_config import TRAINING_CONFIG
@@ -88,175 +92,6 @@ flags.DEFINE_integer(
     None,
     "Override the pre-configured number of train steps..",
 )
-
-
-class MaskedLMHead(keras.layers.Layer):
-    """Masked language model network head for BERT.
-
-    This layer implements a masked language model based on the provided
-    transformer based encoder. It assumes that the encoder network being passed
-    has a "get_embedding_table()" method.
-
-    Example:
-    ```python
-    encoder=modeling.networks.BertEncoder(...)
-    lm_layer=MaskedLMHead(embedding_table=encoder.get_embedding_table())
-    ```
-
-    Args:
-        embedding_table: The embedding table from encoder network.
-        inner_activation: The activation, if any, for the inner dense layer.
-        initializer: The initializer for the dense layer. Defaults to a Glorot
-            uniform initializer.
-        output: The output style for this layer. Can be either 'logits' or
-            'predictions'.
-    """
-
-    def __init__(
-        self,
-        embedding_table,
-        inner_activation="gelu",
-        initializer="glorot_uniform",
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.embedding_table = embedding_table
-        self.inner_activation = keras.activations.get(inner_activation)
-        self.initializer = initializer
-
-    def build(self, input_shape):
-        self._vocab_size, hidden_size = self.embedding_table.shape
-        self.dense = keras.layers.Dense(
-            hidden_size,
-            activation=self.inner_activation,
-            kernel_initializer=self.initializer,
-            name="transform/dense",
-        )
-        self.layer_norm = keras.layers.LayerNormalization(
-            axis=-1, epsilon=1e-12, name="transform/LayerNorm"
-        )
-        self.bias = self.add_weight(
-            "output_bias/bias",
-            shape=(self._vocab_size,),
-            initializer="zeros",
-            trainable=True,
-        )
-
-        super().build(input_shape)
-
-    def call(self, sequence_data, masked_positions):
-        masked_lm_input = self._gather_indexes(sequence_data, masked_positions)
-        lm_data = self.dense(masked_lm_input)
-        lm_data = self.layer_norm(lm_data)
-        lm_data = tf.matmul(lm_data, self.embedding_table, transpose_b=True)
-        logits = tf.nn.bias_add(lm_data, self.bias)
-        masked_positions_length = (
-            masked_positions.shape.as_list()[1] or tf.shape(masked_positions)[1]
-        )
-        return tf.reshape(
-            logits, [-1, masked_positions_length, self._vocab_size]
-        )
-
-    def _gather_indexes(self, sequence_tensor, positions):
-        """Gathers the vectors at the specific positions, for performance.
-
-        Args:
-            sequence_tensor: Sequence output of shape
-                (`batch_size`, `seq_length`, `hidden_size`) where `hidden_size`
-                is number of hidden units.
-            positions: Positions ids of tokens in sequence to mask for
-                pretraining of with dimension (batch_size, num_predictions)
-                where `num_predictions` is maximum number of tokens to mask out
-                and predict per each sequence.
-
-        Returns:
-            Masked out sequence tensor of shape (batch_size * num_predictions,
-            `hidden_size`).
-        """
-        sequence_shape = tf.shape(sequence_tensor)
-        batch_size, seq_length = sequence_shape[0], sequence_shape[1]
-        width = sequence_tensor.shape.as_list()[2] or sequence_shape[2]
-
-        flat_offsets = tf.reshape(
-            tf.range(0, batch_size, dtype=tf.int32) * seq_length, [-1, 1]
-        )
-        flat_positions = tf.reshape(positions + flat_offsets, [-1])
-        flat_sequence_tensor = tf.reshape(
-            sequence_tensor, [batch_size * seq_length, width]
-        )
-        output_tensor = tf.gather(flat_sequence_tensor, flat_positions)
-
-        return output_tensor
-
-
-class BertPretrainer(keras.Model):
-    def __init__(self, bert_model, **kwargs):
-        super().__init__(**kwargs)
-        self.bert_model = bert_model
-        self.masked_lm_head = MaskedLMHead(
-            bert_model.get_embedding_table(),
-            initializer=bert_model.initializer,
-        )
-        self.next_sentence_head = keras.layers.Dense(
-            2,
-            kernel_initializer=bert_model.initializer,
-        )
-        self.loss_tracker = keras.metrics.Mean(name="loss")
-        self.lm_loss_tracker = keras.metrics.Mean(name="lm_loss")
-        self.nsp_loss_tracker = keras.metrics.Mean(name="nsp_loss")
-        self.lm_accuracy = keras.metrics.SparseCategoricalAccuracy(
-            name="lm_accuracy"
-        )
-        self.nsp_accuracy = keras.metrics.SparseCategoricalAccuracy(
-            name="nsp_accuracy"
-        )
-
-    def call(self, data):
-        sequence_output, pooled_output = self.bert_model(
-            {
-                "input_ids": data["input_ids"],
-                "input_mask": data["input_mask"],
-                "segment_ids": data["segment_ids"],
-            }
-        )
-        lm_preds = self.masked_lm_head(
-            sequence_output, data["masked_lm_positions"]
-        )
-        nsp_preds = self.next_sentence_head(pooled_output)
-        return lm_preds, nsp_preds
-
-    def train_step(self, data):
-        with tf.GradientTape() as tape:
-            lm_preds, nsp_preds = self(data, training=True)
-            lm_labels = data["masked_lm_ids"]
-            lm_weights = data["masked_lm_weights"]
-            nsp_labels = data["next_sentence_labels"]
-
-            lm_loss = keras.losses.sparse_categorical_crossentropy(
-                lm_labels, lm_preds, from_logits=True
-            )
-            lm_weights_summed = tf.reduce_sum(lm_weights, -1)
-            lm_loss = tf.reduce_sum(lm_loss * lm_weights, -1)
-            lm_loss = tf.math.divide_no_nan(lm_loss, lm_weights_summed)
-            nsp_loss = keras.losses.sparse_categorical_crossentropy(
-                nsp_labels, nsp_preds, from_logits=True
-            )
-            nsp_loss = tf.reduce_mean(nsp_loss)
-            loss = lm_loss + nsp_loss
-
-        # Compute gradients
-        trainable_vars = self.trainable_variables
-        gradients = tape.gradient(loss, trainable_vars)
-        # Update weights
-        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-
-        # Update metrics
-        self.loss_tracker.update_state(loss)
-        self.lm_loss_tracker.update_state(lm_loss)
-        self.nsp_loss_tracker.update_state(nsp_loss)
-        self.lm_accuracy.update_state(lm_labels, lm_preds, lm_weights)
-        self.nsp_accuracy.update_state(nsp_labels, nsp_preds)
-        return {m.name: m.result() for m in self.metrics}
 
 
 class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
@@ -397,7 +232,7 @@ def main(_):
 
     with strategy.scope():
         # Create a BERT model the input config.
-        model = BertModel(
+        model = BertEncoder(
             vocab_size=len(vocab),
             **model_config,
         )
@@ -420,7 +255,7 @@ def main(_):
         )
         optimizer = keras.optimizers.Adam(learning_rate=learning_rate_schedule)
 
-        pretraining_model = BertPretrainer(model)
+        pretraining_model = BertLanguageModel(model)
         pretraining_model.compile(
             optimizer=optimizer,
         )
