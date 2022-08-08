@@ -21,16 +21,24 @@ class RandomReplacement(keras.layers.Layer):
     """Augments input by randomly replacing words.
 
     Args:
-        rate: A float in [0, 1] that is the rate of replacement
-        max_replacements: An integer that is the maximum number of replacements
-        replacement_list: list of candidates to uniformly sample form to replace
-        replacement_fn: function that takes in a token and returns a replacement
-        token
-        py_replacement_fn: python version of replacement_fn.
-        skip_list: list of tokens to skip.
-        skip_fn: fn that takes in a token and returns a boolean.
-        py_skip_fn: python numpy version of skip_fn.
-        seed: An integer that is the seed for the random number generator.
+        rate: A float in [0, 1] that is the rate of replacement.
+        max_replacements: An integer that is the maximum number of replacements.
+        replacement_list: A list of tokens to use for replacement.
+        replacement_fn: A function that takes a token as input and returns a 
+            replacement token. This must be a traceable function of tf 
+            operations.
+        replacement_py_fn: A python function that takes in a token and returns a
+            replacement token. Unlike replacement_fn, this can be any python 
+            function that operates on strings/integers, and does not need to use 
+            tf operations.
+        skip_list: A list of words to skip.
+        skip_fn: A function that takes a word and returns True if the word
+            should be skipped. This must be a traceable function of tf
+            operations.
+        skip_py_fn: A function that takes a word and returns True if the words
+            should be skipped. Unlike skip_fn, this can be any python function
+            that operates on strings, and does not need to use tf operations.
+        seed: A seed for the random number generator.
 
     Examples:
 
