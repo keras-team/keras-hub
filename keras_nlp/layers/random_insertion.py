@@ -23,10 +23,14 @@ class RandomInsertion(keras.layers.Layer):
     Args:
         rate: A float in [0, 1] that is the rate of insertion.
         max_insertions: An integer that is the maximum number of insertions.
-        insertion_list: A list of strings that are the words to insert.
-        insertion_fn: fn that takes in a token and returns a insertion token.
+        insertion_list: A list of tokens to use for insertion.
+        insertion_fn: A function that takes a token as input and returns a 
+            insertion token. This must be a traceable function of tf 
+            operations.
         insertion_py_fn: A python function that takes in a token and returns a
-            insertion token.
+            insertion token. Unlike insertion_fn, this can be any python 
+            function that operates on strings/integers, and does not need to use 
+            tf operations.
         skip_list: A list of words to skip.
         skip_fn: A function that takes a word and returns True if the word
             should be skipped. This must be a traceable function of tf
