@@ -45,7 +45,7 @@ class RandomReplacement(keras.layers.Layer):
     Word level usage
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomReplacement(rate=0.3, max_replacements=2, seed=42,
+    >>> augmenter=keras_nlp.layers.RandomReplacement(rate=0.3, max_replacements=2, seed=42,
     ... replacement_list=['Random1', 'Random2', 'Random3'])
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
@@ -56,7 +56,7 @@ class RandomReplacement(keras.layers.Layer):
     Character level usage
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.unicode_split(["Hey Dude", "Speed Up"], "UTF-8")
-    >>> augmenter=RandomReplacement(rate=0.3, max_replacements=2, seed=42,
+    >>> augmenter=keras_nlp.layers.RandomReplacement(rate=0.3, max_replacements=2, seed=42,
     ... replacement_list=['x', 'y', 'z'])
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, axis=-1)
@@ -70,7 +70,7 @@ class RandomReplacement(keras.layers.Layer):
     ...   return "Bike"
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomReplacement(rate=0.7, max_replacements=2, seed=42,
+    >>> augmenter=keras_nlp.layers.RandomReplacement(rate=0.7, max_replacements=2, seed=42,
     ... replacement_fn=replacement_fn)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
@@ -84,7 +84,7 @@ class RandomReplacement(keras.layers.Layer):
     ...   return word
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomReplacement(rate=0.5, max_replacements=6, seed=42,
+    >>> augmenter=keras_nlp.layers.RandomReplacement(rate=0.5, max_replacements=6, seed=42,
     ... replacement_py_fn=replacement_py_fn)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
@@ -98,7 +98,7 @@ class RandomReplacement(keras.layers.Layer):
     ...   return word
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomReplacement(rate=0.5, max_replacements=6, seed=42,
+    >>> augmenter=keras_nlp.layers.RandomReplacement(rate=0.5, max_replacements=6, seed=42,
     ... replacement_py_fn=replacement_py_fn, skip_list=['Keras'])
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
@@ -116,7 +116,7 @@ class RandomReplacement(keras.layers.Layer):
     ...   return False
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomReplacement(rate=0.5, max_replacements=6, seed=42,
+    >>> augmenter=keras_nlp.layers.RandomReplacement(rate=0.5, max_replacements=6, seed=42,
     ... replacement_py_fn=replacement_py_fn, skip_fn=skip_fn)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
@@ -133,7 +133,7 @@ class RandomReplacement(keras.layers.Layer):
     ...   return False
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomReplacement(rate=0.5, max_replacements=6, seed=42,
+    >>> augmenter=keras_nlp.layers.RandomReplacement(rate=0.5, max_replacements=6, seed=42,
     ... replacement_py_fn=replacement_py_fn, skip_py_fn=skip_py_fn)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
