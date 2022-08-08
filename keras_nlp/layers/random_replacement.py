@@ -24,12 +24,12 @@ class RandomReplacement(keras.layers.Layer):
         rate: A float in [0, 1] that is the rate of replacement.
         max_replacements: An integer that is the maximum number of replacements.
         replacement_list: A list of tokens to use for replacement.
-        replacement_fn: A function that takes a token as input and returns a 
-            replacement token. This must be a traceable function of tf 
+        replacement_fn: A function that takes a token as input and returns a
+            replacement token. This must be a traceable function of tf
             operations.
         replacement_py_fn: A python function that takes in a token and returns a
-            replacement token. Unlike replacement_fn, this can be any python 
-            function that operates on strings/integers, and does not need to use 
+            replacement token. Unlike replacement_fn, this can be any python
+            function that operates on strings/integers, and does not need to use
             tf operations.
         skip_list: A list of words to skip.
         skip_fn: A function that takes a word and returns True if the word
@@ -111,7 +111,7 @@ class RandomReplacement(keras.layers.Layer):
     ...     return 'KerasNLP'
     ...   return word
     >>> def skip_fn(word):
-    ...   if tf.math.equal(word,like):
+    ...   if tf.math.equal(word,"like"):
     ...     return True
     ...   return False
     >>> keras.utils.set_random_seed(1337)
@@ -234,6 +234,7 @@ class RandomReplacement(keras.layers.Layer):
             elif self.skip_fn:
                 return self.skip_fn(token)
             elif self.skip_py_fn:
+
                 def string_fn(token):
                     return self.skip_py_fn(token.numpy().decode("utf-8"))
 
@@ -255,7 +256,9 @@ class RandomReplacement(keras.layers.Layer):
             probs=self.rate,
         )
         if self.max_replacements is not None:
-            num_to_select = tf.math.minimum(num_to_select, self.max_replacements)
+            num_to_select = tf.math.minimum(
+                num_to_select, self.max_replacements
+            )
         num_to_select = tf.cast(num_to_select, "int64")
 
         def _replace(x):
@@ -266,7 +269,10 @@ class RandomReplacement(keras.layers.Layer):
             for _ in range(num_to_select):
                 # Choose a Random Index
                 index = tf.random.stateless_uniform(
-                    shape=[], minval=0, maxval=tf.size(inputs), dtype=tf.int32, 
+                    shape=[],
+                    minval=0,
+                    maxval=tf.size(inputs),
+                    dtype=tf.int32,
                     seed=self._generator.make_seeds()[:, 0],
                 )
                 synonym = inputs[index]
@@ -279,21 +285,31 @@ class RandomReplacement(keras.layers.Layer):
                     )
                 elif self.replacement_py_fn is not None:
 
-                    def _preprocess_replace_fn(word):
+                    def string_fn(token):
                         return self.replacement_py_fn(
-                            word.numpy().decode("utf-8")
+                            token.numpy().decode("utf-8")
                         )
 
+                    def int_fn(token):
+                        return self.replacement_py_fn(token.numpy())
+
+                    _preprocess_replace_fn = (
+                        string_fn if inputs.dtype == tf.string else int_fn
+                    )
+
                     synonym = tf.py_function(
-                        _preprocess_replace_fn, [synonym], tf.string
+                        _preprocess_replace_fn, [synonym], inputs.dtype
                     )
                     inputs = tf.tensor_scatter_nd_update(
                         inputs, [[index]], [synonym]
                     )
                 elif self.replacement_list is not None:
                     replace_list_index = tf.random.stateless_uniform(
-                        shape=[], minval=0, maxval=len(self.replacement_list), 
-                        dtype=tf.int32, seed=self._generator.make_seeds()[:, 0],
+                        shape=[],
+                        minval=0,
+                        maxval=len(self.replacement_list),
+                        dtype=tf.int32,
+                        seed=self._generator.make_seeds()[:, 0],
                     )
                     synonym = tf.gather(
                         self.replacement_list, replace_list_index

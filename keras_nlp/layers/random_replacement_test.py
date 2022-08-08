@@ -16,12 +16,11 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers import Randomreplacement
-from keras_nlp.layers.random_replacement import RandomReplacement
+from keras_nlp.layers import RandomReplacement
 from keras_nlp.tokenizers import UnicodeCodepointTokenizer
 
 
-class RandomreplacementTest(tf.test.TestCase):
+class RandomReplacementTest(tf.test.TestCase):
     def test_shape_and_output_from_word_replacement(self):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]
@@ -32,7 +31,7 @@ class RandomreplacementTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey wind I like", b"Keras and wind wind Tensorflow"]
+        exp_output = [b"Hey I wind", b"wind and Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -46,7 +45,7 @@ class RandomreplacementTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Heyyx I like", b"Keyras anxd Tensorflow"]
+        exp_output = [b"Hey xylike", b"Keras ynd Tensorxlow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -61,21 +60,24 @@ class RandomreplacementTest(tf.test.TestCase):
         augmented = augmenter(tokenized)
         output = tokenizer.detokenize(augmented)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"HeyCc I like", b"KeCras ancd Tensorflow"]
+        exp_output = [b"Hey cClike", b"Keras Cnd Tensorclow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_skip_options(self):
         keras.utils.set_random_seed(1337)
         augmenter = RandomReplacement(
-            rate=0.4, max_replacements=2, seed=42, replacement_list=["Hey", "There"]
+            rate=0.4,
+            max_replacements=2,
+            seed=42,
+            replacement_list=["Hey", "There"],
         )
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey Hey I like", b"Keras and There There Tensorflow"]
+        exp_output = [b"Hey I Hey", b"There and Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -92,7 +94,7 @@ class RandomreplacementTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey Hey I like", b"Keras and There There Tensorflow"]
+        exp_output = [b"Hey I Hey", b"There and Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -111,22 +113,24 @@ class RandomreplacementTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I like", b"Keras and There Tensorflow"]
+        exp_output = [b"Hey I like", b"There and Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
-    def test_insert_options(self):
+    def test_replacement_options(self):
         keras.utils.set_random_seed(1337)
         augmenter = RandomReplacement(
-            rate=0.4, max_replacements=2, seed=42, replacement_list=["Hey", "There"]
+            rate=0.4,
+            max_replacements=2,
+            seed=42,
+            replacement_list=["Hey", "There"],
         )
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey Hey I like", b"Keras and There There Tensorflow"]
+        exp_output = [b"Hey I Hey", b"There and Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -142,7 +146,7 @@ class RandomreplacementTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey Speed I like", b"Keras and Tensorflow Time Time"]
+        exp_output = [b"Hey I Speed", b"Time and Time"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -152,22 +156,31 @@ class RandomreplacementTest(tf.test.TestCase):
             return word
 
         augmenter = RandomReplacement(
-            rate=0.4, max_replacements=2, seed=42, replacement_py_fn=replacement_py_fn
+            rate=0.4,
+            max_replacements=2,
+            seed=42,
+            replacement_py_fn=replacement_py_fn,
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey li I like", b"Keras and Tensorflow Te an"]
+        exp_output = [b"Hey I li", b"Ke and Te"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_get_config_and_from_config(self):
         augmenter = RandomReplacement(
-            rate=0.4, max_replacements=1, seed=42, replacement_list=["Hey", "There"]
+            rate=0.4,
+            max_replacements=1,
+            seed=42,
+            replacement_list=["Hey", "There"],
         )
 
-        expected_config_subset = {"max_replacements": 1, "rate": 0.4, "seed": 42}
+        expected_config_subset = {
+            "max_replacements": 1,
+            "rate": 0.4,
+            "seed": 42,
+        }
 
         config = augmenter.get_config()
 
@@ -185,7 +198,10 @@ class RandomreplacementTest(tf.test.TestCase):
     def test_augment_first_batch_second(self):
         keras.utils.set_random_seed(1337)
         augmenter = RandomReplacement(
-            rate=0.4, max_replacements=2, seed=42, replacement_list=["Hey", "There"]
+            rate=0.4,
+            max_replacements=2,
+            seed=42,
+            replacement_list=["Hey", "There"],
         )
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
@@ -193,10 +209,7 @@ class RandomreplacementTest(tf.test.TestCase):
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-        exp_output = [
-            [b"Hey", b"Hey", b"I", b"like"],
-            [b"Keras", b"Hey", b"and", b"Tensorflow"],
-        ]
+        exp_output = [[b"Hey", b"I", b"Hey"], [b"Keras", b"and", b"Hey"]]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -217,10 +230,7 @@ class RandomreplacementTest(tf.test.TestCase):
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-        exp_output = [
-            [b"Hey", b"Hey", b"I", b"like"],
-            [b"Keras", b"Hey", b"and", b"Tensorflow"],
-        ]
+        exp_output = [[b"Hey", b"I", b"Hey"], [b"Keras", b"and", b"Hey"]]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -235,27 +245,24 @@ class RandomreplacementTest(tf.test.TestCase):
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-        exp_output = [
-            [b"Hey", b"Hey", b"I", b"like"],
-            [b"Keras", b"Hey", b"and", b"Tensorflow"],
-        ]
+        exp_output = [[b"Hey", b"I", b"Hey"], [b"Keras", b"and", b"Hey"]]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_batch_first_augment_second(self):
         keras.utils.set_random_seed(1337)
         augmenter = RandomReplacement(
-            rate=0.4, max_replacements=2, seed=42, replacement_list=["Hey", "There"]
+            rate=0.4,
+            max_replacements=2,
+            seed=42,
+            replacement_list=["Hey", "There"],
         )
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        exp_output = [
-            [b"Hey", b"Hey", b"I", b"like"],
-            [b"Keras", b"and", b"There", b"There", b"Tensorflow"],
-        ]
+        exp_output = [[b"Hey", b"I", b"Hey"], [b"There", b"and", b"Tensorflow"]]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -275,10 +282,7 @@ class RandomreplacementTest(tf.test.TestCase):
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        exp_output = [
-            [b"Hey", b"Hey", b"I", b"like"],
-            [b"Keras", b"and", b"There", b"There", b"Tensorflow"],
-        ]
+        exp_output = [[b"Hey", b"I", b"Hey"], [b"There", b"and", b"Tensorflow"]]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -292,11 +296,7 @@ class RandomreplacementTest(tf.test.TestCase):
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        output
-        exp_output = [
-            [b"Hey", b"Hey", b"I", b"like"],
-            [b"Keras", b"and", b"There", b"There", b"Tensorflow"],
-        ]
+        exp_output = [[b"Hey", b"I", b"Hey"], [b"There", b"and", b"Tensorflow"]]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -304,16 +304,17 @@ class RandomreplacementTest(tf.test.TestCase):
         keras.utils.set_random_seed(1337)
         input_data = tf.constant(["Hey I like", "Keras and Tensorflow"])
         augmenter = RandomReplacement(
-            rate=0.4, max_replacements=2, seed=42, replacement_list=["Hey", "There"]
+            rate=0.4,
+            max_replacements=2,
+            seed=42,
+            replacement_list=["Hey", "There"],
         )
         inputs = tf.keras.Input(dtype="string", shape=())
         outputs = augmenter(tf.strings.split(inputs))
         model = tf.keras.Model(inputs, outputs)
         model_output = model(input_data)
+        model_output
         self.assertAllEqual(
             model_output,
-            [
-                [b"Hey", b"Hey", b"I", b"like"],
-                [b"Keras", b"and", b"There", b"There", b"Tensorflow"],
-            ],
+            [[b"Hey", b"I", b"Hey"], [b"There", b"and", b"Tensorflow"]],
         )
