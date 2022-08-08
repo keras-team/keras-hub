@@ -21,9 +21,9 @@ class RandomInsertion(keras.layers.Layer):
     """Augments input by randomly inserting words.
 
     Args:
-        rate: A float in [0, 1] that is the rate of insertion
-        max_insertions: An integer that is the maximum number of insertions
-        insertion_list: A list of strings that are the words to insert
+        rate: A float in [0, 1] that is the rate of insertion.
+        max_insertions: An integer that is the maximum number of insertions.
+        insertion_list: A list of strings that are the words to insert.
         insertion_fn: fn that takes in a token and returns a insertion token.
         insertion_py_fn: A python function that takes in a token and returns a
             insertion token.
