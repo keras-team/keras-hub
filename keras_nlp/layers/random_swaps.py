@@ -11,11 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import tensorflow as tf
-from keras import backend
-from tensorflow import keras
 import random
-from tensorflow.python.ops.ragged import ragged_array_ops
+
+import tensorflow as tf
+from tensorflow import keras
+
 
 class RandomSwaps(keras.layers.Layer):
     """Augments input by randomly swapping words.
@@ -85,8 +85,16 @@ class RandomSwaps(keras.layers.Layer):
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'like I Hey', b'and Keras Tensorflow'], dtype=object)>
     """
 
-    def __init__(self, swaps, skip_list=None, skip_fn=None, skip_py_fn=None, 
-        seed=None, name=None, **kwargs):
+    def __init__(
+        self,
+        swaps,
+        skip_list=None,
+        skip_fn=None,
+        skip_py_fn=None,
+        seed=None,
+        name=None,
+        **kwargs,
+    ):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
@@ -144,6 +152,7 @@ class RandomSwaps(keras.layers.Layer):
             inputs = tf.RaggedTensor.from_tensor(inputs)
 
         row_splits = inputs.row_splits
+
         def _check_skip(token):
             if self.skip_list:
                 return self.StaticHashTable.lookup(token)
@@ -162,6 +171,7 @@ class RandomSwaps(keras.layers.Layer):
                 return tf.py_function(py_fn, [token], tf.bool)
             else:
                 return False
+
         positions_flat = tf.range(tf.size(inputs.flat_values))
         positions = inputs.with_flat_values(positions_flat)
 
@@ -206,7 +216,7 @@ class RandomSwaps(keras.layers.Layer):
         )
 
         if input_is_1d:
-            inputs = tf.squeeze(swapped, axis=0)
+            swapped = tf.squeeze(swapped, axis=0)
         return swapped
 
     def get_config(self):
