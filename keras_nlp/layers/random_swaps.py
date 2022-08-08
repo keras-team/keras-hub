@@ -41,18 +41,48 @@ class RandomSwaps(keras.layers.Layer):
     Examples:
 
     Word Level usage
-    >>> inputs = tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter = RandomSwaps(swaps = 3, seed = 42)
-    >>> augmented = augmenter(inputs)
+    >>> keras.utils.set_random_seed(1337)
+    >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
+    >>> augmenter=keras_nlp.layers.RandomSwaps(swaps=2, seed=42)
+    >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I like Hey', b'and Tensorflow Keras'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'like I Hey', b'and Keras Tensorflow'], dtype=object)>
 
     Character Level usage
-    >>> inputs = tf.strings.unicode_split(["Hey I like", "bye bye"], "UTF-8")
-    >>> augmenter = RandomSwaps(swaps = 1, seed = 42)
-    >>> augmented = augmenter(inputs)
+    >>> keras.utils.set_random_seed(1337)
+    >>> inputs=tf.strings.unicode_split(["Hey Dude", "Speed Up"], "UTF-8")
+    >>> augmenter=keras_nlp.layers.RandomSwaps(swaps=1, seed=42)
+    >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'HeI y like', b'b eybye'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'uey DHde', b'Spdee Up'], dtype=object)>
+
+    Usage with skip list
+    >>> keras.utils.set_random_seed(1337)
+    >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
+    >>> augmenter=RandomSwaps(swaps=5, skip_list=["Keras"], seed=42)
+    >>> augmented=augmenter(inputs)
+    >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey like I', b'Keras Tensorflow and'], dtype=object)>
+
+    Usage with skip_fn
+    >>> def skip_fn(word):
+    ...     return tf.strings.regex_full_match(word, r"\\pP")
+    >>> keras.utils.set_random_seed(1337)
+    >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
+    >>> augmenter=RandomSwaps(swaps=3,skip_fn=skip_fn, seed=42)
+    >>> augmented=augmenter(inputs)
+    >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'like I Hey', b'Keras Tensorflow and'], dtype=object)>
+
+    Usage with skip_py_fn:
+    >>> def skip_py_fn(word):
+    ...     return len(word) < 2
+    >>> keras.utils.set_random_seed(1337)
+    >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
+    >>> augmenter=RandomSwaps(swaps=2,skip_py_fn=skip_py_fn, seed=42)
+    >>> augmented=augmenter(inputs)
+    >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'like I Hey', b'and Keras Tensorflow'], dtype=object)>
     """
 
     def __init__(self, swaps, skip_list=None, skip_fn=None, skip_py_fn=None, 
@@ -64,8 +94,8 @@ class RandomSwaps(keras.layers.Layer):
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer and dtype != tf.string:
                 raise ValueError(
-                    "Output dtype must be an integer type or a string. "
-                    f"Received: dtype={dtype}"
+                    "Output dtype must be one of `'string'`, `'int32'`, and "
+                    f"`'int64'`. Received: dtype={dtype}"
                 )
 
         super().__init__(name=name, **kwargs)
@@ -121,10 +151,15 @@ class RandomSwaps(keras.layers.Layer):
                 return self.skip_fn(token)
             elif self.skip_py_fn:
 
-                def _preprocess_skip_fn(word):
-                    return self.skip_py_fn(word.numpy().decode("utf-8"))
+                def string_fn(token):
+                    return self.skip_py_fn(token.numpy().decode("utf-8"))
 
-                return tf.py_function(_preprocess_skip_fn, [token], tf.bool)
+                def int_fn(token):
+                    return self.skip_py_fn(token.numpy())
+
+                py_fn = string_fn if inputs.dtype == tf.string else int_fn
+
+                return tf.py_function(py_fn, [token], tf.bool)
             else:
                 return False
         positions_flat = tf.range(tf.size(inputs.flat_values))
@@ -135,12 +170,12 @@ class RandomSwaps(keras.layers.Layer):
             if tf.size(positions) == 1:
                 return positions
             for _ in range(self.swaps):
-                index = tf.random.uniform(
+                index = tf.random.stateless_uniform(
                     shape=tf.shape(positions),
                     minval=0,
                     maxval=tf.size(positions),
                     dtype=tf.int32,
-                    seed=self.seed,
+                    seed=self._generator.make_seeds()[:, 0],
                 )
                 index1, index2 = index[0], index[1]
                 word1 = inputs[index1]
