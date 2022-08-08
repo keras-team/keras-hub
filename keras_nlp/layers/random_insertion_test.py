@@ -65,7 +65,6 @@ class RandomInsertionTest(tf.test.TestCase):
         split = tf.strings.split(inputs)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
         exp_output = [b'Hey Hey I like', b'Keras and There There Tensorflow']
         for i in range(output.shape[0]):
@@ -77,7 +76,6 @@ class RandomInsertionTest(tf.test.TestCase):
         augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"], skip_fn=skip_fn)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
         exp_output = [b'Hey Hey I like', b'Keras and There There Tensorflow']
         for i in range(output.shape[0]):
@@ -96,12 +94,53 @@ class RandomInsertionTest(tf.test.TestCase):
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
+    def test_insert_options(self):
+        keras.utils.set_random_seed(1337)
+        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"])
+        inputs = ["Hey I like", "Keras and Tensorflow"]
+        split = tf.strings.split(inputs)
+        augmented = augmenter(split)
+        output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+        output
+        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
+        exp_output = [b'Hey Hey I like', b'Keras and There There Tensorflow']
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
+
+        def insertion_fn(word):
+            if (word == "like"):
+              return "Speed"
+            else:
+              return "Time"
+
+        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_fn=insertion_fn)
+        augmented = augmenter(split)
+        output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
+        exp_output = [b'Hey Speed I like', b'Keras and Tensorflow Time Time']
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
+
+        def insertion_py_fn(word):
+            if (len(word) > 2):
+              return word[:2]
+            return word
+
+        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_py_fn=insertion_py_fn)
+        augmented = augmenter(split)
+        output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+        output
+        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
+        exp_output = [b'Hey li I like', b'Keras and Tensorflow Te an']
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
+
     def test_get_config_and_from_config(self):
         augmenter = RandomInsertion(
             rate=0.4, max_insertions=1, seed=42, insertion_list=["Hey", "There"]
         )
 
-        expected_config_subset = {"max_insertions": 1, "rate": 0.4, "seed": 42, "insertion_list": ["Hey", "There"]}
+        expected_config_subset = {"max_insertions": 1, "rate": 0.4, "seed": 42}
 
         config = augmenter.get_config()
 

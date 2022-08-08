@@ -278,6 +278,7 @@ class RandomInsertion(keras.layers.Layer):
                 "skip_list": self.skip_list,
                 "skip_fn": self.skip_fn,
                 "skip_py_fn": self.skip_py_fn,
+                "seed": self.seed,
             }
         )
         return config
