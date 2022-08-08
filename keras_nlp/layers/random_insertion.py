@@ -224,7 +224,7 @@ class RandomInsertion(keras.layers.Layer):
 
         def _insert(x):
             """
-            Replace words randomly
+            Inserts words randomly
             """
             inputs, num_to_select = x
             for _ in range(num_to_select):
@@ -235,9 +235,9 @@ class RandomInsertion(keras.layers.Layer):
                     dtype=tf.int32,
                     seed=self._generator.make_seeds()[:, 0],
                 )
-                replacement_word = index[0]
+                insertion_prompt = index[0]
                 insertion_location = index[1]
-                original_word = inputs[replacement_word]
+                original_word = inputs[insertion_prompt]
                 if _check_skip(original_word):
                     continue
                 if self.insertion_fn is not None:
