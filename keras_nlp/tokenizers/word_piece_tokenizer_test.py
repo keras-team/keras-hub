@@ -168,6 +168,10 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6, 7]])
 
+    def test_from_pretrained(self):
+        tokenizer = WordPieceTokenizer(vocabulary="bert_uncased")
+        self.assertAllEqual(len(tokenizer.vocabulary), 30522)
+
     def test_config(self):
         input_data = ["quick brOWN whale"]
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]

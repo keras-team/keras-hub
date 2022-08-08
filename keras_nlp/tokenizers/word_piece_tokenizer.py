@@ -17,7 +17,7 @@ from typing import List
 
 import tensorflow as tf
 import tensorflow_text as tf_text
-
+from tensorflow import keras
 from keras_nlp.tokenizers import tokenizer
 
 # Matches whitespace and control characters.
@@ -61,7 +61,6 @@ WHITESPACE_AND_PUNCTUATION_REGEX = r"|".join(
         PUNCTUATION_REGEX,
     ]
 )
-
 
 def pretokenize(text, lowercase, strip_accents, split):
     """Helper function that takes in a dataset element and pretokenizes it.
@@ -142,10 +141,14 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     be either an integer or string type.
 
     Args:
-        vocabulary: A list of strings or a string filename path. If
-            passing a list, each element of the list should be a single
-            WordPiece token string. If passing a filename, the file should be a
-            plain text file containing a single WordPiece token per line.
+        vocabulary: A list of strings, a string filename path, or 
+            'bert_uncased'. If passing a list, each element of the list should
+            be a single WordPiece token string. If passing a filename, the file
+            should be a plain text file containing a single WordPiece token per
+            line. If passing 'bert_uncased', the tokenizer uses the vocabulary
+            used to train BERT as the input, and default parameters
+            `lowercase=True`, `strip_accents=True` and `split=True` must be
+            used.
         sequence_length: int. If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of sequence_length.
         lowercase: bool, defaults to `True`. If true, the input text will be
@@ -235,6 +238,13 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         super().__init__(**kwargs)
 
         if isinstance(vocabulary, str):
+            if vocabulary in {'bert_uncased'}:
+                vocabulary = keras.utils.get_file(
+                    "bert_vocab_uncased",
+                    "https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt",
+                    cache_subdir='tokenizers'
+                )
+
             self.vocabulary = [
                 line.rstrip() for line in tf.io.gfile.GFile(vocabulary)
             ]
