@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""ROUGE-N metric implementation based on `keras.metrics.Metric`."""
+"""ROUGE-N metric."""
 
 
 from keras_nlp.metrics.rouge_base import RougeBase
@@ -39,6 +39,9 @@ class RougeN(RougeBase):
                not specified, it defaults to tf.float32.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
+
+    References:
+        - [Lin et al., 2004](https://aclanthology.org/W04-1013/)
 
     Examples:
 
