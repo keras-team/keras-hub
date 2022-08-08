@@ -12,27 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import shutil
+import datetime
 import sys
 
 import tensorflow as tf
 from absl import app
 from absl import flags
+from absl import logging
 from tensorflow import keras
 
 from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
 from examples.bert.bert_config import TRAINING_CONFIG
 from examples.bert.bert_model import BertModel
-from examples.utils.scripting_utils import list_filenames_for_arg
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "input_files",
+    "input_directory",
     None,
-    "Comma seperated list of directories, globs or files.",
+    "The directory of training data. It can be a local disk path, or the URL "
+    "of Google cloud storage bucket.",
 )
 
 flags.DEFINE_string(
@@ -53,6 +53,24 @@ flags.DEFINE_bool(
     "Skip restoring from checkpoint if True",
 )
 
+flags.DEFINE_bool(
+    "tpu_name",
+    None,
+    "The TPU to connect to. If None, TPU will not be used.",
+)
+
+flags.DEFINE_bool(
+    "enable_cloud_logging",
+    False,
+    "If True, the script will use cloud logging.",
+)
+
+flags.DEFINE_string(
+    "tensorboard_log_path",
+    None,
+    "The path to save tensorboard log to.",
+)
+
 flags.DEFINE_string(
     "model_size",
     "tiny",
@@ -70,74 +88,6 @@ flags.DEFINE_integer(
     None,
     "Override the pre-configured number of train steps..",
 )
-
-
-class ClassificationHead(tf.keras.layers.Layer):
-    """Pooling head for sentence-level classification tasks.
-
-    Args:
-        inner_dim: The dimensionality of inner projection layer. If 0 or `None`
-            then only the output projection layer is created.
-        num_classes: Number of output classes.
-        cls_token_idx: The index inside the sequence to pool.
-        inner_activation: Inner layer activation.
-        dropout_rate: Dropout probability.
-        initializer: Initializer for dense layer kernels.
-        **kwargs: Keyword arguments.
-    """
-
-    def __init__(
-        self,
-        inner_dim,
-        num_classes,
-        cls_token_idx=0,
-        inner_activation="tanh",
-        dropout_rate=0.0,
-        initializer="glorot_uniform",
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.dropout_rate = dropout_rate
-        self.inner_dim = inner_dim
-        self.num_classes = num_classes
-        self.inner_activation = keras.activations.get(inner_activation)
-        self.initializer = keras.initializers.get(initializer)
-        self.cls_token_idx = cls_token_idx
-
-        if self.inner_dim:
-            self.dense = keras.layers.Dense(
-                units=self.inner_dim,
-                activation=self.inner_activation,
-                kernel_initializer=self.initializer,
-                name="pooler_dense",
-            )
-        self.dropout = keras.layers.Dropout(rate=self.dropout_rate)
-
-        self.out_proj = keras.layers.Dense(
-            units=num_classes,
-            kernel_initializer=self.initializer,
-            name="logits",
-        )
-
-    def call(self, features: tf.Tensor):
-        """Implements call().
-
-        Args:
-            features: a rank-3 Tensor when self.inner_dim is specified,
-                otherwise it is a rank-2 Tensor.
-
-        Returns:
-            a Tensor shape= [batch size, num classes].
-        """
-        if not self.inner_dim:
-            x = features
-        else:
-            x = features[:, self.cls_token_idx, :]  # take <CLS> token.
-            x = self.dense(x)
-
-        x = self.dropout(x)
-        x = self.out_proj(x)
-        return x
 
 
 class MaskedLMHead(keras.layers.Layer):
@@ -247,13 +197,9 @@ class BertPretrainer(keras.Model):
             bert_model.get_embedding_table(),
             initializer=bert_model.initializer,
         )
-        self.next_sentence_head = ClassificationHead(
-            inner_dim=768,
-            num_classes=2,
-            dropout_rate=0.1,
-            initializer=bert_model.initializer,
-            # Always use tanh for classification.
-            inner_activation="tanh",
+        self.next_sentence_head = keras.layers.Dense(
+            2,
+            kernel_initializer=bert_model.initializer,
         )
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.lm_loss_tracker = keras.metrics.Mean(name="lm_loss")
@@ -266,30 +212,34 @@ class BertPretrainer(keras.Model):
         )
 
     def call(self, data):
-        outputs = self.bert_model(
+        sequence_output, pooled_output = self.bert_model(
             {
                 "input_ids": data["input_ids"],
                 "input_mask": data["input_mask"],
                 "segment_ids": data["segment_ids"],
             }
         )
-        lm_preds = self.masked_lm_head(outputs, data["masked_lm_positions"])
-        nsp_preds = self.next_sentence_head(outputs)
+        lm_preds = self.masked_lm_head(
+            sequence_output, data["masked_lm_positions"]
+        )
+        nsp_preds = self.next_sentence_head(pooled_output)
         return lm_preds, nsp_preds
 
     def train_step(self, data):
-        # TODO(mattdangerw): Add metrics (e.g nsp, lm accuracy).
         with tf.GradientTape() as tape:
             lm_preds, nsp_preds = self(data, training=True)
-            lm_loss = keras.metrics.sparse_categorical_crossentropy(
-                data["masked_lm_ids"], lm_preds, from_logits=True
-            )
+            lm_labels = data["masked_lm_ids"]
             lm_weights = data["masked_lm_weights"]
+            nsp_labels = data["next_sentence_labels"]
+
+            lm_loss = keras.losses.sparse_categorical_crossentropy(
+                lm_labels, lm_preds, from_logits=True
+            )
             lm_weights_summed = tf.reduce_sum(lm_weights, -1)
             lm_loss = tf.reduce_sum(lm_loss * lm_weights, -1)
             lm_loss = tf.math.divide_no_nan(lm_loss, lm_weights_summed)
-            nsp_loss = keras.metrics.sparse_categorical_crossentropy(
-                data["next_sentence_labels"], nsp_preds, from_logits=True
+            nsp_loss = keras.losses.sparse_categorical_crossentropy(
+                nsp_labels, nsp_preds, from_logits=True
             )
             nsp_loss = tf.reduce_mean(nsp_loss)
             loss = lm_loss + nsp_loss
@@ -304,8 +254,8 @@ class BertPretrainer(keras.Model):
         self.loss_tracker.update_state(loss)
         self.lm_loss_tracker.update_state(lm_loss)
         self.nsp_loss_tracker.update_state(nsp_loss)
-        self.lm_accuracy.update_state(data["masked_lm_ids"], lm_preds)
-        self.nsp_accuracy.update_state(data["next_sentence_labels"], nsp_preds)
+        self.lm_accuracy.update_state(lm_labels, lm_preds, lm_weights)
+        self.nsp_accuracy.update_state(nsp_labels, nsp_preds)
         return {m.name: m.result() for m in self.metrics}
 
 
@@ -371,29 +321,70 @@ def decode_record(record):
     return example
 
 
+def get_checkpoint_callback():
+    if tf.io.gfile.exists(FLAGS.checkpoint_save_directory):
+        if not tf.io.gfile.isdir(FLAGS.checkpoint_save_directory):
+            raise ValueError(
+                "`checkpoint_save_directory` should be a directory, "
+                f"but {FLAGS.checkpoint_save_directory} is not a "
+                "directory. Please set `checkpoint_save_directory` as "
+                "a directory."
+            )
+
+        elif FLAGS.skip_restore:
+            # Clear up the directory if users want to skip restoring.
+            tf.io.gfile.rmtree(FLAGS.checkpoint_save_directory)
+    checkpoint_path = FLAGS.checkpoint_save_directory
+    return keras.callbacks.BackupAndRestore(
+        backup_dir=checkpoint_path,
+    )
+
+
+def get_tensorboard_callback():
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_dir = FLAGS.tensorboard_log_path + timestamp
+    return keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
+
 def main(_):
-    print(f"Reading input data from {FLAGS.input_files}")
-    input_filenames = list_filenames_for_arg(FLAGS.input_files)
+    if FLAGS.enable_cloud_logging:
+        # If the job is on cloud, we will use cloud logging.
+        import google.cloud.logging
+
+        keras.utils.disable_interactive_logging()
+        client = google.cloud.logging.Client()
+        client.setup_logging()
+
+    logging.info(f"Reading input data from {FLAGS.input_directory}")
+    if not tf.io.gfile.isdir(FLAGS.input_directory):
+        raise ValueError(
+            "`input_directory` should be a directory, "
+            f"but {FLAGS.input_directory} is not a directory. Please "
+            "set `input_directory` flag as a directory."
+        )
+    files = tf.io.gfile.listdir(FLAGS.input_directory)
+    input_filenames = [FLAGS.input_directory + "/" + file for file in files]
+
     if not input_filenames:
-        print("No input files found. Check `input_files` flag.")
+        logging.info("No input files found. Check `input_directory` flag.")
         sys.exit(1)
 
     vocab = []
-    with open(FLAGS.vocab_file, "r") as vocab_file:
+    with tf.io.gfile.GFile(FLAGS.vocab_file) as vocab_file:
         for line in vocab_file:
             vocab.append(line.strip())
 
     model_config = MODEL_CONFIGS[FLAGS.model_size]
 
-    if tf.config.list_logical_devices("TPU"):
-        # Connect to TPU and create TPU strategy.
-        resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
-            tpu="local"
-        )
-        strategy = tf.distribute.TPUStrategy(resolver)
-    else:
+    if FLAGS.tpu_name is None:
         # Use default strategy if not using TPU.
         strategy = tf.distribute.get_strategy()
+    else:
+        # Connect to TPU and create TPU strategy.
+        resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
+            tpu=FLAGS.tpu_name
+        )
+        strategy = tf.distribute.TPUStrategy(resolver)
 
     # Decode and batch data.
     dataset = tf.data.TFRecordDataset(input_filenames)
@@ -438,22 +429,10 @@ def main(_):
     steps_per_epoch = num_train_steps // epochs
 
     callbacks = []
-    if FLAGS.checkpoint_save_directory is not None:
-        if os.path.exists(FLAGS.checkpoint_save_directory):
-            if not os.path.isdir(FLAGS.checkpoint_save_directory):
-                raise ValueError(
-                    "`checkpoint_save_directory` should be a directory, but "
-                    f"{FLAGS.checkpoint_save_directory} is not a directory."
-                    " Please set `checkpoint_save_directory` as a directory."
-                )
-
-            elif FLAGS.skip_restore:
-                # Clear up the directory if users want to skip restoring.
-                shutil.rmtree(FLAGS.checkpoint_save_directory)
-        checkpoint_path = FLAGS.checkpoint_save_directory + "/checkpoint"
-        callbacks.append(
-            tf.keras.callbacks.BackupAndRestore(backup_dir=checkpoint_path)
-        )
+    if FLAGS.checkpoint_save_directory:
+        callbacks.append(get_checkpoint_callback())
+    if FLAGS.tensorboard_log_path:
+        callbacks.append(get_tensorboard_callback())
 
     pretraining_model.fit(
         dataset,
@@ -462,12 +441,13 @@ def main(_):
         callbacks=callbacks,
     )
 
-    print(f"Saving to {FLAGS.saved_model_output}")
-    model.save(FLAGS.saved_model_output)
+    model_path = FLAGS.saved_model_output
+    logging.info(f"Saving to {FLAGS.saved_model_output}")
+    model.save(model_path)
 
 
 if __name__ == "__main__":
-    flags.mark_flag_as_required("input_files")
+    flags.mark_flag_as_required("input_directory")
     flags.mark_flag_as_required("vocab_file")
     flags.mark_flag_as_required("saved_model_output")
     app.run(main)
