@@ -11,16 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import random
+
 import tensorflow as tf
 from tensorflow import keras
-import random
+
 
 class RandomInsertion(keras.layers.Layer):
     """Augments input by randomly inserting words.
 
     Args:
         rate: A float in [0, 1] that is the rate of insertion
-        max_replacements: An integer that is the maximum number of insertions
+        max_insertions: An integer that is the maximum number of insertions
         insertion_list: A list of strings that are the words to insert
         insertion_fn: fn that takes in a token and returns a insertion token.
         insertion_py_fn: A python function that takes in a token and returns a
@@ -32,7 +34,7 @@ class RandomInsertion(keras.layers.Layer):
         skip_py_fn: A function that takes a word and returns True if the words
             should be skipped. Unlike skip_fn, this can be any python function
             that operates on strings, and does not need to use tf operations.
-        seed: A seed for the rng.
+        seed: A seed for the random number generator.
 
 
     Examples:
@@ -153,7 +155,9 @@ class RandomInsertion(keras.layers.Layer):
                 "provided."
             )
 
-        if [self.insertion_list, self.insertion_fn, self.insertion_py_fn].count(None) != 2:
+        if [self.insertion_list, self.insertion_fn, self.insertion_py_fn].count(
+            None
+        ) != 2:
             raise ValueError(
                 "Exactly one of insertion_list, insertion_fn, insertion_py_fn "
                 "must be provided."
@@ -225,8 +229,10 @@ class RandomInsertion(keras.layers.Layer):
             inputs, num_to_select = x
             for _ in range(num_to_select):
                 index = tf.random.stateless_uniform(
-                    shape=tf.shape(inputs), minval=0, maxval=tf.size(inputs), 
-                    dtype=tf.int32, 
+                    shape=tf.shape(inputs),
+                    minval=0,
+                    maxval=tf.size(inputs),
+                    dtype=tf.int32,
                     seed=self._generator.make_seeds()[:, 0],
                 )
                 replacement_word = index[0]
@@ -246,11 +252,24 @@ class RandomInsertion(keras.layers.Layer):
                     )
                     synonym = tf.gather(self.insertion_list, synonym_index)
                 else:
+
                     def _preprocess_insertion_fn(word):
-                        return self.insertion_py_fn(word.numpy().decode("utf-8"))
-                    synonym = tf.py_function(_preprocess_insertion_fn, [original_word], tf.string)
+                        return self.insertion_py_fn(
+                            word.numpy().decode("utf-8")
+                        )
+
+                    synonym = tf.py_function(
+                        _preprocess_insertion_fn, [original_word], tf.string
+                    )
                 # Insert the synonym at the location.
-                inputs = tf.concat([inputs[:insertion_location+1], [synonym], inputs[insertion_location + 1 :]], axis=0)
+                inputs = tf.concat(
+                    [
+                        inputs[: insertion_location + 1],
+                        [synonym],
+                        inputs[insertion_location + 1 :],
+                    ],
+                    axis=0,
+                )
             return inputs
 
         inserted = tf.map_fn(

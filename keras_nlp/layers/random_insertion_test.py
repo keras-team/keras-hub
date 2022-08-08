@@ -25,11 +25,13 @@ class RandomInsertionTest(tf.test.TestCase):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=['wind'])
+        augmenter = RandomInsertion(
+            rate=0.4, max_insertions=2, seed=42, insertion_list=["wind"]
+        )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b'Hey wind I like', b'Keras and wind wind Tensorflow']
+        exp_output = [b"Hey wind I like", b"Keras and wind wind Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -37,11 +39,13 @@ class RandomInsertionTest(tf.test.TestCase):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.unicode_split(inputs, "UTF-8")
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=['x', 'y'])
+        augmenter = RandomInsertion(
+            rate=0.4, max_insertions=2, seed=42, insertion_list=["x", "y"]
+        )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b'Heyyx I like', b'Keyras anxd Tensorflow']
+        exp_output = [b"Heyyx I like", b"Keyras anxd Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -50,34 +54,44 @@ class RandomInsertionTest(tf.test.TestCase):
         inputs = ["Hey I like", "Keras and Tensorflow"]
         tokenizer = UnicodeCodepointTokenizer(lowercase=False)
         tokenized = tokenizer.tokenize(inputs)
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=[99, 67])
+        augmenter = RandomInsertion(
+            rate=0.4, max_insertions=2, seed=42, insertion_list=[99, 67]
+        )
         augmented = augmenter(tokenized)
         output = tokenizer.detokenize(augmented)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b'HeyCc I like', b'KeCras ancd Tensorflow']
+        exp_output = [b"HeyCc I like", b"KeCras ancd Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_skip_options(self):
         keras.utils.set_random_seed(1337)
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"])
+        augmenter = RandomInsertion(
+            rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"]
+        )
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b'Hey Hey I like', b'Keras and There There Tensorflow']
+        exp_output = [b"Hey Hey I like", b"Keras and There There Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
         def skip_fn(word):
             return tf.strings.regex_full_match(word, r"\\pP")
 
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"], skip_fn=skip_fn)
+        augmenter = RandomInsertion(
+            rate=0.4,
+            max_insertions=2,
+            seed=42,
+            insertion_list=["Hey", "There"],
+            skip_fn=skip_fn,
+        )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b'Hey Hey I like', b'Keras and There There Tensorflow']
+        exp_output = [b"Hey Hey I like", b"Keras and There There Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -86,52 +100,64 @@ class RandomInsertionTest(tf.test.TestCase):
                 return True
             return False
 
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"], skip_py_fn=skip_py_fn)
+        augmenter = RandomInsertion(
+            rate=0.4,
+            max_insertions=2,
+            seed=42,
+            insertion_list=["Hey", "There"],
+            skip_py_fn=skip_py_fn,
+        )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b'Hey I like', b'Keras and There Tensorflow']
+        exp_output = [b"Hey I like", b"Keras and There Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_insert_options(self):
         keras.utils.set_random_seed(1337)
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"])
+        augmenter = RandomInsertion(
+            rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"]
+        )
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b'Hey Hey I like', b'Keras and There There Tensorflow']
+        exp_output = [b"Hey Hey I like", b"Keras and There There Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
         def insertion_fn(word):
-            if (word == "like"):
-              return "Speed"
+            if word == "like":
+                return "Speed"
             else:
-              return "Time"
+                return "Time"
 
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_fn=insertion_fn)
+        augmenter = RandomInsertion(
+            rate=0.4, max_insertions=2, seed=42, insertion_fn=insertion_fn
+        )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b'Hey Speed I like', b'Keras and Tensorflow Time Time']
+        exp_output = [b"Hey Speed I like", b"Keras and Tensorflow Time Time"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
         def insertion_py_fn(word):
-            if (len(word) > 2):
-              return word[:2]
+            if len(word) > 2:
+                return word[:2]
             return word
 
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_py_fn=insertion_py_fn)
+        augmenter = RandomInsertion(
+            rate=0.4, max_insertions=2, seed=42, insertion_py_fn=insertion_py_fn
+        )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b'Hey li I like', b'Keras and Tensorflow Te an']
+        exp_output = [b"Hey li I like", b"Keras and Tensorflow Te an"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -157,14 +183,19 @@ class RandomInsertionTest(tf.test.TestCase):
 
     def test_augment_first_batch_second(self):
         keras.utils.set_random_seed(1337)
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"])
+        augmenter = RandomInsertion(
+            rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"]
+        )
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-        exp_output = [[b'Hey', b'Hey', b'I', b'like'], [b'Keras', b'Hey', b'and', b'Tensorflow']]
+        exp_output = [
+            [b"Hey", b"Hey", b"I", b"like"],
+            [b"Keras", b"Hey", b"and", b"Tensorflow"],
+        ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -174,33 +205,56 @@ class RandomInsertionTest(tf.test.TestCase):
         def skip_py_fn(word):
             return len(word) < 4
 
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"], skip_fn=skip_fn)
+        augmenter = RandomInsertion(
+            rate=0.4,
+            max_insertions=2,
+            seed=42,
+            insertion_list=["Hey", "There"],
+            skip_fn=skip_fn,
+        )
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-        exp_output = [[b'Hey', b'Hey', b'I', b'like'], [b'Keras', b'Hey', b'and', b'Tensorflow']]
+        exp_output = [
+            [b"Hey", b"Hey", b"I", b"like"],
+            [b"Keras", b"Hey", b"and", b"Tensorflow"],
+        ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"], skip_py_fn=skip_py_fn)
+        augmenter = RandomInsertion(
+            rate=0.4,
+            max_insertions=2,
+            seed=42,
+            insertion_list=["Hey", "There"],
+            skip_py_fn=skip_py_fn,
+        )
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-        exp_output = [[b'Hey', b'Hey', b'I', b'like'], [b'Keras', b'Hey', b'and', b'Tensorflow']]
+        exp_output = [
+            [b"Hey", b"Hey", b"I", b"like"],
+            [b"Keras", b"Hey", b"and", b"Tensorflow"],
+        ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_batch_first_augment_second(self):
         keras.utils.set_random_seed(1337)
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"])
+        augmenter = RandomInsertion(
+            rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"]
+        )
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        exp_output = [[b'Hey', b'Hey', b'I', b'like'], [b'Keras', b'and', b'There', b'There', b'Tensorflow']]
+        exp_output = [
+            [b"Hey", b"Hey", b"I", b"like"],
+            [b"Keras", b"and", b"There", b"There", b"Tensorflow"],
+        ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -210,32 +264,55 @@ class RandomInsertionTest(tf.test.TestCase):
         def skip_py_fn(word):
             return len(word) < 4
 
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"], skip_fn=skip_fn)
+        augmenter = RandomInsertion(
+            rate=0.4,
+            max_insertions=2,
+            seed=42,
+            insertion_list=["Hey", "There"],
+            skip_fn=skip_fn,
+        )
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        exp_output = [[b'Hey', b'Hey', b'I', b'like'], [b'Keras', b'and', b'There', b'There', b'Tensorflow']]
+        exp_output = [
+            [b"Hey", b"Hey", b"I", b"like"],
+            [b"Keras", b"and", b"There", b"There", b"Tensorflow"],
+        ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"], skip_py_fn=skip_py_fn)
+        augmenter = RandomInsertion(
+            rate=0.4,
+            max_insertions=2,
+            seed=42,
+            insertion_list=["Hey", "There"],
+            skip_py_fn=skip_py_fn,
+        )
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
         output
-        exp_output = [[b'Hey', b'Hey', b'I', b'like'], [b'Keras', b'and', b'There', b'There', b'Tensorflow']]
+        exp_output = [
+            [b"Hey", b"Hey", b"I", b"like"],
+            [b"Keras", b"and", b"There", b"There", b"Tensorflow"],
+        ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_functional_model(self):
         keras.utils.set_random_seed(1337)
         input_data = tf.constant(["Hey I like", "Keras and Tensorflow"])
-        augmenter = RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"])
+        augmenter = RandomInsertion(
+            rate=0.4, max_insertions=2, seed=42, insertion_list=["Hey", "There"]
+        )
         inputs = tf.keras.Input(dtype="string", shape=())
         outputs = augmenter(tf.strings.split(inputs))
         model = tf.keras.Model(inputs, outputs)
         model_output = model(input_data)
         self.assertAllEqual(
-            model_output, [[b'Hey', b'Hey', b'I', b'like'],
-                        [b'Keras', b'and', b'There', b'There', b'Tensorflow']]
+            model_output,
+            [
+                [b"Hey", b"Hey", b"I", b"like"],
+                [b"Keras", b"and", b"There", b"There", b"Tensorflow"],
+            ],
         )
