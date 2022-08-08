@@ -123,7 +123,6 @@ class RandomInsertionTest(tf.test.TestCase):
         split = tf.strings.split(inputs)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
         exp_output = [b"Hey Hey I like", b"Keras and There There Tensorflow"]
         for i in range(output.shape[0]):
@@ -155,7 +154,6 @@ class RandomInsertionTest(tf.test.TestCase):
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
         exp_output = [b"Hey li I like", b"Keras and Tensorflow Te an"]
         for i in range(output.shape[0]):
@@ -291,7 +289,6 @@ class RandomInsertionTest(tf.test.TestCase):
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        output
         exp_output = [
             [b"Hey", b"Hey", b"I", b"like"],
             [b"Keras", b"and", b"There", b"There", b"Tensorflow"],

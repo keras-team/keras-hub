@@ -24,12 +24,12 @@ class RandomInsertion(keras.layers.Layer):
         rate: A float in [0, 1] that is the rate of insertion.
         max_insertions: An integer that is the maximum number of insertions.
         insertion_list: A list of tokens to use for insertion.
-        insertion_fn: A function that takes a token as input and returns a 
-            insertion token. This must be a traceable function of tf 
+        insertion_fn: A function that takes a token as input and returns a
+            insertion token. This must be a traceable function of tf
             operations.
         insertion_py_fn: A python function that takes in a token and returns a
-            insertion token. Unlike insertion_fn, this can be any python 
-            function that operates on strings/integers, and does not need to use 
+            insertion token. Unlike insertion_fn, this can be any python
+            function that operates on strings/integers, and does not need to use
             tf operations.
         skip_list: A list of words to skip.
         skip_fn: A function that takes a word and returns True if the word
@@ -46,7 +46,7 @@ class RandomInsertion(keras.layers.Layer):
     Word Level usage
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=['wind'])
+    >>> augmenter=keras_nlp.layers.RandomInsertion(rate=0.4, max_insertions=2, seed=42, insertion_list=['wind'])
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey wind I like', b'Keras and wind wind Tensorflow'], dtype=object)>
@@ -54,7 +54,7 @@ class RandomInsertion(keras.layers.Layer):
     Character Level Usage
     >>> keras.utils.set_random_seed(1337)
     >>> inputs = tf.strings.unicode_split(["Hey I like", "bye bye"], "UTF-8")
-    >>> augmenter = RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_list=['y', 'z'])
+    >>> augmenter = keras_nlp.layers.RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_list=['y', 'z'])
     >>> augmented = augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, axis=-1)
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Heyy I like', b'bye bzye'], dtype=object)>
@@ -66,7 +66,7 @@ class RandomInsertion(keras.layers.Layer):
     ...   return "Bike"
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter = RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_fn=insertion_fn)
+    >>> augmenter = keras_nlp.layers.RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_fn=insertion_fn)
     >>> augmented = augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey Car I like', b'Keras and Tensorflow Bike'], dtype=object)>
@@ -76,7 +76,7 @@ class RandomInsertion(keras.layers.Layer):
     ...   return word[:2]
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter = RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_py_fn=insertion_py_fn)
+    >>> augmenter = keras_nlp.layers.RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_py_fn=insertion_py_fn)
     >>> augmented = augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey li I like', b'Keras and Tensorflow Te'], dtype=object)>
@@ -84,7 +84,7 @@ class RandomInsertion(keras.layers.Layer):
     Usage with skip_list
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_list=['wind'], skip_list=['like'])
+    >>> augmenter=keras_nlp.layers.RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_list=['wind'], skip_list=['like'])
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I like', b'Keras and Tensorflow wind'], dtype=object)>
@@ -94,7 +94,7 @@ class RandomInsertion(keras.layers.Layer):
     ...     return tf.strings.regex_full_match(word, r"\\pP")
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_list=['wind'], skip_fn=skip_fn)
+    >>> augmenter=keras_nlp.layers.RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_list=['wind'], skip_fn=skip_fn)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey wind I like', b'Keras and wind Tensorflow'], dtype=object)>
@@ -104,7 +104,7 @@ class RandomInsertion(keras.layers.Layer):
     ...     return len(word) < 2
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_list=['wind'], skip_py_fn=skip_py_fn)
+    >>> augmenter=keras_nlp.layers.RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_list=['wind'], skip_py_fn=skip_py_fn)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
     <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey wind I like', b'Keras and wind Tensorflow'], dtype=object)>
@@ -257,13 +257,20 @@ class RandomInsertion(keras.layers.Layer):
                     synonym = tf.gather(self.insertion_list, synonym_index)
                 else:
 
-                    def _preprocess_insertion_fn(word):
+                    def string_fn(token):
                         return self.insertion_py_fn(
-                            word.numpy().decode("utf-8")
+                            token.numpy().decode("utf-8")
                         )
 
+                    def int_fn(token):
+                        return self.insertion_py_fn(token.numpy())
+
+                    _preprocess_insertion_fn = (
+                        string_fn if inputs.dtype == tf.string else int_fn
+                    )
+
                     synonym = tf.py_function(
-                        _preprocess_insertion_fn, [original_word], tf.string
+                        _preprocess_insertion_fn, [original_word], inputs.dtype
                     )
                 # Insert the synonym at the location.
                 inputs = tf.concat(
