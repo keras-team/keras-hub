@@ -46,7 +46,7 @@ class RandomDeletion(keras.layers.Layer):
             indicates that should not be considered a candidate for deletion.
             Unlike the `skip_fn` argument, this argument need not be
             tracable--it can be any python function.
-        seed: A seed for the rng.
+        seed: A seed for the random number generator.
 
     Examples:
 

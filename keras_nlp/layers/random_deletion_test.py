@@ -105,6 +105,8 @@ class RandomDeletionTest(tf.test.TestCase):
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
         exp_output = [b"Hey like", b"Keras Tensorflow"]
+        for i in range(output.shape[0]):
+            self.assertAllEqual(output[i], exp_output[i])
 
     def test_get_config_and_from_config(self):
         augmenter = random_deletion.RandomDeletion(
