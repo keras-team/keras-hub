@@ -20,7 +20,7 @@ from keras_nlp.layers import RandomSwaps
 from keras_nlp.tokenizers import UnicodeCodepointTokenizer
 
 
-class RandomDeletionTest(tf.test.TestCase):
+class RandomSwapTest(tf.test.TestCase):
     def test_shape_and_output_from_word_swap(self):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]
