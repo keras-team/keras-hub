@@ -54,10 +54,15 @@ class ByteTokenizer(tokenizer.Tokenizer):
         normalization_form: string. One of the following values: (None, "NFC",
             "NFKC", "NFD", "NFKD"). If set, every UTF-8 string in the input
             tensor text will be normalized to the given form before tokenizing.
-        errors: string. One of ("strict", "replace", "ignore"). Defaults to
-            "replace". Specifies the `detokenize()` behaviour when an invalid
-            byte sequence is encountered (same behaviour as
-            https://www.tensorflow.org/api_docs/python/tf/strings/unicode_transcode).
+        errors: One of ('replace', 'remove', 'strict'). Specifies the
+            `detokenize()` behavior when an invalid tokenizer is encountered.
+            The value of `'strict'` will cause the operation to produce a
+            `InvalidArgument` error on any invalid input formatting. A value of
+            `'replace'` will cause the tokenizer to replace any invalid
+            formatting in the input with the `replacement_char` codepoint.
+            A value of `'ignore'` will cause the tokenizer to skip any invalid
+            formatting in the input and produce no corresponding output
+            character.
         replacement_char: int. Defaults to 65533. The replacement character to
             use when an invalid byte sequence is encountered and when `errors`
             is set to "replace" (same behaviour as

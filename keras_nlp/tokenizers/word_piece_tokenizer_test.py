@@ -116,22 +116,6 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5]])
 
-    def test_custom_spliting(self):
-        input_data = ["a,e,i,o,u"]
-        vocab_data = ["[UNK]", "a", "e", "i", "o", "u", ","]
-        # Don't keep commas.
-        tokenizer = WordPieceTokenizer(
-            vocabulary=vocab_data, split_pattern=",", keep_pattern=""
-        )
-        call_output = tokenizer(input_data)
-        self.assertAllEqual(call_output, [[1, 2, 3, 4, 5]])
-        # Keep commas.
-        tokenizer = WordPieceTokenizer(
-            vocabulary=vocab_data, split_pattern=",", keep_pattern=","
-        )
-        call_output = tokenizer(input_data)
-        self.assertAllEqual(call_output, [[1, 6, 2, 6, 3, 6, 4, 6, 5]])
-
     def test_no_spliting(self):
         input_data = ["t o k e n", "m i s s i n g", "t o k e n"]
         vocab_data = ["[UNK]", "t o k e n"]

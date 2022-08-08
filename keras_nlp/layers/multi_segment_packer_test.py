@@ -67,8 +67,8 @@ class MultiSegmentPackerTest(tf.test.TestCase):
         )
 
     def test_trim_batched_inputs_round_robin(self):
-        seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b", "c"]])
-        seq2 = tf.ragged.constant([["x", "y", "z"], ["x", "y", "z"]])
+        seq1 = tf.constant([["a", "b", "c"], ["a", "b", "c"]])
+        seq2 = tf.constant([["x", "y", "z"], ["x", "y", "z"]])
         packer = MultiSegmentPacker(
             7, start_value="[CLS]", end_value="[SEP]", truncator="round_robin"
         )
@@ -89,7 +89,7 @@ class MultiSegmentPackerTest(tf.test.TestCase):
 
     def test_trim_batched_inputs_waterfall(self):
         seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b"]])
-        seq2 = tf.ragged.constant([["x", "y", "z"], ["x", "y", "z"]])
+        seq2 = tf.constant([["x", "y", "z"], ["x", "y", "z"]])
         packer = MultiSegmentPacker(
             7, start_value="[CLS]", end_value="[SEP]", truncator="waterfall"
         )
