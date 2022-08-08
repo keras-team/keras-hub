@@ -172,6 +172,20 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         tokenizer = WordPieceTokenizer(vocabulary="bert_uncased")
         self.assertAllEqual(len(tokenizer.vocabulary), 30522)
 
+    def test_from_pretrained_error(self):
+        with self.assertRaises(ValueError):
+            tokenizer = WordPieceTokenizer(
+                vocabulary="bert_uncased", lowercase=False
+            )
+        with self.assertRaises(ValueError):
+            tokenizer = WordPieceTokenizer(
+                vocabulary="bert_uncased", strip_accents=False
+            )
+        with self.assertRaises(ValueError):
+            tokenizer = WordPieceTokenizer(
+                vocabulary="bert_uncased", split=False
+            )
+
     def test_config(self):
         input_data = ["quick brOWN whale"]
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]

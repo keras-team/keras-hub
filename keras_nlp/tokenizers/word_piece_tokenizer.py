@@ -18,6 +18,7 @@ from typing import List
 import tensorflow as tf
 import tensorflow_text as tf_text
 from tensorflow import keras
+
 from keras_nlp.tokenizers import tokenizer
 
 # Matches whitespace and control characters.
@@ -61,6 +62,7 @@ WHITESPACE_AND_PUNCTUATION_REGEX = r"|".join(
         PUNCTUATION_REGEX,
     ]
 )
+
 
 def pretokenize(text, lowercase, strip_accents, split):
     """Helper function that takes in a dataset element and pretokenizes it.
@@ -141,7 +143,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     be either an integer or string type.
 
     Args:
-        vocabulary: A list of strings, a string filename path, or 
+        vocabulary: A list of strings, a string filename path, or
             'bert_uncased'. If passing a list, each element of the list should
             be a single WordPiece token string. If passing a filename, the file
             should be a plain text file containing a single WordPiece token per
@@ -238,11 +240,18 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         super().__init__(**kwargs)
 
         if isinstance(vocabulary, str):
-            if vocabulary in {'bert_uncased'}:
+            if vocabulary in {"bert_uncased"}:
+                if (not lowercase) or (not strip_accents) or (not split):
+                    raise ValueError(
+                        "If using `vocabulary='bert_vocab_uncased'`, default "
+                        "configuration parameters should be set: "
+                        "`lowercase=True`, `strip_accents=True`, and "
+                        "`split=True`."
+                    )
                 vocabulary = keras.utils.get_file(
                     "bert_vocab_uncased",
                     "https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt",
-                    cache_subdir='tokenizers'
+                    cache_subdir="tokenizers",
                 )
 
             self.vocabulary = [
