@@ -375,6 +375,8 @@ def create_masked_lm_predictions(
 ):
     """Creates the predictions for the masked LM objective."""
 
+    # TODO(bischof): replace with keras_nlp.layers.MLMMaskGenerator
+
     cand_indexes = []
     for (i, token) in enumerate(tokens):
         if token == "[CLS]" or token == "[SEP]":

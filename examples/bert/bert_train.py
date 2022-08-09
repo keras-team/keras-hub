@@ -21,13 +21,11 @@ from absl import flags
 from absl import logging
 from tensorflow import keras
 
-from keras_nlp.applications.bert import (
-    BertLanguageModel,
-    BertEncoder,
-)
 from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
 from examples.bert.bert_config import TRAINING_CONFIG
+from keras_nlp.applications.bert import BertEncoder
+from keras_nlp.applications.bert import BertLanguageModel
 
 FLAGS = flags.FLAGS
 

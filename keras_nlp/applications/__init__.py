@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.applications.bert import BertClassifier
 from keras_nlp.applications.bert import BertEncoder
 from keras_nlp.applications.bert import BertLanguageModel
-from keras_nlp.applications.bert import BertClassifier
