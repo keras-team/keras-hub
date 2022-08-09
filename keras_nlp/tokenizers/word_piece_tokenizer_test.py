@@ -174,17 +174,11 @@ class WordPieceTokenizerTest(tf.test.TestCase):
 
     def test_from_pretrained_error(self):
         with self.assertRaises(ValueError):
-            WordPieceTokenizer(
-                vocabulary="bert_uncased", lowercase=False
-            )
+            WordPieceTokenizer(vocabulary="bert_uncased", lowercase=False)
         with self.assertRaises(ValueError):
-            WordPieceTokenizer(
-                vocabulary="bert_uncased", strip_accents=False
-            )
+            WordPieceTokenizer(vocabulary="bert_uncased", strip_accents=False)
         with self.assertRaises(ValueError):
-            WordPieceTokenizer(
-                vocabulary="bert_uncased", split=False
-            )
+            WordPieceTokenizer(vocabulary="bert_uncased", split=False)
 
     def test_config(self):
         input_data = ["quick brOWN whale"]
