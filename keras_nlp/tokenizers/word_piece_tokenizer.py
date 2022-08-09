@@ -150,7 +150,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             tensor and padded/trimmed so all outputs are of sequence_length.
         lowercase: bool, defaults to `True`. If true, the input text will be
             lowercased before tokenization.
-        strip_accents: bool, defaults to `True`. If true, all accent marks will
+        strip_accents: bool, defaults to `False`. If true, all accent marks will
             be removed from text before tokenization.
         split: bool, defaults to `True`. If true, input will be split on
             whitespace and punctuation marks, and all punctuation marks will be
@@ -180,7 +180,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
     >>> inputs = ["The quick brown fox."]
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-    ...     vocabulary=vocab, sequence_length=10)
+    ...     vocabulary=vocab, 
+    ...     sequence_length=10
+    ... )
     >>> tokenizer(inputs)
     <tf.Tensor: shape=(1, 10), dtype=int32, numpy=
     array([[1, 2, 3, 4, 5, 6, 7, 0, 0, 0]], dtype=int32)>
@@ -189,7 +191,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
     >>> inputs = ["The quick brown fox."]
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-    ...     vocabulary=vocab, dtype="string")
+    ...     vocabulary=vocab, 
+    ...     dtype="string"
+    ... )
     >>> tokenizer(inputs)
     <tf.RaggedTensor [[b'the', b'qu', b'##ick', b'br', b'##own', b'fox', b'.']]>
 
@@ -203,8 +207,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     Custom splitting.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
     >>> inputs = ["The$quick$brown$fox"]
-    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab,
-    ...     split=False, dtype='string')
+    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+    ...     vocabulary=vocab,
+    ...     split=False, 
+    ...     dtype='string'
+    ... )
     >>> split_inputs = tf.strings.split(inputs, sep="$")
     >>> tokenizer(split_inputs)
     <tf.RaggedTensor [[b'the', b'qu', b'##ick', b'br', b'##own', b'fox']]>
@@ -215,7 +222,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         vocabulary=None,
         sequence_length: int = None,
         lowercase: bool = True,
-        strip_accents: bool = True,
+        strip_accents: bool = False,
         split: bool = True,
         suffix_indicator: str = "##",
         oov_token: str = "[UNK]",
