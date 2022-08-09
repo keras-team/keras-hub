@@ -180,7 +180,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
     >>> inputs = ["The quick brown fox."]
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-    ...     vocabulary=vocab, 
+    ...     vocabulary=vocab,
     ...     sequence_length=10
     ... )
     >>> tokenizer(inputs)
@@ -191,7 +191,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
     >>> inputs = ["The quick brown fox."]
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-    ...     vocabulary=vocab, 
+    ...     vocabulary=vocab,
     ...     dtype="string"
     ... )
     >>> tokenizer(inputs)
@@ -209,7 +209,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     >>> inputs = ["The$quick$brown$fox"]
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
     ...     vocabulary=vocab,
-    ...     split=False, 
+    ...     split=False,
     ...     dtype='string'
     ... )
     >>> split_inputs = tf.strings.split(inputs, sep="$")
