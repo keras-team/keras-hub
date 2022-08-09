@@ -174,15 +174,15 @@ class WordPieceTokenizerTest(tf.test.TestCase):
 
     def test_from_pretrained_error(self):
         with self.assertRaises(ValueError):
-            tokenizer = WordPieceTokenizer(
+            WordPieceTokenizer(
                 vocabulary="bert_uncased", lowercase=False
             )
         with self.assertRaises(ValueError):
-            tokenizer = WordPieceTokenizer(
+            WordPieceTokenizer(
                 vocabulary="bert_uncased", strip_accents=False
             )
         with self.assertRaises(ValueError):
-            tokenizer = WordPieceTokenizer(
+            WordPieceTokenizer(
                 vocabulary="bert_uncased", split=False
             )
 
