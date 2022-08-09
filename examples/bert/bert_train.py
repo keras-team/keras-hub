@@ -24,7 +24,7 @@ from tensorflow import keras
 from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
 from examples.bert.bert_config import TRAINING_CONFIG
-from keras_nlp.applications.bert import BertEncoder
+from keras_nlp.applications.bert import Bert
 from keras_nlp.applications.bert import BertLanguageModel
 
 FLAGS = flags.FLAGS
@@ -229,10 +229,7 @@ def main(_):
 
     with strategy.scope():
         # Create a BERT model the input config.
-        encoder = BertEncoder(
-            vocab_size=len(vocab),
-            **model_config,
-        )
+        encoder = Bert(vocab_size=len(vocab), **model_config)
         # Make sure model has been called.
         encoder(encoder.inputs)
         encoder.summary()

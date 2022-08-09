@@ -26,18 +26,7 @@ CLS_INDEX = 0
 TOKEN_EMBEDDING_LAYER_NAME = "token_embedding"
 
 
-def BertEncoder(
-    vocab_size,
-    num_layers=12,
-    hidden_size=768,
-    dropout=0.1,
-    num_attention_heads=12,
-    inner_size=3072,
-    inner_activation="gelu",
-    initializer_range=0.02,
-    max_sequence_length=512,
-    type_vocab_size=2,
-):
+class Bert(keras.Model):
     """Bi-directional Transformer-based encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -54,7 +43,6 @@ def BertEncoder(
         vocab_size: The size of the token vocabulary.
         num_layers: The number of transformer layers.
         hidden_size: The size of the transformer hidden layers.
-        dropout: Dropout probability for the Transformer encoder.
         num_attention_heads: The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
         inner_size: The output dimension of the first Dense layer in a two-layer
@@ -63,6 +51,7 @@ def BertEncoder(
             two-layer feedforward network for each transformer.
         initializer_range: The initialzer range to use for a truncated normal
             initializer.
+        dropout: Dropout probability for the Transformer encoder.
         max_sequence_length: The maximum sequence length that this encoder can
             consume. If None, max_sequence_length uses the value from sequence
             length. This determines the variable shape for positional
@@ -73,87 +62,133 @@ def BertEncoder(
             dense layers. If set False, output of attention and intermediate
             dense layers is normalized.
     """
-
-    # Create lambda functions from input params
-    inner_activation_fn = keras.activations.get(inner_activation)
-    initializer_fn = keras.initializers.TruncatedNormal(
-        stddev=initializer_range
-    )
-
-    # Functional version of model
-    token_id_input = keras.Input(shape=(None,), dtype="int32", name="input_ids")
-    segment_id_input = keras.Input(
-        shape=(None,), dtype="int32", name="segment_ids"
-    )
-    input_mask = keras.Input(shape=(None,), dtype="int32", name="input_mask")
-
-    # Embed tokens, positions, and segment ids.
-    token_embedding = keras.layers.Embedding(
-        input_dim=vocab_size,
-        output_dim=hidden_size,
-        name=TOKEN_EMBEDDING_LAYER_NAME,
-    )(token_id_input)
-    position_embedding = keras_nlp.layers.PositionEmbedding(
-        initializer=initializer_fn,
-        sequence_length=max_sequence_length,
-        name="position_embedding",
-    )(token_embedding)
-    segment_embedding = keras.layers.Embedding(
-        input_dim=type_vocab_size,
-        output_dim=hidden_size,
-        name="segment_embedding",
-    )(segment_id_input)
-
-    # Sum, normailze and apply dropout to embeddings.
-    x = keras.layers.Add(
-        name="embedding_sum",
-    )((token_embedding, position_embedding, segment_embedding))
-    x = keras.layers.LayerNormalization(
-        name="embeddings/layer_norm",
-        axis=-1,
-        epsilon=1e-12,
-        dtype=tf.float32,
-    )(x)
-    x = keras.layers.Dropout(
-        dropout,
-        name="embedding_dropout",
-    )(x)
-
-    # Apply successive transformer encoder blocks.
-    for i in range(num_layers):
-        x = keras_nlp.layers.TransformerEncoder(
-            num_heads=num_attention_heads,
-            intermediate_dim=inner_size,
-            activation=inner_activation_fn,
-            dropout=dropout,
-            kernel_initializer=initializer_fn,
-            name="transformer/layer_%d" % i,
-        )(x, padding_mask=input_mask)
-
-    # Construct the two BERT outputs, and apply a dense to the pooled output.
-    sequence_output = x
-    pooled_output = keras.layers.Dense(
+    def __init__(
+        self,
+        vocab_size,
+        num_layers,
         hidden_size,
-        activation="tanh",
-        name="pooled_dense",
-    )(x[:, CLS_INDEX, :])
+        num_attention_heads,
+        inner_size,
+        inner_activation="gelu",
+        initializer_range=0.02,
+        dropout=0.1,
+        max_sequence_length=512,
+        type_vocab_size=2,
+        **kwargs
+    ):
 
-    model = keras.Model(
-        inputs={
-            "input_ids": token_id_input,
-            "segment_ids": segment_id_input,
-            "input_mask": input_mask,
-        },
-        outputs={
-            "sequence_output": sequence_output,
-            "pooled_output": pooled_output,
-        },
-    )
-    # Save some metadata for downstream usage
-    model.initializer_fn = initializer_fn
-    model.type_vocab_size = type_vocab_size
-    model.max_sequence_length = max_sequence_length
-    return model
+        # Create lambda functions from input params
+        inner_activation_fn = keras.activations.get(inner_activation)
+        initializer_fn = keras.initializers.TruncatedNormal(
+            stddev=initializer_range
+        )
+
+        # Functional version of model
+        token_id_input = keras.Input(shape=(None,), dtype="int32", name="input_ids")
+        segment_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="segment_ids"
+        )
+        input_mask = keras.Input(shape=(None,), dtype="int32", name="input_mask")
+
+        # Embed tokens, positions, and segment ids.
+        token_embedding = keras.layers.Embedding(
+            input_dim=vocab_size,
+            output_dim=hidden_size,
+            name=TOKEN_EMBEDDING_LAYER_NAME,
+        )(token_id_input)
+        position_embedding = keras_nlp.layers.PositionEmbedding(
+            initializer=initializer_fn,
+            sequence_length=max_sequence_length,
+            name="position_embedding",
+        )(token_embedding)
+        segment_embedding = keras.layers.Embedding(
+            input_dim=type_vocab_size,
+            output_dim=hidden_size,
+            name="segment_embedding",
+        )(segment_id_input)
+
+        # Sum, normailze and apply dropout to embeddings.
+        x = keras.layers.Add(
+            name="embedding_sum",
+        )((token_embedding, position_embedding, segment_embedding))
+        x = keras.layers.LayerNormalization(
+            name="embeddings/layer_norm",
+            axis=-1,
+            epsilon=1e-12,
+            dtype=tf.float32,
+        )(x)
+        x = keras.layers.Dropout(
+            dropout,
+            name="embedding_dropout",
+        )(x)
+
+        # Apply successive transformer encoder blocks.
+        for i in range(num_layers):
+            x = keras_nlp.layers.TransformerEncoder(
+                num_heads=num_attention_heads,
+                intermediate_dim=inner_size,
+                activation=inner_activation_fn,
+                dropout=dropout,
+                kernel_initializer=initializer_fn,
+                name="transformer/layer_%d" % i,
+            )(x, padding_mask=input_mask)
+
+        # Construct the two BERT outputs, and apply a dense to the pooled output.
+        sequence_output = x
+        pooled_output = keras.layers.Dense(
+            hidden_size,
+            activation="tanh",
+            name="pooled_dense",
+        )(x[:, CLS_INDEX, :])
+
+        # Instantiate using Functional API Model constructor
+        super(Bert, self).__init__(
+            inputs={
+                "input_ids": token_id_input,
+                "segment_ids": segment_id_input,
+                "input_mask": input_mask,
+            },
+            outputs={
+                "sequence_output": sequence_output,
+                "pooled_output": pooled_output,
+            },
+            **kwargs)
+        # All references to `self` below this line
+        self.inner_activation_fn = inner_activation_fn
+        self.initializer_fn = initializer_fn
+        self.vocab_size = vocab_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.num_attention_heads = num_attention_heads
+        self.max_sequence_length = max_sequence_length
+        self.type_vocab_size = type_vocab_size
+        self.inner_size = inner_size
+        self.inner_activation = keras.activations.get(inner_activation)
+        self.initializer_range = initializer_range
+        self.dropout = dropout
+    
+    def get_embedding_table(self):
+        return self.get_layer(TOKEN_EMBEDDING_LAYER_NAME).embeddings
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "vocab_size": self.vocab_size,
+                "hidden_size": self.hidden_size,
+                "num_layers": self.num_layers,
+                "num_attention_heads": self.num_attention_heads,
+                "max_sequence_length": self.max_sequence_length,
+                "type_vocab_size": self.type_vocab_size,
+                "inner_size": self.inner_size,
+                "inner_activation": keras.activations.serialize(
+                    self.inner_activation
+                ),
+                "dropout": self.dropout,
+                "initializer_range": self.initializer_range,
+            }
+        )
+        return config
 
 
 class MaskedLMHead(keras.layers.Layer):
@@ -265,9 +300,7 @@ class BertLanguageModel(keras.Model):
         self.encoder = encoder
         # TODO(jbischof): replace with keras_nlp.layers.MLMHead
         self.masked_lm_head = MaskedLMHead(
-            embedding_table=encoder.get_layer(
-                TOKEN_EMBEDDING_LAYER_NAME
-            ).embeddings,
+            embedding_table=encoder.get_embedding_table(),
             initializer=encoder.initializer_fn,
         )
         self.next_sentence_head = keras.layers.Dense(
@@ -285,13 +318,14 @@ class BertLanguageModel(keras.Model):
         )
 
     def call(self, data):
-        sequence_output, pooled_output = self.encoder(
+        encoder_output = self.encoder(
             {
                 "input_ids": data["input_ids"],
                 "input_mask": data["input_mask"],
                 "segment_ids": data["segment_ids"],
             }
         )
+        sequence_output, pooled_output = encoder_output["sequence_output"], encoder_output["pooled_output"]
         lm_preds = self.masked_lm_head(
             sequence_output, data["masked_lm_positions"]
         )
@@ -351,20 +385,22 @@ class BertClassifier(keras.Model):
         return self._logit_layer(pooled_output)
 
 
-def BertBaseEncoder(weights=None):
+def BertBase(weights=None):
     """Factory for BertEncoder using "Base" architecture."""
 
-    model = BertEncoder(
+    model = Bert(
         vocab_size=30522,
         num_layers=12,
         hidden_size=768,
-        dropout=0.1,
         num_attention_heads=12,
         inner_size=3072,
         inner_activation="gelu",
         initializer_range=0.02,
+        dropout=0.1,
     )
 
+    # TODO(bischof): add some documentation or magic to load our checkpoints
+    # Note: This is pure Keras and also intended to work with user checkpoints
     if weights is not None:
         model.load_weights(weights)
 
