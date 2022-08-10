@@ -19,7 +19,7 @@ from tensorflow import keras
 import keras_nlp.layers
 
 # isort: off
-# TODO(bischof): decide what to export or whether we are using these decorators
+# TODO(jbischof): decide what to export or whether we are using these decorators
 #from tensorflow.python.util.tf_export import keras_export
 
 CLS_INDEX = 0
@@ -194,6 +194,7 @@ class Bert(keras.Model):
 class BertClassifier(keras.Model):
     """Classifier model with BertEncoder."""
 
+    # TODO(jbischof): figure out initialization default
     def __init__(self, encoder, num_classes, initializer, **kwargs):
         super().__init__(**kwargs)
         self.encoder = encoder
@@ -224,10 +225,10 @@ def BertBase(weights=None):
         dropout=0.1,
     )
 
-    # TODO(bischof): add some documentation or magic to load our checkpoints
+    # TODO(jbischof): add some documentation or magic to load our checkpoints
     # Note: This is pure Keras and also intended to work with user checkpoints
     if weights is not None:
         model.load_weights(weights)
 
-    # TODO(bischof): attach the tokenizer
+    # TODO(jbischof): attach the tokenizer
     return model

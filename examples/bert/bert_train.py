@@ -188,7 +188,7 @@ class MaskedLMHead(keras.layers.Layer):
         return output_tensor
 
 
-class BertLanguageModel(keras.Model):
+class BertPretrainingModel(keras.Model):
     """
     MLM + NSP model with BertEncoder.
     """
@@ -196,7 +196,7 @@ class BertLanguageModel(keras.Model):
     def __init__(self, encoder, **kwargs):
         super().__init__(**kwargs)
         self.encoder = encoder
-        # TODO(jbischof): replace with keras_nlp.layers.MLMHead
+        # TODO(jbischof): replace with keras_nlp.layers.MLMHead (Issue #166)
         self.masked_lm_head = MaskedLMHead(
             embedding_table=encoder.get_embedding_table(),
             initializer=encoder.initializer_fn,
@@ -262,6 +262,7 @@ class BertLanguageModel(keras.Model):
         self.lm_accuracy.update_state(lm_labels, lm_preds, lm_weights)
         self.nsp_accuracy.update_state(nsp_labels, nsp_preds)
         return {m.name: m.result() for m in self.metrics}
+
 
 class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
     """
@@ -421,8 +422,8 @@ def main(_):
         )
         optimizer = keras.optimizers.Adam(learning_rate=learning_rate_schedule)
 
-        language_model = BertLanguageModel(encoder)
-        language_model.compile(
+        pretraining_model = BertPretrainingModel(encoder)
+        pretraining_model.compile(
             optimizer=optimizer,
         )
 
@@ -435,7 +436,7 @@ def main(_):
     if FLAGS.tensorboard_log_path:
         callbacks.append(get_tensorboard_callback())
 
-    language_model.fit(
+    pretraining_model.fit(
         dataset,
         epochs=epochs,
         steps_per_epoch=steps_per_epoch,
