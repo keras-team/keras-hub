@@ -26,7 +26,7 @@ import keras_nlp
 from examples.bert.bert_config import FINETUNING_CONFIG
 from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
-from keras_nlp.applications import BertClassifier
+from keras_nlp.models import BertClassifier
 
 FLAGS = flags.FLAGS
 

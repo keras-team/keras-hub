@@ -24,7 +24,7 @@ from tensorflow import keras
 from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
 from examples.bert.bert_config import TRAINING_CONFIG
-from keras_nlp.applications.bert import Bert
+from keras_nlp.models import Bert
 
 FLAGS = flags.FLAGS
 
@@ -190,9 +190,7 @@ class MaskedLMHead(keras.layers.Layer):
 
 
 class BertPretrainingModel(keras.Model):
-    """
-    MLM + NSP model with BertEncoder.
-    """
+    """MLM + NSP model with BertEncoder."""
 
     def __init__(self, encoder, **kwargs):
         super().__init__(**kwargs)
