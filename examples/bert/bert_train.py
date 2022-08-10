@@ -201,7 +201,7 @@ class BertPretrainingModel(keras.Model):
             initializer=encoder.initializer_fn,
         )
         self.next_sentence_head = keras.layers.Dense(
-            encoder.type_vocab_size,
+            encoder.num_segments,
             kernel_initializer=encoder.initializer_fn,
         )
         self.loss_tracker = keras.metrics.Mean(name="loss")

@@ -16,17 +16,12 @@
 import tensorflow as tf
 from tensorflow import keras
 
-import keras_nlp.layers
-
-# isort: off
-# TODO(jbischof): decide what to export or whether we are using these decorators
-# from tensorflow.python.util.tf_export import keras_export
+from keras_nlp.layers import PositionEmbedding, TransformerEncoder
 
 CLS_INDEX = 0
 TOKEN_EMBEDDING_LAYER_NAME = "token_embedding"
 
 
-# TODO(jbischof): move to keras_nlp/models
 class Bert(keras.Model):
     """Bi-directional Transformer-based encoder network.
 
@@ -44,10 +39,10 @@ class Bert(keras.Model):
         vocab_size: The size of the token vocabulary.
         num_layers: The number of transformer layers.
         hidden_size: The size of the transformer hidden layers.
-        num_attention_heads: The number of attention heads for each transformer.
+        num_heads: The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
-        inner_size: The output dimension of the first Dense layer in a two-layer
-            feedforward network for each transformer.
+        intermediate_dim: The output dimension of the first Dense layer in a
+            two-layer feedforward network for each transformer.
         inner_activation: The activation for the first Dense layer in a
             two-layer feedforward network for each transformer.
         initializer_range: The initialzer range to use for a truncated normal
@@ -57,7 +52,7 @@ class Bert(keras.Model):
             consume. If None, max_sequence_length uses the value from sequence
             length. This determines the variable shape for positional
             embeddings.
-        type_vocab_size: The number of types that the 'segment_ids' input can
+        num_segments: The number of types that the 'segment_ids' input can
             take.
         norm_first: Whether to normalize inputs to attention and intermediate
             dense layers. If set False, output of attention and intermediate
@@ -69,14 +64,14 @@ class Bert(keras.Model):
         vocab_size,
         num_layers,
         hidden_size,
-        num_attention_heads,
-        inner_size,
+        num_heads,
+        intermediate_dim,
         inner_activation="gelu",
         initializer_range=0.02,
         dropout=0.1,
         max_sequence_length=512,
-        type_vocab_size=2,
-        **kwargs
+        num_segments=2,
+        **kwargs,
     ):
 
         # Create lambda functions from input params
@@ -104,13 +99,13 @@ class Bert(keras.Model):
             output_dim=hidden_size,
             name=TOKEN_EMBEDDING_LAYER_NAME,
         )(token_id_input)
-        position_embedding = keras_nlp.layers.PositionEmbedding(
+        position_embedding = PositionEmbedding(
             initializer=initializer_fn,
             sequence_length=max_sequence_length,
             name="position_embedding",
         )(token_embedding)
         segment_embedding = keras.layers.Embedding(
-            input_dim=type_vocab_size,
+            input_dim=num_segments,
             output_dim=hidden_size,
             name="segment_embedding",
         )(segment_id_input)
@@ -132,9 +127,9 @@ class Bert(keras.Model):
 
         # Apply successive transformer encoder blocks.
         for i in range(num_layers):
-            x = keras_nlp.layers.TransformerEncoder(
-                num_heads=num_attention_heads,
-                intermediate_dim=inner_size,
+            x = TransformerEncoder(
+                num_heads=num_heads,
+                intermediate_dim=intermediate_dim,
                 activation=inner_activation_fn,
                 dropout=dropout,
                 kernel_initializer=initializer_fn,
@@ -169,10 +164,10 @@ class Bert(keras.Model):
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.num_attention_heads = num_attention_heads
+        self.num_heads = num_heads
         self.max_sequence_length = max_sequence_length
-        self.type_vocab_size = type_vocab_size
-        self.inner_size = inner_size
+        self.num_segments = num_segments
+        self.intermediate_dim = intermediate_dim
         self.inner_activation = keras.activations.get(inner_activation)
         self.initializer_range = initializer_range
         self.dropout = dropout
@@ -187,10 +182,10 @@ class Bert(keras.Model):
                 "vocab_size": self.vocab_size,
                 "hidden_size": self.hidden_size,
                 "num_layers": self.num_layers,
-                "num_attention_heads": self.num_attention_heads,
+                "num_heads": self.num_heads,
                 "max_sequence_length": self.max_sequence_length,
-                "type_vocab_size": self.type_vocab_size,
-                "inner_size": self.inner_size,
+                "num_segments": self.num_segments,
+                "intermediate_dim": self.intermediate_dim,
                 "inner_activation": keras.activations.serialize(
                     self.inner_activation
                 ),
@@ -223,13 +218,14 @@ class BertClassifier(keras.Model):
 
 def BertBase(weights=None):
     """Factory for BertEncoder using "Base" architecture."""
+    # TODO(jbischof): add docstring for `Bert`
 
     model = Bert(
         vocab_size=30522,
         num_layers=12,
         hidden_size=768,
-        num_attention_heads=12,
-        inner_size=3072,
+        num_heads=12,
+        intermediate_dim=3072,
         inner_activation="gelu",
         initializer_range=0.02,
         dropout=0.1,
