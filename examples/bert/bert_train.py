@@ -89,6 +89,7 @@ flags.DEFINE_integer(
     "Override the pre-configured number of train steps..",
 )
 
+
 class MaskedLMHead(keras.layers.Layer):
     """Masked language model network head for BERT.
 
@@ -223,7 +224,10 @@ class BertPretrainingModel(keras.Model):
                 "segment_ids": data["segment_ids"],
             }
         )
-        sequence_output, pooled_output = encoder_output["sequence_output"], encoder_output["pooled_output"]
+        sequence_output, pooled_output = (
+            encoder_output["sequence_output"],
+            encoder_output["pooled_output"],
+        )
         lm_preds = self.masked_lm_head(
             sequence_output, data["masked_lm_positions"]
         )

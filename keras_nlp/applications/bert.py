@@ -20,12 +20,13 @@ import keras_nlp.layers
 
 # isort: off
 # TODO(jbischof): decide what to export or whether we are using these decorators
-#from tensorflow.python.util.tf_export import keras_export
+# from tensorflow.python.util.tf_export import keras_export
 
 CLS_INDEX = 0
 TOKEN_EMBEDDING_LAYER_NAME = "token_embedding"
 
 
+# TODO(jbischof): move to keras_nlp/models
 class Bert(keras.Model):
     """Bi-directional Transformer-based encoder network.
 
@@ -62,6 +63,7 @@ class Bert(keras.Model):
             dense layers. If set False, output of attention and intermediate
             dense layers is normalized.
     """
+
     def __init__(
         self,
         vocab_size,
@@ -84,13 +86,17 @@ class Bert(keras.Model):
         )
 
         # Functional version of model
-        token_id_input = keras.Input(shape=(None,), dtype="int32", name="input_ids")
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="input_ids"
+        )
         segment_id_input = keras.Input(
             shape=(None,), dtype="int32", name="segment_ids"
         )
         # TODO(jbischof): improve handling of masking following
         # https://www.tensorflow.org/guide/keras/masking_and_padding
-        input_mask = keras.Input(shape=(None,), dtype="int32", name="input_mask")
+        input_mask = keras.Input(
+            shape=(None,), dtype="int32", name="input_mask"
+        )
 
         # Embed tokens, positions, and segment ids.
         token_embedding = keras.layers.Embedding(
@@ -150,11 +156,13 @@ class Bert(keras.Model):
                 "segment_ids": segment_id_input,
                 "input_mask": input_mask,
             },
+            # TODO(jbischof): Consider list output
             outputs={
                 "sequence_output": sequence_output,
                 "pooled_output": pooled_output,
             },
-            **kwargs)
+            **kwargs
+        )
         # All references to `self` below this line
         self.inner_activation_fn = inner_activation_fn
         self.initializer_fn = initializer_fn
@@ -168,7 +176,7 @@ class Bert(keras.Model):
         self.inner_activation = keras.activations.get(inner_activation)
         self.initializer_range = initializer_range
         self.dropout = dropout
-    
+
     def get_embedding_table(self):
         return self.get_layer(TOKEN_EMBEDDING_LAYER_NAME).embeddings
 
