@@ -15,4 +15,3 @@
 from keras_nlp.applications.bert import BertClassifier
 from keras_nlp.applications.bert import Bert
 from keras_nlp.applications.bert import BertBase
-from keras_nlp.applications.bert import BertLanguageModel
