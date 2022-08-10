@@ -88,6 +88,8 @@ class Bert(keras.Model):
         segment_id_input = keras.Input(
             shape=(None,), dtype="int32", name="segment_ids"
         )
+        # TODO(jbischof): improve handling of masking following
+        # https://www.tensorflow.org/guide/keras/masking_and_padding
         input_mask = keras.Input(shape=(None,), dtype="int32", name="input_mask")
 
         # Embed tokens, positions, and segment ids.
