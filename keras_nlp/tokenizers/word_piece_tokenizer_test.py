@@ -89,7 +89,7 @@ class WordPieceTokenizerTest(tf.test.TestCase):
     def test_lowercase(self):
         input_data = ["the QUicK brOWN FOX"]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
-        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data, lowercase=True)
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6]])
 
