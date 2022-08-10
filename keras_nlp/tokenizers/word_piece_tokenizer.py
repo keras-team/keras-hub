@@ -171,17 +171,21 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     Ragged outputs.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
-    >>> inputs = ["the quick brown fox."]
-    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
+    >>> inputs = ["The quick brown fox."]
+    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+    ...     vocabulary=vocab,
+    ...     lowercase=True
+    ... )
     >>> tokenizer(inputs)
     <tf.RaggedTensor [[1, 2, 3, 4, 5, 6, 7]]>
 
     Dense outputs.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
-    >>> inputs = ["the quick brown fox."]
+    >>> inputs = ["The quick brown fox."]
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
     ...     vocabulary=vocab,
-    ...     sequence_length=10
+    ...     sequence_length=10,
+    ...     lowercase=True
     ... )
     >>> tokenizer(inputs)
     <tf.Tensor: shape=(1, 10), dtype=int32, numpy=
@@ -189,9 +193,10 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     String output.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
-    >>> inputs = ["the quick brown fox."]
+    >>> inputs = ["The quick brown fox."]
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
     ...     vocabulary=vocab,
+    ...     lowercase=True,
     ...     dtype="string"
     ... )
     >>> tokenizer(inputs)
@@ -199,17 +204,21 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     Detokenization.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
-    >>> inputs = "the quick brown fox."
-    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
+    >>> inputs = "The quick brown fox."
+    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+    ...     vocabulary=vocab,
+    ...     lowercase=True,
+    ... )
     >>> tokenizer.detokenize(tokenizer.tokenize(inputs)).numpy().decode('utf-8')
     'the quick brown fox .'
 
     Custom splitting.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
-    >>> inputs = ["the$quick$brown$fox"]
+    >>> inputs = ["The$quick$brown$fox"]
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
     ...     vocabulary=vocab,
     ...     split=False,
+    ...     lowercase=True,
     ...     dtype='string'
     ... )
     >>> split_inputs = tf.strings.split(inputs, sep="$")
