@@ -145,7 +145,11 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         test_output = ["a", "b", "c", "m", "s", "##aa", "##a", "##b"]
 
         compute_word_piece_vocabulary(
-            test_text, 8, vocabulary_output_file="test.txt", reserved_tokens=[]
+            test_text, 
+            8, 
+            vocabulary_output_file="test.txt", 
+            lowercase=True,
+            reserved_tokens=[]
         )
         vocab_from_file = []
         with open("test.txt", "r") as f:
