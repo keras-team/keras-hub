@@ -26,6 +26,7 @@ import keras_nlp
 from examples.bert.bert_config import FINETUNING_CONFIG
 from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
+from keras_nlp.applications import BertClassifier
 
 FLAGS = flags.FLAGS
 
@@ -109,24 +110,6 @@ def load_data(task_name):
     return train_ds, test_ds, validation_ds
 
 
-class BertClassificationFinetuner(keras.Model):
-    """Adds a classification head to a pre-trained BERT model for finetuning"""
-
-    def __init__(self, bert_model, num_classes, initializer, **kwargs):
-        super().__init__(**kwargs)
-        self.bert_model = bert_model
-        self._logit_layer = keras.layers.Dense(
-            num_classes,
-            kernel_initializer=initializer,
-            name="logits",
-        )
-
-    def call(self, inputs):
-        # Ignore the sequence output, use the pooled output.
-        _, pooled_output = self.bert_model(inputs)
-        return self._logit_layer(pooled_output)
-
-
 class BertHyperModel(keras_tuner.HyperModel):
     """Creates a hypermodel to help with the search space for finetuning."""
 
@@ -136,8 +119,8 @@ class BertHyperModel(keras_tuner.HyperModel):
     def build(self, hp):
         model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
         model_config = self.model_config
-        finetuning_model = BertClassificationFinetuner(
-            bert_model=model,
+        finetuning_model = BertClassifier(
+            encoder=model,
             num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
             initializer=keras.initializers.TruncatedNormal(
                 stddev=model_config["initializer_range"]

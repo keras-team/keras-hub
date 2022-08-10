@@ -20,7 +20,7 @@ import keras_nlp.layers
 
 # isort: off
 # TODO(bischof): decide what to export or whether we are using these decorators
-from tensorflow.python.util.tf_export import keras_export
+#from tensorflow.python.util.tf_export import keras_export
 
 CLS_INDEX = 0
 TOKEN_EMBEDDING_LAYER_NAME = "token_embedding"
@@ -369,19 +369,19 @@ class BertLanguageModel(keras.Model):
 class BertClassifier(keras.Model):
     """Classifier model with BertEncoder."""
 
-    def __init__(self, encoder, num_classes, **kwargs):
+    def __init__(self, encoder, num_classes, initializer, **kwargs):
         super().__init__(**kwargs)
         self.encoder = encoder
         self.num_classes = num_classes
         self._logit_layer = keras.layers.Dense(
             num_classes,
-            kernel_initializer=encoder.initializer_fn,
+            kernel_initializer=initializer,
             name="logits",
         )
 
     def call(self, inputs):
         # Ignore the sequence output, use the pooled output.
-        _, pooled_output = self.bert_model(inputs)
+        pooled_output = self.encoder(inputs)["pooled_output"]
         return self._logit_layer(pooled_output)
 
 
