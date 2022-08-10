@@ -31,10 +31,6 @@ class Bert(keras.Model):
     embedding lookups and transformer layers, but not the masked language model
     or classification task networks.
 
-    The default values for this object are taken from the BERT-Base
-    implementation in "BERT: Pre-training of Deep Bidirectional Transformers for
-    Language Understanding".
-
     Args:
         vocab_size: The size of the token vocabulary.
         num_layers: The number of transformer layers.
@@ -54,9 +50,6 @@ class Bert(keras.Model):
             embeddings.
         num_segments: The number of types that the 'segment_ids' input can
             take.
-        norm_first: Whether to normalize inputs to attention and intermediate
-            dense layers. If set False, output of attention and intermediate
-            dense layers is normalized.
     """
 
     def __init__(
@@ -216,9 +209,16 @@ class BertClassifier(keras.Model):
         return self._logit_layer(pooled_output)
 
 
-def BertBase(weights=None):
-    """Factory for BertEncoder using "Base" architecture."""
-    # TODO(jbischof): add docstring for `Bert`
+def BertBase():
+    """
+    Factory for BertEncoder using "Base" architecture.
+
+    This network implements a bi-directional Transformer-based encoder as
+    described in "BERT: Pre-training of Deep Bidirectional Transformers for
+    Language Understanding" (https://arxiv.org/abs/1810.04805). It includes the
+    embedding lookups and transformer layers, but not the masked language model
+    or classification task networks.
+    """
 
     model = Bert(
         vocab_size=30522,
@@ -232,9 +232,5 @@ def BertBase(weights=None):
     )
 
     # TODO(jbischof): add some documentation or magic to load our checkpoints
-    # Note: This is pure Keras and also intended to work with user checkpoints
-    if weights is not None:
-        model.load_weights(weights)
-
     # TODO(jbischof): attach the tokenizer
     return model
