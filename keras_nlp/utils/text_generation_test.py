@@ -17,6 +17,7 @@ import random
 
 import numpy as np
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.utils.text_generation import beam_search
@@ -26,7 +27,7 @@ from keras_nlp.utils.text_generation import top_k_search
 from keras_nlp.utils.text_generation import top_p_search
 
 
-class GreedySearchTextGenerationTest(tf.test.TestCase):
+class GreedySearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
         self.vocab_size = 10
@@ -81,7 +82,7 @@ class GreedySearchTextGenerationTest(tf.test.TestCase):
     def test_assert_generation_is_correct(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, batch_size, axis=0)
 
         batch_size = 10
@@ -97,7 +98,7 @@ class GreedySearchTextGenerationTest(tf.test.TestCase):
     def test_end_token_id(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, batch_size, axis=0)
 
         max_length = 5
@@ -113,9 +114,12 @@ class GreedySearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
 
-    def test_model_compile(self):
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_model_compile(self, jit_compile):
         def token_probability_fn(inputs):
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, 2, axis=0)
 
         max_length = 5
@@ -139,14 +143,17 @@ class GreedySearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
 
         model = TestModel()
-        model.compile()
+        model.compile(jit_compile=jit_compile)
 
         outputs = model.predict(inputs)
         self.assertAllEqual(outputs, expected_outputs)
 
-    def test_model_compile_batched_ds(self):
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_model_compile_batched_ds(self, jit_compile):
         def token_probability_fn(inputs):
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, 2, axis=0)
 
         max_length = 5
@@ -171,7 +178,7 @@ class GreedySearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
 
         model = TestModel()
-        model.compile()
+        model.compile(jit_compile=jit_compile)
 
         outputs = model.predict(ds)
         self.assertAllEqual(outputs, expected_outputs)
@@ -312,7 +319,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
     def test_assert_generation_is_correct(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, batch_size, axis=0)
 
         batch_size = 10
@@ -332,7 +339,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
     def test_end_token_id(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, batch_size, axis=0)
 
         max_length = 5
@@ -350,7 +357,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase):
         self.assertAllEqual(outputs, expected_outputs)
 
 
-class RandomSearchTextGenerationTest(tf.test.TestCase):
+class RandomSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
         self.vocab_size = 10
@@ -405,7 +412,7 @@ class RandomSearchTextGenerationTest(tf.test.TestCase):
     def test_assert_probability_distribution_generation_is_correct(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, batch_size, axis=0)
 
         batch_size = 10
@@ -423,14 +430,14 @@ class RandomSearchTextGenerationTest(tf.test.TestCase):
                 outputs_count[pred] += 1
         self.assertAllClose(
             outputs_count / np.sum(outputs_count),
-            [0.01, 0.01, 0.08, 0.9],
+            [0.0, 0.0, 0.0, 1.0],
             rtol=0.2,
         )
 
     def test_end_token_id(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, batch_size, axis=0)
 
         max_length = 5
@@ -449,9 +456,12 @@ class RandomSearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
 
-    def test_model_compile(self):
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_model_compile(self, jit_compile):
         def token_probability_fn(inputs):
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, 2, axis=0)
 
         max_length = 5
@@ -476,14 +486,17 @@ class RandomSearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
 
         model = TestModel()
-        model.compile()
+        model.compile(jit_compile=jit_compile)
 
         outputs = model(inputs)
         self.assertAllEqual(outputs, expected_outputs)
 
-    def test_model_compile_batched_ds(self):
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_model_compile_batched_ds(self, jit_compile):
         def token_probability_fn(inputs):
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, 2, axis=0)
 
         max_length = 5
@@ -509,7 +522,7 @@ class RandomSearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
 
         model = TestModel()
-        model.compile()
+        model.compile(jit_compile=jit_compile)
 
         outputs = model.predict(ds)
         self.assertAllEqual(outputs, expected_outputs)
@@ -548,7 +561,7 @@ class RandomSearchTextGenerationTest(tf.test.TestCase):
         self.assertAllEqual(output_logit, output_probs)
 
 
-class TopKSearchTextGenerationTest(tf.test.TestCase):
+class TopKSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
         self.vocab_size = 10
@@ -619,7 +632,7 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
     def test_assert_probability_distribution_generation_is_correct(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.constant([[0.1, 0.2, 0.3, 0.4]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, batch_size, axis=0)
 
         batch_size = 10
@@ -641,7 +654,7 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
                 outputs_count[pred] += 1
         self.assertAllClose(
             outputs_count / np.sum(outputs_count),
-            [0.0, 0.0, 0.429, 0.571],
+            [0.0, 0.0, 0.0, 1.0],
             rtol=0.2,
         )
 
@@ -667,7 +680,7 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
     def test_end_token_id(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, batch_size, axis=0)
 
         max_length = 5
@@ -687,9 +700,12 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
 
-    def test_model_compile(self):
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_model_compile(self, jit_compile):
         def token_probability_fn(inputs):
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, 2, axis=0)
 
         max_length = 5
@@ -715,14 +731,17 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
 
         model = TestModel()
-        model.compile()
+        model.compile(jit_compile=jit_compile)
 
         outputs = model.predict(inputs)
         self.assertAllEqual(outputs, expected_outputs)
 
-    def test_model_compile_batched_ds(self):
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_model_compile_batched_ds(self, jit_compile):
         def token_probability_fn(inputs):
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, 2, axis=0)
 
         max_length = 5
@@ -749,7 +768,7 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
 
         model = TestModel()
-        model.compile()
+        model.compile(jit_compile=jit_compile)
 
         outputs = model.predict(ds)
         self.assertAllEqual(outputs, expected_outputs)
@@ -790,7 +809,7 @@ class TopKSearchTextGenerationTest(tf.test.TestCase):
         self.assertAllEqual(output_logit, output_probs)
 
 
-class TopPSearchTextGenerationTest(tf.test.TestCase):
+class TopPSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
         self.vocab_size = 10
@@ -851,7 +870,7 @@ class TopPSearchTextGenerationTest(tf.test.TestCase):
     def test_assert_probability_distribution_generation_is_correct(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.constant([[0.1, 0.2, 0.3, 0.4]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, batch_size, axis=0)
 
         batch_size = 10
@@ -873,7 +892,7 @@ class TopPSearchTextGenerationTest(tf.test.TestCase):
                 outputs_count[pred] += 1
         self.assertAllClose(
             outputs_count / np.sum(outputs_count),
-            [0.0, 0.0, 0.429, 0.571],
+            [0.0, 0.0, 0.0, 1.0],
             rtol=0.2,
         )
 
@@ -895,7 +914,7 @@ class TopPSearchTextGenerationTest(tf.test.TestCase):
     def test_end_token_id(self):
         def token_probability_fn(inputs):
             batch_size = inputs.shape[0]
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, batch_size, axis=0)
 
         max_length = 5
@@ -915,9 +934,12 @@ class TopPSearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
 
-    def test_model_compile(self):
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_model_compile(self, jit_compile):
         def token_probability_fn(inputs):
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, 2, axis=0)
 
         max_length = 5
@@ -943,14 +965,17 @@ class TopPSearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
 
         model = TestModel()
-        model.compile()
+        model.compile(jit_compile=jit_compile)
 
         outputs = model.predict(inputs)
         self.assertAllEqual(outputs, expected_outputs)
 
-    def test_model_compile_batched_ds(self):
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_model_compile_batched_ds(self, jit_compile):
         def token_probability_fn(inputs):
-            prob = tf.constant([[0.01, 0.01, 0.08, 0.9]])
+            prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, 2, axis=0)
 
         max_length = 5
@@ -977,7 +1002,7 @@ class TopPSearchTextGenerationTest(tf.test.TestCase):
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
 
         model = TestModel()
-        model.compile()
+        model.compile(jit_compile=jit_compile)
 
         outputs = model.predict(ds)
         self.assertAllEqual(outputs, expected_outputs)
