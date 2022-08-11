@@ -89,7 +89,7 @@ class WordPieceTokenizerTest(tf.test.TestCase):
     def test_lowercase(self):
         input_data = ["the QUicK brOWN FOX"]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
-        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data, lowercase=True)
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6]])
 
@@ -103,7 +103,9 @@ class WordPieceTokenizerTest(tf.test.TestCase):
     def test_strip_accents(self):
         input_data = ["á é í ó ú"]
         vocab_data = ["[UNK]", "a", "e", "i", "o", "u"]
-        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data, strip_accents=True
+        )
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5]])
 
