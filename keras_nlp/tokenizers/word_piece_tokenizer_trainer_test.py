@@ -32,18 +32,21 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
 
     def test_filenames_input(self):
         test_text = "baa maa caa saa aaa"
-        with open("test.txt", "w+") as f:
+        input_file = os.path.join(self.get_temp_dir(), "test.txt")
+        with open(input_file, "w+") as f:
             f.write(test_text + "\n")
         test_output = ["a", "b", "c", "m", "s", "##aa", "##a", "##b"]
         vocab = compute_word_piece_vocabulary(
-            ["test.txt"], 8, reserved_tokens=[]
+            [input_file],
+            8,
+            reserved_tokens=[],
         )
         self.assertAllEqual(vocab, test_output)
-        os.remove("test.txt")
 
     def test_filenames_without_split(self):
         test_text = "baa maa caa saa aaa"
-        with open("test.txt", "w+") as f:
+        input_file = os.path.join(self.get_temp_dir(), "test.txt")
+        with open(input_file, "w+") as f:
             f.write(test_text + "\n")
 
         with self.assertRaisesRegex(
@@ -54,7 +57,6 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             r"`compute_word_piece_vocabulary\(\)` with split=False.",
         ):
             compute_word_piece_vocabulary(["test.txt"], 10, split=False)
-        os.remove("test.txt")
 
     def test_invalid_input(self):
         test_text_invalid = tf.data.Dataset.from_tensor_slices([1, 2, 3, 4])
@@ -143,16 +145,18 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
     def test_output_file(self):
         test_text = tf.data.Dataset.from_tensor_slices(["BaA Maa Caa Saa AAa"])
         test_output = ["a", "b", "c", "m", "s", "##aa", "##a", "##b"]
-
+        vocab_file = os.path.join(self.get_temp_dir(), "test.txt")
         compute_word_piece_vocabulary(
-            test_text, 8, vocabulary_output_file="test.txt", reserved_tokens=[]
+            test_text,
+            8,
+            vocab_file,
+            reserved_tokens=[],
         )
         vocab_from_file = []
-        with open("test.txt", "r") as f:
+        with open(vocab_file, "r") as f:
             for line in f:
                 vocab_from_file.append(line.strip())
         self.assertAllEqual(vocab_from_file, test_output)
-        os.remove("test.txt")
 
     def test_reserved_tokens(self):
         # This dummy text/token would be removed for being too long.
