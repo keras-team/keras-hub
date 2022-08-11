@@ -113,7 +113,7 @@ class RandomInsertion(keras.layers.Layer):
     def __init__(
         self,
         rate,
-        max_insertions,
+        max_insertions=None,
         insertion_list=None,
         insertion_fn=None,
         insertion_py_fn=None,
@@ -146,6 +146,9 @@ class RandomInsertion(keras.layers.Layer):
         self.skip_py_fn = skip_py_fn
         self.seed = random.randint(1, 1e9) if seed is None else seed
         self._generator = tf.random.Generator.from_seed(self.seed)
+
+        if self.max_insertions is not None and self.max_insertions < 0:
+            raise ValueError("Insertions must be non negative")
 
         if self.rate > 1 or self.rate < 0:
             raise ValueError(
