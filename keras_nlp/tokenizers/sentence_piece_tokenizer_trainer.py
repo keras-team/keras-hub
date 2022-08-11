@@ -111,8 +111,8 @@ def compute_sentence_piece_proto(
     model_writer = (
         open(proto_output_file, "wb") if proto_output_file else io.BytesIO()
     )
-    isDataset = isinstance(data, tf.data.Dataset)
-    if isDataset:
+    is_dataset = isinstance(data, tf.data.Dataset)
+    if is_dataset:
         spm.SentencePieceTrainer.train(
             sentence_iterator=data.as_numpy_iterator(),
             model_writer=model_writer,
