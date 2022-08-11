@@ -15,7 +15,7 @@
 from keras_nlp.tokenizers.byte_tokenizer import ByteTokenizer
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.tokenizers.sentence_piece_tokenizer_trainer import (
-    compute_sentencepiece_vocabulary,
+    compute_sentence_piece_proto,
 )
 from keras_nlp.tokenizers.tokenizer import Tokenizer
 from keras_nlp.tokenizers.unicode_codepoint_tokenizer import (

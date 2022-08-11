@@ -19,12 +19,10 @@ import tensorflow as tf
 try:
     import sentencepiece as spm
 except ImportError:
-    print("Couldn't find sentencepiece module")
-    print("Try running `pip install sentencepiece`")
     spm = None
 
 
-def compute_sentencepiece_vocabulary(
+def compute_sentence_piece_proto(
     data,
     vocabulary_size,
     model_type="unigram",
@@ -51,14 +49,14 @@ def compute_sentencepiece_vocabulary(
             lowercased before tokenization.
 
     Returns:
-        Returns a bytes object with a serialized SentencePiece proto or
-        writes to proto_output_file if provided
+        Returns a `bytes` object with a serialized SentencePiece proto or
+        `None` if proto_output_file if provided
 
     Examples:
 
     Basic Usage (from Dataset).
     >>> inputs = tf.data.Dataset.from_tensor_slices(["Drifting Along"])
-    >>> proto = keras_nlp.tokenizers.compute_sentencepiece_vocabulary(inputs, vocabulary_size=15)
+    >>> proto = keras_nlp.tokenizers.compute_sentence_piece_proto(inputs, vocabulary_size=15)
     >>> tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto=proto)
     >>> outputs = inputs.map(tokenizer)
     >>> for output in outputs:
@@ -66,32 +64,24 @@ def compute_sentencepiece_vocabulary(
     tf.Tensor([ 4  8 12  5  9 14  5  6 13  4  7 10 11  6 13],
     shape=(15,), dtype=int32)
 
-    # Basic Usage (from filenames).
-    >>> with open("test.txt", "w+") as f: f.write("Drifting Along\n")
-    >>> inputs = ["test.txt"]
-    >>> proto = keras_nlp.tokenizers.compute_sentencepiece_vocabulary(inputs, 15)
-
-    # Basic Usage (with multiple files).
-    >>> with open("test1.txt", "w+") as f: f.write("Drifting Along\n")
-    >>> with open("test2.txt", "w+") as f: f.write("Woah look there\n")
-    >>> inputs = ["test1.txt", "test2.txt"]
-    >>> proto = keras_nlp.tokenizers.compute_sentencepiece_vocabulary(inputs, 20)
-
-    # Basic Usage (with `proto_output_file`)
-    >>> inputs = tf.data.Dataset.from_tensor_slices(["Drifting Along"])
-    >>> proto = keras_nlp.tokenizers.compute_sentencepiece_vocabulary(inputs, vocabulary_size=15,
-    ...     proto_output_file = "model.spm")
-    >>> tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto="model.spm")
-    >>> ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
-    >>> ds = ds.map(tokenizer)
-    >>> for output in ds:
-    ...   print(output)
+    Basic Usage (with files).
+    ``` python
+    with open("test.txt", "w+") as f: f.write("Drifting Along\n")
+    inputs = ["test.txt"]
+    proto = keras_nlp.tokenizers.compute_sentence_piece_proto(inputs, vocabulary_size=15,
+         proto_output_file="model.spm")
+    tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto="model.spm")
+    ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
+    ds = ds.map(tokenizer)
+    for output in ds:
+       print(output)
     tf.Tensor([ 4 14  1  4  1  5  1  4  1 12 11  1  6  4  9 11  1],
     shape=(17,), dtype=int32)
+    ```
 
-    # Usage with lowercase
+    Usage with lowercase
     >>> inputs = tf.data.Dataset.from_tensor_slices(["Drifting Along"])
-    >>> proto = keras_nlp.tokenizers.compute_sentencepiece_vocabulary(inputs, vocabulary_size=15, lowercase =True)
+    >>> proto = keras_nlp.tokenizers.compute_sentence_piece_proto(inputs, vocabulary_size=15, lowercase=True)
     >>> tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto=proto)
     >>> outputs = inputs.map(tokenizer)
     >>> for output in outputs:
@@ -100,22 +90,28 @@ def compute_sentencepiece_vocabulary(
     shape=(15,), dtype=int32)
     """
 
-    if not isinstance(data, (list, tf.data.Dataset)):
+    if spm is None:
+        raise ImportError(
+            "sentencepiece is not installed. Please install it via `pip install sentencepiece`."
+        )
+
+    if not isinstance(data, (list, tuple, tf.data.Dataset)):
         raise ValueError(
-            "The `data` argument must be either `tf.data.Dataset` or `list`. "
-            f"Received: {type(data)}."
+            "The `data` argument must be either `tf.data.Dataset` or `tuple` or `list`. "
+            f"Received: type(data)={type(data)}."
         )
 
     if model_type not in ["unigram", "bpe", "word", "char"]:
         raise ValueError(
             "The `model_type` argument must be one of `unigram`, `bpe`, `word`"
-            f"or `char`. Received: {model_type}."
+            f"or `char`. Received: model_type={model_type}."
         )
 
     model_writer = (
         open(proto_output_file, "wb") if proto_output_file else io.BytesIO()
     )
-    if isinstance(data, tf.data.Dataset):
+    isDataset = isinstance(data, tf.data.Dataset)
+    if isDataset:
         spm.SentencePieceTrainer.train(
             sentence_iterator=data.as_numpy_iterator(),
             model_writer=model_writer,
