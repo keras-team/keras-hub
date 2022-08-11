@@ -20,6 +20,17 @@ from tensorflow import keras
 class RandomInsertion(keras.layers.Layer):
     """Augments input by randomly inserting words.
 
+    This layer comes in handy when you need to generate new data using insertion
+    augmentation as described in the paper [EDA: Easy Data Augmentation
+    Techniques for Boosting Performance on Text Classification Tasks]
+    (https://arxiv.org/pdf/1901.11196.pdf). The layer expects the inputs to be
+    pretokenized so that each index in the tokenized inputs can be considered
+    as an insertion location and optionally the tokens can be used for 
+    insertion functions.
+
+    Input should be either a `tf.RaggedTensor` or a dense `tf.Tensor`, and
+    either rank-1 or rank-2.
+
     Args:
         rate: A float in [0, 1] that is the rate of insertion.
         max_insertions: An integer that is the maximum number of insertions.
