@@ -142,26 +142,20 @@ def greedy_search(
     initial_shape = prompt.shape.as_list()
     initial_length = initial_shape[1]
 
-    # Pad the prompt with `pad_token_id` to `max_length`. We use `map_fn` here
-    # because the batch_size might not be static.
-    prompt = tf.map_fn(
-        fn=lambda sequence: tf.concat(
-            [sequence, tf.fill([max_length - initial_length], pad_token_id)],
-            axis=0,
+    # Pad the prompt with `pad_token_id` to `max_length`.
+    prompt = tf.concat(
+        (
+            prompt,
+            tf.fill(
+                (tf.shape(prompt)[0], max_length - initial_length), pad_token_id
+            ),
         ),
-        elems=prompt,
-        fn_output_signature=tf.TensorSpec(
-            shape=(max_length), dtype=prompt.dtype
-        ),
+        axis=1,
     )
 
-    # Create a state dictionary.
-    state = {"length": initial_length, "prompt": prompt}
+    length = initial_length
 
-    def one_step(state):
-        length = state["length"]
-        prompt = state["prompt"]
-
+    def one_step(length, prompt):
         pred = token_probability_fn(prompt[:, :length])
         next_token = tf.cast(tf.argmax(pred, axis=-1), dtype=prompt.dtype)
 
@@ -179,22 +173,19 @@ def greedy_search(
                 shape=(max_length), dtype=prompt.dtype
             ),
         )
-
-        state["length"] += 1
-        state["prompt"] = prompt
-        return [state]
+        length += 1
+        return (length, prompt)
 
     # Run a while loop till text of length `max_length` has been generated.
-    state = tf.while_loop(
-        cond=lambda state: tf.less(
-            tf.cast(state["length"], dtype=tf.int64),
+    prompt = tf.while_loop(
+        cond=lambda length, _: tf.less(
+            tf.cast(length, dtype=tf.int64),
             tf.cast(max_length, dtype=tf.int64),
         ),
         body=one_step,
-        loop_vars=[state],
-    )[0]
+        loop_vars=(length, prompt),
+    )[1]
 
-    prompt = state["prompt"]
     if end_token_id is not None:
         prompt = mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
@@ -434,26 +425,20 @@ def random_search(
     initial_shape = prompt.shape.as_list()
     initial_length = initial_shape[1]
 
-    # Pad the prompt with `pad_token_id` to `max_length`. We use `map_fn` here
-    # because the batch_size might not be static.
-    prompt = tf.map_fn(
-        fn=lambda sequence: tf.concat(
-            [sequence, tf.fill([max_length - initial_length], pad_token_id)],
-            axis=0,
+    # Pad the prompt with `pad_token_id` to `max_length`.
+    prompt = tf.concat(
+        (
+            prompt,
+            tf.fill(
+                (tf.shape(prompt)[0], max_length - initial_length), pad_token_id
+            ),
         ),
-        elems=prompt,
-        fn_output_signature=tf.TensorSpec(
-            shape=(max_length), dtype=prompt.dtype
-        ),
+        axis=1,
     )
 
-    # Create a state dictionary.
-    state = {"length": initial_length, "prompt": prompt}
+    length = initial_length
 
-    def one_step(state):
-        length = state["length"]
-        prompt = state["prompt"]
-
+    def one_step(length, prompt):
         pred = token_probability_fn(prompt)
         if from_logits:
             pred = keras.activations.softmax(pred, axis=-1)
@@ -479,22 +464,19 @@ def random_search(
                 shape=(max_length), dtype=prompt.dtype
             ),
         )
-
-        state["length"] += 1
-        state["prompt"] = prompt
-        return [state]
+        length += 1
+        return (length, prompt)
 
     # Run a while loop till text of length `max_length` has been generated.
-    state = tf.while_loop(
-        cond=lambda state: tf.less(
-            tf.cast(state["length"], dtype=tf.int64),
+    prompt = tf.while_loop(
+        cond=lambda length, _: tf.less(
+            tf.cast(length, dtype=tf.int64),
             tf.cast(max_length, dtype=tf.int64),
         ),
         body=one_step,
-        loop_vars=[state],
-    )[0]
+        loop_vars=(length, prompt),
+    )[1]
 
-    prompt = state["prompt"]
     if end_token_id is not None:
         prompt = mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
@@ -602,26 +584,20 @@ def top_k_search(
     initial_shape = prompt.shape.as_list()
     initial_length = initial_shape[1]
 
-    # Pad the prompt with `pad_token_id` to `max_length`. We use `map_fn` here
-    # because the batch_size might not be static.
-    prompt = tf.map_fn(
-        fn=lambda sequence: tf.concat(
-            [sequence, tf.fill([max_length - initial_length], pad_token_id)],
-            axis=0,
+    # Pad the prompt with `pad_token_id` to `max_length`.
+    prompt = tf.concat(
+        (
+            prompt,
+            tf.fill(
+                (tf.shape(prompt)[0], max_length - initial_length), pad_token_id
+            ),
         ),
-        elems=prompt,
-        fn_output_signature=tf.TensorSpec(
-            shape=(max_length), dtype=prompt.dtype
-        ),
+        axis=1,
     )
 
-    # Create a state dictionary.
-    state = {"length": initial_length, "prompt": prompt}
+    length = initial_length
 
-    def one_step(state):
-        length = state["length"]
-        prompt = state["prompt"]
-
+    def one_step(length, prompt):
         pred = token_probability_fn(prompt)
         if from_logits:
             pred = keras.activations.softmax(pred, axis=-1)
@@ -651,22 +627,19 @@ def top_k_search(
                 shape=(max_length), dtype=prompt.dtype
             ),
         )
-
-        state["length"] += 1
-        state["prompt"] = prompt
-        return [state]
+        length += 1
+        return (length, prompt)
 
     # Run a while loop till text of length `max_length` has been generated.
-    state = tf.while_loop(
-        cond=lambda state: tf.less(
-            tf.cast(state["length"], dtype=tf.int64),
+    prompt = tf.while_loop(
+        cond=lambda length, _: tf.less(
+            tf.cast(length, dtype=tf.int64),
             tf.cast(max_length, dtype=tf.int64),
         ),
         body=one_step,
-        loop_vars=[state],
-    )[0]
+        loop_vars=(length, prompt),
+    )[1]
 
-    prompt = state["prompt"]
     if end_token_id is not None:
         prompt = mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
@@ -770,26 +743,20 @@ def top_p_search(
     initial_shape = prompt.shape.as_list()
     initial_length = initial_shape[1]
 
-    # Pad the prompt with `pad_token_id` to `max_length`. We use `map_fn` here
-    # because the batch_size might not be static.
-    prompt = tf.map_fn(
-        fn=lambda sequence: tf.concat(
-            [sequence, tf.fill([max_length - initial_length], pad_token_id)],
-            axis=0,
+    # Pad the prompt with `pad_token_id` to `max_length`.
+    prompt = tf.concat(
+        (
+            prompt,
+            tf.fill(
+                (tf.shape(prompt)[0], max_length - initial_length), pad_token_id
+            ),
         ),
-        elems=prompt,
-        fn_output_signature=tf.TensorSpec(
-            shape=(max_length), dtype=prompt.dtype
-        ),
+        axis=1,
     )
 
-    # Create a state dictionary.
-    state = {"length": initial_length, "prompt": prompt}
+    length = initial_length
 
-    def one_step(state):
-        length = state["length"]
-        prompt = state["prompt"]
-
+    def one_step(length, prompt):
         pred = token_probability_fn(prompt)
         if from_logits:
             pred = keras.activations.softmax(pred, axis=-1)
@@ -833,22 +800,19 @@ def top_p_search(
                 shape=(max_length), dtype=prompt.dtype
             ),
         )
-
-        state["length"] += 1
-        state["prompt"] = prompt
-        return [state]
+        length += 1
+        return (length, prompt)
 
     # Run a while loop till text of length `max_length` has been generated.
-    state = tf.while_loop(
-        cond=lambda state: tf.less(
-            tf.cast(state["length"], dtype=tf.int64),
+    prompt = tf.while_loop(
+        cond=lambda length, _: tf.less(
+            tf.cast(length, dtype=tf.int64),
             tf.cast(max_length, dtype=tf.int64),
         ),
         body=one_step,
-        loop_vars=[state],
-    )[0]
+        loop_vars=(length, prompt),
+    )[1]
 
-    prompt = state["prompt"]
     if end_token_id is not None:
         prompt = mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
