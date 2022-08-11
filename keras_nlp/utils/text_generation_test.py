@@ -125,18 +125,15 @@ class GreedySearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
         max_length = 5
 
         class TestModel(tf.keras.Model):
-            def call(self, inputs, training=False):
-                if not training:
-                    generated = greedy_search(
-                        token_probability_fn,
-                        inputs,
-                        max_length=max_length,
-                        end_token_id=2,
-                        pad_token_id=0,
-                    )
-                    return generated
-                else:
-                    return inputs
+            def call(self, inputs):
+                generated = greedy_search(
+                    token_probability_fn,
+                    inputs,
+                    max_length=max_length,
+                    end_token_id=2,
+                    pad_token_id=0,
+                )
+                return generated
 
         inputs = tf.constant([[0, 1], [1, 2]])
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
@@ -159,18 +156,15 @@ class GreedySearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
         max_length = 5
 
         class TestModel(tf.keras.Model):
-            def call(self, inputs, training=False):
-                if not training:
-                    generated = greedy_search(
-                        token_probability_fn,
-                        inputs,
-                        max_length=max_length,
-                        end_token_id=2,
-                        pad_token_id=0,
-                    )
-                    return generated
-                else:
-                    return inputs
+            def call(self, inputs):
+                generated = greedy_search(
+                    token_probability_fn,
+                    inputs,
+                    max_length=max_length,
+                    end_token_id=2,
+                    pad_token_id=0,
+                )
+                return generated
 
         inputs = tf.constant([[0, 1], [1, 2]])
         ds = tf.data.Dataset.from_tensor_slices(inputs).batch(2)
@@ -467,19 +461,16 @@ class RandomSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
         max_length = 5
 
         class TestModel(tf.keras.Model):
-            def call(self, inputs, training=False):
-                if not training:
-                    generated = random_search(
-                        token_probability_fn,
-                        inputs,
-                        max_length=max_length,
-                        seed=42,
-                        end_token_id=2,
-                        pad_token_id=0,
-                    )
-                    return generated
-                else:
-                    return inputs
+            def call(self, inputs):
+                generated = random_search(
+                    token_probability_fn,
+                    inputs,
+                    max_length=max_length,
+                    seed=42,
+                    end_token_id=2,
+                    pad_token_id=0,
+                )
+                return generated
 
         inputs = tf.constant([[0, 1], [1, 2]])
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
@@ -502,19 +493,16 @@ class RandomSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
         max_length = 5
 
         class TestModel(tf.keras.Model):
-            def call(self, inputs, training=False):
-                if not training:
-                    generated = random_search(
-                        token_probability_fn,
-                        inputs,
-                        max_length=max_length,
-                        seed=42,
-                        end_token_id=2,
-                        pad_token_id=0,
-                    )
-                    return generated
-                else:
-                    return inputs
+            def call(self, inputs):
+                generated = random_search(
+                    token_probability_fn,
+                    inputs,
+                    max_length=max_length,
+                    seed=42,
+                    end_token_id=2,
+                    pad_token_id=0,
+                )
+                return generated
 
         inputs = tf.constant([[0, 1], [1, 2]])
         ds = tf.data.Dataset.from_tensor_slices(inputs).batch(2)
@@ -711,20 +699,16 @@ class TopKSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
         max_length = 5
 
         class TestModel(tf.keras.Model):
-            def call(self, inputs, training=False):
-                if not training:
-                    generated = top_k_search(
-                        token_probability_fn,
-                        inputs,
-                        max_length=max_length,
-                        seed=42,
-                        k=4,
-                        end_token_id=2,
-                        pad_token_id=0,
-                    )
-                    return generated
-                else:
-                    return inputs
+            def call(self, inputs):
+                generated = random_search(
+                    token_probability_fn,
+                    inputs,
+                    max_length=max_length,
+                    seed=42,
+                    end_token_id=2,
+                    pad_token_id=0,
+                )
+                return generated
 
         inputs = tf.constant([[0, 1], [1, 2]])
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
@@ -747,20 +731,16 @@ class TopKSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
         max_length = 5
 
         class TestModel(tf.keras.Model):
-            def call(self, inputs, training=False):
-                if not training:
-                    generated = top_k_search(
-                        token_probability_fn,
-                        inputs,
-                        max_length=max_length,
-                        seed=42,
-                        k=4,
-                        end_token_id=2,
-                        pad_token_id=0,
-                    )
-                    return generated
-                else:
-                    return inputs
+            def call(self, inputs):
+                generated = random_search(
+                    token_probability_fn,
+                    inputs,
+                    max_length=max_length,
+                    seed=42,
+                    end_token_id=2,
+                    pad_token_id=0,
+                )
+                return generated
 
         inputs = tf.constant([[0, 1], [1, 2]])
         ds = tf.data.Dataset.from_tensor_slices(inputs).batch(2)
@@ -945,20 +925,17 @@ class TopPSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
         max_length = 5
 
         class TestModel(tf.keras.Model):
-            def call(self, inputs, training=False):
-                if not training:
-                    generated = top_p_search(
-                        token_probability_fn,
-                        inputs,
-                        max_length=max_length,
-                        p=0.92,
-                        seed=1,
-                        end_token_id=2,
-                        pad_token_id=0,
-                    )
-                    return generated
-                else:
-                    return inputs
+            def call(self, inputs):
+                generated = top_p_search(
+                    token_probability_fn,
+                    inputs,
+                    max_length=max_length,
+                    p=0.92,
+                    seed=1,
+                    end_token_id=2,
+                    pad_token_id=0,
+                )
+                return generated
 
         inputs = tf.constant([[0, 1], [1, 2]])
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
@@ -981,20 +958,17 @@ class TopPSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
         max_length = 5
 
         class TestModel(tf.keras.Model):
-            def call(self, inputs, training=False):
-                if not training:
-                    generated = top_p_search(
-                        token_probability_fn,
-                        inputs,
-                        max_length=max_length,
-                        p=0.92,
-                        seed=1,
-                        end_token_id=2,
-                        pad_token_id=0,
-                    )
-                    return generated
-                else:
-                    return inputs
+            def call(self, inputs):
+                generated = top_p_search(
+                    token_probability_fn,
+                    inputs,
+                    max_length=max_length,
+                    p=0.92,
+                    seed=1,
+                    end_token_id=2,
+                    pad_token_id=0,
+                )
+                return generated
 
         inputs = tf.constant([[0, 1], [1, 2]])
         ds = tf.data.Dataset.from_tensor_slices(inputs).batch(2)
