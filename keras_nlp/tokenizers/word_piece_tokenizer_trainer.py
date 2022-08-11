@@ -110,8 +110,8 @@ def compute_word_piece_vocabulary(
     inputs = tf.data.TextLineDataset(["test.txt"])
     split_inputs = inputs.map(normalize_and_split)
     vocab = compute_word_piece_vocabulary(split_inputs, 13, split=False)
-    vocab
-    ['[PAD]', '[CLS]', '[SEP]', '[UNK]', '[MASK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
+    tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
+    inputs.map(tokenizer.tokenize)
     ```
     """
     # Read data files.

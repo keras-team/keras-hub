@@ -32,11 +32,12 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
 
     def test_filenames_input(self):
         test_text = "baa maa caa saa aaa"
-        with open(os.path.join(self.get_temp_dir(), "test.txt"), "w+") as f:
+        vocab_file = os.path.join(self.get_temp_dir(), "test.txt")
+        with open(vocab_file, "w+") as f:
             f.write(test_text + "\n")
         test_output = ["a", "b", "c", "m", "s", "##aa", "##a", "##b"]
         vocab = compute_word_piece_vocabulary(
-            [os.path.join(self.get_temp_dir(), "test.txt")],
+            [vocab_file],
             8,
             reserved_tokens=[],
         )
@@ -44,7 +45,8 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
 
     def test_filenames_without_split(self):
         test_text = "baa maa caa saa aaa"
-        with open(os.path.join(self.get_temp_dir(), "test.txt"), "w+") as f:
+        vocab_file = os.path.join(self.get_temp_dir(), "test.txt")
+        with open(vocab_file, "w+") as f:
             f.write(test_text + "\n")
 
         with self.assertRaisesRegex(
@@ -143,16 +145,15 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
     def test_output_file(self):
         test_text = tf.data.Dataset.from_tensor_slices(["BaA Maa Caa Saa AAa"])
         test_output = ["a", "b", "c", "m", "s", "##aa", "##a", "##b"]
+        vocab_file = os.path.join(self.get_temp_dir(), "test.txt")
         compute_word_piece_vocabulary(
             test_text,
             8,
-            vocabulary_output_file=os.path.join(
-                self.get_temp_dir(), "test.txt"
-            ),
+            vocab_file,
             reserved_tokens=[],
         )
         vocab_from_file = []
-        with open(os.path.join(self.get_temp_dir(), "test.txt"), "r") as f:
+        with open(vocab_file, "r") as f:
             for line in f:
                 vocab_from_file.append(line.strip())
         self.assertAllEqual(vocab_from_file, test_output)
