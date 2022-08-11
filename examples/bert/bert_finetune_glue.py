@@ -24,17 +24,10 @@ from tensorflow import keras
 
 import keras_nlp
 from examples.bert.bert_config import FINETUNING_CONFIG
-from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
 from keras_nlp.models import BertClassifier
 
 FLAGS = flags.FLAGS
-
-flags.DEFINE_string(
-    "model_size",
-    "tiny",
-    "One of: tiny, mini, small, medium, base, or large.",
-)
 
 flags.DEFINE_string(
     "vocab_file",
@@ -113,12 +106,8 @@ def load_data(task_name):
 class BertHyperModel(keras_tuner.HyperModel):
     """Creates a hypermodel to help with the search space for finetuning."""
 
-    def __init__(self, model_config):
-        self.model_config = model_config
-
     def build(self, hp):
         model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
-        model_config = self.model_config
         finetuning_model = BertClassifier(
             encoder=model,
             num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
@@ -148,8 +137,6 @@ def main(_):
         end_value=tokenizer.token_to_id("[SEP]"),
     )
 
-    model_config = MODEL_CONFIGS[FLAGS.model_size]
-
     def preprocess_data(inputs, labels):
         inputs = [tokenizer(x) for x in inputs]
         token_ids, segment_ids = packer(inputs)
@@ -174,7 +161,7 @@ def main(_):
     )
 
     # Create a hypermodel object for a RandomSearch.
-    hypermodel = BertHyperModel(model_config)
+    hypermodel = BertHyperModel()
 
     # Initialize the random search over the 4 learning rate parameters, for 4
     # trials and 3 epochs for each trial.
