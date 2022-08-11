@@ -35,13 +35,13 @@ def compute_sentence_piece_proto(
     filenames.
 
     If `data` is a list of filenames, the file format is required to be plain
-    text files, and the text would be read in line by line during training.
+    text files, and the text will be read in line by line during training.
 
     Args:
         data: A `tf.data.Dataset`, or a list of filenames.
         vocabulary_size: int. The maximum size of a vocabulary to be trained.
-        model_type: str, defaults to `unigram`. The model algorithm must be one
-            of `unigram`, `bpe`, `word` or `char`.
+        model_type: str, defaults to `"unigram"`. The model algorithm must be one
+            of `"unigram"`, `"bpe"`, `"word"` or `"char"`.
         proto_output_file: str, defaults to `None`. If provided it will be used
             as model_file which is passed to model_writer.
             If `None`, the model_file will be `io.BytesIO` object.
@@ -49,8 +49,8 @@ def compute_sentence_piece_proto(
             lowercased before tokenization.
 
     Returns:
-        Returns a `bytes` object with a serialized SentencePiece proto or
-        `None` if proto_output_file if provided
+        A `bytes` object with a serialized SentencePiece proto or
+        `None` if proto_output_file if provided.
 
     Examples:
 
@@ -60,7 +60,7 @@ def compute_sentence_piece_proto(
     >>> tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto=proto)
     >>> outputs = inputs.map(tokenizer)
     >>> for output in outputs:
-    ...   print(output)
+    ...     print(output)
     tf.Tensor([ 4  8 12  5  9 14  5  6 13  4  7 10 11  6 13],
     shape=(15,), dtype=int32)
 
@@ -68,24 +68,25 @@ def compute_sentence_piece_proto(
     ``` python
     with open("test.txt", "w+") as f: f.write("Drifting Along\n")
     inputs = ["test.txt"]
-    proto = keras_nlp.tokenizers.compute_sentence_piece_proto(inputs, vocabulary_size=15,
-         proto_output_file="model.spm")
+    proto = keras_nlp.tokenizers.compute_sentence_piece_proto(
+         inputs, vocabulary_size=15, proto_output_file="model.spm")
     tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto="model.spm")
     ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
     ds = ds.map(tokenizer)
     for output in ds:
-       print(output)
+         print(output)
     tf.Tensor([ 4 14  1  4  1  5  1  4  1 12 11  1  6  4  9 11  1],
     shape=(17,), dtype=int32)
     ```
 
     Usage with lowercase
     >>> inputs = tf.data.Dataset.from_tensor_slices(["Drifting Along"])
-    >>> proto = keras_nlp.tokenizers.compute_sentence_piece_proto(inputs, vocabulary_size=15, lowercase=True)
+    >>> proto = keras_nlp.tokenizers.compute_sentence_piece_proto(
+    ...     inputs, vocabulary_size=15, lowercase=True)
     >>> tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto=proto)
     >>> outputs = inputs.map(tokenizer)
     >>> for output in outputs:
-    ...   print(output)
+    ...     print(output)
     tf.Tensor([ 4  8 12  5  9 14  5  6 13  4  7 10 11  6 13],
     shape=(15,), dtype=int32)
     """
