@@ -145,9 +145,7 @@ def greedy_search(
     prompt = tf.concat(
         (
             prompt,
-            tf.fill(
-                (tf.shape(prompt)[0], max_length - length), pad_token_id
-            ),
+            tf.fill((tf.shape(prompt)[0], max_length - length), pad_token_id),
         ),
         axis=1,
     )
@@ -425,9 +423,7 @@ def random_search(
     prompt = tf.concat(
         (
             prompt,
-            tf.fill(
-                (tf.shape(prompt)[0], max_length - length), pad_token_id
-            ),
+            tf.fill((tf.shape(prompt)[0], max_length - length), pad_token_id),
         ),
         axis=1,
     )
@@ -581,9 +577,7 @@ def top_k_search(
     prompt = tf.concat(
         (
             prompt,
-            tf.fill(
-                (tf.shape(prompt)[0], max_length - length), pad_token_id
-            ),
+            tf.fill((tf.shape(prompt)[0], max_length - length), pad_token_id),
         ),
         axis=1,
     )
@@ -737,9 +731,7 @@ def top_p_search(
     prompt = tf.concat(
         (
             prompt,
-            tf.fill(
-                (tf.shape(prompt)[0], max_length - length), pad_token_id
-            ),
+            tf.fill((tf.shape(prompt)[0], max_length - length), pad_token_id),
         ),
         axis=1,
     )
