@@ -61,13 +61,13 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         with self.assertRaisesRegex(
             ValueError,
             "The dataset elements in `data` must have string dtype. "
-            "Recieved: <dtype: 'int32'>.",
+            "Received: <dtype: 'int32'>.",
         ):
             compute_word_piece_vocabulary(test_text_invalid, 10)
         with self.assertRaisesRegex(
             ValueError,
             "The `data` argument must be either `tf.data.Dataset` or `list`. "
-            "Recieved: <class 'int'>.",
+            "Received: <class 'int'>.",
         ):
             compute_word_piece_vocabulary(4, 4)
 
