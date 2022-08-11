@@ -20,6 +20,16 @@ from tensorflow import keras
 class RandomReplacement(keras.layers.Layer):
     """Augments input by randomly replacing words.
 
+    This layer comes in handy when you need to generate new data using replacement
+    augmentation as described in the paper [EDA: Easy Data Augmentation
+    Techniques for Boosting Performance on Text Classification Tasks]
+    (https://arxiv.org/pdf/1901.11196.pdf). The layer expects the inputs to be
+    pretokenized so that each token can be individually treated as a possible
+    candidate for replacement.
+
+    Input should be either a `tf.RaggedTensor` or a dense `tf.Tensor`, and
+    either rank-1 or rank-2.
+
     Args:
         rate: A float in [0, 1] that is the rate of replacement.
         max_replacements: An integer that is the maximum number of replacements.
@@ -144,7 +154,7 @@ class RandomReplacement(keras.layers.Layer):
     def __init__(
         self,
         rate,
-        max_replacements,
+        max_replacements=None,
         replacement_list=None,
         replacement_fn=None,
         replacement_py_fn=None,
@@ -177,6 +187,8 @@ class RandomReplacement(keras.layers.Layer):
         self.skip_py_fn = skip_py_fn
         self.seed = random.randint(1, 1e9) if seed is None else seed
         self._generator = tf.random.Generator.from_seed(self.seed)
+        if self.max_replacements is not None and self.max_replacements < 0:
+            raise ValueError("max_replacements must be non negative")
         if self.rate > 1 or self.rate < 0:
             raise ValueError(
                 "Rate must be between 0 and 1 (both inclusive)."
