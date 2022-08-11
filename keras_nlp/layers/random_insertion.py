@@ -25,7 +25,7 @@ class RandomInsertion(keras.layers.Layer):
     Techniques for Boosting Performance on Text Classification Tasks]
     (https://arxiv.org/pdf/1901.11196.pdf). The layer expects the inputs to be
     pretokenized so that each index in the tokenized inputs can be considered
-    as an insertion location and optionally the tokens can be used for 
+    as an insertion location and optionally the tokens can be used for
     insertion functions.
 
     Input should be either a `tf.RaggedTensor` or a dense `tf.Tensor`, and
