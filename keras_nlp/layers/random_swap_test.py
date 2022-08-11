@@ -16,7 +16,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers import RandomSwaps
+from keras_nlp.layers import RandomSwap
 from keras_nlp.tokenizers import UnicodeCodepointTokenizer
 
 
@@ -25,11 +25,11 @@ class RandomSwapTest(tf.test.TestCase):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
-        augmenter = RandomSwaps(swaps=3, seed=42)
+        augmenter = RandomSwap(rate=0.7, max_swaps=3, seed=42)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"like I Hey", b"Keras Tensorflow and"]
+        exp_output = [b"like I Hey", b"Tensorflow Keras and"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -37,11 +37,11 @@ class RandomSwapTest(tf.test.TestCase):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.unicode_split(inputs, "UTF-8")
-        augmenter = RandomSwaps(swaps=1, seed=11)
+        augmenter = RandomSwap(rate=0.7, max_swaps=6, seed=42)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I lkie", b"Keras anl Tensorfdow"]
+        exp_output = [b"yli I eHke", b"seaad rnK Tensolrfow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
@@ -50,18 +50,18 @@ class RandomSwapTest(tf.test.TestCase):
         inputs = ["Hey I like", "Keras and Tensorflow"]
         tokenizer = UnicodeCodepointTokenizer(lowercase=False)
         tokenized = tokenizer.tokenize(inputs)
-        augmenter = RandomSwaps(swaps=1, seed=11)
+        augmenter = RandomSwap(rate=0.7, max_swaps=6, seed=42)
         augmented = augmenter(tokenized)
         output = tokenizer.detokenize(augmented)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I lkie", b"Keras anl Tensorfdow"]
+        exp_output = [b"yli I eHke", b"seaad rnK Tensolrfow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_skip_options(self):
         keras.utils.set_random_seed(1337)
-        augmenter = RandomSwaps(
-            swaps=2, seed=42, skip_list=["Tensorflow", "like"]
+        augmenter = RandomSwap(
+            rate=0.7, max_swaps=6, seed=42, skip_list=["Tensorflow", "like"]
         )
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
@@ -77,7 +77,7 @@ class RandomSwapTest(tf.test.TestCase):
                 return True
             return False
 
-        augmenter = RandomSwaps(swaps=2, seed=42, skip_fn=skip_fn)
+        augmenter = RandomSwap(rate=0.7, max_swaps=6, seed=42, skip_fn=skip_fn)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
@@ -90,24 +90,27 @@ class RandomSwapTest(tf.test.TestCase):
                 return True
             return False
 
-        augmenter = RandomSwaps(swaps=2, seed=42, skip_py_fn=skip_py_fn)
+        augmenter = RandomSwap(
+            rate=0.7, max_swaps=6, seed=42, skip_py_fn=skip_py_fn
+        )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+        output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
         exp_output = [b"Hey I like", b"and Keras Tensorflow"]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
     def test_get_config_and_from_config(self):
-        augmenter = RandomSwaps(swaps=3, seed=42)
+        augmenter = RandomSwap(rate=0.4, max_swaps=3, seed=42)
 
-        expected_config_subset = {"swaps": 3, "seed": 42}
+        expected_config_subset = {"rate": 0.4, "max_swaps": 3, "seed": 42}
 
         config = augmenter.get_config()
 
         self.assertEqual(config, {**config, **expected_config_subset})
 
-        restored_augmenter = RandomSwaps.from_config(
+        restored_augmenter = RandomSwap.from_config(
             config,
         )
 
@@ -118,7 +121,7 @@ class RandomSwapTest(tf.test.TestCase):
 
     def test_augment_first_batch_second(self):
         keras.utils.set_random_seed(1337)
-        augmenter = RandomSwaps(swaps=2, seed=42)
+        augmenter = RandomSwap(rate=0.7, max_swaps=3, seed=42)
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         ds = tf.data.Dataset.from_tensor_slices(split)
@@ -127,7 +130,7 @@ class RandomSwapTest(tf.test.TestCase):
         output = ds.take(1).get_single_element()
         exp_output = [
             [b"like", b"I", b"Hey"],
-            [b"and", b"Keras", b"Tensorflow"],
+            [b"and", b"Tensorflow", b"Keras"],
         ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
@@ -138,19 +141,21 @@ class RandomSwapTest(tf.test.TestCase):
         def skip_py_fn(word):
             return len(word) < 4
 
-        augmenter = RandomSwaps(swaps=2, seed=42, skip_fn=skip_fn)
+        augmenter = RandomSwap(rate=0.7, max_swaps=3, seed=42, skip_fn=skip_fn)
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
         exp_output = [
             [b"like", b"I", b"Hey"],
-            [b"and", b"Keras", b"Tensorflow"],
+            [b"and", b"Tensorflow", b"Keras"],
         ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
-        augmenter = RandomSwaps(swaps=3, seed=42, skip_py_fn=skip_py_fn)
+        augmenter = RandomSwap(
+            rate=0.7, max_swaps=3, seed=42, skip_py_fn=skip_py_fn
+        )
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
@@ -164,16 +169,15 @@ class RandomSwapTest(tf.test.TestCase):
 
     def test_batch_first_augment_second(self):
         keras.utils.set_random_seed(1337)
-        augmenter = RandomSwaps(swaps=2, seed=42)
+        augmenter = RandomSwap(rate=0.7, max_swaps=2, seed=42)
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        output
         exp_output = [
             [b"like", b"I", b"Hey"],
-            [b"and", b"Keras", b"Tensorflow"],
+            [b"Tensorflow", b"Keras", b"and"],
         ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
@@ -184,25 +188,26 @@ class RandomSwapTest(tf.test.TestCase):
         def skip_py_fn(word):
             return len(word) < 2
 
-        augmenter = RandomSwaps(swaps=2, seed=42, skip_fn=skip_fn)
+        augmenter = RandomSwap(rate=0.7, max_swaps=2, seed=42, skip_fn=skip_fn)
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
         exp_output = [
             [b"like", b"I", b"Hey"],
-            [b"and", b"Keras", b"Tensorflow"],
+            [b"Tensorflow", b"Keras", b"and"],
         ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
-        augmenter = RandomSwaps(swaps=2, seed=42, skip_py_fn=skip_py_fn)
+        augmenter = RandomSwap(
+            rate=0.7, max_swaps=2, seed=42, skip_py_fn=skip_py_fn
+        )
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        output
         exp_output = [
             [b"like", b"I", b"Hey"],
-            [b"and", b"Keras", b"Tensorflow"],
+            [b"Tensorflow", b"Keras", b"and"],
         ]
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
@@ -210,13 +215,12 @@ class RandomSwapTest(tf.test.TestCase):
     def test_functional_model(self):
         keras.utils.set_random_seed(1337)
         input_data = tf.constant(["Hey I like", "Keras and Tensorflow"])
-        augmenter = RandomSwaps(swaps=2, seed=42)
+        augmenter = RandomSwap(rate=0.7, max_swaps=2, seed=42)
         inputs = tf.keras.Input(dtype="string", shape=())
         outputs = augmenter(tf.strings.split(inputs))
         model = tf.keras.Model(inputs, outputs)
         model_output = model(input_data)
-        model_output
         self.assertAllEqual(
             model_output,
-            [[b"like", b"I", b"Hey"], [b"and", b"Keras", b"Tensorflow"]],
+            [[b"like", b"I", b"Hey"], [b"Tensorflow", b"Keras", b"and"]],
         )

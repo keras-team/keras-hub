@@ -17,77 +17,96 @@ import tensorflow as tf
 from tensorflow import keras
 
 
-class RandomSwaps(keras.layers.Layer):
+class RandomSwap(keras.layers.Layer):
     """Augments input by randomly swapping words.
 
-    The layer works by splitting the words using `tf.strings.split` computes
-    then repeats the following n times:
-        - Chooses 2 random indices from the input.
-        - Swaps the words present at those indices.
-    These 2 randomly sampled indices can also potentially be the same index.
+    This layer comes in handy when you need to generate new data using swap
+    augmentation as described in the paper [EDA: Easy Data Augmentation
+    Techniques for Boosting Performance on Text Classification Tasks]
+    (https://arxiv.org/pdf/1901.11196.pdf). The layer expects the inputs to be
+    pretokenized so that each token can be individually treated as a possible
+    candidate for swapping.
+
+    Input should be either a `tf.RaggedTensor` or a dense `tf.Tensor`, and
+    either rank-1 or rank-2.
 
     Args:
         swaps: Number of swaps to perform.
         skip_list: A list of words to skip.
-        skip_fn: A function that takes a word and returns True if the word
-            should be skipped. This must be a traceable function of tf
-            operations.
-        skip_py_fn: A function that takes a word and returns True if the words
-            should be skipped. Unlike skip_fn, this can be any python function
-            that operates on strings, and does not need to use tf operations.
-        seed: A seed for the rng.
+        skip_list: A list of token values that should not be considered
+            candidates for deletion.
+        skip_fn: A function that takes as input a scalar tensor token and
+            returns as output a scalar tensor True/False value. A value of
+            True indicates that the token should not be considered a
+            candidate for deletion. This function must be tracable--it
+            should consist of tensorflow operations.
+        skip_py_fn: A function that takes as input a python token value and
+            returns as output `True` or `False`. A value of True
+            indicates that should not be considered a candidate for deletion.
+            Unlike the `skip_fn` argument, this argument need not be
+            tracable--it can be any python function.
+        seed: A seed for the random number generator.
 
 
     Examples:
 
-    Word Level usage
+    Word level usage.
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=keras_nlp.layers.RandomSwaps(swaps=2, seed=42)
+    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.4, seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'like I Hey', b'and Keras Tensorflow'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'like I Hey', b'and Keras Tensorflow'], dtype=object)>
 
-    Character Level usage
+    Character Level usage.
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.unicode_split(["Hey Dude", "Speed Up"], "UTF-8")
-    >>> augmenter=keras_nlp.layers.RandomSwaps(swaps=1, seed=42)
+    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.4, seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'uey DHde', b'Spdee Up'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'deD yuHe', b'SUede pp'], dtype=object)>
 
-    Usage with skip list
+    Usage with skip_list.
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomSwaps(swaps=5, skip_list=["Keras"], seed=42)
+    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.4,
+    ...     skip_list=["Keras"], seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey like I', b'Keras Tensorflow and'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'like I Hey', b'Keras and Tensorflow'], dtype=object)>
 
-    Usage with skip_fn
+    Usage with skip_fn.
     >>> def skip_fn(word):
     ...     return tf.strings.regex_full_match(word, r"\\pP")
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomSwaps(swaps=3,skip_fn=skip_fn, seed=42)
+    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.4,
+    ...     skip_fn=skip_fn, seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'like I Hey', b'Keras Tensorflow and'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'like I Hey', b'and Keras Tensorflow'], dtype=object)>
 
-    Usage with skip_py_fn:
+    Usage with skip_py_fn.
     >>> def skip_py_fn(word):
     ...     return len(word) < 2
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomSwaps(swaps=2,skip_py_fn=skip_py_fn, seed=42)
+    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.4, max_swaps=1,
+    ...     skip_py_fn=skip_py_fn, seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'like I Hey', b'and Keras Tensorflow'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'like I Hey', b'Keras and Tensorflow'], dtype=object)>
     """
 
     def __init__(
         self,
-        swaps,
+        rate,
+        max_swaps=None,
         skip_list=None,
         skip_fn=None,
         skip_py_fn=None,
@@ -107,13 +126,14 @@ class RandomSwaps(keras.layers.Layer):
                 )
 
         super().__init__(name=name, **kwargs)
-        self.swaps = swaps
+        self.rate = rate
+        self.max_swaps = max_swaps
         self.seed = random.randint(1, 1e9) if seed is None else seed
         self._generator = tf.random.Generator.from_seed(self.seed)
         self.skip_list = skip_list
         self.skip_fn = skip_fn
         self.skip_py_fn = skip_py_fn
-        if self.swaps < 0:
+        if self.max_swaps is not None and self.max_swaps < 0:
             raise ValueError("Swaps must be non negative")
 
         if [self.skip_list, self.skip_fn, self.skip_py_fn].count(None) < 2:
@@ -174,12 +194,23 @@ class RandomSwaps(keras.layers.Layer):
 
         positions_flat = tf.range(tf.size(inputs.flat_values))
         positions = inputs.with_flat_values(positions_flat)
+        # Figure out how many we are going to select.
+        token_counts = tf.cast(inputs.row_lengths(), "float32")
+        num_to_select = tf.random.stateless_binomial(
+            shape=tf.shape(token_counts),
+            seed=self._generator.make_seeds()[:, 0],
+            counts=token_counts,
+            probs=self.rate,
+        )
+        if self.max_swaps is not None:
+            num_to_select = tf.math.minimum(num_to_select, self.max_swaps)
+        num_to_select = tf.cast(num_to_select, "int64")
 
         def _swap(x):
-            positions, inputs = x
+            positions, inputs, num_to_select = x
             if tf.size(positions) == 1:
                 return positions
-            for _ in range(self.swaps):
+            for _ in range(num_to_select):
                 index = tf.random.stateless_uniform(
                     shape=tf.shape(positions),
                     minval=0,
@@ -202,7 +233,7 @@ class RandomSwaps(keras.layers.Layer):
 
         shuffled = tf.map_fn(
             _swap,
-            (positions, inputs),
+            (positions, inputs, num_to_select),
             fn_output_signature=tf.RaggedTensorSpec(
                 ragged_rank=positions.ragged_rank - 1, dtype=positions.dtype
             ),
@@ -223,8 +254,12 @@ class RandomSwaps(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "swaps": self.swaps,
+                "rate": self.rate,
+                "max_swaps": self.max_swaps,
                 "seed": self.seed,
+                "skip_list": self.skip_list,
+                "skip_fn": self.skip_fn,
+                "skip_py_fn": self.skip_py_fn,
             }
         )
         return config
