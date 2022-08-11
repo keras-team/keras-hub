@@ -77,9 +77,12 @@ def compute_word_piece_vocabulary(
     tf.Tensor([ 6 12 10 12  8 12  7 12  9 12], shape=(10,), dtype=int32)
 
     Basic Usage (from filenames).
-    >>> with open("test.txt", "w+") as f: f.write("bat sat pat mat rat\n")
-    >>> inputs = ["test.txt"]
-    >>> vocab = compute_word_piece_vocabulary(inputs, 13)
+    ```python
+    with open("test.txt", "w+") as f:
+        f.write("bat sat pat mat rat\n")
+    inputs = ["test.txt"]
+    vocab = compute_word_piece_vocabulary(inputs, 13)
+    ```
 
     Custom Split Usage (from Dataset).
     >>> def normalize_and_split(x):
@@ -97,18 +100,19 @@ def compute_word_piece_vocabulary(
     >>> inputs.map(tokenizer.tokenize)
 
     Custom Split Usage (from filenames).
-    >>> def normalize_and_split(x):
-    ...     "Strip punctuation and split on whitespace."
-    ...     x = tf.strings.regex_replace(x, r"\p{P}", "")
-    ...     return tf.strings.split(x)
-    >>> with open("test.txt", "w+") as f: f.write("bat sat: pat mat rat.\n")
-    >>> inputs = tf.data.TextLineDataset(["test.txt"])
-    >>> split_inputs = inputs.map(normalize_and_split)
-    >>> vocab = compute_word_piece_vocabulary(split_inputs, 13, split=False)
-    >>> vocab
-    ['[PAD]', '[CLS]', '[SEP]', '[UNK]', '[MASK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
-    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
-    >>> inputs.map(tokenizer.tokenize)
+    ```python
+    def normalize_and_split(x):
+        "Strip punctuation and split on whitespace."
+        x = tf.strings.regex_replace(x, r"\p{P}", "")
+        return tf.strings.split(x)
+    with open("test.txt", "w+") as f:
+        f.write("bat sat: pat mat rat.\n")
+    inputs = tf.data.TextLineDataset(["test.txt"])
+    split_inputs = inputs.map(normalize_and_split)
+    vocab = compute_word_piece_vocabulary(split_inputs, 13, split=False)
+    tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
+    inputs.map(tokenizer.tokenize)
+    ```
     """
     # Read data files.
 
