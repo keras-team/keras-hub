@@ -21,7 +21,6 @@ from keras_nlp.layers import PositionEmbedding
 from keras_nlp.layers import TransformerEncoder
 
 CLS_INDEX = 0
-TOKEN_EMBEDDING_LAYER_NAME = "token_embedding"
 
 
 class Bert(keras.Model):
@@ -79,11 +78,12 @@ class Bert(keras.Model):
         )
 
         # Embed tokens, positions, and segment ids.
-        token_embedding = keras.layers.Embedding(
+        token_embedding_layer = keras.layers.Embedding(
             input_dim=vocab_size,
             output_dim=hidden_size,
-            name=TOKEN_EMBEDDING_LAYER_NAME,
-        )(token_id_input)
+            name="token_embedding",
+        )
+        token_embedding = token_embedding_layer(token_id_input)
         position_embedding = PositionEmbedding(
             initializer=initializer_fn,
             sequence_length=max_sequence_length,
@@ -145,6 +145,7 @@ class Bert(keras.Model):
             **kwargs,
         )
         # All references to `self` below this line
+        self.token_embedding = token_embedding_layer
         self.initializer_fn = initializer_fn
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
@@ -156,7 +157,7 @@ class Bert(keras.Model):
         self.dropout = dropout
 
     def get_embedding_table(self):
-        return self.get_layer(TOKEN_EMBEDDING_LAYER_NAME).embeddings
+        return self.token_embedding.embeddings
 
     def get_config(self):
         config = super().get_config()
