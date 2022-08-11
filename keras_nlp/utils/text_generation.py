@@ -139,21 +139,18 @@ def greedy_search(
         prompt = prompt[tf.newaxis, :]
     validate_token_probability_fn(token_probability_fn, prompt)
 
-    initial_shape = prompt.shape.as_list()
-    initial_length = initial_shape[1]
+    length = prompt.shape.as_list()[1]
 
     # Pad the prompt with `pad_token_id` to `max_length`.
     prompt = tf.concat(
         (
             prompt,
             tf.fill(
-                (tf.shape(prompt)[0], max_length - initial_length), pad_token_id
+                (tf.shape(prompt)[0], max_length - length), pad_token_id
             ),
         ),
         axis=1,
     )
-
-    length = initial_length
 
     def one_step(length, prompt):
         pred = token_probability_fn(prompt[:, :length])
@@ -422,21 +419,18 @@ def random_search(
         prompt = prompt[tf.newaxis, :]
     validate_token_probability_fn(token_probability_fn, prompt)
 
-    initial_shape = prompt.shape.as_list()
-    initial_length = initial_shape[1]
+    length = prompt.shape.as_list()[1]
 
     # Pad the prompt with `pad_token_id` to `max_length`.
     prompt = tf.concat(
         (
             prompt,
             tf.fill(
-                (tf.shape(prompt)[0], max_length - initial_length), pad_token_id
+                (tf.shape(prompt)[0], max_length - length), pad_token_id
             ),
         ),
         axis=1,
     )
-
-    length = initial_length
 
     def one_step(length, prompt):
         pred = token_probability_fn(prompt)
@@ -581,21 +575,18 @@ def top_k_search(
         )
         k = pred.shape[1]
 
-    initial_shape = prompt.shape.as_list()
-    initial_length = initial_shape[1]
+    length = prompt.shape.as_list()[-1]
 
     # Pad the prompt with `pad_token_id` to `max_length`.
     prompt = tf.concat(
         (
             prompt,
             tf.fill(
-                (tf.shape(prompt)[0], max_length - initial_length), pad_token_id
+                (tf.shape(prompt)[0], max_length - length), pad_token_id
             ),
         ),
         axis=1,
     )
-
-    length = initial_length
 
     def one_step(length, prompt):
         pred = token_probability_fn(prompt)
@@ -740,21 +731,18 @@ def top_p_search(
         prompt = prompt[tf.newaxis, :]
     validate_token_probability_fn(token_probability_fn, prompt)
 
-    initial_shape = prompt.shape.as_list()
-    initial_length = initial_shape[1]
+    length = prompt.shape.as_list()[-1]
 
     # Pad the prompt with `pad_token_id` to `max_length`.
     prompt = tf.concat(
         (
             prompt,
             tf.fill(
-                (tf.shape(prompt)[0], max_length - initial_length), pad_token_id
+                (tf.shape(prompt)[0], max_length - length), pad_token_id
             ),
         ),
         axis=1,
     )
-
-    length = initial_length
 
     def one_step(length, prompt):
         pred = token_probability_fn(prompt)
