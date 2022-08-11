@@ -16,6 +16,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
+# TODO(jbischof): fix import style
 from keras_nlp.layers import PositionEmbedding
 from keras_nlp.layers import TransformerEncoder
 
@@ -137,7 +138,6 @@ class Bert(keras.Model):
                 "segment_ids": segment_id_input,
                 "input_mask": input_mask,
             },
-            # TODO(jbischof): Consider list output
             outputs={
                 "sequence_output": sequence_output,
                 "pooled_output": pooled_output,
@@ -186,6 +186,7 @@ class BertClassifier(keras.Model):
         bias_initializer: Initializer for the bias vector.
     """
 
+    # TODO(jbischof): decide how to set defaults from `num_segments`
     def __init__(
         self,
         encoder,
@@ -194,21 +195,17 @@ class BertClassifier(keras.Model):
         bias_initializer="zeros",
         **kwargs,
     ):
-
-        super().__init__(**kwargs)
-        self.encoder = encoder
-        self.num_classes = num_classes
-        self._logit_layer = keras.layers.Dense(
+        inputs = encoder.input
+        pooled = encoder(inputs)["pooled_output"]
+        outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=kernel_initializer,
             bias_initializer=bias_initializer,
             name="logits",
-        )
-
-    def call(self, inputs):
-        # Ignore the sequence output, use the pooled output.
-        pooled_output = self.encoder(inputs)["pooled_output"]
-        return self._logit_layer(pooled_output)
+        )(pooled)
+        super().__init__(inputs=inputs, outputs=outputs, **kwargs)
+        self.encoder = encoder
+        self.num_classes = num_classes
 
 
 def BertBase(**kwargs):
