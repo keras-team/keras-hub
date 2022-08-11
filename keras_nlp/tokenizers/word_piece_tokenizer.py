@@ -174,7 +174,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     >>> inputs = ["The quick brown fox."]
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
     ...     vocabulary=vocab,
-    ...     lowercase=True
+    ...     lowercase=True,
     ... )
     >>> tokenizer(inputs)
     <tf.RaggedTensor [[1, 2, 3, 4, 5, 6, 7]]>
@@ -185,7 +185,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
     ...     vocabulary=vocab,
     ...     sequence_length=10,
-    ...     lowercase=True
+    ...     lowercase=True,
     ... )
     >>> tokenizer(inputs)
     <tf.Tensor: shape=(1, 10), dtype=int32, numpy=
@@ -197,7 +197,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
     ...     vocabulary=vocab,
     ...     lowercase=True,
-    ...     dtype="string"
+    ...     dtype="string",
     ... )
     >>> tokenizer(inputs)
     <tf.RaggedTensor [[b'the', b'qu', b'##ick', b'br', b'##own', b'fox', b'.']]>
@@ -219,7 +219,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ...     vocabulary=vocab,
     ...     split=False,
     ...     lowercase=True,
-    ...     dtype='string'
+    ...     dtype='string',
     ... )
     >>> split_inputs = tf.strings.split(inputs, sep="$")
     >>> tokenizer(split_inputs)

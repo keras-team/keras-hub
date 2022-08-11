@@ -150,7 +150,7 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
             test_text,
             8,
             vocab_file,
-            lowercase=True
+            lowercase=True,
             reserved_tokens=[],
         )
         vocab_from_file = []
