@@ -31,8 +31,8 @@ class RandomSwap(keras.layers.Layer):
     either rank-1 or rank-2.
 
     Args:
-        swaps: Number of swaps to perform.
-        skip_list: A list of words to skip.
+        rate: The probability of a token being chosen for swapping.
+        max_swaps: The maximum number of swaps to be performed.
         skip_list: A list of token values that should not be considered
             candidates for deletion.
         skip_fn: A function that takes as input a scalar tensor token and
@@ -134,7 +134,7 @@ class RandomSwap(keras.layers.Layer):
         self.skip_fn = skip_fn
         self.skip_py_fn = skip_py_fn
         if self.max_swaps is not None and self.max_swaps < 0:
-            raise ValueError("Swaps must be non negative")
+            raise ValueError("max_swaps must be non negative")
 
         if [self.skip_list, self.skip_fn, self.skip_py_fn].count(None) < 2:
             raise ValueError(
