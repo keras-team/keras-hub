@@ -31,8 +31,8 @@ class RandomReplacement(keras.layers.Layer):
     either rank-1 or rank-2.
 
     Args:
-        rate: A float in [0, 1] that is the rate of replacement.
-        max_replacements: An integer that is the maximum number of replacements.
+        rate: The probability of a token being chosen for replacement.
+        max_insertions: The maximum number of tokens to replace.
         replacement_list: A list of tokens to use for replacement.
         replacement_fn: A function that takes a token as input and returns a
             replacement token. This must be a traceable function of tf
