@@ -32,8 +32,8 @@ class RandomInsertion(keras.layers.Layer):
     either rank-1 or rank-2.
 
     Args:
-        rate: A float in [0, 1] that is the rate of insertion.
-        max_insertions: An integer that is the maximum number of insertions.
+        rate: The probability of a token being chosen for insertion.
+        max_insertions: The maximum number of tokens to insert.
         insertion_list: A list of tokens to use for insertion.
         insertion_fn: A function that takes a token as input and returns a
             insertion token. This must be a traceable function of tf
