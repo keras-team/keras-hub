@@ -16,7 +16,8 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers import PositionEmbedding, TransformerEncoder
+from keras_nlp.layers import PositionEmbedding
+from keras_nlp.layers import TransformerEncoder
 
 CLS_INDEX = 0
 TOKEN_EMBEDDING_LAYER_NAME = "token_embedding"
@@ -149,7 +150,7 @@ class Bert(keras.Model):
                 "sequence_output": sequence_output,
                 "pooled_output": pooled_output,
             },
-            **kwargs
+            **kwargs,
         )
         # All references to `self` below this line
         self.inner_activation_fn = inner_activation_fn
@@ -190,16 +191,32 @@ class Bert(keras.Model):
 
 
 class BertClassifier(keras.Model):
-    """Classifier model with BertEncoder."""
+    """
+    Classifier model with BertEncoder.
 
-    # TODO(jbischof): figure out initialization default
-    def __init__(self, encoder, num_classes, initializer, **kwargs):
+    Args:
+        encoder: A `Bert` Model to encode inputs.
+        num_classes: Number of classes to predict.
+        kernel_initializer: Initializer for the `kernel` weights matrix.
+        bias_initializer: Initializer for the bias vector.
+    """
+
+    def __init__(
+        self,
+        encoder,
+        num_classes,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
+        **kwargs,
+    ):
+
         super().__init__(**kwargs)
         self.encoder = encoder
         self.num_classes = num_classes
         self._logit_layer = keras.layers.Dense(
             num_classes,
-            kernel_initializer=initializer,
+            kernel_initializer=kernel_initializer,
+            bias_initializer=bias_initializer,
             name="logits",
         )
 

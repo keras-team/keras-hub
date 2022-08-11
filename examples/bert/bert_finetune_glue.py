@@ -122,9 +122,6 @@ class BertHyperModel(keras_tuner.HyperModel):
         finetuning_model = BertClassifier(
             encoder=model,
             num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
-            initializer=keras.initializers.TruncatedNormal(
-                stddev=model_config["initializer_range"]
-            ),
         )
         finetuning_model.compile(
             optimizer=keras.optimizers.Adam(
