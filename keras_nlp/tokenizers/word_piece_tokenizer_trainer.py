@@ -25,8 +25,8 @@ def compute_word_piece_vocabulary(
     data,
     vocabulary_size,
     vocabulary_output_file=None,
-    lowercase=True,
-    strip_accents=True,
+    lowercase=False,
+    strip_accents=False,
     split=True,
     suffix_indicator="##",
     reserved_tokens=["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]"],
@@ -45,9 +45,9 @@ def compute_word_piece_vocabulary(
         vocabulary_size: int. The maximum size of a vocabulary to be trained.
         vocabulary_output_file: str, defaults to `None`. The location to write a
             vocabulary file.
-        lowercase: bool, defaults to `True`. If true, the input text will be
+        lowercase: bool, defaults to `False`. If true, the input text will be
             lowercased before tokenization.
-        strip_accents: bool, defaults to `True`. If true, all accent marks will
+        strip_accents: bool, defaults to `False`. If true, all accent marks will
             be removed from text before tokenization.
         split: bool, defaults to `True`. If true, input will be split on
             whitespace and punctuation marks, and all punctuation marks will be
