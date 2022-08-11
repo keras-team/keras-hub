@@ -40,10 +40,6 @@ class Bert(keras.Model):
             The hidden size must be divisible by the number of attention heads.
         intermediate_dim: The output dimension of the first Dense layer in a
             two-layer feedforward network for each transformer.
-        intermediate_activiation: The activation for the first Dense layer in a
-            two-layer feedforward network for each transformer.
-        initializer_range: The initialzer range to use for a truncated normal
-            initializer.
         dropout: Dropout probability for the Transformer encoder.
         max_sequence_length: The maximum sequence length that this encoder can
             consume. If None, max_sequence_length uses the value from sequence
@@ -60,21 +56,13 @@ class Bert(keras.Model):
         hidden_size,
         num_heads,
         intermediate_dim,
-        intermediate_activiation="gelu",
-        initializer_range=0.02,
         dropout=0.1,
         max_sequence_length=512,
         num_segments=2,
         **kwargs,
     ):
 
-        # Create lambda functions from input params
-        intermediate_activiation_fn = keras.activations.get(
-            intermediate_activiation
-        )
-        initializer_fn = keras.initializers.TruncatedNormal(
-            stddev=initializer_range
-        )
+        initializer_fn = keras.initializers.TruncatedNormal(stddev=0.02)
 
         # Functional version of model
         token_id_input = keras.Input(
@@ -126,7 +114,9 @@ class Bert(keras.Model):
             x = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
-                activation=intermediate_activiation_fn,
+                activation=lambda x: keras.activations.gelu(
+                    x, approximate=True
+                ),
                 dropout=dropout,
                 kernel_initializer=initializer_fn,
                 name="transformer/layer_%d" % i,
@@ -155,7 +145,6 @@ class Bert(keras.Model):
             **kwargs,
         )
         # All references to `self` below this line
-        self.intermediate_activiation_fn = intermediate_activiation_fn
         self.initializer_fn = initializer_fn
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
@@ -164,10 +153,6 @@ class Bert(keras.Model):
         self.max_sequence_length = max_sequence_length
         self.num_segments = num_segments
         self.intermediate_dim = intermediate_dim
-        self.intermediate_activiation = keras.activations.get(
-            intermediate_activiation
-        )
-        self.initializer_range = initializer_range
         self.dropout = dropout
 
     def get_embedding_table(self):
@@ -184,11 +169,7 @@ class Bert(keras.Model):
                 "max_sequence_length": self.max_sequence_length,
                 "num_segments": self.num_segments,
                 "intermediate_dim": self.intermediate_dim,
-                "intermediate_activiation": keras.activations.serialize(
-                    self.intermediate_activiation
-                ),
                 "dropout": self.dropout,
-                "initializer_range": self.initializer_range,
             }
         )
         return config
@@ -196,7 +177,7 @@ class Bert(keras.Model):
 
 class BertClassifier(keras.Model):
     """
-    Classifier model with BertEncoder.
+    Adds a classification head to a Bert encoder model.
 
     Args:
         encoder: A `Bert` Model to encode inputs.
@@ -247,8 +228,6 @@ def BertBase(**kwargs):
         hidden_size=768,
         num_heads=12,
         intermediate_dim=3072,
-        intermediate_activiation="gelu",
-        initializer_range=0.02,
         dropout=0.1,
         **kwargs,
     )
