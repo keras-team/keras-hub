@@ -112,8 +112,6 @@ def compute_word_piece_vocabulary(
     vocab = compute_word_piece_vocabulary(split_inputs, 13, split=False)
     vocab
     ['[PAD]', '[CLS]', '[SEP]', '[UNK]', '[MASK]', 'a', 'b', 'm', 'p', 'r', 's', 't', '##at']
-    tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
-    inputs.map(tokenizer.tokenize)
     ```
     """
     # Read data files.
