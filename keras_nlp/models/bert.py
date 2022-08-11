@@ -40,7 +40,7 @@ class Bert(keras.Model):
             The hidden size must be divisible by the number of attention heads.
         intermediate_dim: The output dimension of the first Dense layer in a
             two-layer feedforward network for each transformer.
-        inner_activation: The activation for the first Dense layer in a
+        intermediate_activiation: The activation for the first Dense layer in a
             two-layer feedforward network for each transformer.
         initializer_range: The initialzer range to use for a truncated normal
             initializer.
@@ -60,7 +60,7 @@ class Bert(keras.Model):
         hidden_size,
         num_heads,
         intermediate_dim,
-        inner_activation="gelu",
+        intermediate_activiation="gelu",
         initializer_range=0.02,
         dropout=0.1,
         max_sequence_length=512,
@@ -69,7 +69,9 @@ class Bert(keras.Model):
     ):
 
         # Create lambda functions from input params
-        inner_activation_fn = keras.activations.get(inner_activation)
+        intermediate_activiation_fn = keras.activations.get(
+            intermediate_activiation
+        )
         initializer_fn = keras.initializers.TruncatedNormal(
             stddev=initializer_range
         )
@@ -124,7 +126,7 @@ class Bert(keras.Model):
             x = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
-                activation=inner_activation_fn,
+                activation=intermediate_activiation_fn,
                 dropout=dropout,
                 kernel_initializer=initializer_fn,
                 name="transformer/layer_%d" % i,
@@ -139,7 +141,7 @@ class Bert(keras.Model):
         )(x[:, CLS_INDEX, :])
 
         # Instantiate using Functional API Model constructor
-        super(Bert, self).__init__(
+        super().__init__(
             inputs={
                 "input_ids": token_id_input,
                 "segment_ids": segment_id_input,
@@ -153,7 +155,7 @@ class Bert(keras.Model):
             **kwargs,
         )
         # All references to `self` below this line
-        self.inner_activation_fn = inner_activation_fn
+        self.intermediate_activiation_fn = intermediate_activiation_fn
         self.initializer_fn = initializer_fn
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
@@ -162,7 +164,9 @@ class Bert(keras.Model):
         self.max_sequence_length = max_sequence_length
         self.num_segments = num_segments
         self.intermediate_dim = intermediate_dim
-        self.inner_activation = keras.activations.get(inner_activation)
+        self.intermediate_activiation = keras.activations.get(
+            intermediate_activiation
+        )
         self.initializer_range = initializer_range
         self.dropout = dropout
 
@@ -180,8 +184,8 @@ class Bert(keras.Model):
                 "max_sequence_length": self.max_sequence_length,
                 "num_segments": self.num_segments,
                 "intermediate_dim": self.intermediate_dim,
-                "inner_activation": keras.activations.serialize(
-                    self.inner_activation
+                "intermediate_activiation": keras.activations.serialize(
+                    self.intermediate_activiation
                 ),
                 "dropout": self.dropout,
                 "initializer_range": self.initializer_range,
@@ -226,7 +230,7 @@ class BertClassifier(keras.Model):
         return self._logit_layer(pooled_output)
 
 
-def BertBase():
+def BertBase(**kwargs):
     """
     Factory for BertEncoder using "Base" architecture.
 
@@ -243,9 +247,10 @@ def BertBase():
         hidden_size=768,
         num_heads=12,
         intermediate_dim=3072,
-        inner_activation="gelu",
+        intermediate_activiation="gelu",
         initializer_range=0.02,
         dropout=0.1,
+        **kwargs,
     )
 
     # TODO(jbischof): add some documentation or magic to load our checkpoints

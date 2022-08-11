@@ -20,7 +20,7 @@ MODEL_CONFIGS = {
         "dropout": 0.1,
         "num_heads": 2,
         "intermediate_dim": 512,
-        "inner_activation": "gelu",
+        "intermediate_activiation": "gelu",
         "initializer_range": 0.02,
     },
     "mini": {
@@ -29,7 +29,7 @@ MODEL_CONFIGS = {
         "dropout": 0.1,
         "num_heads": 4,
         "intermediate_dim": 1024,
-        "inner_activation": "gelu",
+        "intermediate_activiation": "gelu",
         "initializer_range": 0.02,
     },
     "small": {
@@ -38,7 +38,7 @@ MODEL_CONFIGS = {
         "dropout": 0.1,
         "num_heads": 8,
         "intermediate_dim": 2048,
-        "inner_activation": "gelu",
+        "intermediate_activiation": "gelu",
         "initializer_range": 0.02,
     },
     "medium": {
@@ -47,7 +47,7 @@ MODEL_CONFIGS = {
         "dropout": 0.1,
         "num_heads": 8,
         "intermediate_dim": 2048,
-        "inner_activation": "gelu",
+        "intermediate_activiation": "gelu",
         "initializer_range": 0.02,
     },
     "base": {
@@ -56,7 +56,7 @@ MODEL_CONFIGS = {
         "dropout": 0.1,
         "num_heads": 12,
         "intermediate_dim": 3072,
-        "inner_activation": "gelu",
+        "intermediate_activiation": "gelu",
         "initializer_range": 0.02,
     },
     "large": {
@@ -65,7 +65,7 @@ MODEL_CONFIGS = {
         "dropout": 0.1,
         "num_heads": 16,
         "intermediate_dim": 4096,
-        "inner_activation": "gelu",
+        "intermediate_activiation": "gelu",
         "initializer_range": 0.02,
     },
 }

@@ -105,7 +105,7 @@ class MaskedLMHead(keras.layers.Layer):
 
     Args:
         embedding_table: The embedding table from encoder network.
-        inner_activation: The activation, if any, for the inner dense layer.
+        intermediate_activiation: The activation, if any, for the inner dense layer.
         initializer: The initializer for the dense layer. Defaults to a Glorot
             uniform initializer.
         output: The output style for this layer. Can be either 'logits' or
@@ -115,20 +115,22 @@ class MaskedLMHead(keras.layers.Layer):
     def __init__(
         self,
         embedding_table,
-        inner_activation="gelu",
+        intermediate_activiation="gelu",
         initializer="glorot_uniform",
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.embedding_table = embedding_table
-        self.inner_activation = keras.activations.get(inner_activation)
+        self.intermediate_activiation = keras.activations.get(
+            intermediate_activiation
+        )
         self.initializer = initializer
 
     def build(self, input_shape):
         self._vocab_size, hidden_size = self.embedding_table.shape
         self.dense = keras.layers.Dense(
             hidden_size,
-            activation=self.inner_activation,
+            activation=self.intermediate_activiation,
             kernel_initializer=self.initializer,
             name="transform/dense",
         )
