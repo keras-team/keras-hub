@@ -136,5 +136,7 @@ def compute_sentence_piece_proto(
             bos_id=2,
             eos_id=3,
         )
-    if not proto_output_file:
+    if proto_output_file:
+        model_writer.close()
+    else:
         return model_writer.getvalue()
