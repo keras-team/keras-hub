@@ -47,7 +47,7 @@ class Bert(keras.Model):
         num_segments: The number of types that the 'segment_ids' input can
             take.
 
-    Example:
+    Example usage:
     ```python
     # Randomly initialized Bert encoder
     encoder = keras_nlp.models.Bert(
@@ -210,6 +210,30 @@ class BertClassifier(keras.Model):
         num_classes: Number of classes to predict.
         kernel_initializer: Initializer for the `kernel` weights matrix.
         bias_initializer: Initializer for the bias vector.
+    
+    Example usage:
+    # Randomly initialized Bert encoder
+    encoder = keras_nlp.models.Bert(
+        vocab_size=30522,
+        num_layers=12,
+        hidden_size=768,
+        num_heads=12,
+        intermediate_dim=3072,
+        dropout=0.1,
+        max_sequence_length=12
+    )
+
+     # Call classifier on the inputs.
+    input_data = {
+        "input_ids": tf.random.uniform(
+            shape=(1, 12), dtype=tf.int64, maxval=30522),
+        "segment_ids": tf.constant(
+            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
+        "input_mask": tf.constant(
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
+    }
+    classifier = keras_nlp.models.BertClassifier(encoder, 4)
+    logits = classifier(input_data)
     """
 
     # TODO(jbischof): decide how to set defaults from `num_segments`
