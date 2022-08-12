@@ -22,6 +22,10 @@ from keras_nlp.layers import TransformerEncoder
 CLS_INDEX = 0
 
 
+def _bert_kernel_initializer(stddev=0.02):
+    return keras.initializers.TruncatedNormal(stddev=stddev)
+
+
 class Bert(keras.Model):
     """Bi-directional Transformer-based encoder network.
 
@@ -88,8 +92,6 @@ class Bert(keras.Model):
         **kwargs,
     ):
 
-        initializer_fn = keras.initializers.TruncatedNormal(stddev=0.02)
-
         # Functional version of model
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="input_ids"
@@ -105,17 +107,19 @@ class Bert(keras.Model):
         token_embedding_layer = keras.layers.Embedding(
             input_dim=vocab_size,
             output_dim=hidden_size,
+            embeddings_initializer=_bert_kernel_initializer(),
             name="token_embedding",
         )
         token_embedding = token_embedding_layer(token_id_input)
         position_embedding = PositionEmbedding(
-            initializer=initializer_fn,
+            initializer=_bert_kernel_initializer(),
             sequence_length=max_sequence_length,
             name="position_embedding",
         )(token_embedding)
         segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
             output_dim=hidden_size,
+            embeddings_initializer=_bert_kernel_initializer(),
             name="segment_embedding",
         )(segment_id_input)
 
@@ -143,7 +147,7 @@ class Bert(keras.Model):
                     x, approximate=True
                 ),
                 dropout=dropout,
-                kernel_initializer=initializer_fn,
+                kernel_initializer=_bert_kernel_initializer(),
                 name="transformer/layer_%d" % i,
             )(x, padding_mask=input_mask)
 
@@ -152,6 +156,7 @@ class Bert(keras.Model):
         sequence_output = x
         pooled_output = keras.layers.Dense(
             hidden_size,
+            kernel_initializer=_bert_kernel_initializer(),
             activation="tanh",
             name="pooled_dense",
         )(x[:, CLS_INDEX, :])
@@ -171,7 +176,6 @@ class Bert(keras.Model):
         )
         # All references to `self` below this line
         self.token_embedding = token_embedding_layer
-        self.initializer_fn = initializer_fn
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -208,9 +212,9 @@ class BertClassifier(keras.Model):
     Args:
         encoder: A `Bert` Model to encode inputs.
         num_classes: Number of classes to predict.
-        kernel_initializer: Initializer for the `kernel` weights matrix.
-        bias_initializer: Initializer for the bias vector.
 
+    ```
+    python
     Example usage:
     # Randomly initialized Bert encoder
     encoder = keras_nlp.models.Bert(
@@ -234,22 +238,20 @@ class BertClassifier(keras.Model):
     }
     classifier = keras_nlp.models.BertClassifier(encoder, 4)
     logits = classifier(input_data)
+    ```
     """
 
     def __init__(
         self,
         encoder,
         num_classes,
-        kernel_initializer="glorot_uniform",
-        bias_initializer="zeros",
         **kwargs,
     ):
         inputs = encoder.input
         pooled = encoder(inputs)["pooled_output"]
         outputs = keras.layers.Dense(
             num_classes,
-            kernel_initializer=kernel_initializer,
-            bias_initializer=bias_initializer,
+            kernel_initializer=_bert_kernel_initializer(),
             name="logits",
         )(pooled)
         # Instantiate using Functional API Model constructor
@@ -261,7 +263,8 @@ class BertClassifier(keras.Model):
 
 def BertBase(**kwargs):
     """
-    Factory for Bert using "Base" architecture.
+    Bi-directional Transformer-based encoder network (Bert) using "Base"
+    architecture.
 
     This network implements a bi-directional Transformer-based encoder as
     described in "BERT: Pre-training of Deep Bidirectional Transformers for
@@ -270,7 +273,6 @@ def BertBase(**kwargs):
     or classification task networks.
     """
 
-    # TODO(jbischof): decide how to set defaults from `num_segments`
     model = Bert(
         vocab_size=30522,
         num_layers=12,
@@ -279,6 +281,7 @@ def BertBase(**kwargs):
         intermediate_dim=3072,
         dropout=0.1,
         max_sequence_length=512,
+        num_segments=2,
         **kwargs,
     )
 

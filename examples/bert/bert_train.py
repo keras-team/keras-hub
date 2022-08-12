@@ -201,11 +201,11 @@ class BertPretrainingModel(keras.Model):
         # TODO(jbischof): replace with keras_nlp.layers.MLMHead (Issue #166)
         self.masked_lm_head = MaskedLMHead(
             embedding_table=encoder.get_embedding_table(),
-            initializer=encoder.initializer_fn,
+            initializer=keras.initializers.TruncatedNormal(stddev=0.02),
         )
         self.next_sentence_head = keras.layers.Dense(
             encoder.num_segments,
-            kernel_initializer=encoder.initializer_fn,
+            kernel_initializer=keras.initializers.TruncatedNormal(stddev=0.02),
         )
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.lm_loss_tracker = keras.metrics.Mean(name="lm_loss")
