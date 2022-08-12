@@ -16,7 +16,6 @@
 import tensorflow as tf
 from tensorflow import keras
 
-# TODO(jbischof): fix import style
 from keras_nlp.layers import PositionEmbedding
 from keras_nlp.layers import TransformerEncoder
 
