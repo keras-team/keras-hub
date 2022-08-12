@@ -139,8 +139,9 @@ def greedy_search(
         prompt = prompt[tf.newaxis, :]
     validate_token_probability_fn(token_probability_fn, prompt)
 
-    batch_size = tf.shape(prompt)[0]
-    length = tf.shape(prompt)[1]
+    shape = tf.shape(prompt)
+    batch_size = shape[0]
+    length = shape[1]
 
     # Pad the prompt with `pad_token_id` to `max_length`.
     padding = tf.fill((batch_size, max_length - length), pad_token_id)
@@ -410,8 +411,9 @@ def random_search(
         prompt = prompt[tf.newaxis, :]
     validate_token_probability_fn(token_probability_fn, prompt)
 
-    batch_size = tf.shape(prompt)[0]
-    length = tf.shape(prompt)[1]
+    shape = tf.shape(prompt)
+    batch_size = shape[0]
+    length = shape[1]
 
     # Pad the prompt with `pad_token_id` to `max_length`.
     padding = tf.fill((batch_size, max_length - length), pad_token_id)
@@ -557,8 +559,9 @@ def top_k_search(
         )
         k = pred.shape[1]
 
-    batch_size = tf.shape(prompt)[0]
-    length = tf.shape(prompt)[1]
+    shape = tf.shape(prompt)
+    batch_size = shape[0]
+    length = shape[1]
 
     # Pad the prompt with `pad_token_id` to `max_length`.
     padding = tf.fill((batch_size, max_length - length), pad_token_id)
@@ -704,8 +707,9 @@ def top_p_search(
         prompt = prompt[tf.newaxis, :]
     validate_token_probability_fn(token_probability_fn, prompt)
 
-    batch_size = tf.shape(prompt)[0]
-    length = tf.shape(prompt)[1]
+    shape = tf.shape(prompt)
+    batch_size = shape[0]
+    length = shape[1]
 
     # Pad the prompt with `pad_token_id` to `max_length`.
     padding = tf.fill((batch_size, max_length - length), pad_token_id)
