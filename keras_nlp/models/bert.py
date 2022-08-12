@@ -45,8 +45,8 @@ class Bert(keras.Model):
             length. This determines the variable shape for positional
             embeddings.
         num_segments: The number of types that the 'segment_ids' input can
-            take.    
-    
+            take.
+
     Example:
     ```python
     # Randomly initialized Bert encoder
