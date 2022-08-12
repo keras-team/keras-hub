@@ -200,7 +200,7 @@ class BertPretrainingModel(keras.Model):
         self.encoder = encoder
         # TODO(jbischof): replace with keras_nlp.layers.MLMHead (Issue #166)
         self.masked_lm_head = MaskedLMHead(
-            embedding_table=encoder.get_embedding_table(),
+            embedding_table=encoder.token_embedding.embeddings,
             initializer=keras.initializers.TruncatedNormal(stddev=0.02),
         )
         self.next_sentence_head = keras.layers.Dense(
@@ -407,7 +407,9 @@ def main(_):
 
     with strategy.scope():
         # Create a Bert model the input config.
-        encoder = keras_nlp.models.Bert(vocab_size=len(vocab), **model_config)
+        encoder = keras_nlp.models.Bert(
+            vocabulary_size=len(vocab), **model_config
+        )
         # Make sure model has been called.
         encoder(encoder.inputs)
         encoder.summary()
