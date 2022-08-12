@@ -236,7 +236,6 @@ class BertClassifier(keras.Model):
     logits = classifier(input_data)
     """
 
-    # TODO(jbischof): decide how to set defaults from `num_segments`
     def __init__(
         self,
         encoder,
@@ -271,6 +270,7 @@ def BertBase(**kwargs):
     or classification task networks.
     """
 
+    # TODO(jbischof): decide how to set defaults from `num_segments`
     model = Bert(
         vocab_size=30522,
         num_layers=12,
