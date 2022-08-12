@@ -128,9 +128,9 @@ class MaskedLMHead(keras.layers.Layer):
         self.initializer = initializer
 
     def build(self, input_shape):
-        self._vocab_size, hidden_size = self.embedding_table.shape
+        self._vocab_size, hidden_dim = self.embedding_table.shape
         self.dense = keras.layers.Dense(
-            hidden_size,
+            hidden_dim,
             activation=self.intermediate_activation,
             kernel_initializer=self.initializer,
             name="transform/dense",
@@ -165,7 +165,7 @@ class MaskedLMHead(keras.layers.Layer):
 
         Args:
             sequence_tensor: Sequence output of shape
-                (`batch_size`, `seq_length`, `hidden_size`) where `hidden_size`
+                (`batch_size`, `seq_length`, `hidden_dim`) where `hidden_dim`
                 is number of hidden units.
             positions: Positions ids of tokens in sequence to mask for
                 pretraining of with dimension (batch_size, num_predictions)
@@ -174,7 +174,7 @@ class MaskedLMHead(keras.layers.Layer):
 
         Returns:
             Masked out sequence tensor of shape (batch_size * num_predictions,
-            `hidden_size`).
+            `hidden_dim`).
         """
         sequence_shape = tf.shape(sequence_tensor)
         batch_size, seq_length = sequence_shape[0], sequence_shape[1]

@@ -108,7 +108,7 @@ class BertHyperModel(keras_tuner.HyperModel):
     def build(self, hp):
         model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
         finetuning_model = keras_nlp.models.BertClassifier(
-            encoder=model,
+            base_model=model,
             num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
         )
         finetuning_model.compile(

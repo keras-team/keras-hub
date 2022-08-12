@@ -36,9 +36,9 @@ class Bert(keras.Model):
     Args:
         vocabulary_size: The size of the token vocabulary.
         num_layers: The number of transformer layers.
-        hidden_size: The size of the transformer hidden layers.
         num_heads: The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
+        hidden_dim: The size of the transformer hidden layers.
         intermediate_dim: The output dimension of the first Dense layer in a
             two-layer feedforward network for each transformer.
         dropout: Dropout probability for the Transformer encoder.
@@ -56,8 +56,8 @@ class Bert(keras.Model):
     encoder = keras_nlp.models.Bert(
         vocabulary_size=30522,
         num_layers=12,
-        hidden_size=768,
         num_heads=12,
+        hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12
     )
@@ -81,8 +81,8 @@ class Bert(keras.Model):
         self,
         vocabulary_size,
         num_layers,
-        hidden_size,
         num_heads,
+        hidden_dim,
         intermediate_dim,
         dropout=0.1,
         max_sequence_length=512,
@@ -104,7 +104,7 @@ class Bert(keras.Model):
         # Embed tokens, positions, and segment ids.
         token_embedding_layer = keras.layers.Embedding(
             input_dim=vocabulary_size,
-            output_dim=hidden_size,
+            output_dim=hidden_dim,
             embeddings_initializer=_bert_kernel_initializer(),
             name="token_embedding",
         )
@@ -116,7 +116,7 @@ class Bert(keras.Model):
         )(token_embedding)
         segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
-            output_dim=hidden_size,
+            output_dim=hidden_dim,
             embeddings_initializer=_bert_kernel_initializer(),
             name="segment_embedding",
         )(segment_id_input)
@@ -153,7 +153,7 @@ class Bert(keras.Model):
         # top of the [CLS] token.
         sequence_output = x
         pooled_output = keras.layers.Dense(
-            hidden_size,
+            hidden_dim,
             kernel_initializer=_bert_kernel_initializer(),
             activation="tanh",
             name="pooled_dense",
@@ -175,7 +175,8 @@ class Bert(keras.Model):
         # All references to `self` below this line
         self.token_embedding = token_embedding_layer
         self.vocabulary_size = vocabulary_size
-        self.hidden_size = hidden_size
+        self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
         self.max_sequence_length = max_sequence_length
@@ -189,7 +190,8 @@ class Bert(keras.Model):
         config.update(
             {
                 "vocabulary_size": self.vocabulary_size,
-                "hidden_size": self.hidden_size,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
                 "num_layers": self.num_layers,
                 "num_heads": self.num_heads,
                 "max_sequence_length": self.max_sequence_length,
@@ -206,7 +208,7 @@ class BertClassifier(keras.Model):
     """Bert encoder model with a classification head.
 
     Args:
-        encoder: A `keras_nlp.models.Bert` to encode inputs.
+        base_model: A `keras_nlp.models.Bert` to encode inputs.
         num_classes: Number of classes to predict.
 
     Example usage:
@@ -216,8 +218,8 @@ class BertClassifier(keras.Model):
     encoder = keras_nlp.models.Bert(
         vocabulary_size=30522,
         num_layers=12,
-        hidden_size=768,
         num_heads=12,
+        hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12
     )
@@ -238,12 +240,12 @@ class BertClassifier(keras.Model):
 
     def __init__(
         self,
-        encoder,
+        base_model,
         num_classes,
         **kwargs,
     ):
-        inputs = encoder.input
-        pooled = encoder(inputs)["pooled_output"]
+        inputs = base_model.input
+        pooled = base_model(inputs)["pooled_output"]
         outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=_bert_kernel_initializer(),
@@ -252,7 +254,7 @@ class BertClassifier(keras.Model):
         # Instantiate using Functional API Model constructor
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
         # All references to `self` below this line
-        self.encoder = encoder
+        self.base_model = base_model
         self.num_classes = num_classes
 
 
@@ -270,8 +272,8 @@ def BertBase(**kwargs):
     model = Bert(
         vocabulary_size=30522,
         num_layers=12,
-        hidden_size=768,
         num_heads=12,
+        hidden_dim=768,
         intermediate_dim=3072,
         dropout=0.1,
         max_sequence_length=512,
