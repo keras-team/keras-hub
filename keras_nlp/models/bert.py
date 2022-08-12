@@ -45,7 +45,32 @@ class Bert(keras.Model):
             length. This determines the variable shape for positional
             embeddings.
         num_segments: The number of types that the 'segment_ids' input can
-            take.
+            take.    
+    
+    Example:
+    ```python
+    # Randomly initialized Bert encoder
+    encoder = keras_nlp.models.Bert(
+        vocab_size=30522,
+        num_layers=12,
+        hidden_size=768,
+        num_heads=12,
+        intermediate_dim=3072,
+        dropout=0.1,
+        max_sequence_length=12
+    )
+
+     # Call encoder on the inputs.
+    input_data = {
+        "input_ids": tf.random.uniform(
+            shape=(1, 12), dtype=tf.int64, maxval=30522),
+        "segment_ids": tf.constant(
+            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
+        "input_mask": tf.constant(
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
+    }
+    output = encoder(input_data)
+    ```
     """
 
     # TODO(bischof): add tests
