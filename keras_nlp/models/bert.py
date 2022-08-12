@@ -48,7 +48,7 @@ class Bert(keras.Model):
             embeddings.
         num_segments: The number of types that the 'segment_ids' input can
             take.
-        cls_token_index: Index of [CLS] token in the vocabulary. 
+        cls_token_index: Index of [CLS] token in the vocabulary.
 
     Example usage:
     ```python
@@ -196,7 +196,6 @@ class Bert(keras.Model):
                 "num_heads": self.num_heads,
                 "max_sequence_length": self.max_sequence_length,
                 "num_segments": self.num_segments,
-                "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
                 "cls_token_index": self.cls_token_index,
             }
