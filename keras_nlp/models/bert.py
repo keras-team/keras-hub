@@ -210,7 +210,7 @@ class BertClassifier(keras.Model):
         num_classes: Number of classes to predict.
         kernel_initializer: Initializer for the `kernel` weights matrix.
         bias_initializer: Initializer for the bias vector.
-    
+
     Example usage:
     # Randomly initialized Bert encoder
     encoder = keras_nlp.models.Bert(
