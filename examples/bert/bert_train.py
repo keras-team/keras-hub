@@ -21,10 +21,10 @@ from absl import flags
 from absl import logging
 from tensorflow import keras
 
+import keras_nlp
 from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
 from examples.bert.bert_config import TRAINING_CONFIG
-from keras_nlp.models import Bert
 
 FLAGS = flags.FLAGS
 
@@ -91,7 +91,7 @@ flags.DEFINE_integer(
 
 
 class MaskedLMHead(keras.layers.Layer):
-    """Masked language model network head for BERT.
+    """Masked language model network head for Bert.
 
     This layer implements a masked language model based on the provided
     transformer based encoder. It assumes that the encoder network being passed
@@ -99,8 +99,8 @@ class MaskedLMHead(keras.layers.Layer):
 
     Example:
     ```python
-    encoder=modeling.networks.BertEncoder(...)
-    lm_layer=MaskedLMHead(embedding_table=encoder.get_embedding_table())
+    encoder = keras_nlp.models.BertBase()
+    lm_layer = MaskedLMHead(embedding_table=encoder.get_embedding_table())
     ```
 
     Args:
@@ -193,7 +193,7 @@ class MaskedLMHead(keras.layers.Layer):
 
 
 class BertPretrainingModel(keras.Model):
-    """MLM + NSP model with BertEncoder."""
+    """MLM + NSP model with Bert encoder."""
 
     def __init__(self, encoder, **kwargs):
         super().__init__(**kwargs)
@@ -406,8 +406,8 @@ def main(_):
     dataset = dataset.repeat()
 
     with strategy.scope():
-        # Create a BERT model the input config.
-        encoder = Bert(vocab_size=len(vocab), **model_config)
+        # Create a Bert model the input config.
+        encoder = keras_nlp.models.Bert(vocab_size=len(vocab), **model_config)
         # Make sure model has been called.
         encoder(encoder.inputs)
         encoder.summary()

@@ -49,6 +49,8 @@ class Bert(keras.Model):
             take.
     """
 
+    # TODO(bischof): add tests
+
     def __init__(
         self,
         vocab_size,
@@ -71,8 +73,6 @@ class Bert(keras.Model):
         segment_id_input = keras.Input(
             shape=(None,), dtype="int32", name="segment_ids"
         )
-        # TODO(jbischof): improve handling of masking following
-        # https://www.tensorflow.org/guide/keras/masking_and_padding
         input_mask = keras.Input(
             shape=(None,), dtype="int32", name="input_mask"
         )
@@ -97,7 +97,7 @@ class Bert(keras.Model):
 
         # Sum, normailze and apply dropout to embeddings.
         x = keras.layers.Add(
-            name="embedding_sum",
+            name="embeddings/sum",
         )((token_embedding, position_embedding, segment_embedding))
         x = keras.layers.LayerNormalization(
             name="embeddings/layer_norm",
@@ -107,7 +107,7 @@ class Bert(keras.Model):
         )(x)
         x = keras.layers.Dropout(
             dropout,
-            name="embedding_dropout",
+            name="embeddings/dropout",
         )(x)
 
         # Apply successive transformer encoder blocks.
@@ -123,7 +123,8 @@ class Bert(keras.Model):
                 name="transformer/layer_%d" % i,
             )(x, padding_mask=input_mask)
 
-        # Construct the two BERT outputs, and apply a dense to the pooled output.
+        # Construct the two BERT outputs. The pooled output is a dense layer on
+        # top of the [CLS] token.
         sequence_output = x
         pooled_output = keras.layers.Dense(
             hidden_size,
@@ -204,14 +205,16 @@ class BertClassifier(keras.Model):
             bias_initializer=bias_initializer,
             name="logits",
         )(pooled)
+        # Instantiate using Functional API Model constructor
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
+        # All references to `self` below this line
         self.encoder = encoder
         self.num_classes = num_classes
 
 
 def BertBase(**kwargs):
     """
-    Factory for BertEncoder using "Base" architecture.
+    Factory for Bert using "Base" architecture.
 
     This network implements a bi-directional Transformer-based encoder as
     described in "BERT: Pre-training of Deep Bidirectional Transformers for

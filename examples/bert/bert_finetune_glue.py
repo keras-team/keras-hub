@@ -25,7 +25,6 @@ from tensorflow import keras
 import keras_nlp
 from examples.bert.bert_config import FINETUNING_CONFIG
 from examples.bert.bert_config import PREPROCESSING_CONFIG
-from keras_nlp.models import BertClassifier
 
 FLAGS = flags.FLAGS
 
@@ -108,7 +107,7 @@ class BertHyperModel(keras_tuner.HyperModel):
 
     def build(self, hp):
         model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
-        finetuning_model = BertClassifier(
+        finetuning_model = keras_nlp.models.BertClassifier(
             encoder=model,
             num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
         )
