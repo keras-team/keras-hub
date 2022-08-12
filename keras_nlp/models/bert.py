@@ -278,6 +278,7 @@ def BertBase(**kwargs):
         num_heads=12,
         intermediate_dim=3072,
         dropout=0.1,
+        max_sequence_length=512,
         **kwargs,
     )
 
