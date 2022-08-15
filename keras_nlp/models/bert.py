@@ -14,8 +14,8 @@
 """Bert model and layer implementations."""
 
 import tensorflow as tf
-from tensorflow import keras
 from absl import logging
+from tensorflow import keras
 
 from keras_nlp.layers import PositionEmbedding
 from keras_nlp.layers import TransformerEncoder
@@ -35,7 +35,7 @@ class Bert(keras.Model):
     or classification task networks.
 
     This class gives a fully configurable Bert model with any number of layers,
-    heads, and embedding dimensions. For specific specific bert architectures 
+    heads, and embedding dimensions. For specific specific bert architectures
     defined in the paper, see for example `keras_nlp.models.BertBase`.
 
     Args:
@@ -305,7 +305,8 @@ def BertBase(**kwargs):
         if arg in base_args:
             logging.error(
                 f"""`{arg}` fixed to {base_args[arg]} in BertBase and cannot """
-                f"""be changed.""")
+                f"""be changed."""
+            )
 
     model = Bert({**base_args, **kwargs})
 
