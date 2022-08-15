@@ -301,7 +301,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     <tf.RaggedTensor [[b'the', b'qu', b'##ick', b'br', b'##own', b'fox']]>
 
     Pretrained Tokenizer.
-    >>> inputs = "The quick brown fox."
+    >>> inputs = ["The quick brown fox."]
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
     ...     lang="en",
     ...     lowercase=True,
