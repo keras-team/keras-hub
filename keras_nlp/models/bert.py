@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Bert model configurable class, preconfigured versions, and task heads."""
+
 import tensorflow as tf
 from absl import logging
 from tensorflow import keras
