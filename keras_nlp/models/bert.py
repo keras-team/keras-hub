@@ -55,6 +55,9 @@ class Bert(keras.Model):
         num_segments: Int. The number of types that the 'segment_ids' input can
             take.
         cls_token_index: Int. Index of [CLS] token in the vocabulary.
+        name: String, optional. Name of the model.
+        trainable: Boolean, optional. If the model's variables should be
+            trainable.
 
     Example usage:
     ```python
@@ -96,7 +99,8 @@ class Bert(keras.Model):
         max_sequence_length=512,
         num_segments=2,
         cls_token_index=0,
-        **kwargs,
+        name=None,
+        trainable=True,
     ):
 
         token_id_input = keras.Input(
@@ -178,7 +182,8 @@ class Bert(keras.Model):
                 "sequence_output": sequence_output,
                 "pooled_output": pooled_output,
             },
-            **kwargs,
+            name=name,
+            trainable=trainable,
         )
         # All references to `self` below this line
         self.token_embedding = token_embedding_layer
@@ -265,7 +270,7 @@ class BertClassifier(keras.Model):
         self.num_classes = num_classes
 
 
-def BertBase(**kwargs):
+def BertBase(name=None, trainable=True):
     """Bi-directional Transformer-based encoder network (Bert) using "Base"
     architecture.
 
@@ -274,6 +279,11 @@ def BertBase(**kwargs):
     Language Understanding"](https://arxiv.org/abs/1810.04805). It includes the
     embedding lookups and transformer layers, but not the masked language model
     or classification task networks.
+
+    Args:
+        name: String, optional. Name of the model.
+        trainable: Boolean, optional. If the model's variables should be
+            trainable.
 
     Example usage:
     ```python
@@ -293,25 +303,17 @@ def BertBase(**kwargs):
     ```
     """
 
-    base_args = {
-        "vocabulary_size": 30522,
-        "num_layers": 12,
-        "num_heads": 12,
-        "hidden_dim": 768,
-        "intermediate_dim": 3072,
-        "dropout": 0.1,
-        "max_sequence_length": 512,
-        "num_segments": 2,
-    }
-
-    for arg in kwargs:
-        if arg in base_args:
-            logging.error(
-                f"""`{arg}` fixed to {base_args[arg]} in BertBase and cannot """
-                f"""be changed."""
-            )
-
-    model = Bert({**base_args, **kwargs})
+    model = Bert(
+        vocab_size=30522,
+        num_layers=12,
+        hidden_size=768,
+        num_heads=12,
+        intermediate_dim=3072,
+        dropout=0.1,
+        max_sequence_length=512,
+        name=name,
+        trainable=trainable,
+    )
 
     # TODO(jbischof): add some documentation or magic to load our checkpoints
     # TODO(jbischof): attach the tokenizer
