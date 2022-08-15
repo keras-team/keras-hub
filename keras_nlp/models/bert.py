@@ -221,6 +221,9 @@ class BertClassifier(keras.Model):
     Args:
         base_model: A `keras_nlp.models.Bert` to encode inputs.
         num_classes: Int. Number of classes to predict.
+        name: String, optional. Name of the model.
+        trainable: Boolean, optional. If the model's variables should be
+            trainable.
 
     Example usage:
     ```
@@ -253,7 +256,8 @@ class BertClassifier(keras.Model):
         self,
         base_model,
         num_classes,
-        **kwargs,
+        name=None,
+        trainable=True,
     ):
         inputs = base_model.input
         pooled = base_model(inputs)["pooled_output"]
@@ -263,7 +267,9 @@ class BertClassifier(keras.Model):
             name="logits",
         )(pooled)
         # Instantiate using Functional API Model constructor
-        super().__init__(inputs=inputs, outputs=outputs, **kwargs)
+        super().__init__(
+            inputs=inputs, outputs=outputs, name=name, trainable=trainable
+        )
         # All references to `self` below this line
         self.base_model = base_model
         self.num_classes = num_classes
