@@ -287,6 +287,7 @@ def BertBase(**kwargs):
             [1] * 512, shape=(1, 512)),
     }
     output = encoder(input_data)
+    ```
     """
 
     base_args = {
