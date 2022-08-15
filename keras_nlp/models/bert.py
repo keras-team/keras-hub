@@ -38,21 +38,21 @@ class Bert(keras.Model):
     defined in the paper, see for example `keras_nlp.models.BertBase`.
 
     Args:
-        vocabulary_size: The size of the token vocabulary.
-        num_layers: The number of transformer layers.
-        num_heads: The number of attention heads for each transformer.
+        vocabulary_size: Int. The size of the token vocabulary.
+        num_layers: Int. The number of transformer layers.
+        num_heads: Int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
-        hidden_dim: The size of the transformer encoding and pooler layers.
-        intermediate_dim: The output dimension of the first Dense layer in a
-            two-layer feedforward network for each transformer.
-        dropout: Dropout probability for the Transformer encoder.
-        max_sequence_length: The maximum sequence length that this encoder can
-            consume. If None, max_sequence_length uses the value from sequence
-            length. This determines the variable shape for positional
+        hidden_dim: Int. The size of the transformer encoding and pooler layers.
+        intermediate_dim: Int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for each transformer.
+        dropout: Float. Dropout probability for the Transformer encoder.
+        max_sequence_length: Int. The maximum sequence length that this encoder
+            can consume. If None, `max_sequence_length` uses the value from
+            sequence length. This determines the variable shape for positional
             embeddings.
-        num_segments: The number of types that the 'segment_ids' input can
+        num_segments: Int. The number of types that the 'segment_ids' input can
             take.
-        cls_token_index: Index of [CLS] token in the vocabulary.
+        cls_token_index: Int. Index of [CLS] token in the vocabulary.
 
     Example usage:
     ```python
@@ -81,7 +81,7 @@ class Bert(keras.Model):
 
     # TODO(jbischof): add tests
     # TODO(jbischof): consider changing `intermediate_dim` to less confusing
-    # name here and in TransformerEncoder
+    # name here and in TransformerEncoder (`feed_forward_dim`?)
 
     def __init__(
         self,
@@ -214,7 +214,7 @@ class BertClassifier(keras.Model):
 
     Args:
         base_model: A `keras_nlp.models.Bert` to encode inputs.
-        num_classes: Number of classes to predict.
+        num_classes: Int. Number of classes to predict.
 
     Example usage:
     ```
