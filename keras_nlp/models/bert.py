@@ -15,7 +15,6 @@
 """Bert model configurable class, preconfigured versions, and task heads."""
 
 import tensorflow as tf
-from absl import logging
 from tensorflow import keras
 
 from keras_nlp.layers import PositionEmbedding
@@ -304,10 +303,10 @@ def BertBase(name=None, trainable=True):
     """
 
     model = Bert(
-        vocab_size=30522,
+        vocabulary_size=30522,
         num_layers=12,
-        hidden_size=768,
         num_heads=12,
+        hidden_dim=768,
         intermediate_dim=3072,
         dropout=0.1,
         max_sequence_length=512,
