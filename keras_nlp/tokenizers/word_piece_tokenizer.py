@@ -124,7 +124,13 @@ def pretokenize(text, lowercase, strip_accents, split):
     return text
 
 
-def download_vocabulary(lang, vocabulary_size, lowercase, strip_accents):
+def download_vocabulary(
+    lang,
+    vocabulary_size,
+    lowercase,
+    strip_accents,
+    suffix_indicator,
+):
     if lang not in SUPPORTED_VOCAB:
         raise ValueError(
             "This language is currently not supported. Recieved "
@@ -134,6 +140,13 @@ def download_vocabulary(lang, vocabulary_size, lowercase, strip_accents):
         raise ValueError(
             "The pretrained vocabularies currently do not support "
             "`strip_accents=True`."
+        )
+    if suffix_indicator != "##":
+        raise ValueError(
+            "This suffix indicator is currently not supported in pretrained "
+            'vocabularies. Use the default `suffix_indicator="##"` or '
+            "provide your own vocabulary. Recieved "
+            f"`suffix_indicator={suffix_indicator}`."
         )
 
     # Get vocabulary file
@@ -199,14 +212,15 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     be either an integer or string type.
 
     Args:
-        vocabulary: A list of strings, a string filename path, or
-            'bert_uncased'. If passing a list, each element of the list should
-            be a single WordPiece token string. If passing a filename, the file
-            should be a plain text file containing a single WordPiece token per
-            line. If passing 'bert_uncased', the tokenizer uses the vocabulary
-            used to train BERT as the input, and default parameters
-            `lowercase=True`, `strip_accents=True` and `split=True` must be
-            used.
+        vocabulary: A list of strings or a string filename path. If passing a
+            list, each element of the list should be a single WordPiece token
+            string. If passing a filename, the file should be a plain text file
+            containing a single WordPiece token per line.
+        lang: An ISO 639-1 language code. Loads the tokenizer with a vocabulary
+            for the specified language.
+        vocabulary_size: If set, the vocabulary would be truncated to
+            `vocabulary_size`. Most vocabulary files are sorted in descending
+            order of frequency, so the most common tokens would be kept.
         sequence_length: int. If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of sequence_length.
         lowercase: bool, defaults to `False`. If true, the input text will be
@@ -337,7 +351,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             )
         elif vocabulary is None and lang is not None:
             vocabulary = download_vocabulary(
-                lang, vocabulary_size, lowercase, strip_accents
+                lang,
+                vocabulary_size,
+                lowercase,
+                strip_accents,
+                suffix_indicator,
             )
 
         if isinstance(vocabulary, str):

@@ -198,6 +198,8 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         with self.assertRaises(ValueError):
             # Unsupported language.
             WordPieceTokenizer(lang="zh")
+        with self.assertRaises(ValueError):
+            WordPieceTokenizer(lang="en", suffix_indicator="$$")
 
     def test_config(self):
         input_data = ["quick brOWN whale"]
