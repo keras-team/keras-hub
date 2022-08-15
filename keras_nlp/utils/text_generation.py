@@ -18,6 +18,7 @@ import tensorflow as tf
 from absl import logging
 from tensorflow import keras
 
+# TODO (@chenmoneygithub): Refactor code to reuse snippets.
 
 def validate_prompt(prompt):
     """Helper function to validate input to text_generation utils."""
