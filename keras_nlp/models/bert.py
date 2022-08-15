@@ -43,7 +43,7 @@ class Bert(keras.Model):
         num_layers: The number of transformer layers.
         num_heads: The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
-        hidden_dim: The size of the transformer hidden layers.
+        hidden_dim: The size of the transformer encoding and pooler layers.
         intermediate_dim: The output dimension of the first Dense layer in a
             two-layer feedforward network for each transformer.
         dropout: Dropout probability for the Transformer encoder.
@@ -80,7 +80,9 @@ class Bert(keras.Model):
     ```
     """
 
-    # TODO(bischof): add tests
+    # TODO(jbischof): add tests
+    # TODO(jbischof): consider changing `intermediate_dim` to less confusing
+    # name here and in TransformerEncoder
 
     def __init__(
         self,
