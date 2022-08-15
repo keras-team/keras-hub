@@ -21,6 +21,23 @@ from tensorflow import keras
 
 from keras_nlp.tokenizers import tokenizer
 
+# Pretrained Vocabularies
+
+BASE_PATH = "https://storage.googleapis.com/keras-nlp/pretrained-tokenizers/wordpiece-tokenizer/vocabularies/"
+
+SUPPORTED_VOCAB = {
+    "en",
+    "es",
+    "fr",
+    "ar",
+    "bn",
+    "hi",
+    "ru",
+    "id",
+    "pt",
+}
+
+
 # Matches whitespace and control characters.
 WHITESPACE_REGEX = r"|".join(
     [
@@ -105,6 +122,45 @@ def pretokenize(text, lowercase, strip_accents, split):
             keep_delim_regex_pattern=PUNCTUATION_REGEX,
         )
     return text
+
+
+def download_vocabulary(lang, vocabulary_size, lowercase, strip_accents):
+    if lang not in SUPPORTED_VOCAB:
+        raise ValueError(
+            "This language is currently not supported. Recieved "
+            f"`lang={lang}`."
+        )
+    if strip_accents:
+        raise ValueError(
+            "The pretrained vocabularies currently do not support "
+            "`strip_accents=True`."
+        )
+
+    # Get vocabulary file
+    if vocabulary_size is not None:
+        # 0.95 is from the 5% buffer when training vocabularies.
+        if vocabulary_size <= 20000 * 0.95:
+            size = "20000"
+        elif vocabulary_size <= 50000 * 0.95:
+            size = "50000"
+        else:
+            raise ValueError(
+                f"`vocabulary_size={vocabulary_size}` is not currently "
+                "supported. Use a vocabulary size less than "
+                f"{50000*0.95}. "
+            )
+    else:
+        size = "50000"
+
+    case = "uncased" if lowercase else "cased"
+
+    filename = f"{lang}wiki_{size}_{case}.txt"
+    vocabulary = keras.utils.get_file(
+        filename,
+        BASE_PATH + filename,
+        cache_subdir="tokenizers",
+    )
+    return vocabulary
 
 
 class WordPieceTokenizer(tokenizer.Tokenizer):
@@ -229,11 +285,23 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     >>> split_inputs = tf.strings.split(inputs, sep="$")
     >>> tokenizer(split_inputs)
     <tf.RaggedTensor [[b'the', b'qu', b'##ick', b'br', b'##own', b'fox']]>
+
+    Pretrained Tokenizer.
+    >>> inputs = "The quick brown fox."
+    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+    ...     lang="en",
+    ...     lowercase=True,
+    ...     dtype='string',
+    ... )
+    >>> tokenizer(inputs)
+    <tf.RaggedTensor [[b'the', b'quick', b'brown', b'fox', b'.']]>
     """
 
     def __init__(
         self,
         vocabulary=None,
+        lang: str = None,
+        vocabulary_size: int = None,
         sequence_length: int = None,
         lowercase: bool = False,
         strip_accents: bool = False,
@@ -255,21 +323,24 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         super().__init__(**kwargs)
 
-        if isinstance(vocabulary, str):
-            if vocabulary in {"bert_uncased"}:
-                if (not lowercase) or (not strip_accents) or (not split):
-                    raise ValueError(
-                        "If using `vocabulary='bert_vocab_uncased'`, default "
-                        "configuration parameters should be set: "
-                        "`lowercase=True`, `strip_accents=True`, and "
-                        "`split=True`."
-                    )
-                vocabulary = keras.utils.get_file(
-                    "bert_vocab_uncased",
-                    "https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert/bert_vocab_uncased.txt",
-                    cache_subdir="tokenizers",
-                )
+        if vocabulary is None and lang is None:
+            raise ValueError(
+                "Tokenizer requires either the `vocabulary` or `lang` "
+                "argument. Use `vocabulary` for custom vocabulary and `lang` "
+                "for pretrained vocabulary."
+            )
+        elif vocabulary is not None and lang is not None:
+            raise ValueError(
+                "Tokenizer requires only one of `vocabulary` or `lang` "
+                "arguments. Use `vocabulary` for custom vocabulary and `lang` "
+                "for pretrained vocabulary."
+            )
+        elif vocabulary is None and lang is not None:
+            vocabulary = download_vocabulary(
+                lang, vocabulary_size, lowercase, strip_accents
+            )
 
+        if isinstance(vocabulary, str):
             self.vocabulary = [
                 line.rstrip() for line in tf.io.gfile.GFile(vocabulary)
             ]
@@ -281,6 +352,10 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "Vocabulary must be an file path or list of terms. "
                 f"Received: vocabulary={vocabulary}"
             )
+        # Truncate vocabulary.
+        if vocabulary_size is not None:
+            self.vocabulary = self.vocabulary[:vocabulary_size]
+
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
 

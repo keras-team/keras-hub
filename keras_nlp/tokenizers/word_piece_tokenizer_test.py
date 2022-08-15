@@ -171,16 +171,33 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6, 7]])
 
     def test_from_pretrained(self):
-        tokenizer = WordPieceTokenizer(vocabulary="bert_uncased")
-        self.assertAllEqual(len(tokenizer.vocabulary), 30522)
+        input_data = ["the quick brown fox."]
+        tokenizer = WordPieceTokenizer(
+            lang="en", lowercase=True, dtype="string"
+        )
+        # self.assertAllEqual(len(tokenizer.vocabulary), 30522)
+        self.assertAllEqual(
+            tokenizer(input_data), [[b"the", b"quick", b"brown", b"fox", b"."]]
+        )
 
     def test_from_pretrained_error(self):
         with self.assertRaises(ValueError):
-            WordPieceTokenizer(vocabulary="bert_uncased", lowercase=False)
+            WordPieceTokenizer(lang="en", strip_accents=True)
         with self.assertRaises(ValueError):
-            WordPieceTokenizer(vocabulary="bert_uncased", strip_accents=False)
+            vocab_data = [
+                "[UNK]",
+                "the",
+                "qu",
+                "##ick",
+                "br",
+                "##own",
+                "fox",
+                ".",
+            ]
+            WordPieceTokenizer(vocabulary=vocab_data, lang="en")
         with self.assertRaises(ValueError):
-            WordPieceTokenizer(vocabulary="bert_uncased", split=False)
+            # Unsupported language.
+            WordPieceTokenizer(lang="zh")
 
     def test_config(self):
         input_data = ["quick brOWN whale"]
