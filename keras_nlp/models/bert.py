@@ -15,6 +15,7 @@
 
 import tensorflow as tf
 from tensorflow import keras
+from absl import logging
 
 from keras_nlp.layers import PositionEmbedding
 from keras_nlp.layers import TransformerEncoder
@@ -28,10 +29,14 @@ class Bert(keras.Model):
     """Bi-directional Transformer-based encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
-    described in "BERT: Pre-training of Deep Bidirectional Transformers for
-    Language Understanding" (https://arxiv.org/abs/1810.04805). It includes the
+    described in ["BERT: Pre-training of Deep Bidirectional Transformers for
+    Language Understanding"](https://arxiv.org/abs/1810.04805). It includes the
     embedding lookups and transformer layers, but not the masked language model
     or classification task networks.
+
+    This class gives a fully configurable Bert model with any number of layers,
+    heads, and embedding dimensions. For specific specific bert architectures 
+    defined in the paper, see for example `keras_nlp.models.BertBase`.
 
     Args:
         vocabulary_size: The size of the token vocabulary.
@@ -262,23 +267,46 @@ def BertBase(**kwargs):
     architecture.
 
     This network implements a bi-directional Transformer-based encoder as
-    described in "BERT: Pre-training of Deep Bidirectional Transformers for
-    Language Understanding" (https://arxiv.org/abs/1810.04805). It includes the
+    described in ["BERT: Pre-training of Deep Bidirectional Transformers for
+    Language Understanding"](https://arxiv.org/abs/1810.04805). It includes the
     embedding lookups and transformer layers, but not the masked language model
     or classification task networks.
+
+    Example usage:
+    ```python
+    # Randomly initialized BertBase encoder
+    encoder = keras_nlp.models.BertBase()
+
+     # Call encoder on the inputs.
+    input_data = {
+        "input_ids": tf.random.uniform(
+            shape=(1, 512), dtype=tf.int64, maxval=encoder.vocabulary_size),
+        "segment_ids": tf.constant(
+            [0] * 200 + [1] * 312, shape=(1, 512)),
+        "input_mask": tf.constant(
+            [1] * 512, shape=(1, 512)),
+    }
+    output = encoder(input_data)
     """
 
-    model = Bert(
-        vocabulary_size=30522,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        dropout=0.1,
-        max_sequence_length=512,
-        num_segments=2,
-        **kwargs,
-    )
+    base_args = {
+        "vocabulary_size": 30522,
+        "num_layers": 12,
+        "num_heads": 12,
+        "hidden_dim": 768,
+        "intermediate_dim": 3072,
+        "dropout": 0.1,
+        "max_sequence_length": 512,
+        "num_segments": 2,
+    }
+
+    for arg in kwargs:
+        if arg in base_args:
+            logging.error(
+                f"""`{arg}` fixed to {base_args[arg]} in BertBase and cannot """
+                f"""be changed.""")
+
+    model = Bert({**base_args, **kwargs})
 
     # TODO(jbischof): add some documentation or magic to load our checkpoints
     # TODO(jbischof): attach the tokenizer
