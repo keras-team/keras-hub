@@ -83,9 +83,8 @@ class Bert(keras.Model):
     ```
     """
 
-    # TODO(jbischof): add tests
-    # TODO(jbischof): consider changing `intermediate_dim` to less confusing
-    # name here and in TransformerEncoder (`feed_forward_dim`?)
+    # TODO(jbischof): consider changing `intermediate_dim` and `hidden_dim` to 
+    # less confusing name here and in TransformerEncoder (`feed_forward_dim`?)
 
     def __init__(
         self,
