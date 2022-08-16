@@ -21,10 +21,10 @@ from absl import flags
 from absl import logging
 from tensorflow import keras
 
+import keras_nlp
 from examples.bert.bert_config import MODEL_CONFIGS
 from examples.bert.bert_config import PREPROCESSING_CONFIG
 from examples.bert.bert_config import TRAINING_CONFIG
-from examples.bert.bert_model import BertModel
 
 FLAGS = flags.FLAGS
 
@@ -91,7 +91,7 @@ flags.DEFINE_integer(
 
 
 class MaskedLMHead(keras.layers.Layer):
-    """Masked language model network head for BERT.
+    """Masked language model network head for Bert.
 
     This layer implements a masked language model based on the provided
     transformer based encoder. It assumes that the encoder network being passed
@@ -99,13 +99,14 @@ class MaskedLMHead(keras.layers.Layer):
 
     Example:
     ```python
-    encoder=modeling.networks.BertEncoder(...)
-    lm_layer=MaskedLMHead(embedding_table=encoder.get_embedding_table())
+    encoder = keras_nlp.models.BertBase()
+    lm_layer = MaskedLMHead(embedding_table=encoder.get_embedding_table())
     ```
 
     Args:
         embedding_table: The embedding table from encoder network.
-        inner_activation: The activation, if any, for the inner dense layer.
+        intermediate_activation: The activation, if any, for the inner dense
+            layer.
         initializer: The initializer for the dense layer. Defaults to a Glorot
             uniform initializer.
         output: The output style for this layer. Can be either 'logits' or
@@ -115,20 +116,22 @@ class MaskedLMHead(keras.layers.Layer):
     def __init__(
         self,
         embedding_table,
-        inner_activation="gelu",
+        intermediate_activation="gelu",
         initializer="glorot_uniform",
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.embedding_table = embedding_table
-        self.inner_activation = keras.activations.get(inner_activation)
+        self.intermediate_activation = keras.activations.get(
+            intermediate_activation
+        )
         self.initializer = initializer
 
     def build(self, input_shape):
-        self._vocab_size, hidden_size = self.embedding_table.shape
+        self._vocab_size, hidden_dim = self.embedding_table.shape
         self.dense = keras.layers.Dense(
-            hidden_size,
-            activation=self.inner_activation,
+            hidden_dim,
+            activation=self.intermediate_activation,
             kernel_initializer=self.initializer,
             name="transform/dense",
         )
@@ -162,7 +165,7 @@ class MaskedLMHead(keras.layers.Layer):
 
         Args:
             sequence_tensor: Sequence output of shape
-                (`batch_size`, `seq_length`, `hidden_size`) where `hidden_size`
+                (`batch_size`, `seq_length`, `hidden_dim`) where `hidden_dim`
                 is number of hidden units.
             positions: Positions ids of tokens in sequence to mask for
                 pretraining of with dimension (batch_size, num_predictions)
@@ -171,7 +174,7 @@ class MaskedLMHead(keras.layers.Layer):
 
         Returns:
             Masked out sequence tensor of shape (batch_size * num_predictions,
-            `hidden_size`).
+            `hidden_dim`).
         """
         sequence_shape = tf.shape(sequence_tensor)
         batch_size, seq_length = sequence_shape[0], sequence_shape[1]
@@ -189,17 +192,20 @@ class MaskedLMHead(keras.layers.Layer):
         return output_tensor
 
 
-class BertPretrainer(keras.Model):
-    def __init__(self, bert_model, **kwargs):
+class BertPretrainingModel(keras.Model):
+    """MLM + NSP model with Bert encoder."""
+
+    def __init__(self, encoder, **kwargs):
         super().__init__(**kwargs)
-        self.bert_model = bert_model
+        self.encoder = encoder
+        # TODO(jbischof): replace with keras_nlp.layers.MLMHead (Issue #166)
         self.masked_lm_head = MaskedLMHead(
-            bert_model.get_embedding_table(),
-            initializer=bert_model.initializer,
+            embedding_table=encoder.token_embedding.embeddings,
+            initializer=keras.initializers.TruncatedNormal(stddev=0.02),
         )
         self.next_sentence_head = keras.layers.Dense(
-            2,
-            kernel_initializer=bert_model.initializer,
+            encoder.num_segments,
+            kernel_initializer=keras.initializers.TruncatedNormal(stddev=0.02),
         )
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.lm_loss_tracker = keras.metrics.Mean(name="lm_loss")
@@ -212,12 +218,16 @@ class BertPretrainer(keras.Model):
         )
 
     def call(self, data):
-        sequence_output, pooled_output = self.bert_model(
+        encoder_output = self.encoder(
             {
                 "input_ids": data["input_ids"],
                 "input_mask": data["input_mask"],
                 "segment_ids": data["segment_ids"],
             }
+        )
+        sequence_output, pooled_output = (
+            encoder_output["sequence_output"],
+            encoder_output["pooled_output"],
         )
         lm_preds = self.masked_lm_head(
             sequence_output, data["masked_lm_positions"]
@@ -396,14 +406,13 @@ def main(_):
     dataset = dataset.repeat()
 
     with strategy.scope():
-        # Create a BERT model the input config.
-        model = BertModel(
-            vocab_size=len(vocab),
-            **model_config,
+        # Create a Bert model the input config.
+        encoder = keras_nlp.models.Bert(
+            vocabulary_size=len(vocab), **model_config
         )
         # Make sure model has been called.
-        model(model.inputs)
-        model.summary()
+        encoder(encoder.inputs)
+        encoder.summary()
 
         # Allow overriding train steps from the command line for quick testing.
         if FLAGS.num_train_steps is not None:
@@ -420,7 +429,7 @@ def main(_):
         )
         optimizer = keras.optimizers.Adam(learning_rate=learning_rate_schedule)
 
-        pretraining_model = BertPretrainer(model)
+        pretraining_model = BertPretrainingModel(encoder)
         pretraining_model.compile(
             optimizer=optimizer,
         )
@@ -443,7 +452,7 @@ def main(_):
 
     model_path = FLAGS.saved_model_output
     logging.info(f"Saving to {FLAGS.saved_model_output}")
-    model.save(model_path)
+    encoder.save(model_path)
 
 
 if __name__ == "__main__":

@@ -68,7 +68,6 @@ class TransformerEncoder(keras.layers.Layer):
     # Call encoder on the inputs.
     input_data = tf.random.uniform(shape=[2, 10, 64])
     output = model(input_data)
-
     ```
 
     References:
