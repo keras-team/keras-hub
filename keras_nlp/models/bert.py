@@ -83,7 +83,7 @@ class Bert(keras.Model):
     ```
     """
 
-    # TODO(jbischof): consider changing `intermediate_dim` and `hidden_dim` to 
+    # TODO(jbischof): consider changing `intermediate_dim` and `hidden_dim` to
     # less confusing name here and in TransformerEncoder (`feed_forward_dim`?)
 
     def __init__(
