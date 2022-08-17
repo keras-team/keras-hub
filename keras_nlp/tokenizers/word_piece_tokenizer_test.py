@@ -13,10 +13,12 @@
 # limitations under the License.
 
 import os
+import random
 
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.tokenizers.word_piece_tokenizer import SUPPORTED_VOCAB
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
@@ -175,10 +177,14 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         tokenizer = WordPieceTokenizer(
             lang="en", lowercase=True, dtype="string"
         )
-        # self.assertAllEqual(len(tokenizer.vocabulary), 30522)
         self.assertAllEqual(
             tokenizer(input_data), [[b"the", b"quick", b"brown", b"fox", b"."]]
         )
+
+    def test_from_pretrained_supported_vocab(self):
+        for lang in random.sample(SUPPORTED_VOCAB, 5):
+            self.assertTrue(WordPieceTokenizer(lang=lang))
+            self.assertTrue(WordPieceTokenizer(lang=lang, lowercase=True))
 
     def test_from_pretrained_error(self):
         with self.assertRaises(ValueError):

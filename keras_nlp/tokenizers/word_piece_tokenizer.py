@@ -37,6 +37,53 @@ SUPPORTED_VOCAB = {
     "pt",
 }
 
+VOCAB_HASHES = {
+    # English (en)
+    "enwiki_20000_cased.txt": "dee108245d25e363d8b3a9e310148b75",
+    "enwiki_20000_uncased.txt": "6a3365724775df22518fad70943cbe92",
+    "enwiki_50000_cased.txt": "4a30d9a0d4fb3e2ab3fe703e7b525747",
+    "enwiki_50000_uncased.txt": "8d0a7cbff5a90f7e12eca339f59c1dde",
+    # French (fr)
+    "frwiki_20000_cased.txt": "83edcd4ea721cc654cffe85694b53c5a",
+    "frwiki_20000_uncased.txt": "d26a8be56437f0501bfd32e29cd34d3b",
+    "frwiki_50000_cased.txt": "62181f510fba0551b53e86e266b2b344",
+    "frwiki_50000_uncased.txt": "bb4268157ec21ff4b0a733e7ea441b3f",
+    # Spanish (es)
+    "eswiki_20000_cased.txt": "2e71613bdfef4d880f14d6abea805589",
+    "eswiki_20000_uncased.txt": "0db01a31d4315ae1b6951ff17815cca1",
+    "eswiki_50000_cased.txt": "fe87ae67e08da90f29461111d43e36d0",
+    "eswiki_50000_uncased.txt": "2b86440fce72f322229ce7c374aae811",
+    # Arabic (ar)
+    "arwiki_20000_cased.txt": "adad214c0941f987cb3626243cfa8669",
+    "arwiki_20000_uncased.txt": "7a39a909204e722ff5e6e15c26cfff09",
+    "arwiki_50000_cased.txt": "1b86106ba3419174a9fc7923c68c0f31",
+    "arwiki_50000_uncased.txt": "e19fd6b6054e9d7d8c18b1d63ca24050",
+    # Hindi (hi)
+    "hiwiki_20000_cased.txt": "6338c8bc597425c6f9dc7224c9b0bab5",
+    "hiwiki_20000_uncased.txt": "1cb9ce769bae2195e3e31d0101b05e7a",
+    "hiwiki_50000_cased.txt": "14ce7153c47fca47ae1b025308b1db8b",
+    "hiwiki_50000_uncased.txt": "94bab6e000c8e190cc0b085aef1469fb",
+    # Russian (ru)
+    "ruwiki_20000_cased.txt": "64c327dd906d4f2e721c4e97cb74369e",
+    "ruwiki_20000_uncased.txt": "8396c84aa19f442e0bea9a16d13eb46f",
+    "ruwiki_50000_cased.txt": "01dd03cf1fcc56a5f23866501e91680d",
+    "ruwiki_50000_uncased.txt": "8f10d36f15f7b0ce488d1c40a93c187d",
+    # Bengali (bn)
+    "bnwiki_20000_cased.txt": "ae3c5c932ce2d7aeeaa441edea66e87d",
+    "bnwiki_20000_uncased.txt": "63d040dbd1fb50c13d394b33dab6a356",
+    "bnwiki_50000_cased.txt": "6a7f1dd2eb58825741a33ea006e19569",
+    "bnwiki_50000_uncased.txt": "8528865a47f199ce7c360e9b9f88c50f",
+    # Portuguese (pt)
+    "ptwiki_20000_cased.txt": "6151935d3a423020a46644e8ec7c6775",
+    "ptwiki_20000_uncased.txt": "a1ba7df9e795af2ca0c5e97ce74d3ef9",
+    "ptwiki_50000_cased.txt": "59226413e933ea336eb730b62b19c810",
+    "ptwiki_50000_uncased.txt": "5c0bc78db111780d884e455c16d47b70",
+    # Indonesian (id)
+    "idwiki_20000_cased.txt": "6af5b7312fec62afcfb609bff955c3f0",
+    "idwiki_20000_uncased.txt": "d0e3a893d089c9a96f12ceb8de8807e9",
+    "idwiki_50000_cased.txt": "6b0d1d89dc06458f7baa4c648ccc79cb",
+    "idwiki_50000_uncased.txt": "a5235e0296c0c728dda3f0eccb28240f",
+}
 
 # Matches whitespace and control characters.
 WHITESPACE_REGEX = r"|".join(
@@ -133,17 +180,18 @@ def download_vocabulary(
 ):
     if lang not in SUPPORTED_VOCAB:
         raise ValueError(
-            "This language is currently not supported. Recieved "
-            f"`lang={lang}`."
+            "This Wikipedia language code is currently not supported. Recieved "
+            f"`lang={lang}`. Supported Wikipedia languages codes include "
+            f"{', '.join(SUPPORTED_VOCAB)}."
         )
     if strip_accents:
         raise ValueError(
-            "The pretrained vocabularies currently do not support "
+            "The pre-trained vocabularies currently does not support "
             "`strip_accents=True`."
         )
     if suffix_indicator != "##":
         raise ValueError(
-            "This suffix indicator is currently not supported in pretrained "
+            "This suffix indicator is currently not supported in pre-trained "
             'vocabularies. Use the default `suffix_indicator="##"` or '
             "provide your own vocabulary. Recieved "
             f"`suffix_indicator={suffix_indicator}`."
@@ -172,12 +220,13 @@ def download_vocabulary(
         filename,
         BASE_PATH + filename,
         cache_subdir="tokenizers",
+        file_hash=VOCAB_HASHES[filename],
     )
     return vocabulary
 
 
 class WordPieceTokenizer(tokenizer.Tokenizer):
-    """A WordPiece tokenizer layer.
+    f"""A WordPiece tokenizer layer.
 
     This layer provides an efficient, in graph, implementation of the WordPiece
     algorithm used by BERT and other models.
@@ -211,13 +260,25 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     The output dtype can be controlled via the `dtype` argument, which should
     be either an integer or string type.
 
+    Use `vocabulary` when tokenizing with your own vocabulary, and use `lang`
+    when using a pre-trained vocabulary. Using both arguments is not supported.
+
+    Pre-trained vocabularies are trained on the
+    [Wikipedia dataset](https://dumps.wikimedia.org/), with each Wikipedia
+    language code in `lang` corresponding to a vocabulary trained on that
+    language's dataset. For example, `lang='fr'` retrives the vocabulary trained
+    on the "frwiki" dataset.
+
+    Currently supported Wikipedia language codes include:
+    {", ".join(SUPPORTED_VOCAB)}.
+
     Args:
         vocabulary: A list of strings or a string filename path. If passing a
             list, each element of the list should be a single WordPiece token
             string. If passing a filename, the file should be a plain text file
             containing a single WordPiece token per line.
-        lang: An ISO 639-1 language code. Loads the tokenizer with a vocabulary
-            for the specified language.
+        lang: A [Wikipedia language code](https://en.wikipedia.org/wiki/List_of_Wikipedias).
+            Loads the tokenizer with a vocabulary for the specified language.
         vocabulary_size: If set, the vocabulary would be truncated to
             `vocabulary_size`. Most vocabulary files are sorted in descending
             order of frequency, so the most common tokens would be kept.
@@ -300,7 +361,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     >>> tokenizer(split_inputs)
     <tf.RaggedTensor [[b'the', b'qu', b'##ick', b'br', b'##own', b'fox']]>
 
-    Pretrained Tokenizer.
+    Pre-trained tokenizer.
     >>> inputs = ["The quick brown fox."]
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
     ...     lang="en",
@@ -341,13 +402,13 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             raise ValueError(
                 "Tokenizer requires either the `vocabulary` or `lang` "
                 "argument. Use `vocabulary` for custom vocabulary and `lang` "
-                "for pretrained vocabulary."
+                "for pre-trained vocabulary."
             )
         elif vocabulary is not None and lang is not None:
             raise ValueError(
                 "Tokenizer requires only one of `vocabulary` or `lang` "
                 "arguments. Use `vocabulary` for custom vocabulary and `lang` "
-                "for pretrained vocabulary."
+                "for pre-trained vocabulary."
             )
         elif vocabulary is None and lang is not None:
             vocabulary = download_vocabulary(
@@ -360,7 +421,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         if isinstance(vocabulary, str):
             self.vocabulary = [
-                line.rstrip() for line in tf.io.gfile.GFile(vocabulary)
+                line[:-1] for line in tf.io.gfile.GFile(vocabulary)
             ]
         elif isinstance(vocabulary, Iterable):
             # Make a copy.
@@ -392,7 +453,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 f'`"{self.oov_token}"`, or pass a different value for '
                 "the `oov_token` argument when creating the tokenizer."
             )
-
         self._fast_word_piece = tf_text.FastWordpieceTokenizer(
             vocab=self.vocabulary,
             token_out_type=self.compute_dtype,
