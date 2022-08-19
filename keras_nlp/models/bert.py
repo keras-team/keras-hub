@@ -118,9 +118,15 @@ class Bert(keras.Model):
         trainable=True,
     ):
 
-        token_id_input = keras.Input(shape=(None,), dtype="int32", name="input_ids")
-        segment_id_input = keras.Input(shape=(None,), dtype="int32", name="segment_ids")
-        input_mask = keras.Input(shape=(None,), dtype="int32", name="input_mask")
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="input_ids"
+        )
+        segment_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="segment_ids"
+        )
+        input_mask = keras.Input(
+            shape=(None,), dtype="int32", name="input_mask"
+        )
 
         # Embed tokens, positions, and segment ids.
         token_embedding_layer = keras.layers.Embedding(
@@ -143,7 +149,9 @@ class Bert(keras.Model):
         )(segment_id_input)
 
         # Sum, normailze and apply dropout to embeddings.
-        x = keras.layers.Add()((token_embedding, position_embedding, segment_embedding))
+        x = keras.layers.Add()(
+            (token_embedding, position_embedding, segment_embedding)
+        )
         x = keras.layers.LayerNormalization(
             name="embeddings_layer_norm",
             axis=-1,
@@ -160,7 +168,9 @@ class Bert(keras.Model):
             x = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
-                activation=lambda x: keras.activations.gelu(x, approximate=True),
+                activation=lambda x: keras.activations.gelu(
+                    x, approximate=True
+                ),
                 dropout=dropout,
                 kernel_initializer=_bert_kernel_initializer(),
                 name=f"""transformer_layer_{i}""",
@@ -273,7 +283,9 @@ class BertClassifier(keras.Model):
             name="logits",
         )(pooled)
         # Instantiate using Functional API Model constructor
-        super().__init__(inputs=inputs, outputs=outputs, name=name, trainable=trainable)
+        super().__init__(
+            inputs=inputs, outputs=outputs, name=name, trainable=trainable
+        )
         # All references to `self` below this line
         self.base_model = base_model
         self.num_classes = num_classes
@@ -295,9 +307,7 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
             trainable.
-"""
 
-BASE_EXAMPLE = """
     Example usage:
     ```python
     # Randomly initialized BertBase encoder
@@ -349,6 +359,7 @@ def BertBase(weights=None, name=None, trainable=True):
 setattr(
     BertBase,
     "__doc__",
-    MODEL_DOCSTRING.format(type="Base", names=", ".join(checkpoints["bert_base"]))
-    + BASE_EXAMPLE,
+    MODEL_DOCSTRING.format(
+        type="Base", names=", ".join(checkpoints["bert_base"])
+    ),
 )
