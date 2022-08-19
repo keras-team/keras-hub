@@ -34,6 +34,7 @@ checkpoints = {
             "md5": "074304b9d7f031ad5a6b626745f2a687",
             "description": "Base size of Bert where all input is lowercased.",
         },
+        # TODO(jbischof): upload cased model to GCP and verify output
         "bert_base_cased": {
             "md5": "xxx",
             "description": "Base size of Bert where case is maintained.",
@@ -340,6 +341,7 @@ def BertBase(weights=None, name=None, trainable=True):
         trainable=trainable,
     )
 
+    # TODO(jbischof): add tests for basic functionality but not file loading
     if weights:
         if weights not in checkpoints["bert_base"]:
             raise ValueError(
