@@ -323,6 +323,7 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
             [1] * 512, shape=(1, 512)),
     }}
     output = encoder(input_data)
+    ```
 """
 
 
