@@ -25,6 +25,23 @@ def _bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
+# Pretrained models
+BASE_PATH = "https://storage.googleapis.com/keras-nlp/models/"
+
+checkpoints = {
+    "bert_base": {
+        "bert_base_uncased": {
+            "md5": "074304b9d7f031ad5a6b626745f2a687",
+            "description": "Base size of Bert where all input is lowercased.",
+        },
+        "bert_base_cased": {
+            "md5": "xxx",
+            "description": "Base size of Bert where case is maintained.",
+        },
+    }
+}
+
+
 class Bert(keras.Model):
     """Bi-directional Transformer-based encoder network.
 
@@ -101,15 +118,9 @@ class Bert(keras.Model):
         trainable=True,
     ):
 
-        token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="input_ids"
-        )
-        segment_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="segment_ids"
-        )
-        input_mask = keras.Input(
-            shape=(None,), dtype="int32", name="input_mask"
-        )
+        token_id_input = keras.Input(shape=(None,), dtype="int32", name="input_ids")
+        segment_id_input = keras.Input(shape=(None,), dtype="int32", name="segment_ids")
+        input_mask = keras.Input(shape=(None,), dtype="int32", name="input_mask")
 
         # Embed tokens, positions, and segment ids.
         token_embedding_layer = keras.layers.Embedding(
@@ -132,9 +143,7 @@ class Bert(keras.Model):
         )(segment_id_input)
 
         # Sum, normailze and apply dropout to embeddings.
-        x = keras.layers.Add()(
-            (token_embedding, position_embedding, segment_embedding)
-        )
+        x = keras.layers.Add()((token_embedding, position_embedding, segment_embedding))
         x = keras.layers.LayerNormalization(
             name="embeddings_layer_norm",
             axis=-1,
@@ -151,9 +160,7 @@ class Bert(keras.Model):
             x = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=True
-                ),
+                activation=lambda x: keras.activations.gelu(x, approximate=True),
                 dropout=dropout,
                 kernel_initializer=_bert_kernel_initializer(),
                 name=f"""transformer_layer_{i}""",
@@ -266,17 +273,14 @@ class BertClassifier(keras.Model):
             name="logits",
         )(pooled)
         # Instantiate using Functional API Model constructor
-        super().__init__(
-            inputs=inputs, outputs=outputs, name=name, trainable=trainable
-        )
+        super().__init__(inputs=inputs, outputs=outputs, name=name, trainable=trainable)
         # All references to `self` below this line
         self.base_model = base_model
         self.num_classes = num_classes
 
 
-def BertBase(name=None, trainable=True):
-    """Bi-directional Transformer-based encoder network (Bert) using "Base"
-    architecture.
+MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
+    using "{type}" architecture.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["BERT: Pre-training of Deep Bidirectional Transformers for
@@ -285,10 +289,15 @@ def BertBase(name=None, trainable=True):
     or classification task networks.
 
     Args:
+        weights: String, optional. Name of pretrained model to load weights.
+            Should be one of {names}.
+            If None, model is randomly initialized.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
             trainable.
+"""
 
+BASE_EXAMPLE = """
     Example usage:
     ```python
     # Randomly initialized BertBase encoder
@@ -304,9 +313,10 @@ def BertBase(name=None, trainable=True):
             [1] * 512, shape=(1, 512)),
     }
     output = encoder(input_data)
-    ```
-    """
+"""
 
+
+def BertBase(weights=None, name=None, trainable=True):
     model = Bert(
         vocabulary_size=30522,
         num_layers=12,
@@ -319,6 +329,26 @@ def BertBase(name=None, trainable=True):
         trainable=trainable,
     )
 
-    # TODO(jbischof): add some documentation or magic to load our checkpoints
+    if weights:
+        if weights not in checkpoints["bert_base"]:
+            raise ValueError(
+                f"""`weights` must be one of {", ".join(checkpoints["bert_base"])}"""
+            )
+        filepath = keras.utils.get_file(
+            weights,
+            BASE_PATH + weights + "/model.h5",
+            cache_subdir="models",
+            file_hash=checkpoints["bert_base"][weights]["md5"],
+        )
+        model.load_weights(filepath)
+
     # TODO(jbischof): attach the tokenizer
     return model
+
+
+setattr(
+    BertBase,
+    "__doc__",
+    MODEL_DOCSTRING.format(type="Base", names=", ".join(checkpoints["bert_base"]))
+    + BASE_EXAMPLE,
+)
