@@ -47,7 +47,7 @@ def _validate_inputs(token_probability_fn, prompt):
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
-    print(prompt)
+
     _validate_token_probability_fn(token_probability_fn, prompt)
     return prompt, input_is_1d
 
