@@ -84,7 +84,6 @@ def _generate_text(
     # We will maintain a tensor of shape `(batch_size,)` which will store the
     # length of every sample. At the same time, pad the prompt with
     # `pad_token_id` to `max_length`.
-
     ragged_tensor = False
     if isinstance(prompt, tf.Tensor):
         shape = tf.shape(prompt)
@@ -98,6 +97,9 @@ def _generate_text(
         ragged_tensor = True
         batch_size = prompt.nrows()
         length = tf.RaggedTensor.row_lengths(prompt)
+
+        # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
+        # fails in TF 2.9.x. Fix this.
         prompt = prompt.to_tensor(
             default_value=pad_token_id, shape=(batch_size, max_length + 1)
         )
