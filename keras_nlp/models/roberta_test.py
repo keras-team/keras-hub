@@ -97,4 +97,7 @@ class RobertaTest(tf.test.TestCase):
         restored_model = keras.models.load_model(save_path)
 
         restored_output = restored_model(input_data)
-        self.assertAllClose(model_output[:, 0, :], restored_output[:, 0, :])
+        self.assertAllClose(
+            model_output[:, 0, :], restored_output[:, 0, :],
+            atol=1e-5
+        )

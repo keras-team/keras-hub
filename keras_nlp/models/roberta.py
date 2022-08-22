@@ -162,7 +162,7 @@ class Roberta(keras.Model):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         # BOS token '<s>' is equivalent to '[CLS]' from BERT
-        self.cls_token_index = bos_token_index
+        self.bos_token_index = bos_token_index
 
     def get_config(self):
         config = super().get_config()
@@ -175,11 +175,12 @@ class Roberta(keras.Model):
                 "num_heads": self.num_heads,
                 "max_sequence_length": self.max_sequence_length,
                 "dropout": self.dropout,
-                "cls_token_index": self.cls_token_index,
+                "bos_token_index": self.bos_token_index,
             }
         )
         return config
 
+#TODO: add RobertaMLM, different from BERT.
 
 class RobertaClassifier(keras.Model):
     """Roberta encoder model with a classification head.
