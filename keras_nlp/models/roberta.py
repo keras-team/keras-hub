@@ -42,7 +42,7 @@ class Roberta(keras.Model):
         num_layers: Int. The number of transformer layers.
         num_heads: Int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
-        hidden_dim: Int. The size of the transformer encoding and pooler layers.
+        hidden_dim: Int. The size of the transformer encoding layer.
         intermediate_dim: Int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
         dropout: Float. Dropout probability for the Transformer encoder.
@@ -187,6 +187,9 @@ class RobertaClassifier(keras.Model):
     Args:
         base_model: A `keras_nlp.models.Roberta` to encode inputs.
         num_classes: Int. Number of classes to predict.
+        hidden_dim: Int. The size of the pooler layer.
+        bos_token_index: Int. Index of <s> token in the vocabulary. Equivalent
+            to [CLS] in BERT.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
             trainable.
@@ -220,15 +223,17 @@ class RobertaClassifier(keras.Model):
         self,
         base_model,
         num_classes,
-        hidden_dim,
+        hidden_dim=None,
         bos_token_index=0,
         dropout=0.1,
         name=None,
         trainable=True,
     ):
         inputs = base_model.input
-        x = base_model(inputs)[:, bos_token_index, :]
+        if hidden_dim is None:
+            hidden_dim = base_model.hidden_dim
 
+        x = base_model(inputs)[:, bos_token_index, :]
         x = keras.layers.Dropout(dropout, name="pooler_dropout_1")(x)
         x = keras.layers.Dense(
             hidden_dim, activation="tanh", name="pooled_dense"
@@ -268,7 +273,7 @@ def RobertaBase(name=None, trainable=True):
     # Randomly initialized RobertaBase encoder
     encoder = keras_nlp.models.RobertaBase()
 
-     # Call encoder on the inputs.
+    # Call encoder on the inputs.
     input_data = {
         "input_ids": tf.random.uniform(
             shape=(1, 512), dtype=tf.int64, maxval=encoder.vocabulary_size),
