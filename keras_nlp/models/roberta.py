@@ -253,7 +253,7 @@ def RobertaBase(name=None, trainable=True):
     """RoBERTa implementation using "Base" architecture.
 
     This network implements a bi-directional Transformer-based encoder as
-    described in ["RoBERTa: A Robustly Optimized BERT Pretraining 
+    described in ["RoBERTa: A Robustly Optimized BERT Pretraining
     Approach"](https://arxiv.org/abs/1907.11692). It includes the
     embedding lookups and transformer layers, but not the masked language model
     or classification task networks.
