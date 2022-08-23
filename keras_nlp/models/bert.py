@@ -306,7 +306,8 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
     Args:
         weights: String, optional. Name of pretrained model to load weights.
             Should be one of {names}.
-            If None, model is randomly initialized.
+            If None, model is randomly initialized. Either `weights` or 
+            `vocabularly_size` must be specified, but not both.
         vocabulary_size: Int, optional. The size of the token vocabulary. Either
             `weights` or `vocabularly_size` must be specified, but not both.
         name: String, optional. Name of the model.
@@ -342,6 +343,12 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
             "(but not both)."
         )
 
+    if weights:
+        if weights not in checkpoints["bert_base"]:
+            raise ValueError(
+                "`weights` must be one of "
+                f"""{", ".join(checkpoints["bert_base"])}"""
+            )
     if vocabulary_size is None:
         vocabulary_size = checkpoints["bert_base"][weights]["vocabulary_size"]
 
@@ -359,11 +366,6 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
 
     # TODO(jbischof): add tests for basic functionality but not file loading
     if weights:
-        if weights not in checkpoints["bert_base"]:
-            raise ValueError(
-                "`weights` must be one of "
-                f"""{", ".join(checkpoints["bert_base"])}"""
-            )
         filepath = keras.utils.get_file(
             weights,
             BASE_PATH + weights + "/model.h5",

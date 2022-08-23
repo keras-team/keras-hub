@@ -81,13 +81,22 @@ class BertTest(tf.test.TestCase):
         model(input_data)
 
     def test_bert_base_vocab_error(self):
+        # Need `vocabulary_size` or `weights`
         with self.assertRaises(ValueError):
             bert.BertBase(name="encoder")
 
+        # Only one of `vocabulary_size` or `weights`
         with self.assertRaises(ValueError):
             bert.BertBase(
-                weights="bert_based_uncased",
+                weights="bert_base_uncased",
                 vocabulary_size=10000,
+                name="encoder",
+            )
+
+        # Not a checkpoint name
+        with self.assertRaises(ValueError):
+            bert.BertBase(
+                weights="bert_base_clowntown",
                 name="encoder",
             )
 
