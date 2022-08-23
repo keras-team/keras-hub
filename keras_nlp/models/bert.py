@@ -33,11 +33,13 @@ checkpoints = {
         "bert_base_uncased": {
             "md5": "074304b9d7f031ad5a6b626745f2a687",
             "description": "Base size of Bert where all input is lowercased.",
+            "vocabulary_size": 30522,
         },
         # TODO(jbischof): upload cased model to GCP and verify output
         "bert_base_cased": {
             "md5": "xxx",
             "description": "Base size of Bert where case is maintained.",
+            "vocabulary_size": 28996,
         },
     }
 }
@@ -305,6 +307,8 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
         weights: String, optional. Name of pretrained model to load weights.
             Should be one of {names}.
             If None, model is randomly initialized.
+        vocabulary_size: Int, optional. The size of the token vocabulary. Either
+            `weights` or `vocabularly_size` must be specified, but not both.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
             trainable.
@@ -312,7 +316,7 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
     Example usage:
     ```python
     # Randomly initialized BertBase encoder
-    encoder = keras_nlp.models.BertBase()
+    encoder = keras_nlp.models.BertBase(vocabulary_size=10000)
 
      # Call encoder on the inputs.
     input_data = {{
@@ -328,9 +332,21 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
 """
 
 
-def BertBase(weights=None, name=None, trainable=True):
+def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
+
+    if (vocabulary_size is None and weights is None) or (
+        vocabulary_size and weights
+    ):
+        raise ValueError(
+            "One of `vocabulary_size` or `weights` must be specified "
+            "(but not both)."
+        )
+
+    if vocabulary_size is None:
+        vocabulary_size = checkpoints["bert_base"][weights]["vocabulary_size"]
+
     model = Bert(
-        vocabulary_size=30522,
+        vocabulary_size=vocabulary_size,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
@@ -345,7 +361,8 @@ def BertBase(weights=None, name=None, trainable=True):
     if weights:
         if weights not in checkpoints["bert_base"]:
             raise ValueError(
-                f"""`weights` must be one of {", ".join(checkpoints["bert_base"])}"""
+                "`weights` must be one of "
+                f"""{", ".join(checkpoints["bert_base"])}"""
             )
         filepath = keras.utils.get_file(
             weights,
@@ -355,7 +372,7 @@ def BertBase(weights=None, name=None, trainable=True):
         )
         model.load_weights(filepath)
 
-    # TODO(jbischof): attach the tokenizer
+    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
 
 

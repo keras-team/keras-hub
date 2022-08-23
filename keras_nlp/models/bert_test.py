@@ -70,7 +70,7 @@ class BertTest(tf.test.TestCase):
         classifier(input_data)
 
     def test_valid_call_bert_base(self):
-        model = bert.BertBase(name="encoder")
+        model = bert.BertBase(vocabulary_size=10000, name="encoder")
         input_data = {
             "input_ids": tf.random.uniform(
                 shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
@@ -79,6 +79,17 @@ class BertTest(tf.test.TestCase):
             "input_mask": tf.constant([1] * 512, shape=(1, 512)),
         }
         model(input_data)
+
+    def test_bert_base_vocab_error(self):
+        with self.assertRaises(ValueError):
+            bert.BertBase(name="encoder")
+
+        with self.assertRaises(ValueError):
+            bert.BertBase(
+                weights="bert_based_uncased",
+                vocabulary_size=10000,
+                name="encoder",
+            )
 
     def test_saving_model(self):
         model = bert.Bert(
