@@ -98,5 +98,7 @@ class RobertaTest(tf.test.TestCase):
 
         restored_output = restored_model(input_data)
         self.assertAllClose(
-            model_output[:, 0, :], restored_output[:, 0, :], atol=1e-5
+            model_output["sequence_output"],
+            restored_output["sequence_output"],
+            atol=1e-5,
         )

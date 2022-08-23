@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""RoBerta model configurable class, preconfigured versions, and task heads."""
+"""Roberta model configurable class, preconfigured versions, and task heads."""
 
 import tensorflow as tf
 from tensorflow import keras
@@ -50,7 +50,7 @@ class Roberta(keras.Model):
             can consume. If None, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
-        bos_token_index: Int. Index of <s> token in the vocabulary. Equivalent
+        start_token_index: Int. Index of <s> token in the vocabulary. Equivalent
             to [CLS] in BERT.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
@@ -71,7 +71,7 @@ class Roberta(keras.Model):
     # Call encoder on the inputs.
     input_data = {
         "input_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=30522),
+            shape=(1, 12), dtype=tf.int64, maxval=50265),
         "input_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
@@ -88,29 +88,29 @@ class Roberta(keras.Model):
         intermediate_dim,
         dropout=0.1,
         max_sequence_length=512,
-        bos_token_index=0,
+        start_token_index=0,
         name=None,
         trainable=True,
     ):
 
         token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="input_ids"
+            shape=(None,), dtype=tf.int32, name="input_ids"
         )
         input_mask = keras.Input(
-            shape=(None,), dtype="int32", name="input_mask"
+            shape=(None,), dtype=tf.int32, name="input_mask"
         )
 
         # Embed tokens and positions.
-        token_and_position_embedding_layer = TokenAndPositionEmbedding(
+        embedding_layer = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
             embedding_dim=hidden_dim,
             embeddings_initializer=_roberta_kernel_initializer(),
-            name="token_and_position_embeddings",
+            name="embeddings",
         )
-        embedding = token_and_position_embedding_layer(token_id_input)
+        embedding = embedding_layer(token_id_input)
 
-        # Sum, normailze and apply dropout to embeddings.
+        # Sum, normalize and apply dropout to embeddings.
         x = keras.layers.LayerNormalization(
             name="embeddings_layer_norm",
             axis=-1,
@@ -127,32 +127,29 @@ class Roberta(keras.Model):
             x = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=True
-                ),
+                activation="gelu",
                 dropout=dropout,
                 kernel_initializer=_roberta_kernel_initializer(),
-                name=f"""transformer_layer_{i}""",
+                name=f"transformer_layer_{i}",
             )(x, padding_mask=input_mask)
 
-        # Construct the two RoBerta outputs.
-        output = x
+        # Construct the Roberta output.
+        sequence_output = x
 
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs={
                 "input_ids": token_id_input,
-                # "segment_ids": segment_id_input,
                 "input_mask": input_mask,
             },
-            outputs=output,
+            outputs={
+                "sequence_output": sequence_output,
+            },
             name=name,
             trainable=trainable,
         )
         # All references to `self` below this line
-        self.token_embedding = (
-            token_and_position_embedding_layer.token_embedding
-        )
+        self.token_embedding = embedding_layer.token_embedding
         self.vocabulary_size = vocabulary_size
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
@@ -162,7 +159,7 @@ class Roberta(keras.Model):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         # BOS token '<s>' is equivalent to '[CLS]' from BERT
-        self.bos_token_index = bos_token_index
+        self.start_token_index = start_token_index
 
     def get_config(self):
         config = super().get_config()
@@ -175,7 +172,7 @@ class Roberta(keras.Model):
                 "num_heads": self.num_heads,
                 "max_sequence_length": self.max_sequence_length,
                 "dropout": self.dropout,
-                "bos_token_index": self.bos_token_index,
+                "start_token_index": self.start_token_index,
             }
         )
         return config
@@ -191,8 +188,6 @@ class RobertaClassifier(keras.Model):
         base_model: A `keras_nlp.models.Roberta` to encode inputs.
         num_classes: Int. Number of classes to predict.
         hidden_dim: Int. The size of the pooler layer.
-        bos_token_index: Int. Index of <s> token in the vocabulary. Equivalent
-            to [CLS] in BERT.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
             trainable.
@@ -227,7 +222,6 @@ class RobertaClassifier(keras.Model):
         base_model,
         num_classes,
         hidden_dim=None,
-        bos_token_index=0,
         dropout=0.1,
         name=None,
         trainable=True,
@@ -236,12 +230,14 @@ class RobertaClassifier(keras.Model):
         if hidden_dim is None:
             hidden_dim = base_model.hidden_dim
 
-        x = base_model(inputs)[:, bos_token_index, :]
-        x = keras.layers.Dropout(dropout, name="pooler_dropout_1")(x)
+        x = base_model(inputs)["sequence_output"][
+            :, base_model.start_token_index, :
+        ]
+        x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
         x = keras.layers.Dense(
             hidden_dim, activation="tanh", name="pooled_dense"
         )(x)
-        x = keras.layers.Dropout(dropout, name="pooler_dropout_2")(x)
+        x = keras.layers.Dropout(dropout, name="classifier_dropout")(x)
         outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=_roberta_kernel_initializer(),
