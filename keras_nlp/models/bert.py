@@ -306,7 +306,7 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
     Args:
         weights: String, optional. Name of pretrained model to load weights.
             Should be one of {names}.
-            If None, model is randomly initialized. Either `weights` or 
+            If None, model is randomly initialized. Either `weights` or
             `vocabularly_size` must be specified, but not both.
         vocabulary_size: Int, optional. The size of the token vocabulary. Either
             `weights` or `vocabularly_size` must be specified, but not both.
