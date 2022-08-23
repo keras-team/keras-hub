@@ -346,9 +346,9 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
         if weights not in checkpoints["bert_base"]:
             raise ValueError(
                 "`weights` must be one of "
-                f"""{", ".join(checkpoints["bert_base"])}"""
+                f"""{", ".join(checkpoints["bert_base"])}. """
+                f"""Recieved: {weights}"""
             )
-    if vocabulary_size is None:
         vocabulary_size = checkpoints["bert_base"][weights]["vocabulary_size"]
 
     model = Bert(
