@@ -46,3 +46,32 @@ class BytePairTokenizerTest(tf.test.TestCase):
         self.assertIsInstance(call_output, tf.RaggedTensor)
         self.assertAllEqual(call_output, [[11, 12]])
         self.assertAllEqual(tokenize_output, [[11, 12]])
+
+    def test_tokenize_scalar(self):
+        input_data = "brown."
+        tokenizer = BytePairTokenizer(
+            vocabulary=self.vocabulary,
+            merges=["b r", "br o", "bro w", "brow n"],
+        )
+        tokenize_output = tokenizer.tokenize(input_data)
+        self.assertAllEqual(tokenize_output, [11, 12])
+
+    def test_tokenize_single_output(self):
+        # Test that output doesn't collapse to zero dimensions with one output
+        input_data = "brown"
+        tokenizer = BytePairTokenizer(
+            vocabulary=self.vocabulary,
+            merges=["b r", "br o", "bro w", "brow n"],
+        )
+        tokenize_output = tokenizer.tokenize(input_data)
+        self.assertAllEqual(tokenize_output, [11])
+
+    def test_detokenize(self):
+        input_data = ["brown."]
+        tokenizer = BytePairTokenizer(
+            vocabulary=self.vocabulary,
+            merges=["b r", "br o", "bro w", "brow n"],
+        )
+        tokenized_data = tokenizer.tokenize(input_data)
+        output_data = tokenizer.detokenize(tokenized_data)
+        self.assertAllEqual(input_data, output_data)

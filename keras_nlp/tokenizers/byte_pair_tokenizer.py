@@ -37,13 +37,18 @@ def bytes_to_unicode():
             cs.append(2**8 + n)
             n += 1
     cs = [chr(n) for n in cs]
+    bs = [n.to_bytes(1, "little") for n in bs]
     return bs, cs  # int to string mapping
 
 
 class BytePairTokenizerCache:
     def __init__(self):
         self.key2id = tf.lookup.experimental.DenseHashTable(
-            tf.string, tf.int64, -1, "a ", "b "
+            tf.string,
+            tf.int64,
+            -1,
+            "a ",
+            "b ",  # These tokens will never appear as keys.
         )
         self.id2value = tf.lookup.experimental.MutableHashTable(
             tf.int64, tf.string, ""
@@ -131,15 +136,23 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         # Map byte to unicode.
         bs, cs = bytes_to_unicode()
         self.byte2unicode = create_static_hashtable(bs, cs, default="")
+        self.unicode2byte = create_static_hashtable(cs, bs, default="")
 
         # Caching.
         self.cache = BytePairTokenizerCache()
 
         # BytePair encodings.
+        byte_pairs = [x[0] for x in self.vocabulary.items()]
+        byte_pair_encoding_idxs = [x[1] for x in self.vocabulary.items()]
         self.byte_pair_encoder = create_static_hashtable(
-            [x[0] for x in self.vocabulary.items()],
-            [x[1] for x in self.vocabulary.items()],
+            byte_pairs,
+            byte_pair_encoding_idxs,
             default=-1,
+        )
+        self.byte_pair_decoder = create_static_hashtable(
+            byte_pair_encoding_idxs,
+            byte_pairs,
+            default="",
         )
 
         # Merging rankings.
@@ -191,6 +204,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             inputs = tf.convert_to_tensor(inputs)
 
         scalar_input = inputs.shape.rank == 0
+        if scalar_input:
+            inputs = tf.expand_dims(inputs, 0)
 
         # Regex match tokens.
         raw_tokens = tf_text.regex_split(inputs, self.pat, self.pat)
@@ -237,22 +252,34 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
         return encoding
 
+    def detokenize(self, inputs):
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            inputs = tf.convert_to_tensor(inputs)
+
+        scalar_input = inputs.shape.rank == 0
+        if scalar_input:
+            inputs = tf.expand_dims(inputs, 0)
+
+        unicode_text = tf.strings.reduce_join(
+            self.byte_pair_decoder.lookup(inputs), axis=1
+        )
+        split_unicode_text = tf.strings.unicode_split(unicode_text, "UTF-8")
+        byte_text = tf.strings.reduce_join(
+            self.unicode2byte.lookup(split_unicode_text)
+        )
+
+        if not scalar_input:
+            byte_text = tf.expand_dims(byte_text, 0)
+
+        return byte_text
+
     # Helper functions go here.
 
     def _encode_tokens(self, tokens):
         """Map token bytes to unicode using `byte2unicode`."""
-        # TODO: This could be optimized.
-        # Encode token bytes.
-        token_bytes = tf.strings.bytes_split(tokens)
-        flatten_bytes = token_bytes.flat_values
-        flatten_bytes = tf.squeeze(
-            tf.cast(tf.io.decode_raw(flatten_bytes, tf.uint8), tf.int32)
-        )
-        flatten_unicode = self.byte2unicode.lookup(flatten_bytes)
-        token_unicode = tf.RaggedTensor.from_row_lengths(
-            values=flatten_unicode, row_lengths=token_bytes.row_lengths()
-        )
-        return token_unicode
+        split_bytes = tf.strings.bytes_split(tokens)
+        split_unicode = self.byte2unicode.lookup(split_bytes)
+        return split_unicode
 
     def _remove_empty_strings(self, tensor):
         """Remove empty strings in a tensor"""
