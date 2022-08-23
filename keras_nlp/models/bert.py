@@ -35,7 +35,6 @@ checkpoints = {
             "description": "Base size of Bert where all input is lowercased.",
             "vocabulary_size": 30522,
         },
-        # TODO(jbischof): upload cased model to GCP and verify output
         "bert_base_cased": {
             "md5": "f94a6cb012e18f4fb8ec92abb91864e9",
             "description": "Base size of Bert where case is maintained.",
