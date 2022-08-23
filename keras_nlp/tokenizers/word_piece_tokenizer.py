@@ -205,7 +205,7 @@ def download_vocabulary(
     if suffix_indicator != "##":
         raise ValueError(
             "This suffix indicator is currently not supported in pre-trained "
-            "vocabularies. Use the default `suffix_indicator=\"##\"` or "
+            'vocabularies. Use the default `suffix_indicator="##"` or '
             "provide your own vocabulary. Received: "
             f"`suffix_indicator={suffix_indicator}`."
         )
@@ -485,7 +485,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     def token_to_id(self, token: str) -> int:
         """Convert a string token to an integer id."""
         # This will be slow, but keep memory usage down compared to building a
-        # . Assuming the main use case is looking up a few special tokens
+        # mapping. Assuming the main use case is looking up a few special tokens
         # early in the vocab, this should be fine.
         return self.vocabulary.index(token)
 

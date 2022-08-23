@@ -208,23 +208,23 @@ class WordPieceTokenizerTest(tf.test.TestCase):
     def test_from_pretrained_error(self, download_mock):
         download_mock.return_value = []  # Should raise ValueError before this.
         with self.assertRaisesRegex(
-            ValueError, 
+            ValueError,
             "The pre-trained vocabularies currently does not support "
-            "`strip_accents=True`."
+            "`strip_accents=True`.",
         ):
             WordPieceTokenizer(lang="en", strip_accents=True)
         with self.assertRaisesRegex(
             ValueError,
             "Tokenizer requires either the `vocabulary` or `lang` "
             "argument. Use `vocabulary` for custom vocabulary and `lang` "
-            "for pre-trained vocabulary."
+            "for pre-trained vocabulary.",
         ):
             WordPieceTokenizer()
         with self.assertRaisesRegex(
             ValueError,
             "Tokenizer requires only one of `vocabulary` or `lang` "
             "arguments. Use `vocabulary` for custom vocabulary and `lang` "
-            "for pre-trained vocabulary."
+            "for pre-trained vocabulary.",
         ):
             vocab_data = [
                 "[UNK]",
@@ -241,19 +241,18 @@ class WordPieceTokenizerTest(tf.test.TestCase):
             ValueError,
             "This language code is currently not supported. Received: "
             f"`lang=zh`. Supported languages codes include "
-            f"{', '.join(SUPPORTED_VOCAB)}."
+            f"{', '.join(SUPPORTED_VOCAB)}.",
         ):
             # Unsupported language.
             WordPieceTokenizer(lang="zh")
         with self.assertRaisesRegex(
             ValueError,
             "This suffix indicator is currently not supported in pre-trained "
-            "vocabularies. Use the default `suffix_indicator=\"##\"` or "
+            'vocabularies. Use the default `suffix_indicator="##"` or '
             "provide your own vocabulary. Received: "
-            "`suffix_indicator=\$\$`."
+            "`suffix_indicator=@@.",
         ):
-            WordPieceTokenizer(lang="en", suffix_indicator="$$")
-        
+            WordPieceTokenizer(lang="en", suffix_indicator="@@")
 
     def test_config(self):
         input_data = ["quick brOWN whale"]
