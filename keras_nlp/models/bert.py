@@ -37,7 +37,7 @@ checkpoints = {
         },
         # TODO(jbischof): upload cased model to GCP and verify output
         "bert_base_cased": {
-            "md5": "xxx",
+            "md5": "f94a6cb012e18f4fb8ec92abb91864e9",
             "description": "Base size of Bert where case is maintained.",
             "vocabulary_size": 28996,
         },
