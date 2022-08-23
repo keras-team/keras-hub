@@ -193,8 +193,8 @@ def download_vocabulary(
     """Creates filename from parameters and downloads file from GCS."""
     if lang not in SUPPORTED_VOCAB:
         raise ValueError(
-            "This Wikipedia language code is currently not supported. Recieved "
-            f"`lang={lang}`. Supported Wikipedia languages codes include "
+            "This language code is currently not supported. Received: "
+            f"`lang={lang}`. Supported languages codes include "
             f"{', '.join(SUPPORTED_VOCAB)}."
         )
     if strip_accents:
@@ -205,8 +205,8 @@ def download_vocabulary(
     if suffix_indicator != "##":
         raise ValueError(
             "This suffix indicator is currently not supported in pre-trained "
-            'vocabularies. Use the default `suffix_indicator="##"` or '
-            "provide your own vocabulary. Recieved "
+            "vocabularies. Use the default `suffix_indicator=\"##\"` or "
+            "provide your own vocabulary. Received: "
             f"`suffix_indicator={suffix_indicator}`."
         )
 
@@ -234,7 +234,7 @@ def download_vocabulary(
 
 
 class WordPieceTokenizer(tokenizer.Tokenizer):
-    f"""A WordPiece tokenizer layer.
+    """A WordPiece tokenizer layer.
 
     This layer provides an efficient, in graph, implementation of the WordPiece
     algorithm used by BERT and other models.
@@ -272,20 +272,20 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     when using a pre-trained vocabulary. Using both arguments is not supported.
 
     Pre-trained vocabularies are trained on the
-    [Wikipedia dataset](https://dumps.wikimedia.org/), with each Wikipedia
+    [Wikipedia dataset](https://dumps.wikimedia.org/), with each
     language code in `lang` corresponding to a vocabulary trained on that
     language's dataset. For example, `lang='fr'` retrives the vocabulary trained
     on the "frwiki" dataset.
 
-    Currently supported Wikipedia language codes include:
-    {", ".join(SUPPORTED_VOCAB)}.
+    Currently supported language codes include:
+    en, es, fr, ar, bn, hi, ru, id, pt.
 
     Args:
         vocabulary: A list of strings or a string filename path. If passing a
             list, each element of the list should be a single WordPiece token
             string. If passing a filename, the file should be a plain text file
             containing a single WordPiece token per line.
-        lang: A [Wikipedia language code](https://en.wikipedia.org/wiki/List_of_Wikipedias).
+        lang: A [language code](https://en.wikipedia.org/wiki/List_of_Wikipedias).
             Loads the tokenizer with a vocabulary for the specified language.
         vocabulary_size: If set, the vocabulary would be truncated to
             `vocabulary_size`. Most vocabulary files are sorted in descending
