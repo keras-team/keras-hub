@@ -14,6 +14,7 @@
 
 import os
 import random
+import unittest
 
 import tensorflow as tf
 from tensorflow import keras
@@ -172,21 +173,40 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6, 7]])
 
-    def test_from_pretrained(self):
+    @unittest.mock.patch("keras_nlp.tokenizers.word_piece_tokenizer.download")
+    def test_from_pretrained(self, download_mock):
+        download_mock.return_value = [
+            "[UNK]",
+            "the",
+            "qu",
+            "##ick",
+            "br",
+            "##own",
+            "fox",
+        ]
         input_data = ["the quick brown fox."]
         tokenizer = WordPieceTokenizer(
             lang="en", lowercase=True, dtype="string"
         )
         self.assertAllEqual(
-            tokenizer(input_data), [[b"the", b"quick", b"brown", b"fox", b"."]]
+            tokenizer(input_data),
+            tf.ragged.constant(
+                [["the", "qu", "##ick", "br", "##own", "fox", "[UNK]"]]
+            ),
         )
+        self.assertAllEqual(download_mock.call_count, 1)
 
-    def test_from_pretrained_supported_vocab(self):
+    @unittest.mock.patch("keras_nlp.tokenizers.word_piece_tokenizer.download")
+    def test_from_pretrained_supported_vocab(self, download_mock):
+        download_mock.return_value = ["[UNK]"]
         for lang in random.sample(SUPPORTED_VOCAB, 5):
             self.assertTrue(WordPieceTokenizer(lang=lang))
             self.assertTrue(WordPieceTokenizer(lang=lang, lowercase=True))
+        self.assertAllEqual(download_mock.call_count, 10)
 
-    def test_from_pretrained_error(self):
+    @unittest.mock.patch("keras_nlp.tokenizers.word_piece_tokenizer.download")
+    def test_from_pretrained_error(self, download_mock):
+        download_mock.return_value = []  # should raise ValueError before this
         with self.assertRaises(ValueError):
             WordPieceTokenizer(lang="en", strip_accents=True)
         with self.assertRaises(ValueError):

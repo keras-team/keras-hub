@@ -171,6 +171,18 @@ def pretokenize(text, lowercase, strip_accents, split):
     return text
 
 
+def download(filename):
+    """Download file from GCS. Modularized for easier mock testing."""
+    vocabulary = keras.utils.get_file(
+        filename,
+        BASE_PATH + filename,
+        cache_subdir="tokenizers",
+        file_hash=VOCAB_HASHES[filename],
+    )
+    vocabulary = [line[:-1] for line in tf.io.gfile.GFile(vocabulary)]
+    return vocabulary
+
+
 def download_vocabulary(
     lang,
     vocabulary_size,
@@ -178,6 +190,7 @@ def download_vocabulary(
     strip_accents,
     suffix_indicator,
 ):
+    """Creates filename from parameters and downloads file from GCS."""
     if lang not in SUPPORTED_VOCAB:
         raise ValueError(
             "This Wikipedia language code is currently not supported. Recieved "
@@ -216,13 +229,8 @@ def download_vocabulary(
     case = "uncased" if lowercase else "cased"
 
     filename = f"{lang}wiki_{size}_{case}.txt"
-    vocabulary = keras.utils.get_file(
-        filename,
-        BASE_PATH + filename,
-        cache_subdir="tokenizers",
-        file_hash=VOCAB_HASHES[filename],
-    )
-    return vocabulary
+
+    return download(filename)
 
 
 class WordPieceTokenizer(tokenizer.Tokenizer):
