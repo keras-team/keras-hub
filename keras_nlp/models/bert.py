@@ -341,7 +341,9 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
     ):
         raise ValueError(
             "One of `vocabulary_size` or `weights` must be specified "
-            "(but not both)."
+            "(but not both). "
+            f"""Received: weights={weights}, """
+            f"""vocabulary_size={vocabulary_size}"""
         )
 
     if weights:
@@ -349,7 +351,7 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
             raise ValueError(
                 "`weights` must be one of "
                 f"""{", ".join(checkpoints["bert_base"])}. """
-                f"""Recieved: {weights}"""
+                f"""Received: {weights}"""
             )
         vocabulary_size = checkpoints["bert_base"][weights]["vocabulary_size"]
 
