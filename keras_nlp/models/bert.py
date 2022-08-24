@@ -37,7 +37,7 @@ checkpoints = {
             "vocabulary_size": 30522,
         },
         "bert_base_cased": {
-            "md5": "f94a6cb012e18f4fb8ec92abb91864e9",
+            "md5": "9b2b2139f221988759ac9cdd17050b31",
             "description": "Base size of Bert where case is maintained. "
             "Trained on English wikipedia + books corpora.",
             "vocabulary_size": 28996,
