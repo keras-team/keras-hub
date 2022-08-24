@@ -31,7 +31,7 @@ BASE_PATH = "https://storage.googleapis.com/keras-nlp/models/"
 checkpoints = {
     "bert_base": {
         "bert_base_uncased": {
-            "md5": "074304b9d7f031ad5a6b626745f2a687",
+            "md5": "9b2b2139f221988759ac9cdd17050b31",
             "description": "Base size of Bert where all input is lowercased. "
             "Trained on English wikipedia + books corpora.",
             "vocabulary_size": 30522,
