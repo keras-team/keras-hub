@@ -32,12 +32,14 @@ checkpoints = {
     "bert_base": {
         "bert_base_uncased": {
             "md5": "074304b9d7f031ad5a6b626745f2a687",
-            "description": "Base size of Bert where all input is lowercased.",
+            "description": "Base size of Bert where all input is lowercased. "
+            "Trained on English wikipedia + books corpora.",
             "vocabulary_size": 30522,
         },
         "bert_base_cased": {
             "md5": "f94a6cb012e18f4fb8ec92abb91864e9",
-            "description": "Base size of Bert where case is maintained.",
+            "description": "Base size of Bert where case is maintained. "
+            "Trained on English wikipedia + books corpora.",
             "vocabulary_size": 28996,
         },
     }
