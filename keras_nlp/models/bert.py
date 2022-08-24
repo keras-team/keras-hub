@@ -363,7 +363,6 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
         trainable=trainable,
     )
 
-    # TODO(jbischof): add tests for basic functionality but not file loading
     if weights:
         filepath = keras.utils.get_file(
             weights,
