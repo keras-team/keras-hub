@@ -1,4 +1,3 @@
-
 # Copyright 2022 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +14,9 @@
 """Tests for loading pretrained model checkpoints."""
 
 import tensorflow as tf
+
 import keras_nlp
+
 
 class BertCkptTest(tf.test.TestCase):
     def test_load_bert_base_uncased(self):
