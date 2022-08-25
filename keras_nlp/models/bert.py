@@ -377,6 +377,9 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
         trainable=trainable,
     )
 
+    # TODO(jbischof): consider changing format from `h5` to
+    # `tf.train.Checkpoint` once
+    # https://github.com/keras-team/keras/issues/16946 is resolved
     if weights:
         filepath = keras.utils.get_file(
             weights,
