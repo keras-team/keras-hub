@@ -327,13 +327,13 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
     model = keras_nlp.models.BertBase(vocabulary_size=10000)
 
     # Call encoder on the inputs.
-    input_data = {
+    input_data = {{
         "input_ids": tf.random.uniform(
             shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
         ),
         "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
         "input_mask": tf.constant([1] * 512, shape=(1, 512)),
-    }
+    }}
     output = model(input_data)
     ```
 """
