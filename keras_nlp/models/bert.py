@@ -335,6 +335,11 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
         "input_mask": tf.constant([1] * 512, shape=(1, 512)),
     }}
     output = model(input_data)
+
+    # Load a pretrained model
+    model = keras_nlp.models.BertBase(weights="bert_base_uncased")
+    # Call encoder on the inputs.
+    output = model(input_data)
     ```
 """
 
