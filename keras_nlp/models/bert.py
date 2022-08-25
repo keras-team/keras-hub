@@ -82,7 +82,7 @@ class Bert(keras.Model):
     Example usage:
     ```python
     # Randomly initialized Bert encoder
-    model = bert.Bert(
+    model = keras_nlp.models.Bert(
         vocabulary_size=30522,
         num_layers=12,
         num_heads=12,
