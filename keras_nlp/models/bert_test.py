@@ -34,7 +34,7 @@ class BertTest(tf.test.TestCase):
         )
         input_data = {
             "input_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int64, maxval=30522
+                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
             ),
             "segment_ids": tf.constant(
                 [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
@@ -112,7 +112,7 @@ class BertTest(tf.test.TestCase):
         )
         input_data = {
             "input_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int64, maxval=30522
+                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
             ),
             "segment_ids": tf.constant(
                 [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
