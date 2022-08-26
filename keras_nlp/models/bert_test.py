@@ -23,7 +23,7 @@ from keras_nlp.models import bert
 
 class BertTest(tf.test.TestCase):
     def test_valid_call_bert(self):
-        model = bert.Bert(
+        model = bert.BertCustom(
             vocabulary_size=30522,
             num_layers=12,
             num_heads=12,
@@ -46,7 +46,7 @@ class BertTest(tf.test.TestCase):
         model(input_data)
 
     def test_valid_call_classifier(self):
-        model = bert.Bert(
+        model = bert.BertCustom(
             vocabulary_size=30522,
             num_layers=12,
             num_heads=12,
@@ -81,7 +81,7 @@ class BertTest(tf.test.TestCase):
         model(input_data)
 
     def test_saving_model(self):
-        model = bert.Bert(
+        model = bert.BertCustom(
             vocabulary_size=30522,
             num_layers=12,
             num_heads=12,
