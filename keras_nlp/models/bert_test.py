@@ -34,7 +34,7 @@ class BertTest(tf.test.TestCase):
         )
         input_data = {
             "input_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int64, maxval=30522
+                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
             ),
             "segment_ids": tf.constant(
                 [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
@@ -88,7 +88,7 @@ class BertTest(tf.test.TestCase):
         classifier(input_data)
 
     def test_valid_call_bert_base(self):
-        model = bert.BertBase(name="encoder")
+        model = bert.BertBase(vocabulary_size=10000, name="encoder")
         input_data = {
             "input_ids": tf.random.uniform(
                 shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
@@ -97,6 +97,26 @@ class BertTest(tf.test.TestCase):
             "input_mask": tf.constant([1] * 512, shape=(1, 512)),
         }
         model(input_data)
+
+    def test_bert_base_vocab_error(self):
+        # Need `vocabulary_size` or `weights`
+        with self.assertRaises(ValueError):
+            bert.BertBase(name="encoder")
+
+        # Only one of `vocabulary_size` or `weights`
+        with self.assertRaises(ValueError):
+            bert.BertBase(
+                weights="bert_base_uncased",
+                vocabulary_size=10000,
+                name="encoder",
+            )
+
+        # Not a checkpoint name
+        with self.assertRaises(ValueError):
+            bert.BertBase(
+                weights="bert_base_clowntown",
+                name="encoder",
+            )
 
     def test_saving_model(self):
         model = bert.BertCustom(
@@ -110,7 +130,7 @@ class BertTest(tf.test.TestCase):
         )
         input_data = {
             "input_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int64, maxval=30522
+                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
             ),
             "segment_ids": tf.constant(
                 [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
