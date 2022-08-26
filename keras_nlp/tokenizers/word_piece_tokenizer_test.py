@@ -15,12 +15,13 @@
 import os
 
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
-class WordPieceTokenizerTest(tf.test.TestCase):
+class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_tokenize(self):
         input_data = ["the quick brown fox."]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -188,7 +189,8 @@ class WordPieceTokenizerTest(tf.test.TestCase):
             cloned_tokenizer(input_data),
         )
 
-    def test_saving(self):
+    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
+    def test_saving(self, format):
         input_data = tf.constant(["quick brOWN whale"])
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]
         tokenizer = WordPieceTokenizer(
@@ -201,8 +203,9 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
-        model.save(self.get_temp_dir())
-        restored_model = keras.models.load_model(self.get_temp_dir())
+        path = os.path.join(self.get_temp_dir(), "model")
+        model.save(path, save_format=format)
+        restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),
             restored_model(input_data),

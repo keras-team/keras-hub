@@ -20,6 +20,7 @@ from tensorflow import keras
 SEQUENCE_AXIS = -2
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class PositionEmbedding(keras.layers.Layer):
     """A layer which learns a position embedding for inputs sequences.
 

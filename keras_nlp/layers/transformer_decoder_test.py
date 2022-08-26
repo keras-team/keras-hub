@@ -16,12 +16,13 @@
 import os
 
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.layers import transformer_decoder
 
 
-class TransformerDecoderTest(tf.test.TestCase):
+class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call(self):
         encoder_input = keras.Input(shape=[4, 6])
         decoder_input = keras.Input(shape=[4, 6])
@@ -256,7 +257,8 @@ class TransformerDecoderTest(tf.test.TestCase):
         outputs = decoder(decoder_sequence)
         self.assertAllEqual(outputs._keras_mask, mask)
 
-    def test_save_model(self):
+    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
+    def test_save_model(self, format):
         encoder_input = keras.Input(shape=[4, 6])
         decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
@@ -272,14 +274,15 @@ class TransformerDecoderTest(tf.test.TestCase):
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model([decoder_sequence, encoder_sequence])
         path = os.path.join(self.get_temp_dir(), "model")
-        model.save(path)
+        model.save(path, save_format=format)
 
         loaded_model = keras.models.load_model(path)
         model_output = model([decoder_sequence, encoder_sequence])
         loaded_model_output = loaded_model([decoder_sequence, encoder_sequence])
         self.assertAllClose(model_output, loaded_model_output)
 
-    def test_save_model_without_cross_attention(self):
+    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
+    def test_save_model_without_cross_attention(self, format):
         decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
@@ -293,7 +296,7 @@ class TransformerDecoderTest(tf.test.TestCase):
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model(decoder_sequence)
         path = os.path.join(self.get_temp_dir(), "model")
-        model.save(path)
+        model.save(path, save_format=format)
         loaded_model = keras.models.load_model(path)
 
         model_output = model(decoder_sequence)

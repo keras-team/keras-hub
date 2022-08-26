@@ -17,12 +17,13 @@ import os
 
 import sentencepiece
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 
 
-class SentencePieceTokenizerTest(tf.test.TestCase):
+class SentencePieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
         bytes_io = io.BytesIO()
@@ -184,7 +185,8 @@ class SentencePieceTokenizerTest(tf.test.TestCase):
             cloned_tokenizer(input_data),
         )
 
-    def test_saving(self):
+    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
+    def test_saving(self, format):
         filepath = os.path.join(self.get_temp_dir(), "model.txt")
         input_data = tf.constant(["the quick brown whale."])
         with tf.io.gfile.GFile(filepath, "wb") as file:
@@ -195,8 +197,9 @@ class SentencePieceTokenizerTest(tf.test.TestCase):
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
-        model.save(self.get_temp_dir())
-        restored_model = keras.models.load_model(self.get_temp_dir())
+        path = os.path.join(self.get_temp_dir(), "model")
+        model.save(path, save_format=format)
+        restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),
             restored_model(input_data),

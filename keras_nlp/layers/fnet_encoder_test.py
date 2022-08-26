@@ -16,12 +16,13 @@
 import os
 
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.layers import fnet_encoder
 
 
-class FNetEncoderTest(tf.test.TestCase):
+class FNetEncoderTest(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call(self):
         encoder = fnet_encoder.FNetEncoder(intermediate_dim=4)
         model = keras.Sequential(
@@ -116,7 +117,8 @@ class FNetEncoderTest(tf.test.TestCase):
         encoder2_output = encoder2(data)
         self.assertAllClose(encoder1_output, encoder2_output)
 
-    def test_save_model(self):
+    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
+    def test_save_model(self, format):
         model = keras.Sequential(
             [
                 keras.Input(shape=(4, 6)),
@@ -128,7 +130,7 @@ class FNetEncoderTest(tf.test.TestCase):
         data = tf.random.uniform(shape=[2, 4, 6])
         model(data)
         path = os.path.join(self.get_temp_dir(), "model")
-        model.save(path)
+        model.save(path, save_format=format)
         loaded_model = keras.models.load_model(path)
 
         model_output = model(data)
