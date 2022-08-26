@@ -21,6 +21,7 @@ from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
 )
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class TransformerEncoder(keras.layers.Layer):
     """Transformer encoder.
 
@@ -86,6 +87,9 @@ class TransformerEncoder(keras.layers.Layer):
         name=None,
         **kwargs
     ):
+        # Work around for model saving
+        self._input_shape = kwargs.pop("build_input_shape", None)
+
         super().__init__(name=name, **kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
@@ -97,9 +101,13 @@ class TransformerEncoder(keras.layers.Layer):
         self._built = False
         self.supports_masking = True
 
+        if self._input_shape is not None:
+            self._build(self._input_shape)
+
     def _build(self, input_shape):
         # Create layers based on input shape.
         self._built = True
+        self._input_shape = input_shape
         feature_size = input_shape[-1]
         self._attention_head_size = int(feature_size // self.num_heads)
         self._multi_head_attention_layer = keras.layers.MultiHeadAttention(
@@ -109,6 +117,9 @@ class TransformerEncoder(keras.layers.Layer):
             dropout=self.dropout,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
+        )
+        self._multi_head_attention_layer._build_from_signature(
+            input_shape, input_shape
         )
 
         self._attention_layernorm = keras.layers.LayerNormalization(
@@ -199,6 +210,7 @@ class TransformerEncoder(keras.layers.Layer):
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
                 ),
+                "build_input_shape": self._input_shape,
             }
         )
         return config

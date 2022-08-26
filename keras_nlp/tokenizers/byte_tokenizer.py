@@ -17,10 +17,12 @@
 import numpy as np
 import tensorflow as tf
 import tensorflow_text as tf_text
+from tensorflow import keras
 
 from keras_nlp.tokenizers import tokenizer
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class ByteTokenizer(tokenizer.Tokenizer):
     """Raw byte tokenizer.
 

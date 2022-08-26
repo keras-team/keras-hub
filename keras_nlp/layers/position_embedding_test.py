@@ -16,6 +16,7 @@
 import os
 
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.layers import position_embedding
@@ -28,7 +29,7 @@ def custom_init(shape, dtype=None):
     return tf.reshape(tf.range(count, dtype=dtype), shape)
 
 
-class PositionEmbeddingLayerTest(tf.test.TestCase):
+class PositionEmbeddingLayerTest(tf.test.TestCase, parameterized.TestCase):
     def test_static_layer_output_shape(self):
         # Create a 3-dimensional input (the first dimension is implicit).
         sequence_length = 21
@@ -302,7 +303,8 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
             restored_encoder.get_config(), {**config, **expected_config_subset}
         )
 
-    def test_save_model(self):
+    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
+    def test_save_model(self, format):
         max_sequence_length = 4
         feature_size = 6
         test_layer = position_embedding.PositionEmbedding(
@@ -316,7 +318,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase):
         model(data)
 
         path = os.path.join(self.get_temp_dir(), "model")
-        model.save(path)
+        model.save(path, save_format=format)
         loaded_model = keras.models.load_model(path)
 
         model_output = model.predict(data)

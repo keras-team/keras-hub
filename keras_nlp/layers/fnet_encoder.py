@@ -18,6 +18,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class FNetEncoder(keras.layers.Layer):
     """FNet encoder.
 

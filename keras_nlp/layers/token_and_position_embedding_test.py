@@ -16,6 +16,7 @@
 import os
 
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.layers import TokenAndPositionEmbedding
@@ -28,7 +29,7 @@ def custom_embed_init(shape, dtype=None):
     return tf.ones(shape, dtype=dtype)
 
 
-class TokenAndPositionEmbeddingTest(tf.test.TestCase):
+class TokenAndPositionEmbeddingTest(tf.test.TestCase, parameterized.TestCase):
     def test_get_config_and_from_config(self):
         token_and_position_embed = TokenAndPositionEmbedding(
             vocabulary_size=5,
@@ -133,7 +134,8 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase):
         outputs = test_layer(input_data)
         self.assertAllEqual(outputs._keras_mask, mask)
 
-    def test_save_model(self):
+    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
+    def test_save_model(self, format):
         vocabulary_size = 5
         sequence_length = 4
         embedding_dim = 3
@@ -150,7 +152,7 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase):
         model(data)
 
         path = os.path.join(self.get_temp_dir(), "model")
-        model.save(path)
+        model.save(path, save_format=format)
         loaded_model = keras.models.load_model(path)
 
         model_output = model.predict(data)
