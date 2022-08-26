@@ -252,7 +252,7 @@ class BertClassifier(keras.Model):
     Example usage:
     ```python
     # Randomly initialized Bert encoder
-    model = keras_nlp.models.Bert(
+    model = keras_nlp.models.BertCustom(
         vocabulary_size=30522,
         num_layers=12,
         num_heads=12,
