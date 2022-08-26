@@ -148,8 +148,6 @@ class RobertaCustom(keras.Model):
         self.max_sequence_length = max_sequence_length
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
-        # BOS token '<s>' is equivalent to '[CLS]' from BERT
-        self.start_token_index = START_TOKEN_INDEX
 
     def get_config(self):
         config = super().get_config()
