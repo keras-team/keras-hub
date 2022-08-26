@@ -102,5 +102,3 @@ class RobertaTest(tf.test.TestCase):
             model_output["sequence_output"],
             restored_output["sequence_output"],
         )
-
-    
