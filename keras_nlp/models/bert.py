@@ -30,13 +30,13 @@ BASE_PATH = "https://storage.googleapis.com/keras-nlp/models/"
 
 checkpoints = {
     "bert_base": {
-        "bert_base_uncased": {
+        "uncased_en": {
             "md5": "9b2b2139f221988759ac9cdd17050b31",
             "description": "Base size of Bert where all input is lowercased. "
             "Trained on English wikipedia + books corpora.",
             "vocabulary_size": 30522,
         },
-        "bert_base_cased": {
+        "cased_en": {
             "md5": "f94a6cb012e18f4fb8ec92abb91864e9",
             "description": "Base size of Bert where case is maintained. "
             "Trained on English wikipedia + books corpora.",
@@ -337,7 +337,7 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
     output = model(input_data)
 
     # Load a pretrained model
-    model = keras_nlp.models.BertBase(weights="bert_base_uncased")
+    model = keras_nlp.models.BertBase(weights="uncased_en")
     # Call encoder on the inputs.
     output = model(input_data)
     ```
@@ -382,9 +382,9 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
     # https://github.com/keras-team/keras/issues/16946 is resolved
     if weights:
         filepath = keras.utils.get_file(
-            weights,
-            BASE_PATH + weights + "/model.h5",
-            cache_subdir="models",
+            "model.h5",
+            BASE_PATH + "bert_base_" + weights + "/model.h5",
+            cache_subdir="models/bert_base/" + weights + "/",
             file_hash=checkpoints["bert_base"][weights]["md5"],
         )
         model.load_weights(filepath)
