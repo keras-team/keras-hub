@@ -73,6 +73,26 @@ class RobertaTest(tf.test.TestCase):
         }
         model(input_data)
 
+    def test_variable_sequence_length_call_roberta(self):
+        model = roberta.RobertaCustom(
+            vocabulary_size=50265,
+            num_layers=12,
+            num_heads=12,
+            hidden_dim=768,
+            intermediate_dim=3072,
+            sequence_length=100,
+            name="encoder",
+        )
+        for seq_length in (25, 50, 100):
+            input_data = {
+                "input_ids": tf.ones((8, seq_length), dtype="int32"),
+                "input_mask": tf.ones((8, seq_length), dtype="int32"),
+            }
+            output = model(input_data)
+            self.assertAllEqual(
+                tf.shape(output["sequence_output"]), [8, seq_length, 768]
+            )
+
     def test_saving_model(self):
         model = roberta.RobertaCustom(
             vocabulary_size=50265,
