@@ -25,7 +25,6 @@ def _bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-
 # Pretrained models
 BASE_PATH = "https://storage.googleapis.com/keras-nlp/models/"
 
