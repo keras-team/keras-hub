@@ -25,7 +25,7 @@ def _bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-class Bert(keras.Model):
+class BertCustom(keras.Model):
     """Bi-directional Transformer-based encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -34,7 +34,7 @@ class Bert(keras.Model):
     embedding lookups and transformer layers, but not the masked language model
     or classification task networks.
 
-    This class gives a fully configurable Bert model with any number of layers,
+    This class gives a fully customizable Bert model with any number of layers,
     heads, and embedding dimensions. For specific specific bert architectures
     defined in the paper, see for example `keras_nlp.models.BertBase`.
 
@@ -61,7 +61,7 @@ class Bert(keras.Model):
     Example usage:
     ```python
     # Randomly initialized Bert encoder
-    encoder = keras_nlp.models.Bert(
+    encoder = keras_nlp.models.BertCustom(
         vocabulary_size=30522,
         num_layers=12,
         num_heads=12,
@@ -218,7 +218,7 @@ class BertClassifier(keras.Model):
     """Bert encoder model with a classification head.
 
     Args:
-        base_model: A `keras_nlp.models.Bert` to encode inputs.
+        base_model: A `keras_nlp.models.BertCustom` to encode inputs.
         num_classes: Int. Number of classes to predict.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
@@ -228,7 +228,7 @@ class BertClassifier(keras.Model):
     ```
     python
     # Randomly initialized Bert encoder
-    encoder = keras_nlp.models.Bert(
+    encoder = keras_nlp.models.BertCustom(
         vocabulary_size=30522,
         num_layers=12,
         num_heads=12,
@@ -307,7 +307,7 @@ def BertBase(name=None, trainable=True):
     ```
     """
 
-    model = Bert(
+    model = BertCustom(
         vocabulary_size=30522,
         num_layers=12,
         num_heads=12,
