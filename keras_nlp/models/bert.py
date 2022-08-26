@@ -46,7 +46,7 @@ checkpoints = {
 }
 
 
-class Bert(keras.Model):
+class BertCustom(keras.Model):
     """Bi-directional Transformer-based encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -55,7 +55,7 @@ class Bert(keras.Model):
     embedding lookups and transformer layers, but not the masked language model
     or classification task networks.
 
-    This class gives a fully configurable Bert model with any number of layers,
+    This class gives a fully customizable Bert model with any number of layers,
     heads, and embedding dimensions. For specific specific bert architectures
     defined in the paper, see for example `keras_nlp.models.BertBase`.
 
@@ -82,7 +82,7 @@ class Bert(keras.Model):
     Example usage:
     ```python
     # Randomly initialized Bert encoder
-    model = keras_nlp.models.Bert(
+    model = keras_nlp.models.BertCustom(
         vocabulary_size=30522,
         num_layers=12,
         num_heads=12,
@@ -365,7 +365,7 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
             )
         vocabulary_size = checkpoints["bert_base"][weights]["vocabulary_size"]
 
-    model = Bert(
+    model = BertCustom(
         vocabulary_size=vocabulary_size,
         num_layers=12,
         num_heads=12,
