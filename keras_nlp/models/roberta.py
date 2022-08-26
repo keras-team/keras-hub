@@ -20,6 +20,8 @@ from tensorflow import keras
 from keras_nlp.layers import TokenAndPositionEmbedding
 from keras_nlp.layers import TransformerEncoder
 
+START_TOKEN_INDEX = 0
+
 
 class RobertaCustom(keras.Model):
     """RoBERTa model with a customizable set of hyperparameters.
@@ -147,7 +149,7 @@ class RobertaCustom(keras.Model):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         # BOS token '<s>' is equivalent to '[CLS]' from BERT
-        self.start_token_index = 0
+        self.start_token_index = START_TOKEN_INDEX
 
     def get_config(self):
         config = super().get_config()
@@ -213,9 +215,7 @@ class RobertaClassifier(keras.Model):
         if hidden_dim is None:
             hidden_dim = base_model.hidden_dim
 
-        x = base_model(inputs)["sequence_output"][
-            :, base_model.start_token_index, :
-        ]
+        x = base_model(inputs)["sequence_output"][:, START_TOKEN_INDEX, :]
         x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
         x = keras.layers.Dense(
             hidden_dim, activation="tanh", name="pooled_dense"
