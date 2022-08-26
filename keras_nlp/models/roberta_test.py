@@ -85,7 +85,7 @@ class RobertaTest(tf.test.TestCase):
         )
         input_data = {
             "input_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int32, maxval=50265
+                shape=(1, 12), dtype=tf.int64, maxval=50265
             ),
             "input_mask": tf.constant(
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
@@ -102,3 +102,5 @@ class RobertaTest(tf.test.TestCase):
             model_output["sequence_output"],
             restored_output["sequence_output"],
         )
+
+    

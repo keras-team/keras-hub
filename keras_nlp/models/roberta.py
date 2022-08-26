@@ -52,7 +52,7 @@ class RobertaCustom(keras.Model):
     Example usage:
     ```python
     # Randomly initialized Roberta encoder
-    encoder = keras_nlp.models.roberta.Roberta(
+    encoder = keras_nlp.models.RobertaCustom(
         vocabulary_size=50265,
         num_layers=12,
         num_heads=12,
@@ -180,7 +180,7 @@ class RobertaClassifier(keras.Model):
     Example usage:
     ```python
     # Randomly initialized Roberta encoder
-    encoder = keras_nlp.models.roberta.Roberta(
+    encoder = keras_nlp.models.RobertaCustom(
         vocabulary_size=50265,
         num_layers=12,
         num_heads=12,
@@ -254,7 +254,7 @@ def RobertaBase(name=None, trainable=True):
     Example usage:
     ```python
     # Randomly initialized RobertaBase encoder
-    encoder = keras_nlp.models.roberta.RobertaBase()
+    encoder = keras_nlp.models.RobertaBase()
 
     # Call encoder on the inputs.
     input_data = {
