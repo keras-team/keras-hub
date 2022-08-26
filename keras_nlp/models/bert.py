@@ -25,6 +25,27 @@ def _bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
+# Pretrained models
+BASE_PATH = "https://storage.googleapis.com/keras-nlp/models/"
+
+checkpoints = {
+    "bert_base": {
+        "uncased_en": {
+            "md5": "9b2b2139f221988759ac9cdd17050b31",
+            "description": "Base size of Bert where all input is lowercased. "
+            "Trained on English wikipedia + books corpora.",
+            "vocabulary_size": 30522,
+        },
+        "cased_en": {
+            "md5": "f94a6cb012e18f4fb8ec92abb91864e9",
+            "description": "Base size of Bert where case is maintained. "
+            "Trained on English wikipedia + books corpora.",
+            "vocabulary_size": 28996,
+        },
+    }
+}
+
+
 class BertCustom(keras.Model):
     """Bi-directional Transformer-based encoder network.
 
@@ -61,25 +82,29 @@ class BertCustom(keras.Model):
     Example usage:
     ```python
     # Randomly initialized Bert encoder
-    encoder = keras_nlp.models.BertCustom(
+    model = keras_nlp.models.BertCustom(
         vocabulary_size=30522,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
-        max_sequence_length=12
+        max_sequence_length=12,
+        name="encoder",
     )
 
-     # Call encoder on the inputs.
+    # Call encoder on the inputs
     input_data = {
         "input_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=30522),
+            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
+        ),
         "segment_ids": tf.constant(
-            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
+            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+        ),
         "input_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+        ),
     }
-    output = encoder(input_data)
+    output = model(input_data)
     ```
     """
 
@@ -156,7 +181,7 @@ class BertCustom(keras.Model):
                 ),
                 dropout=dropout,
                 kernel_initializer=_bert_kernel_initializer(),
-                name=f"""transformer_layer_{i}""",
+                name=f"transformer_layer_{i}",
             )(x, padding_mask=input_mask)
 
         # Construct the two Bert outputs. The pooled output is a dense layer on
@@ -225,10 +250,9 @@ class BertClassifier(keras.Model):
             trainable.
 
     Example usage:
-    ```
-    python
+    ```python
     # Randomly initialized Bert encoder
-    encoder = keras_nlp.models.BertCustom(
+    model = keras_nlp.models.BertCustom(
         vocabulary_size=30522,
         num_layers=12,
         num_heads=12,
@@ -237,16 +261,19 @@ class BertClassifier(keras.Model):
         max_sequence_length=12
     )
 
-     # Call classifier on the inputs.
+    # Call classifier on the inputs.
     input_data = {
         "input_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=30522),
+            shape=(1, 12), dtype=tf.int64, maxval=30522
+        ),
         "segment_ids": tf.constant(
-            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
+            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+        ),
         "input_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+        ),
     }
-    classifier = keras_nlp.models.BertClassifier(encoder, 4)
+    classifier = bert.BertClassifier(model, 4, name="classifier")
     logits = classifier(input_data)
     ```
     """
@@ -274,9 +301,8 @@ class BertClassifier(keras.Model):
         self.num_classes = num_classes
 
 
-def BertBase(name=None, trainable=True):
-    """Bi-directional Transformer-based encoder network (Bert) using "Base"
-    architecture.
+MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
+    using "{type}" architecture.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["BERT: Pre-training of Deep Bidirectional Transformers for
@@ -285,6 +311,12 @@ def BertBase(name=None, trainable=True):
     or classification task networks.
 
     Args:
+        weights: String, optional. Name of pretrained model to load weights.
+            Should be one of {names}.
+            If None, model is randomly initialized. Either `weights` or
+            `vocabulary_size` must be specified, but not both.
+        vocabulary_size: Int, optional. The size of the token vocabulary. Either
+            `weights` or `vocabularly_size` must be specified, but not both.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
             trainable.
@@ -292,23 +324,49 @@ def BertBase(name=None, trainable=True):
     Example usage:
     ```python
     # Randomly initialized BertBase encoder
-    encoder = keras_nlp.models.BertBase()
+    model = keras_nlp.models.BertBase(vocabulary_size=10000)
 
-     # Call encoder on the inputs.
-    input_data = {
+    # Call encoder on the inputs.
+    input_data = {{
         "input_ids": tf.random.uniform(
-            shape=(1, 512), dtype=tf.int64, maxval=encoder.vocabulary_size),
-        "segment_ids": tf.constant(
-            [0] * 200 + [1] * 312, shape=(1, 512)),
-        "input_mask": tf.constant(
-            [1] * 512, shape=(1, 512)),
-    }
-    output = encoder(input_data)
+            shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
+        ),
+        "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
+        "input_mask": tf.constant([1] * 512, shape=(1, 512)),
+    }}
+    output = model(input_data)
+
+    # Load a pretrained model
+    model = keras_nlp.models.BertBase(weights="uncased_en")
+    # Call encoder on the inputs.
+    output = model(input_data)
     ```
-    """
+"""
+
+
+def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
+
+    if (vocabulary_size is None and weights is None) or (
+        vocabulary_size and weights
+    ):
+        raise ValueError(
+            "One of `vocabulary_size` or `weights` must be specified "
+            "(but not both). "
+            f"Received: weights={weights}, "
+            f"vocabulary_size={vocabulary_size}"
+        )
+
+    if weights:
+        if weights not in checkpoints["bert_base"]:
+            raise ValueError(
+                "`weights` must be one of "
+                f"""{", ".join(checkpoints["bert_base"])}. """
+                f"Received: {weights}"
+            )
+        vocabulary_size = checkpoints["bert_base"][weights]["vocabulary_size"]
 
     model = BertCustom(
-        vocabulary_size=30522,
+        vocabulary_size=vocabulary_size,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
@@ -319,6 +377,26 @@ def BertBase(name=None, trainable=True):
         trainable=trainable,
     )
 
-    # TODO(jbischof): add some documentation or magic to load our checkpoints
-    # TODO(jbischof): attach the tokenizer
+    # TODO(jbischof): consider changing format from `h5` to
+    # `tf.train.Checkpoint` once
+    # https://github.com/keras-team/keras/issues/16946 is resolved
+    if weights:
+        filepath = keras.utils.get_file(
+            "model.h5",
+            BASE_PATH + "bert_base_" + weights + "/model.h5",
+            cache_subdir="models/bert_base/" + weights + "/",
+            file_hash=checkpoints["bert_base"][weights]["md5"],
+        )
+        model.load_weights(filepath)
+
+    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
+
+
+setattr(
+    BertBase,
+    "__doc__",
+    MODEL_DOCSTRING.format(
+        type="Base", names=", ".join(checkpoints["bert_base"])
+    ),
+)
