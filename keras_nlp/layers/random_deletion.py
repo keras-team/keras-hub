@@ -18,6 +18,7 @@ from tensorflow import keras
 from tensorflow.python.ops.ragged import ragged_array_ops
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class RandomDeletion(keras.layers.Layer):
     """Augments input by randomly deleting tokens.
 

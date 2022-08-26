@@ -18,7 +18,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+# TODO(mattdangerw): register this class as serializable.
 class MLMHead(keras.layers.Layer):
     """Masked Language Model (MLM) head.
 
