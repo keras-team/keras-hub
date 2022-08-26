@@ -34,7 +34,7 @@ class RobertaTest(tf.test.TestCase):
         )
         input_data = {
             "input_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int64, maxval=50265
+                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
             ),
             "input_mask": tf.constant(
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
@@ -54,7 +54,7 @@ class RobertaTest(tf.test.TestCase):
         )
         input_data = {
             "input_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int64, maxval=50265
+                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
             ),
             "input_mask": tf.constant(
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
@@ -64,7 +64,7 @@ class RobertaTest(tf.test.TestCase):
         classifier(input_data)
 
     def test_valid_call_roberta_base(self):
-        model = roberta.RobertaBase(name="encoder")
+        model = roberta.RobertaBase(vocabulary_size=10000, name="encoder")
         input_data = {
             "input_ids": tf.random.uniform(
                 shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
@@ -83,7 +83,7 @@ class RobertaTest(tf.test.TestCase):
             max_sequence_length=100,
             name="encoder",
         )
-        for seq_length in (25, 50, 100):
+        for seq_length in (25, 50, 75):
             input_data = {
                 "input_ids": tf.ones((8, seq_length), dtype="int32"),
                 "input_mask": tf.ones((8, seq_length), dtype="int32"),
@@ -105,7 +105,7 @@ class RobertaTest(tf.test.TestCase):
         )
         input_data = {
             "input_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int64, maxval=50265
+                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
             ),
             "input_mask": tf.constant(
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)

@@ -74,7 +74,6 @@ class BertCustom(keras.Model):
             embeddings.
         num_segments: Int. The number of types that the 'segment_ids' input can
             take.
-        cls_token_index: Int. Index of [CLS] token in the vocabulary.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
             trainable.
@@ -121,11 +120,13 @@ class BertCustom(keras.Model):
         dropout=0.1,
         max_sequence_length=512,
         num_segments=2,
-        cls_token_index=0,
         name=None,
         trainable=True,
     ):
 
+        # Index of classification token in the vocabulary
+        cls_token_index = 0
+        # Inputs
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="input_ids"
         )
@@ -264,7 +265,7 @@ class BertClassifier(keras.Model):
     # Call classifier on the inputs.
     input_data = {
         "input_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=30522
+            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
         ),
         "segment_ids": tf.constant(
             [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)

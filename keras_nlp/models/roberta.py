@@ -20,11 +20,13 @@ from tensorflow import keras
 from keras_nlp.layers import TokenAndPositionEmbedding
 from keras_nlp.layers import TransformerEncoder
 
-START_TOKEN_INDEX = 0
+
+def _roberta_kernel_initializer(stddev=0.02):
+    return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
 class RobertaCustom(keras.Model):
-    """RoBERTa model with a customizable set of hyperparameters.
+    """RoBERTa encoder with a customizable set of hyperparameters.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["RoBERTa: A Robustly Optimized BERT Pretraining Approach"](https://arxiv.org/abs/1907.11692).
@@ -53,8 +55,8 @@ class RobertaCustom(keras.Model):
 
     Example usage:
     ```python
-    # Randomly initialized Roberta encoder
-    encoder = keras_nlp.models.RobertaCustom(
+    # Randomly initialized Roberta model
+    model = keras_nlp.models.RobertaCustom(
         vocabulary_size=50265,
         num_layers=12,
         num_heads=12,
@@ -70,7 +72,7 @@ class RobertaCustom(keras.Model):
         "input_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
-    output = encoder(input_data)
+    output = model(input_data)
     ```
     """
 
@@ -87,6 +89,9 @@ class RobertaCustom(keras.Model):
         trainable=True,
     ):
 
+        # Index of classification token in the vocabulary
+        cls_token_index = 0
+        # Inputs
         token_id_input = keras.Input(
             shape=(None,), dtype=tf.int32, name="input_ids"
         )
@@ -99,7 +104,7 @@ class RobertaCustom(keras.Model):
             vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
             embedding_dim=hidden_dim,
-            embeddings_initializer=keras.initializers.TruncatedNormal(0.02),
+            embeddings_initializer=_roberta_kernel_initializer(),
             name="embeddings",
         )
         embedding = embedding_layer(token_id_input)
@@ -123,7 +128,7 @@ class RobertaCustom(keras.Model):
                 intermediate_dim=intermediate_dim,
                 activation="gelu",
                 dropout=dropout,
-                kernel_initializer=keras.initializers.TruncatedNormal(0.02),
+                kernel_initializer=_roberta_kernel_initializer(),
                 name=f"transformer_layer_{i}",
             )(x, padding_mask=input_mask)
 
@@ -148,6 +153,7 @@ class RobertaCustom(keras.Model):
         self.max_sequence_length = max_sequence_length
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
+        self.cls_token_index = cls_token_index
 
     def get_config(self):
         config = super().get_config()
@@ -160,6 +166,7 @@ class RobertaCustom(keras.Model):
                 "num_heads": self.num_heads,
                 "max_sequence_length": self.max_sequence_length,
                 "dropout": self.dropout,
+                "cls_token_index": self.cls_token_index,
             }
         )
         return config
@@ -179,7 +186,7 @@ class RobertaClassifier(keras.Model):
     Example usage:
     ```python
     # Randomly initialized Roberta encoder
-    encoder = keras_nlp.models.RobertaCustom(
+    model = keras_nlp.models.RobertaCustom(
         vocabulary_size=50265,
         num_layers=12,
         num_heads=12,
@@ -191,11 +198,11 @@ class RobertaClassifier(keras.Model):
     # Call classifier on the inputs.
     input_data = {
         "input_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=50265),
+            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size),
         "input_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
-    classifier = keras_nlp.models.RobertaClassifier(encoder, 4)
+    classifier = keras_nlp.models.RobertaClassifier(model, 4)
     logits = classifier(input_data)
     ```
     """
@@ -213,7 +220,9 @@ class RobertaClassifier(keras.Model):
         if hidden_dim is None:
             hidden_dim = base_model.hidden_dim
 
-        x = base_model(inputs)["sequence_output"][:, START_TOKEN_INDEX, :]
+        x = base_model(inputs)["sequence_output"][
+            :, base_model.cls_token_index, :
+        ]
         x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
         x = keras.layers.Dense(
             hidden_dim, activation="tanh", name="pooled_dense"
@@ -221,7 +230,7 @@ class RobertaClassifier(keras.Model):
         x = keras.layers.Dropout(dropout, name="classifier_dropout")(x)
         outputs = keras.layers.Dense(
             num_classes,
-            kernel_initializer=keras.initializers.TruncatedNormal(0.02),
+            kernel_initializer=_roberta_kernel_initializer(),
             name="logits",
         )(x)
 
@@ -234,7 +243,7 @@ class RobertaClassifier(keras.Model):
         self.num_classes = num_classes
 
 
-def RobertaBase(name=None, trainable=True):
+def RobertaBase(vocabulary_size, name=None, trainable=True):
     """RoBERTa implementation using "Base" architecture.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -244,6 +253,7 @@ def RobertaBase(name=None, trainable=True):
     or classification task networks.
 
     Args:
+        vocabulary_size: Int, optional. The size of the token vocabulary.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
             trainable.
@@ -251,20 +261,20 @@ def RobertaBase(name=None, trainable=True):
     Example usage:
     ```python
     # Randomly initialized RobertaBase encoder
-    encoder = keras_nlp.models.RobertaBase()
+    model = keras_nlp.models.RobertaBase(vocabulary_size=10000)
 
     # Call encoder on the inputs.
     input_data = {
         "input_ids": tf.random.uniform(
-            shape=(1, 512), dtype=tf.int64, maxval=encoder.vocabulary_size),
+            shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size),
         "input_mask": tf.ones((1, 512)),
     }
-    output = encoder(input_data)
+    output = model(input_data)
     ```
     """
 
     return RobertaCustom(
-        vocabulary_size=50265,
+        vocabulary_size=vocabulary_size,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
