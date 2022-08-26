@@ -14,7 +14,6 @@
 
 """Roberta model configurable class, preconfigured versions, and task heads."""
 
-from unicodedata import name
 import tensorflow as tf
 from tensorflow import keras
 
@@ -139,7 +138,6 @@ class RobertaCustom(keras.Model):
             trainable=trainable,
         )
         # All references to `self` below this line
-        self.token_embedding = embedding_layer.token_embedding
         self.vocabulary_size = vocabulary_size
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
@@ -163,10 +161,10 @@ class RobertaCustom(keras.Model):
                 "sequence_length": self.sequence_length,
                 "dropout": self.dropout,
                 "start_token_index": self.start_token_index,
-                "token_embedding": self.token_embedding
             }
         )
         return config
+
 
 class RobertaClassifier(keras.Model):
     """Roberta encoder model with a classification head.
@@ -208,7 +206,7 @@ class RobertaClassifier(keras.Model):
         base_model,
         num_classes,
         hidden_dim=None,
-        dropout=0.,
+        dropout=0.0,
         name=None,
         trainable=True,
     ):

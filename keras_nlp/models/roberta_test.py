@@ -20,6 +20,7 @@ from tensorflow import keras
 
 from keras_nlp.models import roberta
 
+
 class RobertaTest(tf.test.TestCase):
     def test_valid_call_roberta(self):
         model = roberta.RobertaCustom(
@@ -95,7 +96,7 @@ class RobertaTest(tf.test.TestCase):
         save_path = os.path.join(self.get_temp_dir(), "model")
         model.save(save_path)
         restored_model = keras.models.load_model(save_path)
-        
+
         restored_output = restored_model.predict(input_data)
         self.assertAllClose(
             model_output["sequence_output"],
