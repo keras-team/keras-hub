@@ -14,6 +14,7 @@
 
 """Roberta model configurable class, preconfigured versions, and task heads."""
 
+from unicodedata import name
 import tensorflow as tf
 from tensorflow import keras
 
@@ -21,12 +22,8 @@ from keras_nlp.layers import TokenAndPositionEmbedding
 from keras_nlp.layers import TransformerEncoder
 
 
-def _roberta_kernel_initializer(stddev=0.02):
-    return keras.initializers.TruncatedNormal(stddev=stddev)
-
-
-class Roberta(keras.Model):
-    """Robustly optimized Bert pretraining approach.
+class RobertaCustom(keras.Model):
+    """RoBERTa model with a customizable set of hyperparameters.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["RoBERTa: A Robustly Optimized BERT Pretraining Approach"](https://arxiv.org/abs/1907.11692).
@@ -46,10 +43,7 @@ class Roberta(keras.Model):
         intermediate_dim: Int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
         dropout: Float. Dropout probability for the Transformer encoder.
-        max_sequence_length: Int. The maximum sequence length that this encoder
-            can consume. If None, `max_sequence_length` uses the value from
-            sequence length. This determines the variable shape for positional
-            embeddings.
+        sequence_length: Int. The maximum sequence length this encoder can consume.
         start_token_index: Int. Index of <s> token in the vocabulary. Equivalent
             to [CLS] in BERT.
         name: String, optional. Name of the model.
@@ -59,13 +53,13 @@ class Roberta(keras.Model):
     Example usage:
     ```python
     # Randomly initialized Roberta encoder
-    encoder = keras_nlp.models.Roberta(
+    encoder = keras_nlp.models.roberta.Roberta(
         vocabulary_size=50265,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
-        max_sequence_length=12
+        sequence_length=12
     )
 
     # Call encoder on the inputs.
@@ -87,8 +81,7 @@ class Roberta(keras.Model):
         hidden_dim,
         intermediate_dim,
         dropout=0.1,
-        max_sequence_length=512,
-        start_token_index=0,
+        sequence_length=512,
         name=None,
         trainable=True,
     ):
@@ -103,9 +96,9 @@ class Roberta(keras.Model):
         # Embed tokens and positions.
         embedding_layer = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
-            sequence_length=max_sequence_length,
+            sequence_length=sequence_length,
             embedding_dim=hidden_dim,
-            embeddings_initializer=_roberta_kernel_initializer(),
+            embeddings_initializer=keras.initializers.TruncatedNormal(0.02),
             name="embeddings",
         )
         embedding = embedding_layer(token_id_input)
@@ -129,12 +122,9 @@ class Roberta(keras.Model):
                 intermediate_dim=intermediate_dim,
                 activation="gelu",
                 dropout=dropout,
-                kernel_initializer=_roberta_kernel_initializer(),
+                kernel_initializer=keras.initializers.TruncatedNormal(0.02),
                 name=f"transformer_layer_{i}",
             )(x, padding_mask=input_mask)
-
-        # Construct the Roberta output.
-        sequence_output = x
 
         # Instantiate using Functional API Model constructor
         super().__init__(
@@ -143,7 +133,7 @@ class Roberta(keras.Model):
                 "input_mask": input_mask,
             },
             outputs={
-                "sequence_output": sequence_output,
+                "sequence_output": x,
             },
             name=name,
             trainable=trainable,
@@ -155,11 +145,11 @@ class Roberta(keras.Model):
         self.intermediate_dim = intermediate_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
-        self.max_sequence_length = max_sequence_length
+        self.sequence_length = sequence_length
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         # BOS token '<s>' is equivalent to '[CLS]' from BERT
-        self.start_token_index = start_token_index
+        self.start_token_index = 0
 
     def get_config(self):
         config = super().get_config()
@@ -170,16 +160,13 @@ class Roberta(keras.Model):
                 "intermediate_dim": self.intermediate_dim,
                 "num_layers": self.num_layers,
                 "num_heads": self.num_heads,
-                "max_sequence_length": self.max_sequence_length,
+                "sequence_length": self.sequence_length,
                 "dropout": self.dropout,
                 "start_token_index": self.start_token_index,
+                "token_embedding": self.token_embedding
             }
         )
         return config
-
-
-# TODO: add RobertaMLM, different from BERT.
-
 
 class RobertaClassifier(keras.Model):
     """Roberta encoder model with a classification head.
@@ -193,16 +180,15 @@ class RobertaClassifier(keras.Model):
             trainable.
 
     Example usage:
-    ```
-    python
+    ```python
     # Randomly initialized Roberta encoder
-    encoder = keras_nlp.models.Roberta(
+    encoder = keras_nlp.models.roberta.Roberta(
         vocabulary_size=50265,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
-        max_sequence_length=12
+        sequence_length=12
     )
 
     # Call classifier on the inputs.
@@ -222,7 +208,7 @@ class RobertaClassifier(keras.Model):
         base_model,
         num_classes,
         hidden_dim=None,
-        dropout=0.1,
+        dropout=0.,
         name=None,
         trainable=True,
     ):
@@ -240,7 +226,7 @@ class RobertaClassifier(keras.Model):
         x = keras.layers.Dropout(dropout, name="classifier_dropout")(x)
         outputs = keras.layers.Dense(
             num_classes,
-            kernel_initializer=_roberta_kernel_initializer(),
+            kernel_initializer=keras.initializers.TruncatedNormal(0.02),
             name="logits",
         )(x)
 
@@ -270,29 +256,26 @@ def RobertaBase(name=None, trainable=True):
     Example usage:
     ```python
     # Randomly initialized RobertaBase encoder
-    encoder = keras_nlp.models.RobertaBase()
+    encoder = keras_nlp.models.roberta.RobertaBase()
 
     # Call encoder on the inputs.
     input_data = {
         "input_ids": tf.random.uniform(
             shape=(1, 512), dtype=tf.int64, maxval=encoder.vocabulary_size),
-        "input_mask": tf.constant(
-            [1] * 512, shape=(1, 512)),
+        "input_mask": tf.ones((1, 512)),
     }
     output = encoder(input_data)
     ```
     """
 
-    model = Roberta(
+    return RobertaCustom(
         vocabulary_size=50265,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
         dropout=0.1,
-        max_sequence_length=512,
+        sequence_length=512,
         name=name,
         trainable=trainable,
     )
-
-    return model
