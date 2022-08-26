@@ -26,7 +26,7 @@ def _roberta_kernel_initializer(stddev=0.02):
 
 
 class RobertaCustom(keras.Model):
-    """RoBERTa model with a customizable set of hyperparameters.
+    """RoBERTa encoder with a customizable set of hyperparameters.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["RoBERTa: A Robustly Optimized BERT Pretraining Approach"](https://arxiv.org/abs/1907.11692).
@@ -173,7 +173,7 @@ class RobertaCustom(keras.Model):
 
 
 class RobertaClassifier(keras.Model):
-    """Roberta model model with a classification head.
+    """Roberta encoder model with a classification head.
 
     Args:
         base_model: A `keras_nlp.models.Roberta` to encode inputs.
