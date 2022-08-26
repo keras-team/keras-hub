@@ -45,6 +45,24 @@ class BertTest(tf.test.TestCase):
         }
         model(input_data)
 
+    def test_variable_sequence_length_call_bert(self):
+        model = bert.BertCustom(
+            vocabulary_size=30522,
+            num_layers=12,
+            num_heads=12,
+            hidden_dim=768,
+            intermediate_dim=3072,
+            max_sequence_length=100,
+            name="encoder",
+        )
+        for seq_length in (25, 50, 75):
+            input_data = {
+                "input_ids": tf.ones((8, seq_length), dtype="int32"),
+                "segment_ids": tf.ones((8, seq_length), dtype="int32"),
+                "input_mask": tf.ones((8, seq_length), dtype="int32"),
+            }
+            model(input_data)
+
     def test_valid_call_classifier(self):
         model = bert.BertCustom(
             vocabulary_size=30522,
