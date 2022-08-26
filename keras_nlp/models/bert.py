@@ -25,6 +25,7 @@ def _bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
+
 # Pretrained models
 BASE_PATH = "https://storage.googleapis.com/keras-nlp/models/"
 
@@ -243,7 +244,7 @@ class BertClassifier(keras.Model):
     """Bert encoder model with a classification head.
 
     Args:
-        base_model: A `keras_nlp.models.Bert` to encode inputs.
+        base_model: A `keras_nlp.models.BertCustom` to encode inputs.
         num_classes: Int. Number of classes to predict.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
