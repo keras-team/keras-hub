@@ -23,7 +23,7 @@ from keras_nlp.tokenizers import tokenizer
 
 # Pretrained Vocabularies
 
-BASE_PATH = "https://storage.googleapis.com/keras-nlp/pretrained-tokenizers/wordpiece-tokenizer/vocabularies/"
+BASE_PATH = "https://storage.googleapis.com/keras-nlp/pretrained_tokenizers/wordpiece_tokenizer/"
 
 SUPPORTED_VOCAB = {
     "en",
@@ -276,6 +276,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     language code in `lang` corresponding to a vocabulary trained on that
     language's dataset. For example, `lang='fr'` retrives the vocabulary trained
     on the "frwiki" dataset.
+
+    The language codes follow the [Wikipedia languages codes](https://meta.wikimedia.org/wiki/List_of_Wikipedias_by_language_group).
 
     Currently supported language codes include:
     en, es, fr, ar, bn, hi, ru, id, pt.
