@@ -42,9 +42,9 @@ class RobertaCustom(keras.Model):
         intermediate_dim: Int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
         dropout: Float. Dropout probability for the Transformer encoder.
-        sequence_length: Int. The maximum sequence length this encoder can consume.
-        start_token_index: Int. Index of <s> token in the vocabulary. Equivalent
-            to [CLS] in BERT.
+        max_sequence_length: Int. The maximum sequence length this encoder can
+            consume. The sequence length of the input must be less than
+            `max_sequence_length`.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
             trainable.
@@ -58,7 +58,7 @@ class RobertaCustom(keras.Model):
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
-        sequence_length=12
+        max_sequence_length=12
     )
 
     # Call encoder on the inputs.
@@ -80,7 +80,7 @@ class RobertaCustom(keras.Model):
         hidden_dim,
         intermediate_dim,
         dropout=0.1,
-        sequence_length=512,
+        max_sequence_length=512,
         name=None,
         trainable=True,
     ):
@@ -95,7 +95,7 @@ class RobertaCustom(keras.Model):
         # Embed tokens and positions.
         embedding_layer = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
-            sequence_length=sequence_length,
+            sequence_length=max_sequence_length,
             embedding_dim=hidden_dim,
             embeddings_initializer=keras.initializers.TruncatedNormal(0.02),
             name="embeddings",
@@ -143,7 +143,7 @@ class RobertaCustom(keras.Model):
         self.intermediate_dim = intermediate_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
-        self.sequence_length = sequence_length
+        self.max_sequence_length = max_sequence_length
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         # BOS token '<s>' is equivalent to '[CLS]' from BERT
@@ -158,9 +158,8 @@ class RobertaCustom(keras.Model):
                 "intermediate_dim": self.intermediate_dim,
                 "num_layers": self.num_layers,
                 "num_heads": self.num_heads,
-                "sequence_length": self.sequence_length,
+                "max_sequence_length": self.max_sequence_length,
                 "dropout": self.dropout,
-                "start_token_index": self.start_token_index,
             }
         )
         return config
@@ -186,7 +185,7 @@ class RobertaClassifier(keras.Model):
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
-        sequence_length=12
+        max_sequence_length=12
     )
 
     # Call classifier on the inputs.
@@ -273,7 +272,7 @@ def RobertaBase(name=None, trainable=True):
         hidden_dim=768,
         intermediate_dim=3072,
         dropout=0.1,
-        sequence_length=512,
+        max_sequence_length=512,
         name=name,
         trainable=trainable,
     )

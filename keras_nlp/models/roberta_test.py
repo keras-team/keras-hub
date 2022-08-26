@@ -29,7 +29,7 @@ class RobertaTest(tf.test.TestCase):
             num_heads=12,
             hidden_dim=768,
             intermediate_dim=3072,
-            sequence_length=12,
+            max_sequence_length=12,
             name="encoder",
         )
         input_data = {
@@ -49,7 +49,7 @@ class RobertaTest(tf.test.TestCase):
             num_heads=12,
             hidden_dim=768,
             intermediate_dim=3072,
-            sequence_length=12,
+            max_sequence_length=12,
             name="encoder",
         )
         input_data = {
@@ -80,7 +80,7 @@ class RobertaTest(tf.test.TestCase):
             num_heads=12,
             hidden_dim=768,
             intermediate_dim=3072,
-            sequence_length=100,
+            max_sequence_length=100,
             name="encoder",
         )
         for seq_length in (25, 50, 100):
@@ -100,7 +100,7 @@ class RobertaTest(tf.test.TestCase):
             num_heads=12,
             hidden_dim=768,
             intermediate_dim=3072,
-            sequence_length=12,
+            max_sequence_length=12,
             name="encoder",
         )
         input_data = {
