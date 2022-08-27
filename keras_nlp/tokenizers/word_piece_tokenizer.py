@@ -100,7 +100,7 @@ def pretokenize(text, lowercase, strip_accents, split, split_on_cjk):
     # Preprocess, lowercase, strip and split input data.
     if text.shape.rank == 0:
         text = tf.expand_dims(text, 0)
-    if split_on_cjk:
+    if split_on_cjk and split:
         text = tf.strings.regex_replace(text, CJK_REGEX, r" \0 ")
     if lowercase:
         text = tf_text.case_fold_utf8(text)
