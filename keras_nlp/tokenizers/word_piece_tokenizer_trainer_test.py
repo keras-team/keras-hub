@@ -110,6 +110,29 @@ class WordPieceTokenizerTrainerTest(tf.test.TestCase):
         )
         self.assertAllEqual(output_vocab_1, output_vocab_2)
 
+    def test_split_on_cjk(self):
+        test_text = tf.data.Dataset.from_tensor_slices(["ah半推zz"])
+        test_text_split = tf.data.Dataset.from_tensor_slices(
+            ["ah", "半", "推", "zz"]
+        )
+        output_vocab_1 = compute_word_piece_vocabulary(
+            test_text,
+            4,
+            split=True,
+            split_on_cjk=True,
+            lowercase=False,
+            strip_accents=False,
+        )
+        output_vocab_2 = compute_word_piece_vocabulary(
+            test_text_split,
+            4,
+            split=False,
+            split_on_cjk=False,
+            lowercase=False,
+            strip_accents=False,
+        )
+        self.assertAllEqual(output_vocab_1, output_vocab_2)
+
     def test_skip_split(self):
         test_text = tf.data.Dataset.from_tensor_slices(
             [
