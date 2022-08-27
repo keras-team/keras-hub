@@ -102,7 +102,6 @@ def pretokenize(text, lowercase, strip_accents, split, split_on_cjk):
         text = tf.expand_dims(text, 0)
     if split_on_cjk:
         text = tf.strings.regex_replace(text, CJK_REGEX, r" \0 ")
-    tf.print(text)
     if lowercase:
         text = tf_text.case_fold_utf8(text)
     if strip_accents:
