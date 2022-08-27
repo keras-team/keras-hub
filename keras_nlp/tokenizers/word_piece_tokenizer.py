@@ -63,8 +63,21 @@ WHITESPACE_AND_PUNCTUATION_REGEX = r"|".join(
     ]
 )
 
+# Matches CJK characters.
+CJK_REGEX = r"|".join(
+    [
+        r"[\x{4E00}-\x{9FFF}]",
+        r"[\x{3400}-\x{4DBF}]",
+        r"[\x{20000}-\x{2A6DF}]",
+        r"[\x{2A700}-\x{2B73F}]",
+        r"[\x{2B740}-\x{2B81F}]",
+        r"[\x{2B820}-\x{2CEAF}]",
+        r"[\x{F900}-\x{FAFF}]",
+        r"[\x{2F800}-\x{2FA1F}]"
+    ]
+)
 
-def pretokenize(text, lowercase, strip_accents, split):
+def pretokenize(text, lowercase, strip_accents, split, split_on_cjk):
     """Helper function that takes in a dataset element and pretokenizes it.
 
     Args:
@@ -78,6 +91,10 @@ def pretokenize(text, lowercase, strip_accents, split):
             kept as tokens. If false, input should be split ("pre-tokenized")
             before calling the tokenizer, and passed as a dense or ragged tensor
             of whole words.
+        split_on_cjk: bool, defaults to `True`. If true, input will be split
+            on CJK characters, i.e., Chinese, Japanese, Korean and Vietnamese
+            characters (https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)).
+            Note that this is applicable only when `split` is true.
 
     Returns:
         A tensor containing the pre-processed and pre-tokenized `text`.
@@ -91,6 +108,9 @@ def pretokenize(text, lowercase, strip_accents, split):
     # Preprocess, lowercase, strip and split input data.
     if text.shape.rank == 0:
         text = tf.expand_dims(text, 0)
+    if split_on_cjk:
+        text = tf.strings.regex_replace(text, CJK_REGEX, r" \0 ")
+    tf.print(text)
     if lowercase:
         text = tf_text.case_fold_utf8(text)
     if strip_accents:
@@ -159,6 +179,10 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             kept as tokens. If false, input should be split ("pre-tokenized")
             before calling the tokenizer, and passed as a dense or ragged tensor
             of whole words.
+        split_on_cjk: bool, defaults to `True`. If true, input will be split
+            on CJK characters, i.e., Chinese, Japanese, Korean and Vietnamese
+            characters (https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)).
+            Note that this is applicable only when `split` is true.
         suffix_indicator: str, defaults to "##". The characters prepended to a
             WordPiece to indicate that it is a suffix to another subword.
             E.g. "##ing".
@@ -235,6 +259,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         lowercase: bool = False,
         strip_accents: bool = False,
         split: bool = True,
+        split_on_cjk: bool = True,
         suffix_indicator: str = "##",
         oov_token: str = "[UNK]",
         **kwargs,
@@ -271,6 +296,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.lowercase = lowercase
         self.strip_accents = strip_accents
         self.split = split
+        self.split_on_cjk = split_on_cjk
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
 
@@ -335,7 +361,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         scalar_input = inputs.shape.rank == 0
         inputs = pretokenize(
-            inputs, self.lowercase, self.strip_accents, self.split
+            inputs, self.lowercase, self.strip_accents, self.split, self.split_on_cjk
         )
 
         # Apply WordPiece and coerce shape for outputs.
