@@ -69,7 +69,9 @@ CJK_REGEX = r"|".join(
 )
 
 
-def pretokenize(text, lowercase, strip_accents, split, split_on_cjk):
+def pretokenize(
+    text, lowercase=True, strip_accents=True, split=True, split_on_cjk=True
+):
     """Helper function that takes in a dataset element and pretokenizes it.
 
     Args:
