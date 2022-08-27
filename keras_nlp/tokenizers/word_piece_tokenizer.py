@@ -43,15 +43,6 @@ PUNCTUATION_REGEX = r"|".join(
         r"[{-~]",
         # Unicode punctuation class.
         r"[\p{P}]",
-        # More unicode ranges.
-        r"[\x{4E00}-\x{9FFF}]",
-        r"[\x{3400}-\x{4DBF}]",
-        r"[\x{20000}-\x{2A6DF}]",
-        r"[\x{2A700}-\x{2B73F}]",
-        r"[\x{2B740}-\x{2B81F}]",
-        r"[\x{2B820}-\x{2CEAF}]",
-        r"[\x{F900}-\x{FAFF}]",
-        r"[\x{2F800}-\x{2FA1F}]",
     ]
 )
 
