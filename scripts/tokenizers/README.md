@@ -1,6 +1,7 @@
 # Training WordPiece Vocabularies on Wikipedia
 
 This is unmaintained helper code for training the vocabularies on Wikipedia.
+It is advised to run these scripts on GCS. 
 
 ### Screens
 Use screens to continue the download even when the terminal is not open!
