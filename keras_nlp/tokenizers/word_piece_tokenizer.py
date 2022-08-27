@@ -64,9 +64,10 @@ CJK_REGEX = r"|".join(
         r"[\x{2B740}-\x{2B81F}]",
         r"[\x{2B820}-\x{2CEAF}]",
         r"[\x{F900}-\x{FAFF}]",
-        r"[\x{2F800}-\x{2FA1F}]"
+        r"[\x{2F800}-\x{2FA1F}]",
     ]
 )
+
 
 def pretokenize(text, lowercase, strip_accents, split, split_on_cjk):
     """Helper function that takes in a dataset element and pretokenizes it.
@@ -352,7 +353,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         scalar_input = inputs.shape.rank == 0
         inputs = pretokenize(
-            inputs, self.lowercase, self.strip_accents, self.split, self.split_on_cjk
+            inputs,
+            self.lowercase,
+            self.strip_accents,
+            self.split,
+            self.split_on_cjk,
         )
 
         # Apply WordPiece and coerce shape for outputs.
