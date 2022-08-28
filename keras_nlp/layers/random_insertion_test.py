@@ -44,7 +44,7 @@ class RandomInsertionTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Heyyx I like", b"Keyras anxd Tensorflow"]
+        exp_output = [b"Heyxy I like", b"Keyras and Tensorfxlow"]
         self.assertAllEqual(output, exp_output)
 
     def test_with_integer_tokens(self):
@@ -58,7 +58,7 @@ class RandomInsertionTest(tf.test.TestCase):
         augmented = augmenter(tokenized)
         output = tokenizer.detokenize(augmented)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"HeyCc I like", b"KeCras ancd Tensorflow"]
+        exp_output = [b"HeycC I like", b"KeCras and Tensorfclow"]
         self.assertAllEqual(output, exp_output)
 
     def test_skip_options(self):
@@ -133,8 +133,9 @@ class RandomInsertionTest(tf.test.TestCase):
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+        output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey Speed I like", b"Keras and Tensorflow Time Time"]
+        exp_output = [b"Hey Speed I like", b"Keras and Time Tensorflow Time"]
         self.assertAllEqual(output, exp_output)
 
         def insertion_py_fn(word):
@@ -147,8 +148,9 @@ class RandomInsertionTest(tf.test.TestCase):
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+        output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey li I like", b"Keras and Tensorflow Te an"]
+        exp_output = [b"Hey li I like", b"Keras and Ke Tensorflow Te"]
         self.assertAllEqual(output, exp_output)
 
     def test_get_config_and_from_config(self):
@@ -222,8 +224,9 @@ class RandomInsertionTest(tf.test.TestCase):
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
+        output
         exp_output = [
-            [b"Hey", b"Hey", b"I", b"like"],
+            [b"Hey", b"I", b"like", b"Hey"],
             [b"Keras", b"Hey", b"and", b"Tensorflow"],
         ]
         self.assertAllEqual(output, exp_output)
@@ -276,9 +279,10 @@ class RandomInsertionTest(tf.test.TestCase):
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
+        output
         exp_output = [
-            [b"Hey", b"Hey", b"I", b"like"],
-            [b"Keras", b"and", b"There", b"There", b"Tensorflow"],
+            [b"Hey", b"I", b"like", b"Hey"],
+            [b"Keras", b"and", b"Tensorflow", b"There", b"There"],
         ]
         self.assertAllEqual(output, exp_output)
 

@@ -234,6 +234,8 @@ class RandomInsertion(keras.layers.Layer):
 
         positions_flat = tf.range(tf.size(inputs.flat_values))
         positions = inputs.with_flat_values(positions_flat)
+        row_starts = positions.row_starts()
+        row_starts = tf.cast(row_starts, tf.int32)
         if skip_masks is not None:
             skip_masks = tf.logical_not(skip_masks)
             skip_masks.set_shape([None])
@@ -259,20 +261,21 @@ class RandomInsertion(keras.layers.Layer):
             """
             Inserts words randomly
             """
-            inputs, num_to_select = x
+            inputs, num_to_select, positions, row_start = x
+            positions = tf.math.subtract(positions, row_start)
             for _ in range(num_to_select):
                 tf.autograph.experimental.set_loop_options(
                     shape_invariants=[(inputs, tf.TensorShape([None]))]
                 )
                 index = tf.random.stateless_uniform(
-                    shape=tf.shape(inputs),
+                    shape=[2],
                     minval=0,
-                    maxval=tf.size(inputs),
+                    maxval=tf.size(positions),
                     dtype=tf.int32,
                     seed=self._generator.make_seeds()[:, 0],
                 )
-                insertion_prompt = index[0]
-                insertion_location = index[1]
+                insertion_prompt = positions[index[0]]
+                insertion_location = positions[index[1]]
                 original_word = inputs[insertion_prompt]
                 if self.insertion_fn is not None:
                     synonym = self.insertion_fn(original_word)
@@ -315,7 +318,7 @@ class RandomInsertion(keras.layers.Layer):
 
         inserted = tf.map_fn(
             _insert,
-            (inputs, num_to_select),
+            (inputs, num_to_select, positions, row_starts),
             fn_output_signature=tf.RaggedTensorSpec(
                 ragged_rank=inputs.ragged_rank - 1, dtype=inputs.dtype
             ),
