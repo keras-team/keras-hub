@@ -15,6 +15,7 @@ import random
 
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.python.ops.ragged import ragged_array_ops
 
 
 class RandomSwap(keras.layers.Layer):
@@ -95,12 +96,12 @@ class RandomSwap(keras.layers.Layer):
     ...     return len(word) < 2
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.4, max_swaps=1,
+    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.7, max_swaps=4,
     ...     skip_py_fn=skip_py_fn, seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
     <tf.Tensor: shape=(2,), dtype=string,
-    numpy=array([b'like I Hey', b'Keras and Tensorflow'], dtype=object)>
+    numpy=array([b'Hey I like', b'Tensorflow Keras and'], dtype=object)>
     """
 
     def __init__(
@@ -151,7 +152,6 @@ class RandomSwap(keras.layers.Layer):
                 default_value=False,
             )
 
-    @tf.function
     def call(self, inputs):
 
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
@@ -171,29 +171,39 @@ class RandomSwap(keras.layers.Layer):
             # Convert to ragged tensor.
             inputs = tf.RaggedTensor.from_tensor(inputs)
 
-        row_splits = inputs.row_splits
+        skip_masks = None
+        if self.skip_list:
+            skip_masks = self.StaticHashTable.lookup(inputs.flat_values)
+        elif self.skip_fn:
+            skip_masks = tf.map_fn(
+                self.skip_fn, inputs.flat_values, fn_output_signature=tf.bool
+            )
+        elif self.skip_py_fn:
 
-        def _check_skip(token):
-            if self.skip_list:
-                return self.StaticHashTable.lookup(token)
-            elif self.skip_fn:
-                return self.skip_fn(token)
-            elif self.skip_py_fn:
+            def string_fn(token):
+                return self.skip_py_fn(token.numpy().decode("utf-8"))
 
-                def string_fn(token):
-                    return self.skip_py_fn(token.numpy().decode("utf-8"))
+            def int_fn(token):
+                return self.skip_py_fn(token.numpy())
 
-                def int_fn(token):
-                    return self.skip_py_fn(token.numpy())
+            py_fn = string_fn if inputs.dtype == tf.string else int_fn
 
-                py_fn = string_fn if inputs.dtype == tf.string else int_fn
-
-                return tf.py_function(py_fn, [token], tf.bool)
-            else:
-                return False
+            skip_masks = tf.map_fn(
+                lambda x: tf.py_function(py_fn, [x], tf.bool),
+                inputs.flat_values,
+                fn_output_signature=tf.bool,
+            )
 
         positions_flat = tf.range(tf.size(inputs.flat_values))
         positions = inputs.with_flat_values(positions_flat)
+        row_starts = positions.row_starts()
+        row_starts = tf.cast(row_starts, tf.int32)
+        if skip_masks is not None:
+            skip_masks = tf.logical_not(skip_masks)
+            skip_masks.set_shape([None])
+            positions = ragged_array_ops.boolean_mask(
+                positions, inputs.with_flat_values(skip_masks)
+            )
         # Figure out how many we are going to select.
         token_counts = tf.cast(inputs.row_lengths(), "float32")
         num_to_select = tf.random.stateless_binomial(
@@ -204,47 +214,40 @@ class RandomSwap(keras.layers.Layer):
         )
         if self.max_swaps is not None:
             num_to_select = tf.math.minimum(num_to_select, self.max_swaps)
+        num_to_select = tf.math.minimum(
+            num_to_select, tf.cast(positions.row_lengths(), tf.int32)
+        )
         num_to_select = tf.cast(num_to_select, "int64")
 
         def _swap(x):
-            positions, inputs, num_to_select = x
-            if tf.size(positions) == 1:
-                return positions
+            positions, inputs, num_to_select, row_start = x
+            positions = tf.math.subtract(positions, row_start)
             for _ in range(num_to_select):
                 index = tf.random.stateless_uniform(
-                    shape=tf.shape(positions),
+                    shape=[2],
                     minval=0,
                     maxval=tf.size(positions),
                     dtype=tf.int32,
                     seed=self._generator.make_seeds()[:, 0],
                 )
-                index1, index2 = index[0], index[1]
-                word1 = inputs[index1]
-                word2 = inputs[index2]
-                if _check_skip(word1) or _check_skip(word2):
-                    continue
+                index1, index2 = positions[index[0]], positions[index[1]]
                 # swap items at the sampled indices with each other
-                positions = tf.tensor_scatter_nd_update(
-                    positions,
+                inputs = tf.tensor_scatter_nd_update(
+                    inputs,
                     [[index1], [index2]],
-                    [positions[index2], positions[index1]],
+                    [inputs[index2], inputs[index1]],
                 )
-            return positions
+            return inputs
 
-        shuffled = tf.map_fn(
+        swapped = tf.map_fn(
             _swap,
-            (positions, inputs, num_to_select),
+            (positions, inputs, num_to_select, row_starts),
             fn_output_signature=tf.RaggedTensorSpec(
-                ragged_rank=positions.ragged_rank - 1, dtype=positions.dtype
+                ragged_rank=positions.ragged_rank - 1, dtype=inputs.dtype
             ),
         )
 
-        shuffled.flat_values.set_shape([None])
-
-        swapped = tf.RaggedTensor.from_row_splits(
-            values=tf.gather(inputs.flat_values, shuffled.flat_values),
-            row_splits=row_splits,
-        )
+        swapped.flat_values.set_shape([None])
 
         if input_is_1d:
             swapped = tf.squeeze(swapped, axis=0)

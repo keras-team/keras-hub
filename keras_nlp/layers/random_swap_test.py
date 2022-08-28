@@ -195,7 +195,7 @@ class RandomSwapTest(tf.test.TestCase):
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
         exp_output = [
-            [b"like", b"I", b"Hey"],
+            [b"Hey", b"I", b"like"],
             [b"Tensorflow", b"Keras", b"and"],
         ]
         self.assertAllEqual(output, exp_output)
