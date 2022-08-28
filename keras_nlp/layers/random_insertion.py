@@ -15,6 +15,7 @@ import random
 
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.python.ops.ragged import ragged_array_ops
 
 
 class RandomInsertion(keras.layers.Layer):
@@ -98,7 +99,7 @@ class RandomInsertion(keras.layers.Layer):
     >>> augmenter=keras_nlp.layers.RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_list=['wind'], skip_list=['like'])
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I like', b'Keras and Tensorflow wind'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey wind I like', b'Keras and wind Tensorflow'], dtype=object)>
 
     Usage with skip_fn
     >>> def skip_fn(word):
@@ -190,7 +191,6 @@ class RandomInsertion(keras.layers.Layer):
                 default_value=False,
             )
 
-    @tf.function
     def call(self, inputs):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
@@ -209,25 +209,37 @@ class RandomInsertion(keras.layers.Layer):
             # Convert to ragged tensor.
             inputs = tf.RaggedTensor.from_tensor(inputs)
 
-        def _check_skip(token):
-            if self.skip_list:
-                return self.StaticHashTable.lookup(token)
-            elif self.skip_fn:
-                return self.skip_fn(token)
-            elif self.skip_py_fn:
+        skip_masks = None
+        if self.skip_list:
+            skip_masks = self.StaticHashTable.lookup(inputs.flat_values)
+        elif self.skip_fn:
+            skip_masks = tf.map_fn(
+                self.skip_fn, inputs.flat_values, fn_output_signature=tf.bool
+            )
+        elif self.skip_py_fn:
 
-                def string_fn(token):
-                    return self.skip_py_fn(token.numpy().decode("utf-8"))
+            def string_fn(token):
+                return self.skip_py_fn(token.numpy().decode("utf-8"))
 
-                def int_fn(token):
-                    return self.skip_py_fn(token.numpy())
+            def int_fn(token):
+                return self.skip_py_fn(token.numpy())
 
-                py_fn = string_fn if inputs.dtype == tf.string else int_fn
+            py_fn = string_fn if inputs.dtype == tf.string else int_fn
 
-                return tf.py_function(py_fn, [token], tf.bool)
-            else:
-                return False
+            skip_masks = tf.map_fn(
+                lambda x: tf.py_function(py_fn, [x], tf.bool),
+                inputs.flat_values,
+                fn_output_signature=tf.bool,
+            )
 
+        positions_flat = tf.range(tf.size(inputs.flat_values))
+        positions = inputs.with_flat_values(positions_flat)
+        if skip_masks is not None:
+            skip_masks = tf.logical_not(skip_masks)
+            skip_masks.set_shape([None])
+            positions = ragged_array_ops.boolean_mask(
+                positions, inputs.with_flat_values(skip_masks)
+            )
         # Figure out how many we are going to select.
         token_counts = tf.cast(inputs.row_lengths(), "float32")
         num_to_select = tf.random.stateless_binomial(
@@ -238,6 +250,9 @@ class RandomInsertion(keras.layers.Layer):
         )
         if self.max_insertions is not None:
             num_to_select = tf.math.minimum(num_to_select, self.max_insertions)
+            num_to_select = tf.math.minimum(
+                num_to_select, tf.cast(positions.row_lengths(), tf.int32)
+            )
         num_to_select = tf.cast(num_to_select, "int64")
 
         def _insert(x):
@@ -246,6 +261,9 @@ class RandomInsertion(keras.layers.Layer):
             """
             inputs, num_to_select = x
             for _ in range(num_to_select):
+                tf.autograph.experimental.set_loop_options(
+                    shape_invariants=[(inputs, tf.TensorShape([None]))]
+                )
                 index = tf.random.stateless_uniform(
                     shape=tf.shape(inputs),
                     minval=0,
@@ -256,8 +274,6 @@ class RandomInsertion(keras.layers.Layer):
                 insertion_prompt = index[0]
                 insertion_location = index[1]
                 original_word = inputs[insertion_prompt]
-                if _check_skip(original_word):
-                    continue
                 if self.insertion_fn is not None:
                     synonym = self.insertion_fn(original_word)
                 elif self.insertion_list is not None:

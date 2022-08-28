@@ -104,8 +104,9 @@ class RandomInsertionTest(tf.test.TestCase):
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
+        output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I like", b"Keras and There Tensorflow"]
+        exp_output = [b"Hey Hey I like", b"Keras and There There Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
     def test_insert_options(self):
