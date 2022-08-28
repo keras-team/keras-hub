@@ -297,9 +297,6 @@ class RandomReplacement(keras.layers.Layer):
             inputs, num_to_select, positions, row_start = x
             positions = tf.math.subtract(positions, row_start)
             for _ in range(num_to_select):
-                tf.autograph.experimental.set_loop_options(
-                    shape_invariants=[(inputs, tf.TensorShape([None]))]
-                )
                 # Choose a Random Index
                 index = positions[
                     tf.random.stateless_uniform(
