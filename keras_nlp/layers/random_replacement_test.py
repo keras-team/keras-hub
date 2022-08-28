@@ -108,7 +108,7 @@ class RandomReplacementTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I like", b"There and Tensorflow"]
+        exp_output = [b"Hey I like", b"There There Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
     def test_replacement_options(self):
@@ -282,7 +282,7 @@ class RandomReplacementTest(tf.test.TestCase):
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        exp_output = [[b"Hey", b"I", b"Hey"], [b"There", b"and", b"Tensorflow"]]
+        exp_output = [[b"Hey", b"I", b"Hey"], [b"There", b"and", b"There"]]
         self.assertAllEqual(output, exp_output)
 
     def test_functional_model(self):
