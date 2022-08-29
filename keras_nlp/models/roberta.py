@@ -138,9 +138,7 @@ class RobertaCustom(keras.Model):
                 "token_ids": token_id_input,
                 "padding_mask": padding_mask,
             },
-            outputs={
-                "sequence_output": x,
-            },
+            outputs=x,
             name=name,
             trainable=trainable,
         )
@@ -220,9 +218,7 @@ class RobertaClassifier(keras.Model):
         if hidden_dim is None:
             hidden_dim = base_model.hidden_dim
 
-        x = base_model(inputs)["sequence_output"][
-            :, base_model.cls_token_index, :
-        ]
+        x = base_model(inputs)[:, base_model.cls_token_index, :]
         x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
         x = keras.layers.Dense(
             hidden_dim, activation="tanh", name="pooled_dense"
