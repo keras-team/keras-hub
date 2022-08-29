@@ -22,11 +22,7 @@ from tensorflow import keras
 def _validate_prompt(prompt):
     """Helper function to validate input to text_generation utils."""
     if not isinstance(prompt, (tf.Tensor, tf.RaggedTensor)):
-        try:
-            prompt = tf.convert_to_tensor(prompt)
-        except ValueError:
-            prompt = tf.ragged.constant(prompt)
-
+        prompt = tf.convert_to_tensor(prompt)
     return prompt
 
 
@@ -39,17 +35,6 @@ def _validate_token_probability_fn(token_probability_fn, prompt):
             "please provide a function with the output shape "
             "[batch_size, vocab_size]."
         )
-
-
-def _validate_inputs(token_probability_fn, prompt):
-    prompt = _validate_prompt(prompt)
-
-    input_is_1d = prompt.shape.rank == 1
-    if input_is_1d:
-        prompt = prompt[tf.newaxis, :]
-
-    _validate_token_probability_fn(token_probability_fn, prompt)
-    return prompt, input_is_1d
 
 
 def _mask_tokens_after_end_token(
@@ -69,90 +54,6 @@ def _mask_tokens_after_end_token(
     # with `pad_token_id`.
     valid_indices = tf.sequence_mask(end_indices + 1, maxlen=max_length)
     return tf.where(valid_indices, prompt, pad_token_id)
-
-
-def _generate_text(
-    token_probability_fn,
-    gen_next_token_fn,
-    prompt,
-    input_is_1d,
-    max_length,
-    pad_token_id,
-    end_token_id,
-    prompt_additional_val_fn=None,
-):
-    # We will maintain a tensor of shape `(batch_size,)` which will store the
-    # length of every sample. At the same time, pad the prompt with
-    # `pad_token_id` to `max_length`.
-    ragged_tensor = False
-    if isinstance(prompt, tf.Tensor):
-        shape = tf.shape(prompt)
-        batch_size = shape[0]
-        length = tf.repeat(shape[1], repeats=batch_size)
-        padding = tf.fill(
-            (batch_size, max_length + 1 - length[0]), pad_token_id
-        )
-        prompt = tf.concat((prompt, padding), axis=1)
-    elif isinstance(prompt, tf.RaggedTensor):
-        ragged_tensor = True
-        batch_size = prompt.nrows()
-        length = tf.RaggedTensor.row_lengths(prompt)
-
-        # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
-        # fails in TF 2.9.x. Fix this.
-        prompt = prompt.to_tensor(
-            default_value=pad_token_id, shape=(batch_size, max_length + 1)
-        )
-
-    def one_step(length, prompt):
-        def slice_prompt(args):
-            prompt, length = args
-            return prompt[:length]
-
-        if ragged_tensor:
-            exp_shape = tf.RaggedTensorSpec(shape=[None], dtype=prompt.dtype)
-        else:
-            exp_shape = tf.TensorSpec(shape=[None], dtype=prompt.dtype)
-
-        sliced_prompt = tf.map_fn(
-            fn=slice_prompt,
-            elems=(prompt, length),
-            fn_output_signature=exp_shape,
-        )
-
-        next_token = gen_next_token_fn(sliced_prompt)
-
-        # Append the next token to current sequence.
-        prompt = tf.tensor_scatter_nd_update(
-            tensor=prompt,
-            indices=tf.stack(
-                (tf.cast(tf.range(batch_size), dtype=length.dtype), length),
-                axis=1,
-            ),
-            updates=next_token,
-        )
-
-        length = tf.add(length, 1)
-        length = tf.clip_by_value(
-            length, clip_value_min=0, clip_value_max=max_length
-        )
-        return (length, prompt)
-
-    # Run a while loop till text of length `max_length` has been generated.
-    length, prompt = tf.while_loop(
-        cond=lambda length, _: tf.less(tf.math.reduce_min(length), max_length),
-        body=one_step,
-        loop_vars=(length, prompt),
-    )
-
-    prompt = prompt[..., :max_length]
-
-    if end_token_id is not None:
-        prompt = _mask_tokens_after_end_token(
-            prompt, max_length, end_token_id, pad_token_id
-        )
-
-    return tf.squeeze(prompt) if input_is_1d else prompt
 
 
 def greedy_search(
@@ -224,22 +125,82 @@ def greedy_search(
     ```
 
     """
-    prompt, input_is_1d = _validate_inputs(token_probability_fn, prompt)
+    prompt = _validate_prompt(prompt)
+
+    input_is_1d = prompt.shape.rank == 1
+    if input_is_1d:
+        prompt = prompt[tf.newaxis, :]
+
+    _validate_token_probability_fn(token_probability_fn, prompt)
 
     def gen_next_token(prompt):
         pred = token_probability_fn(prompt)
         next_token = tf.cast(tf.argmax(pred, axis=-1), dtype=prompt.dtype)
         return next_token
 
-    return _generate_text(
-        token_probability_fn=token_probability_fn,
-        gen_next_token_fn=gen_next_token,
-        prompt=prompt,
-        input_is_1d=input_is_1d,
-        max_length=max_length,
-        pad_token_id=pad_token_id,
-        end_token_id=end_token_id,
+    # Maintain a mask tensor of shape `(batch_size,max_length)` which will
+    # control the updates at every step.  At the same time, pad the prompt
+    # with `pad_token_id` to `max_length`.
+    if isinstance(prompt, tf.Tensor):
+        shape = tf.shape(prompt)
+        batch_size = shape[0]
+        length = shape[1]
+
+        mask = tf.ones_like(prompt, dtype=tf.bool)
+        mask_padding = tf.fill((batch_size, max_length - length), False)
+        mask = tf.concat([mask, mask_padding], axis=1)
+
+        padding = tf.fill((batch_size, max_length - length), pad_token_id)
+        prompt = tf.concat((prompt, padding), axis=1)
+    elif isinstance(prompt, tf.RaggedTensor):
+        batch_size = prompt.nrows()
+        length = tf.math.reduce_min(tf.RaggedTensor.row_lengths(prompt))
+
+        # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
+        # fails in TF 2.9.x. Fix this. After this issue has been fixed, we can
+        # condense the two branches into one by starting off with a ragged tensor.
+        mask = tf.ones_like(prompt, dtype=tf.bool)
+        mask = mask.to_tensor(
+            default_value=False, shape=(batch_size, max_length)
+        )
+
+        prompt = prompt.to_tensor(
+            default_value=pad_token_id, shape=(batch_size, max_length)
+        )
+
+    def one_step(length, prompt):
+        next_token = gen_next_token(prompt[:, :length])
+        next_token = tf.where(mask[:, length], prompt[:, length], next_token)
+
+        # Append the next token to current sequence.
+        prompt = tf.tensor_scatter_nd_update(
+            tensor=prompt,
+            indices=tf.stack(
+                (
+                    tf.cast(tf.range(batch_size), dtype=length.dtype),
+                    tf.repeat(length, batch_size),
+                ),
+                axis=1,
+            ),
+            updates=next_token,
+        )
+
+        length = tf.add(length, 1)
+        return (length, prompt)
+
+    # Run a while loop till text of length `max_length` has been generated.
+    length, prompt = tf.while_loop(
+        cond=lambda length, _: tf.less(length, max_length),
+        body=one_step,
+        loop_vars=(length, prompt),
     )
+
+    if end_token_id is not None:
+        prompt = _mask_tokens_after_end_token(
+            prompt, max_length, end_token_id, pad_token_id
+        )
+
+    return tf.squeeze(prompt) if input_is_1d else prompt
 
 
 def beam_search(
@@ -469,7 +430,13 @@ def random_search(
     ```
 
     """
-    prompt, input_is_1d = _validate_inputs(token_probability_fn, prompt)
+    prompt = _validate_prompt(prompt)
+
+    input_is_1d = prompt.shape.rank == 1
+    if input_is_1d:
+        prompt = prompt[tf.newaxis, :]
+
+    _validate_token_probability_fn(token_probability_fn, prompt)
 
     def gen_next_token(prompt):
         pred = token_probability_fn(prompt)
@@ -484,15 +451,69 @@ def random_search(
         )
         return next_token
 
-    return _generate_text(
-        token_probability_fn=token_probability_fn,
-        gen_next_token_fn=gen_next_token,
-        prompt=prompt,
-        max_length=max_length,
-        input_is_1d=input_is_1d,
-        pad_token_id=pad_token_id,
-        end_token_id=end_token_id,
+    # Maintain a mask tensor of shape `(batch_size,max_length)` which will
+    # control the updates at every step.  At the same time, pad the prompt
+    # with `pad_token_id` to `max_length`.
+    if isinstance(prompt, tf.Tensor):
+        shape = tf.shape(prompt)
+        batch_size = shape[0]
+        length = shape[1]
+
+        mask = tf.ones_like(prompt, dtype=tf.bool)
+        mask_padding = tf.fill((batch_size, max_length - length), False)
+        mask = tf.concat([mask, mask_padding], axis=1)
+
+        padding = tf.fill((batch_size, max_length - length), pad_token_id)
+        prompt = tf.concat((prompt, padding), axis=1)
+    elif isinstance(prompt, tf.RaggedTensor):
+        batch_size = prompt.nrows()
+        length = tf.math.reduce_min(tf.RaggedTensor.row_lengths(prompt))
+
+        # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
+        # fails in TF 2.9.x. Fix this. After this issue has been fixed, we can
+        # condense the two branches into one by starting off with a ragged tensor.
+        mask = tf.ones_like(prompt, dtype=tf.bool)
+        mask = mask.to_tensor(
+            default_value=False, shape=(batch_size, max_length)
+        )
+
+        prompt = prompt.to_tensor(
+            default_value=pad_token_id, shape=(batch_size, max_length)
+        )
+
+    def one_step(length, prompt):
+        next_token = gen_next_token(prompt[:, :length])
+        next_token = tf.where(mask[:, length], prompt[:, length], next_token)
+
+        # Append the next token to current sequence.
+        prompt = tf.tensor_scatter_nd_update(
+            tensor=prompt,
+            indices=tf.stack(
+                (
+                    tf.cast(tf.range(batch_size), dtype=length.dtype),
+                    tf.repeat(length, batch_size),
+                ),
+                axis=1,
+            ),
+            updates=next_token,
+        )
+
+        length = tf.add(length, 1)
+        return (length, prompt)
+
+    # Run a while loop till text of length `max_length` has been generated.
+    length, prompt = tf.while_loop(
+        cond=lambda length, _: tf.less(length, max_length),
+        body=one_step,
+        loop_vars=(length, prompt),
     )
+
+    if end_token_id is not None:
+        prompt = _mask_tokens_after_end_token(
+            prompt, max_length, end_token_id, pad_token_id
+        )
+
+    return tf.squeeze(prompt) if input_is_1d else prompt
 
 
 def top_k_search(
@@ -578,7 +599,13 @@ def top_k_search(
     if k <= 0:
         raise ValueError(f"`k` should be strictly positive. Received: `k={k}`.")
 
-    prompt, input_is_1d = _validate_inputs(token_probability_fn, prompt)
+    prompt = _validate_prompt(prompt)
+
+    input_is_1d = prompt.shape.rank == 1
+    if input_is_1d:
+        prompt = prompt[tf.newaxis, :]
+
+    _validate_token_probability_fn(token_probability_fn, prompt)
 
     # If k is greater than the vocabulary size, use the entire vocabulary.
     pred = token_probability_fn(prompt)
@@ -606,15 +633,69 @@ def top_k_search(
         next_token = tf.cast(next_token, dtype=prompt.dtype)
         return next_token
 
-    return _generate_text(
-        token_probability_fn=token_probability_fn,
-        gen_next_token_fn=gen_next_token,
-        prompt=prompt,
-        max_length=max_length,
-        input_is_1d=input_is_1d,
-        pad_token_id=pad_token_id,
-        end_token_id=end_token_id,
+    # Maintain a mask tensor of shape `(batch_size,max_length)` which will
+    # control the updates at every step.  At the same time, pad the prompt
+    # with `pad_token_id` to `max_length`.
+    if isinstance(prompt, tf.Tensor):
+        shape = tf.shape(prompt)
+        batch_size = shape[0]
+        length = shape[1]
+
+        mask = tf.ones_like(prompt, dtype=tf.bool)
+        mask_padding = tf.fill((batch_size, max_length - length), False)
+        mask = tf.concat([mask, mask_padding], axis=1)
+
+        padding = tf.fill((batch_size, max_length - length), pad_token_id)
+        prompt = tf.concat((prompt, padding), axis=1)
+    elif isinstance(prompt, tf.RaggedTensor):
+        batch_size = prompt.nrows()
+        length = tf.math.reduce_min(tf.RaggedTensor.row_lengths(prompt))
+
+        # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
+        # fails in TF 2.9.x. Fix this. After this issue has been fixed, we can
+        # condense the two branches into one by starting off with a ragged tensor.
+        mask = tf.ones_like(prompt, dtype=tf.bool)
+        mask = mask.to_tensor(
+            default_value=False, shape=(batch_size, max_length)
+        )
+
+        prompt = prompt.to_tensor(
+            default_value=pad_token_id, shape=(batch_size, max_length)
+        )
+
+    def one_step(length, prompt):
+        next_token = gen_next_token(prompt[:, :length])
+        next_token = tf.where(mask[:, length], prompt[:, length], next_token)
+
+        # Append the next token to current sequence.
+        prompt = tf.tensor_scatter_nd_update(
+            tensor=prompt,
+            indices=tf.stack(
+                (
+                    tf.cast(tf.range(batch_size), dtype=length.dtype),
+                    tf.repeat(length, batch_size),
+                ),
+                axis=1,
+            ),
+            updates=next_token,
+        )
+
+        length = tf.add(length, 1)
+        return (length, prompt)
+
+    # Run a while loop till text of length `max_length` has been generated.
+    length, prompt = tf.while_loop(
+        cond=lambda length, _: tf.less(length, max_length),
+        body=one_step,
+        loop_vars=(length, prompt),
     )
+
+    if end_token_id is not None:
+        prompt = _mask_tokens_after_end_token(
+            prompt, max_length, end_token_id, pad_token_id
+        )
+
+    return tf.squeeze(prompt) if input_is_1d else prompt
 
 
 def top_p_search(
@@ -704,7 +785,13 @@ def top_p_search(
             f"`p` should be in the range (0, 1). Received: `p={p}`."
         )
 
-    prompt, input_is_1d = _validate_inputs(token_probability_fn, prompt)
+    prompt = _validate_prompt(prompt)
+
+    input_is_1d = prompt.shape.rank == 1
+    if input_is_1d:
+        prompt = prompt[tf.newaxis, :]
+
+    _validate_token_probability_fn(token_probability_fn, prompt)
 
     def gen_next_token(prompt):
         pred = token_probability_fn(prompt)
@@ -737,12 +824,66 @@ def top_p_search(
         next_token = tf.cast(next_token, dtype=prompt.dtype)
         return next_token
 
-    return _generate_text(
-        token_probability_fn=token_probability_fn,
-        gen_next_token_fn=gen_next_token,
-        prompt=prompt,
-        max_length=max_length,
-        input_is_1d=input_is_1d,
-        pad_token_id=pad_token_id,
-        end_token_id=end_token_id,
+    # Maintain a mask tensor of shape `(batch_size,max_length)` which will
+    # control the updates at every step.  At the same time, pad the prompt
+    # with `pad_token_id` to `max_length`.
+    if isinstance(prompt, tf.Tensor):
+        shape = tf.shape(prompt)
+        batch_size = shape[0]
+        length = shape[1]
+
+        mask = tf.ones_like(prompt, dtype=tf.bool)
+        mask_padding = tf.fill((batch_size, max_length - length), False)
+        mask = tf.concat([mask, mask_padding], axis=1)
+
+        padding = tf.fill((batch_size, max_length - length), pad_token_id)
+        prompt = tf.concat((prompt, padding), axis=1)
+    elif isinstance(prompt, tf.RaggedTensor):
+        batch_size = prompt.nrows()
+        length = tf.math.reduce_min(tf.RaggedTensor.row_lengths(prompt))
+
+        # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
+        # fails in TF 2.9.x. Fix this. After this issue has been fixed, we can
+        # condense the two branches into one by starting off with a ragged tensor.
+        mask = tf.ones_like(prompt, dtype=tf.bool)
+        mask = mask.to_tensor(
+            default_value=False, shape=(batch_size, max_length)
+        )
+
+        prompt = prompt.to_tensor(
+            default_value=pad_token_id, shape=(batch_size, max_length)
+        )
+
+    def one_step(length, prompt):
+        next_token = gen_next_token(prompt[:, :length])
+        next_token = tf.where(mask[:, length], prompt[:, length], next_token)
+
+        # Append the next token to current sequence.
+        prompt = tf.tensor_scatter_nd_update(
+            tensor=prompt,
+            indices=tf.stack(
+                (
+                    tf.cast(tf.range(batch_size), dtype=length.dtype),
+                    tf.repeat(length, batch_size),
+                ),
+                axis=1,
+            ),
+            updates=next_token,
+        )
+
+        length = tf.add(length, 1)
+        return (length, prompt)
+
+    # Run a while loop till text of length `max_length` has been generated.
+    length, prompt = tf.while_loop(
+        cond=lambda length, _: tf.less(length, max_length),
+        body=one_step,
+        loop_vars=(length, prompt),
     )
+
+    if end_token_id is not None:
+        prompt = _mask_tokens_after_end_token(
+            prompt, max_length, end_token_id, pad_token_id
+        )
+
+    return tf.squeeze(prompt) if input_is_1d else prompt
