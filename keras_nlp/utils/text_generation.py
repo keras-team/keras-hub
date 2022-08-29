@@ -163,7 +163,6 @@ def greedy_search(
             default_value=pad_token_id, shape=(batch_size, max_length)
         )
 
-
     def one_step(length, prompt):
         pred = token_probability_fn(prompt[:, :length])
         next_token = tf.cast(tf.argmax(pred, axis=-1), dtype=prompt.dtype)

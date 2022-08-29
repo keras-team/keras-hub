@@ -138,8 +138,7 @@ class GreedySearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             expected_outputs = tf.constant([[0, 1, 3, 3, 3], [1, 1, 2, 0, 0]])
         else:
             inputs = tf.constant([[0, 1], [1, 2]])
-            expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
-            expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+            expected_outputs = [[0, 1, 3, 3, 3], [1, 2, 0, 0, 0]]
 
         model = TestModel()
         model.compile(jit_compile=jit_compile)
@@ -175,8 +174,7 @@ class GreedySearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             expected_outputs = tf.constant([[0, 1, 3, 3, 3], [1, 1, 2, 0, 0]])
         else:
             inputs = tf.constant([[0, 1], [1, 2]])
-            expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
-            expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+            expected_outputs = [[0, 1, 3, 3, 3], [1, 2, 0, 0, 0]]
 
         ds = tf.data.Dataset.from_tensor_slices(inputs).batch(2)
 
@@ -484,8 +482,7 @@ class RandomSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             expected_outputs = tf.constant([[0, 1, 3, 3, 3], [1, 1, 2, 0, 0]])
         else:
             inputs = tf.constant([[0, 1], [1, 2]])
-            expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
-            expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+            expected_outputs = [[0, 1, 3, 3, 3], [1, 2, 0, 0, 0]]
 
         model = TestModel()
         model.compile(jit_compile=jit_compile)
@@ -522,8 +519,7 @@ class RandomSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             expected_outputs = tf.constant([[0, 1, 3, 3, 3], [1, 1, 2, 0, 0]])
         else:
             inputs = tf.constant([[0, 1], [1, 2]])
-            expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
-            expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+            expected_outputs = [[0, 1, 3, 3, 3], [1, 2, 0, 0, 0]]
 
         ds = tf.data.Dataset.from_tensor_slices(inputs).batch(2)
 
@@ -732,8 +728,7 @@ class TopKSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             expected_outputs = tf.constant([[0, 1, 3, 3, 3], [1, 1, 2, 0, 0]])
         else:
             inputs = tf.constant([[0, 1], [1, 2]])
-            expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
-            expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+            expected_outputs = [[0, 1, 3, 3, 3], [1, 2, 0, 0, 0]]
 
         model = TestModel()
         model.compile(jit_compile=jit_compile)
@@ -771,8 +766,7 @@ class TopKSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             expected_outputs = tf.constant([[0, 1, 3, 3, 3], [1, 1, 2, 0, 0]])
         else:
             inputs = tf.constant([[0, 1], [1, 2]])
-            expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
-            expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+            expected_outputs = [[0, 1, 3, 3, 3], [1, 2, 0, 0, 0]]
 
         ds = tf.data.Dataset.from_tensor_slices(inputs).batch(2)
 
@@ -971,8 +965,7 @@ class TopPSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             expected_outputs = tf.constant([[0, 1, 3, 3, 3], [1, 1, 2, 0, 0]])
         else:
             inputs = tf.constant([[0, 1], [1, 2]])
-            expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
-            expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+            expected_outputs = [[0, 1, 3, 3, 3], [1, 2, 0, 0, 0]]
 
         model = TestModel()
         model.compile(jit_compile=jit_compile)
@@ -1010,8 +1003,7 @@ class TopPSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             expected_outputs = tf.constant([[0, 1, 3, 3, 3], [1, 1, 2, 0, 0]])
         else:
             inputs = tf.constant([[0, 1], [1, 2]])
-            expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
-            expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+            expected_outputs = [[0, 1, 3, 3, 3], [1, 2, 0, 0, 0]]
 
         ds = tf.data.Dataset.from_tensor_slices(inputs).batch(2)
 
