@@ -46,15 +46,8 @@ PUNCTUATION_REGEX = r"|".join(
     ]
 )
 
-# Matches both whitespace and punctuation.
-WHITESPACE_AND_PUNCTUATION_REGEX = r"|".join(
-    [
-        WHITESPACE_REGEX,
-        PUNCTUATION_REGEX,
-    ]
-)
-
-# Matches CJK characters.
+# Matches CJK characters. Obtained from
+# https://github.com/google-research/bert/blob/master/tokenization.py#L251
 CJK_REGEX = r"|".join(
     [
         r"[\x{4E00}-\x{9FFF}]",
@@ -68,9 +61,37 @@ CJK_REGEX = r"|".join(
     ]
 )
 
+# Matches both whitespace and punctuation.
+WHITESPACE_AND_PUNCTUATION_REGEX = r"|".join(
+    [
+        WHITESPACE_REGEX,
+        PUNCTUATION_REGEX,
+    ]
+)
+
+# Matches punctuation and CJK characters.
+PUNCTUATION_AND_CJK_REGEX = r"|".join(
+    [
+        PUNCTUATION_REGEX,
+        CJK_REGEX,
+    ]
+)
+
+# Matches whitespace, punctuation, and CJK characters.
+WHITESPACE_PUNCTUATION_AND_CJK_REGEX = r"|".join(
+    [
+        WHITESPACE_AND_PUNCTUATION_REGEX,
+        CJK_REGEX,
+    ]
+)
+
 
 def pretokenize(
-    text, lowercase=True, strip_accents=True, split=True, split_on_cjk=True
+    text,
+    lowercase=True,
+    strip_accents=True,
+    split=True,
+    split_on_cjk=True,
 ):
     """Helper function that takes in a dataset element and pretokenizes it.
 
@@ -112,10 +133,16 @@ def pretokenize(
         # Remove the accent marks.
         text = tf.strings.regex_replace(text, r"\p{Mn}", "")
     if split:
+        if split_on_cjk:
+            split_pattern = WHITESPACE_PUNCTUATION_AND_CJK_REGEX
+            keep_delim_regex_pattern = PUNCTUATION_AND_CJK_REGEX
+        else:
+            split_pattern = WHITESPACE_AND_PUNCTUATION_REGEX
+            keep_delim_regex_pattern = PUNCTUATION_REGEX
         text = tf_text.regex_split(
             text,
-            delim_regex_pattern=WHITESPACE_AND_PUNCTUATION_REGEX,
-            keep_delim_regex_pattern=PUNCTUATION_REGEX,
+            delim_regex_pattern=split_pattern,
+            keep_delim_regex_pattern=keep_delim_regex_pattern,
         )
     return text
 
