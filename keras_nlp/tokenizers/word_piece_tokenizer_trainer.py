@@ -28,6 +28,7 @@ def compute_word_piece_vocabulary(
     lowercase=False,
     strip_accents=False,
     split=True,
+    split_on_cjk=True,
     suffix_indicator="##",
     reserved_tokens=["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]"],
 ):
@@ -55,6 +56,10 @@ def compute_word_piece_vocabulary(
             before calling the tokenizer, and passed as a dense or ragged tensor
             of whole words. `split` is required to be `True` when `data` is a
             list of filenames.
+        split_on_cjk: bool, defaults to `True`. If true, input will be split
+            on CJK characters, i.e., Chinese, Japanese, Korean and Vietnamese
+            characters (https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)).
+            Note that this is applicable only when `split` is true.
         suffix_indicator: str, defaults to "##". The characters prepended to a
             WordPiece to indicate that it is a suffix to another subword.
             E.g. "##ing".
@@ -138,7 +143,9 @@ def compute_word_piece_vocabulary(
         )
 
     words_data = data.map(
-        lambda text: pretokenize(text, lowercase, strip_accents, split),
+        lambda text: pretokenize(
+            text, lowercase, strip_accents, split, split_on_cjk
+        ),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
     word_counts = learner.count_words(words_data)
