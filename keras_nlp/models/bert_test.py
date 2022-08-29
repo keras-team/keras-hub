@@ -32,10 +32,17 @@ class BertTest(tf.test.TestCase):
             max_sequence_length=128,
             name="encoder",
         )
+        self.batch_size = 8
         self.input_data = {
-            "input_ids": tf.ones((8, 128), dtype="int32"),
-            "segment_ids": tf.ones((8, 128), dtype="int32"),
-            "input_mask": tf.ones((8, 128), dtype="int32"),
+            "input_ids": tf.ones(
+                (self.batch_size, self.model.max_sequence_length), dtype="int32"
+            ),
+            "segment_ids": tf.ones(
+                (self.batch_size, self.model.max_sequence_length), dtype="int32"
+            ),
+            "input_mask": tf.ones(
+                (self.batch_size, self.model.max_sequence_length), dtype="int32"
+            ),
         }
 
     def test_valid_call_bert(self):
@@ -44,9 +51,15 @@ class BertTest(tf.test.TestCase):
     def test_variable_sequence_length_call_bert(self):
         for seq_length in (25, 50, 75):
             input_data = {
-                "input_ids": tf.ones((8, seq_length), dtype="int32"),
-                "segment_ids": tf.ones((8, seq_length), dtype="int32"),
-                "input_mask": tf.ones((8, seq_length), dtype="int32"),
+                "input_ids": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
+                "segment_ids": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
+                "input_mask": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
             }
             self.model(input_data)
 
@@ -58,13 +71,13 @@ class BertTest(tf.test.TestCase):
         model = bert.BertBase(vocabulary_size=1000, name="encoder")
         input_data = {
             "input_ids": tf.ones(
-                (8, self.model.max_sequence_length), dtype="int32"
+                (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
             "segment_ids": tf.ones(
-                (8, self.model.max_sequence_length), dtype="int32"
+                (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
             "input_mask": tf.ones(
-                (8, self.model.max_sequence_length), dtype="int32"
+                (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
         }
         model(input_data)
@@ -78,7 +91,7 @@ class BertTest(tf.test.TestCase):
         with self.assertRaises(ValueError):
             bert.BertBase(
                 weights="bert_base_uncased",
-                vocabulary_size=10000,
+                vocabulary_size=1000,
                 name="encoder",
             )
 

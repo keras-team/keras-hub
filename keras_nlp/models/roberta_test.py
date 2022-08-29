@@ -32,9 +32,14 @@ class RobertaTest(tf.test.TestCase):
             max_sequence_length=128,
             name="encoder",
         )
+        self.batch_size = 8
         self.input_data = {
-            "input_ids": tf.ones((8, 128), dtype="int32"),
-            "input_mask": tf.ones((8, 128), dtype="int32"),
+            "input_ids": tf.ones(
+                (self.batch_size, self.model.max_sequence_length), dtype="int32"
+            ),
+            "input_mask": tf.ones(
+                (self.batch_size, self.model.max_sequence_length), dtype="int32"
+            ),
         }
 
     def test_valid_call_roberta(self):
@@ -42,7 +47,7 @@ class RobertaTest(tf.test.TestCase):
 
     def test_valid_call_classifier(self):
         classifier = roberta.RobertaClassifier(
-            self.model, 4, 768, name="classifier"
+            self.model, 4, 128, name="classifier"
         )
         classifier(self.input_data)
 
@@ -50,10 +55,10 @@ class RobertaTest(tf.test.TestCase):
         model = roberta.RobertaBase(vocabulary_size=1000, name="encoder")
         input_data = {
             "input_ids": tf.ones(
-                (8, self.model.max_sequence_length), dtype="int32"
+                (self.batch_size, model.max_sequence_length), dtype="int32"
             ),
             "input_mask": tf.ones(
-                (8, self.model.max_sequence_length), dtype="int32"
+                (self.batch_size, model.max_sequence_length), dtype="int32"
             ),
         }
         model(input_data)
@@ -61,13 +66,17 @@ class RobertaTest(tf.test.TestCase):
     def test_variable_sequence_length_call_roberta(self):
         for seq_length in (25, 50, 75):
             input_data = {
-                "input_ids": tf.ones((8, seq_length), dtype="int32"),
-                "input_mask": tf.ones((8, seq_length), dtype="int32"),
+                "input_ids": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
+                "input_mask": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
             }
             output = self.model(input_data)
             self.assertAllEqual(
                 tf.shape(output["sequence_output"]),
-                [8, seq_length, self.model.hidden_dim],
+                [self.batch_size, seq_length, self.model.hidden_dim],
             )
 
     def test_saving_model(self):
