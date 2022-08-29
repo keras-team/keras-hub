@@ -47,7 +47,7 @@ PUNCTUATION_REGEX = r"|".join(
 )
 
 # Matches CJK characters. Obtained from
-# https://github.com/google-research/bert/blob/master/tokenization.py#L251
+# https://github.com/google-research/bert/blob/master/tokenization.py#L251.
 CJK_REGEX = r"|".join(
     [
         r"[\x{4E00}-\x{9FFF}]",
