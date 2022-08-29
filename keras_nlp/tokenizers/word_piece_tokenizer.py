@@ -135,14 +135,14 @@ def pretokenize(
     if split:
         if split_on_cjk:
             split_pattern = WHITESPACE_PUNCTUATION_AND_CJK_REGEX
-            keep_delim_regex_pattern = PUNCTUATION_AND_CJK_REGEX
+            keep_split_pattern = PUNCTUATION_AND_CJK_REGEX
         else:
             split_pattern = WHITESPACE_AND_PUNCTUATION_REGEX
-            keep_delim_regex_pattern = PUNCTUATION_REGEX
+            keep_split_pattern = PUNCTUATION_REGEX
         text = tf_text.regex_split(
             text,
             delim_regex_pattern=split_pattern,
-            keep_delim_regex_pattern=keep_delim_regex_pattern,
+            keep_delim_regex_pattern=keep_split_pattern,
         )
     return text
 
