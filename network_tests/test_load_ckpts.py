@@ -22,21 +22,21 @@ class BertCkptTest(tf.test.TestCase):
     def test_load_bert_base_uncased(self):
         model = keras_nlp.models.BertBase(weights="uncased_en")
         input_data = {
-            "input_ids": tf.random.uniform(
+            "token_ids": tf.random.uniform(
                 shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
             ),
             "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
-            "input_mask": tf.constant([1] * 512, shape=(1, 512)),
+            "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
         }
         model(input_data)
 
     def test_load_bert_base_cased(self):
         model = keras_nlp.models.BertBase(weights="cased_en")
         input_data = {
-            "input_ids": tf.random.uniform(
+            "token_ids": tf.random.uniform(
                 shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
             ),
             "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
-            "input_mask": tf.constant([1] * 512, shape=(1, 512)),
+            "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
         }
         model(input_data)

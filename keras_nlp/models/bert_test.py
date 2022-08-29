@@ -34,13 +34,13 @@ class BertTest(tf.test.TestCase):
         )
         self.batch_size = 8
         self.input_data = {
-            "input_ids": tf.ones(
+            "token_ids": tf.ones(
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
             "segment_ids": tf.ones(
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
-            "input_mask": tf.ones(
+            "padding_mask": tf.ones(
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
         }
@@ -51,13 +51,13 @@ class BertTest(tf.test.TestCase):
     def test_variable_sequence_length_call_bert(self):
         for seq_length in (25, 50, 75):
             input_data = {
-                "input_ids": tf.ones(
+                "token_ids": tf.ones(
                     (self.batch_size, seq_length), dtype="int32"
                 ),
                 "segment_ids": tf.ones(
                     (self.batch_size, seq_length), dtype="int32"
                 ),
-                "input_mask": tf.ones(
+                "padding_mask": tf.ones(
                     (self.batch_size, seq_length), dtype="int32"
                 ),
             }
@@ -70,13 +70,13 @@ class BertTest(tf.test.TestCase):
     def test_valid_call_bert_base(self):
         model = bert.BertBase(vocabulary_size=1000, name="encoder")
         input_data = {
-            "input_ids": tf.ones(
+            "token_ids": tf.ones(
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
             "segment_ids": tf.ones(
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
-            "input_mask": tf.ones(
+            "padding_mask": tf.ones(
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
         }
