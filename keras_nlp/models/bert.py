@@ -93,13 +93,13 @@ class BertCustom(keras.Model):
 
     # Call encoder on the inputs
     input_data = {
-        "input_ids": tf.random.uniform(
+        "token_ids": tf.random.uniform(
             shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
         ),
         "segment_ids": tf.constant(
             [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
-        "input_mask": tf.constant(
+        "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
     }
@@ -128,13 +128,13 @@ class BertCustom(keras.Model):
         cls_token_index = 0
         # Inputs
         token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="input_ids"
+            shape=(None,), dtype="int32", name="token_ids"
         )
         segment_id_input = keras.Input(
             shape=(None,), dtype="int32", name="segment_ids"
         )
-        input_mask = keras.Input(
-            shape=(None,), dtype="int32", name="input_mask"
+        padding_mask = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
         )
 
         # Embed tokens, positions, and segment ids.
@@ -183,7 +183,7 @@ class BertCustom(keras.Model):
                 dropout=dropout,
                 kernel_initializer=_bert_kernel_initializer(),
                 name=f"transformer_layer_{i}",
-            )(x, padding_mask=input_mask)
+            )(x, padding_mask=padding_mask)
 
         # Construct the two Bert outputs. The pooled output is a dense layer on
         # top of the [CLS] token.
@@ -198,9 +198,9 @@ class BertCustom(keras.Model):
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs={
-                "input_ids": token_id_input,
+                "token_ids": token_id_input,
                 "segment_ids": segment_id_input,
-                "input_mask": input_mask,
+                "padding_mask": padding_mask,
             },
             outputs={
                 "sequence_output": sequence_output,
@@ -264,13 +264,13 @@ class BertClassifier(keras.Model):
 
     # Call classifier on the inputs.
     input_data = {
-        "input_ids": tf.random.uniform(
+        "token_ids": tf.random.uniform(
             shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
         ),
         "segment_ids": tf.constant(
             [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
-        "input_mask": tf.constant(
+        "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
     }
@@ -329,11 +329,11 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
 
     # Call encoder on the inputs.
     input_data = {{
-        "input_ids": tf.random.uniform(
+        "token_ids": tf.random.uniform(
             shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
         ),
         "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
-        "input_mask": tf.constant([1] * 512, shape=(1, 512)),
+        "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
     }}
     output = model(input_data)
 
