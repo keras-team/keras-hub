@@ -37,6 +37,39 @@ def _validate_token_probability_fn(token_probability_fn, prompt):
         )
 
 
+def _pad_prompts(prompt, max_length, pad_token_id):
+    # Maintain a mask tensor of shape `(batch_size,max_length)` which will
+    # control the updates at every step.  At the same time, pad the prompt
+    # with `pad_token_id` to `max_length`.
+    if isinstance(prompt, tf.Tensor):
+        shape = tf.shape(prompt)
+        batch_size = shape[0]
+        length = shape[1]
+
+        mask = tf.ones_like(prompt, dtype=tf.bool)
+        mask_padding = tf.fill((batch_size, max_length - length), False)
+        mask = tf.concat([mask, mask_padding], axis=1)
+
+        padding = tf.fill((batch_size, max_length - length), pad_token_id)
+        prompt = tf.concat((prompt, padding), axis=1)
+    elif isinstance(prompt, tf.RaggedTensor):
+        batch_size = prompt.nrows()
+        length = tf.math.reduce_min(tf.RaggedTensor.row_lengths(prompt))
+
+        # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
+        # fails in TF 2.9.x. Fix this. After this issue has been fixed, we can
+        # condense the two branches into one by starting off with a ragged tensor.
+        mask = tf.ones_like(prompt, dtype=tf.bool)
+        mask = mask.to_tensor(
+            default_value=False, shape=(batch_size, max_length)
+        )
+
+        prompt = prompt.to_tensor(
+            default_value=pad_token_id, shape=(batch_size, max_length)
+        )
+    return prompt, mask, batch_size, length
+
+
 def _mask_tokens_after_end_token(
     prompt, max_length, end_token_id, pad_token_id
 ):
@@ -133,35 +166,9 @@ def greedy_search(
 
     _validate_token_probability_fn(token_probability_fn, prompt)
 
-    # Maintain a mask tensor of shape `(batch_size,max_length)` which will
-    # control the updates at every step.  At the same time, pad the prompt
-    # with `pad_token_id` to `max_length`.
-    if isinstance(prompt, tf.Tensor):
-        shape = tf.shape(prompt)
-        batch_size = shape[0]
-        length = shape[1]
-
-        mask = tf.ones_like(prompt, dtype=tf.bool)
-        mask_padding = tf.fill((batch_size, max_length - length), False)
-        mask = tf.concat([mask, mask_padding], axis=1)
-
-        padding = tf.fill((batch_size, max_length - length), pad_token_id)
-        prompt = tf.concat((prompt, padding), axis=1)
-    elif isinstance(prompt, tf.RaggedTensor):
-        batch_size = prompt.nrows()
-        length = tf.math.reduce_min(tf.RaggedTensor.row_lengths(prompt))
-
-        # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
-        # fails in TF 2.9.x. Fix this. After this issue has been fixed, we can
-        # condense the two branches into one by starting off with a ragged tensor.
-        mask = tf.ones_like(prompt, dtype=tf.bool)
-        mask = mask.to_tensor(
-            default_value=False, shape=(batch_size, max_length)
-        )
-
-        prompt = prompt.to_tensor(
-            default_value=pad_token_id, shape=(batch_size, max_length)
-        )
+    prompt, mask, batch_size, length = _pad_prompts(
+        prompt, max_length, pad_token_id
+    )
 
     def one_step(length, prompt):
         pred = token_probability_fn(prompt[:, :length])
@@ -434,35 +441,9 @@ def random_search(
 
     _validate_token_probability_fn(token_probability_fn, prompt)
 
-    # Maintain a mask tensor of shape `(batch_size,max_length)` which will
-    # control the updates at every step.  At the same time, pad the prompt
-    # with `pad_token_id` to `max_length`.
-    if isinstance(prompt, tf.Tensor):
-        shape = tf.shape(prompt)
-        batch_size = shape[0]
-        length = shape[1]
-
-        mask = tf.ones_like(prompt, dtype=tf.bool)
-        mask_padding = tf.fill((batch_size, max_length - length), False)
-        mask = tf.concat([mask, mask_padding], axis=1)
-
-        padding = tf.fill((batch_size, max_length - length), pad_token_id)
-        prompt = tf.concat((prompt, padding), axis=1)
-    elif isinstance(prompt, tf.RaggedTensor):
-        batch_size = prompt.nrows()
-        length = tf.math.reduce_min(tf.RaggedTensor.row_lengths(prompt))
-
-        # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
-        # fails in TF 2.9.x. Fix this. After this issue has been fixed, we can
-        # condense the two branches into one by starting off with a ragged tensor.
-        mask = tf.ones_like(prompt, dtype=tf.bool)
-        mask = mask.to_tensor(
-            default_value=False, shape=(batch_size, max_length)
-        )
-
-        prompt = prompt.to_tensor(
-            default_value=pad_token_id, shape=(batch_size, max_length)
-        )
+    prompt, mask, batch_size, length = _pad_prompts(
+        prompt, max_length, pad_token_id
+    )
 
     def one_step(length, prompt):
         pred = token_probability_fn(prompt[:, :length])
@@ -608,35 +589,9 @@ def top_k_search(
         )
         k = pred.shape[1]
 
-    # Maintain a mask tensor of shape `(batch_size,max_length)` which will
-    # control the updates at every step.  At the same time, pad the prompt
-    # with `pad_token_id` to `max_length`.
-    if isinstance(prompt, tf.Tensor):
-        shape = tf.shape(prompt)
-        batch_size = shape[0]
-        length = shape[1]
-
-        mask = tf.ones_like(prompt, dtype=tf.bool)
-        mask_padding = tf.fill((batch_size, max_length - length), False)
-        mask = tf.concat([mask, mask_padding], axis=1)
-
-        padding = tf.fill((batch_size, max_length - length), pad_token_id)
-        prompt = tf.concat((prompt, padding), axis=1)
-    elif isinstance(prompt, tf.RaggedTensor):
-        batch_size = prompt.nrows()
-        length = tf.math.reduce_min(tf.RaggedTensor.row_lengths(prompt))
-
-        # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
-        # fails in TF 2.9.x. Fix this. After this issue has been fixed, we can
-        # condense the two branches into one by starting off with a ragged tensor.
-        mask = tf.ones_like(prompt, dtype=tf.bool)
-        mask = mask.to_tensor(
-            default_value=False, shape=(batch_size, max_length)
-        )
-
-        prompt = prompt.to_tensor(
-            default_value=pad_token_id, shape=(batch_size, max_length)
-        )
+    prompt, mask, batch_size, length = _pad_prompts(
+        prompt, max_length, pad_token_id
+    )
 
     def one_step(length, prompt):
         pred = token_probability_fn(prompt[:, :length])
@@ -781,35 +736,9 @@ def top_p_search(
 
     _validate_token_probability_fn(token_probability_fn, prompt)
 
-    # Maintain a mask tensor of shape `(batch_size,max_length)` which will
-    # control the updates at every step.  At the same time, pad the prompt
-    # with `pad_token_id` to `max_length`.
-    if isinstance(prompt, tf.Tensor):
-        shape = tf.shape(prompt)
-        batch_size = shape[0]
-        length = shape[1]
-
-        mask = tf.ones_like(prompt, dtype=tf.bool)
-        mask_padding = tf.fill((batch_size, max_length - length), False)
-        mask = tf.concat([mask, mask_padding], axis=1)
-
-        padding = tf.fill((batch_size, max_length - length), pad_token_id)
-        prompt = tf.concat((prompt, padding), axis=1)
-    elif isinstance(prompt, tf.RaggedTensor):
-        batch_size = prompt.nrows()
-        length = tf.math.reduce_min(tf.RaggedTensor.row_lengths(prompt))
-
-        # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
-        # fails in TF 2.9.x. Fix this. After this issue has been fixed, we can
-        # condense the two branches into one by starting off with a ragged tensor.
-        mask = tf.ones_like(prompt, dtype=tf.bool)
-        mask = mask.to_tensor(
-            default_value=False, shape=(batch_size, max_length)
-        )
-
-        prompt = prompt.to_tensor(
-            default_value=pad_token_id, shape=(batch_size, max_length)
-        )
+    prompt, mask, batch_size, length = _pad_prompts(
+        prompt, max_length, pad_token_id
+    )
 
     def one_step(length, prompt):
         pred = token_probability_fn(prompt[:, :length])
