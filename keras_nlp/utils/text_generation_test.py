@@ -415,7 +415,7 @@ class RandomSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
 
         outputs_count = np.array([0, 0, 0, 0])
         tf.random.set_seed(42)
-        for i in range(500):
+        for i in range(64):
             outputs = random_search(
                 token_probability_fn, inputs, max_length=max_length, seed=42
             )
@@ -629,7 +629,7 @@ class TopKSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
 
         outputs_count = np.array([0, 0, 0, 0])
         tf.random.set_seed(42)
-        for i in range(500):
+        for _ in range(64):
             outputs = top_k_search(
                 token_probability_fn,
                 inputs,
@@ -859,7 +859,7 @@ class TopPSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
 
         outputs_count = np.array([0, 0, 0, 0])
         tf.random.set_seed(42)
-        for i in range(500):
+        for i in range(64):
             outputs = top_p_search(
                 token_probability_fn,
                 inputs,

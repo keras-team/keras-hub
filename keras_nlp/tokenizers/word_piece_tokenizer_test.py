@@ -87,6 +87,16 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             tf.ragged.constant([["qu", "@@ick", "br", "@@own", "@UNK@"]]),
         )
 
+    def test_cjk_tokens(self):
+        input_data = ["ah半推zz"]
+        vocab_data = ["[UNK]", "推", "敐", "乐", "半", "偷", "匕", "ah", "zz"]
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data, dtype="string")
+        call_output = tokenizer(input_data)
+        self.assertAllEqual(
+            call_output,
+            tf.ragged.constant([["ah", "半", "推", "zz"]]),
+        )
+
     def test_lowercase(self):
         input_data = ["the QUicK brOWN FOX"]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
@@ -119,7 +129,7 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5]])
 
-    def test_no_spliting(self):
+    def test_no_splitting(self):
         input_data = ["t o k e n", "m i s s i n g", "t o k e n"]
         vocab_data = ["[UNK]", "t o k e n"]
         tokenizer = WordPieceTokenizer(vocabulary=vocab_data, split=False)
