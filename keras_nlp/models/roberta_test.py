@@ -22,102 +22,71 @@ from keras_nlp.models import roberta
 
 
 class RobertaTest(tf.test.TestCase):
-    def test_valid_call_roberta(self):
-        model = roberta.RobertaCustom(
-            vocabulary_size=50265,
-            num_layers=12,
-            num_heads=12,
-            hidden_dim=768,
-            intermediate_dim=3072,
-            max_sequence_length=12,
+    def setUp(self):
+        self.model = roberta.RobertaCustom(
+            vocabulary_size=1000,
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=64,
+            intermediate_dim=128,
+            max_sequence_length=128,
             name="encoder",
         )
-        input_data = {
-            "input_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
+        self.batch_size = 8
+        self.input_data = {
+            "input_ids": tf.ones(
+                (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
-            "input_mask": tf.constant(
-                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+            "input_mask": tf.ones(
+                (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
         }
-        model(input_data)
+
+    def test_valid_call_roberta(self):
+        self.model(self.input_data)
 
     def test_valid_call_classifier(self):
-        model = roberta.RobertaCustom(
-            vocabulary_size=50265,
-            num_layers=12,
-            num_heads=12,
-            hidden_dim=768,
-            intermediate_dim=3072,
-            max_sequence_length=12,
-            name="encoder",
+        classifier = roberta.RobertaClassifier(
+            self.model, 4, 128, name="classifier"
         )
-        input_data = {
-            "input_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
-            ),
-            "input_mask": tf.constant(
-                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-            ),
-        }
-        classifier = roberta.RobertaClassifier(model, 4, 768, name="classifier")
-        classifier(input_data)
+        classifier(self.input_data)
 
     def test_valid_call_roberta_base(self):
-        model = roberta.RobertaBase(vocabulary_size=10000, name="encoder")
+        model = roberta.RobertaBase(vocabulary_size=1000, name="encoder")
         input_data = {
-            "input_ids": tf.random.uniform(
-                shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
+            "input_ids": tf.ones(
+                (self.batch_size, model.max_sequence_length), dtype="int32"
             ),
-            "input_mask": tf.constant([1] * 512, shape=(1, 512)),
+            "input_mask": tf.ones(
+                (self.batch_size, model.max_sequence_length), dtype="int32"
+            ),
         }
         model(input_data)
 
     def test_variable_sequence_length_call_roberta(self):
-        model = roberta.RobertaCustom(
-            vocabulary_size=50265,
-            num_layers=12,
-            num_heads=12,
-            hidden_dim=768,
-            intermediate_dim=3072,
-            max_sequence_length=100,
-            name="encoder",
-        )
         for seq_length in (25, 50, 75):
             input_data = {
-                "input_ids": tf.ones((8, seq_length), dtype="int32"),
-                "input_mask": tf.ones((8, seq_length), dtype="int32"),
+                "input_ids": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
+                "input_mask": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
             }
-            output = model(input_data)
+            output = self.model(input_data)
             self.assertAllEqual(
-                tf.shape(output["sequence_output"]), [8, seq_length, 768]
+                tf.shape(output["sequence_output"]),
+                [self.batch_size, seq_length, self.model.hidden_dim],
             )
 
     def test_saving_model(self):
-        model = roberta.RobertaCustom(
-            vocabulary_size=50265,
-            num_layers=12,
-            num_heads=12,
-            hidden_dim=768,
-            intermediate_dim=3072,
-            max_sequence_length=12,
-            name="encoder",
-        )
-        input_data = {
-            "input_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
-            ),
-            "input_mask": tf.constant(
-                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-            ),
-        }
-        model_output = model.predict(input_data)
+        model_output = self.model.predict(self.input_data)
 
         save_path = os.path.join(self.get_temp_dir(), "model")
-        model.save(save_path)
+        self.model.save(save_path)
         restored_model = keras.models.load_model(save_path)
 
-        restored_output = restored_model.predict(input_data)
+        restored_output = restored_model.predict(self.input_data)
         self.assertAllClose(
             model_output["sequence_output"],
             restored_output["sequence_output"],
