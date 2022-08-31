@@ -16,12 +16,13 @@
 import os
 
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models import roberta
 
 
-class RobertaTest(tf.test.TestCase):
+class RobertaTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.model = roberta.RobertaCustom(
             vocabulary_size=1000,
@@ -33,7 +34,7 @@ class RobertaTest(tf.test.TestCase):
             name="encoder",
         )
         self.batch_size = 8
-        self.input_data = {
+        self.input_batch = {
             "token_ids": tf.ones(
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
@@ -42,14 +43,18 @@ class RobertaTest(tf.test.TestCase):
             ),
         }
 
+        self.input_dataset = tf.data.Dataset.from_tensor_slices(
+            self.input_batch
+        ).batch(2)
+
     def test_valid_call_roberta(self):
-        self.model(self.input_data)
+        self.model(self.input_batch)
 
     def test_valid_call_classifier(self):
         classifier = roberta.RobertaClassifier(
             self.model, 4, 128, name="classifier"
         )
-        classifier(self.input_data)
+        classifier(self.input_batch)
 
     def test_valid_call_roberta_base(self):
         model = roberta.RobertaBase(vocabulary_size=1000, name="encoder")
@@ -62,6 +67,38 @@ class RobertaTest(tf.test.TestCase):
             ),
         }
         model(input_data)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_roberta_base_compile(self, jit_compile):
+        model = roberta.RobertaBase(vocabulary_size=1000, name="encoder")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.input_batch)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_roberta_base_compile_batched_ds(self, jit_compile):
+        model = roberta.RobertaBase(vocabulary_size=1000, name="encoder")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.input_dataset)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_roberta_classifier_compile(self, jit_compile):
+        model = roberta.RobertaClassifier(self.model, 4, 128, name="classifier")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.input_batch)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_roberta_classifier_compile_batched_ds(self, jit_compile):
+        model = roberta.RobertaClassifier(self.model, 4, 128, name="classifier")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.input_dataset)
 
     def test_variable_sequence_length_call_roberta(self):
         for seq_length in (25, 50, 75):
@@ -80,13 +117,13 @@ class RobertaTest(tf.test.TestCase):
             )
 
     def test_saving_model(self):
-        model_output = self.model.predict(self.input_data)
+        model_output = self.model.predict(self.input_batch)
 
         save_path = os.path.join(self.get_temp_dir(), "model")
         self.model.save(save_path)
         restored_model = keras.models.load_model(save_path)
 
-        restored_output = restored_model.predict(self.input_data)
+        restored_output = restored_model.predict(self.input_batch)
         self.assertAllClose(
             model_output,
             restored_output,
