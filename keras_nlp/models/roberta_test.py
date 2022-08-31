@@ -22,7 +22,7 @@ from tensorflow import keras
 from keras_nlp.models import roberta
 
 
-class RobertaTest(tf.test.TestCase):
+class RobertaTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.model = roberta.RobertaCustom(
             vocabulary_size=1000,

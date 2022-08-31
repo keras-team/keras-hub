@@ -22,7 +22,7 @@ from tensorflow import keras
 from keras_nlp.models import bert
 
 
-class BertTest(tf.test.TestCase):
+class BertTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.model = bert.BertCustom(
             vocabulary_size=1000,
@@ -127,7 +127,7 @@ class BertTest(tf.test.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_bert_classifier_compile_batched_ds(self, jit_compile):
-        model = roberta.RobertaClassifier(self.model, 4, 128, name="classifier")
+        model = bert.BertClassifier(self.model, 4, name="classifier")
         model.compile(jit_compile=jit_compile)
         model.predict(self.ds)
 
