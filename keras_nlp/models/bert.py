@@ -393,6 +393,53 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
     # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
 
+def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
+
+    if (vocabulary_size is None and weights is None) or (
+        vocabulary_size and weights
+    ):
+        raise ValueError(
+            "One of `vocabulary_size` or `weights` must be specified "
+            "(but not both). "
+            f"Received: weights={weights}, "
+            f"vocabulary_size={vocabulary_size}"
+        )
+
+    if weights:
+        if weights not in checkpoints["bert_large"]:
+            raise ValueError(
+                "`weights` must be one of "
+                f"""{", ".join(checkpoints["bert_large"])}. """
+                f"Received: {weights}"
+            )
+        vocabulary_size = checkpoints["bert_large"][weights]["vocabulary_size"]
+
+    model = BertCustom(
+        vocabulary_size=vocabulary_size,
+        num_layers=24,
+        num_heads=16,
+        hidden_dim=1024,
+        intermediate_dim=3072,
+        dropout=0.1,
+        max_sequence_length=512,
+        name=name,
+        trainable=trainable,
+    )
+
+    # TODO(jbischof): consider changing format from `h5` to
+    # `tf.train.Checkpoint` once
+    # https://github.com/keras-team/keras/issues/16946 is resolved
+    if weights:
+        filepath = keras.utils.get_file(
+            "model.h5",
+            BASE_PATH + "bert_base_" + weights + "/model.h5",
+            cache_subdir="models/bert_base/" + weights + "/",
+            file_hash=checkpoints["bert_base"][weights]["md5"],
+        )
+        model.load_weights(filepath)
+
+    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
+    return model
 
 setattr(
     BertBase,
