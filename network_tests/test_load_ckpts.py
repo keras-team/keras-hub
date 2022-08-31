@@ -20,8 +20,11 @@ import keras_nlp
 
 
 class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
-    @parameterized.parameters(
-        ("uncased_en"), ("cased_en"), ("zh"), ("multi_cased")
+    @parameterized.named_parameters(
+        ("uncased_en", "uncased_en"),
+        ("cased_en", "cased_en"),
+        ("zh", "zh"),
+        ("multi_cased", "multi_cased"),
     )
     def test_load_bert_base(self, weights):
         model = keras_nlp.models.BertBase(weights=weights)
