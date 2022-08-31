@@ -34,7 +34,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             name="encoder",
         )
         self.batch_size = 8
-        self.input_data = {
+        self.input_batch = {
             "token_ids": tf.ones(
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
@@ -46,24 +46,12 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             ),
         }
 
-        self.ds = tf.data.Dataset.from_tensor_slices(
-            (
-                self.input_data["token_ids"],
-                self.input_data["segment_ids"],
-                self.input_data["padding_mask"],
-            )
-        )
-        self.ds = self.ds.batch(2)
-        self.ds = self.ds.map(
-            lambda x, y, z: {
-                "token_ids": x,
-                "segment_ids": y,
-                "padding_mask": z,
-            }
-        )
+        self.input_dataset = tf.data.Dataset.from_tensor_slices(
+            self.input_batch
+        ).repeat(3)
 
     def test_valid_call_bert(self):
-        self.model(self.input_data)
+        self.model(self.input_batch)
 
     def test_variable_sequence_length_call_bert(self):
         for seq_length in (25, 50, 75):
@@ -82,7 +70,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_valid_call_classifier(self):
         classifier = bert.BertClassifier(self.model, 4, name="classifier")
-        classifier(self.input_data)
+        classifier(self.input_batch)
 
     def test_valid_call_bert_base(self):
         model = bert.BertBase(vocabulary_size=1000, name="encoder")
@@ -105,7 +93,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
     def test_bert_base_compile(self, jit_compile):
         model = bert.BertBase(vocabulary_size=1000, name="encoder")
         model.compile(jit_compile=jit_compile)
-        model.predict(self.input_data)
+        model.predict(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
@@ -113,7 +101,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
     def test_bert_base_compile_batched_ds(self, jit_compile):
         model = bert.BertBase(vocabulary_size=1000, name="encoder")
         model.compile(jit_compile=jit_compile)
-        model.predict(self.ds)
+        model.predict(self.input_dataset)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
@@ -121,7 +109,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
     def test_bert_classifier_compile(self, jit_compile):
         model = bert.BertClassifier(self.model, 4, name="classifier")
         model.compile(jit_compile=jit_compile)
-        model.predict(self.input_data)
+        model.predict(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
@@ -129,7 +117,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
     def test_bert_classifier_compile_batched_ds(self, jit_compile):
         model = bert.BertClassifier(self.model, 4, name="classifier")
         model.compile(jit_compile=jit_compile)
-        model.predict(self.ds)
+        model.predict(self.input_dataset)
 
     def test_bert_base_vocab_error(self):
         # Need `vocabulary_size` or `weights`
@@ -152,12 +140,12 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             )
 
     def test_saving_model(self):
-        model_output = self.model(self.input_data)
+        model_output = self.model(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), "model")
         self.model.save(save_path)
         restored_model = keras.models.load_model(save_path)
 
-        restored_output = restored_model(self.input_data)
+        restored_output = restored_model(self.input_batch)
         self.assertAllClose(
             model_output["pooled_output"], restored_output["pooled_output"]
         )
