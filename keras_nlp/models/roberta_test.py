@@ -34,10 +34,10 @@ class RobertaTest(tf.test.TestCase):
         )
         self.batch_size = 8
         self.input_data = {
-            "input_ids": tf.ones(
+            "token_ids": tf.ones(
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
-            "input_mask": tf.ones(
+            "padding_mask": tf.ones(
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
         }
@@ -54,10 +54,10 @@ class RobertaTest(tf.test.TestCase):
     def test_valid_call_roberta_base(self):
         model = roberta.RobertaBase(vocabulary_size=1000, name="encoder")
         input_data = {
-            "input_ids": tf.ones(
+            "token_ids": tf.ones(
                 (self.batch_size, model.max_sequence_length), dtype="int32"
             ),
-            "input_mask": tf.ones(
+            "padding_mask": tf.ones(
                 (self.batch_size, model.max_sequence_length), dtype="int32"
             ),
         }
@@ -66,16 +66,16 @@ class RobertaTest(tf.test.TestCase):
     def test_variable_sequence_length_call_roberta(self):
         for seq_length in (25, 50, 75):
             input_data = {
-                "input_ids": tf.ones(
+                "token_ids": tf.ones(
                     (self.batch_size, seq_length), dtype="int32"
                 ),
-                "input_mask": tf.ones(
+                "padding_mask": tf.ones(
                     (self.batch_size, seq_length), dtype="int32"
                 ),
             }
             output = self.model(input_data)
             self.assertAllEqual(
-                tf.shape(output["sequence_output"]),
+                tf.shape(output),
                 [self.batch_size, seq_length, self.model.hidden_dim],
             )
 
@@ -88,6 +88,6 @@ class RobertaTest(tf.test.TestCase):
 
         restored_output = restored_model.predict(self.input_data)
         self.assertAllClose(
-            model_output["sequence_output"],
-            restored_output["sequence_output"],
+            model_output,
+            restored_output,
         )

@@ -59,10 +59,10 @@ class MLMMaskGenerator(keras.layers.Layer):
 
     Returns:
         A Dict with 4 keys:
-            tokens: Tensor or RaggedTensor, has the same type and shape of
+            token_ids: Tensor or RaggedTensor, has the same type and shape of
                 input. Sequence after getting masked.
             mask_positions: Tensor, or RaggedTensor if `mask_selection_length`
-                is None. The positions of tokens getting masked.
+                is None. The positions of token_ids getting masked.
             mask_ids: Tensor, or RaggedTensor if  `mask_selection_length` is
                 None. The original token ids at masked positions.
             mask_weights: Tensor, or RaggedTensor if `mask_selection_length` is
@@ -139,7 +139,7 @@ class MLMMaskGenerator(keras.layers.Layer):
             # convert dense to ragged.
             inputs = tf.RaggedTensor.from_tensor(inputs)
 
-        (tokens, mask_positions, mask_ids,) = tf_text.mask_language_model(
+        (token_ids, mask_positions, mask_ids,) = tf_text.mask_language_model(
             inputs,
             item_selector=self._random_selector,
             mask_values_chooser=self._mask_values_chooser,
@@ -147,7 +147,7 @@ class MLMMaskGenerator(keras.layers.Layer):
 
         if not input_is_ragged:
             # If we converted the input from dense to ragged, convert back.
-            tokens = tokens.to_tensor()
+            token_ids = token_ids.to_tensor()
 
         mask_weights = tf.ones_like(mask_positions, self.compute_dtype)
         # If mask_selection_length is set, covert to raggeds to dense.
@@ -159,18 +159,17 @@ class MLMMaskGenerator(keras.layers.Layer):
 
         if input_is_1d:
             # If inputs is 1D, we format the output to be 1D as well.
-            tokens = tf.squeeze(tokens, axis=0)
+            token_ids = tf.squeeze(token_ids, axis=0)
             mask_positions = tf.squeeze(mask_positions, axis=0)
             mask_ids = tf.squeeze(mask_ids, axis=0)
             mask_weights = tf.squeeze(mask_weights, axis=0)
 
-        output_dict = {
-            "tokens": tokens,
+        return {
+            "token_ids": token_ids,
             "mask_positions": mask_positions,
             "mask_ids": mask_ids,
             "mask_weights": mask_weights,
         }
-        return output_dict
 
     def get_config(self):
         config = super().get_config()

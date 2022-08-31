@@ -67,9 +67,9 @@ class RobertaCustom(keras.Model):
 
     # Call encoder on the inputs.
     input_data = {
-        "input_ids": tf.random.uniform(
+        "token_ids": tf.random.uniform(
             shape=(1, 12), dtype=tf.int64, maxval=50265),
-        "input_mask": tf.constant(
+        "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
     output = model(input_data)
@@ -93,10 +93,10 @@ class RobertaCustom(keras.Model):
         cls_token_index = 0
         # Inputs
         token_id_input = keras.Input(
-            shape=(None,), dtype=tf.int32, name="input_ids"
+            shape=(None,), dtype=tf.int32, name="token_ids"
         )
-        input_mask = keras.Input(
-            shape=(None,), dtype=tf.int32, name="input_mask"
+        padding_mask = keras.Input(
+            shape=(None,), dtype=tf.int32, name="padding_mask"
         )
 
         # Embed tokens and positions.
@@ -130,17 +130,15 @@ class RobertaCustom(keras.Model):
                 dropout=dropout,
                 kernel_initializer=_roberta_kernel_initializer(),
                 name=f"transformer_layer_{i}",
-            )(x, padding_mask=input_mask)
+            )(x, padding_mask=padding_mask)
 
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs={
-                "input_ids": token_id_input,
-                "input_mask": input_mask,
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask,
             },
-            outputs={
-                "sequence_output": x,
-            },
+            outputs=x,
             name=name,
             trainable=trainable,
         )
@@ -197,9 +195,9 @@ class RobertaClassifier(keras.Model):
 
     # Call classifier on the inputs.
     input_data = {
-        "input_ids": tf.random.uniform(
+        "token_ids": tf.random.uniform(
             shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size),
-        "input_mask": tf.constant(
+        "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
     classifier = keras_nlp.models.RobertaClassifier(model, 4)
@@ -220,9 +218,7 @@ class RobertaClassifier(keras.Model):
         if hidden_dim is None:
             hidden_dim = base_model.hidden_dim
 
-        x = base_model(inputs)["sequence_output"][
-            :, base_model.cls_token_index, :
-        ]
+        x = base_model(inputs)[:, base_model.cls_token_index, :]
         x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
         x = keras.layers.Dense(
             hidden_dim, activation="tanh", name="pooled_dense"
@@ -265,9 +261,9 @@ def RobertaBase(vocabulary_size, name=None, trainable=True):
 
     # Call encoder on the inputs.
     input_data = {
-        "input_ids": tf.random.uniform(
+        "token_ids": tf.random.uniform(
             shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size),
-        "input_mask": tf.ones((1, 512)),
+        "padding_mask": tf.ones((1, 512)),
     }
     output = model(input_data)
     ```
