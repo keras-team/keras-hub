@@ -16,6 +16,7 @@
 import os
 
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models import roberta
@@ -42,6 +43,15 @@ class RobertaTest(tf.test.TestCase):
             ),
         }
 
+        self.ds = tf.data.Dataset.from_tensor_slices(
+            (
+                self.input_data["token_ids"],
+                self.input_data["padding_mask"],
+            )
+        )
+        self.ds = self.ds.batch(2)
+        self.ds = self.ds.map(lambda x, y: {"token_ids": x, "padding_mask": y})
+
     def test_valid_call_roberta(self):
         self.model(self.input_data)
 
@@ -62,6 +72,38 @@ class RobertaTest(tf.test.TestCase):
             ),
         }
         model(input_data)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_roberta_base_compile(self, jit_compile):
+        model = roberta.RobertaBase(vocabulary_size=1000, name="encoder")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.input_data)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_roberta_base_compile_batched_ds(self, jit_compile):
+        model = roberta.RobertaBase(vocabulary_size=1000, name="encoder")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.ds)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_roberta_classifier_compile(self, jit_compile):
+        model = roberta.RobertaClassifier(self.model, 4, 128, name="classifier")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.input_data)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_roberta_classifier_compile_batched_ds(self, jit_compile):
+        model = roberta.RobertaClassifier(self.model, 4, 128, name="classifier")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.ds)
 
     def test_variable_sequence_length_call_roberta(self):
         for seq_length in (25, 50, 75):

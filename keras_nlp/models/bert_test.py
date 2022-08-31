@@ -16,6 +16,7 @@
 import os
 
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models import bert
@@ -44,6 +45,22 @@ class BertTest(tf.test.TestCase):
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
         }
+
+        self.ds = tf.data.Dataset.from_tensor_slices(
+            (
+                self.input_data["token_ids"],
+                self.input_data["segment_ids"],
+                self.input_data["padding_mask"],
+            )
+        )
+        self.ds = self.ds.batch(2)
+        self.ds = self.ds.map(
+            lambda x, y, z: {
+                "token_ids": x,
+                "segment_ids": y,
+                "padding_mask": z,
+            }
+        )
 
     def test_valid_call_bert(self):
         self.model(self.input_data)
@@ -81,6 +98,38 @@ class BertTest(tf.test.TestCase):
             ),
         }
         model(input_data)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_bert_base_compile(self, jit_compile):
+        model = bert.BertBase(vocabulary_size=1000, name="encoder")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.input_data)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_bert_base_compile_batched_ds(self, jit_compile):
+        model = bert.BertBase(vocabulary_size=1000, name="encoder")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.ds)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_bert_classifier_compile(self, jit_compile):
+        model = bert.BertClassifier(self.model, 4, name="classifier")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.input_data)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_bert_classifier_compile_batched_ds(self, jit_compile):
+        model = roberta.RobertaClassifier(self.model, 4, 128, name="classifier")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.ds)
 
     def test_bert_base_vocab_error(self):
         # Need `vocabulary_size` or `weights`
