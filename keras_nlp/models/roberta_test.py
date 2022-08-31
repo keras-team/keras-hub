@@ -33,7 +33,7 @@ class RobertaTest(tf.test.TestCase, parameterized.TestCase):
             max_sequence_length=128,
             name="encoder",
         )
-        self.batch_size = 8
+        self.batch_size = 2
         self.input_batch = {
             "token_ids": tf.ones(
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
