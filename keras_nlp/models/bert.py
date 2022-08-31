@@ -47,6 +47,12 @@ checkpoints = {
             "description": "Base size of BERT. Trained on Chinese Wikipedia.",
             "vocabulary_size": 21128,
         },
+        "multi_cased": {
+            "md5": "b0631cec0a1f2513c6cfd75ba29c33aa",
+            "description": "Base size of BERT. Trained on Wikipedias of "
+            "104 languages.",
+            "vocabulary_size": 119547,
+        },
     }
 }
 
