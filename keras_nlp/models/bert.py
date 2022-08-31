@@ -419,7 +419,7 @@ def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
         num_layers=24,
         num_heads=16,
         hidden_dim=1024,
-        intermediate_dim=3072,
+        intermediate_dim=4096,
         dropout=0.1,
         max_sequence_length=512,
         name=name,
