@@ -17,7 +17,6 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers import RandomSwap
-from keras_nlp.tokenizers import UnicodeCodepointTokenizer
 
 
 class RandomSwapTest(tf.test.TestCase):
@@ -45,14 +44,13 @@ class RandomSwapTest(tf.test.TestCase):
 
     def test_with_integer_tokens(self):
         keras.utils.set_random_seed(1337)
-        inputs = ["Hey I like", "Keras and Tensorflow"]
-        tokenizer = UnicodeCodepointTokenizer(lowercase=False)
-        tokenized = tokenizer.tokenize(inputs)
+        inputs = tf.constant([[1, 2, 3], [4, 5, 6]])
         augmenter = RandomSwap(rate=0.7, max_swaps=6, seed=42)
-        augmented = augmenter(tokenized)
-        output = tokenizer.detokenize(augmented)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"yli I eHke", b"seaad rnK Tensolrfow"]
+        output = augmenter(inputs)
+        self.assertAllEqual(
+            output.to_tensor().shape, tf.convert_to_tensor(inputs).shape
+        )
+        exp_output = [[3, 2, 1], [6, 4, 5]]
         self.assertAllEqual(output, exp_output)
 
     def test_skip_options(self):
@@ -90,7 +88,6 @@ class RandomSwapTest(tf.test.TestCase):
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
         exp_output = [b"Hey I like", b"and Keras Tensorflow"]
         self.assertAllEqual(output, exp_output)
@@ -129,24 +126,25 @@ class RandomSwapTest(tf.test.TestCase):
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
-            return tf.strings.regex_full_match(word, r"\pP")
+            # Regex to match words starting with I or a
+            return tf.strings.regex_full_match(word, r"[I, a].*")
 
         def skip_py_fn(word):
             return len(word) < 4
 
-        augmenter = RandomSwap(rate=0.7, max_swaps=3, seed=42, skip_fn=skip_fn)
+        augmenter = RandomSwap(rate=0.7, max_swaps=5, seed=11, skip_fn=skip_fn)
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
         exp_output = [
             [b"like", b"I", b"Hey"],
-            [b"and", b"Tensorflow", b"Keras"],
+            [b"Tensorflow", b"and", b"Keras"],
         ]
         self.assertAllEqual(output, exp_output)
 
         augmenter = RandomSwap(
-            rate=0.7, max_swaps=3, seed=42, skip_py_fn=skip_py_fn
+            rate=0.7, max_swaps=2, seed=42, skip_py_fn=skip_py_fn
         )
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.map(augmenter)
@@ -164,7 +162,7 @@ class RandomSwapTest(tf.test.TestCase):
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         ds = tf.data.Dataset.from_tensor_slices(split)
-        ds = ds.batch(5).map(augmenter)
+        ds = ds.batch(2).map(augmenter)
         output = ds.take(1).get_single_element()
         exp_output = [
             [b"like", b"I", b"Hey"],
@@ -173,18 +171,19 @@ class RandomSwapTest(tf.test.TestCase):
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
-            return tf.strings.regex_full_match(word, r"\pP")
+            # Regex to match words starting with I or a
+            return tf.strings.regex_full_match(word, r"[I, a].*")
 
         def skip_py_fn(word):
             return len(word) < 2
 
         augmenter = RandomSwap(rate=0.7, max_swaps=2, seed=42, skip_fn=skip_fn)
         ds = tf.data.Dataset.from_tensor_slices(split)
-        ds = ds.batch(5).map(augmenter)
+        ds = ds.batch(2).map(augmenter)
         output = ds.take(1).get_single_element()
         exp_output = [
-            [b"like", b"I", b"Hey"],
-            [b"Tensorflow", b"Keras", b"and"],
+            [b"Hey", b"I", b"like"],
+            [b"Tensorflow", b"and", b"Keras"],
         ]
         self.assertAllEqual(output, exp_output)
 
@@ -192,7 +191,7 @@ class RandomSwapTest(tf.test.TestCase):
             rate=0.7, max_swaps=2, seed=42, skip_py_fn=skip_py_fn
         )
         ds = tf.data.Dataset.from_tensor_slices(split)
-        ds = ds.batch(5).map(augmenter)
+        ds = ds.batch(2).map(augmenter)
         output = ds.take(1).get_single_element()
         exp_output = [
             [b"Hey", b"I", b"like"],
