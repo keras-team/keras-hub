@@ -393,6 +393,7 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
     # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
 
+
 def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
 
     if (vocabulary_size is None and weights is None) or (
@@ -440,6 +441,7 @@ def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
 
     # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
+
 
 setattr(
     BertBase,
