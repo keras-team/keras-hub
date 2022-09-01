@@ -1,10 +1,10 @@
 # Training WordPiece Vocabularies on Wikipedia
 
 This is unmaintained helper code for training the vocabularies on Wikipedia.
-It is advised to run these scripts on GCS. 
+It is advised to run these scripts on GCS.
 
-### Screens
-Use screens to continue the download even when the terminal is not open!
+Note: use either `screen` or `tmux` when running these commands remotely to
+avoiding killing long running scripts.
 
 ## Instructions
 The steps are listed below. You will need to run 1 and 2 for all wikipedia data
