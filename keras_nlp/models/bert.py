@@ -56,7 +56,7 @@ checkpoints = {
             "Trained on English wikipedia + books corpora.",
             "vocabulary_size": 28996,
         },
-    }
+    },
 }
 
 
