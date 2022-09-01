@@ -42,6 +42,20 @@ checkpoints = {
             "Trained on English wikipedia + books corpora.",
             "vocabulary_size": 28996,
         },
+    },
+    "bert_large": {
+        "uncased_en": {
+            "md5": "cc5cacc9565ef400ee4376105f40ddae",
+            "description": "Large size of Bert where all input is lowercased. "
+            "Trained on English wikipedia + books corpora.",
+            "vocabulary_size": 30522,
+        },
+        "cased_en": {
+            "md5": "8b8ab82290bbf4f8db87d4f100648890",
+            "description": "Large size of Bert where case is maintained. "
+            "Trained on English wikipedia + books corpora.",
+            "vocabulary_size": 28996,
+        },
     }
 }
 
@@ -448,5 +462,12 @@ setattr(
     "__doc__",
     MODEL_DOCSTRING.format(
         type="Base", names=", ".join(checkpoints["bert_base"])
+    ),
+)
+setattr(
+    BertLarge,
+    "__doc__",
+    MODEL_DOCSTRING.format(
+        type="Large", names=", ".join(checkpoints["bert_large"])
     ),
 )
