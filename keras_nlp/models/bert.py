@@ -447,9 +447,9 @@ def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
     if weights:
         filepath = keras.utils.get_file(
             "model.h5",
-            BASE_PATH + "bert_base_" + weights + "/model.h5",
-            cache_subdir="models/bert_base/" + weights + "/",
-            file_hash=checkpoints["bert_base"][weights]["md5"],
+            BASE_PATH + "bert_large_" + weights + "/model.h5",
+            cache_subdir="models/bert_large/" + weights + "/",
+            file_hash=checkpoints["bert_large"][weights]["md5"],
         )
         model.load_weights(filepath)
 
