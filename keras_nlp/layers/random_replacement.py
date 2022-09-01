@@ -15,7 +15,6 @@ import random
 
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.python.ops.ragged import ragged_array_ops
 
 
 class RandomReplacement(keras.layers.Layer):
@@ -25,8 +24,10 @@ class RandomReplacement(keras.layers.Layer):
     augmentation as described in the paper [EDA: Easy Data Augmentation
     Techniques for Boosting Performance on Text Classification Tasks]
     (https://arxiv.org/pdf/1901.11196.pdf). The layer expects the inputs to be
-    pretokenized so that each token can be individually treated as a possible
-    candidate for replacement.
+    pre-split into token level inputs. This allows control over the level of
+    augmentation, you can split by character for character level swaps, or by
+    word for word level swaps.
+
 
     Input should be either a `tf.RaggedTensor` or a dense `tf.Tensor`, and
     either rank-1 or rank-2.
@@ -189,7 +190,10 @@ class RandomReplacement(keras.layers.Layer):
         self.seed = random.randint(1, 1e9) if seed is None else seed
         self._generator = tf.random.Generator.from_seed(self.seed)
         if self.max_replacements is not None and self.max_replacements < 0:
-            raise ValueError("max_replacements must be non negative")
+            raise ValueError(
+                "max_replacements must be non-negative."
+                f"Received max_replacements={max_replacements}."
+            )
         if self.rate > 1 or self.rate < 0:
             raise ValueError(
                 "Rate must be between 0 and 1 (both inclusive)."
@@ -263,18 +267,16 @@ class RandomReplacement(keras.layers.Layer):
                 fn_output_signature=tf.bool,
             )
 
-        positions_flat = tf.range(tf.size(inputs.flat_values))
-        positions = inputs.with_flat_values(positions_flat)
-        row_starts = positions.row_starts()
-        row_starts = tf.cast(row_starts, tf.int32)
+        positions = tf.ragged.range(inputs.row_lengths())
+
         if skip_masks is not None:
             skip_masks = tf.logical_not(skip_masks)
             skip_masks.set_shape([None])
-            positions = ragged_array_ops.boolean_mask(
+            positions = tf.ragged.boolean_mask(
                 positions, inputs.with_flat_values(skip_masks)
             )
         # Figure out how many we are going to select.
-        token_counts = tf.cast(inputs.row_lengths(), "float32")
+        token_counts = tf.cast(positions.row_lengths(), "float32")
         num_to_select = tf.random.stateless_binomial(
             shape=tf.shape(token_counts),
             seed=self._generator.make_seeds()[:, 0],
@@ -285,17 +287,13 @@ class RandomReplacement(keras.layers.Layer):
             num_to_select = tf.math.minimum(
                 num_to_select, self.max_replacements
             )
-            num_to_select = tf.math.minimum(
-                num_to_select, tf.cast(positions.row_lengths(), tf.int32)
-            )
-        num_to_select = tf.cast(num_to_select, "int64")
+        num_to_select = tf.math.minimum(
+            num_to_select, tf.cast(positions.row_lengths(), tf.int32)
+        )
+        num_to_select = tf.cast(num_to_select, tf.int64)
 
         def _replace(x):
-            """
-            Replace words randomly
-            """
-            inputs, num_to_select, positions, row_start = x
-            positions = tf.math.subtract(positions, row_start)
+            inputs, num_to_select, positions = x
             for _ in range(num_to_select):
                 # Choose a Random Index
                 index = positions[
@@ -352,7 +350,7 @@ class RandomReplacement(keras.layers.Layer):
 
         replaced = tf.map_fn(
             _replace,
-            (inputs, num_to_select, positions, row_starts),
+            (inputs, num_to_select, positions),
             fn_output_signature=tf.RaggedTensorSpec(
                 ragged_rank=inputs.ragged_rank - 1, dtype=inputs.dtype
             ),

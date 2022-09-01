@@ -17,7 +17,6 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers import RandomReplacement
-from keras_nlp.tokenizers import UnicodeCodepointTokenizer
 
 
 class RandomReplacementTest(tf.test.TestCase):
@@ -49,16 +48,13 @@ class RandomReplacementTest(tf.test.TestCase):
 
     def test_with_integer_tokens(self):
         keras.utils.set_random_seed(1337)
-        inputs = ["Hey I like", "Keras and Tensorflow"]
-        tokenizer = UnicodeCodepointTokenizer(lowercase=False)
-        tokenized = tokenizer.tokenize(inputs)
+        inputs = tf.constant([[1, 2, 3], [4, 5, 6]])
         augmenter = RandomReplacement(
             rate=0.4, max_replacements=2, seed=42, replacement_list=[99, 67]
         )
-        augmented = augmenter(tokenized)
-        output = tokenizer.detokenize(augmented)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey cClike", b"Keras Cnd Tensorclow"]
+        output = augmenter(inputs)
+        self.assertAllEqual(output.to_tensor().shape, inputs.shape)
+        exp_output = [[1, 2, 99], [67, 5, 6]]
         self.assertAllEqual(output, exp_output)
 
     def test_skip_options(self):
@@ -108,7 +104,7 @@ class RandomReplacementTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I like", b"There There Tensorflow"]
+        exp_output = [b"Hey I like", b"Keras There Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
     def test_replacement_options(self):
@@ -282,7 +278,7 @@ class RandomReplacementTest(tf.test.TestCase):
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        exp_output = [[b"Hey", b"I", b"Hey"], [b"There", b"and", b"There"]]
+        exp_output = [[b"Hey", b"I", b"Hey"], [b"Keras", b"and", b"There"]]
         self.assertAllEqual(output, exp_output)
 
     def test_functional_model(self):
