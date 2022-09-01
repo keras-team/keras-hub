@@ -220,9 +220,9 @@ class BertPretrainingModel(keras.Model):
     def call(self, data):
         encoder_output = self.encoder(
             {
-                "input_ids": data["input_ids"],
-                "input_mask": data["input_mask"],
+                "token_ids": data["token_ids"],
                 "segment_ids": data["segment_ids"],
+                "padding_mask": data["padding_mask"],
             }
         )
         sequence_output, pooled_output = (
@@ -312,8 +312,8 @@ def decode_record(record):
     seq_length = PREPROCESSING_CONFIG["max_seq_length"]
     lm_length = PREPROCESSING_CONFIG["max_predictions_per_seq"]
     name_to_features = {
-        "input_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
-        "input_mask": tf.io.FixedLenFeature([seq_length], tf.int64),
+        "token_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
+        "padding_mask": tf.io.FixedLenFeature([seq_length], tf.int64),
         "segment_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
         "masked_lm_positions": tf.io.FixedLenFeature([lm_length], tf.int64),
         "masked_lm_ids": tf.io.FixedLenFeature([lm_length], tf.int64),

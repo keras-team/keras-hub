@@ -140,9 +140,9 @@ def main(_):
         inputs = [tokenizer(x) for x in inputs]
         token_ids, segment_ids = packer(inputs)
         return {
-            "input_ids": token_ids,
-            "input_mask": tf.cast(token_ids != 0, "int32"),
+            "token_ids": token_ids,
             "segment_ids": segment_ids,
+            "padding_mask": tf.cast(token_ids != 0, "int32"),
         }, labels
 
     # Read and preprocess GLUE task data.
