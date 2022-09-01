@@ -85,12 +85,12 @@ class RandomSwap(keras.layers.Layer):
     ...     return tf.strings.regex_full_match(word, r"[I, a].*")
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.7, max_swaps=2,
-    ...     skip_fn=skip_fn, seed=42)
+    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.9, max_swaps=3,
+    ...     skip_fn=skip_fn, seed=11)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
     <tf.Tensor: shape=(2,), dtype=string,
-    numpy=array([b'Hey I like', b'Tensorflow and Keras'], dtype=object)>
+    numpy=array([b'like I Hey', b'Keras and Tensorflow'], dtype=object)>
 
     Usage with skip_py_fn.
     >>> def skip_py_fn(word):
@@ -206,7 +206,7 @@ class RandomSwap(keras.layers.Layer):
                 positions, inputs.with_flat_values(skip_masks)
             )
         # Figure out how many we are going to select.
-        token_counts = tf.cast(inputs.row_lengths(), "float32")
+        token_counts = tf.cast(positions.row_lengths(), "float32")
         num_to_select = tf.random.stateless_binomial(
             shape=tf.shape(token_counts),
             seed=self._generator.make_seeds()[:, 0],

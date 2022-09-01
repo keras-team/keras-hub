@@ -56,14 +56,14 @@ class RandomSwapTest(tf.test.TestCase):
     def test_skip_options(self):
         keras.utils.set_random_seed(1337)
         augmenter = RandomSwap(
-            rate=0.7, max_swaps=6, seed=42, skip_list=["Tensorflow", "like"]
+            rate=0.9, max_swaps=3, seed=11, skip_list=["Tensorflow", "like"]
         )
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I like", b"and Keras Tensorflow"]
+        exp_output = [b"I Hey like", b"Keras and Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
@@ -71,11 +71,11 @@ class RandomSwapTest(tf.test.TestCase):
                 return True
             return False
 
-        augmenter = RandomSwap(rate=0.7, max_swaps=6, seed=42, skip_fn=skip_fn)
+        augmenter = RandomSwap(rate=0.9, max_swaps=3, seed=11, skip_fn=skip_fn)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I like", b"and Keras Tensorflow"]
+        exp_output = [b"I Hey like", b"Keras and Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
         def skip_py_fn(word):
@@ -84,12 +84,12 @@ class RandomSwapTest(tf.test.TestCase):
             return False
 
         augmenter = RandomSwap(
-            rate=0.7, max_swaps=6, seed=42, skip_py_fn=skip_py_fn
+            rate=0.9, max_swaps=3, seed=11, skip_py_fn=skip_py_fn
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I like", b"and Keras Tensorflow"]
+        exp_output = [b"I Hey like", b"Keras and Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
     def test_get_config_and_from_config(self):
@@ -130,7 +130,7 @@ class RandomSwapTest(tf.test.TestCase):
             return tf.strings.regex_full_match(word, r"[I, a].*")
 
         def skip_py_fn(word):
-            return len(word) < 4
+            return len(word) < 2
 
         augmenter = RandomSwap(rate=0.7, max_swaps=5, seed=11, skip_fn=skip_fn)
         ds = tf.data.Dataset.from_tensor_slices(split)
@@ -139,7 +139,7 @@ class RandomSwapTest(tf.test.TestCase):
         output = ds.take(1).get_single_element()
         exp_output = [
             [b"like", b"I", b"Hey"],
-            [b"Tensorflow", b"and", b"Keras"],
+            [b"Keras", b"and", b"Tensorflow"],
         ]
         self.assertAllEqual(output, exp_output)
 
@@ -152,7 +152,7 @@ class RandomSwapTest(tf.test.TestCase):
         output = ds.take(1).get_single_element()
         exp_output = [
             [b"Hey", b"I", b"like"],
-            [b"Tensorflow", b"and", b"Keras"],
+            [b"Tensorflow", b"Keras", b"and"],
         ]
         self.assertAllEqual(output, exp_output)
 
@@ -171,8 +171,8 @@ class RandomSwapTest(tf.test.TestCase):
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
-            # Regex to match words starting with I or a
-            return tf.strings.regex_full_match(word, r"[I, a].*")
+            # Regex to match words starting with I
+            return tf.strings.regex_full_match(word, r"[I].*")
 
         def skip_py_fn(word):
             return len(word) < 2
@@ -183,7 +183,7 @@ class RandomSwapTest(tf.test.TestCase):
         output = ds.take(1).get_single_element()
         exp_output = [
             [b"Hey", b"I", b"like"],
-            [b"Tensorflow", b"and", b"Keras"],
+            [b"and", b"Keras", b"Tensorflow"],
         ]
         self.assertAllEqual(output, exp_output)
 
@@ -195,7 +195,7 @@ class RandomSwapTest(tf.test.TestCase):
         output = ds.take(1).get_single_element()
         exp_output = [
             [b"Hey", b"I", b"like"],
-            [b"Tensorflow", b"Keras", b"and"],
+            [b"and", b"Keras", b"Tensorflow"],
         ]
         self.assertAllEqual(output, exp_output)
 
