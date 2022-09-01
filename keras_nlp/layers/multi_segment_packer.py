@@ -19,6 +19,7 @@ import tensorflow_text as tf_text
 from tensorflow import keras
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class MultiSegmentPacker(keras.layers.Layer):
     """Packs multiple sequences into a single fixed width model input.
 

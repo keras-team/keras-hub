@@ -13,13 +13,16 @@
 # limitations under the License.
 """Tests for Transformer Decoder."""
 
+import os
+
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 
 
-class MultiSegmentPackerTest(tf.test.TestCase):
+class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
     def test_trim_single_input_ints(self):
         input_data = tf.range(3, 10)
         packer = MultiSegmentPacker(8, start_value=1, end_value=2)
@@ -158,7 +161,8 @@ class MultiSegmentPackerTest(tf.test.TestCase):
             cloned_packer([seq1, seq2]),
         )
 
-    def test_saving(self):
+    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
+    def test_saving(self, format):
         seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b"]])
         seq2 = tf.ragged.constant([["x", "y", "z"], ["x", "y", "z"]])
         packer = MultiSegmentPacker(
@@ -170,8 +174,9 @@ class MultiSegmentPackerTest(tf.test.TestCase):
         )
         outputs = packer(inputs)
         model = keras.Model(inputs, outputs)
-        model.save(self.get_temp_dir())
-        restored_model = keras.models.load_model(self.get_temp_dir())
+        path = os.path.join(self.get_temp_dir(), "model")
+        model.save(path, save_format=format)
+        restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model((seq1, seq2)),
             restored_model((seq1, seq2)),

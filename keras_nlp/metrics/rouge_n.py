@@ -14,10 +14,12 @@
 
 """ROUGE-N metric."""
 
+from tensorflow import keras
 
 from keras_nlp.metrics.rouge_base import RougeBase
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class RougeN(RougeBase):
     """ROUGE-N metric.
 

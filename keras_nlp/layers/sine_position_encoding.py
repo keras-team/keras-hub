@@ -18,6 +18,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class SinePositionEncoding(keras.layers.Layer):
     """Sinusoidal positional encoding layer.
 
@@ -62,6 +63,8 @@ class SinePositionEncoding(keras.layers.Layer):
         self.max_wavelength = max_wavelength
 
     def call(self, inputs):
+        # TODO(jbischof): replace `hidden_size` with`hidden_dim` for consistency
+        # with other layers.
         input_shape = tf.shape(inputs)
         # length of sequence is the second last dimension of the inputs
         seq_length = input_shape[-2]
