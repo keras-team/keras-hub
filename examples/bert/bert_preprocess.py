@@ -125,18 +125,18 @@ def write_instance_to_example_files(
     total_written = 0
     lookup = dict(zip(vocab, range(len(vocab))))
     for (inst_index, instance) in enumerate(instances):
-        input_ids = [lookup[x] for x in instance.tokens]
-        input_mask = [1] * len(input_ids)
+        token_ids = [lookup[x] for x in instance.tokens]
+        padding_mask = [1] * len(token_ids)
         segment_ids = list(instance.segment_ids)
-        assert len(input_ids) <= max_seq_length
+        assert len(token_ids) <= max_seq_length
 
-        while len(input_ids) < max_seq_length:
-            input_ids.append(0)
-            input_mask.append(0)
+        while len(token_ids) < max_seq_length:
+            token_ids.append(0)
+            padding_mask.append(0)
             segment_ids.append(0)
 
-        assert len(input_ids) == max_seq_length
-        assert len(input_mask) == max_seq_length
+        assert len(token_ids) == max_seq_length
+        assert len(padding_mask) == max_seq_length
         assert len(segment_ids) == max_seq_length
 
         masked_lm_positions = list(instance.masked_lm_positions)
@@ -151,8 +151,8 @@ def write_instance_to_example_files(
         next_sentence_label = 1 if instance.is_random_next else 0
 
         features = collections.OrderedDict()
-        features["input_ids"] = int_feature(input_ids)
-        features["input_mask"] = int_feature(input_mask)
+        features["token_ids"] = int_feature(token_ids)
+        features["padding_mask"] = int_feature(padding_mask)
         features["segment_ids"] = int_feature(segment_ids)
         features["masked_lm_positions"] = int_feature(masked_lm_positions)
         features["masked_lm_ids"] = int_feature(masked_lm_ids)
