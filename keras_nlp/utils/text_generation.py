@@ -27,7 +27,7 @@ def _validate_prompt(prompt):
 
 
 def _validate_token_probability_fn(token_probability_fn, prompt):
-    """Helper function to validate token probability fn output"""
+    """Helper function to validate token probability fn output."""
     test_pred = token_probability_fn(prompt)
     if len(test_pred.shape) != 2:
         raise ValueError(
@@ -37,15 +37,26 @@ def _validate_token_probability_fn(token_probability_fn, prompt):
         )
 
 
-def _pad_prompts(prompt, max_length, pad_token_id):
-    # Maintain a mask tensor of shape `(batch_size,max_length)` which will
-    # control the updates at every step.  At the same time, pad the prompt
-    # with `pad_token_id` to `max_length`.
+def _get_prompt_length(prompt):
+    """Helper function to get the batch size and prompt length."""
     if isinstance(prompt, tf.Tensor):
         shape = tf.shape(prompt)
-        batch_size = shape[0]
-        length = shape[1]
+        return (shape[0], shape[1])
+    elif isinstance(prompt, tf.RaggedTensor):
+        batch_size = prompt.nrows()
+        length = tf.math.reduce_min(tf.RaggedTensor.row_lengths(prompt))
+        return (batch_size, length)
 
+
+def _pad_prompt(prompt, batch_size, length, max_length, pad_token_id):
+    """Pad prompt to `max_length` and compute a mask for controlled updates.
+
+    This utility will pad the (possibly ragged) prompt to `max_length`, and
+    compute a mask where the input was originally set in the prompt, to avoid
+    overwriting the original inputs when generating token(s) for the next
+    timestep.
+    """
+    if isinstance(prompt, tf.Tensor):
         mask = tf.ones_like(prompt, dtype=tf.bool)
         mask_padding = tf.fill((batch_size, max_length - length), False)
         mask = tf.concat([mask, mask_padding], axis=1)
@@ -53,21 +64,15 @@ def _pad_prompts(prompt, max_length, pad_token_id):
         padding = tf.fill((batch_size, max_length - length), pad_token_id)
         prompt = tf.concat((prompt, padding), axis=1)
     elif isinstance(prompt, tf.RaggedTensor):
-        batch_size = prompt.nrows()
-        length = tf.math.reduce_min(tf.RaggedTensor.row_lengths(prompt))
-
         # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
         # fails in TF 2.9.x. Fix this. After this issue has been fixed, we can
         # condense the two branches into one by starting off with a ragged tensor.
         mask = tf.ones_like(prompt, dtype=tf.bool)
-        mask = mask.to_tensor(
-            default_value=False, shape=(batch_size, max_length)
-        )
-
+        mask = mask.to_tensor(default_value=False, shape=(None, max_length))
         prompt = prompt.to_tensor(
-            default_value=pad_token_id, shape=(batch_size, max_length)
+            default_value=pad_token_id, shape=(None, max_length)
         )
-    return prompt, mask, batch_size, length
+    return prompt, mask
 
 
 def _mask_tokens_after_end_token(
@@ -166,8 +171,9 @@ def greedy_search(
 
     _validate_token_probability_fn(token_probability_fn, prompt)
 
-    prompt, mask, batch_size, length = _pad_prompts(
-        prompt, max_length, pad_token_id
+    batch_size, length = _get_prompt_length(prompt)
+    prompt, mask = _pad_prompt(
+        prompt, batch_size, length, max_length, pad_token_id
     )
 
     def one_step(length, prompt):
@@ -441,8 +447,9 @@ def random_search(
 
     _validate_token_probability_fn(token_probability_fn, prompt)
 
-    prompt, mask, batch_size, length = _pad_prompts(
-        prompt, max_length, pad_token_id
+    batch_size, length = _get_prompt_length(prompt)
+    prompt, mask = _pad_prompt(
+        prompt, batch_size, length, max_length, pad_token_id
     )
 
     def one_step(length, prompt):
@@ -589,8 +596,9 @@ def top_k_search(
         )
         k = pred.shape[1]
 
-    prompt, mask, batch_size, length = _pad_prompts(
-        prompt, max_length, pad_token_id
+    batch_size, length = _get_prompt_length(prompt)
+    prompt, mask = _pad_prompt(
+        prompt, batch_size, length, max_length, pad_token_id
     )
 
     def one_step(length, prompt):
@@ -736,8 +744,9 @@ def top_p_search(
 
     _validate_token_probability_fn(token_probability_fn, prompt)
 
-    prompt, mask, batch_size, length = _pad_prompts(
-        prompt, max_length, pad_token_id
+    batch_size, length = _get_prompt_length(prompt)
+    prompt, mask = _pad_prompt(
+        prompt, batch_size, length, max_length, pad_token_id
     )
 
     def one_step(length, prompt):
