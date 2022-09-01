@@ -15,7 +15,6 @@ import random
 
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.python.ops.ragged import ragged_array_ops
 
 
 class RandomSwap(keras.layers.Layer):
@@ -95,15 +94,15 @@ class RandomSwap(keras.layers.Layer):
 
     Usage with skip_py_fn.
     >>> def skip_py_fn(word):
-    ...     return len(word) == 3
+    ...     return len(word) < 4
     >>> keras.utils.set_random_seed(1337)
-    >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=keras_nlp.layers.RandomSwap(rate=1, max_swaps=2,
-    ...     skip_py_fn=skip_py_fn, seed=42)
+    >>> inputs=tf.strings.split(["He was drifting along", "With the wind"])
+    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.8, max_swaps=2,
+    ...     skip_py_fn=skip_py_fn, seed=15)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey I like',
-    b'Tensorflow and Keras'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'He was along drifting',
+    b'wind the With'], dtype=object)>
     """
 
     def __init__(
@@ -137,7 +136,10 @@ class RandomSwap(keras.layers.Layer):
         self.skip_fn = skip_fn
         self.skip_py_fn = skip_py_fn
         if self.max_swaps is not None and self.max_swaps < 0:
-            raise ValueError("max_swaps must be non negative")
+            raise ValueError(
+                "max_swaps must be non-negative."
+                f"Received max_swaps={max_swaps}."
+            )
 
         if [self.skip_list, self.skip_fn, self.skip_py_fn].count(None) < 2:
             raise ValueError(
@@ -155,7 +157,6 @@ class RandomSwap(keras.layers.Layer):
             )
 
     def call(self, inputs):
-
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
 
@@ -196,15 +197,12 @@ class RandomSwap(keras.layers.Layer):
                 fn_output_signature=tf.bool,
             )
 
-        positions_flat = tf.range(tf.size(inputs.flat_values))
-        positions = inputs.with_flat_values(positions_flat)
-        row_starts = positions.row_starts()
-        row_starts = tf.cast(row_starts, tf.int32)
+        positions = tf.ragged.range(inputs.row_lengths())
 
         if skip_masks is not None:
             skip_masks = tf.logical_not(skip_masks)
             skip_masks.set_shape([None])
-            positions = ragged_array_ops.boolean_mask(
+            positions = tf.ragged.boolean_mask(
                 positions, inputs.with_flat_values(skip_masks)
             )
         # Figure out how many we are going to select.
@@ -220,20 +218,7 @@ class RandomSwap(keras.layers.Layer):
         num_to_select = tf.math.minimum(
             num_to_select, tf.cast(positions.row_lengths(), tf.int32)
         )
-        num_to_select = tf.cast(num_to_select, "int64")
-
-        def _reduce_by_offset(x):
-            positions, row_starts = x
-            positions = tf.math.subtract(positions, row_starts)
-            return positions
-
-        positions = tf.map_fn(
-            _reduce_by_offset,
-            (positions, row_starts),
-            fn_output_signature=tf.RaggedTensorSpec(
-                ragged_rank=positions.ragged_rank - 1, dtype=positions.dtype
-            ),
-        )
+        num_to_select = tf.cast(num_to_select, tf.int64)
 
         def _swap(x):
             positions, inputs, num_to_select = x
@@ -261,7 +246,6 @@ class RandomSwap(keras.layers.Layer):
                 ragged_rank=positions.ragged_rank - 1, dtype=inputs.dtype
             ),
         )
-
         swapped.flat_values.set_shape([None])
 
         if input_is_1d:
