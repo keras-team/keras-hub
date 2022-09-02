@@ -397,7 +397,8 @@ def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
             raise ValueError(
                 "`weights` must be one of "
                 f"""{", ".join(checkpoints["bert_tiny"])}. """
-                f"Received: {weights}"
+                f"Received: {weights}. Other BERT variants may have checkpoints "
+                f'for "{weights}" available.'
             )
         vocabulary_size = checkpoints["bert_tiny"][weights]["vocabulary_size"]
 
@@ -448,7 +449,8 @@ def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
             raise ValueError(
                 "`weights` must be one of "
                 f"""{", ".join(checkpoints["bert_small"])}. """
-                f"Received: {weights}"
+                f"Received: {weights}. Other BERT variants may have checkpoints "
+                f'for "{weights}" available.'
             )
         vocabulary_size = checkpoints["bert_small"][weights]["vocabulary_size"]
 
@@ -493,7 +495,8 @@ def BertMedium(weights=None, vocabulary_size=None, name=None, trainable=True):
             raise ValueError(
                 "`weights` must be one of "
                 f"""{", ".join(checkpoints["bert_medium"])}. """
-                f"Received: {weights}"
+                f"Received: {weights}. Other BERT variants may have checkpoints "
+                f'for "{weights}" available.'
             )
         vocabulary_size = checkpoints["bert_medium"][weights]["vocabulary_size"]
 
@@ -538,7 +541,8 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
             raise ValueError(
                 "`weights` must be one of "
                 f"""{", ".join(checkpoints["bert_base"])}. """
-                f"Received: {weights}"
+                f"Received: {weights}. Other BERT variants may have checkpoints "
+                f'for "{weights}" available.'
             )
         vocabulary_size = checkpoints["bert_base"][weights]["vocabulary_size"]
 
