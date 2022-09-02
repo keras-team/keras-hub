@@ -63,7 +63,7 @@ checkpoints = {
         },
         "cased_en": {
             "md5": "8b8ab82290bbf4f8db87d4f100648890",
-            "description": "Large size of Bert where case is maintained. "
+            "description": "Large size of BERT where case is maintained. "
             "Trained on English Wikipedia + BooksCorpus.",
             "vocabulary_size": 28996,
         },
