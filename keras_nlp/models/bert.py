@@ -85,7 +85,7 @@ checkpoints = {
             "104 languages.",
             "vocabulary_size": 119547,
         },
-    }
+    },
 }
 
 
@@ -387,6 +387,7 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
     ```
 """
 
+
 def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
 
     if (vocabulary_size is None and weights is None) or (
@@ -484,6 +485,7 @@ def BertMini(weights=None, vocabulary_size=None, name=None, trainable=True):
     # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
 
+
 def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
 
     if (vocabulary_size is None and weights is None) or (
@@ -531,6 +533,7 @@ def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
 
     # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
+
 
 def BertMedium(weights=None, vocabulary_size=None, name=None, trainable=True):
 
