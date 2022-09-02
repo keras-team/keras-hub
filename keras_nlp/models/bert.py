@@ -29,6 +29,38 @@ def _bert_kernel_initializer(stddev=0.02):
 BASE_PATH = "https://storage.googleapis.com/keras-nlp/models/"
 
 checkpoints = {
+    "bert_tiny": {
+        "uncased_en": {
+            "md5": "",
+            "description": "Tiny size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus.",
+            "vocabulary_size": 30522,
+        }
+    },
+    "bert_mini": {
+        "uncased_en": {
+            "md5": "",
+            "description": "Mini size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus.",
+            "vocabulary_size": 30522,
+        }
+    },
+    "bert_small": {
+        "uncased_en": {
+            "md5": "",
+            "description": "Small size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus.",
+            "vocabulary_size": 30522,
+        }
+    },
+    "bert_medium": {
+        "uncased_en": {
+            "md5": "",
+            "description": "Medium size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus.",
+            "vocabulary_size": 30522,
+        }
+    },
     "bert_base": {
         "uncased_en": {
             "md5": "9b2b2139f221988759ac9cdd17050b31",
@@ -355,6 +387,199 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
     ```
 """
 
+def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
+
+    if (vocabulary_size is None and weights is None) or (
+        vocabulary_size and weights
+    ):
+        raise ValueError(
+            "One of `vocabulary_size` or `weights` must be specified "
+            "(but not both). "
+            f"Received: weights={weights}, "
+            f"vocabulary_size={vocabulary_size}"
+        )
+
+    if weights:
+        if weights not in checkpoints["bert_tiny"]:
+            raise ValueError(
+                "`weights` must be one of "
+                f"""{", ".join(checkpoints["bert_tiny"])}. """
+                f"Received: {weights}"
+            )
+        vocabulary_size = checkpoints["bert_tiny"][weights]["vocabulary_size"]
+
+    model = BertCustom(
+        vocabulary_size=vocabulary_size,
+        num_layers=2,
+        num_heads=2,
+        hidden_dim=128,
+        intermediate_dim=512,
+        dropout=0.1,
+        max_sequence_length=512,
+        name=name,
+        trainable=trainable,
+    )
+
+    # TODO(jbischof): consider changing format from `h5` to
+    # `tf.train.Checkpoint` once
+    # https://github.com/keras-team/keras/issues/16946 is resolved
+    if weights:
+        filepath = keras.utils.get_file(
+            "model.h5",
+            BASE_PATH + "bert_tiny_" + weights + "/model.h5",
+            cache_subdir="models/bert_tiny/" + weights + "/",
+            file_hash=checkpoints["bert_tiny"][weights]["md5"],
+        )
+        model.load_weights(filepath)
+
+    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
+    return model
+
+
+def BertMini(weights=None, vocabulary_size=None, name=None, trainable=True):
+
+    if (vocabulary_size is None and weights is None) or (
+        vocabulary_size and weights
+    ):
+        raise ValueError(
+            "One of `vocabulary_size` or `weights` must be specified "
+            "(but not both). "
+            f"Received: weights={weights}, "
+            f"vocabulary_size={vocabulary_size}"
+        )
+
+    if weights:
+        if weights not in checkpoints["bert_mini"]:
+            raise ValueError(
+                "`weights` must be one of "
+                f"""{", ".join(checkpoints["bert_mini"])}. """
+                f"Received: {weights}"
+            )
+        vocabulary_size = checkpoints["bert_mini"][weights]["vocabulary_size"]
+
+    model = BertCustom(
+        vocabulary_size=vocabulary_size,
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        intermediate_dim=1024,
+        dropout=0.1,
+        max_sequence_length=512,
+        name=name,
+        trainable=trainable,
+    )
+
+    # TODO(jbischof): consider changing format from `h5` to
+    # `tf.train.Checkpoint` once
+    # https://github.com/keras-team/keras/issues/16946 is resolved
+    if weights:
+        filepath = keras.utils.get_file(
+            "model.h5",
+            BASE_PATH + "bert_mini_" + weights + "/model.h5",
+            cache_subdir="models/bert_mini/" + weights + "/",
+            file_hash=checkpoints["bert_mini"][weights]["md5"],
+        )
+        model.load_weights(filepath)
+
+    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
+    return model
+
+def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
+
+    if (vocabulary_size is None and weights is None) or (
+        vocabulary_size and weights
+    ):
+        raise ValueError(
+            "One of `vocabulary_size` or `weights` must be specified "
+            "(but not both). "
+            f"Received: weights={weights}, "
+            f"vocabulary_size={vocabulary_size}"
+        )
+
+    if weights:
+        if weights not in checkpoints["bert_small"]:
+            raise ValueError(
+                "`weights` must be one of "
+                f"""{", ".join(checkpoints["bert_small"])}. """
+                f"Received: {weights}"
+            )
+        vocabulary_size = checkpoints["bert_small"][weights]["vocabulary_size"]
+
+    model = BertCustom(
+        vocabulary_size=vocabulary_size,
+        num_layers=4,
+        num_heads=8,
+        hidden_dim=512,
+        intermediate_dim=2048,
+        dropout=0.1,
+        max_sequence_length=512,
+        name=name,
+        trainable=trainable,
+    )
+
+    # TODO(jbischof): consider changing format from `h5` to
+    # `tf.train.Checkpoint` once
+    # https://github.com/keras-team/keras/issues/16946 is resolved
+    if weights:
+        filepath = keras.utils.get_file(
+            "model.h5",
+            BASE_PATH + "bert_small_" + weights + "/model.h5",
+            cache_subdir="models/bert_small/" + weights + "/",
+            file_hash=checkpoints["bert_small"][weights]["md5"],
+        )
+        model.load_weights(filepath)
+
+    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
+    return model
+
+def BertMedium(weights=None, vocabulary_size=None, name=None, trainable=True):
+
+    if (vocabulary_size is None and weights is None) or (
+        vocabulary_size and weights
+    ):
+        raise ValueError(
+            "One of `vocabulary_size` or `weights` must be specified "
+            "(but not both). "
+            f"Received: weights={weights}, "
+            f"vocabulary_size={vocabulary_size}"
+        )
+
+    if weights:
+        if weights not in checkpoints["bert_medium"]:
+            raise ValueError(
+                "`weights` must be one of "
+                f"""{", ".join(checkpoints["bert_medium"])}. """
+                f"Received: {weights}"
+            )
+        vocabulary_size = checkpoints["bert_medium"][weights]["vocabulary_size"]
+
+    model = BertCustom(
+        vocabulary_size=vocabulary_size,
+        num_layers=8,
+        num_heads=8,
+        hidden_dim=512,
+        intermediate_dim=2048,
+        dropout=0.1,
+        max_sequence_length=512,
+        name=name,
+        trainable=trainable,
+    )
+
+    # TODO(jbischof): consider changing format from `h5` to
+    # `tf.train.Checkpoint` once
+    # https://github.com/keras-team/keras/issues/16946 is resolved
+    if weights:
+        filepath = keras.utils.get_file(
+            "model.h5",
+            BASE_PATH + "bert_medium_" + weights + "/model.h5",
+            cache_subdir="models/bert_medium/" + weights + "/",
+            file_hash=checkpoints["bert_medium"][weights]["md5"],
+        )
+        model.load_weights(filepath)
+
+    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
+    return model
+
 
 def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
 
@@ -404,6 +629,38 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
     # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
 
+
+setattr(
+    BertTiny,
+    "__doc__",
+    MODEL_DOCSTRING.format(
+        type="Tiny", names=", ".join(checkpoints["bert_tiny"])
+    ),
+)
+
+setattr(
+    BertMini,
+    "__doc__",
+    MODEL_DOCSTRING.format(
+        type="Mini", names=", ".join(checkpoints["bert_mini"])
+    ),
+)
+
+setattr(
+    BertSmall,
+    "__doc__",
+    MODEL_DOCSTRING.format(
+        type="Small", names=", ".join(checkpoints["bert_small"])
+    ),
+)
+
+setattr(
+    BertMedium,
+    "__doc__",
+    MODEL_DOCSTRING.format(
+        type="Medium", names=", ".join(checkpoints["bert_medium"])
+    ),
+)
 
 setattr(
     BertBase,
