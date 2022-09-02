@@ -32,13 +32,13 @@ checkpoints = {
     "bert_base": {
         "uncased_en": {
             "md5": "9b2b2139f221988759ac9cdd17050b31",
-            "description": "Base size of Bert where all input is lowercased. "
+            "description": "Base size of BERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus.",
             "vocabulary_size": 30522,
         },
         "cased_en": {
             "md5": "f94a6cb012e18f4fb8ec92abb91864e9",
-            "description": "Base size of Bert where case is maintained. "
+            "description": "Base size of BERT where case is maintained. "
             "Trained on English Wikipedia + BooksCorpus.",
             "vocabulary_size": 28996,
         },
@@ -57,14 +57,14 @@ checkpoints = {
     "bert_large": {
         "uncased_en": {
             "md5": "cc5cacc9565ef400ee4376105f40ddae",
-            "description": "Large size of Bert where all input is lowercased. "
-            "Trained on English wikipedia + books corpora.",
+            "description": "Large size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus.",
             "vocabulary_size": 30522,
         },
         "cased_en": {
             "md5": "8b8ab82290bbf4f8db87d4f100648890",
             "description": "Large size of Bert where case is maintained. "
-            "Trained on English wikipedia + books corpora.",
+            "Trained on English Wikipedia + BooksCorpus.",
             "vocabulary_size": 28996,
         },
     },
