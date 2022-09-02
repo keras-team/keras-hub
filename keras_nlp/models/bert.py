@@ -37,14 +37,6 @@ checkpoints = {
             "vocabulary_size": 30522,
         }
     },
-    "bert_mini": {
-        "uncased_en": {
-            "md5": "6ccf2e96506dafba6edb1fa83063964f",
-            "description": "Mini size of BERT where all input is lowercased. "
-            "Trained on English Wikipedia + BooksCorpus.",
-            "vocabulary_size": 30522,
-        }
-    },
     "bert_small": {
         "uncased_en": {
             "md5": "08632c9479b034f342ba2c2b7afba5f7",
@@ -439,51 +431,6 @@ def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
     return model
 
 
-def BertMini(weights=None, vocabulary_size=None, name=None, trainable=True):
-
-    if (vocabulary_size is None and weights is None) or (
-        vocabulary_size and weights
-    ):
-        raise ValueError(
-            "One of `vocabulary_size` or `weights` must be specified "
-            "(but not both). "
-            f"Received: weights={weights}, "
-            f"vocabulary_size={vocabulary_size}"
-        )
-
-    if weights:
-        if weights not in checkpoints["bert_mini"]:
-            raise ValueError(
-                "`weights` must be one of "
-                f"""{", ".join(checkpoints["bert_mini"])}. """
-                f"Received: {weights}"
-            )
-        vocabulary_size = checkpoints["bert_mini"][weights]["vocabulary_size"]
-
-    model = BertCustom(
-        vocabulary_size=vocabulary_size,
-        num_layers=4,
-        num_heads=4,
-        hidden_dim=256,
-        intermediate_dim=1024,
-        dropout=0.1,
-        max_sequence_length=512,
-        name=name,
-        trainable=trainable,
-    )
-
-    if weights:
-        filepath = keras.utils.get_file(
-            "model.h5",
-            BASE_PATH + "bert_mini_" + weights + "/model.h5",
-            cache_subdir="models/bert_mini/" + weights + "/",
-            file_hash=checkpoints["bert_mini"][weights]["md5"],
-        )
-        model.load_weights(filepath)
-
-    return model
-
-
 def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
 
     if (vocabulary_size is None and weights is None) or (
@@ -624,14 +571,6 @@ setattr(
     "__doc__",
     MODEL_DOCSTRING.format(
         type="Tiny", names=", ".join(checkpoints["bert_tiny"])
-    ),
-)
-
-setattr(
-    BertMini,
-    "__doc__",
-    MODEL_DOCSTRING.format(
-        type="Mini", names=", ".join(checkpoints["bert_mini"])
     ),
 )
 
