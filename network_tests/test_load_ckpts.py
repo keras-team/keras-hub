@@ -36,3 +36,47 @@ class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
         }
         model(input_data)
+
+    def test_load_bert_tiny(self, weights):
+        model = keras_nlp.models.BertTiny(weights="uncased_en")
+        input_data = {
+            "token_ids": tf.random.uniform(
+                shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
+            ),
+            "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
+            "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+        }
+        model(input_data)
+
+    def test_load_bert_mini(self, weights):
+        model = keras_nlp.models.BertMini(weights="uncased_en")
+        input_data = {
+            "token_ids": tf.random.uniform(
+                shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
+            ),
+            "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
+            "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+        }
+        model(input_data)
+
+    def test_load_bert_small(self, weights):
+        model = keras_nlp.models.BertSmall(weights="uncased_en")
+        input_data = {
+            "token_ids": tf.random.uniform(
+                shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
+            ),
+            "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
+            "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+        }
+        model(input_data)
+
+    def test_load_bert_medium(self, weights):
+        model = keras_nlp.models.BertMedium(weights="uncased_en")
+        input_data = {
+            "token_ids": tf.random.uniform(
+                shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
+            ),
+            "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
+            "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+        }
+        model(input_data)

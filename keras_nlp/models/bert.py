@@ -31,7 +31,7 @@ BASE_PATH = "https://storage.googleapis.com/keras-nlp/models/"
 checkpoints = {
     "bert_tiny": {
         "uncased_en": {
-            "md5": "",
+            "md5": "c2b29fcbf8f814a0812e4ab89ef5c068",
             "description": "Tiny size of BERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus.",
             "vocabulary_size": 30522,
@@ -39,7 +39,7 @@ checkpoints = {
     },
     "bert_mini": {
         "uncased_en": {
-            "md5": "",
+            "md5": "6ccf2e96506dafba6edb1fa83063964f",
             "description": "Mini size of BERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus.",
             "vocabulary_size": 30522,
@@ -47,7 +47,7 @@ checkpoints = {
     },
     "bert_small": {
         "uncased_en": {
-            "md5": "",
+            "md5": "08632c9479b034f342ba2c2b7afba5f7",
             "description": "Small size of BERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus.",
             "vocabulary_size": 30522,
@@ -55,7 +55,7 @@ checkpoints = {
     },
     "bert_medium": {
         "uncased_en": {
-            "md5": "",
+            "md5": "bb990e1184ec6b6185450c73833cd661",
             "description": "Medium size of BERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus.",
             "vocabulary_size": 30522,
