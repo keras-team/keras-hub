@@ -423,7 +423,8 @@ def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
 
     # TODO(jbischof): consider changing format from `h5` to
     # `tf.train.Checkpoint` once
-    # https://github.com/keras-team/keras/issues/16946 is resolved
+    # https://github.com/keras-team/keras/issues/16946 is resolved. This comment
+    # applies to other variants as well.
     if weights:
         filepath = keras.utils.get_file(
             "model.h5",
@@ -433,7 +434,8 @@ def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
         )
         model.load_weights(filepath)
 
-    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
+    # TODO(jbischof): attach the tokenizer or create separate tokenizer class.
+    # This comment applies to other variants as well.
     return model
 
 
@@ -470,9 +472,6 @@ def BertMini(weights=None, vocabulary_size=None, name=None, trainable=True):
         trainable=trainable,
     )
 
-    # TODO(jbischof): consider changing format from `h5` to
-    # `tf.train.Checkpoint` once
-    # https://github.com/keras-team/keras/issues/16946 is resolved
     if weights:
         filepath = keras.utils.get_file(
             "model.h5",
@@ -482,7 +481,6 @@ def BertMini(weights=None, vocabulary_size=None, name=None, trainable=True):
         )
         model.load_weights(filepath)
 
-    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
 
 
@@ -519,9 +517,6 @@ def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
         trainable=trainable,
     )
 
-    # TODO(jbischof): consider changing format from `h5` to
-    # `tf.train.Checkpoint` once
-    # https://github.com/keras-team/keras/issues/16946 is resolved
     if weights:
         filepath = keras.utils.get_file(
             "model.h5",
@@ -531,7 +526,6 @@ def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
         )
         model.load_weights(filepath)
 
-    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
 
 
@@ -568,9 +562,6 @@ def BertMedium(weights=None, vocabulary_size=None, name=None, trainable=True):
         trainable=trainable,
     )
 
-    # TODO(jbischof): consider changing format from `h5` to
-    # `tf.train.Checkpoint` once
-    # https://github.com/keras-team/keras/issues/16946 is resolved
     if weights:
         filepath = keras.utils.get_file(
             "model.h5",
@@ -580,7 +571,6 @@ def BertMedium(weights=None, vocabulary_size=None, name=None, trainable=True):
         )
         model.load_weights(filepath)
 
-    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
 
 
@@ -617,9 +607,6 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
         trainable=trainable,
     )
 
-    # TODO(jbischof): consider changing format from `h5` to
-    # `tf.train.Checkpoint` once
-    # https://github.com/keras-team/keras/issues/16946 is resolved
     if weights:
         filepath = keras.utils.get_file(
             "model.h5",
@@ -629,7 +616,6 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
         )
         model.load_weights(filepath)
 
-    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
 
 
