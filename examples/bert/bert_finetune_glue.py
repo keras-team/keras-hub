@@ -15,7 +15,7 @@
 
 import tempfile
 
-import datasets
+import tensorflow_datasets as tfds
 import keras_tuner
 import tensorflow as tf
 from absl import app
@@ -77,7 +77,7 @@ def load_data(task_name):
     elif task_name in "qqp":
         feature_names = ("question1", "question2")
     else:
-        raise ValueError(f"Unkown task_name {task_name}.")
+        raise ValueError(f"Unknown task_name {task_name}.")
 
     test_suffix = ""
     if task_name in ("mnli", "mnli_matched"):
@@ -88,17 +88,10 @@ def load_data(task_name):
         task_name = "mnli"
         test_suffix = "_mismatched"
 
-    def to_tf_dataset(split):
-        # Format each sample as a tuple of string features and an int label.
-        features = tuple([split[f] for f in feature_names])
-        label = tf.cast(split["label"], tf.int32)
-        return tf.data.Dataset.from_tensor_slices((features, label))
-
-    data = datasets.load_dataset("glue", task_name)
-    data.set_format(type="tensorflow")
-    train_ds = to_tf_dataset(data["train"])
-    test_ds = to_tf_dataset(data["test" + test_suffix])
-    validation_ds = to_tf_dataset(data["validation" + test_suffix])
+    data = tfds.load(f"glue/{task_name}")
+    train_ds = data["train"].map(lambda x: {feature_name: x[feature_name] for feature_name in feature_names})
+    test_ds = data["test" + test_suffix].map(lambda x: {feature_name: x[feature_name] for feature_name in feature_names})
+    validation_ds = data["validation" + test_suffix].map(lambda x: {feature_name: x[feature_name] for feature_name in feature_names})
     return train_ds, test_ds, validation_ds
 
 
