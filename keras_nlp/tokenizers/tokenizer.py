@@ -17,6 +17,7 @@ from typing import List
 from tensorflow import keras
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class Tokenizer(keras.layers.Layer):
     """A base class for tokenizer layers.
 

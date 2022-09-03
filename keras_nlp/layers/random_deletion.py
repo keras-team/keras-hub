@@ -15,9 +15,9 @@ import random
 
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.python.ops.ragged import ragged_array_ops
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class RandomDeletion(keras.layers.Layer):
     """Augments input by randomly deleting tokens.
 
@@ -46,7 +46,7 @@ class RandomDeletion(keras.layers.Layer):
             indicates that should not be considered a candidate for deletion.
             Unlike the `skip_fn` argument, this argument need not be
             tracable--it can be any python function.
-        seed: A seed for the rng.
+        seed: A seed for the random number generator.
 
     Examples:
 
@@ -201,7 +201,7 @@ class RandomDeletion(keras.layers.Layer):
         if skip_masks is not None:
             skip_masks = tf.logical_not(skip_masks)
             skip_masks.set_shape([None])
-            positions = ragged_array_ops.boolean_mask(
+            positions = tf.ragged.boolean_mask(
                 positions, inputs.with_flat_values(skip_masks)
             )
 

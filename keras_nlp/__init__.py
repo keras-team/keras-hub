@@ -14,6 +14,7 @@
 
 from keras_nlp import layers
 from keras_nlp import metrics
+from keras_nlp import models
 from keras_nlp import tokenizers
 from keras_nlp import utils
 

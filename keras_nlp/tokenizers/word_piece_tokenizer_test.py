@@ -15,12 +15,13 @@
 import os
 
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
-class WordPieceTokenizerTest(tf.test.TestCase):
+class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_tokenize(self):
         input_data = ["the quick brown fox."]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -86,10 +87,20 @@ class WordPieceTokenizerTest(tf.test.TestCase):
             tf.ragged.constant([["qu", "@@ick", "br", "@@own", "@UNK@"]]),
         )
 
+    def test_cjk_tokens(self):
+        input_data = ["ah半推zz"]
+        vocab_data = ["[UNK]", "推", "敐", "乐", "半", "偷", "匕", "ah", "zz"]
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data, dtype="string")
+        call_output = tokenizer(input_data)
+        self.assertAllEqual(
+            call_output,
+            tf.ragged.constant([["ah", "半", "推", "zz"]]),
+        )
+
     def test_lowercase(self):
         input_data = ["the QUicK brOWN FOX"]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
-        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data, lowercase=True)
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6]])
 
@@ -103,7 +114,9 @@ class WordPieceTokenizerTest(tf.test.TestCase):
     def test_strip_accents(self):
         input_data = ["á é í ó ú"]
         vocab_data = ["[UNK]", "a", "e", "i", "o", "u"]
-        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data, strip_accents=True
+        )
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5]])
 
@@ -116,7 +129,7 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5]])
 
-    def test_no_spliting(self):
+    def test_no_splitting(self):
         input_data = ["t o k e n", "m i s s i n g", "t o k e n"]
         vocab_data = ["[UNK]", "t o k e n"]
         tokenizer = WordPieceTokenizer(vocabulary=vocab_data, split=False)
@@ -186,7 +199,8 @@ class WordPieceTokenizerTest(tf.test.TestCase):
             cloned_tokenizer(input_data),
         )
 
-    def test_saving(self):
+    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
+    def test_saving(self, format):
         input_data = tf.constant(["quick brOWN whale"])
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]
         tokenizer = WordPieceTokenizer(
@@ -199,8 +213,9 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
-        model.save(self.get_temp_dir())
-        restored_model = keras.models.load_model(self.get_temp_dir())
+        path = os.path.join(self.get_temp_dir(), "model")
+        model.save(path, save_format=format)
+        restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),
             restored_model(input_data),

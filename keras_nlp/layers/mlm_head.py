@@ -18,6 +18,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 
+# TODO(mattdangerw): register this class as serializable.
 class MLMHead(keras.layers.Layer):
     """Masked Language Model (MLM) head.
 
@@ -138,10 +139,8 @@ class MLMHead(keras.layers.Layer):
                 )
             self.vocabulary_size = shape[0]
 
-    def _build(self, input_shape):
-        # Create layers based on input shape.
-        self._built = True
-        feature_size = input_shape[-1]
+    def build(self, input_shapes):
+        feature_size = input_shapes[-1]
 
         self._dense = keras.layers.Dense(
             feature_size,
@@ -167,9 +166,6 @@ class MLMHead(keras.layers.Layer):
         )
 
     def call(self, inputs, mask_positions):
-        if not self._built:
-            self._build(inputs.shape)
-
         # Gather the encoded tokens at the masked indices.
         x = tf.gather(inputs, mask_positions, axis=1, batch_dims=1)
 

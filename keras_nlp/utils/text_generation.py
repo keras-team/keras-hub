@@ -19,24 +19,15 @@ from absl import logging
 from tensorflow import keras
 
 
-def validate_prompt(prompt):
+def _validate_prompt(prompt):
     """Helper function to validate input to text_generation utils."""
-    if isinstance(prompt, tf.RaggedTensor):
-        raise ValueError(
-            "RaggedTensor `prompt` is not supported, please "
-            "provide `prompt` as a list or Tensor."
-        )
-    if not isinstance(prompt, tf.Tensor):
+    if not isinstance(prompt, (tf.Tensor, tf.RaggedTensor)):
         prompt = tf.convert_to_tensor(prompt)
-    if prompt.shape[-1] == 0:
-        raise ValueError(
-            "Length of `prompt` is 0, please provide a non-empty `prompt`."
-        )
     return prompt
 
 
-def validate_token_probability_fn(token_probability_fn, prompt):
-    """Helper function to validate token probability fn output"""
+def _validate_token_probability_fn(token_probability_fn, prompt):
+    """Helper function to validate token probability fn output."""
     test_pred = token_probability_fn(prompt)
     if len(test_pred.shape) != 2:
         raise ValueError(
@@ -46,13 +37,55 @@ def validate_token_probability_fn(token_probability_fn, prompt):
         )
 
 
-def mask_tokens_after_end_token(prompt, max_length, end_token_id, pad_token_id):
+def _get_prompt_shape(prompt):
+    """Helper function to get the batch size and prompt length."""
+    if isinstance(prompt, tf.Tensor):
+        shape = tf.shape(prompt)
+        return (shape[0], shape[1])
+    elif isinstance(prompt, tf.RaggedTensor):
+        batch_size = prompt.nrows()
+        length = tf.math.reduce_min(tf.RaggedTensor.row_lengths(prompt))
+        return (batch_size, length)
+
+
+def _pad_prompt(prompt, max_length):
+    """Pad prompt to `max_length` and compute a mask for controlled updates.
+
+    This utility will pad the (possibly ragged) prompt to `max_length`, and
+    compute a mask where the input was originally set in the prompt, to avoid
+    overwriting the original inputs when generating token(s) for the next
+    timestep.
+    """
+    if isinstance(prompt, tf.Tensor):
+        shape = tf.shape(prompt)
+        pad_shape = (shape[0], max_length - shape[1])
+
+        mask = tf.ones(shape, tf.bool)
+        mask = tf.concat((mask, tf.zeros(pad_shape, tf.bool)), axis=1)
+        prompt = tf.concat((prompt, tf.zeros(pad_shape, prompt.dtype)), axis=1)
+    elif isinstance(prompt, tf.RaggedTensor):
+        # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
+        # fails in TF 2.9.x. Fix this. After this issue has been fixed, we can
+        # condense the two branches into one by starting off with a ragged tensor.
+        mask = tf.ones_like(prompt, dtype=tf.bool)
+        mask = mask.to_tensor(shape=(None, max_length))
+        prompt = prompt.to_tensor(shape=(None, max_length))
+    return prompt, mask
+
+
+def _mask_tokens_after_end_token(
+    prompt, max_length, end_token_id, pad_token_id
+):
     """Helper function to mask the tokens after the end token."""
     # Mask out tokens after `end_token_id` is encountered.
     # Find index of first end_token_id.
     end_indices = tf.math.argmax(prompt == end_token_id, -1)
     # Use max_length if no `end_token_id` is found.
-    end_indices = tf.where(end_indices == 0, max_length, end_indices)
+    end_indices = tf.where(
+        end_indices == 0,
+        tf.cast(max_length, dtype=end_indices.dtype),
+        end_indices,
+    )
     # Build a mask including end_token and replace tokens after end_token
     # with `pad_token_id`.
     valid_indices = tf.sequence_mask(end_indices + 1, maxlen=max_length)
@@ -128,32 +161,47 @@ def greedy_search(
     ```
 
     """
-    if not tf.executing_eagerly():
-        raise RuntimeError(
-            "`keras_nlp.utils.greedy_search` currently requires an eager "
-            "execution context. Please call `greedy_search` outside "
-            "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
-            "tf.function in eager mode."
-        )
-
-    prompt = validate_prompt(prompt)
+    prompt = _validate_prompt(prompt)
 
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
-    validate_token_probability_fn(token_probability_fn, prompt)
 
-    i = prompt.shape[1]
-    while i < max_length:
-        # If the prompt has reached our desired length, exit while loop.
-        pred = token_probability_fn(prompt)
+    _validate_token_probability_fn(token_probability_fn, prompt)
+
+    batch_size, length = _get_prompt_shape(prompt)
+    prompt, mask = _pad_prompt(prompt, max_length)
+
+    def one_step(length, prompt):
+        pred = token_probability_fn(prompt[:, :length])
         next_token = tf.cast(tf.argmax(pred, axis=-1), dtype=prompt.dtype)
+        next_token = tf.where(mask[:, length], prompt[:, length], next_token)
+
         # Append the next token to current sequence.
-        prompt = tf.concat([prompt, next_token[:, tf.newaxis]], axis=-1)
-        i += 1
+        prompt = tf.tensor_scatter_nd_update(
+            tensor=prompt,
+            indices=tf.stack(
+                (
+                    tf.cast(tf.range(batch_size), dtype=length.dtype),
+                    tf.repeat(length, batch_size),
+                ),
+                axis=1,
+            ),
+            updates=next_token,
+        )
+
+        length = tf.add(length, 1)
+        return (length, prompt)
+
+    # Run a while loop till text of length `max_length` has been generated.
+    length, prompt = tf.while_loop(
+        cond=lambda length, _: tf.less(length, max_length),
+        body=one_step,
+        loop_vars=(length, prompt),
+    )
 
     if end_token_id is not None:
-        prompt = mask_tokens_after_end_token(
+        prompt = _mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
         )
 
@@ -252,12 +300,17 @@ def beam_search(
             f"`num_beams` should be strictly positive. Received: `num_beams={num_beams}`."
         )
 
-    prompt = validate_prompt(prompt)
+    prompt = _validate_prompt(prompt)
+
+    if prompt.shape[-1] == 0:
+        raise ValueError(
+            "Length of `prompt` is 0, please provide a non-empty `prompt`."
+        )
 
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
-    validate_token_probability_fn(token_probability_fn, prompt)
+    _validate_token_probability_fn(token_probability_fn, prompt)
 
     batch_size, length = prompt.shape
     if length >= max_length:
@@ -300,7 +353,7 @@ def beam_search(
     prompt = tf.squeeze(max_beams)
 
     if end_token_id is not None:
-        prompt = mask_tokens_after_end_token(
+        prompt = _mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
         )
     return tf.squeeze(prompt) if input_is_1d else prompt
@@ -382,38 +435,58 @@ def random_search(
     ```
 
     """
-    if not tf.executing_eagerly():
-        raise RuntimeError(
-            "`keras_nlp.utils.random_sampling` currently requires an eager "
-            "execution context. Please call `random_sampling` outside "
-            "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
-            "tf.function in eager mode."
-        )
+    prompt = _validate_prompt(prompt)
 
-    prompt = validate_prompt(prompt)
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
-    validate_token_probability_fn(token_probability_fn, prompt)
 
-    i = prompt.shape[1]
-    while i < max_length:
-        # If the prompt has reached our desired length, exit while loop.
-        pred = token_probability_fn(prompt)
+    _validate_token_probability_fn(token_probability_fn, prompt)
+
+    batch_size, length = _get_prompt_shape(prompt)
+    prompt, mask = _pad_prompt(prompt, max_length)
+
+    def one_step(length, prompt):
+        pred = token_probability_fn(prompt[:, :length])
         if from_logits:
             pred = keras.activations.softmax(pred, axis=-1)
-        next_token = tf.cast(
-            tf.random.categorical(tf.math.log(pred), 1, seed=seed),
-            dtype=prompt.dtype,
+        next_token = tf.squeeze(
+            tf.cast(
+                tf.random.categorical(tf.math.log(pred), 1, seed=seed),
+                dtype=prompt.dtype,
+            ),
+            axis=1,
         )
+        next_token = tf.where(mask[:, length], prompt[:, length], next_token)
+
         # Append the next token to current sequence.
-        prompt = tf.concat([prompt, next_token], axis=-1)
-        i += 1
+        prompt = tf.tensor_scatter_nd_update(
+            tensor=prompt,
+            indices=tf.stack(
+                (
+                    tf.cast(tf.range(batch_size), dtype=length.dtype),
+                    tf.repeat(length, batch_size),
+                ),
+                axis=1,
+            ),
+            updates=next_token,
+        )
+
+        length = tf.add(length, 1)
+        return (length, prompt)
+
+    # Run a while loop till text of length `max_length` has been generated.
+    length, prompt = tf.while_loop(
+        cond=lambda length, _: tf.less(length, max_length),
+        body=one_step,
+        loop_vars=(length, prompt),
+    )
 
     if end_token_id is not None:
-        prompt = mask_tokens_after_end_token(
+        prompt = _mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
         )
+
     return tf.squeeze(prompt) if input_is_1d else prompt
 
 
@@ -497,22 +570,17 @@ def top_k_search(
     ```
 
     """
-    if not tf.executing_eagerly():
-        raise RuntimeError(
-            "`keras_nlp.utils.top_k_search` currently requires an eager "
-            "execution context. Please call `top_k_search` outside "
-            "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
-            "tf.function in eager mode."
-        )
+    if k <= 0:
+        raise ValueError(f"`k` should be strictly positive. Received: `k={k}`.")
 
-    prompt = validate_prompt(prompt)
+    prompt = _validate_prompt(prompt)
+
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
-    validate_token_probability_fn(token_probability_fn, prompt)
 
-    if k <= 0:
-        raise ValueError(f"`k` should be strictly positive. Received: `k={k}`.")
+    _validate_token_probability_fn(token_probability_fn, prompt)
+
     # If k is greater than the vocabulary size, use the entire vocabulary.
     pred = token_probability_fn(prompt)
     if k > pred.shape[1]:
@@ -522,9 +590,11 @@ def top_k_search(
         )
         k = pred.shape[1]
 
-    i = prompt.shape[1]
-    while i < max_length:
-        pred = token_probability_fn(prompt)
+    batch_size, length = _get_prompt_shape(prompt)
+    prompt, mask = _pad_prompt(prompt, max_length)
+
+    def one_step(length, prompt):
+        pred = token_probability_fn(prompt[:, :length])
         if from_logits:
             pred = keras.activations.softmax(pred, axis=-1)
 
@@ -534,17 +604,40 @@ def top_k_search(
         next_token = tf.random.categorical(
             tf.math.log(top_k_pred), 1, seed=seed
         )
+
         # Rearrange to get the next token idx from the original order.
         next_token = tf.gather_nd(top_k_indices, next_token, batch_dims=1)
         next_token = tf.cast(next_token, dtype=prompt.dtype)
+        next_token = tf.where(mask[:, length], prompt[:, length], next_token)
+
         # Append the next token to current sequence.
-        prompt = tf.concat([prompt, next_token[:, tf.newaxis]], axis=-1)
-        i += 1
+        prompt = tf.tensor_scatter_nd_update(
+            tensor=prompt,
+            indices=tf.stack(
+                (
+                    tf.cast(tf.range(batch_size), dtype=length.dtype),
+                    tf.repeat(length, batch_size),
+                ),
+                axis=1,
+            ),
+            updates=next_token,
+        )
+
+        length = tf.add(length, 1)
+        return (length, prompt)
+
+    # Run a while loop till text of length `max_length` has been generated.
+    length, prompt = tf.while_loop(
+        cond=lambda length, _: tf.less(length, max_length),
+        body=one_step,
+        loop_vars=(length, prompt),
+    )
 
     if end_token_id is not None:
-        prompt = mask_tokens_after_end_token(
+        prompt = _mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
         )
+
     return tf.squeeze(prompt) if input_is_1d else prompt
 
 
@@ -630,28 +723,24 @@ def top_p_search(
     ```
 
     """
-    if not tf.executing_eagerly():
-        raise RuntimeError(
-            "`keras_nlp.utils.top_p_search` currently requires an eager "
-            "execution context. Please call `top_p_search` outside "
-            "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
-            "tf.function in eager mode."
-        )
     if p <= 0 or p >= 1:
         raise ValueError(
             f"`p` should be in the range (0, 1). Received: `p={p}`."
         )
 
-    prompt = validate_prompt(prompt)
+    prompt = _validate_prompt(prompt)
+
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
-    validate_token_probability_fn(token_probability_fn, prompt)
 
-    i = prompt.shape[1]
-    while i < max_length:
-        # If the prompt has reached our desired length, exit while loop.
-        pred = token_probability_fn(prompt)
+    _validate_token_probability_fn(token_probability_fn, prompt)
+
+    batch_size, length = _get_prompt_shape(prompt)
+    prompt, mask = _pad_prompt(prompt, max_length)
+
+    def one_step(length, prompt):
+        pred = token_probability_fn(prompt[:, :length])
         if from_logits:
             pred = keras.activations.softmax(pred, axis=-1)
         # Sort preds in descending order.
@@ -679,12 +768,34 @@ def top_p_search(
             sorted_indices, sorted_next_token, batch_dims=1
         )
         next_token = tf.cast(next_token, dtype=prompt.dtype)
+        next_token = tf.where(mask[:, length], prompt[:, length], next_token)
+
         # Append the next token to current sequence.
-        prompt = tf.concat([prompt, next_token[:, tf.newaxis]], axis=-1)
-        i += 1
+        prompt = tf.tensor_scatter_nd_update(
+            tensor=prompt,
+            indices=tf.stack(
+                (
+                    tf.cast(tf.range(batch_size), dtype=length.dtype),
+                    tf.repeat(length, batch_size),
+                ),
+                axis=1,
+            ),
+            updates=next_token,
+        )
+
+        length = tf.add(length, 1)
+        return (length, prompt)
+
+    # Run a while loop till text of length `max_length` has been generated.
+    length, prompt = tf.while_loop(
+        cond=lambda length, _: tf.less(length, max_length),
+        body=one_step,
+        loop_vars=(length, prompt),
+    )
 
     if end_token_id is not None:
-        prompt = mask_tokens_after_end_token(
+        prompt = _mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
         )
+
     return tf.squeeze(prompt) if input_is_1d else prompt
