@@ -15,9 +15,9 @@
 
 import tempfile
 
-import tensorflow_datasets as tfds
 import keras_tuner
 import tensorflow as tf
+import tensorflow_datasets as tfds
 from absl import app
 from absl import flags
 from tensorflow import keras
@@ -89,9 +89,21 @@ def load_data(task_name):
         test_suffix = "_mismatched"
 
     data = tfds.load(f"glue/{task_name}")
-    train_ds = data["train"].map(lambda x: {feature_name: x[feature_name] for feature_name in feature_names})
-    test_ds = data["test" + test_suffix].map(lambda x: {feature_name: x[feature_name] for feature_name in feature_names})
-    validation_ds = data["validation" + test_suffix].map(lambda x: {feature_name: x[feature_name] for feature_name in feature_names})
+    train_ds = data["train"].map(
+        lambda x: {
+            feature_name: x[feature_name] for feature_name in feature_names
+        }
+    )
+    test_ds = data["test" + test_suffix].map(
+        lambda x: {
+            feature_name: x[feature_name] for feature_name in feature_names
+        }
+    )
+    validation_ds = data["validation" + test_suffix].map(
+        lambda x: {
+            feature_name: x[feature_name] for feature_name in feature_names
+        }
+    )
     return train_ds, test_ds, validation_ds
 
 
