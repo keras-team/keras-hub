@@ -15,7 +15,6 @@ import random
 
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.python.ops.ragged import ragged_array_ops
 
 
 class RandomInsertion(keras.layers.Layer):
@@ -25,9 +24,9 @@ class RandomInsertion(keras.layers.Layer):
     augmentation as described in the paper [EDA: Easy Data Augmentation
     Techniques for Boosting Performance on Text Classification Tasks]
     (https://arxiv.org/pdf/1901.11196.pdf). The layer expects the inputs to be
-    pretokenized so that each index in the tokenized inputs can be considered
-    as an insertion location and optionally the tokens can be used for
-    insertion functions.
+    pre-split into token level inputs. This allows control over the level of
+    augmentation, you can split by character for character level swaps, or by
+    word for word level swaps.
 
     Input should be either a `tf.RaggedTensor` or a dense `tf.Tensor`, and
     either rank-1 or rank-2.
@@ -103,13 +102,13 @@ class RandomInsertion(keras.layers.Layer):
 
     Usage with skip_fn
     >>> def skip_fn(word):
-    ...     return tf.strings.regex_full_match(word, r"\\pP")
+    ...     return tf.strings.regex_full_match(word, r"[I, a].*")
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
     >>> augmenter=keras_nlp.layers.RandomInsertion(rate=0.4, max_insertions=1, seed=42, insertion_list=['wind'], skip_fn=skip_fn)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey wind I like', b'Keras and wind Tensorflow'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'Hey wind I like', b'Keras and Tensorflow wind'], dtype=object)>
 
     Usage with skip_py_fn
     >>> def skip_py_fn(word):
@@ -160,7 +159,10 @@ class RandomInsertion(keras.layers.Layer):
         self._generator = tf.random.Generator.from_seed(self.seed)
 
         if self.max_insertions is not None and self.max_insertions < 0:
-            raise ValueError("max_insertions must be non negative")
+            raise ValueError(
+                "max_insertions must be non negative"
+                f"Received max_insertions={max_insertions}."
+            )
 
         if self.rate > 1 or self.rate < 0:
             raise ValueError(
@@ -232,18 +234,16 @@ class RandomInsertion(keras.layers.Layer):
                 fn_output_signature=tf.bool,
             )
 
-        positions_flat = tf.range(tf.size(inputs.flat_values))
-        positions = inputs.with_flat_values(positions_flat)
-        row_starts = positions.row_starts()
-        row_starts = tf.cast(row_starts, tf.int32)
+        positions = tf.ragged.range(inputs.row_lengths())
+
         if skip_masks is not None:
             skip_masks = tf.logical_not(skip_masks)
             skip_masks.set_shape([None])
-            positions = ragged_array_ops.boolean_mask(
+            positions = tf.ragged.boolean_mask(
                 positions, inputs.with_flat_values(skip_masks)
             )
         # Figure out how many we are going to select.
-        token_counts = tf.cast(inputs.row_lengths(), "float32")
+        token_counts = tf.cast(positions.row_lengths(), "float32")
         num_to_select = tf.random.stateless_binomial(
             shape=tf.shape(token_counts),
             seed=self._generator.make_seeds()[:, 0],
@@ -252,17 +252,13 @@ class RandomInsertion(keras.layers.Layer):
         )
         if self.max_insertions is not None:
             num_to_select = tf.math.minimum(num_to_select, self.max_insertions)
-            num_to_select = tf.math.minimum(
-                num_to_select, tf.cast(positions.row_lengths(), tf.int32)
-            )
-        num_to_select = tf.cast(num_to_select, "int64")
+        num_to_select = tf.math.minimum(
+            num_to_select, tf.cast(positions.row_lengths(), tf.int32)
+        )
+        num_to_select = tf.cast(num_to_select, tf.int64)
 
         def _insert(x):
-            """
-            Inserts words randomly
-            """
-            inputs, num_to_select, positions, row_start = x
-            positions = tf.math.subtract(positions, row_start)
+            inputs, num_to_select, positions = x
             for _ in range(num_to_select):
                 tf.autograph.experimental.set_loop_options(
                     shape_invariants=[(inputs, tf.TensorShape([None]))]
@@ -318,7 +314,7 @@ class RandomInsertion(keras.layers.Layer):
 
         inserted = tf.map_fn(
             _insert,
-            (inputs, num_to_select, positions, row_starts),
+            (inputs, num_to_select, positions),
             fn_output_signature=tf.RaggedTensorSpec(
                 ragged_rank=inputs.ragged_rank - 1, dtype=inputs.dtype
             ),

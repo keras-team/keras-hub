@@ -17,7 +17,6 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers import RandomInsertion
-from keras_nlp.tokenizers import UnicodeCodepointTokenizer
 
 
 class RandomInsertionTest(tf.test.TestCase):
@@ -49,16 +48,16 @@ class RandomInsertionTest(tf.test.TestCase):
 
     def test_with_integer_tokens(self):
         keras.utils.set_random_seed(1337)
-        inputs = ["Hey I like", "Keras and Tensorflow"]
-        tokenizer = UnicodeCodepointTokenizer(lowercase=False)
-        tokenized = tokenizer.tokenize(inputs)
+        inputs = [[1, 2, 3], [4, 5, 6]]
         augmenter = RandomInsertion(
-            rate=0.4, max_insertions=2, seed=42, insertion_list=[99, 67]
+            rate=0.7, max_insertions=6, insertion_list=[1, 2, 3], seed=42
         )
-        augmented = augmenter(tokenized)
-        output = tokenizer.detokenize(augmented)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"HeycC I like", b"KeCras and Tensorfclow"]
+        output = augmenter(inputs)
+        # cannot compare inner dimensions as values are added
+        self.assertAllEqual(
+            output.to_tensor().shape[0], tf.convert_to_tensor(inputs).shape[0]
+        )
+        exp_output = [[1, 3, 3, 2, 3], [4, 5, 3, 2, 6]]
         self.assertAllEqual(output, exp_output)
 
     def test_skip_options(self):
@@ -75,7 +74,8 @@ class RandomInsertionTest(tf.test.TestCase):
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
-            return tf.strings.regex_full_match(word, r"\\pP")
+            # Regex to match words starting with I or a
+            return tf.strings.regex_full_match(word, r"[I, a].*")
 
         augmenter = RandomInsertion(
             rate=0.4,
@@ -87,7 +87,7 @@ class RandomInsertionTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey Hey I like", b"Keras and There There Tensorflow"]
+        exp_output = [b"Hey Hey I like", b"Keras and Tensorflow There"]
         self.assertAllEqual(output, exp_output)
 
         def skip_py_fn(word):
@@ -104,9 +104,8 @@ class RandomInsertionTest(tf.test.TestCase):
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        output
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey Hey I like", b"Keras and There There Tensorflow"]
+        exp_output = [b"Hey Hey I like", b"Keras and There Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
     def test_insert_options(self):
@@ -191,7 +190,8 @@ class RandomInsertionTest(tf.test.TestCase):
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
-            return tf.strings.regex_full_match(word, r"\pP")
+            # Regex to match words starting with I
+            return tf.strings.regex_full_match(word, r"[I].*")
 
         def skip_py_fn(word):
             return len(word) < 4
@@ -279,10 +279,9 @@ class RandomInsertionTest(tf.test.TestCase):
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        output
         exp_output = [
             [b"Hey", b"I", b"like", b"Hey"],
-            [b"Keras", b"and", b"Tensorflow", b"There", b"There"],
+            [b"Keras", b"and", b"Tensorflow", b"There"],
         ]
         self.assertAllEqual(output, exp_output)
 
