@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Randomreplacement Layer."""
+"""Tests for Random Replacement Layer."""
 
 import tensorflow as tf
 from tensorflow import keras
@@ -74,7 +74,8 @@ class RandomReplacementTest(tf.test.TestCase):
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
-            return tf.strings.regex_full_match(word, r"\\pP")
+            # Regex to match words starting with I or a
+            return tf.strings.regex_full_match(word, r"[I, a].*")
 
         augmenter = RandomReplacement(
             rate=0.4,
@@ -86,7 +87,7 @@ class RandomReplacementTest(tf.test.TestCase):
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I Hey", b"There and Tensorflow"]
+        exp_output = [b"Hey I like", b"Keras and There"]
         self.assertAllEqual(output, exp_output)
 
         def skip_py_fn(word):
@@ -200,7 +201,8 @@ class RandomReplacementTest(tf.test.TestCase):
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
-            return tf.strings.regex_full_match(word, r"\pP")
+            # Regex to match words starting with I or a
+            return tf.strings.regex_full_match(word, r"[I, a].*")
 
         def skip_py_fn(word):
             return len(word) < 4
@@ -216,7 +218,7 @@ class RandomReplacementTest(tf.test.TestCase):
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-        exp_output = [[b"Hey", b"I", b"Hey"], [b"Keras", b"and", b"Hey"]]
+        exp_output = [[b"Hey", b"I", b"like"], [b"Keras", b"and", b"Hey"]]
         self.assertAllEqual(output, exp_output)
 
         augmenter = RandomReplacement(
@@ -250,7 +252,8 @@ class RandomReplacementTest(tf.test.TestCase):
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
-            return tf.strings.regex_full_match(word, r"\pP")
+            # Regex to match words starting with I or a
+            return tf.strings.regex_full_match(word, r"[I, a].*")
 
         def skip_py_fn(word):
             return len(word) < 4
@@ -265,7 +268,7 @@ class RandomReplacementTest(tf.test.TestCase):
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        exp_output = [[b"Hey", b"I", b"Hey"], [b"There", b"and", b"Tensorflow"]]
+        exp_output = [[b"Hey", b"I", b"like"], [b"Keras", b"and", b"There"]]
         self.assertAllEqual(output, exp_output)
 
         augmenter = RandomReplacement(
