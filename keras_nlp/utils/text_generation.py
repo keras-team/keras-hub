@@ -26,8 +26,12 @@ def _validate_prompt(prompt):
     return prompt
 
 
-def _validate_token_probability_fn(token_probability_fn, prompt):
-    """Helper function to validate token probability fn output."""
+def _validate_token_probability_fn(
+    token_probability_fn, prompt, return_vocab_size=False
+):
+    """Helper function to validate token probability fn output. Returns
+    vocabulary size if `return_vocab_size` is True.
+    """
     test_pred = token_probability_fn(prompt)
     if len(test_pred.shape) != 2:
         raise ValueError(
@@ -35,6 +39,10 @@ def _validate_token_probability_fn(token_probability_fn, prompt):
             "please provide a function with the output shape "
             "[batch_size, vocab_size]."
         )
+    if return_vocab_size:
+        return tf.shape(test_pred)[-1]
+    else:
+        return -1
 
 
 def _get_prompt_shape(prompt):
@@ -58,7 +66,9 @@ def _pad_prompt(prompt, max_length):
     """
     if isinstance(prompt, tf.Tensor):
         shape = tf.shape(prompt)
-        pad_shape = (shape[0], max_length - shape[1])
+        pad_shape = [shape[0], max_length - shape[1]]
+        if pad_shape[1] < 0:
+            pad_shape[1] = 0
 
         mask = tf.ones(shape, tf.bool)
         mask = tf.concat((mask, tf.zeros(pad_shape, tf.bool)), axis=1)
@@ -288,53 +298,51 @@ def beam_search(
     ```
 
     """
-    if not tf.executing_eagerly():
-        raise RuntimeError(
-            "`keras_nlp.utils.beam_search` currently requires an eager "
-            "execution context. Please call `beam_search` outside "
-            "tf.function or run `tf.config.run_functions_eagerly(True)` to run "
-            "tf.function in eager mode."
-        )
     if num_beams <= 0:
         raise ValueError(
             f"`num_beams` should be strictly positive. Received: `num_beams={num_beams}`."
         )
-
     prompt = _validate_prompt(prompt)
-
-    if prompt.shape[-1] == 0:
-        raise ValueError(
-            "Length of `prompt` is 0, please provide a non-empty `prompt`."
-        )
 
     input_is_1d = prompt.shape.rank == 1
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
-    _validate_token_probability_fn(token_probability_fn, prompt)
 
-    batch_size, length = prompt.shape
+    batch_size, length = _get_prompt_shape(prompt)
+    prompt, mask = _pad_prompt(prompt, max_length)
+
+    vocab_size = _validate_token_probability_fn(
+        token_probability_fn, prompt, return_vocab_size=True
+    )
+
     if length >= max_length:
         return tf.squeeze(prompt) if input_is_1d else prompt
+    # Initialize beam with shape `(batch_size, num_beams, length)`.
+    beams = tf.repeat(tf.expand_dims(prompt, axis=1), num_beams, axis=1)
 
-    # Initialize beam.
-    beams = tf.expand_dims(prompt, 1)
-    beams_prob = tf.zeros([batch_size, 1])
-    i = length
-    while i < max_length:
-        beam_size = beams.shape[1]
-        beam_preds = []
-        for j in range(beam_size):
-            preds = token_probability_fn(beams[:, j, :])
-            if from_logits:
-                preds = keras.activations.softmax(preds, axis=-1)
-            beam_preds.append(preds)
-        stacked_preds = tf.stack(beam_preds, axis=1)
-        vocab_size = stacked_preds.shape[2]
-        logits = tf.reshape(stacked_preds, [batch_size, beam_size * vocab_size])
+    # Initialize beams_prob with shape `(batch_size, num_beams)`
+    beams_prob = tf.zeros([batch_size, 1], dtype=tf.float32)
+    if num_beams > 1:
+        beams_prob = tf.concat(
+            [beams_prob, tf.fill((batch_size, num_beams - 1), -3.40282e38)],
+            axis=-1,
+        )
+
+    def one_step(beams, beams_prob, length):
+        truncated_beams = beams[..., :length]
+
+        # logits is of shape [batch_size, num_beams * vocab_size]
+        logits = tf.reshape(
+            token_probability_fn(
+                tf.reshape(truncated_beams, shape=[batch_size * num_beams, -1])
+            ),
+            shape=[batch_size, -1],
+        )
+
         probs = tf.math.log(logits) + tf.repeat(
             beams_prob, repeats=vocab_size, axis=1
         )
-        num_beams = min(beam_size * vocab_size, num_beams)
+
         candidate_prob, candidate_indexes = tf.math.top_k(
             probs, k=num_beams, sorted=False
         )
@@ -342,9 +350,39 @@ def beam_search(
         next_token = candidate_indexes % vocab_size
 
         beams = tf.gather(beams, candidate_beam_indexes, axis=1, batch_dims=1)
-        beams = tf.concat([beams, next_token[..., tf.newaxis]], axis=-1)
+
+        next_token = tf.where(
+            condition=mask[..., length, tf.newaxis],
+            x=beams[..., length],
+            y=next_token,
+        )
+        beams = tf.tensor_scatter_nd_update(
+            tensor=beams,
+            indices=tf.concat(
+                [
+                    tf.cast(
+                        tf.where(tf.ones((batch_size, num_beams), tf.bool)),
+                        dtype=length.dtype,
+                    ),
+                    tf.fill((batch_size * num_beams, 1), length),
+                ],
+                axis=1,
+            ),
+            updates=tf.reshape(next_token, shape=[-1]),
+        )
+
         beams_prob = candidate_prob
-        i += 1
+        length = tf.add(length, 1)
+
+        return beams, beams_prob, length
+
+    # Run a while loop till text of length `max_length` has been generated.
+    beams, beams_prob, length = tf.while_loop(
+        cond=lambda beams, beams_prob, length: tf.less(length, max_length),
+        body=one_step,
+        loop_vars=(beams, beams_prob, length),
+    )
+
     # Get the beam with the maximum probability.
     max_indexes = tf.math.argmax(beams_prob, axis=-1)
     max_beams = tf.gather(
