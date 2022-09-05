@@ -30,7 +30,7 @@ class MultiSegmentPacker(keras.layers.Layer):
     Takes as input a list or tuple of token segments. The layer will process
     inputs as follows:
      - Truncate all input segments to fit within `sequence_length` according to
-       the `truncator` strategy.
+       the `truncate` strategy.
      - Concatenate all input segments, adding a single `start_value` at the
        start of the entire sequence, and multiple `end_value`s at the end of
        each segment.
@@ -55,7 +55,7 @@ class MultiSegmentPacker(keras.layers.Layer):
         pad_value: The id or token that is to be placed into the unused
             positions after the last segment in the sequence
             (called "[PAD]" for BERT).
-        truncator: The algorithm to truncate a list of batched segments to fit a
+        truncate: The algorithm to truncate a list of batched segments to fit a
             per-example length limit. The value can be either `round_robin` or
             `waterfall`:
                 - `"round_robin"`: Available space is assigned one token at a
@@ -104,17 +104,17 @@ class MultiSegmentPacker(keras.layers.Layer):
         start_value,
         end_value,
         pad_value=None,
-        truncator="round_robin",
+        truncate="round_robin",
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.sequence_length = sequence_length
-        if truncator not in ("round_robin", "waterfall"):
+        if truncate not in ("round_robin", "waterfall"):
             raise ValueError(
                 "Only 'round_robin' and 'waterfall' algorithms are "
-                "supported. Received %s" % truncator
+                "supported. Received %s" % truncate
             )
-        self.truncator = truncator
+        self.truncate = truncate
         self.start_value = start_value
         self.end_value = end_value
         self.pad_value = pad_value
@@ -127,7 +127,7 @@ class MultiSegmentPacker(keras.layers.Layer):
                 "start_value": self.start_value,
                 "end_value": self.end_value,
                 "pad_value": self.pad_value,
-                "truncator": self.truncator,
+                "truncate": self.truncate,
             }
         )
         return config
@@ -162,16 +162,16 @@ class MultiSegmentPacker(keras.layers.Layer):
     def _trim_inputs(self, inputs):
         """Trim inputs to desired length."""
         num_special_tokens = len(inputs) + 1
-        if self.truncator == "round_robin":
+        if self.truncate == "round_robin":
             return tf_text.RoundRobinTrimmer(
                 self.sequence_length - num_special_tokens
             ).trim(inputs)
-        elif self.truncator == "waterfall":
+        elif self.truncate == "waterfall":
             return tf_text.WaterfallTrimmer(
                 self.sequence_length - num_special_tokens
             ).trim(inputs)
         else:
-            raise ValueError("Unsupported truncator: %s" % self.truncator)
+            raise ValueError("Unsupported truncate: %s" % self.truncate)
 
     def _combine_inputs(self, segments):
         """Combine inputs with start and end values added."""
