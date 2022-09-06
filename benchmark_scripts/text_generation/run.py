@@ -153,8 +153,7 @@ def main(config):
                 )
                 print("Time taken: ", time_taken)
                 res_handler.write(
-                    f"{text_gen_method},{execution_method},"
-                    f"{time_taken}\n"
+                    f"{text_gen_method},{execution_method}," f"{time_taken}\n"
                 )
 
 

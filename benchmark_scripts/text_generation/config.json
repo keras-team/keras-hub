@@ -19,6 +19,38 @@
                 "end_token_id": 2,
                 "pad_token_id": 0
             }
+        },
+        {
+            "name": "random_search",
+            "execution_methods": ["graph", "xla"],
+            "args": {
+                "seed": 42,
+                "from_logits": true,
+                "end_token_id": 2,
+                "pad_token_id": 0
+            }
+        },
+        {
+            "name": "top_k_search",
+            "execution_methods": ["graph", "xla"],
+            "args": {
+                "k": 5,
+                "seed": 42,
+                "from_logits": true,
+                "end_token_id": 2,
+                "pad_token_id": 0
+            }
+        },
+        {
+            "name": "top_p_search",
+            "execution_methods": ["graph", "xla"],
+            "args": {
+                "p": 5,
+                "seed": 42,
+                "from_logits": true,
+                "end_token_id": 2,
+                "pad_token_id": 0
+            }
         }
     ]
 }
