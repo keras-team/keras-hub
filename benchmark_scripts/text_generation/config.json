@@ -45,7 +45,7 @@
             "name": "top_p_search",
             "execution_methods": ["graph", "xla"],
             "args": {
-                "p": 5,
+                "p": 0.9,
                 "seed": 42,
                 "from_logits": true,
                 "end_token_id": 2,
