@@ -136,6 +136,7 @@ def main(config):
             if text_gen_method not in SUPPORTED_TEXT_GEN_METHODS:
                 raise Exception(
                     f"Unsupported text generation method: {text_gen_method}"
+                    f"Should be one of {SUPPORTED_TEXT_GEN_METHODS.keys()}"
                 )
             for execution_method in test_run["execution_methods"]:
                 print(f"Running {text_gen_method} in {execution_method} mode")
