@@ -3,7 +3,7 @@
         "vocab_size": 40000,
         "num_samples": 10000,
         "batch_size": 64,
-        "max_length": 50,
+        "max_length": 256,
         "model_max_length": 300,
         "embed_dim": 768,
         "num_layers": 4,
