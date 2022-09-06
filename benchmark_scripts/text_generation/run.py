@@ -160,6 +160,8 @@ def main(config):
                 print()
             print("*************************************")
 
+    print(json.dumps(config, indent=4))
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(

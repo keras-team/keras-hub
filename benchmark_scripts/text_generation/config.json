@@ -14,7 +14,7 @@
     "test_runs": [
         {
             "name": "greedy_search",
-            "execution_methods": ["graph", "xla"],
+            "execution_methods": ["xla", "graph"],
             "args": {
                 "end_token_id": 2,
                 "pad_token_id": 0
@@ -22,7 +22,7 @@
         },
         {
             "name": "random_search",
-            "execution_methods": ["graph", "xla"],
+            "execution_methods": ["xla", "graph"],
             "args": {
                 "seed": 42,
                 "from_logits": true,
@@ -32,7 +32,7 @@
         },
         {
             "name": "top_k_search",
-            "execution_methods": ["graph", "xla"],
+            "execution_methods": ["xla", "graph"],
             "args": {
                 "k": 5,
                 "seed": 42,
@@ -43,7 +43,7 @@
         },
         {
             "name": "top_p_search",
-            "execution_methods": ["graph", "xla"],
+            "execution_methods": ["xla", "graph"],
             "args": {
                 "p": 0.9,
                 "seed": 42,
