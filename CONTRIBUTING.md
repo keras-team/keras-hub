@@ -126,14 +126,14 @@ pytest keras_nlp/keras_nlp/integration_tests/import_test.py -k="import"
 
 ### Run all tests
 
-You can run all the testing we run continuously for the repository with:
+You can run the testing we run continuously for the repository with:
 
 ```shell
 pytest
 ```
 
 Some slow integration tests (e.g. tests that download large files) are
-disabled by default. You can run these by running:
+disabled by default. You can include these by running:
 
 ```shell
 pytest --runslow
