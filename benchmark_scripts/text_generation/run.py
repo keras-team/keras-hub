@@ -127,7 +127,7 @@ def main(config):
         output = model(inputs)
         return output[:, -1, :]  # return next token logits
 
-    print("*************************************")
+    print("*************************************\n")
 
     with open("./results.csv", "w") as res_handler:
         res_handler.write("text_gen_method,execution_method,time\n")
