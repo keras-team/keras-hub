@@ -1,0 +1,24 @@
+{
+    "common_args": {
+        "vocab_size": 10000,
+        "num_samples": 10000,
+        "batch_size": 64,
+        "max_length": 256,
+        "model_max_length": 300,
+        "embed_dim": 256,
+        "num_layers": 2,
+        "num_heads": 3,
+        "ff_dim": 256,
+        "seed": 42
+    },
+    "test_runs": [
+        {
+            "name": "greedy_search",
+            "execution_methods": ["graph", "xla"],
+            "args": {
+                "end_token_id": 2,
+                "pad_token_id": 0
+            }
+        }
+    ]
+}
