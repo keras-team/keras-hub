@@ -1,14 +1,14 @@
 {
     "common_args": {
-        "vocab_size": 10000,
+        "vocab_size": 40000,
         "num_samples": 10000,
         "batch_size": 64,
-        "max_length": 256,
+        "max_length": 50,
         "model_max_length": 300,
-        "embed_dim": 256,
-        "num_layers": 2,
-        "num_heads": 3,
-        "ff_dim": 256,
+        "embed_dim": 768,
+        "num_layers": 4,
+        "num_heads": 4,
+        "ff_dim": 3072,
         "seed": 42
     },
     "test_runs": [
@@ -45,7 +45,7 @@
             "name": "top_p_search",
             "execution_methods": ["graph", "xla"],
             "args": {
-                "p": 0.9,
+                "p": 5,
                 "seed": 42,
                 "from_logits": true,
                 "end_token_id": 2,
