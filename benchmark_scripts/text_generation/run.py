@@ -127,6 +127,8 @@ def main(config):
         output = model(inputs)
         return output[:, -1, :]  # return next token logits
 
+    print("*************************************")
+
     with open("./results.csv", "w") as res_handler:
         res_handler.write("text_gen_method,execution_method,time\n")
         for test_run in config["test_runs"]:
@@ -155,7 +157,8 @@ def main(config):
                 res_handler.write(
                     f"{text_gen_method},{execution_method}," f"{time_taken}\n"
                 )
-
+                print()
+            print("*************************************")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
