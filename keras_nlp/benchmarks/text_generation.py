@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse
-import json
+"""Benchmark for text generation."""
+
 import time
 
 import tensorflow as tf
+from benchmarks.text_generation_config import COMMON_ARGS
+from benchmarks.text_generation_config import TEST_RUNS
 from tensorflow import keras
 
 import keras_nlp
@@ -103,24 +105,23 @@ def run_graph(
     return time.time() - t0
 
 
-def main(config):
-    args = config["common_args"]
-    keras.utils.set_random_seed(args["seed"])
+def main():
+    keras.utils.set_random_seed(COMMON_ARGS["seed"])
 
     ds = generate_random_ds(
-        vocab_size=args["vocab_size"],
-        num_samples=args["num_samples"],
-        batch_size=args["batch_size"],
-        seed=args["seed"],
+        vocab_size=COMMON_ARGS["vocab_size"],
+        num_samples=COMMON_ARGS["num_samples"],
+        batch_size=COMMON_ARGS["batch_size"],
+        seed=COMMON_ARGS["seed"],
     )
 
     model = build_model(
-        vocab_size=args["vocab_size"],
-        max_length=args["model_max_length"],
-        embed_dim=args["embed_dim"],
-        num_layers=args["num_layers"],
-        num_heads=args["num_heads"],
-        ff_dim=args["ff_dim"],
+        vocab_size=COMMON_ARGS["vocab_size"],
+        max_length=COMMON_ARGS["model_max_length"],
+        embed_dim=COMMON_ARGS["embed_dim"],
+        num_layers=COMMON_ARGS["num_layers"],
+        num_heads=COMMON_ARGS["num_heads"],
+        ff_dim=COMMON_ARGS["ff_dim"],
     )
 
     def token_logits_fn(inputs):
@@ -131,7 +132,7 @@ def main(config):
 
     with open("./results.csv", "w") as res_handler:
         res_handler.write("text_gen_method,execution_method,time\n")
-        for test_run in config["test_runs"]:
+        for test_run in TEST_RUNS:
             text_gen_method = test_run["name"]
             if text_gen_method not in SUPPORTED_TEXT_GEN_METHODS:
                 raise Exception(
@@ -140,20 +141,20 @@ def main(config):
                 )
             for execution_method in test_run["execution_methods"]:
                 print(f"Running {text_gen_method} in {execution_method} mode")
+                if execution_method not in EXECUTION_METHODS:
+                    raise Exception(
+                        f"Unsupported execution method: {execution_method}"
+                        f"Should be one of {EXECUTION_METHODS}"
+                    )
                 if execution_method == "graph":
                     jit_compile = False
                 elif execution_method == "xla":
                     jit_compile = True
-                else:
-                    raise Exception(
-                        "Unsupported execution method: "
-                        f"{execution_method}. Should be one of "
-                        f"{EXECUTION_METHODS}."
-                    )
+
                 time_taken = run_graph(
                     token_probability_fn=token_logits_fn,
                     prompt=ds,
-                    max_length=args["max_length"],
+                    max_length=COMMON_ARGS["max_length"],
                     text_gen_method=text_gen_method,
                     text_gen_args=test_run["args"],
                     jit_compile=jit_compile,
@@ -165,20 +166,6 @@ def main(config):
                 print()
             print("*************************************")
 
-    print(json.dumps(config, indent=4))
-
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--config_path",
-        type=str,
-        default="./benchmark_scripts/text_generation/config.json",
-        help="Config file path.",
-    )
-    args = parser.parse_args()
-
-    with open(args.config_path, "r") as f:
-        config = json.load(f)
-
-    main(config)
+    main()
