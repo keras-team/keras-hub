@@ -6,7 +6,7 @@
         "max_length": 256,
         "model_max_length": 300,
         "embed_dim": 768,
-        "num_layers": 12,
+        "num_layers": 8,
         "num_heads": 8,
         "ff_dim": 3072,
         "seed": 42
