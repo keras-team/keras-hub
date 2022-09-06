@@ -124,15 +124,15 @@ def main(config):
     )
 
     def token_logits_fn(inputs):
-        cur_len = inputs.shape[1]
         output = model(inputs)
-        return output[:, cur_len - 1, :]  # return next token logits
+        return output[:, -1, :]  # return next token logits
 
     with open("./results.csv", "w") as res_handler:
         res_handler.write("text_gen_method,execution_method,time\n")
-        for test_run in args["test_runs"]:
+        for test_run in config["test_runs"]:
             text_gen_method = test_run["name"]
             for execution_method in test_run["execution_methods"]:
+                print(f"Running {text_gen_method} in {execution_method} mode")
                 if execution_method == "graph":
                     jit_compile = False
                 elif execution_method == "xla":
@@ -143,18 +143,19 @@ def main(config):
                         f"{execution_method}. Should be one of "
                         f"{EXECUTION_METHODS}."
                     )
-                    time_taken = run_graph(
-                        token_probability_fn=token_logits_fn,
-                        prompt=ds,
-                        max_length=args["max_length"],
-                        text_gen_method=text_gen_method,
-                        text_gen_args=test_run["args"],
-                        jit_compile=jit_compile,
-                    )
-                    res_handler.write(
-                        f"{text_gen_method},{execution_method},"
-                        f"{time_taken}\n"
-                    )
+                time_taken = run_graph(
+                    token_probability_fn=token_logits_fn,
+                    prompt=ds,
+                    max_length=args["max_length"],
+                    text_gen_method=text_gen_method,
+                    text_gen_args=test_run["args"],
+                    jit_compile=jit_compile,
+                )
+                print("Time taken: ", time_taken)
+                res_handler.write(
+                    f"{text_gen_method},{execution_method},"
+                    f"{time_taken}\n"
+                )
 
 
 if __name__ == "__main__":
@@ -162,7 +163,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_path",
         type=str,
-        default="./keras_nlp/benchmark_scripts/text_generation/config.json",
+        default="./benchmark_scripts/text_generation/config.json",
         help="Config file path.",
     )
     args = parser.parse_args()
