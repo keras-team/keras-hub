@@ -33,7 +33,7 @@ SUPPORTED_TEXT_GEN_METHODS = {
     "top_k_search": top_k_search,
     "top_p_search": top_p_search,
 }
-EXECUTION_METHODS = ["eager", "graph", "xla"]
+EXECUTION_METHODS = ["graph", "xla"]
 
 
 def generate_random_ds(vocab_size, num_samples, batch_size, seed):
@@ -133,6 +133,10 @@ def main(config):
         res_handler.write("text_gen_method,execution_method,time\n")
         for test_run in config["test_runs"]:
             text_gen_method = test_run["name"]
+            if text_gen_method not in SUPPORTED_TEXT_GEN_METHODS:
+                raise Exception(
+                    f"Unsupported text generation method: {text_gen_method}"
+                )
             for execution_method in test_run["execution_methods"]:
                 print(f"Running {text_gen_method} in {execution_method} mode")
                 if execution_method == "graph":
@@ -161,6 +165,7 @@ def main(config):
             print("*************************************")
 
     print(json.dumps(config, indent=4))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
