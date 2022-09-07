@@ -126,7 +126,7 @@ pytest keras_nlp/keras_nlp/integration_tests/import_test.py -k="import"
 
 ### Run all tests
 
-You can run the testing we run continuously for the repository with:
+You can run the full testing suite by simply invoking pytest:
 
 ```shell
 pytest
