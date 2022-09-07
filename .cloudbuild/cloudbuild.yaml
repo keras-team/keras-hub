@@ -13,7 +13,7 @@ steps:
   args: [
     'build',
     '.',
-    '-f', 'cloudbuild/Dockerfile',
+    '-f', '.cloudbuild/Dockerfile',
     '-t', '$_IMAGE_NAME:$BUILD_ID',
   ]
 - name: 'docker'
@@ -44,7 +44,7 @@ steps:
   - clone-templates
   entrypoint: 'jsonnet'
   args: [
-    'cloudbuild/unit_test_jobs.jsonnet',
+    '.cloudbuild/unit_test_jobs.jsonnet',
     '--string',
     '-J', 'ml-testing-accelerators',
     '--ext-str', 'image=$_IMAGE_NAME',
