@@ -207,15 +207,15 @@ class BertPretrainingModel(keras.Model):
             encoder.num_segments,
             kernel_initializer=keras.initializers.TruncatedNormal(stddev=0.02),
         )
-        self.loss_tracker = keras.metrics.Mean(name="loss")
-        self.lm_loss_tracker = keras.metrics.Mean(name="lm_loss")
-        self.nsp_loss_tracker = keras.metrics.Mean(name="nsp_loss")
-        self.lm_accuracy = keras.metrics.SparseCategoricalAccuracy(
-            name="lm_accuracy"
-        )
-        self.nsp_accuracy = keras.metrics.SparseCategoricalAccuracy(
-            name="nsp_accuracy"
-        )
+        # self.loss_tracker = keras.metrics.Mean(name="loss")
+        # self.lm_loss_tracker = keras.metrics.Mean(name="lm_loss")
+        # self.nsp_loss_tracker = keras.metrics.Mean(name="nsp_loss")
+        # self.lm_accuracy = keras.metrics.SparseCategoricalAccuracy(
+        #     name="lm_accuracy"
+        # )
+        # self.nsp_accuracy = keras.metrics.SparseCategoricalAccuracy(
+        #     name="nsp_accuracy"
+        # )
 
     def call(self, data):
         encoder_output = self.encoder(
@@ -235,38 +235,38 @@ class BertPretrainingModel(keras.Model):
         nsp_preds = self.next_sentence_head(pooled_output)
         return lm_preds, nsp_preds
 
-    def train_step(self, data):
-        with tf.GradientTape() as tape:
-            lm_preds, nsp_preds = self(data, training=True)
-            lm_labels = data["masked_lm_ids"]
-            lm_weights = data["masked_lm_weights"]
-            nsp_labels = data["next_sentence_labels"]
+    # def train_step(self, data):
+    #     with tf.GradientTape() as tape:
+    #         lm_preds, nsp_preds = self(data, training=True)
+    #         lm_labels = data["masked_lm_ids"]
+    #         lm_weights = data["masked_lm_weights"]
+    #         nsp_labels = data["next_sentence_labels"]
 
-            lm_loss = keras.losses.sparse_categorical_crossentropy(
-                lm_labels, lm_preds, from_logits=True
-            )
-            lm_weights_summed = tf.reduce_sum(lm_weights, -1)
-            lm_loss = tf.reduce_sum(lm_loss * lm_weights, -1)
-            lm_loss = tf.math.divide_no_nan(lm_loss, lm_weights_summed)
-            nsp_loss = keras.losses.sparse_categorical_crossentropy(
-                nsp_labels, nsp_preds, from_logits=True
-            )
-            nsp_loss = tf.reduce_mean(nsp_loss)
-            loss = lm_loss + nsp_loss
+    #         lm_loss = keras.losses.sparse_categorical_crossentropy(
+    #             lm_labels, lm_preds, from_logits=True
+    #         )
+    #         lm_weights_summed = tf.reduce_sum(lm_weights, -1)
+    #         lm_loss = tf.reduce_sum(lm_loss * lm_weights, -1)
+    #         lm_loss = tf.math.divide_no_nan(lm_loss, lm_weights_summed)
+    #         nsp_loss = keras.losses.sparse_categorical_crossentropy(
+    #             nsp_labels, nsp_preds, from_logits=True
+    #         )
+    #         nsp_loss = tf.reduce_mean(nsp_loss)
+    #         loss = lm_loss + nsp_loss
 
-        # Compute gradients
-        trainable_vars = self.trainable_variables
-        gradients = tape.gradient(loss, trainable_vars)
-        # Update weights
-        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+    #     # Compute gradients
+    #     trainable_vars = self.trainable_variables
+    #     gradients = tape.gradient(loss, trainable_vars)
+    #     # Update weights
+    #     self.optimizer.apply_gradients(zip(gradients, trainable_vars))
 
-        # Update metrics
-        self.loss_tracker.update_state(loss)
-        self.lm_loss_tracker.update_state(lm_loss)
-        self.nsp_loss_tracker.update_state(nsp_loss)
-        self.lm_accuracy.update_state(lm_labels, lm_preds, lm_weights)
-        self.nsp_accuracy.update_state(nsp_labels, nsp_preds)
-        return {m.name: m.result() for m in self.metrics}
+    #     # Update metrics
+    #     self.loss_tracker.update_state(loss)
+    #     self.lm_loss_tracker.update_state(lm_loss)
+    #     self.nsp_loss_tracker.update_state(nsp_loss)
+    #     self.lm_accuracy.update_state(lm_labels, lm_preds, lm_weights)
+    #     self.nsp_accuracy.update_state(nsp_labels, nsp_preds)
+    #     return {m.name: m.result() for m in self.metrics}
 
 
 class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
@@ -311,6 +311,13 @@ def decode_record(record):
     """Decodes a record to a TensorFlow example."""
     seq_length = PREPROCESSING_CONFIG["max_seq_length"]
     lm_length = PREPROCESSING_CONFIG["max_predictions_per_seq"]
+    feature_keys = (
+        "token_ids",
+        "padding_mask",
+        "segment_ids",
+        "masked_lm_positions",
+    )
+    label_keys = ("masked_lm_ids", "next_sentence_labels")
     name_to_features = {
         "token_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
         "padding_mask": tf.io.FixedLenFeature([seq_length], tf.int64),
@@ -328,7 +335,42 @@ def decode_record(record):
         if value.dtype == tf.int64:
             value = tf.cast(value, tf.int32)
         example[name] = value
-    return example
+    return (
+        {key: example[key] for key in feature_keys},
+        (example[key] for key in label_keys),
+        (example["masked_lm_weights"], tf.ones((2,), dtype=tf.int32)),
+    )
+
+
+def lm_loss(y_true, y_pred, sample_weight=None):
+    lm_labels = y_true[0]
+    lm_preds = y_true[0]
+    lm_weights = sample_weight[0]
+
+    lm_loss = keras.losses.sparse_categorical_crossentropy(
+        lm_labels, lm_preds, from_logits=True
+    )
+    lm_weights_summed = tf.reduce_sum(lm_weights, -1)
+    lm_loss = tf.reduce_sum(lm_loss * lm_weights, -1)
+    lm_loss = tf.math.divide_no_nan(lm_loss, lm_weights_summed)
+    return lm_loss
+
+
+def nsp_loss(y_true, y_pred, sample_weight=None):
+    nsp_labels = y_true[1]
+    nsp_preds = y_pred[1]
+
+    nsp_loss = keras.losses.sparse_categorical_crossentropy(
+        nsp_labels, nsp_preds, from_logits=True
+    )
+    nsp_loss = tf.reduce_mean(nsp_loss)
+    return nsp_loss
+
+
+def aggregate_loss(y_true, y_pred, sample_weight=None):
+    return lm_loss(y_true, y_pred, sample_weight) + nsp_loss(
+        y_true, y_pred, sample_weight
+    )
 
 
 def get_checkpoint_callback():
@@ -432,6 +474,7 @@ def main(_):
         pretraining_model = BertPretrainingModel(encoder)
         pretraining_model.compile(
             optimizer=optimizer,
+            loss=aggregate_loss,
         )
 
     epochs = TRAINING_CONFIG["epochs"]
