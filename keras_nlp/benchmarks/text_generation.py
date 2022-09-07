@@ -17,11 +17,11 @@
 import time
 
 import tensorflow as tf
-from benchmarks.text_generation_config import COMMON_ARGS
-from benchmarks.text_generation_config import TEST_RUNS
 from tensorflow import keras
 
 import keras_nlp
+from keras_nlp.benchmarks.text_generation_config import COMMON_ARGS
+from keras_nlp.benchmarks.text_generation_config import TEST_RUNS
 from keras_nlp.utils import beam_search
 from keras_nlp.utils import greedy_search
 from keras_nlp.utils import random_search
