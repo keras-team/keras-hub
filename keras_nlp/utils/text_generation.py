@@ -26,12 +26,8 @@ def _validate_prompt(prompt):
     return prompt
 
 
-def _validate_token_probability_fn(
-    token_probability_fn, prompt, return_vocab_size=False
-):
-    """Helper function to validate token probability fn output. Returns
-    vocabulary size if `return_vocab_size` is True.
-    """
+def _validate_token_probability_fn(token_probability_fn, prompt):
+    """Helper function to validate token probability fn output."""
     test_pred = token_probability_fn(prompt)
     if len(test_pred.shape) != 2:
         raise ValueError(
@@ -39,10 +35,8 @@ def _validate_token_probability_fn(
             "please provide a function with the output shape "
             "[batch_size, vocab_size]."
         )
-    if return_vocab_size:
-        return tf.shape(test_pred)[-1]
-    else:
-        return -1
+
+    return tf.shape(test_pred)[-1]
 
 
 def _get_prompt_shape(prompt):
@@ -66,9 +60,8 @@ def _pad_prompt(prompt, max_length):
     """
     if isinstance(prompt, tf.Tensor):
         shape = tf.shape(prompt)
-        pad_shape = [shape[0], max_length - shape[1]]
-        if pad_shape[1] < 0:
-            pad_shape[1] = 0
+        extra_space = tf.math.maximum(0, max_length - shape[1])
+        pad_shape = [shape[0], extra_space]
 
         mask = tf.ones(shape, tf.bool)
         mask = tf.concat((mask, tf.zeros(pad_shape, tf.bool)), axis=1)
@@ -238,9 +231,9 @@ def beam_search(
         token_probability_fn: a callable, which takes in input_sequence
             and output the probability distribution of the next token. If
             `from_logits` set to True, it should output the logits of the next
-            token. The input shape would be `[batch_size, length]` and the
-            output should be `[batch_size, vocab_size]`, where batch_size is
-            variable.
+            token. The input shape would be `[batch_size * num_beams, length]`
+            and the output should be `[batch_size * num_beams, vocab_size]`,
+            where batch_size is variable.
         prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
             append generated tokens. The initial beam for beam search.
         max_length: int. The max length of generated text.
@@ -302,6 +295,15 @@ def beam_search(
         raise ValueError(
             f"`num_beams` should be strictly positive. Received: `num_beams={num_beams}`."
         )
+    if num_beams == 1:
+        return greedy_search(
+            token_probability_fn=token_probability_fn,
+            prompt=prompt,
+            max_length=max_length,
+            end_token_id=end_token_id,
+            pad_token_id=pad_token_id,
+        )
+
     prompt = _validate_prompt(prompt)
 
     input_is_1d = prompt.shape.rank == 1
@@ -311,33 +313,30 @@ def beam_search(
     batch_size, length = _get_prompt_shape(prompt)
     prompt, mask = _pad_prompt(prompt, max_length)
 
-    vocab_size = _validate_token_probability_fn(
-        token_probability_fn, prompt, return_vocab_size=True
-    )
+    vocab_size = _validate_token_probability_fn(token_probability_fn, prompt)
 
     if length >= max_length:
         return tf.squeeze(prompt) if input_is_1d else prompt
+
     # Initialize beam with shape `(batch_size, num_beams, length)`.
     beams = tf.repeat(tf.expand_dims(prompt, axis=1), num_beams, axis=1)
 
-    # Initialize beams_prob with shape `(batch_size, num_beams)`
+    # Initialize `beams_prob`` with shape `(batch_size, num_beams)`
     beams_prob = tf.zeros([batch_size, 1], dtype=tf.float32)
-    if num_beams > 1:
-        beams_prob = tf.concat(
-            [beams_prob, tf.fill((batch_size, num_beams - 1), -3.40282e38)],
-            axis=-1,
-        )
+    beams_prob = tf.concat(
+        [beams_prob, tf.fill((batch_size, num_beams - 1), -3.40282e38)],
+        axis=-1,
+    )
 
     def one_step(beams, beams_prob, length):
         truncated_beams = beams[..., :length]
 
-        # logits is of shape [batch_size, num_beams * vocab_size]
-        logits = tf.reshape(
-            token_probability_fn(
-                tf.reshape(truncated_beams, shape=[batch_size * num_beams, -1])
-            ),
-            shape=[batch_size, -1],
+        # logits is of shape [batch_size, num_beams * vocab_size].
+        flattened_beams = tf.reshape(
+            truncated_beams, shape=[batch_size * num_beams, -1]
         )
+        logits = token_probability_fn(flattened_beams)
+        logits = tf.reshape(logits, shape=[batch_size, -1])
 
         probs = tf.math.log(logits) + tf.repeat(
             beams_prob, repeats=vocab_size, axis=1
@@ -356,16 +355,19 @@ def beam_search(
             x=beams[..., length],
             y=next_token,
         )
+
+        # Initialize `indices_over_samples` with shape `(batch_size, num_beams)`
+        # , with `indices_over_samples[i, j] = [i, j]`.
+        indices_over_samples = tf.cast(
+            tf.where(tf.ones((batch_size, num_beams), tf.bool)),
+            dtype=length.dtype,
+        )
+        length_repeated = tf.fill((batch_size * num_beams, 1), length)
+        # Update `beams[:, :, length]` with `next_token`.
         beams = tf.tensor_scatter_nd_update(
             tensor=beams,
             indices=tf.concat(
-                [
-                    tf.cast(
-                        tf.where(tf.ones((batch_size, num_beams), tf.bool)),
-                        dtype=length.dtype,
-                    ),
-                    tf.fill((batch_size * num_beams, 1), length),
-                ],
+                [indices_over_samples, length_repeated],
                 axis=1,
             ),
             updates=tf.reshape(next_token, shape=[-1]),
