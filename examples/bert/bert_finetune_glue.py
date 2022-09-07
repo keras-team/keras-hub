@@ -88,21 +88,18 @@ def load_data(task_name):
         task_name = "mnli"
         test_suffix = "_mismatched"
 
-    def preprocess_data(ds):
-        return ds.map(
-            lambda x: {
-                feature_name: x[feature_name] for feature_name in feature_names
-            },
-            num_parallel_calls=tf.data.AUTOTUNE,
-        )
+    def split_features(x):
+        return {feature_name: x[feature_name] for feature_name in feature_names}
 
     train_ds, test_ds, validation_ds = tfds.load(
         f"glue/{task_name}",
         split=["train", "test" + test_suffix, "validation" + test_suffix],
     )
-    train_ds = preprocess_data(train_ds)
-    test_ds = preprocess_data(test_ds)
-    validation_ds = preprocess_data(validation_ds)
+    train_ds = train_ds.map(split_features, num_parallel_calls=tf.data.AUTOTUNE)
+    test_ds = test_ds.map(split_features, num_parallel_calls=tf.data.AUTOTUNE)
+    validation_ds = validation_ds.map(
+        split_features, num_parallel_calls=tf.data.AUTOTUNE
+    )
     return train_ds, test_ds, validation_ds
 
 
