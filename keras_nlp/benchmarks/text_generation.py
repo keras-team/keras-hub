@@ -20,27 +20,71 @@ import tensorflow as tf
 from tensorflow import keras
 
 import keras_nlp
-from keras_nlp.benchmarks.text_generation_config import COMMON_ARGS
-from keras_nlp.benchmarks.text_generation_config import TEST_RUNS
-from keras_nlp.utils import beam_search
+
+# from keras_nlp.utils import beam_search
 from keras_nlp.utils import greedy_search
 from keras_nlp.utils import random_search
 from keras_nlp.utils import top_k_search
 from keras_nlp.utils import top_p_search
 
-SUPPORTED_TEXT_GEN_METHODS = {
-    "greedy_search": greedy_search,
-    "random_search": random_search,
-    "beam_search": beam_search,
-    "top_k_search": top_k_search,
-    "top_p_search": top_p_search,
+COMMON_ARGS = {
+    "vocab_size": 40000,
+    "num_samples": 1000,
+    "batch_size": 2,
+    "max_length": 64,
+    "model_max_length": 300,
+    "embed_dim": 768,
+    "num_layers": 8,
+    "num_heads": 8,
+    "ff_dim": 3072,
+    "seed": 42,
 }
-EXECUTION_METHODS = ["graph", "xla"]
+
+TEST_RUNS = [
+    {
+        "decoding_fn": greedy_search,
+        "execution_methods": ["xla", "graph"],
+        "args": {"end_token_id": 2, "pad_token_id": 0},
+    },
+    {
+        "decoding_fn": random_search,
+        "execution_methods": ["xla", "graph"],
+        "args": {
+            "seed": COMMON_ARGS["seed"],
+            "from_logits": True,
+            "end_token_id": 2,
+            "pad_token_id": 0,
+        },
+    },
+    {
+        "decoding_fn": top_k_search,
+        "execution_methods": ["xla", "graph"],
+        "args": {
+            "k": 5,
+            "seed": COMMON_ARGS["seed"],
+            "from_logits": True,
+            "end_token_id": 2,
+            "pad_token_id": 0,
+        },
+    },
+    {
+        "decoding_fn": top_p_search,
+        "execution_methods": ["xla", "graph"],
+        "args": {
+            "p": 0.9,
+            "seed": COMMON_ARGS["seed"],
+            "from_logits": True,
+            "end_token_id": 2,
+            "pad_token_id": 0,
+        },
+    },
+]
 
 
 def generate_random_ds(vocab_size, num_samples, batch_size, seed):
+    prompt_length = 2
     inputs = tf.random.uniform(
-        shape=(num_samples, 2),
+        shape=(num_samples, prompt_length),
         minval=0,
         maxval=vocab_size - 1,
         dtype=tf.dtypes.int32,
@@ -66,30 +110,27 @@ def build_model(
     x = embedding_layer(inputs)
     # Transformer decoders.
     for _ in range(num_layers):
-        decoder_layer = keras_nlp.layers.TransformerDecoder(
+        x = keras_nlp.layers.TransformerDecoder(
             num_heads=num_heads,
             intermediate_dim=ff_dim,
-        )
-        x = decoder_layer(x)  # Giving one argument only skips cross-attention.
+        )(x)
     # Output.
     outputs = keras.layers.Dense(vocab_size)(x)
     model = keras.Model(inputs=inputs, outputs=outputs)
     return model
 
 
-def run_graph(
+def generate_text(
     token_probability_fn,
     prompt,
     max_length,
-    text_gen_method,
+    decoding_fn,
     text_gen_args,
     jit_compile,
 ):
-    text_gen_fn = SUPPORTED_TEXT_GEN_METHODS[text_gen_method]
-
     class TestModel(tf.keras.Model):
         def call(self, inputs):
-            generated = text_gen_fn(
+            generated = decoding_fn(
                 token_probability_fn=token_probability_fn,
                 prompt=inputs,
                 max_length=max_length,
@@ -131,37 +172,30 @@ def main():
     print("*************************************\n")
 
     with open("./results.csv", "w") as res_handler:
-        res_handler.write("text_gen_method,execution_method,time\n")
+        res_handler.write("decoding_strategy,execution_method,time\n")
         for test_run in TEST_RUNS:
-            text_gen_method = test_run["name"]
-            if text_gen_method not in SUPPORTED_TEXT_GEN_METHODS:
-                raise Exception(
-                    f"Unsupported text generation method: {text_gen_method}"
-                    f"Should be one of {SUPPORTED_TEXT_GEN_METHODS.keys()}"
-                )
+            decoding_fn = test_run["decoding_fn"]
+            decoding_strategy = str(decoding_fn)
+
             for execution_method in test_run["execution_methods"]:
-                print(f"Running {text_gen_method} in {execution_method} mode")
-                if execution_method not in EXECUTION_METHODS:
-                    raise Exception(
-                        f"Unsupported execution method: {execution_method}"
-                        f"Should be one of {EXECUTION_METHODS}"
-                    )
+                print(f"Running {decoding_strategy} in {execution_method} mode")
+
                 if execution_method == "graph":
                     jit_compile = False
                 elif execution_method == "xla":
                     jit_compile = True
 
-                time_taken = run_graph(
+                time_taken = generate_text(
                     token_probability_fn=token_logits_fn,
                     prompt=ds,
                     max_length=COMMON_ARGS["max_length"],
-                    text_gen_method=text_gen_method,
+                    decoding_fn=decoding_fn,
                     text_gen_args=test_run["args"],
                     jit_compile=jit_compile,
                 )
                 print("Time taken: ", time_taken)
                 res_handler.write(
-                    f"{text_gen_method},{execution_method}," f"{time_taken}\n"
+                    f"{decoding_strategy},{execution_method}," f"{time_taken}\n"
                 )
                 print()
             print("*************************************")
