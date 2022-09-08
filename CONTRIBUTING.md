@@ -84,7 +84,7 @@ Once the pull request is approved, a team member will take care of merging.
 Python 3.7 or later is required.
 
 Setting up your KerasNLP development environment requires you to fork the
-KerasNLP repository, clone the repository, create a virtual environment, and 
+KerasNLP repository, clone the repository, create a virtual environment, and
 install dependencies.
 
 You can achieve this by running the following commands:
@@ -126,10 +126,17 @@ pytest keras_nlp/keras_nlp/integration_tests/import_test.py -k="import"
 
 ### Run all tests
 
-You can run the unit tests for KerasNLP by running:
+You can run the full testing suite by simply invoking pytest:
 
 ```shell
-pytest keras_nlp/
+pytest
+```
+
+Some slow integration tests (e.g. tests that download large files) are
+disabled by default. You can include these by running:
+
+```shell
+pytest --runslow
 ```
 
 ## Formatting Code
