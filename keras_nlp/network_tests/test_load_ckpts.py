@@ -28,7 +28,7 @@ class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
         ("base_zh", keras_nlp.models.BertBase, "zh"),
         ("base_multi_cased", keras_nlp.models.BertBase, "multi_cased"),
         ("large_uncased_en", keras_nlp.models.BertLarge, "uncased_en"),
-        ("large_cased_en", keras_nlp.models.BertLarge, "cased_en")
+        ("large_cased_en", keras_nlp.models.BertLarge, "cased_en"),
     )
     def test_load_bert(self, bert_variant, weights):
         model = bert_variant(weights=weights)
