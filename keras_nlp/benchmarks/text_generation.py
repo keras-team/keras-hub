@@ -107,13 +107,12 @@ def build_model(
 ):
     inputs = keras.layers.Input(shape=(None,), dtype=tf.int32)
     # Embedding.
-    embedding_layer = keras_nlp.layers.TokenAndPositionEmbedding(
+    x = keras_nlp.layers.TokenAndPositionEmbedding(
         vocabulary_size=vocab_size,
         sequence_length=max_length,
         embedding_dim=embed_dim,
         mask_zero=True,
-    )
-    x = embedding_layer(inputs)
+    )(x)
     # Transformer decoders.
     for _ in range(num_layers):
         x = keras_nlp.layers.TransformerDecoder(
@@ -179,7 +178,7 @@ def main():
         res_handler.write("decoding_strategy,execution_method,time\n")
         for test_run in TEST_RUNS:
             decoding_fn = test_run["decoding_fn"]
-            decoding_strategy = str(decoding_fn)
+            decoding_strategy = decoding_fn.__name__
 
             for execution_method in test_run["execution_methods"]:
                 print(f"Running {decoding_strategy} in {execution_method} mode")
