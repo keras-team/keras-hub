@@ -30,7 +30,7 @@ class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
         ("large_uncased_en", keras_nlp.models.BertLarge, "uncased_en"),
         ("large_cased_en", keras_nlp.models.BertLarge, "cased_en")
     )
-    def test_load_bert_base(self, bert_variant, weights):
+    def test_load_bert(self, bert_variant, weights):
         model = bert_variant(weights=weights)
         input_data = {
             "token_ids": tf.random.uniform(
