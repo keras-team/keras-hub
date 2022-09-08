@@ -434,26 +434,9 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (BERT)
 
 
 def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
-
-    if (vocabulary_size is None and weights is None) or (
-        vocabulary_size and weights
-    ):
-        raise ValueError(
-            "One of `vocabulary_size` or `weights` must be specified "
-            "(but not both). "
-            f"Received: weights={weights}, "
-            f"vocabulary_size={vocabulary_size}"
-        )
-
-    if weights:
-        if weights not in checkpoints["bert_tiny"]:
-            raise ValueError(
-                "`weights` must be one of "
-                f"""{", ".join(checkpoints["bert_tiny"])}. """
-                f"Received: {weights}. Other BERT variants may have checkpoints "
-                f'for "{weights}" available.'
-            )
-        vocabulary_size = checkpoints["bert_tiny"][weights]["vocabulary_size"]
+    weights, vocabulary_size = _handle_weights_and_vocab_size(
+        "bert_tiny", weights, vocabulary_size
+    )
 
     model = BertCustom(
         vocabulary_size=vocabulary_size,
@@ -467,17 +450,7 @@ def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
         trainable=trainable,
     )
 
-    # TODO(jbischof): consider changing format from `h5` to
-    # `tf.train.Checkpoint` once
-    # https://github.com/keras-team/keras/issues/16946 is resolved. This comment
-    # applies to other variants as well.
     if weights:
-        filepath = keras.utils.get_file(
-            "model.h5",
-            BASE_PATH + "bert_tiny_" + weights + "/model.h5",
-            cache_subdir="models/bert_tiny/" + weights + "/",
-            file_hash=checkpoints["bert_tiny"][weights]["md5"],
-        )
         model.load_weights(filepath)
 
     # TODO(jbischof): attach the tokenizer or create separate tokenizer class.
@@ -486,26 +459,9 @@ def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
 
 
 def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
-
-    if (vocabulary_size is None and weights is None) or (
-        vocabulary_size and weights
-    ):
-        raise ValueError(
-            "One of `vocabulary_size` or `weights` must be specified "
-            "(but not both). "
-            f"Received: weights={weights}, "
-            f"vocabulary_size={vocabulary_size}"
-        )
-
-    if weights:
-        if weights not in checkpoints["bert_small"]:
-            raise ValueError(
-                "`weights` must be one of "
-                f"""{", ".join(checkpoints["bert_small"])}. """
-                f"Received: {weights}. Other BERT variants may have checkpoints "
-                f'for "{weights}" available.'
-            )
-        vocabulary_size = checkpoints["bert_small"][weights]["vocabulary_size"]
+    weights, vocabulary_size = _handle_weights_and_vocab_size(
+        "bert_small", weights, vocabulary_size
+    )
 
     model = BertCustom(
         vocabulary_size=vocabulary_size,
@@ -520,38 +476,15 @@ def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
     )
 
     if weights:
-        filepath = keras.utils.get_file(
-            "model.h5",
-            BASE_PATH + "bert_small_" + weights + "/model.h5",
-            cache_subdir="models/bert_small/" + weights + "/",
-            file_hash=checkpoints["bert_small"][weights]["md5"],
-        )
         model.load_weights(filepath)
 
     return model
 
 
 def BertMedium(weights=None, vocabulary_size=None, name=None, trainable=True):
-
-    if (vocabulary_size is None and weights is None) or (
-        vocabulary_size and weights
-    ):
-        raise ValueError(
-            "One of `vocabulary_size` or `weights` must be specified "
-            "(but not both). "
-            f"Received: weights={weights}, "
-            f"vocabulary_size={vocabulary_size}"
-        )
-
-    if weights:
-        if weights not in checkpoints["bert_medium"]:
-            raise ValueError(
-                "`weights` must be one of "
-                f"""{", ".join(checkpoints["bert_medium"])}. """
-                f"Received: {weights}. Other BERT variants may have checkpoints "
-                f'for "{weights}" available.'
-            )
-        vocabulary_size = checkpoints["bert_medium"][weights]["vocabulary_size"]
+    weights, vocabulary_size = _handle_weights_and_vocab_size(
+        "bert_medium", weights, vocabulary_size
+    )
 
     model = BertCustom(
         vocabulary_size=vocabulary_size,
@@ -566,12 +499,6 @@ def BertMedium(weights=None, vocabulary_size=None, name=None, trainable=True):
     )
 
     if weights:
-        filepath = keras.utils.get_file(
-            "model.h5",
-            BASE_PATH + "bert_medium_" + weights + "/model.h5",
-            cache_subdir="models/bert_medium/" + weights + "/",
-            file_hash=checkpoints["bert_medium"][weights]["md5"],
-        )
         model.load_weights(filepath)
 
     return model
@@ -597,8 +524,6 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
     if weights is not None:
         model.load_weights(weights)
 
-    # TODO(jbischof): attach the tokenizer or create separate tokenizer class.
-    # Applicable for other BERT variants as well.
     return model
 
 
