@@ -112,7 +112,7 @@ def build_model(
         sequence_length=max_length,
         embedding_dim=embed_dim,
         mask_zero=True,
-    )(x)
+    )(inputs)
     # Transformer decoders.
     for _ in range(num_layers):
         x = keras_nlp.layers.TransformerDecoder(
