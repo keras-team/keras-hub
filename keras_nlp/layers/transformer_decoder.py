@@ -197,9 +197,6 @@ class TransformerDecoder(keras.layers.Layer):
         )
         self._output_dropout = keras.layers.Dropout(rate=self.dropout)
 
-    def _add_and_norm(self, input1, input2, norm_layer):
-        return norm_layer(input1 + input2)
-
     def _feed_forward(self, input):
         x = self._intermediate_dense(input)
         x = self._output_dense(x)
@@ -272,8 +269,8 @@ class TransformerDecoder(keras.layers.Layer):
         else:
             decoder_mask = tf.minimum(decoder_mask, causal_mask)
 
+        residual_decoder_sequence = decoder_sequence
         if self.normalize_first:
-            residual_decoder_sequence = decoder_sequence
             decoder_sequence = self._decoder_attention_layernorm(
                 decoder_sequence
             )
@@ -285,21 +282,18 @@ class TransformerDecoder(keras.layers.Layer):
             attention_mask=decoder_mask,
         )
         self_attended = self._self_attention_dropout(self_attended)
-        if self.normalize_first:
-            attention_output = residual_decoder_sequence + self_attended
-        else:
-            attention_output = self._add_and_norm(
-                decoder_sequence,
-                self_attended,
-                self._decoder_attention_layernorm,
+        attention_output = residual_decoder_sequence + self_attended
+        if not self.normalize_first:
+            attention_output = self._decoder_attention_layernorm(
+                attention_output
             )
 
         if self._cross_attention_layer is not None:
             encoder_mask = merge_padding_and_attention_mask(
                 encoder_sequence, encoder_padding_mask, encoder_attention_mask
             )
+            residual_attention_output = attention_output
             if self.normalize_first:
-                residual_attention_output = attention_output
                 attention_output = self._cross_attention_layernorm(
                     attention_output
                 )
@@ -313,27 +307,23 @@ class TransformerDecoder(keras.layers.Layer):
             cross_attended = self._cross_attention_dropout(
                 cross_attended,
             )
-            if self.normalize_first:
-                attention_output = residual_attention_output + cross_attended
-            else:
-                attention_output = self._add_and_norm(
-                    attention_output,
-                    cross_attended,
-                    self._cross_attention_layernorm,
+            attention_output = residual_attention_output + cross_attended
+            if not self.normalize_first:
+                attention_output = self._cross_attention_layernorm(
+                    attention_output
                 )
 
+        residual_attention_output = attention_output
         if self.normalize_first:
-            residual_attention_output = attention_output
             attention_output = self._feedforward_layernorm(attention_output)
         # Feedforward.
         feed_forward_output = self._feed_forward(attention_output)
-        if self.normalize_first:
-            return residual_attention_output + feed_forward_output
-        return self._add_and_norm(
-            attention_output,
-            feed_forward_output,
-            self._feedforward_layernorm,
-        )
+        feed_forward_output = residual_attention_output + feed_forward_output
+        if not self.normalize_first:
+            feed_forward_output = self._feedforward_layernorm(
+                feed_forward_output
+            )
+        return feed_forward_output
 
     def get_config(self):
         config = super().get_config()

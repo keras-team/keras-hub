@@ -150,9 +150,6 @@ class TransformerEncoder(keras.layers.Layer):
         )
         self._output_dropout = keras.layers.Dropout(rate=self.dropout)
 
-    def _add_and_norm(self, input1, input2, norm_layer):
-        return norm_layer(input1 + input2)
-
     def _feed_forward(self, input):
         x = self._intermediate_dense(input)
         x = self._output_dense(x)
@@ -185,33 +182,29 @@ class TransformerEncoder(keras.layers.Layer):
             attention_mask,
         )
 
+        residual_inputs = inputs
         if self.normalize_first:
-            residual_inputs = inputs
             inputs = self._attention_layernorm(inputs)
         # Self attention.
         attended = self._multi_head_attention_layer(
             inputs, inputs, inputs, attention_mask=mask
         )
         attended = self._attention_dropout(attended)
-        if self.normalize_first:
-            attended = residual_inputs + attended
-        else:
-            attended = self._add_and_norm(
-                inputs,
-                attended,
-                self._attention_layernorm,
-            )
+        attended = residual_inputs + attended
+        if not self.normalize_first:
+            attended = self._attention_layernorm(attended)
 
+        residual_attended = attended
         if self.normalize_first:
-            residual_attended = attended
             attended = self._feedforward_layernorm(attended)
         # Feedforward.
         feed_forward_output = self._feed_forward(attended)
-        if self.normalize_first:
-            return residual_attended + feed_forward_output
-        return self._add_and_norm(
-            attended, feed_forward_output, self._feedforward_layernorm
-        )
+        feed_forward_output = residual_attended + feed_forward_output
+        if not self.normalize_first:
+            feed_forward_output = self._feedforward_layernorm(
+                feed_forward_output
+            )
+        return feed_forward_output
 
     def get_config(self):
         config = super().get_config()

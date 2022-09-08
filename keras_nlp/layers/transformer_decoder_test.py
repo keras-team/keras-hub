@@ -93,6 +93,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
             num_heads=2,
             kernel_initializer="HeNormal",
             bias_initializer="Zeros",
+            normalize_first=True,
         )
 
         config = decoder.get_config()
@@ -108,6 +109,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
             "bias_initializer": keras.initializers.serialize(
                 keras.initializers.Zeros()
             ),
+            "normalize_first": True,
         }
         self.assertEqual(config, {**config, **expected_config_subset})
         self.assertEqual(config, {**config, **expected_config_subset})
@@ -274,6 +276,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
+            normalize_first=True,
         )
         output = decoder(encoder_input, decoder_input)
         model = keras.Model(
@@ -297,6 +300,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
+            normalize_first=True,
         )
         output = decoder(decoder_input)
         model = keras.Model(
