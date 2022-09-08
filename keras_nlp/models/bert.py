@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Bert model configurable class, preconfigured versions, and task heads."""
+"""BERT model configurable class, preconfigured versions, and task heads."""
 
 import tensorflow as tf
 from tensorflow import keras
@@ -25,6 +25,45 @@ def _bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
+def _handle_weights_and_vocab_size(bert_variant, weights, vocabulary_size):
+    """Look up pretrained defaults for `weights` and `vocabulary_size`.
+
+    This helper will validate the `weights` and `vocabulary_size` arguments, and
+    fully resolve them in the case we are loading pretrained weights.
+    """
+    if (vocabulary_size is None and weights is None) or (
+        vocabulary_size and weights
+    ):
+        raise ValueError(
+            "One of `vocabulary_size` or `weights` must be specified "
+            "(but not both). "
+            f"Received: weights={weights}, "
+            f"vocabulary_size={vocabulary_size}"
+        )
+
+    if weights:
+        if weights not in checkpoints[bert_variant]:
+            raise ValueError(
+                "`weights` must be one of "
+                f"""{", ".join(checkpoints[bert_variant])}. """
+                f"Received: {weights}"
+            )
+
+        vocabulary_size = checkpoints[bert_variant][weights]["vocabulary_size"]
+
+        # TODO(jbischof): consider changing format from `h5` to
+        # `tf.train.Checkpoint` once
+        # https://github.com/keras-team/keras/issues/16946 is resolved.
+        weights = keras.utils.get_file(
+            "model.h5",
+            BASE_PATH + f"{bert_variant}_{weights}/model.h5/",
+            cache_subdir=f"models/{bert_variant}/{weights}/",
+            file_hash=checkpoints[bert_variant][weights]["md5"],
+        )
+
+    return weights, vocabulary_size
+
+
 # Pretrained models
 BASE_PATH = "https://storage.googleapis.com/keras-nlp/models/"
 
@@ -32,13 +71,13 @@ checkpoints = {
     "bert_base": {
         "uncased_en": {
             "md5": "9b2b2139f221988759ac9cdd17050b31",
-            "description": "Base size of Bert where all input is lowercased. "
+            "description": "Base size of BERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus.",
             "vocabulary_size": 30522,
         },
         "cased_en": {
             "md5": "f94a6cb012e18f4fb8ec92abb91864e9",
-            "description": "Base size of Bert where case is maintained. "
+            "description": "Base size of BERT where case is maintained. "
             "Trained on English Wikipedia + BooksCorpus.",
             "vocabulary_size": 28996,
         },
@@ -53,7 +92,21 @@ checkpoints = {
             "104 languages.",
             "vocabulary_size": 119547,
         },
-    }
+    },
+    "bert_large": {
+        "uncased_en": {
+            "md5": "cc5cacc9565ef400ee4376105f40ddae",
+            "description": "Large size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus.",
+            "vocabulary_size": 30522,
+        },
+        "cased_en": {
+            "md5": "8b8ab82290bbf4f8db87d4f100648890",
+            "description": "Large size of BERT where case is maintained. "
+            "Trained on English Wikipedia + BooksCorpus.",
+            "vocabulary_size": 28996,
+        },
+    },
 }
 
 
@@ -66,7 +119,7 @@ class BertCustom(keras.Model):
     embedding lookups and transformer layers, but not the masked language model
     or classification task networks.
 
-    This class gives a fully customizable Bert model with any number of layers,
+    This class gives a fully customizable BERT model with any number of layers,
     heads, and embedding dimensions. For specific specific bert architectures
     defined in the paper, see for example `keras_nlp.models.BertBase`.
 
@@ -91,7 +144,7 @@ class BertCustom(keras.Model):
 
     Example usage:
     ```python
-    # Randomly initialized Bert encoder
+    # Randomly initialized BERT encoder
     model = keras_nlp.models.BertCustom(
         vocabulary_size=30522,
         num_layers=12,
@@ -196,7 +249,7 @@ class BertCustom(keras.Model):
                 name=f"transformer_layer_{i}",
             )(x, padding_mask=padding_mask)
 
-        # Construct the two Bert outputs. The pooled output is a dense layer on
+        # Construct the two BERT outputs. The pooled output is a dense layer on
         # top of the [CLS] token.
         sequence_output = x
         pooled_output = keras.layers.Dense(
@@ -252,7 +305,7 @@ class BertCustom(keras.Model):
 
 
 class BertClassifier(keras.Model):
-    """Bert encoder model with a classification head.
+    """BERT encoder model with a classification head.
 
     Args:
         base_model: A `keras_nlp.models.BertCustom` to encode inputs.
@@ -263,7 +316,7 @@ class BertClassifier(keras.Model):
 
     Example usage:
     ```python
-    # Randomly initialized Bert encoder
+    # Randomly initialized BERT encoder
     model = keras_nlp.models.BertCustom(
         vocabulary_size=30522,
         num_layers=12,
@@ -313,7 +366,7 @@ class BertClassifier(keras.Model):
         self.num_classes = num_classes
 
 
-MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
+MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (BERT)
     using "{type}" architecture.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -335,8 +388,8 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
 
     Example usage:
     ```python
-    # Randomly initialized BertBase encoder
-    model = keras_nlp.models.BertBase(vocabulary_size=10000)
+    # Randomly initialized Bert{type} encoder
+    model = keras_nlp.models.Bert{type}(vocabulary_size=10000)
 
     # Call encoder on the inputs.
     input_data = {{
@@ -349,7 +402,7 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
     output = model(input_data)
 
     # Load a pretrained model
-    model = keras_nlp.models.BertBase(weights="uncased_en")
+    model = keras_nlp.models.Bert{type}(weights="uncased_en")
     # Call encoder on the inputs.
     output = model(input_data)
     ```
@@ -357,25 +410,9 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
 
 
 def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
-
-    if (vocabulary_size is None and weights is None) or (
-        vocabulary_size and weights
-    ):
-        raise ValueError(
-            "One of `vocabulary_size` or `weights` must be specified "
-            "(but not both). "
-            f"Received: weights={weights}, "
-            f"vocabulary_size={vocabulary_size}"
-        )
-
-    if weights:
-        if weights not in checkpoints["bert_base"]:
-            raise ValueError(
-                "`weights` must be one of "
-                f"""{", ".join(checkpoints["bert_base"])}. """
-                f"Received: {weights}"
-            )
-        vocabulary_size = checkpoints["bert_base"][weights]["vocabulary_size"]
+    weights, vocabulary_size = _handle_weights_and_vocab_size(
+        "bert_base", weights, vocabulary_size
+    )
 
     model = BertCustom(
         vocabulary_size=vocabulary_size,
@@ -389,19 +426,34 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
         trainable=trainable,
     )
 
-    # TODO(jbischof): consider changing format from `h5` to
-    # `tf.train.Checkpoint` once
-    # https://github.com/keras-team/keras/issues/16946 is resolved
-    if weights:
-        filepath = keras.utils.get_file(
-            "model.h5",
-            BASE_PATH + "bert_base_" + weights + "/model.h5",
-            cache_subdir="models/bert_base/" + weights + "/",
-            file_hash=checkpoints["bert_base"][weights]["md5"],
-        )
-        model.load_weights(filepath)
+    if weights is not None:
+        model.load_weights(weights)
 
-    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
+    # TODO(jbischof): attach the tokenizer or create separate tokenizer class.
+    # Applicable for other BERT variants as well.
+    return model
+
+
+def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
+    weights, vocabulary_size = _handle_weights_and_vocab_size(
+        "bert_large", weights, vocabulary_size
+    )
+
+    model = BertCustom(
+        vocabulary_size=vocabulary_size,
+        num_layers=24,
+        num_heads=16,
+        hidden_dim=1024,
+        intermediate_dim=4096,
+        dropout=0.1,
+        max_sequence_length=512,
+        name=name,
+        trainable=trainable,
+    )
+
+    if weights is not None:
+        model.load_weights(weights)
+
     return model
 
 
@@ -410,5 +462,12 @@ setattr(
     "__doc__",
     MODEL_DOCSTRING.format(
         type="Base", names=", ".join(checkpoints["bert_base"])
+    ),
+)
+setattr(
+    BertLarge,
+    "__doc__",
+    MODEL_DOCSTRING.format(
+        type="Large", names=", ".join(checkpoints["bert_large"])
     ),
 )
