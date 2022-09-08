@@ -23,10 +23,15 @@ from keras_nlp.layers import transformer_encoder
 
 
 class TransformerEncoderTest(tf.test.TestCase, parameterized.TestCase):
-    def test_valid_call(self):
+    @parameterized.named_parameters(
+        ("without_norm_first", False),
+        ("with_norm_first", True),
+    )
+    def test_valid_call(self, normalize_first):
         encoder = transformer_encoder.TransformerEncoder(
             intermediate_dim=4,
             num_heads=2,
+            normalize_first=normalize_first,
         )
         model = keras.Sequential(
             [

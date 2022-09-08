@@ -51,6 +51,10 @@ class TransformerEncoder(keras.layers.Layer):
         bias_initializer: string or `keras.initializers` initializer,
             defaults to "zeros". The bias initializer for
             the dense and multiheaded attention layers.
+        normalize_first: bool. If True, the inputs to the attention layer and
+            the intermediate dense layer  are normalized (similar to GPT-2). If
+            set to False, outputs of attention layer and intermediate dense
+            layer are normalized (similar to BERT). Defaults to False.
         name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
 
@@ -84,6 +88,7 @@ class TransformerEncoder(keras.layers.Layer):
         layer_norm_epsilon=1e-05,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
+        normalize_first=False,
         name=None,
         **kwargs
     ):
@@ -98,6 +103,7 @@ class TransformerEncoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.normalize_first = normalize_first
         self._built = False
         self.supports_masking = True
 
@@ -179,18 +185,30 @@ class TransformerEncoder(keras.layers.Layer):
             attention_mask,
         )
 
+        if self.normalize_first:
+            residual_inputs = inputs
+            inputs = self._attention_layernorm(inputs)
         # Self attention.
         attended = self._multi_head_attention_layer(
             inputs, inputs, inputs, attention_mask=mask
         )
         attended = self._attention_dropout(attended)
-        attended = self._add_and_norm(
-            inputs,
-            attended,
-            self._attention_layernorm,
-        )
+        if self.normalize_first:
+            attended = residual_inputs + attended
+        else:
+            attended = self._add_and_norm(
+                inputs,
+                attended,
+                self._attention_layernorm,
+            )
+
+        if self.normalize_first:
+            residual_attended = attended
+            attended = self._feedforward_layernorm(attended)
         # Feedforward.
         feed_forward_output = self._feed_forward(attended)
+        if self.normalize_first:
+            return residual_attended + feed_forward_output
         return self._add_and_norm(
             attended, feed_forward_output, self._feedforward_layernorm
         )
@@ -210,6 +228,7 @@ class TransformerEncoder(keras.layers.Layer):
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
                 ),
+                "normalize_first": self.normalize_first,
                 "build_input_shape": self._input_shape,
             }
         )

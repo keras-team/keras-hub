@@ -63,6 +63,10 @@ class TransformerDecoder(keras.layers.Layer):
         bias_initializer: string or `keras.initializers` initializer,
             defaults to "zeros". The bias initializer for
             the dense and multiheaded attention layers.
+        normalize_first: bool. If True, the inputs to the attention layer(s) and
+            the intermediate dense layer are normalized (similar to GPT-2). If
+            set to False, outputs of attention layer and intermediate dense
+            layer are normalized (similar to BERT). Defaults to False.
         name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
 
@@ -100,6 +104,7 @@ class TransformerDecoder(keras.layers.Layer):
         layer_norm_epsilon=1e-05,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
+        normalize_first=False,
         name=None,
         **kwargs,
     ):
@@ -116,6 +121,7 @@ class TransformerDecoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.normalize_first = normalize_first
         self._built = False
         self.supports_masking = True
 
@@ -266,6 +272,11 @@ class TransformerDecoder(keras.layers.Layer):
         else:
             decoder_mask = tf.minimum(decoder_mask, causal_mask)
 
+        if self.normalize_first:
+            residual_decoder_sequence = decoder_sequence
+            decoder_sequence = self._decoder_attention_layernorm(
+                decoder_sequence
+            )
         # Decoder input self-attention.
         self_attended = self._self_attention_layer(
             decoder_sequence,
@@ -274,14 +285,24 @@ class TransformerDecoder(keras.layers.Layer):
             attention_mask=decoder_mask,
         )
         self_attended = self._self_attention_dropout(self_attended)
-        attention_output = self._add_and_norm(
-            self_attended, decoder_sequence, self._decoder_attention_layernorm
-        )
+        if self.normalize_first:
+            attention_output = residual_decoder_sequence + self_attended
+        else:
+            attention_output = self._add_and_norm(
+                decoder_sequence,
+                self_attended,
+                self._decoder_attention_layernorm,
+            )
 
         if self._cross_attention_layer is not None:
             encoder_mask = merge_padding_and_attention_mask(
                 encoder_sequence, encoder_padding_mask, encoder_attention_mask
             )
+            if self.normalize_first:
+                residual_attention_output = attention_output
+                attention_output = self._cross_attention_layernorm(
+                    attention_output
+                )
             # Cross attention.
             cross_attended = self._cross_attention_layer(
                 query=attention_output,
@@ -292,14 +313,22 @@ class TransformerDecoder(keras.layers.Layer):
             cross_attended = self._cross_attention_dropout(
                 cross_attended,
             )
-            attention_output = self._add_and_norm(
-                cross_attended,
-                attention_output,
-                self._cross_attention_layernorm,
-            )
+            if self.normalize_first:
+                attention_output = residual_attention_output + cross_attended
+            else:
+                attention_output = self._add_and_norm(
+                    attention_output,
+                    cross_attended,
+                    self._cross_attention_layernorm,
+                )
 
+        if self.normalize_first:
+            residual_attention_output = attention_output
+            attention_output = self._feedforward_layernorm(attention_output)
         # Feedforward.
         feed_forward_output = self._feed_forward(attention_output)
+        if self.normalize_first:
+            return residual_attention_output + feed_forward_output
         return self._add_and_norm(
             attention_output,
             feed_forward_output,
@@ -321,6 +350,7 @@ class TransformerDecoder(keras.layers.Layer):
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
                 ),
+                "normalize_first": self.normalize_first,
                 "build_input_shape": self._input_shape,
                 "has_cross_attention": self._has_cross_attention,
             }
