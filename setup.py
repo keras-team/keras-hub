@@ -52,7 +52,7 @@ setup(
             "sentencepiece",
         ],
         "examples": [
-            "datasets",  # For GLUE in BERT example.
+            "tensorflow_datasets",  # For GLUE in BERT example.
             "nltk",
             "wikiextractor",
             "keras-tuner",
