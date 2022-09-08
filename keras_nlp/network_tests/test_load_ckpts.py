@@ -13,12 +13,14 @@
 # limitations under the License.
 """Tests for loading pretrained model checkpoints."""
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
 import keras_nlp
 
 
+@pytest.mark.slow
 class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("uncased_en", "uncased_en"),
@@ -28,20 +30,6 @@ class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_load_bert_base(self, weights):
         model = keras_nlp.models.BertBase(weights=weights)
-        input_data = {
-            "token_ids": tf.random.uniform(
-                shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
-            ),
-            "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
-            "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
-        }
-        model(input_data)
-
-    @parameterized.named_parameters(
-        ("uncased_en", "uncased_en"), ("cased_en", "cased_en")
-    )
-    def test_load_bert_large(self, weights):
-        model = keras_nlp.models.BertLarge(weights=weights)
         input_data = {
             "token_ids": tf.random.uniform(
                 shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
