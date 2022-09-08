@@ -13,12 +13,14 @@
 # limitations under the License.
 """Tests for loading pretrained model checkpoints."""
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
 import keras_nlp
 
 
+@pytest.mark.slow
 class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("uncased_en", "uncased_en"),
