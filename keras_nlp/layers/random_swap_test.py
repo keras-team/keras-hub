@@ -11,57 +11,59 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for RandomDeletion Layer."""
+"""Tests for RandomSwaps Layer."""
 
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers import RandomDeletion
+from keras_nlp.layers import RandomSwap
 
 
-class RandomDeletionTest(tf.test.TestCase):
-    def test_shape_and_output_from_word_deletion(self):
+class RandomSwapTest(tf.test.TestCase):
+    def test_shape_and_output_from_word_swap(self):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
-        augmenter = RandomDeletion(rate=0.4, max_deletions=1, seed=42)
+        augmenter = RandomSwap(rate=0.7, max_swaps=3, seed=42)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"I like", b"and Tensorflow"]
+        exp_output = [b"like I Hey", b"Tensorflow Keras and"]
         self.assertAllEqual(output, exp_output)
 
-    def test_shape_and_output_from_character_swaps(self):
+    def test_shape_and_output_from_character_swap(self):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.unicode_split(inputs, "UTF-8")
-        augmenter = RandomDeletion(rate=0.4, max_deletions=1, seed=42)
+        augmenter = RandomSwap(rate=0.7, max_swaps=6, seed=42)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I lie", b"Keras and Tensoflow"]
+        exp_output = [b"yli I eHke", b"seaad rnK Tensolrfow"]
         self.assertAllEqual(output, exp_output)
 
     def test_with_integer_tokens(self):
         keras.utils.set_random_seed(1337)
-        inputs = tf.constant([[1, 2], [3, 4]])
-        augmenter = RandomDeletion(rate=0.4, max_deletions=4, seed=42)
+        inputs = tf.constant([[1, 2, 3], [4, 5, 6]])
+        augmenter = RandomSwap(rate=0.7, max_swaps=6, seed=42)
         output = augmenter(inputs)
-        self.assertAllEqual(output.to_tensor().shape[0], inputs.shape[0])
-        exp_output = [[2], [4]]
+        self.assertAllEqual(
+            output.to_tensor().shape, tf.convert_to_tensor(inputs).shape
+        )
+        exp_output = [[3, 2, 1], [6, 4, 5]]
         self.assertAllEqual(output, exp_output)
 
     def test_skip_options(self):
         keras.utils.set_random_seed(1337)
-        augmenter = RandomDeletion(
-            rate=0.4, max_deletions=1, seed=42, skip_list=["Tensorflow", "like"]
+        augmenter = RandomSwap(
+            rate=0.9, max_swaps=3, seed=11, skip_list=["Tensorflow", "like"]
         )
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"I like", b"and Tensorflow"]
+        exp_output = [b"I Hey like", b"Keras and Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
@@ -69,13 +71,11 @@ class RandomDeletionTest(tf.test.TestCase):
                 return True
             return False
 
-        augmenter = RandomDeletion(
-            rate=0.4, max_deletions=1, seed=42, skip_fn=skip_fn
-        )
+        augmenter = RandomSwap(rate=0.9, max_swaps=3, seed=11, skip_fn=skip_fn)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey like", b"Keras Tensorflow"]
+        exp_output = [b"I Hey like", b"Keras and Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
         def skip_py_fn(word):
@@ -83,24 +83,25 @@ class RandomDeletionTest(tf.test.TestCase):
                 return True
             return False
 
-        augmenter = RandomDeletion(
-            rate=0.4, max_deletions=1, seed=42, skip_py_fn=skip_py_fn
+        augmenter = RandomSwap(
+            rate=0.9, max_swaps=3, seed=11, skip_py_fn=skip_py_fn
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
         self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey like", b"Keras Tensorflow"]
+        exp_output = [b"I Hey like", b"Keras and Tensorflow"]
+        self.assertAllEqual(output, exp_output)
 
     def test_get_config_and_from_config(self):
-        augmenter = RandomDeletion(rate=0.4, max_deletions=1, seed=42)
+        augmenter = RandomSwap(rate=0.4, max_swaps=3, seed=42)
 
-        expected_config_subset = {"max_deletions": 1, "rate": 0.4, "seed": 42}
+        expected_config_subset = {"rate": 0.4, "max_swaps": 3, "seed": 42}
 
         config = augmenter.get_config()
 
         self.assertEqual(config, {**config, **expected_config_subset})
 
-        restored_augmenter = RandomDeletion.from_config(
+        restored_augmenter = RandomSwap.from_config(
             config,
         )
 
@@ -111,87 +112,103 @@ class RandomDeletionTest(tf.test.TestCase):
 
     def test_augment_first_batch_second(self):
         keras.utils.set_random_seed(1337)
-        augmenter = RandomDeletion(rate=0.4, max_deletions=1, seed=42)
+        augmenter = RandomSwap(rate=0.7, max_swaps=3, seed=42)
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-
-        exp_output = [[b"I", b"like"], [b"Keras", b"and", b"Tensorflow"]]
+        exp_output = [
+            [b"like", b"I", b"Hey"],
+            [b"and", b"Tensorflow", b"Keras"],
+        ]
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
-            return tf.strings.regex_full_match(word, r"\pP")
+            # Regex to match words starting with I or a
+            return tf.strings.regex_full_match(word, r"[I, a].*")
 
         def skip_py_fn(word):
-            return len(word) < 4
+            return len(word) < 2
 
-        augmenter = RandomDeletion(
-            rate=0.8, max_deletions=1, seed=42, skip_fn=skip_fn
-        )
+        augmenter = RandomSwap(rate=0.7, max_swaps=5, seed=11, skip_fn=skip_fn)
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-        exp_output = [[b"I", b"like"], [b"and", b"Tensorflow"]]
+        exp_output = [
+            [b"like", b"I", b"Hey"],
+            [b"Keras", b"and", b"Tensorflow"],
+        ]
         self.assertAllEqual(output, exp_output)
 
-        augmenter = RandomDeletion(
-            rate=0.8, max_deletions=1, seed=42, skip_py_fn=skip_py_fn
+        augmenter = RandomSwap(
+            rate=0.7, max_swaps=2, seed=42, skip_py_fn=skip_py_fn
         )
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-        exp_output = [[b"Hey", b"I", b"like"], [b"and", b"Tensorflow"]]
+        exp_output = [
+            [b"Hey", b"I", b"like"],
+            [b"Tensorflow", b"Keras", b"and"],
+        ]
         self.assertAllEqual(output, exp_output)
 
     def test_batch_first_augment_second(self):
         keras.utils.set_random_seed(1337)
-        augmenter = RandomDeletion(rate=0.4, max_deletions=1, seed=42)
+        augmenter = RandomSwap(rate=0.7, max_swaps=2, seed=42)
         inputs = ["Hey I like", "Keras and Tensorflow"]
         split = tf.strings.split(inputs)
         ds = tf.data.Dataset.from_tensor_slices(split)
-        ds = ds.batch(5).map(augmenter)
+        ds = ds.batch(2).map(augmenter)
         output = ds.take(1).get_single_element()
-
-        exp_output = [[b"I", b"like"], [b"and", b"Tensorflow"]]
+        exp_output = [
+            [b"like", b"I", b"Hey"],
+            [b"Tensorflow", b"Keras", b"and"],
+        ]
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
-            return tf.strings.regex_full_match(word, r"\pP")
+            # Regex to match words starting with I
+            return tf.strings.regex_full_match(word, r"[I].*")
 
         def skip_py_fn(word):
-            return len(word) < 4
+            return len(word) < 2
 
-        augmenter = RandomDeletion(
-            rate=0.8, max_deletions=1, seed=42, skip_fn=skip_fn
-        )
+        augmenter = RandomSwap(rate=0.7, max_swaps=2, seed=42, skip_fn=skip_fn)
         ds = tf.data.Dataset.from_tensor_slices(split)
-        ds = ds.batch(5).map(augmenter)
+        ds = ds.batch(2).map(augmenter)
         output = ds.take(1).get_single_element()
-        exp_output = [[b"I", b"like"], [b"and", b"Tensorflow"]]
+        exp_output = [
+            [b"Hey", b"I", b"like"],
+            [b"and", b"Keras", b"Tensorflow"],
+        ]
         self.assertAllEqual(output, exp_output)
 
-        augmenter = RandomDeletion(
-            rate=0.8, max_deletions=1, seed=42, skip_py_fn=skip_py_fn
+        augmenter = RandomSwap(
+            rate=0.7, max_swaps=2, seed=42, skip_py_fn=skip_py_fn
         )
         ds = tf.data.Dataset.from_tensor_slices(split)
-        ds = ds.batch(5).map(augmenter)
+        ds = ds.batch(2).map(augmenter)
         output = ds.take(1).get_single_element()
-        exp_output = [[b"Hey", b"I", b"like"], [b"and", b"Tensorflow"]]
+        exp_output = [
+            [b"Hey", b"I", b"like"],
+            [b"and", b"Keras", b"Tensorflow"],
+        ]
         self.assertAllEqual(output, exp_output)
 
     def test_functional_model(self):
         keras.utils.set_random_seed(1337)
         input_data = tf.constant(["Hey I like", "Keras and Tensorflow"])
-        augmenter = RandomDeletion(rate=0.4, max_deletions=1, seed=42)
+        augmenter = RandomSwap(rate=0.7, max_swaps=2, seed=42)
         inputs = tf.keras.Input(dtype="string", shape=())
         outputs = augmenter(tf.strings.split(inputs))
         model = tf.keras.Model(inputs, outputs)
         model_output = model(input_data)
-        self.assertAllEqual(
-            model_output, [[b"I", b"like"], [b"and", b"Tensorflow"]]
-        )
+        exp_output = [
+            [b"like", b"I", b"Hey"],
+            [b"Tensorflow", b"Keras", b"and"],
+        ]
+        self.assertAllEqual(model_output, exp_output)

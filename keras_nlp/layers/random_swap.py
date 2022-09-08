@@ -17,12 +17,11 @@ import tensorflow as tf
 from tensorflow import keras
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
-class RandomDeletion(keras.layers.Layer):
-    """Augments input by randomly deleting tokens.
+class RandomSwap(keras.layers.Layer):
+    """Augments input by randomly swapping words.
 
-    This layer comes in handy when you need to generate new data using deletion
-    augmentation as described in the paper [EDA: Easy Data Augmentation
+    This layer comes in handy when you need to generate new data using swap
+    augmentations as described in the paper [EDA: Easy Data Augmentation
     Techniques for Boosting Performance on Text Classification Tasks]
     (https://arxiv.org/pdf/1901.11196.pdf). The layer expects the inputs to be
     pre-split into token level inputs. This allows control over the level of
@@ -33,8 +32,9 @@ class RandomDeletion(keras.layers.Layer):
     either rank-1 or rank-2.
 
     Args:
-        rate: The probability of a token being chosen for deletion.
-        max_deletions: The maximum number of tokens to delete.
+        rate: The probability of a given token being chosen to be swapped
+            with another random token.
+        max_swaps: The maximum number of swaps to be performed.
         skip_list: A list of token values that should not be considered
             candidates for deletion.
         skip_fn: A function that takes as input a scalar tensor token and
@@ -49,65 +49,66 @@ class RandomDeletion(keras.layers.Layer):
             tracable--it can be any python function.
         seed: A seed for the random number generator.
 
+
     Examples:
 
     Word level usage.
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4, seed=42)
+    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.4, seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I like', b'and'],
-    dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'like I Hey', b'and Keras Tensorflow'], dtype=object)>
 
     Character level usage.
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.unicode_split(["Hey Dude", "Speed Up"], "UTF-8")
-    >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4, seed=42)
+    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.4, seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'H Dude', b'pedUp'],
-    dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'deD yuHe', b'SUede pp'], dtype=object)>
 
     Usage with skip_list.
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4,
-    ...     skip_list=["Keras", "Tensorflow"], seed=42)
+    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.4,
+    ...     skip_list=["Keras"], seed=42)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
     <tf.Tensor: shape=(2,), dtype=string,
-    numpy=array([b'I like', b'Keras Tensorflow'], dtype=object)>
+    numpy=array([b'like I Hey', b'Keras and Tensorflow'], dtype=object)>
 
     Usage with skip_fn.
     >>> def skip_fn(word):
-    ...     return tf.strings.regex_full_match(word, r"\\pP")
+    ...     return tf.strings.regex_full_match(word, r"[I, a].*")
     >>> keras.utils.set_random_seed(1337)
     >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=keras_nlp.layers.RandomDeletion(rate=0.4,
-    ...     skip_fn=skip_fn, seed=42)
+    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.9, max_swaps=3,
+    ...     skip_fn=skip_fn, seed=11)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'I like', b'and'],
-    dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string,
+    numpy=array([b'like I Hey', b'Keras and Tensorflow'], dtype=object)>
 
     Usage with skip_py_fn.
     >>> def skip_py_fn(word):
     ...     return len(word) < 4
     >>> keras.utils.set_random_seed(1337)
-    >>> inputs=tf.strings.split(["Hey I like", "Keras and Tensorflow"])
-    >>> augmenter=RandomDeletion(rate=0.4,
-    ...     skip_py_fn=skip_py_fn, seed=42)
+    >>> inputs=tf.strings.split(["He was drifting along", "With the wind"])
+    >>> augmenter=keras_nlp.layers.RandomSwap(rate=0.8, max_swaps=2,
+    ...     skip_py_fn=skip_py_fn, seed=15)
     >>> augmented=augmenter(inputs)
     >>> tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-    <tf.Tensor: shape=(2,), dtype=string,
-    numpy=array([b'Hey I', b'and Tensorflow'], dtype=object)>
+    <tf.Tensor: shape=(2,), dtype=string, numpy=array([b'He was along drifting',
+    b'wind the With'], dtype=object)>
     """
 
     def __init__(
         self,
         rate,
-        max_deletions=None,
+        max_swaps=None,
         skip_list=None,
         skip_fn=None,
         skip_py_fn=None,
@@ -128,27 +129,21 @@ class RandomDeletion(keras.layers.Layer):
 
         super().__init__(name=name, **kwargs)
         self.rate = rate
-        self.max_deletions = max_deletions
+        self.max_swaps = max_swaps
         self.seed = random.randint(1, 1e9) if seed is None else seed
         self._generator = tf.random.Generator.from_seed(self.seed)
         self.skip_list = skip_list
         self.skip_fn = skip_fn
         self.skip_py_fn = skip_py_fn
-        if self.max_deletions is not None and self.max_deletions < 0:
+        if self.max_swaps is not None and self.max_swaps < 0:
             raise ValueError(
-                "max_deletions must be non-negative."
-                f"Received max_deletions={max_deletions}."
-            )
-
-        if self.rate > 1 or self.rate < 0:
-            raise ValueError(
-                "Rate must be between 0 and 1 (both inclusive)."
-                f"Received: rate={rate}"
+                "max_swaps must be non-negative."
+                f"Received max_swaps={max_swaps}."
             )
 
         if [self.skip_list, self.skip_fn, self.skip_py_fn].count(None) < 2:
             raise ValueError(
-                "Exactly one of `skip_list`, `skip_fn`, `skip_py_fn` must be "
+                "Exactly one of skip_list, skip_fn, skip_py_fn must be "
                 "provided."
             )
 
@@ -202,15 +197,14 @@ class RandomDeletion(keras.layers.Layer):
                 fn_output_signature=tf.bool,
             )
 
-        positions_flat = tf.range(tf.size(inputs.flat_values))
-        positions = inputs.with_flat_values(positions_flat)
+        positions = tf.ragged.range(inputs.row_lengths())
+
         if skip_masks is not None:
             skip_masks = tf.logical_not(skip_masks)
             skip_masks.set_shape([None])
             positions = tf.ragged.boolean_mask(
                 positions, inputs.with_flat_values(skip_masks)
             )
-
         # Figure out how many we are going to select.
         token_counts = tf.cast(positions.row_lengths(), "float32")
         num_to_select = tf.random.stateless_binomial(
@@ -219,50 +213,51 @@ class RandomDeletion(keras.layers.Layer):
             counts=token_counts,
             probs=self.rate,
         )
-        if self.max_deletions is not None:
-            num_to_select = tf.math.minimum(num_to_select, self.max_deletions)
-        num_to_select = tf.cast(num_to_select, "int64")
+        if self.max_swaps is not None:
+            num_to_select = tf.math.minimum(num_to_select, self.max_swaps)
+        num_to_select = tf.math.minimum(
+            num_to_select, tf.cast(positions.row_lengths(), tf.int32)
+        )
+        num_to_select = tf.cast(num_to_select, tf.int64)
 
-        # Shuffle and trim to items that are going to be selected.
-        def _shuffle_and_trim(x):
-            positions, top_n = x
-            shuffled = tf.random.shuffle(positions, seed=self.seed)
-            return shuffled[:top_n]
+        def _swap(x):
+            positions, inputs, num_to_select = x
+            for _ in range(num_to_select):
+                index = tf.random.stateless_uniform(
+                    shape=[2],
+                    minval=0,
+                    maxval=tf.size(positions),
+                    dtype=tf.int32,
+                    seed=self._generator.make_seeds()[:, 0],
+                )
+                index1, index2 = positions[index[0]], positions[index[1]]
+                # swap items at the sampled indices with each other
+                inputs = tf.tensor_scatter_nd_update(
+                    inputs,
+                    [[index1], [index2]],
+                    [inputs[index2], inputs[index1]],
+                )
+            return inputs
 
-        selected_for_mask = tf.map_fn(
-            _shuffle_and_trim,
-            (positions, num_to_select),
+        swapped = tf.map_fn(
+            _swap,
+            (positions, inputs, num_to_select),
             fn_output_signature=tf.RaggedTensorSpec(
-                ragged_rank=positions.ragged_rank - 1, dtype=positions.dtype
+                ragged_rank=positions.ragged_rank - 1, dtype=inputs.dtype
             ),
         )
-        selected_for_mask.flat_values.set_shape([None])
-
-        # Construct the mask which is a boolean RT
-        # Scatter 0's to positions that have been selector for deletion.
-        update_values = tf.zeros_like(selected_for_mask.flat_values, "int32")
-        update_indices = selected_for_mask.flat_values
-        update_indices = tf.expand_dims(update_indices, -1)
-        update_indices = tf.cast(update_indices, "int32")
-        mask_flat = tf.ones_like(inputs.flat_values, dtype="int32")
-        mask_flat = tf.tensor_scatter_nd_update(
-            mask_flat, update_indices, update_values
-        )
-        mask = tf.cast(inputs.with_flat_values(mask_flat), "bool")
-
-        inputs = tf.ragged.boolean_mask(inputs, mask)
+        swapped.flat_values.set_shape([None])
 
         if input_is_1d:
-            inputs = tf.squeeze(inputs, axis=0)
-
-        return inputs
+            swapped = tf.squeeze(swapped, axis=0)
+        return swapped
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "rate": self.rate,
-                "max_deletions": self.max_deletions,
+                "max_swaps": self.max_swaps,
                 "seed": self.seed,
                 "skip_list": self.skip_list,
                 "skip_fn": self.skip_fn,
