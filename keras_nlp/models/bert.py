@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Bert model configurable class, preconfigured versions, and task heads."""
+"""BERT model configurable class, preconfigured versions, and task heads."""
 
 import tensorflow as tf
 from tensorflow import keras
@@ -23,6 +23,38 @@ from keras_nlp.layers import TransformerEncoder
 
 def _bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
+
+
+def _handle_weights_and_vocab_size(bert_variant, weights, vocabulary_size):
+    if (vocabulary_size is None and weights is None) or (
+        vocabulary_size and weights
+    ):
+        raise ValueError(
+            "One of `vocabulary_size` or `weights` must be specified "
+            "(but not both). "
+            f"Received: weights={weights}, "
+            f"vocabulary_size={vocabulary_size}"
+        )
+
+    weights_filepath = None
+    if weights:
+        if weights not in checkpoints[bert_variant]:
+            raise ValueError(
+                "`weights` must be one of "
+                f"""{", ".join(checkpoints[bert_variant])}. """
+                f"Received: {weights}"
+            )
+
+        weights_filepath = keras.utils.get_file(
+            "model.h5",
+            BASE_PATH + f"{bert_variant}_{weights}/model.h5/",
+            cache_subdir=f"models/{bert_variant}/{weights}/",
+            file_hash=checkpoints[bert_variant][weights]["md5"],
+        )
+
+        vocabulary_size = checkpoints[bert_variant][weights]["vocabulary_size"]
+
+    return weights_filepath, vocabulary_size
 
 
 # Pretrained models
@@ -349,8 +381,8 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
 
     Example usage:
     ```python
-    # Randomly initialized BertBase encoder
-    model = keras_nlp.models.BertBase(vocabulary_size=10000)
+    # Randomly initialized Bert{type} encoder
+    model = keras_nlp.models.Bert{type}(vocabulary_size=10000)
 
     # Call encoder on the inputs.
     input_data = {{
@@ -363,7 +395,7 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
     output = model(input_data)
 
     # Load a pretrained model
-    model = keras_nlp.models.BertBase(weights="uncased_en")
+    model = keras_nlp.models.Bert{type}(weights="uncased_en")
     # Call encoder on the inputs.
     output = model(input_data)
     ```
@@ -371,25 +403,9 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
 
 
 def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
-
-    if (vocabulary_size is None and weights is None) or (
-        vocabulary_size and weights
-    ):
-        raise ValueError(
-            "One of `vocabulary_size` or `weights` must be specified "
-            "(but not both). "
-            f"Received: weights={weights}, "
-            f"vocabulary_size={vocabulary_size}"
-        )
-
-    if weights:
-        if weights not in checkpoints["bert_base"]:
-            raise ValueError(
-                "`weights` must be one of "
-                f"""{", ".join(checkpoints["bert_base"])}. """
-                f"Received: {weights}"
-            )
-        vocabulary_size = checkpoints["bert_base"][weights]["vocabulary_size"]
+    weights_filepath, vocabulary_size = _handle_weights_and_vocab_size(
+        "bert_base", weights, vocabulary_size
+    )
 
     model = BertCustom(
         vocabulary_size=vocabulary_size,
@@ -405,40 +421,20 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
 
     # TODO(jbischof): consider changing format from `h5` to
     # `tf.train.Checkpoint` once
-    # https://github.com/keras-team/keras/issues/16946 is resolved
-    if weights:
-        filepath = keras.utils.get_file(
-            "model.h5",
-            BASE_PATH + "bert_base_" + weights + "/model.h5",
-            cache_subdir="models/bert_base/" + weights + "/",
-            file_hash=checkpoints["bert_base"][weights]["md5"],
-        )
-        model.load_weights(filepath)
+    # https://github.com/keras-team/keras/issues/16946 is resolved. Applicable
+    # for other BERT variants as well.
+    if weights_filepath is not None:
+        model.load_weights(weights_filepath)
 
-    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
+    # TODO(jbischof): attach the tokenizer or create separate tokenizer class.
+    # Applicable for other BERT variants as well.
     return model
 
 
 def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
-
-    if (vocabulary_size is None and weights is None) or (
-        vocabulary_size and weights
-    ):
-        raise ValueError(
-            "One of `vocabulary_size` or `weights` must be specified "
-            "(but not both). "
-            f"Received: weights={weights}, "
-            f"vocabulary_size={vocabulary_size}"
-        )
-
-    if weights:
-        if weights not in checkpoints["bert_large"]:
-            raise ValueError(
-                "`weights` must be one of "
-                f"""{", ".join(checkpoints["bert_large"])}. """
-                f"Received: {weights}"
-            )
-        vocabulary_size = checkpoints["bert_large"][weights]["vocabulary_size"]
+    weights_filepath, vocabulary_size = _handle_weights_and_vocab_size(
+        "bert_large", weights, vocabulary_size
+    )
 
     model = BertCustom(
         vocabulary_size=vocabulary_size,
@@ -452,19 +448,9 @@ def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
         trainable=trainable,
     )
 
-    # TODO(jbischof): consider changing format from `h5` to
-    # `tf.train.Checkpoint` once
-    # https://github.com/keras-team/keras/issues/16946 is resolved
-    if weights:
-        filepath = keras.utils.get_file(
-            "model.h5",
-            BASE_PATH + "bert_large_" + weights + "/model.h5",
-            cache_subdir="models/bert_large/" + weights + "/",
-            file_hash=checkpoints["bert_large"][weights]["md5"],
-        )
-        model.load_weights(filepath)
+    if weights_filepath is not None:
+        model.load_weights(weights_filepath)
 
-    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
 
 
