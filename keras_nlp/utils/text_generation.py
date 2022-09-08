@@ -229,11 +229,10 @@ def beam_search(
 
     Args:
         token_probability_fn: a callable, which takes in input_sequence
-            and output the probability distribution of the next token. If
+            and outputs the probability distribution of the next token. If
             `from_logits` set to True, it should output the logits of the next
             token. The input shape would be `[batch_size * num_beams, length]`
-            and the output should be `[batch_size * num_beams, vocab_size]`,
-            where batch_size is variable.
+            and the output should be `[batch_size * num_beams, vocab_size]`.
         prompt: a list or a Tensor, can be 1D or 2D, the initial tokens to
             append generated tokens. The initial beam for beam search.
         max_length: int. The max length of generated text.
@@ -321,10 +320,10 @@ def beam_search(
     # Initialize beam with shape `(batch_size, num_beams, length)`.
     beams = tf.repeat(tf.expand_dims(prompt, axis=1), num_beams, axis=1)
 
-    # Initialize `beams_prob`` with shape `(batch_size, num_beams)`
+    # Initialize `beams_prob` with shape `(batch_size, num_beams)`.
     beams_prob = tf.zeros([batch_size, 1], dtype=tf.float32)
     beams_prob = tf.concat(
-        [beams_prob, tf.fill((batch_size, num_beams - 1), -3.40282e38)],
+        [beams_prob, tf.fill((batch_size, num_beams - 1), tf.float32.min)],
         axis=-1,
     )
 
@@ -335,10 +334,14 @@ def beam_search(
         flattened_beams = tf.reshape(
             truncated_beams, shape=[batch_size * num_beams, -1]
         )
-        logits = token_probability_fn(flattened_beams)
-        logits = tf.reshape(logits, shape=[batch_size, -1])
+        preds = token_probability_fn(flattened_beams)
+        if from_logits:
+            preds = tf.reshape(preds, shape=[batch_size, num_beams, vocab_size])
+            preds = keras.activations.softmax(preds, axis=-1)
 
-        probs = tf.math.log(logits) + tf.repeat(
+        preds = tf.reshape(preds, shape=[batch_size, -1])
+
+        probs = tf.math.log(preds) + tf.repeat(
             beams_prob, repeats=vocab_size, axis=1
         )
 
@@ -350,27 +353,27 @@ def beam_search(
 
         beams = tf.gather(beams, candidate_beam_indexes, axis=1, batch_dims=1)
 
+        # Build a new column of updates to scatter into the beam tensor.
         next_token = tf.where(
             condition=mask[..., length, tf.newaxis],
             x=beams[..., length],
             y=next_token,
         )
+        next_token = tf.reshape(next_token, shape=[-1])
 
-        # Initialize `indices_over_samples` with shape `(batch_size, num_beams)`
-        # , with `indices_over_samples[i, j] = [i, j]`.
-        indices_over_samples = tf.cast(
-            tf.where(tf.ones((batch_size, num_beams), tf.bool)),
-            dtype=length.dtype,
-        )
-        length_repeated = tf.fill((batch_size * num_beams, 1), length)
+        # Generate `(batch_index, beam_index)` tuples for each beam.
+        beam_indices = tf.where(tf.ones((batch_size, num_beams), tf.bool))
+        beam_indices = tf.cast(beam_indices, dtype=length.dtype)
+        # Build a tensor of repeated `length` values.
+        length_indices = tf.fill((batch_size * num_beams, 1), length)
+        # Concatenate to a triplet of `(batch_index, beam_index, length)`.
+        indices = tf.concat([beam_indices, length_indices], axis=-1)
+
         # Update `beams[:, :, length]` with `next_token`.
         beams = tf.tensor_scatter_nd_update(
             tensor=beams,
-            indices=tf.concat(
-                [indices_over_samples, length_repeated],
-                axis=1,
-            ),
-            updates=tf.reshape(next_token, shape=[-1]),
+            indices=indices,
+            updates=next_token,
         )
 
         beams_prob = candidate_prob
