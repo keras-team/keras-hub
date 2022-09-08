@@ -451,7 +451,7 @@ def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
     )
 
     if weights:
-        model.load_weights(filepath)
+        model.load_weights(weights)
 
     # TODO(jbischof): attach the tokenizer or create separate tokenizer class.
     # This comment applies to other variants as well.
@@ -476,7 +476,7 @@ def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
     )
 
     if weights:
-        model.load_weights(filepath)
+        model.load_weights(weights)
 
     return model
 
@@ -499,7 +499,7 @@ def BertMedium(weights=None, vocabulary_size=None, name=None, trainable=True):
     )
 
     if weights:
-        model.load_weights(filepath)
+        model.load_weights(weights)
 
     return model
 
