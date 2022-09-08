@@ -119,7 +119,7 @@ class BertCustom(keras.Model):
     embedding lookups and transformer layers, but not the masked language model
     or classification task networks.
 
-    This class gives a fully customizable Bert model with any number of layers,
+    This class gives a fully customizable BERT model with any number of layers,
     heads, and embedding dimensions. For specific specific bert architectures
     defined in the paper, see for example `keras_nlp.models.BertBase`.
 
@@ -144,7 +144,7 @@ class BertCustom(keras.Model):
 
     Example usage:
     ```python
-    # Randomly initialized Bert encoder
+    # Randomly initialized BERT encoder
     model = keras_nlp.models.BertCustom(
         vocabulary_size=30522,
         num_layers=12,
@@ -249,7 +249,7 @@ class BertCustom(keras.Model):
                 name=f"transformer_layer_{i}",
             )(x, padding_mask=padding_mask)
 
-        # Construct the two Bert outputs. The pooled output is a dense layer on
+        # Construct the two BERT outputs. The pooled output is a dense layer on
         # top of the [CLS] token.
         sequence_output = x
         pooled_output = keras.layers.Dense(
@@ -305,7 +305,7 @@ class BertCustom(keras.Model):
 
 
 class BertClassifier(keras.Model):
-    """Bert encoder model with a classification head.
+    """BERT encoder model with a classification head.
 
     Args:
         base_model: A `keras_nlp.models.BertCustom` to encode inputs.
@@ -316,7 +316,7 @@ class BertClassifier(keras.Model):
 
     Example usage:
     ```python
-    # Randomly initialized Bert encoder
+    # Randomly initialized BERT encoder
     model = keras_nlp.models.BertCustom(
         vocabulary_size=30522,
         num_layers=12,
@@ -366,7 +366,7 @@ class BertClassifier(keras.Model):
         self.num_classes = num_classes
 
 
-MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
+MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (BERT)
     using "{type}" architecture.
 
     This network implements a bi-directional Transformer-based encoder as
