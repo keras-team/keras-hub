@@ -36,7 +36,6 @@ def _handle_weights_and_vocab_size(bert_variant, weights, vocabulary_size):
             f"vocabulary_size={vocabulary_size}"
         )
 
-    weights_filepath = None
     if weights:
         if weights not in checkpoints[bert_variant]:
             raise ValueError(
@@ -45,16 +44,19 @@ def _handle_weights_and_vocab_size(bert_variant, weights, vocabulary_size):
                 f"Received: {weights}"
             )
 
-        weights_filepath = keras.utils.get_file(
+        vocabulary_size = checkpoints[bert_variant][weights]["vocabulary_size"]
+
+        # TODO(jbischof): consider changing format from `h5` to
+        # `tf.train.Checkpoint` once
+        # https://github.com/keras-team/keras/issues/16946 is resolved.
+        weights = keras.utils.get_file(
             "model.h5",
             BASE_PATH + f"{bert_variant}_{weights}/model.h5/",
             cache_subdir=f"models/{bert_variant}/{weights}/",
             file_hash=checkpoints[bert_variant][weights]["md5"],
         )
 
-        vocabulary_size = checkpoints[bert_variant][weights]["vocabulary_size"]
-
-    return weights_filepath, vocabulary_size
+    return weights, vocabulary_size
 
 
 # Pretrained models
@@ -403,7 +405,7 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
 
 
 def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
-    weights_filepath, vocabulary_size = _handle_weights_and_vocab_size(
+    weights, vocabulary_size = _handle_weights_and_vocab_size(
         "bert_base", weights, vocabulary_size
     )
 
@@ -419,12 +421,8 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
         trainable=trainable,
     )
 
-    # TODO(jbischof): consider changing format from `h5` to
-    # `tf.train.Checkpoint` once
-    # https://github.com/keras-team/keras/issues/16946 is resolved. Applicable
-    # for other BERT variants as well.
-    if weights_filepath is not None:
-        model.load_weights(weights_filepath)
+    if weights is not None:
+        model.load_weights(weights)
 
     # TODO(jbischof): attach the tokenizer or create separate tokenizer class.
     # Applicable for other BERT variants as well.
@@ -432,7 +430,7 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
 
 
 def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
-    weights_filepath, vocabulary_size = _handle_weights_and_vocab_size(
+    weights, vocabulary_size = _handle_weights_and_vocab_size(
         "bert_large", weights, vocabulary_size
     )
 
@@ -448,8 +446,8 @@ def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
         trainable=trainable,
     )
 
-    if weights_filepath is not None:
-        model.load_weights(weights_filepath)
+    if weights is not None:
+        model.load_weights(weights)
 
     return model
 
