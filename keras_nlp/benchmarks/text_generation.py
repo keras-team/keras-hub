@@ -27,33 +27,41 @@ from keras_nlp.utils import random_search
 from keras_nlp.utils import top_k_search
 from keras_nlp.utils import top_p_search
 
-COMMON_ARGS = {
+SEED = 42
+
+DATASET_ARGS = {
     "vocab_size": 40000,
     "num_samples": 1000,
     "batch_size": 2,
+}
+
+TEXT_GEN_ARGS = {
     "max_length": 64,
-    "model_max_length": 300,
+    "end_token_id": 2,
+    "pad_token_id": 0,
+}
+
+MODEL_ARGS = {
+    "max_length": 300,
     "embed_dim": 768,
     "num_layers": 8,
     "num_heads": 8,
     "ff_dim": 3072,
-    "seed": 42,
 }
 
 TEST_RUNS = [
     {
         "decoding_fn": greedy_search,
         "execution_methods": ["xla", "graph"],
-        "args": {"end_token_id": 2, "pad_token_id": 0},
+        "args": TEXT_GEN_ARGS,
     },
     {
         "decoding_fn": random_search,
         "execution_methods": ["xla", "graph"],
         "args": {
-            "seed": COMMON_ARGS["seed"],
+            "seed": SEED,
             "from_logits": True,
-            "end_token_id": 2,
-            "pad_token_id": 0,
+            **TEXT_GEN_ARGS,
         },
     },
     {
@@ -61,10 +69,9 @@ TEST_RUNS = [
         "execution_methods": ["xla", "graph"],
         "args": {
             "k": 5,
-            "seed": COMMON_ARGS["seed"],
+            "seed": SEED,
             "from_logits": True,
-            "end_token_id": 2,
-            "pad_token_id": 0,
+            **TEXT_GEN_ARGS,
         },
     },
     {
@@ -72,10 +79,9 @@ TEST_RUNS = [
         "execution_methods": ["xla", "graph"],
         "args": {
             "p": 0.9,
-            "seed": COMMON_ARGS["seed"],
+            "seed": SEED,
             "from_logits": True,
-            "end_token_id": 2,
-            "pad_token_id": 0,
+            **TEXT_GEN_ARGS,
         },
     },
 ]
@@ -121,10 +127,9 @@ def build_model(
 
 
 def generate_text(
+    decoding_fn,
     token_probability_fn,
     prompt,
-    max_length,
-    decoding_fn,
     text_gen_args,
     jit_compile,
 ):
@@ -133,7 +138,6 @@ def generate_text(
             generated = decoding_fn(
                 token_probability_fn=token_probability_fn,
                 prompt=inputs,
-                max_length=max_length,
                 **text_gen_args,
             )
             return generated
@@ -147,22 +151,22 @@ def generate_text(
 
 
 def main():
-    keras.utils.set_random_seed(COMMON_ARGS["seed"])
+    keras.utils.set_random_seed(SEED)
 
     ds = generate_random_ds(
-        vocab_size=COMMON_ARGS["vocab_size"],
-        num_samples=COMMON_ARGS["num_samples"],
-        batch_size=COMMON_ARGS["batch_size"],
-        seed=COMMON_ARGS["seed"],
+        vocab_size=DATASET_ARGS["vocab_size"],
+        num_samples=DATASET_ARGS["num_samples"],
+        batch_size=DATASET_ARGS["batch_size"],
+        seed=SEED,
     )
 
     model = build_model(
-        vocab_size=COMMON_ARGS["vocab_size"],
-        max_length=COMMON_ARGS["model_max_length"],
-        embed_dim=COMMON_ARGS["embed_dim"],
-        num_layers=COMMON_ARGS["num_layers"],
-        num_heads=COMMON_ARGS["num_heads"],
-        ff_dim=COMMON_ARGS["ff_dim"],
+        vocab_size=DATASET_ARGS["vocab_size"],
+        max_length=MODEL_ARGS["max_length"],
+        embed_dim=MODEL_ARGS["embed_dim"],
+        num_layers=MODEL_ARGS["num_layers"],
+        num_heads=MODEL_ARGS["num_heads"],
+        ff_dim=MODEL_ARGS["ff_dim"],
     )
 
     def token_logits_fn(inputs):
@@ -186,10 +190,9 @@ def main():
                     jit_compile = True
 
                 time_taken = generate_text(
+                    decoding_fn=decoding_fn,
                     token_probability_fn=token_logits_fn,
                     prompt=ds,
-                    max_length=COMMON_ARGS["max_length"],
-                    decoding_fn=decoding_fn,
                     text_gen_args=test_run["args"],
                     jit_compile=jit_compile,
                 )
