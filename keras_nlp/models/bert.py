@@ -26,6 +26,11 @@ def _bert_kernel_initializer(stddev=0.02):
 
 
 def _handle_weights_and_vocab_size(bert_variant, weights, vocabulary_size):
+    """Look up pretrained defaults for `weights` and `vocabulary_size`.
+
+    This helper will validate the `weights` and `vocabulary_size` arguments, and
+    fully resolve them in the case we are loading pretrained weights.
+    """
     if (vocabulary_size is None and weights is None) or (
         vocabulary_size and weights
     ):
