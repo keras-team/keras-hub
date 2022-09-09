@@ -68,6 +68,30 @@ def _handle_weights_and_vocab_size(bert_variant, weights, vocabulary_size):
 BASE_PATH = "https://storage.googleapis.com/keras-nlp/models/"
 
 checkpoints = {
+    "bert_tiny": {
+        "uncased_en": {
+            "md5": "c2b29fcbf8f814a0812e4ab89ef5c068",
+            "description": "Tiny size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus.",
+            "vocabulary_size": 30522,
+        }
+    },
+    "bert_small": {
+        "uncased_en": {
+            "md5": "08632c9479b034f342ba2c2b7afba5f7",
+            "description": "Small size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus.",
+            "vocabulary_size": 30522,
+        }
+    },
+    "bert_medium": {
+        "uncased_en": {
+            "md5": "bb990e1184ec6b6185450c73833cd661",
+            "description": "Medium size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus.",
+            "vocabulary_size": 30522,
+        }
+    },
     "bert_base": {
         "uncased_en": {
             "md5": "9b2b2139f221988759ac9cdd17050b31",
@@ -409,6 +433,77 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (BERT)
 """
 
 
+def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
+    weights, vocabulary_size = _handle_weights_and_vocab_size(
+        "bert_tiny", weights, vocabulary_size
+    )
+
+    model = BertCustom(
+        vocabulary_size=vocabulary_size,
+        num_layers=2,
+        num_heads=2,
+        hidden_dim=128,
+        intermediate_dim=512,
+        dropout=0.1,
+        max_sequence_length=512,
+        name=name,
+        trainable=trainable,
+    )
+
+    if weights:
+        model.load_weights(weights)
+
+    # TODO(jbischof): attach the tokenizer or create separate tokenizer class.
+    # This comment applies to other variants as well.
+    return model
+
+
+def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
+    weights, vocabulary_size = _handle_weights_and_vocab_size(
+        "bert_small", weights, vocabulary_size
+    )
+
+    model = BertCustom(
+        vocabulary_size=vocabulary_size,
+        num_layers=4,
+        num_heads=8,
+        hidden_dim=512,
+        intermediate_dim=2048,
+        dropout=0.1,
+        max_sequence_length=512,
+        name=name,
+        trainable=trainable,
+    )
+
+    if weights:
+        model.load_weights(weights)
+
+    return model
+
+
+def BertMedium(weights=None, vocabulary_size=None, name=None, trainable=True):
+    weights, vocabulary_size = _handle_weights_and_vocab_size(
+        "bert_medium", weights, vocabulary_size
+    )
+
+    model = BertCustom(
+        vocabulary_size=vocabulary_size,
+        num_layers=8,
+        num_heads=8,
+        hidden_dim=512,
+        intermediate_dim=2048,
+        dropout=0.1,
+        max_sequence_length=512,
+        name=name,
+        trainable=trainable,
+    )
+
+    if weights:
+        model.load_weights(weights)
+
+    return model
+
+
 def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
     weights, vocabulary_size = _handle_weights_and_vocab_size(
         "bert_base", weights, vocabulary_size
@@ -429,8 +524,6 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
     if weights is not None:
         model.load_weights(weights)
 
-    # TODO(jbischof): attach the tokenizer or create separate tokenizer class.
-    # Applicable for other BERT variants as well.
     return model
 
 
@@ -456,6 +549,30 @@ def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
 
     return model
 
+
+setattr(
+    BertTiny,
+    "__doc__",
+    MODEL_DOCSTRING.format(
+        type="Tiny", names=", ".join(checkpoints["bert_tiny"])
+    ),
+)
+
+setattr(
+    BertSmall,
+    "__doc__",
+    MODEL_DOCSTRING.format(
+        type="Small", names=", ".join(checkpoints["bert_small"])
+    ),
+)
+
+setattr(
+    BertMedium,
+    "__doc__",
+    MODEL_DOCSTRING.format(
+        type="Medium", names=", ".join(checkpoints["bert_medium"])
+    ),
+)
 
 setattr(
     BertBase,

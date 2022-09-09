@@ -23,6 +23,9 @@ import keras_nlp
 @pytest.mark.slow
 class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
+        ("tiny_uncased_en", keras_nlp.models.BertTiny, "uncased_en"),
+        ("small_uncased_en", keras_nlp.models.BertSmall, "uncased_en"),
+        ("medium_uncased_en", keras_nlp.models.BertMedium, "uncased_en"),
         ("base_uncased_en", keras_nlp.models.BertBase, "uncased_en"),
         ("base_cased_en", keras_nlp.models.BertBase, "cased_en"),
         ("base_zh", keras_nlp.models.BertBase, "zh"),
