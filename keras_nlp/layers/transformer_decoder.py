@@ -63,10 +63,10 @@ class TransformerDecoder(keras.layers.Layer):
         bias_initializer: string or `keras.initializers` initializer,
             defaults to "zeros". The bias initializer for
             the dense and multiheaded attention layers.
-        normalize_first: bool. If True, the inputs to the attention layer(s) and
-            the intermediate dense layer are normalized (similar to GPT-2). If
-            set to False, outputs of attention layer and intermediate dense
-            layer are normalized (similar to BERT). Defaults to False.
+        normalize_first: bool. Defaults to False. If True, the inputs to the
+            attention layer(s) and the intermediate dense layer are normalized
+            (similar to GPT-2). If set to False, outputs of attention layer and
+            intermediate dense layer are normalized (similar to BERT).
         name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
 
@@ -197,7 +197,7 @@ class TransformerDecoder(keras.layers.Layer):
         )
         self._output_dropout = keras.layers.Dropout(rate=self.dropout)
 
-    def _feed_forward(self, input):
+    def _feedforward(self, input):
         x = self._intermediate_dense(input)
         x = self._output_dense(x)
         return self._output_dropout(x)
@@ -317,13 +317,11 @@ class TransformerDecoder(keras.layers.Layer):
         if self.normalize_first:
             attention_output = self._feedforward_layernorm(attention_output)
         # Feedforward.
-        feed_forward_output = self._feed_forward(attention_output)
-        feed_forward_output = residual_attention_output + feed_forward_output
+        feedforward_output = self._feedforward(attention_output)
+        feedforward_output = residual_attention_output + feedforward_output
         if not self.normalize_first:
-            feed_forward_output = self._feedforward_layernorm(
-                feed_forward_output
-            )
-        return feed_forward_output
+            feedforward_output = self._feedforward_layernorm(feedforward_output)
+        return feedforward_output
 
     def get_config(self):
         config = super().get_config()
