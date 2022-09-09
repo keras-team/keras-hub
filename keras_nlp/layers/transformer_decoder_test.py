@@ -23,12 +23,17 @@ from keras_nlp.layers import transformer_decoder
 
 
 class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
-    def test_valid_call(self):
+    @parameterized.named_parameters(
+        ("without_norm_first", False),
+        ("with_norm_first", True),
+    )
+    def test_valid_call(self, normalize_first):
         encoder_input = keras.Input(shape=[4, 6])
         decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
+            normalize_first=normalize_first,
         )
         output = decoder(decoder_input, encoder_input)
         model = keras.Model(
@@ -39,11 +44,16 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model([decoder_sequence, encoder_sequence])
 
-    def test_valid_call_without_cross_attention(self):
+    @parameterized.named_parameters(
+        ("without_norm_first", False),
+        ("with_norm_first", True),
+    )
+    def test_valid_call_without_cross_attention(self, normalize_first):
         decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
+            normalize_first=normalize_first,
         )
         output = decoder(decoder_input)
         model = keras.Model(
@@ -83,6 +93,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
             num_heads=2,
             kernel_initializer="HeNormal",
             bias_initializer="Zeros",
+            normalize_first=True,
         )
 
         config = decoder.get_config()
@@ -98,6 +109,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
             "bias_initializer": keras.initializers.serialize(
                 keras.initializers.Zeros()
             ),
+            "normalize_first": True,
         }
         self.assertEqual(config, {**config, **expected_config_subset})
         self.assertEqual(config, {**config, **expected_config_subset})
@@ -264,6 +276,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
+            normalize_first=True,
         )
         output = decoder(encoder_input, decoder_input)
         model = keras.Model(
@@ -287,6 +300,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
+            normalize_first=True,
         )
         output = decoder(decoder_input)
         model = keras.Model(
