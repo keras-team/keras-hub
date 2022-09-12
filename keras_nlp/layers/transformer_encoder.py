@@ -114,10 +114,10 @@ class TransformerEncoder(keras.layers.Layer):
         # Create layers based on input shape.
         self._built = True
         self._input_shape = input_shape
-        # Infer the size of our inputs and outputs from the build shape.
-        feature_dim = input_shape[-1]
-        # Head size is feature size over the number of heads.
-        head_dim = int(feature_dim // self.num_heads)
+        # Infer the dimension of our hidden feature size from the build shape.
+        hidden_dim = input_shape[-1]
+        # Attention head size is `hidden_dim` over the number of heads.
+        head_dim = int(hidden_dim // self.num_heads)
 
         # Self attention layers.
         self._self_attention_layer = keras.layers.MultiHeadAttention(
@@ -146,7 +146,7 @@ class TransformerEncoder(keras.layers.Layer):
             bias_initializer=self.bias_initializer,
         )
         self._feed_forward_output_dense = keras.layers.Dense(
-            feature_dim,
+            hidden_dim,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
@@ -162,7 +162,7 @@ class TransformerEncoder(keras.layers.Layer):
 
         Args:
             inputs: a Tensor. The input data to TransformerEncoder, should be
-                of shape [batch_size, sequence_length, feature_dim].
+                of shape [batch_size, sequence_length, hidden_dim].
             padding_mask: a boolean Tensor. It indicates if the token should be
                 masked because the token is introduced due to padding.
                 `padding_mask` should have shape [batch_size, sequence_length].
