@@ -114,39 +114,48 @@ class TransformerEncoder(keras.layers.Layer):
         # Create layers based on input shape.
         self._built = True
         self._input_shape = input_shape
-        feature_size = input_shape[-1]
-        head_size = int(feature_size // self.num_heads)
+        # Infer the size of our inputs and outputs from the build shape.
+        feature_dim = input_shape[-1]
+        # Head size is feature size over the number of heads.
+        head_dim = int(feature_dim // self.num_heads)
 
         # Self attention layers.
-        self._self_attn_layer = keras.layers.MultiHeadAttention(
+        self._self_attention_layer = keras.layers.MultiHeadAttention(
             num_heads=self.num_heads,
-            key_dim=head_size,
+            key_dim=head_dim,
             dropout=self.dropout,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._self_attn_layer._build_from_signature(input_shape, input_shape)
-        self._self_attn_norm = keras.layers.LayerNormalization(
+        self._self_attention_layer._build_from_signature(
+            query=input_shape,
+            value=input_shape,
+        )
+        self._self_attention_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
-        self._self_attn_dropout = keras.layers.Dropout(rate=self.dropout)
+        self._self_attention_dropout = keras.layers.Dropout(
+            rate=self.dropout,
+        )
 
         # Feed forward layers.
-        self._ff_intermediate_dense = keras.layers.Dense(
+        self._feed_forward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             activation=self.activation,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._ff_output_dense = keras.layers.Dense(
-            feature_size,
+        self._feed_forward_output_dense = keras.layers.Dense(
+            feature_dim,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._ff_norm = keras.layers.LayerNormalization(
+        self._feed_forward_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
-        self._ff_dropout = keras.layers.Dropout(rate=self.dropout)
+        self._feed_forward_dropout = keras.layers.Dropout(
+            rate=self.dropout,
+        )
 
     def call(self, inputs, padding_mask=None, attention_mask=None):
         """Forward pass of the TransformerEncoder.
@@ -172,30 +181,34 @@ class TransformerEncoder(keras.layers.Layer):
         x = inputs  # Intermediate result.
 
         # Compute self attention mask.
-        self_attn_mask = merge_padding_and_attention_mask(
+        self_attention_mask = merge_padding_and_attention_mask(
             inputs, padding_mask, attention_mask
         )
 
         # Self attention block.
         residual = x
         if self.normalize_first:
-            x = self._self_attn_norm(x)
-        x = self._self_attn_layer(x, x, x, attention_mask=self_attn_mask)
-        x = self._self_attn_dropout(x)
+            x = self._self_attention_norm(x)
+        x = self._self_attention_layer(
+            query=x,
+            value=x,
+            attention_mask=self_attention_mask,
+        )
+        x = self._self_attention_dropout(x)
         x = x + residual
         if not self.normalize_first:
-            x = self._self_attn_norm(x)
+            x = self._self_attention_norm(x)
 
         # Feed forward block.
         residual = x
         if self.normalize_first:
-            x = self._ff_norm(x)
-        x = self._ff_intermediate_dense(x)
-        x = self._ff_output_dense(x)
-        x = self._ff_dropout(x)
+            x = self._feed_forward_norm(x)
+        x = self._feed_forward_intermediate_dense(x)
+        x = self._feed_forward_output_dense(x)
+        x = self._feed_forward_dropout(x)
         x = x + residual
         if not self.normalize_first:
-            x = self._ff_norm(x)
+            x = self._feed_forward_norm(x)
 
         return x
 

@@ -133,60 +133,70 @@ class TransformerDecoder(keras.layers.Layer):
         self._built = True
         self._input_shape = input_shape
         self._has_cross_attention = has_cross_attention
-        feature_size = input_shape[-1]
-        head_size = int(feature_size // self.num_heads)
+        # Infer the size of our inputs and outputs from the build shape.
+        feature_dim = input_shape[-1]
+        # Head size is feature size over the number of heads.
+        head_dim = int(feature_dim // self.num_heads)
 
         # Self attention layers.
-        self._self_attn_layer = keras.layers.MultiHeadAttention(
+        self._self_attention_layer = keras.layers.MultiHeadAttention(
             num_heads=self.num_heads,
-            key_dim=head_size,
+            key_dim=head_dim,
             dropout=self.dropout,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._self_attn_layer._build_from_signature(input_shape, input_shape)
-        self._self_attn_norm = keras.layers.LayerNormalization(
+        self._self_attention_layer._build_from_signature(
+            query=input_shape,
+            value=input_shape,
+        )
+        self._self_attention_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
-        self._self_attn_dropout = keras.layers.Dropout(rate=self.dropout)
+        self._self_attention_dropout = keras.layers.Dropout(
+            rate=self.dropout,
+        )
 
         # Cross attention layers are optional.
-        self._cross_attn_layer = None
+        self._cross_attention_layer = None
         if has_cross_attention:
-            self._cross_attn_layer = keras.layers.MultiHeadAttention(
+            self._cross_attention_layer = keras.layers.MultiHeadAttention(
                 num_heads=self.num_heads,
-                key_dim=head_size,
-                value_dim=feature_size,
+                key_dim=head_dim,
+                value_dim=feature_dim,
                 dropout=self.dropout,
                 kernel_initializer=self.kernel_initializer,
                 bias_initializer=self.bias_initializer,
             )
-            self._cross_attn_layer._build_from_signature(
-                input_shape, input_shape
+            self._cross_attention_layer._build_from_signature(
+                query=input_shape,
+                value=input_shape,
             )
-            self._cross_attn_norm = keras.layers.LayerNormalization(
+            self._cross_attention_norm = keras.layers.LayerNormalization(
                 epsilon=self.layer_norm_epsilon,
             )
-            self._cross_attn_dropout = keras.layers.Dropout(
+            self._cross_attention_dropout = keras.layers.Dropout(
                 rate=self.dropout,
             )
 
         # Feed forward layers.
-        self._ff_intermediate_dense = keras.layers.Dense(
+        self._feed_forward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             activation=self.activation,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._ff_output_dense = keras.layers.Dense(
-            feature_size,
+        self._feed_forward_output_dense = keras.layers.Dense(
+            feature_dim,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._ff_norm = keras.layers.LayerNormalization(
+        self._feed_forward_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
-        self._ff_dropout = keras.layers.Dropout(rate=self.dropout)
+        self._feed_forward_dropout = keras.layers.Dropout(
+            rate=self.dropout,
+        )
 
     def call(
         self,
@@ -223,7 +233,7 @@ class TransformerDecoder(keras.layers.Layer):
         if not self._built:
             self._build(decoder_sequence.shape, has_encoder_sequence)
 
-        is_cross_attention = self._cross_attn_layer is not None
+        is_cross_attention = self._cross_attention_layer is not None
         if not is_cross_attention and has_encoder_sequence:
             raise ValueError(
                 "The number of call arguments to "
@@ -248,55 +258,58 @@ class TransformerDecoder(keras.layers.Layer):
         x = decoder_sequence  # Intermediate result.
 
         # Compute self attention mask.
-        self_attn_mask = compute_causal_mask(decoder_sequence)
+        self_attention_mask = compute_causal_mask(decoder_sequence)
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )
         if decoder_mask is not None:
-            self_attn_mask = tf.minimum(decoder_mask, self_attn_mask)
+            self_attention_mask = tf.minimum(decoder_mask, self_attention_mask)
 
         # Self attention block.
         residual = x
         if self.normalize_first:
-            x = self._self_attn_norm(x)
-        x = self._self_attn_layer(x, x, x, attention_mask=self_attn_mask)
-        x = self._self_attn_dropout(x)
+            x = self._self_attention_norm(x)
+        x = self._self_attention_layer(
+            query=x,
+            value=x,
+            attention_mask=self_attention_mask,
+        )
+        x = self._self_attention_dropout(x)
         x = x + residual
         if not self.normalize_first:
-            x = self._self_attn_norm(x)
+            x = self._self_attention_norm(x)
 
         # Cross attention is optional.
-        if self._cross_attn_layer is not None:
+        if self._cross_attention_layer is not None:
             # Compute cross attention mask.
-            cross_attn_mask = merge_padding_and_attention_mask(
+            cross_attention_mask = merge_padding_and_attention_mask(
                 encoder_sequence, encoder_padding_mask, encoder_attention_mask
             )
 
             # Cross attention block.
             residual = x
             if self.normalize_first:
-                x = self._cross_attn_norm(x)
-            x = self._cross_attn_layer(
+                x = self._cross_attention_norm(x)
+            x = self._cross_attention_layer(
                 query=x,
                 value=encoder_sequence,
-                key=encoder_sequence,
-                attention_mask=cross_attn_mask,
+                attention_mask=cross_attention_mask,
             )
-            x = self._cross_attn_dropout(x)
+            x = self._cross_attention_dropout(x)
             x = x + residual
             if not self.normalize_first:
-                x = self._cross_attn_norm(x)
+                x = self._cross_attention_norm(x)
 
         # Feed forward block.
         residual = x
         if self.normalize_first:
-            x = self._ff_norm(x)
-        x = self._ff_intermediate_dense(x)
-        x = self._ff_output_dense(x)
-        x = self._ff_dropout(x)
+            x = self._feed_forward_norm(x)
+        x = self._feed_forward_intermediate_dense(x)
+        x = self._feed_forward_output_dense(x)
+        x = self._feed_forward_dropout(x)
         x = x + residual
         if not self.normalize_first:
-            x = self._ff_norm(x)
+            x = self._feed_forward_norm(x)
 
         return x
 
