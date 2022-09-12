@@ -199,11 +199,9 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder1(decoder_sequence, encoder_sequence)
         decoder2(decoder_sequence, encoder_sequence)
         # The weights of decoder1 and decoder2 are different.
-        self.assertFalse(
-            all(
-                decoder1._output_dense.trainable_variables[0][0]
-                == decoder2._output_dense.trainable_variables[0][0]
-            )
+        self.assertNotAllClose(
+            decoder1.trainable_variables[0][0],
+            decoder2.trainable_variables[0][0],
         )
         checkpoint = tf.train.Checkpoint(decoder1)
         checkpoint2 = tf.train.Checkpoint(decoder2)
@@ -230,11 +228,9 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder1(decoder_sequence)
         decoder2(decoder_sequence)
         # The weights of decoder1 and decoder2 are different.
-        self.assertFalse(
-            all(
-                decoder1._output_dense.trainable_variables[0][0]
-                == decoder2._output_dense.trainable_variables[0][0]
-            )
+        self.assertNotAllClose(
+            decoder1.trainable_variables[0][0],
+            decoder2.trainable_variables[0][0],
         )
         checkpoint = tf.train.Checkpoint(decoder1)
         checkpoint2 = tf.train.Checkpoint(decoder2)

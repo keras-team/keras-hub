@@ -115,45 +115,38 @@ class TransformerEncoder(keras.layers.Layer):
         self._built = True
         self._input_shape = input_shape
         feature_size = input_shape[-1]
-        self._attention_head_size = int(feature_size // self.num_heads)
-        self._multi_head_attention_layer = keras.layers.MultiHeadAttention(
+        head_size = int(feature_size // self.num_heads)
+
+        # Self attention layers.
+        self._self_attn_layer = keras.layers.MultiHeadAttention(
             num_heads=self.num_heads,
-            key_dim=self._attention_head_size,
-            value_dim=self._attention_head_size,
+            key_dim=head_size,
             dropout=self.dropout,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._multi_head_attention_layer._build_from_signature(
-            input_shape, input_shape
-        )
-
-        self._attention_layernorm = keras.layers.LayerNormalization(
+        self._self_attn_layer._build_from_signature(input_shape, input_shape)
+        self._self_attn_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
-        self._feedforward_layernorm = keras.layers.LayerNormalization(
-            epsilon=self.layer_norm_epsilon,
-        )
+        self._self_attn_dropout = keras.layers.Dropout(rate=self.dropout)
 
-        self._attention_dropout = keras.layers.Dropout(rate=self.dropout)
-
-        self._intermediate_dense = keras.layers.Dense(
+        # Feed forward layers.
+        self._ff_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             activation=self.activation,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._output_dense = keras.layers.Dense(
+        self._ff_output_dense = keras.layers.Dense(
             feature_size,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._output_dropout = keras.layers.Dropout(rate=self.dropout)
-
-    def _feedforward(self, input):
-        x = self._intermediate_dense(input)
-        x = self._output_dense(x)
-        return self._output_dropout(x)
+        self._ff_norm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+        )
+        self._ff_dropout = keras.layers.Dropout(rate=self.dropout)
 
     def call(self, inputs, padding_mask=None, attention_mask=None):
         """Forward pass of the TransformerEncoder.
@@ -176,33 +169,35 @@ class TransformerEncoder(keras.layers.Layer):
         if not self._built:
             self._build(inputs.shape)
 
-        mask = merge_padding_and_attention_mask(
-            inputs,
-            padding_mask,
-            attention_mask,
+        x = inputs  # Intermediate result.
+
+        # Compute self attention mask.
+        self_attn_mask = merge_padding_and_attention_mask(
+            inputs, padding_mask, attention_mask
         )
 
-        residual_inputs = inputs
+        # Self attention block.
+        residual = x
         if self.normalize_first:
-            inputs = self._attention_layernorm(inputs)
-        # Self attention.
-        attended = self._multi_head_attention_layer(
-            inputs, inputs, inputs, attention_mask=mask
-        )
-        attended = self._attention_dropout(attended)
-        attended = residual_inputs + attended
+            x = self._self_attn_norm(x)
+        x = self._self_attn_layer(x, x, x, attention_mask=self_attn_mask)
+        x = self._self_attn_dropout(x)
+        x = x + residual
         if not self.normalize_first:
-            attended = self._attention_layernorm(attended)
+            x = self._self_attn_norm(x)
 
-        residual_attended = attended
+        # Feed forward block.
+        residual = x
         if self.normalize_first:
-            attended = self._feedforward_layernorm(attended)
-        # Feedforward.
-        feedforward_output = self._feedforward(attended)
-        feedforward_output = residual_attended + feedforward_output
+            x = self._ff_norm(x)
+        x = self._ff_intermediate_dense(x)
+        x = self._ff_output_dense(x)
+        x = self._ff_dropout(x)
+        x = x + residual
         if not self.normalize_first:
-            feedforward_output = self._feedforward_layernorm(feedforward_output)
-        return feedforward_output
+            x = self._ff_norm(x)
+
+        return x
 
     def get_config(self):
         config = super().get_config()
