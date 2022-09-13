@@ -336,7 +336,6 @@ def beam_search(
         preds = token_probability_fn(flattened_beams)
         if from_logits:
             preds = keras.activations.softmax(preds, axis=-1)
-
         # Reshape `preds` to shape `(batch_size, num_beams * vocab_size)`.
         preds = tf.reshape(preds, shape=[batch_size, -1])
 
