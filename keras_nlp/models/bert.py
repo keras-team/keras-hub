@@ -145,7 +145,7 @@ class BertCustom(keras.Model):
 
     This class gives a fully customizable BERT model with any number of layers,
     heads, and embedding dimensions. For specific BERT architectures
-    defined in the paper, see for example `keras_nlp.models.BertBase`.
+    defined in the paper, see, for example, `keras_nlp.models.BertBase`.
 
     Args:
         vocabulary_size: Int. The size of the token vocabulary.

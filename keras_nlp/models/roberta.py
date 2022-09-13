@@ -35,7 +35,7 @@ class RobertaCustom(keras.Model):
 
     This class gives a fully configurable Roberta model with any number of
     layers, heads, and embedding dimensions. For specific RoBERTa architectures
-    defined in the paper, see for example `keras_nlp.models.RobertaBase`.
+    defined in the paper, see, for example, `keras_nlp.models.RobertaBase`.
 
     Args:
         vocabulary_size: Int. The size of the token vocabulary.

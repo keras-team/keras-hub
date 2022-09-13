@@ -36,7 +36,7 @@ class Gpt2Custom(keras.Model):
 
     This class gives a fully customizable GPT-2 model with any number of layers,
     heads, and embedding dimensions. For specific GPT-2 architectures
-    defined in the paper, see for example `keras_nlp.models.Gpt2Base`.
+    defined in the paper, see, for example, `keras_nlp.models.Gpt2Base`.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
