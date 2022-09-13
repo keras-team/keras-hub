@@ -330,15 +330,14 @@ def beam_search(
     def one_step(beams, beams_prob, length):
         truncated_beams = beams[..., :length]
 
-        # logits is of shape [batch_size, num_beams * vocab_size].
         flattened_beams = tf.reshape(
             truncated_beams, shape=[batch_size * num_beams, -1]
         )
         preds = token_probability_fn(flattened_beams)
         if from_logits:
-            preds = tf.reshape(preds, shape=[batch_size, num_beams, vocab_size])
             preds = keras.activations.softmax(preds, axis=-1)
 
+        # Reshape `preds` to shape `(batch_size, num_beams * vocab_size)`.
         preds = tf.reshape(preds, shape=[batch_size, -1])
 
         probs = tf.math.log(preds) + tf.repeat(
