@@ -144,7 +144,7 @@ class BertCustom(keras.Model):
     or classification task networks.
 
     This class gives a fully customizable BERT model with any number of layers,
-    heads, and embedding dimensions. For specific specific bert architectures
+    heads, and embedding dimensions. For specific BERT architectures
     defined in the paper, see for example `keras_nlp.models.BertBase`.
 
     Args:
@@ -405,7 +405,7 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (BERT)
             If None, model is randomly initialized. Either `weights` or
             `vocabulary_size` must be specified, but not both.
         vocabulary_size: Int, optional. The size of the token vocabulary. Either
-            `weights` or `vocabularly_size` must be specified, but not both.
+            `weights` or `vocabulary_size` must be specified, but not both.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
             trainable.
