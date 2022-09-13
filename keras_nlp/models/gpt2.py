@@ -195,17 +195,17 @@ MODEL_DOCSTRING = """GPT-2 implementation using "{type}"
 
     Example usage:
     ```python
-    # Randomly initialized Gpt2{type} model
+    # Randomly initialized Gpt2{type} encoder
     model = keras_nlp.models.Gpt2{type}(vocabulary_size=10000)
 
-    # Call model on the inputs.
-    input_data = {
+    # Call encoder on the inputs.
+    input_data = {{
         "token_ids": tf.random.uniform(
-            shape=(1, 1024), dtype=tf.int64, maxval=model.vocabulary_size),
-        "padding_mask": tf.ones((1, 1024)),
-    }
+            shape=(1, 1024), dtype=tf.int64, maxval=model.vocabulary_size
+        ),
+        "padding_mask": tf.constant([1] * 1024, shape=(1, 1024)),
+    }}
     output = model(input_data)
-    ```
 """
 
 
