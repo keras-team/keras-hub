@@ -25,6 +25,15 @@ Running greedy_search in graph mode
 Time taken:  495.7888162136078
 
 *************************************
+Running beam_search in xla mode
+500/500 [==============================] - 615s 1s/step
+Time taken:  615.1776781082153
+
+Running beam_search in graph mode
+500/500 [==============================] - 564s 1s/step
+Time taken:  564.2308156490326
+
+*************************************
 Running random_search in xla mode
 500/500 [==============================] - 296s 567ms/step
 Time taken:  296.20745635032654
