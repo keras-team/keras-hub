@@ -27,7 +27,7 @@ def _validate_prompt(prompt):
 
 
 def _validate_token_probability_fn(token_probability_fn, prompt):
-    """Helper function to validate token probability fn output."""
+    """Helper function to validate `token_probability_fn` output."""
     test_pred = token_probability_fn(prompt)
     if len(test_pred.shape) != 2:
         raise ValueError(
@@ -36,7 +36,7 @@ def _validate_token_probability_fn(token_probability_fn, prompt):
             "[batch_size, vocab_size]."
         )
 
-    return tf.shape(test_pred)[-1]
+    return tf.shape(test_pred)[-1], test_pred.dtype
 
 
 def _get_prompt_shape(prompt):
@@ -312,7 +312,9 @@ def beam_search(
     batch_size, length = _get_prompt_shape(prompt)
     prompt, mask = _pad_prompt(prompt, max_length)
 
-    vocab_size = _validate_token_probability_fn(token_probability_fn, prompt)
+    vocab_size, pred_dtype = _validate_token_probability_fn(
+        token_probability_fn, prompt
+    )
 
     if length >= max_length:
         return tf.squeeze(prompt) if input_is_1d else prompt
@@ -321,9 +323,9 @@ def beam_search(
     beams = tf.repeat(tf.expand_dims(prompt, axis=1), num_beams, axis=1)
 
     # Initialize `beams_prob` with shape `(batch_size, num_beams)`.
-    beams_prob = tf.zeros([batch_size, 1], dtype=tf.float32)
+    beams_prob = tf.zeros([batch_size, 1], dtype=pred_dtype)
     beams_prob = tf.concat(
-        [beams_prob, tf.fill((batch_size, num_beams - 1), tf.float32.min)],
+        [beams_prob, tf.fill((batch_size, num_beams - 1), pred_dtype.min)],
         axis=-1,
     )
 
