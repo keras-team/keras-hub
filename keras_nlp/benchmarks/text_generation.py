@@ -21,7 +21,7 @@ from tensorflow import keras
 
 import keras_nlp
 
-# from keras_nlp.utils import beam_search
+from keras_nlp.utils import beam_search
 from keras_nlp.utils import greedy_search
 from keras_nlp.utils import random_search
 from keras_nlp.utils import top_k_search
@@ -54,6 +54,15 @@ TEST_RUNS = [
         "decoding_fn": greedy_search,
         "execution_methods": ["xla", "graph"],
         "args": TEXT_GEN_ARGS,
+    },
+    {
+        "decoding_fn": beam_search,
+        "execution_methods": ["xla", "graph"],
+        "args": {
+            "num_beams": 5,
+            "from_logits": True,
+            **TEXT_GEN_ARGS,
+        },
     },
     {
         "decoding_fn": random_search,
