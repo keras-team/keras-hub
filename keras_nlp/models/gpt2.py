@@ -201,8 +201,8 @@ MODEL_DOCSTRING = """GPT-2 implementation using "{type}"
     # Call model on the inputs.
     input_data = {
         "token_ids": tf.random.uniform(
-            shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size),
-        "padding_mask": tf.ones((1, 512)),
+            shape=(1, 1024), dtype=tf.int64, maxval=model.vocabulary_size),
+        "padding_mask": tf.ones((1, 1024)),
     }
     output = model(input_data)
     ```
