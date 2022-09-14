@@ -33,7 +33,7 @@ jobs:
             ${{ runner.os }}-pip-
       - name: Install dependencies
         run: |
-          pip install -e ".[tests]" tensorflow==2.9 --progress-bar off --upgrade
+          pip install -e ".[tests]" --progress-bar off --upgrade
           pip uninstall keras -y
           pip uninstall tensorflow -y
           pip uninstall tensorflow_text -y

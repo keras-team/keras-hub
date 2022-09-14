@@ -1,8 +1,8 @@
 absl-py
 numpy
 packaging
-tensorflow==2.9
-tensorflow-text==2.9
+tensorflow
+tensorflow-text
 black
 flake8
 isort

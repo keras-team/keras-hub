@@ -32,7 +32,7 @@ jobs:
             ${{ runner.os }}-pip-
       - name: Install dependencies
         run: |
-          pip install -e ".[tests]" tensorflow==2.9 --progress-bar off --upgrade
+          pip install -e ".[tests]" --progress-bar off --upgrade
       - name: Test with pytest
         run: |
           pytest --cov=keras_nlp --cov-report xml:coverage.xml
@@ -59,6 +59,6 @@ jobs:
             ${{ runner.os }}-pip-
       - name: Install dependencies
         run: |
-          pip install -e ".[tests]" tensorflow==2.9 --progress-bar off --upgrade
+          pip install -e ".[tests]" --progress-bar off --upgrade
       - name: Lint
         run: bash shell/lint.sh

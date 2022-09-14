@@ -23,10 +23,15 @@ from keras_nlp.layers import transformer_encoder
 
 
 class TransformerEncoderTest(tf.test.TestCase, parameterized.TestCase):
-    def test_valid_call(self):
+    @parameterized.named_parameters(
+        ("without_norm_first", False),
+        ("with_norm_first", True),
+    )
+    def test_valid_call(self, normalize_first):
         encoder = transformer_encoder.TransformerEncoder(
             intermediate_dim=4,
             num_heads=2,
+            normalize_first=normalize_first,
         )
         model = keras.Sequential(
             [
@@ -53,6 +58,7 @@ class TransformerEncoderTest(tf.test.TestCase, parameterized.TestCase):
             num_heads=2,
             kernel_initializer="HeNormal",
             bias_initializer="Zeros",
+            normalize_first=True,
         )
 
         config = encoder.get_config()
@@ -69,6 +75,7 @@ class TransformerEncoderTest(tf.test.TestCase, parameterized.TestCase):
             "bias_initializer": keras.initializers.serialize(
                 keras.initializers.Zeros()
             ),
+            "normalize_first": True,
         }
 
         self.assertEqual(config, {**config, **expected_config_subset})
@@ -161,6 +168,7 @@ class TransformerEncoderTest(tf.test.TestCase, parameterized.TestCase):
                 transformer_encoder.TransformerEncoder(
                     intermediate_dim=4,
                     num_heads=2,
+                    normalize_first=True,
                 ),
             ]
         )
