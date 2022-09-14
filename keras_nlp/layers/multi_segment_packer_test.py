@@ -43,7 +43,7 @@ class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
         seq1 = tf.constant(["a", "b", "c"])
         seq2 = tf.constant(["x", "y", "z"])
         packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", truncator="round_robin"
+            7, start_value="[CLS]", end_value="[SEP]", truncate="round_robin"
         )
         output = packer([seq1, seq2])
         self.assertAllEqual(
@@ -58,7 +58,7 @@ class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
         seq1 = tf.constant(["a", "b", "c"])
         seq2 = tf.constant(["x", "y", "z"])
         packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", truncator="waterfall"
+            7, start_value="[CLS]", end_value="[SEP]", truncate="waterfall"
         )
         output = packer([seq1, seq2])
         self.assertAllEqual(
@@ -73,7 +73,7 @@ class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
         seq1 = tf.constant([["a", "b", "c"], ["a", "b", "c"]])
         seq2 = tf.constant([["x", "y", "z"], ["x", "y", "z"]])
         packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", truncator="round_robin"
+            7, start_value="[CLS]", end_value="[SEP]", truncate="round_robin"
         )
         output = packer([seq1, seq2])
         self.assertAllEqual(
@@ -94,7 +94,7 @@ class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
         seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b"]])
         seq2 = tf.constant([["x", "y", "z"], ["x", "y", "z"]])
         packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", truncator="waterfall"
+            7, start_value="[CLS]", end_value="[SEP]", truncate="waterfall"
         )
         output = packer([seq1, seq2])
         self.assertAllEqual(
@@ -151,7 +151,7 @@ class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
         seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b"]])
         seq2 = tf.ragged.constant([["x", "y", "z"], ["x", "y", "z"]])
         original_packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", truncator="waterfall"
+            7, start_value="[CLS]", end_value="[SEP]", truncate="waterfall"
         )
         cloned_packer = MultiSegmentPacker.from_config(
             original_packer.get_config()
@@ -166,7 +166,7 @@ class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
         seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b"]])
         seq2 = tf.ragged.constant([["x", "y", "z"], ["x", "y", "z"]])
         packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", truncator="waterfall"
+            7, start_value="[CLS]", end_value="[SEP]", truncate="waterfall"
         )
         inputs = (
             keras.Input(dtype="string", ragged=True, shape=(None,)),
