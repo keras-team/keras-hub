@@ -11,57 +11,16 @@ from the root of the repository:
 python3 ./keras_nlp/benchmarks/text_generation.py
 ```
 
-On running this script on Google Colab, the following results were obtained:
+On running this script on Google Colab (with Tesla T4 GPU, and TensorFlow 2.10.0),
+the following results were obtained:
 
-```
-*************************************
-
-Running greedy_search in xla mode
-500/500 [==============================] - 294s 562ms/step
-Time taken:  293.77657198905945
-
-Running greedy_search in graph mode
-500/500 [==============================] - 496s 986ms/step
-Time taken:  495.7888162136078
-
-*************************************
-Running beam_search in xla mode
-500/500 [==============================] - 615s 1s/step
-Time taken:  615.1776781082153
-
-Running beam_search in graph mode
-500/500 [==============================] - 564s 1s/step
-Time taken:  564.2308156490326
-
-*************************************
-Running random_search in xla mode
-500/500 [==============================] - 296s 567ms/step
-Time taken:  296.20745635032654
-
-Running random_search in graph mode
-500/500 [==============================] - 446s 888ms/step
-Time taken:  446.5564649105072
-
-*************************************
-Running top_k_search in xla mode
-500/500 [==============================] - 303s 575ms/step
-Time taken:  302.6635549068451
-
-Running top_k_search in graph mode
-500/500 [==============================] - 459s 910ms/step
-Time taken:  458.6870086193085
-
-*************************************
-Running top_p_search in xla mode
-500/500 [==============================] - 565s 1s/step
-Time taken:  565.503867149353
-
-Running top_p_search in graph mode
-500/500 [==============================] - 469s 932ms/step
-Time taken:  468.6358585357666
-
-*************************************
-```
+| **Decoding Strategy** 	| **Graph Mode (sec)** 	| **Graph Mode with XLA (sec)** 	|
+|:---------------------:	|:--------------------:	|:-----------------------------:	|
+|     Greedy Search     	|        495.78        	|             293.77            	|
+|      Beam Search      	|        564.23        	|             615.17            	|
+|     Random Search     	|        446.55        	|             296.21            	|
+|      Top-k Search     	|        458.68        	|             302.66            	|
+|      Top-p Search     	|        468.63        	|             565.50             	|
 
 To change the configuration, say, for example, number of layers in the transformer
 model used for inference, the user can modify the config dictionaries given at
