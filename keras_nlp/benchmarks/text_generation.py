@@ -159,6 +159,7 @@ def generate_text(
 
 def main():
     keras.utils.set_random_seed(SEED)
+    csv_path = time.strftime("text_gen_%Y-%m-%d_%H-%M-%S.csv")
 
     ds = generate_random_ds(
         vocab_size=DATASET_ARGS["vocab_size"],
@@ -178,11 +179,11 @@ def main():
 
     def token_logits_fn(inputs):
         output = model(inputs)
-        return output[:, -1, :]  # return next token logits
+        return output[:, -1, :]
 
     print("*************************************\n")
 
-    with open("./results.csv", "w") as res_handler:
+    with open(csv_path, "w") as res_handler:
         res_handler.write("decoding_strategy,execution_method,time\n")
         for test_run in TEST_RUNS:
             decoding_fn = test_run["decoding_fn"]
@@ -209,6 +210,8 @@ def main():
                 )
                 print()
             print("*************************************")
+
+    print(f"Writing results to {csv_path}")
 
 
 if __name__ == "__main__":
