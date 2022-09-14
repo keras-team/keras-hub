@@ -117,12 +117,12 @@ class TransformerEncoder(keras.layers.Layer):
         # Infer the dimension of our hidden feature size from the build shape.
         hidden_dim = input_shape[-1]
         # Attention head size is `hidden_dim` over the number of heads.
-        head_dim = int(hidden_dim // self.num_heads)
+        key_dim = int(hidden_dim // self.num_heads)
 
         # Self attention layers.
         self._self_attention_layer = keras.layers.MultiHeadAttention(
             num_heads=self.num_heads,
-            key_dim=head_dim,
+            key_dim=key_dim,
             dropout=self.dropout,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
