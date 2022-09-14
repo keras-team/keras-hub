@@ -55,6 +55,10 @@ class BertPreprocessorTest(tf.test.TestCase):
         output = preprocessor.tokenizer.detokenize(input_data)
         self.assertAllEqual(output, ["THE QUICK BROWN FOX"])
 
+    def test_vocabulary_size(self):
+        preprocessor = bert.BertPreprocessor(vocabulary=self.vocab)
+        self.assertEqual(preprocessor.vocabulary_size(), 13)
+
 
 class BertTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
