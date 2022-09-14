@@ -22,6 +22,44 @@ from tensorflow import keras
 from keras_nlp.models import bert
 
 
+class BertPreprocessorTest(tf.test.TestCase):
+    def setUp(self):
+        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
+        self.vocab += ["the", "quick", "brown", "fox"]
+
+    def test_tokenize(self):
+        input_data = ["THE QUICK BROWN FOX."]
+        preprocessor = bert.BertPreprocessor(
+            vocabulary=self.vocab,
+            sequence_length=8,
+        )
+        output = preprocessor(input_data)
+        self.assertAllEqual(output["token_ids"], [2, 5, 6, 7, 8, 1, 3, 0])
+        self.assertAllEqual(output["segment_ids"], [0, 0, 0, 0, 0, 0, 0, 0])
+        self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0])
+
+    def test_lowercase(self):
+        input_data = ["THE QUICK BROWN FOX."]
+        preprocessor = bert.BertPreprocessor(
+            vocabulary=self.vocab,
+            sequence_length=8,
+            lowercase=True,
+        )
+        output = preprocessor(input_data)
+        self.assertAllEqual(output["token_ids"], [2, 9, 10, 11, 12, 1, 3, 0])
+
+    def test_detokenize(self):
+        input_data = [[5, 6, 7, 8]]
+        preprocessor = bert.BertPreprocessor(vocabulary=self.vocab)
+        output = preprocessor.tokenizer.detokenize(input_data)
+        self.assertAllEqual(output, ["THE QUICK BROWN FOX"])
+
+    def test_vocabulary_size(self):
+        preprocessor = bert.BertPreprocessor(vocabulary=self.vocab)
+        self.assertEqual(preprocessor.vocabulary_size(), 13)
+
+
 class BertTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.model = bert.BertCustom(
