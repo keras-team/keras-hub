@@ -31,7 +31,7 @@ MERGE_PATH = keras.utils.get_file(
 )
 
 
-@pytest.mark.slow
+@pytest.mark.large
 class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
