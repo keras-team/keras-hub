@@ -131,29 +131,29 @@ class TransformerEncoder(keras.layers.Layer):
             query=input_shape,
             value=input_shape,
         )
-        self._self_attention_norm = keras.layers.LayerNormalization(
+        self._self_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
         self._self_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,
         )
 
-        # Feed forward layers.
-        self._feed_forward_intermediate_dense = keras.layers.Dense(
+        # Feedforward layers.
+        self._feedforward_layernorm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+        )
+        self._feedforward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             activation=self.activation,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._feed_forward_output_dense = keras.layers.Dense(
+        self._feedforward_output_dense = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._feed_forward_norm = keras.layers.LayerNormalization(
-            epsilon=self.layer_norm_epsilon,
-        )
-        self._feed_forward_dropout = keras.layers.Dropout(
+        self._feedforward_dropout = keras.layers.Dropout(
             rate=self.dropout,
         )
 
@@ -188,7 +188,7 @@ class TransformerEncoder(keras.layers.Layer):
         # Self attention block.
         residual = x
         if self.normalize_first:
-            x = self._self_attention_norm(x)
+            x = self._self_attention_layernorm(x)
         x = self._self_attention_layer(
             query=x,
             value=x,
@@ -197,18 +197,18 @@ class TransformerEncoder(keras.layers.Layer):
         x = self._self_attention_dropout(x)
         x = x + residual
         if not self.normalize_first:
-            x = self._self_attention_norm(x)
+            x = self._self_attention_layernorm(x)
 
-        # Feed forward block.
+        # Feedforward block.
         residual = x
         if self.normalize_first:
-            x = self._feed_forward_norm(x)
-        x = self._feed_forward_intermediate_dense(x)
-        x = self._feed_forward_output_dense(x)
-        x = self._feed_forward_dropout(x)
+            x = self._feedforward_layernorm(x)
+        x = self._feedforward_intermediate_dense(x)
+        x = self._feedforward_output_dense(x)
+        x = self._feedforward_dropout(x)
         x = x + residual
         if not self.normalize_first:
-            x = self._feed_forward_norm(x)
+            x = self._feedforward_layernorm(x)
 
         return x
 
