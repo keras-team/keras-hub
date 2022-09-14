@@ -251,7 +251,7 @@ def Gpt2Large(vocabulary_size, name=None, trainable=True):
     )
 
 
-def Gpt2XLarge(vocabulary_size, name=None, trainable=True):
+def Gpt2ExtraLarge(vocabulary_size, name=None, trainable=True):
     return Gpt2Custom(
         vocabulary_size=vocabulary_size,
         num_layers=48,
