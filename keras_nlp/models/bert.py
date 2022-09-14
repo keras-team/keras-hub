@@ -56,7 +56,7 @@ def _handle_weights_and_vocab_size(bert_variant, weights, vocabulary_size):
         # https://github.com/keras-team/keras/issues/16946 is resolved.
         weights = keras.utils.get_file(
             "model.h5",
-            BASE_PATH + f"{bert_variant}_{weights}/model.h5/",
+            BASE_PATH + f"{bert_variant}_{weights}/model.h5",
             cache_subdir=f"models/{bert_variant}/{weights}/",
             file_hash=checkpoints[bert_variant][weights]["md5"],
         )
