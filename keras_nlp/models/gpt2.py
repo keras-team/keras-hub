@@ -281,7 +281,7 @@ setattr(
     MODEL_DOCSTRING.format(type="Large", num_params="774M"),
 )
 setattr(
-    Gpt2XLarge,
+    Gpt2ExtraLarge,
     "__doc__",
-    MODEL_DOCSTRING.format(type="XLarge", num_params="1558M"),
+    MODEL_DOCSTRING.format(type="ExtraLarge", num_params="1558M"),
 )
