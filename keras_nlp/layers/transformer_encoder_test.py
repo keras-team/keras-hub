@@ -144,11 +144,9 @@ class TransformerEncoderTest(tf.test.TestCase, parameterized.TestCase):
         encoder1(data)
         encoder2(data)
         # The weights of encoder1 and encoder2 are different.
-        self.assertFalse(
-            all(
-                encoder1._output_dense.trainable_variables[0][0]
-                == encoder2._output_dense.trainable_variables[0][0]
-            )
+        self.assertNotAllClose(
+            encoder1.trainable_variables[0][0],
+            encoder2.trainable_variables[0][0],
         )
         checkpoint = tf.train.Checkpoint(encoder1)
         checkpoint2 = tf.train.Checkpoint(encoder2)
