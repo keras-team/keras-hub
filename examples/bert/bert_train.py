@@ -306,6 +306,7 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
             "num_train_steps": self.train_steps,
         }
 
+
 class LMLoss(keras.losses.Loss):
     def __init__(self, reduction=keras.losses.Reduction.NONE, name="lm_loss"):
         super().__init__(reduction=reduction, name=name)
@@ -322,6 +323,7 @@ class LMLoss(keras.losses.Loss):
         lm_loss = tf.reduce_sum(lm_loss * lm_weights, -1)
         lm_loss = tf.math.divide_no_nan(lm_loss, lm_weights_summed)
         return lm_loss
+
 
 class NSPLoss(keras.losses.Loss):
     def __init__(self, reduction=keras.losses.Reduction.NONE, name="nsp_loss"):
@@ -342,13 +344,6 @@ def decode_record(record):
     """Decodes a record to a TensorFlow example."""
     seq_length = PREPROCESSING_CONFIG["max_seq_length"]
     lm_length = PREPROCESSING_CONFIG["max_predictions_per_seq"]
-    feature_keys = (
-        "token_ids",
-        "padding_mask",
-        "segment_ids",
-        "masked_lm_positions",
-    )
-    label_keys = ("masked_lm_ids", "next_sentence_labels")
     name_to_features = {
         "token_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
         "padding_mask": tf.io.FixedLenFeature([seq_length], tf.int64),
@@ -374,7 +369,7 @@ def decode_record(record):
         "masked_lm_positions": example["masked_lm_positions"],
     }
     labels = (example["masked_lm_ids"], example["next_sentence_labels"])
-    sample_weights = example["masked_lm_weights"]
+    sample_weights = (example["masked_lm_weights"], tf.ones((1,)))
     sample = (inputs, labels, sample_weights)
     return sample
 
