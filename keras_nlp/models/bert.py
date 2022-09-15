@@ -637,7 +637,7 @@ MODEL_DOCSTRING = """Bert "{type}" architecture.
             If None, model is randomly initialized. Either `weights` or
             `vocabulary_size` must be specified, but not both.
         vocabulary_size: Int, optional. The size of the token vocabulary. Either
-            `weights` or `vocabulary_size` must be specified, but not both.
+            `weights` or `vocabularly_size` must be specified, but not both.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
             trainable.
