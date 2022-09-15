@@ -180,8 +180,7 @@ class Gpt2Custom(keras.Model):
         return config
 
 
-MODEL_DOCSTRING = """GPT-2 core network with "{type}" architecture ({num_params}
-    parameters).
+MODEL_DOCSTRING = """GPT-2 "{type}" architecture with {num_params} parameters.
 
     This network implements a Transformer-based decoder as
     described in
