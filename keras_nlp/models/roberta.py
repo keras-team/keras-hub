@@ -30,8 +30,8 @@ class RobertaCustom(keras.Model):
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["RoBERTa: A Robustly Optimized BERT Pretraining Approach"](https://arxiv.org/abs/1907.11692).
-    It includes the embedding lookups and transformer layers, but not the masked
-    language model or classification task networks.
+    It includes the embedding lookups and transformer layers, but does not
+    include the masked language model head used during pretraining.
 
     This class gives a fully configurable RoBERTa model with any number of
     layers, heads, and embedding dimensions. For specific RoBERTa architectures
@@ -245,8 +245,8 @@ def RobertaBase(vocabulary_size, name=None, trainable=True):
     This network implements a bi-directional Transformer-based encoder as
     described in ["RoBERTa: A Robustly Optimized BERT Pretraining
     Approach"](https://arxiv.org/abs/1907.11692). It includes the
-    embedding lookups and transformer layers, but not the masked language model
-    or classification task networks.
+    embedding lookups and transformer layers, but does not include the masked
+    language model head used during pretraining.
 
     Args:
         vocabulary_size: int, optional. The size of the token vocabulary.
