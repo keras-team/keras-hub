@@ -306,6 +306,37 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
             "num_train_steps": self.train_steps,
         }
 
+class LMLoss(keras.losses.Loss):
+    def __init__(self, reduction=keras.losses.Reduction.NONE, name="lm_loss"):
+        super().__init__(reduction=reduction, name=name)
+
+    def call(self, y_true, y_pred, sample_weight):
+        lm_labels = y_true
+        lm_preds = y_pred
+        lm_weights = sample_weight
+
+        lm_loss = keras.losses.sparse_categorical_crossentropy(
+            lm_labels, lm_preds, from_logits=True
+        )
+        lm_weights_summed = tf.reduce_sum(lm_weights, -1)
+        lm_loss = tf.reduce_sum(lm_loss * lm_weights, -1)
+        lm_loss = tf.math.divide_no_nan(lm_loss, lm_weights_summed)
+        return lm_loss
+
+class NSPLoss(keras.losses.Loss):
+    def __init__(self, reduction=keras.losses.Reduction.NONE, name="nsp_loss"):
+        super().__init__(reduction=reduction, name=name)
+
+    def call(self, y_true, y_pred, sample_weight=None):
+        nsp_labels = y_true
+        nsp_preds = y_pred
+
+        nsp_loss = keras.losses.sparse_categorical_crossentropy(
+            nsp_labels, nsp_preds, from_logits=True
+        )
+        nsp_loss = tf.reduce_mean(nsp_loss)
+        return nsp_loss
+
 
 def decode_record(record):
     """Decodes a record to a TensorFlow example."""
@@ -335,42 +366,17 @@ def decode_record(record):
         if value.dtype == tf.int64:
             value = tf.cast(value, tf.int32)
         example[name] = value
-    return (
-        {key: example[key] for key in feature_keys},
-        (example[key] for key in label_keys),
-        (example["masked_lm_weights"], tf.ones((2,), dtype=tf.int32)),
-    )
 
-
-def lm_loss(y_true, y_pred, sample_weight=None):
-    lm_labels = y_true[0]
-    lm_preds = y_true[0]
-    lm_weights = sample_weight[0]
-
-    lm_loss = keras.losses.sparse_categorical_crossentropy(
-        lm_labels, lm_preds, from_logits=True
-    )
-    lm_weights_summed = tf.reduce_sum(lm_weights, -1)
-    lm_loss = tf.reduce_sum(lm_loss * lm_weights, -1)
-    lm_loss = tf.math.divide_no_nan(lm_loss, lm_weights_summed)
-    return lm_loss
-
-
-def nsp_loss(y_true, y_pred, sample_weight=None):
-    nsp_labels = y_true[1]
-    nsp_preds = y_pred[1]
-
-    nsp_loss = keras.losses.sparse_categorical_crossentropy(
-        nsp_labels, nsp_preds, from_logits=True
-    )
-    nsp_loss = tf.reduce_mean(nsp_loss)
-    return nsp_loss
-
-
-def aggregate_loss(y_true, y_pred, sample_weight=None):
-    return lm_loss(y_true, y_pred, sample_weight) + nsp_loss(
-        y_true, y_pred, sample_weight
-    )
+    inputs = {
+        "token_ids": example["token_ids"],
+        "padding_mask": example["padding_mask"],
+        "segment_ids": example["segment_ids"],
+        "masked_lm_positions": example["masked_lm_positions"],
+    }
+    labels = (example["masked_lm_ids"], example["next_sentence_labels"])
+    sample_weights = example["masked_lm_weights"]
+    sample = (inputs, labels, sample_weights)
+    return sample
 
 
 def get_checkpoint_callback():
@@ -470,11 +476,13 @@ def main(_):
             num_train_steps=num_train_steps,
         )
         optimizer = keras.optimizers.Adam(learning_rate=learning_rate_schedule)
+        lm_loss = LMLoss(name="lm_loss")
+        nsp_loss = NSPLoss(name="nsp_loss")
 
         pretraining_model = BertPretrainingModel(encoder)
         pretraining_model.compile(
             optimizer=optimizer,
-            loss=aggregate_loss,
+            loss=(lm_loss, nsp_loss),
         )
 
     epochs = TRAINING_CONFIG["epochs"]
