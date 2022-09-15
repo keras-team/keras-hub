@@ -31,8 +31,7 @@ class Gpt2Custom(keras.Model):
     This network implements a Transformer-based decoder network,
     Generative Pretrained Transformer-2 (GPT-2), as described in
     ["Language Models are Unsupervised Multitask Learners"](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf).
-    It includes the embedding lookups and transformer layers, but not the
-    language modeling or classification task heads.
+    It includes the embedding lookups and transformer layers.
 
     This class gives a fully customizable GPT-2 model with any number of layers,
     heads, and embedding dimensions. For specific GPT-2 architectures
@@ -185,8 +184,7 @@ MODEL_DOCSTRING = """GPT-2 "{type}" architecture with {num_params} parameters.
     This network implements a Transformer-based decoder as
     described in
     ["Language Models are Unsupervised Multitask Learners"](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf).
-    It includes the embedding lookups and transformer layers, but not the
-    language modeling or classification task heads.
+    It includes the embedding lookups and transformer layers.
 
     Args:
         vocabulary_size: int, optional. The size of the token vocabulary.
