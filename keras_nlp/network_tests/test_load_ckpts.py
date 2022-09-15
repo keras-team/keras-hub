@@ -43,3 +43,13 @@ class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
         }
         model(input_data)
+
+    @parameterized.named_parameters(
+        ("uncased_en", "uncased_en"),
+        ("cased_en", "cased_en"),
+        ("zh", "zh"),
+        ("multi_cased", "multi_cased"),
+    )
+    def test_load_vocabularies(self, vocabulary):
+        tokenizer = keras_nlp.models.BertPreprocessor(vocabulary=vocabulary)
+        tokenizer("The quick brown fox.")
