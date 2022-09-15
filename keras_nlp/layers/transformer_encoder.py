@@ -51,6 +51,10 @@ class TransformerEncoder(keras.layers.Layer):
         bias_initializer: string or `keras.initializers` initializer,
             defaults to "zeros". The bias initializer for
             the dense and multiheaded attention layers.
+        normalize_first: bool. Defaults to False. If True, the inputs to the
+            attention layer and the intermediate dense layer  are normalized
+            (similar to GPT-2). If set to False, outputs of attention layer and
+            intermediate dense layer are normalized (similar to BERT).
         name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
 
@@ -84,6 +88,7 @@ class TransformerEncoder(keras.layers.Layer):
         layer_norm_epsilon=1e-05,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
+        normalize_first=False,
         name=None,
         **kwargs
     ):
@@ -98,6 +103,7 @@ class TransformerEncoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.normalize_first = normalize_first
         self._built = False
         self.supports_masking = True
 
@@ -108,56 +114,55 @@ class TransformerEncoder(keras.layers.Layer):
         # Create layers based on input shape.
         self._built = True
         self._input_shape = input_shape
-        feature_size = input_shape[-1]
-        self._attention_head_size = int(feature_size // self.num_heads)
-        self._multi_head_attention_layer = keras.layers.MultiHeadAttention(
+        # Infer the dimension of our hidden feature size from the build shape.
+        hidden_dim = input_shape[-1]
+        # Attention head size is `hidden_dim` over the number of heads.
+        key_dim = int(hidden_dim // self.num_heads)
+
+        # Self attention layers.
+        self._self_attention_layer = keras.layers.MultiHeadAttention(
             num_heads=self.num_heads,
-            key_dim=self._attention_head_size,
-            value_dim=self._attention_head_size,
+            key_dim=key_dim,
             dropout=self.dropout,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._multi_head_attention_layer._build_from_signature(
-            input_shape, input_shape
+        self._self_attention_layer._build_from_signature(
+            query=input_shape,
+            value=input_shape,
         )
-
-        self._attention_layernorm = keras.layers.LayerNormalization(
+        self._self_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
+        self._self_attention_dropout = keras.layers.Dropout(
+            rate=self.dropout,
+        )
+
+        # Feedforward layers.
         self._feedforward_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
-
-        self._attention_dropout = keras.layers.Dropout(rate=self.dropout)
-
-        self._intermediate_dense = keras.layers.Dense(
+        self._feedforward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             activation=self.activation,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._output_dense = keras.layers.Dense(
-            feature_size,
+        self._feedforward_output_dense = keras.layers.Dense(
+            hidden_dim,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
         )
-        self._output_dropout = keras.layers.Dropout(rate=self.dropout)
-
-    def _add_and_norm(self, input1, input2, norm_layer):
-        return norm_layer(input1 + input2)
-
-    def _feed_forward(self, input):
-        x = self._intermediate_dense(input)
-        x = self._output_dense(x)
-        return self._output_dropout(x)
+        self._feedforward_dropout = keras.layers.Dropout(
+            rate=self.dropout,
+        )
 
     def call(self, inputs, padding_mask=None, attention_mask=None):
         """Forward pass of the TransformerEncoder.
 
         Args:
             inputs: a Tensor. The input data to TransformerEncoder, should be
-                of shape [batch_size, sequence_length, feature_dim].
+                of shape [batch_size, sequence_length, hidden_dim].
             padding_mask: a boolean Tensor. It indicates if the token should be
                 masked because the token is introduced due to padding.
                 `padding_mask` should have shape [batch_size, sequence_length].
@@ -173,27 +178,39 @@ class TransformerEncoder(keras.layers.Layer):
         if not self._built:
             self._build(inputs.shape)
 
-        mask = merge_padding_and_attention_mask(
-            inputs,
-            padding_mask,
-            attention_mask,
+        x = inputs  # Intermediate result.
+
+        # Compute self attention mask.
+        self_attention_mask = merge_padding_and_attention_mask(
+            inputs, padding_mask, attention_mask
         )
 
-        # Self attention.
-        attended = self._multi_head_attention_layer(
-            inputs, inputs, inputs, attention_mask=mask
+        # Self attention block.
+        residual = x
+        if self.normalize_first:
+            x = self._self_attention_layernorm(x)
+        x = self._self_attention_layer(
+            query=x,
+            value=x,
+            attention_mask=self_attention_mask,
         )
-        attended = self._attention_dropout(attended)
-        attended = self._add_and_norm(
-            inputs,
-            attended,
-            self._attention_layernorm,
-        )
-        # Feedforward.
-        feed_forward_output = self._feed_forward(attended)
-        return self._add_and_norm(
-            attended, feed_forward_output, self._feedforward_layernorm
-        )
+        x = self._self_attention_dropout(x)
+        x = x + residual
+        if not self.normalize_first:
+            x = self._self_attention_layernorm(x)
+
+        # Feedforward block.
+        residual = x
+        if self.normalize_first:
+            x = self._feedforward_layernorm(x)
+        x = self._feedforward_intermediate_dense(x)
+        x = self._feedforward_output_dense(x)
+        x = self._feedforward_dropout(x)
+        x = x + residual
+        if not self.normalize_first:
+            x = self._feedforward_layernorm(x)
+
+        return x
 
     def get_config(self):
         config = super().get_config()
@@ -210,6 +227,7 @@ class TransformerEncoder(keras.layers.Layer):
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
                 ),
+                "normalize_first": self.normalize_first,
                 "build_input_shape": self._input_shape,
             }
         )
