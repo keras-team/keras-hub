@@ -64,7 +64,7 @@ checkpoints = {
     "bert_base": {
         "uncased_en": {
             "description": (
-                "Base size of Bert where all input is lowercased. "
+                "Base size of BERT where all input is lowercased. "
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_uncased_en/model.h5",
@@ -72,7 +72,7 @@ checkpoints = {
         },
         "cased_en": {
             "description": (
-                "Base size of Bert where case is maintained. "
+                "Base size of BERT where case is maintained. "
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_cased_en/model.h5",
@@ -113,7 +113,7 @@ checkpoints = {
 
 
 # Metadata for loading pretrained tokenizer vocabularies.
-# We need the vocabulary_size hardcoded so we can instantiate a Bert network
+# We need the vocabulary_size hardcoded so we can instantiate a BERT network
 # with the right embedding size without downloading the matching vocabulary.
 # TODO(mattdangerw): Update our bucket structure so the vocabularies are
 # stored in an independent way, rather than reading from the base model.
@@ -229,8 +229,8 @@ class BertCustom(keras.Model):
     or classification task networks.
 
     This class gives a fully customizable BERT model with any number of layers,
-    heads, and embedding dimensions. For specific specific BERT architectures
-    defined in the paper, see for example `keras_nlp.models.BertBase`.
+    heads, and embedding dimensions. For specific BERT architectures defined in
+    the paper, see, for example, `keras_nlp.models.BertBase`.
 
     Args:
         vocabulary_size: Int. The size of the token vocabulary.
@@ -623,7 +623,7 @@ class BertClassifier(keras.Model):
         self.num_classes = num_classes
 
 
-MODEL_DOCSTRING = """Bert "{type}" architecture.
+MODEL_DOCSTRING = """BERT "{type}" architecture.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["BERT: Pre-training of Deep Bidirectional Transformers for
@@ -637,7 +637,7 @@ MODEL_DOCSTRING = """Bert "{type}" architecture.
             If None, model is randomly initialized. Either `weights` or
             `vocabulary_size` must be specified, but not both.
         vocabulary_size: Int, optional. The size of the token vocabulary. Either
-            `weights` or `vocabularly_size` must be specified, but not both.
+            `weights` or `vocabulary_size` must be specified, but not both.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
             trainable.

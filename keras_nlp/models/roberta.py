@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Roberta model configurable class, preconfigured versions, and task heads."""
+"""RoBERTa model configurable class, preconfigured versions, and task heads."""
 
 import tensorflow as tf
 from tensorflow import keras
@@ -33,9 +33,9 @@ class RobertaCustom(keras.Model):
     It includes the embedding lookups and transformer layers, but not include
     the masked language model network.
 
-    This class gives a fully configurable Roberta model with any number of
-    layers, heads, and embedding dimensions. For specific roberta architectures
-    defined in the paper, see for example `keras_nlp.models.RobertaBase`.
+    This class gives a fully configurable RoBERTa model with any number of
+    layers, heads, and embedding dimensions. For specific RoBERTa architectures
+    defined in the paper, see, for example, `keras_nlp.models.RobertaBase`.
 
     Args:
         vocabulary_size: Int. The size of the token vocabulary.
@@ -55,7 +55,7 @@ class RobertaCustom(keras.Model):
 
     Example usage:
     ```python
-    # Randomly initialized Roberta model
+    # Randomly initialized RoBERTa model
     model = keras_nlp.models.RobertaCustom(
         vocabulary_size=50265,
         num_layers=12,
@@ -171,7 +171,7 @@ class RobertaCustom(keras.Model):
 
 
 class RobertaClassifier(keras.Model):
-    """Roberta encoder model with a classification head.
+    """RoBERTa encoder model with a classification head.
 
     Args:
         base_model: A `keras_nlp.models.Roberta` to encode inputs.
@@ -183,7 +183,7 @@ class RobertaClassifier(keras.Model):
 
     Example usage:
     ```python
-    # Randomly initialized Roberta encoder
+    # Randomly initialized RoBERTa encoder
     model = keras_nlp.models.RobertaCustom(
         vocabulary_size=50265,
         num_layers=12,
