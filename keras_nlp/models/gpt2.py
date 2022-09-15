@@ -26,10 +26,10 @@ def _gpt_2_kernel_initializer(stddev=0.02):
 
 
 class Gpt2Custom(keras.Model):
-    """Generative Pretrained Transformer-2 (GPT-2) network.
+    """GPT-2 core network with customizable hyperparameters.
 
-    This network implements a Transformer-based decoder as
-    described in
+    This network implements a Transformer-based decoder network,
+    Generative Pretrained Transformer-2 (GPT-2), as described in
     ["Language Models are Unsupervised Multitask Learners"](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf).
     It includes the embedding lookups and transformer layers, but not the
     language modeling or classification task heads.
@@ -108,6 +108,8 @@ class Gpt2Custom(keras.Model):
             name="token_embedding",
         )(token_ids)
 
+        # Can't use `TokenAndPositionEmbedding` layer here because of different
+        # initializers.
         position_embedding = PositionEmbedding(
             initializer=_gpt_2_kernel_initializer(stddev=0.02),
             sequence_length=max_sequence_length,
@@ -178,8 +180,8 @@ class Gpt2Custom(keras.Model):
         return config
 
 
-MODEL_DOCSTRING = """GPT-2 implementation using "{type}"
-    architecture (with {num_params} parameters).
+MODEL_DOCSTRING = """GPT-2 core network with "{type}" architecture ({num_params}
+    parameters).
 
     This network implements a Transformer-based decoder as
     described in

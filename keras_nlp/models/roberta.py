@@ -34,7 +34,7 @@ class RobertaCustom(keras.Model):
     the masked language model network.
 
     This class gives a fully configurable Roberta model with any number of
-    layers, heads, and embedding dimensions. For specific RoBERTa architectures
+    layers, heads, and embedding dimensions. For specific roberta architectures
     defined in the paper, see, for example, `keras_nlp.models.RobertaBase`.
 
     Args:
