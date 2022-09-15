@@ -179,7 +179,7 @@ class Gpt2Custom(keras.Model):
         return config
 
 
-MODEL_DOCSTRING = """GPT-2 "{type}" architecture with {num_params} parameters.
+MODEL_DOCSTRING = """GPT-2 "{type}" architecture.
 
     This network implements a Transformer-based decoder as
     described in
@@ -267,20 +267,20 @@ def Gpt2ExtraLarge(vocabulary_size, name=None, trainable=True):
 setattr(
     Gpt2Base,
     "__doc__",
-    MODEL_DOCSTRING.format(type="Base", num_params="124M"),
+    MODEL_DOCSTRING.format(type="Base"),
 )
 setattr(
     Gpt2Medium,
     "__doc__",
-    MODEL_DOCSTRING.format(type="Medium", num_params="355M"),
+    MODEL_DOCSTRING.format(type="Medium"),
 )
 setattr(
     Gpt2Large,
     "__doc__",
-    MODEL_DOCSTRING.format(type="Large", num_params="774M"),
+    MODEL_DOCSTRING.format(type="Large"),
 )
 setattr(
     Gpt2ExtraLarge,
     "__doc__",
-    MODEL_DOCSTRING.format(type="ExtraLarge", num_params="1558M"),
+    MODEL_DOCSTRING.format(type="ExtraLarge"),
 )
