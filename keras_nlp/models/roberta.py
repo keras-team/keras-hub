@@ -38,19 +38,19 @@ class RobertaCustom(keras.Model):
     defined in the paper, see, for example, `keras_nlp.models.RobertaBase`.
 
     Args:
-        vocabulary_size: Int. The size of the token vocabulary.
-        num_layers: Int. The number of transformer layers.
-        num_heads: Int. The number of attention heads for each transformer.
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers.
+        num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
-        hidden_dim: Int. The size of the transformer encoding layer.
-        intermediate_dim: Int. The output dimension of the first Dense layer in
+        hidden_dim: int. The size of the transformer encoding layer.
+        intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
-        dropout: Float. Dropout probability for the Transformer encoder.
-        max_sequence_length: Int. The maximum sequence length this encoder can
+        dropout: float. Dropout probability for the Transformer encoder.
+        max_sequence_length: int. The maximum sequence length this encoder can
             consume. The sequence length of the input must be less than
             `max_sequence_length`.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
+        name: string, optional. Name of the model.
+        trainable: boolean, optional. If the model's variables should be
             trainable.
 
     Example usage:
@@ -175,10 +175,10 @@ class RobertaClassifier(keras.Model):
 
     Args:
         base_model: A `keras_nlp.models.Roberta` to encode inputs.
-        num_classes: Int. Number of classes to predict.
-        hidden_dim: Int. The size of the pooler layer.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
+        num_classes: int. Number of classes to predict.
+        hidden_dim: int. The size of the pooler layer.
+        name: string, optional. Name of the model.
+        trainable: boolean, optional. If the model's variables should be
             trainable.
 
     Example usage:
@@ -249,9 +249,9 @@ def RobertaBase(vocabulary_size, name=None, trainable=True):
     or classification task networks.
 
     Args:
-        vocabulary_size: Int, optional. The size of the token vocabulary.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
+        vocabulary_size: int, optional. The size of the token vocabulary.
+        name: string, optional. Name of the model.
+        trainable: boolean, optional. If the model's variables should be
             trainable.
 
     Example usage:
