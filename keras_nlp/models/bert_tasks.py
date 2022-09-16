@@ -18,15 +18,15 @@ from tensorflow import keras
 
 from keras_nlp.models import bert
 from keras_nlp.models.bert import bert_kernel_initializer
+from keras_nlp.models.bert import checkpoints
 
-
-class BertClassifier(keras.Model):
-    """BERT encoder model with a classification head.
+# TODO(jbischof): Find more scalable way to list checkpoints.
+CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
 
     Args:
         backbone: A string, `keras_nlp.models.BertCustom` or derivative such as
             `keras_nlp.models.BertBase` to encode inputs. If a string, should be
-            one of `keras_nlp.models.bert_tasks.backbone_checkpoints`.
+            one of {names}.
         num_classes: Int. Number of classes to predict.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
@@ -45,7 +45,7 @@ class BertClassifier(keras.Model):
     )
 
     # Call classifier on the inputs.
-    input_data = {
+    input_data = {{
         "token_ids": tf.random.uniform(
             shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
         ),
@@ -55,18 +55,20 @@ class BertClassifier(keras.Model):
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
-    }
+    }}
     classifier = keras_nlp.models.BertClassifier(model, 4, name="classifier")
     logits = classifier(input_data)
 
     # String backbone specification
     classifier = keras_nlp.models.BertClassifier(
-        "base_uncased_en", 4, name="classifier"
+        "bert_base_uncased_en", 4, name="classifier"
     )
     logits = classifier(input_data)
     ```
-    """
+"""
 
+
+class BertClassifier(keras.Model):
     def __init__(
         self,
         backbone="bert_base_uncased_en",
@@ -100,3 +102,10 @@ class BertClassifier(keras.Model):
         # All references to `self` below this line
         self.backbone = backbone
         self.num_classes = num_classes
+
+
+setattr(
+    BertClassifier,
+    "__doc__",
+    CLASSIFIER_DOCSTRING.format(names=", ".join(checkpoints.keys())),
+)
