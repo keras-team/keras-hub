@@ -456,6 +456,7 @@ def main(_):
             num_train_steps=num_train_steps,
         )
         optimizer = keras.optimizers.Adam(learning_rate=learning_rate_schedule)
+
         lm_loss = LMLoss(name="lm_loss")
         nsp_loss = keras.losses.SparseCategoricalCrossentropy(
             from_logits=True,
@@ -463,10 +464,18 @@ def main(_):
             reduction=keras.losses.Reduction.NONE,
         )
 
+        lm_accuracy = keras.metrics.SparseCategoricalAccuracy(
+            name="lm_accuracy"
+        )
+        nsp_accuracy = keras.metrics.SparseCategoricalAccuracy(
+            name="nsp_accuracy"
+        )
+
         pretraining_model = BertPretrainingModel(encoder)
         pretraining_model.compile(
             optimizer=optimizer,
             loss=(lm_loss, nsp_loss),
+            weighted_metrics=((lm_accuracy,), (nsp_accuracy,)),
         )
 
     epochs = TRAINING_CONFIG["epochs"]
