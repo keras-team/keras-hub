@@ -44,6 +44,26 @@ class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
         }
         model(input_data)
 
+    def test_load_bert_backbone_string(self):
+        for (
+            checkpoint
+        ) in keras_nlp.models.bert_tasks.backbone_checkpoints.keys():
+            classifier = keras_nlp.models.bert_tasks.BertClassifier(
+                checkpoint, 4, name="classifier"
+            )
+            input_data = {
+                "token_ids": tf.random.uniform(
+                    shape=(1, 512),
+                    dtype=tf.int64,
+                    maxval=classifier.backbone.vocabulary_size,
+                ),
+                "segment_ids": tf.constant(
+                    [0] * 200 + [1] * 312, shape=(1, 512)
+                ),
+                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+            }
+            classifier(input_data)
+
     @parameterized.named_parameters(
         ("uncased_en", "uncased_en"),
         ("cased_en", "cased_en"),

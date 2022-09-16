@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BERT model configurable class, preconfigured versions, and task heads."""
+"""BERT model configurable class and preconfigured versions."""
 
 import os
 
@@ -25,7 +25,7 @@ from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
-def _bert_kernel_initializer(stddev=0.02):
+def bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
@@ -314,19 +314,19 @@ class BertCustom(keras.Model):
         token_embedding_layer = keras.layers.Embedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            embeddings_initializer=_bert_kernel_initializer(),
+            embeddings_initializer=bert_kernel_initializer(),
             name="token_embedding",
         )
         token_embedding = token_embedding_layer(token_id_input)
         position_embedding = PositionEmbedding(
-            initializer=_bert_kernel_initializer(),
+            initializer=bert_kernel_initializer(),
             sequence_length=max_sequence_length,
             name="position_embedding",
         )(token_embedding)
         segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
             output_dim=hidden_dim,
-            embeddings_initializer=_bert_kernel_initializer(),
+            embeddings_initializer=bert_kernel_initializer(),
             name="segment_embedding",
         )(segment_id_input)
 
@@ -354,7 +354,7 @@ class BertCustom(keras.Model):
                     x, approximate=True
                 ),
                 dropout=dropout,
-                kernel_initializer=_bert_kernel_initializer(),
+                kernel_initializer=bert_kernel_initializer(),
                 name=f"transformer_layer_{i}",
             )(x, padding_mask=padding_mask)
 
@@ -363,7 +363,7 @@ class BertCustom(keras.Model):
         sequence_output = x
         pooled_output = keras.layers.Dense(
             hidden_dim,
-            kernel_initializer=_bert_kernel_initializer(),
+            kernel_initializer=bert_kernel_initializer(),
             activation="tanh",
             name="pooled_dense",
         )(x[:, cls_token_index, :])
@@ -559,68 +559,6 @@ setattr(
     "__doc__",
     PREPROCESSOR_DOCSTRING.format(names=", ".join(vocabularies)),
 )
-
-
-class BertClassifier(keras.Model):
-    """BERT encoder model with a classification head.
-
-    Args:
-        base_model: A `keras_nlp.models.BertCustom` to encode inputs.
-        num_classes: Int. Number of classes to predict.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
-            trainable.
-
-    Examples:
-    ```python
-    # Randomly initialized BERT encoder
-    model = keras_nlp.models.BertCustom(
-        vocabulary_size=30522,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
-    )
-
-    # Call classifier on the inputs.
-    input_data = {
-        "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
-        ),
-        "segment_ids": tf.constant(
-            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
-        "padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
-    }
-    classifier = bert.BertClassifier(model, 4, name="classifier")
-    logits = classifier(input_data)
-    ```
-    """
-
-    def __init__(
-        self,
-        base_model,
-        num_classes,
-        name=None,
-        trainable=True,
-    ):
-        inputs = base_model.input
-        pooled = base_model(inputs)["pooled_output"]
-        outputs = keras.layers.Dense(
-            num_classes,
-            kernel_initializer=_bert_kernel_initializer(),
-            name="logits",
-        )(pooled)
-        # Instantiate using Functional API Model constructor
-        super().__init__(
-            inputs=inputs, outputs=outputs, name=name, trainable=trainable
-        )
-        # All references to `self` below this line
-        self.base_model = base_model
-        self.num_classes = num_classes
 
 
 MODEL_DOCSTRING = """Bert "{type}" architecture.
