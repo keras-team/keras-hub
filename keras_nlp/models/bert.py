@@ -64,7 +64,7 @@ checkpoints = {
     "bert_base": {
         "uncased_en": {
             "description": (
-                "Base size of Bert where all input is lowercased. "
+                "Base size of BERT where all input is lowercased. "
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_uncased_en/model.h5",
@@ -72,7 +72,7 @@ checkpoints = {
         },
         "cased_en": {
             "description": (
-                "Base size of Bert where case is maintained. "
+                "Base size of BERT where case is maintained. "
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_cased_en/model.h5",
@@ -113,7 +113,7 @@ checkpoints = {
 
 
 # Metadata for loading pretrained tokenizer vocabularies.
-# We need the vocabulary_size hardcoded so we can instantiate a Bert network
+# We need the vocabulary_size hardcoded so we can instantiate a BERT network
 # with the right embedding size without downloading the matching vocabulary.
 # TODO(mattdangerw): Update our bucket structure so the vocabularies are
 # stored in an independent way, rather than reading from the base model.
@@ -229,26 +229,26 @@ class BertCustom(keras.Model):
     or classification task networks.
 
     This class gives a fully customizable BERT model with any number of layers,
-    heads, and embedding dimensions. For specific specific BERT architectures
-    defined in the paper, see for example `keras_nlp.models.BertBase`.
+    heads, and embedding dimensions. For specific BERT architectures defined in
+    the paper, see, for example, `keras_nlp.models.BertBase`.
 
     Args:
-        vocabulary_size: Int. The size of the token vocabulary.
-        num_layers: Int. The number of transformer layers.
-        num_heads: Int. The number of attention heads for each transformer.
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers.
+        num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
-        hidden_dim: Int. The size of the transformer encoding and pooler layers.
-        intermediate_dim: Int. The output dimension of the first Dense layer in
+        hidden_dim: int. The size of the transformer encoding and pooler layers.
+        intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
-        dropout: Float. Dropout probability for the Transformer encoder.
-        max_sequence_length: Int. The maximum sequence length that this encoder
+        dropout: float. Dropout probability for the Transformer encoder.
+        max_sequence_length: int. The maximum sequence length that this encoder
             can consume. If None, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
-        num_segments: Int. The number of types that the 'segment_ids' input can
+        num_segments: int. The number of types that the 'segment_ids' input can
             take.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
+        name: string, optional. Name of the model.
+        trainable: boolean, optional. If the model's variables should be
             trainable.
 
     Examples:
@@ -566,9 +566,9 @@ class BertClassifier(keras.Model):
 
     Args:
         base_model: A `keras_nlp.models.BertCustom` to encode inputs.
-        num_classes: Int. Number of classes to predict.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
+        num_classes: int. Number of classes to predict.
+        name: string, optional. Name of the model.
+        trainable: boolean, optional. If the model's variables should be
             trainable.
 
     Examples:
@@ -623,7 +623,7 @@ class BertClassifier(keras.Model):
         self.num_classes = num_classes
 
 
-MODEL_DOCSTRING = """Bert "{type}" architecture.
+MODEL_DOCSTRING = """BERT "{type}" architecture.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["BERT: Pre-training of Deep Bidirectional Transformers for
@@ -632,14 +632,14 @@ MODEL_DOCSTRING = """Bert "{type}" architecture.
     or classification task networks.
 
     Args:
-        weights: String, optional. Name of pretrained model to load weights.
+        weights: string, optional. Name of pretrained model to load weights.
             Should be one of {names}.
             If None, model is randomly initialized. Either `weights` or
             `vocabulary_size` must be specified, but not both.
         vocabulary_size: Int, optional. The size of the token vocabulary. Either
-            `weights` or `vocabularly_size` must be specified, but not both.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
+            `weights` or `vocabulary_size` must be specified, but not both.
+        name: string, optional. Name of the model.
+        trainable: boolean, optional. If the model's variables should be
             trainable.
 
     Examples:
