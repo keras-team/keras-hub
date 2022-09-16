@@ -16,82 +16,8 @@
 
 from tensorflow import keras
 
-from keras_nlp.models.bert import BertBase
-from keras_nlp.models.bert import BertLarge
-from keras_nlp.models.bert import BertMedium
-from keras_nlp.models.bert import BertSmall
-from keras_nlp.models.bert import BertTiny
+from keras_nlp.models import bert
 from keras_nlp.models.bert import bert_kernel_initializer
-
-# Metadata for loading pretrained model weights.
-backbone_checkpoints = {
-    "tiny_uncased_en": {
-        "model": BertTiny,
-        "weights": "uncased_en",
-        "description": (
-            "Tiny size of BERT where all input is lowercased. "
-            "Trained on English Wikipedia + BooksCorpus."
-        ),
-    },
-    "small_uncased_en": {
-        "model": BertSmall,
-        "weights": "uncased_en",
-        "description": (
-            "Small size of BERT where all input is lowercased. "
-            "Trained on English Wikipedia + BooksCorpus."
-        ),
-    },
-    "medium_uncased_en": {
-        "model": BertMedium,
-        "weights": "uncased_en",
-        "description": (
-            "Medium size of BERT where all input is lowercased. "
-            "Trained on English Wikipedia + BooksCorpus."
-        ),
-    },
-    "base_uncased_en": {
-        "model": BertBase,
-        "weights": "uncased_en",
-        "description": (
-            "Base size of BERT where all input is lowercased. "
-            "Trained on English Wikipedia + BooksCorpus."
-        ),
-    },
-    "base_cased_en": {
-        "model": BertBase,
-        "weights": "cased_en",
-        "description": (
-            "Base size of Bert where case is maintained. "
-            "Trained on English Wikipedia + BooksCorpus."
-        ),
-    },
-    "base_zh": {
-        "model": BertBase,
-        "weights": "zh",
-        "description": ("Base size of BERT. Trained on Chinese Wikipedia."),
-    },
-    "base_multi_cased": {
-        "model": BertBase,
-        "weights": "multi_cased",
-        "description": ("Base size of BERT. Trained on Chinese Wikipedia."),
-    },
-    "large_uncased_en": {
-        "model": BertLarge,
-        "weights": "uncased_en",
-        "description": (
-            "Large size of BERT where all input is lowercased. "
-            "Trained on English Wikipedia + BooksCorpus."
-        ),
-    },
-    "large_cased_en": {
-        "model": BertLarge,
-        "weights": "cased_en",
-        "description": (
-            "Base size of Bert where case is maintained. "
-            "Trained on English Wikipedia + BooksCorpus."
-        ),
-    },
-}
 
 
 class BertClassifier(keras.Model):
@@ -143,22 +69,22 @@ class BertClassifier(keras.Model):
 
     def __init__(
         self,
-        backbone="base_uncased_en",
+        backbone="bert_base_uncased_en",
         num_classes=2,
         name=None,
         trainable=True,
     ):
         # Load backbone from string identifier
         if isinstance(backbone, str):
-            if backbone not in backbone_checkpoints:
+            if backbone not in bert.checkpoints:
                 raise ValueError(
                     "`backbone` must be one of "
-                    f"""{", ".join(backbone_checkpoints.keys())}. """
+                    f"""{", ".join(bert.checkpoints.keys())}. """
                     f"Received: {backbone}"
                 )
-            backbone = backbone_checkpoints[backbone]["model"](
-                backbone_checkpoints[backbone]["weights"]
-            )
+            backbone_class_str = bert.checkpoints[backbone]["model"]
+            backbone_class = bert.arch_classes[backbone_class_str]
+            backbone = backbone_class(backbone)
 
         inputs = backbone.input
         pooled = backbone(inputs)["pooled_output"]

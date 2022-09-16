@@ -62,7 +62,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
 
         # Not a checkpoint name
         with self.assertRaises(ValueError):
-            bert_tasks.BertClassifier("base_clowntown", 4, name="classifier")
+            bert_tasks.BertClassifier("bert_clowntown", 4, name="classifier")
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
