@@ -143,8 +143,8 @@ class BertClassifier(keras.Model):
 
     def __init__(
         self,
-        backbone,
-        num_classes,
+        backbone="bert_base_uncased_en",
+        num_classes=2,
         name=None,
         trainable=True,
     ):
