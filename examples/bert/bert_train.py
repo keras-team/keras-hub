@@ -308,10 +308,10 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
 
 
 class LMLoss(keras.losses.Loss):
-    def __init__(self, reduction=keras.losses.Reduction.NONE, name="lm_loss"):
+    def __init__(self, reduction=keras.losses.Reduction.AUTO, name="lm_loss"):
         super().__init__(reduction=reduction, name=name)
 
-    def call(self, y_true, y_pred, sample_weight):
+    def __call__(self, y_true, y_pred, sample_weight=None):
         lm_labels = y_true
         lm_preds = y_pred
         lm_weights = sample_weight
@@ -326,17 +326,16 @@ class LMLoss(keras.losses.Loss):
 
 
 class NSPLoss(keras.losses.Loss):
-    def __init__(self, reduction=keras.losses.Reduction.NONE, name="nsp_loss"):
+    def __init__(self, reduction=keras.losses.Reduction.AUTO, name="nsp_loss"):
         super().__init__(reduction=reduction, name=name)
 
-    def call(self, y_true, y_pred, sample_weight=None):
+    def __call__(self, y_true, y_pred, sample_weight=None):
         nsp_labels = y_true
         nsp_preds = y_pred
 
         nsp_loss = keras.losses.sparse_categorical_crossentropy(
             nsp_labels, nsp_preds, from_logits=True
         )
-        nsp_loss = tf.reduce_mean(nsp_loss)
         return nsp_loss
 
 
