@@ -325,20 +325,6 @@ class LMLoss(keras.losses.Loss):
         return lm_loss
 
 
-class NSPLoss(keras.losses.Loss):
-    def __init__(self, reduction=keras.losses.Reduction.AUTO, name="nsp_loss"):
-        super().__init__(reduction=reduction, name=name)
-
-    def __call__(self, y_true, y_pred, sample_weight=None):
-        nsp_labels = y_true
-        nsp_preds = y_pred
-
-        nsp_loss = keras.losses.sparse_categorical_crossentropy(
-            nsp_labels, nsp_preds, from_logits=True
-        )
-        return nsp_loss
-
-
 def decode_record(record):
     """Decodes a record to a TensorFlow example."""
     seq_length = PREPROCESSING_CONFIG["max_seq_length"]
@@ -471,7 +457,9 @@ def main(_):
         )
         optimizer = keras.optimizers.Adam(learning_rate=learning_rate_schedule)
         lm_loss = LMLoss(name="lm_loss")
-        nsp_loss = NSPLoss(name="nsp_loss")
+        nsp_loss = tf.keras.losses.SparseCategoricalCrossentropy(
+            from_logits=True, name="nsp_loss"
+        )
 
         pretraining_model = BertPretrainingModel(encoder)
         pretraining_model.compile(
