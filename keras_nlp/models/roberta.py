@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Roberta model configurable class, preconfigured versions, and task heads."""
+"""RoBERTa model configurable class, preconfigured versions, and task heads."""
 
 import tensorflow as tf
 from tensorflow import keras
@@ -30,32 +30,32 @@ class RobertaCustom(keras.Model):
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["RoBERTa: A Robustly Optimized BERT Pretraining Approach"](https://arxiv.org/abs/1907.11692).
-    It includes the embedding lookups and transformer layers, but not include
-    the masked language model network.
+    It includes the embedding lookups and transformer layers, but does not
+    include the masked language modeling head used during pretraining.
 
-    This class gives a fully configurable Roberta model with any number of
-    layers, heads, and embedding dimensions. For specific roberta architectures
-    defined in the paper, see for example `keras_nlp.models.RobertaBase`.
+    This class gives a fully configurable RoBERTa model with any number of
+    layers, heads, and embedding dimensions. For specific RoBERTa architectures
+    defined in the paper, see, for example, `keras_nlp.models.RobertaBase`.
 
     Args:
-        vocabulary_size: Int. The size of the token vocabulary.
-        num_layers: Int. The number of transformer layers.
-        num_heads: Int. The number of attention heads for each transformer.
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers.
+        num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
-        hidden_dim: Int. The size of the transformer encoding layer.
-        intermediate_dim: Int. The output dimension of the first Dense layer in
+        hidden_dim: int. The size of the transformer encoding layer.
+        intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
-        dropout: Float. Dropout probability for the Transformer encoder.
-        max_sequence_length: Int. The maximum sequence length this encoder can
+        dropout: float. Dropout probability for the Transformer encoder.
+        max_sequence_length: int. The maximum sequence length this encoder can
             consume. The sequence length of the input must be less than
             `max_sequence_length`.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
+        name: string, optional. Name of the model.
+        trainable: boolean, optional. If the model's variables should be
             trainable.
 
     Example usage:
     ```python
-    # Randomly initialized Roberta model
+    # Randomly initialized RoBERTa model
     model = keras_nlp.models.RobertaCustom(
         vocabulary_size=50265,
         num_layers=12,
@@ -171,19 +171,19 @@ class RobertaCustom(keras.Model):
 
 
 class RobertaClassifier(keras.Model):
-    """Roberta encoder model with a classification head.
+    """RoBERTa encoder model with a classification head.
 
     Args:
         base_model: A `keras_nlp.models.Roberta` to encode inputs.
-        num_classes: Int. Number of classes to predict.
-        hidden_dim: Int. The size of the pooler layer.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
+        num_classes: int. Number of classes to predict.
+        hidden_dim: int. The size of the pooler layer.
+        name: string, optional. Name of the model.
+        trainable: boolean, optional. If the model's variables should be
             trainable.
 
     Example usage:
     ```python
-    # Randomly initialized Roberta encoder
+    # Randomly initialized RoBERTa encoder
     model = keras_nlp.models.RobertaCustom(
         vocabulary_size=50265,
         num_layers=12,
@@ -245,13 +245,13 @@ def RobertaBase(vocabulary_size, name=None, trainable=True):
     This network implements a bi-directional Transformer-based encoder as
     described in ["RoBERTa: A Robustly Optimized BERT Pretraining
     Approach"](https://arxiv.org/abs/1907.11692). It includes the
-    embedding lookups and transformer layers, but not the masked language model
-    or classification task networks.
+    embedding lookups and transformer layers, but does not include the masked
+    language modeling head used during pretraining.
 
     Args:
-        vocabulary_size: Int, optional. The size of the token vocabulary.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
+        vocabulary_size: int, optional. The size of the token vocabulary.
+        name: string, optional. Name of the model.
+        trainable: boolean, optional. If the model's variables should be
             trainable.
 
     Example usage:
