@@ -33,7 +33,9 @@ class BertCkptTest(tf.test.TestCase):
                 "token_ids": tf.random.uniform(
                     shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
                 ),
-                "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
+                "segment_ids": tf.constant(
+                    [0] * 200 + [1] * 312, shape=(1, 512)
+                ),
                 "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
             }
             model(input_data)
@@ -56,7 +58,7 @@ class BertCkptTest(tf.test.TestCase):
             }
             classifier(input_data)
 
-    def test_classifier_default_args(self):            
+    def test_classifier_default_args(self):
         classifier = keras_nlp.models.bert_tasks.BertClassifier()
         input_data = {
             "token_ids": tf.random.uniform(
@@ -64,9 +66,7 @@ class BertCkptTest(tf.test.TestCase):
                 dtype=tf.int64,
                 maxval=classifier.backbone.vocabulary_size,
             ),
-            "segment_ids": tf.constant(
-                [0] * 200 + [1] * 312, shape=(1, 512)
-            ),
+            "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
             "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
         }
         classifier(input_data)

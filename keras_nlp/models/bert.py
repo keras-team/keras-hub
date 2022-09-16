@@ -15,10 +15,10 @@
 """BERT model configurable class and preconfigured versions."""
 
 import os
+from collections import defaultdict
 
 import tensorflow as tf
 from tensorflow import keras
-from collections import defaultdict
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.layers.position_embedding import PositionEmbedding
