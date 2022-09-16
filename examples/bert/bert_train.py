@@ -308,7 +308,7 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
 
 
 class LMLoss(keras.losses.Loss):
-    def __init__(self, reduction=keras.losses.Reduction.AUTO, name="lm_loss"):
+    def __init__(self, reduction=keras.losses.Reduction.NONE, name="lm_loss"):
         super().__init__(reduction=reduction, name=name)
 
     def __call__(self, y_true, y_pred, sample_weight=None):
@@ -457,8 +457,10 @@ def main(_):
         )
         optimizer = keras.optimizers.Adam(learning_rate=learning_rate_schedule)
         lm_loss = LMLoss(name="lm_loss")
-        nsp_loss = tf.keras.losses.SparseCategoricalCrossentropy(
-            from_logits=True, name="nsp_loss"
+        nsp_loss = keras.losses.SparseCategoricalCrossentropy(
+            from_logits=True,
+            name="nsp_loss",
+            reduction=keras.losses.Reduction.NONE,
         )
 
         pretraining_model = BertPretrainingModel(encoder)
