@@ -14,6 +14,10 @@
 
 """GPT-2 model configurable class, preconfigured versions, and task heads."""
 
+
+import os
+from collections import defaultdict
+
 import tensorflow as tf
 from tensorflow import keras
 
@@ -23,6 +27,108 @@ from keras_nlp.layers import TransformerDecoder
 
 def _gpt_2_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
+
+
+# TODO(abheesht17): Remove "webtext" from URLs?
+checkpoints = {
+    "gpt2_base": {
+        "model": "Gpt2Base",
+        "vocabulary": "webtext",
+        "description": (
+            "Base size of GPT-2 with 124M parameters. Trained on WebText."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_webtext/model.h5",
+        "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
+    },
+    "gpt2_medium": {
+        "model": "Gpt2Medium",
+        "vocabulary": "webtext",
+        "description": (
+            "Medium size of GPT-2 with 355M parameters. Trained on WebText."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_medium_webtext/model.h5",
+        "weights_hash": "580ff9b79c04fc90e6d6f47e975c5afe",
+    },
+    "gpt2_large": {
+        "model": "Gpt2Large",
+        "vocabulary": "webtext",
+        "description": (
+            "Large size of GPT-2 with 774M parameters. Trained on WebText."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_large_webtext/model.h5",
+        "weights_hash": "67957cb3dfc9e965960dabe068811e1a",
+    },
+    "gpt2_extra_large": {
+        "model": "Gpt2ExtraLarge",
+        "vocabulary": "webtext",
+        "description": (
+            "Extra Large size of GPT-2 with 1558M parameters. "
+            "Trained on WebText."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_extra_large_webtext/model.h5",
+        "weights_hash": "d093c1ee0d9705d845c0190909aa2917",
+    },
+}
+
+# Index checkpoints by arch compatibility
+arch_checkpoints = defaultdict(set)
+for arch, metadata in checkpoints.items():
+    arch_checkpoints[metadata["model"]].add(arch)
+
+# TODO: Iron out this part after BPE tokenizer has been finalized. Also, check
+# the to-do comment in `keras_nlp/models/bert.py`.
+vocabularies = {
+    "webtext": {
+        "description": (
+            "The BPE vocabulary for GPT-2 models trained on "
+            "the WebText dataset."
+        ),
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_webtext/vocab.json",
+        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "vocabulary_size": 50257,
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_webtext/merges.txt",
+        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+    },
+}
+
+
+def _handle_pretrained_model_arguments(gpt2_variant, weights, vocabulary_size):
+    """Look up pretrained defaults for model arguments.
+    This helper will validate the `weights` and `vocabulary_size` arguments, and
+    fully resolve them in the case we are loading pretrained weights.
+    """
+    if (vocabulary_size is None and weights is None) or (
+        vocabulary_size and weights
+    ):
+        raise ValueError(
+            "One of `vocabulary_size` or `weights` must be specified "
+            "(but not both). "
+            f"Received: weights={weights}, "
+            f"vocabulary_size={vocabulary_size}"
+        )
+
+    if weights:
+        if weights not in arch_checkpoints[gpt2_variant]:
+            raise ValueError(
+                "`weights` must be one of "
+                f"""{", ".join(arch_checkpoints[gpt2_variant])}. """
+                f"Received: {weights}."
+            )
+        metadata = checkpoints[weights]
+        vocabulary = metadata["vocabulary"]
+        vocabulary_size = vocabularies[vocabulary]["vocabulary_size"]
+
+        # TODO(jbischof): consider changing format from `h5` to
+        # `tf.train.Checkpoint` once
+        # https://github.com/keras-team/keras/issues/16946 is resolved.
+        weights = keras.utils.get_file(
+            "model.h5",
+            metadata["weights_url"],
+            cache_subdir=os.path.join("models", weights),
+            file_hash=metadata["weights_hash"],
+        )
+
+    return weights, vocabulary_size
 
 
 class Gpt2Custom(keras.Model):
@@ -208,8 +314,12 @@ MODEL_DOCSTRING = """GPT-2 "{type}" architecture.
 """
 
 
-def Gpt2Base(vocabulary_size, name=None, trainable=True):
-    return Gpt2Custom(
+def Gpt2Base(weights=None, vocabulary_size=None, name=None, trainable=True):
+    weights, vocabulary_size = _handle_pretrained_model_arguments(
+        "Gpt2Base", weights, vocabulary_size
+    )
+
+    model = Gpt2Custom(
         vocabulary_size=vocabulary_size,
         num_layers=12,
         num_heads=12,
@@ -221,9 +331,18 @@ def Gpt2Base(vocabulary_size, name=None, trainable=True):
         trainable=trainable,
     )
 
+    if weights:
+        model.load_weights(weights)
 
-def Gpt2Medium(vocabulary_size, name=None, trainable=True):
-    return Gpt2Custom(
+    return model
+
+
+def Gpt2Medium(weights=None, vocabulary_size=None, name=None, trainable=True):
+    weights, vocabulary_size = _handle_pretrained_model_arguments(
+        "Gpt2Medium", weights, vocabulary_size
+    )
+
+    model = Gpt2Custom(
         vocabulary_size=vocabulary_size,
         num_layers=24,
         num_heads=16,
@@ -235,9 +354,18 @@ def Gpt2Medium(vocabulary_size, name=None, trainable=True):
         trainable=trainable,
     )
 
+    if weights:
+        model.load_weights(weights)
 
-def Gpt2Large(vocabulary_size, name=None, trainable=True):
-    return Gpt2Custom(
+    return model
+
+
+def Gpt2Large(weights=None, vocabulary_size=None, name=None, trainable=True):
+    weights, vocabulary_size = _handle_pretrained_model_arguments(
+        "Gpt2Large", weights, vocabulary_size
+    )
+
+    model = Gpt2Custom(
         vocabulary_size=vocabulary_size,
         num_layers=36,
         num_heads=20,
@@ -249,9 +377,20 @@ def Gpt2Large(vocabulary_size, name=None, trainable=True):
         trainable=trainable,
     )
 
+    if weights:
+        model.load_weights(weights)
 
-def Gpt2ExtraLarge(vocabulary_size, name=None, trainable=True):
-    return Gpt2Custom(
+    return model
+
+
+def Gpt2ExtraLarge(
+    weights=None, vocabulary_size=None, name=None, trainable=True
+):
+    weights, vocabulary_size = _handle_pretrained_model_arguments(
+        "Gpt2ExtraLarge", weights, vocabulary_size
+    )
+
+    model = Gpt2Custom(
         vocabulary_size=vocabulary_size,
         num_layers=48,
         num_heads=25,
@@ -262,6 +401,11 @@ def Gpt2ExtraLarge(vocabulary_size, name=None, trainable=True):
         name=name,
         trainable=trainable,
     )
+
+    if weights:
+        model.load_weights(weights)
+
+    return model
 
 
 setattr(
