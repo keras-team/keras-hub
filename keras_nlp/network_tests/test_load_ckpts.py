@@ -53,3 +53,22 @@ class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
     def test_load_vocabularies(self, vocabulary):
         tokenizer = keras_nlp.models.BertPreprocessor(vocabulary=vocabulary)
         tokenizer("The quick brown fox.")
+
+
+@pytest.mark.slow
+class Gpt2CkptTest(tf.test.TestCase, parameterized.TestCase):
+    @parameterized.named_parameters(
+        ("base", keras_nlp.models.Gpt2Base, "gpt2_base"),
+        ("medium", keras_nlp.models.Gpt2Medium, "gpt2_medium"),
+        ("large", keras_nlp.models.Gpt2Large, "gpt2_large"),
+        ("extra_large", keras_nlp.models.Gpt2ExtraLarge, "gpt2_extra_large"),
+    )
+    def test_load_gpt2(self, gpt2_variant, weights):
+        model = gpt2_variant(weights=weights)
+        input_data = {
+            "token_ids": tf.random.uniform(
+                shape=(1, 1024), dtype=tf.int64, maxval=model.vocabulary_size
+            ),
+            "padding_mask": tf.constant([1] * 1024, shape=(1, 1024)),
+        }
+        model(input_data)
