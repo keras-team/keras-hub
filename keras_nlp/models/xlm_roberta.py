@@ -13,8 +13,8 @@
 # limitations under the License.
 """XLM-RoBERTa model configurable class, preconfigured versions, and task heads."""
 
-import tensorflow as tf
-from tensorflow import keras
+# import tensorflow as tf
+# from tensorflow import keras
 
 from keras_nlp.models import roberta
 
@@ -70,7 +70,9 @@ class XLMRobertaCustom(roberta.RobertaCustom):
     output = model(input_data)
     ```
     """
+
     pass
+
 
 def XLMRobertaBase(vocabulary_size, name=None, trainable=True):
     """XLM-RoBERTa implementation using "Base" architecture.
