@@ -28,3 +28,5 @@ from keras_nlp.models.gpt2 import Gpt2Medium
 from keras_nlp.models.roberta import RobertaBase
 from keras_nlp.models.roberta import RobertaClassifier
 from keras_nlp.models.roberta import RobertaCustom
+from keras_nlp.models.xlm_roberta import XLMRobertaBase
+from keras_nlp.models.xlm_roberta import XLMRobertaCustom
