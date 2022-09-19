@@ -120,10 +120,14 @@ checkpoints = {
 }
 
 
-# Index checkpoints by arch compatibility
-arch_checkpoints = defaultdict(set)
+# Index checkpoints by arch compatibility and create lookup function
+checkpoints_per_arch = defaultdict(set)
 for arch, metadata in checkpoints.items():
-    arch_checkpoints[metadata["model"]].add(arch)
+    checkpoints_per_arch[metadata["model"]].add(arch)
+
+def compatible_checkpoints(arch):
+    """Returns a list of compatible checkpoints per arch"""
+    return checkpoints_per_arch[arch]
 
 
 # Metadata for loading pretrained tokenizer vocabularies.
@@ -212,10 +216,11 @@ def _handle_pretrained_model_arguments(bert_variant, weights, vocabulary_size):
         )
 
     if weights:
-        if weights not in arch_checkpoints[bert_variant]:
+        arch_checkpoints = compatible_checkpoints(bert_variant)
+        if weights not in arch_checkpoints:
             raise ValueError(
                 "`weights` must be one of "
-                f"""{", ".join(arch_checkpoints[bert_variant])}. """
+                f"""{", ".join(arch_checkpoints)}. """
                 f"Received: {weights}"
             )
         metadata = checkpoints[weights]
@@ -734,20 +739,22 @@ def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
     return model
 
 
-arch_classes = {
-    "BertTiny": BertTiny,
-    "BertSmall": BertSmall,
-    "BertMedium": BertMedium,
-    "BertBase": BertBase,
-    "BertLarge": BertLarge,
-}
+def model_class_by_name(classname):
+    """Return model class given the class name."""
+    return {
+        "BertTiny": BertTiny,
+        "BertSmall": BertSmall,
+        "BertMedium": BertMedium,
+        "BertBase": BertBase,
+        "BertLarge": BertLarge,
+    }[classname]
 
 
 setattr(
     BertTiny,
     "__doc__",
     MODEL_DOCSTRING.format(
-        type="Tiny", names=", ".join(arch_checkpoints["BertTiny"])
+        type="Tiny", names=", ".join(compatible_checkpoints("BertTiny"))
     ),
 )
 
@@ -755,7 +762,7 @@ setattr(
     BertSmall,
     "__doc__",
     MODEL_DOCSTRING.format(
-        type="Small", names=", ".join(arch_checkpoints["BertSmall"])
+        type="Small", names=", ".join(compatible_checkpoints("BertSmall"))
     ),
 )
 
@@ -763,7 +770,7 @@ setattr(
     BertMedium,
     "__doc__",
     MODEL_DOCSTRING.format(
-        type="Medium", names=", ".join(arch_checkpoints["BertMedium"])
+        type="Medium", names=", ".join(compatible_checkpoints("BertMedium"))
     ),
 )
 
@@ -771,13 +778,13 @@ setattr(
     BertBase,
     "__doc__",
     MODEL_DOCSTRING.format(
-        type="Base", names=", ".join(arch_checkpoints["BertBase"])
+        type="Base", names=", ".join(compatible_checkpoints("BertBase"))
     ),
 )
 setattr(
     BertLarge,
     "__doc__",
     MODEL_DOCSTRING.format(
-        type="Large", names=", ".join(arch_checkpoints["BertLarge"])
+        type="Large", names=", ".join(compatible_checkpoints("BertLarge"))
     ),
 )

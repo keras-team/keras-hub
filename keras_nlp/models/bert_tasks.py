@@ -85,7 +85,7 @@ class BertClassifier(keras.Model):
                     f"Received: {backbone}"
                 )
             backbone_class_str = bert.checkpoints[backbone]["model"]
-            backbone_class = bert.arch_classes[backbone_class_str]
+            backbone_class = bert.model_class_by_name(backbone_class_str)
             backbone = backbone_class(backbone)
 
         inputs = backbone.input
