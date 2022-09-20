@@ -27,9 +27,9 @@ CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
         backbone: A string, `keras_nlp.models.BertCustom` or derivative such as
             `keras_nlp.models.BertBase` to encode inputs. If a string, should be
             one of {names}.
-        num_classes: Int. Number of classes to predict.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
+        num_classes: int. Number of classes to predict.
+        name: string, optional. Name of the model.
+        trainable: boolean, optional. If the model's variables should be
             trainable.
 
     Examples:
