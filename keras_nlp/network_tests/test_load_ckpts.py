@@ -17,8 +17,10 @@ import pytest
 import tensorflow as tf
 
 import keras_nlp
-from keras_nlp.models.bert import model_class_by_name as bert_model_class_by_name
 from keras_nlp.models.bert import checkpoints as bert_checkpoints
+from keras_nlp.models.bert import (
+    model_class_by_name as bert_model_class_by_name,
+)
 from keras_nlp.models.bert import vocabularies as bert_vocabularies
 
 

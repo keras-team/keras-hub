@@ -125,6 +125,7 @@ checkpoints_per_arch = defaultdict(set)
 for arch, metadata in checkpoints.items():
     checkpoints_per_arch[metadata["model"]].add(arch)
 
+
 def compatible_checkpoints(arch):
     """Returns a list of compatible checkpoints per arch"""
     return checkpoints_per_arch[arch]
