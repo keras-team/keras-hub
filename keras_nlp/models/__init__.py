@@ -13,13 +13,13 @@
 # limitations under the License.
 
 from keras_nlp.models.bert import BertBase
-from keras_nlp.models.bert import BertClassifier
 from keras_nlp.models.bert import BertCustom
 from keras_nlp.models.bert import BertLarge
 from keras_nlp.models.bert import BertMedium
 from keras_nlp.models.bert import BertPreprocessor
 from keras_nlp.models.bert import BertSmall
 from keras_nlp.models.bert import BertTiny
+from keras_nlp.models.bert_tasks import BertClassifier
 from keras_nlp.models.gpt2 import Gpt2Base
 from keras_nlp.models.gpt2 import Gpt2Custom
 from keras_nlp.models.gpt2 import Gpt2ExtraLarge

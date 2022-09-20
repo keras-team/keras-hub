@@ -15,41 +15,65 @@
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
 
 import keras_nlp
+from keras_nlp.models.bert import checkpoints as bert_checkpoints
+from keras_nlp.models.bert import (
+    model_class_by_name as bert_model_class_by_name,
+)
+from keras_nlp.models.bert import vocabularies as bert_vocabularies
 
 
 @pytest.mark.slow
-class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
-    @parameterized.named_parameters(
-        ("tiny_uncased_en", keras_nlp.models.BertTiny, "uncased_en"),
-        ("small_uncased_en", keras_nlp.models.BertSmall, "uncased_en"),
-        ("medium_uncased_en", keras_nlp.models.BertMedium, "uncased_en"),
-        ("base_uncased_en", keras_nlp.models.BertBase, "uncased_en"),
-        ("base_cased_en", keras_nlp.models.BertBase, "cased_en"),
-        ("base_zh", keras_nlp.models.BertBase, "zh"),
-        ("base_multi_cased", keras_nlp.models.BertBase, "multi_cased"),
-        ("large_uncased_en", keras_nlp.models.BertLarge, "uncased_en"),
-        ("large_cased_en", keras_nlp.models.BertLarge, "cased_en"),
-    )
-    def test_load_bert(self, bert_variant, weights):
-        model = bert_variant(weights=weights)
+class BertCkptTest(tf.test.TestCase):
+    def test_load_bert(self):
+        for checkpoint in bert_checkpoints:
+            bert_variant = bert_checkpoints[checkpoint]["model"]
+            bert_class = bert_model_class_by_name(bert_variant)
+            model = bert_class(weights=checkpoint)
+            input_data = {
+                "token_ids": tf.random.uniform(
+                    shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
+                ),
+                "segment_ids": tf.constant(
+                    [0] * 200 + [1] * 312, shape=(1, 512)
+                ),
+                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+            }
+            model(input_data)
+
+    def test_load_bert_backbone_string(self):
+        for checkpoint in bert_checkpoints:
+            classifier = keras_nlp.models.bert_tasks.BertClassifier(
+                checkpoint, 4, name="classifier"
+            )
+            input_data = {
+                "token_ids": tf.random.uniform(
+                    shape=(1, 512),
+                    dtype=tf.int64,
+                    maxval=classifier.backbone.vocabulary_size,
+                ),
+                "segment_ids": tf.constant(
+                    [0] * 200 + [1] * 312, shape=(1, 512)
+                ),
+                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+            }
+            classifier(input_data)
+
+    def test_classifier_default_args(self):
+        classifier = keras_nlp.models.bert_tasks.BertClassifier()
         input_data = {
             "token_ids": tf.random.uniform(
-                shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
+                shape=(1, 512),
+                dtype=tf.int64,
+                maxval=classifier.backbone.vocabulary_size,
             ),
             "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
             "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
         }
-        model(input_data)
+        classifier(input_data)
 
-    @parameterized.named_parameters(
-        ("uncased_en", "uncased_en"),
-        ("cased_en", "cased_en"),
-        ("zh", "zh"),
-        ("multi_cased", "multi_cased"),
-    )
-    def test_load_vocabularies(self, vocabulary):
-        tokenizer = keras_nlp.models.BertPreprocessor(vocabulary=vocabulary)
-        tokenizer("The quick brown fox.")
+    def test_load_vocabularies(self):
+        for vocabulary in bert_vocabularies:
+            tokenizer = keras_nlp.models.BertPreprocessor(vocabulary=vocabulary)
+            tokenizer("The quick brown fox.")

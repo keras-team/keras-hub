@@ -106,10 +106,6 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             }
             self.model(input_data)
 
-    def test_valid_call_classifier(self):
-        classifier = bert.BertClassifier(self.model, 4, name="classifier")
-        classifier(self.input_batch)
-
     def test_valid_call_bert_base(self):
         model = bert.BertBase(vocabulary_size=1000, name="encoder")
         input_data = {
@@ -141,22 +137,6 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_bert_classifier_compile(self, jit_compile):
-        model = bert.BertClassifier(self.model, 4, name="classifier")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_bert_classifier_compile_batched_ds(self, jit_compile):
-        model = bert.BertClassifier(self.model, 4, name="classifier")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_dataset)
-
     def test_bert_base_vocab_error(self):
         # Need `vocabulary_size` or `weights`
         with self.assertRaises(ValueError):
@@ -165,7 +145,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
         # Only one of `vocabulary_size` or `weights`
         with self.assertRaises(ValueError):
             bert.BertBase(
-                weights="bert_base_uncased",
+                weights="bert_base_uncased_en",
                 vocabulary_size=1000,
                 name="encoder",
             )
@@ -173,7 +153,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
         # Not a checkpoint name
         with self.assertRaises(ValueError):
             bert.BertBase(
-                weights="bert_base_clowntown",
+                weights="bert_base_uncased_clowntown",
                 name="encoder",
             )
 
