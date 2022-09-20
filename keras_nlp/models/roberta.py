@@ -15,6 +15,7 @@
 """RoBERTa model configurable class, preconfigured versions, and task heads."""
 
 import tensorflow as tf
+import tensorflow_text as tf_text
 from tensorflow import keras
 
 from keras_nlp.layers import TokenAndPositionEmbedding
@@ -168,6 +169,183 @@ class RobertaCustom(keras.Model):
             }
         )
         return config
+
+
+class RobertaMultiSegmentPacker(keras.layers.Layer):
+    """Packs multiple sequences into a single fixed width model input.
+
+    This layer packs multiple input sequences into a single fixed width sequence
+    containing start and end delimiters, forming a dense input suitable for a
+    classification task for RoBERTa.
+
+    TODO(abheesht17): This is a temporary, unexported layer until we find a way
+    to make the exported `MultiSegmentPacker` layer more generic.
+
+    Takes as input a list or tuple of token segments. The layer will process
+    inputs as follows:
+     - Truncate all input segments to fit within `sequence_length` according to
+       the `truncate` strategy.
+     - Concatenate all input segments, adding a single `start_value` at the
+       start of the entire sequence, `[end_value, end_value]` at the end of
+       each segment and a single `end_value` at the end of the entire sequence.
+     - Pad the resulting sequence to `sequence_length` using `pad_tokens`.
+
+    Input should be either a `tf.RaggedTensor` or a dense `tf.Tensor`, and
+    either rank-1 or rank-2.
+
+    Args:
+        sequence_length: The desired output length.
+        start_value: The id or token that is to be placed at the start of each
+            sequence (called `"<s>"` for RoBERTa). The dtype must match the dtype
+            of the input tensors to the layer.
+        end_value: The id or token that is to be placed at the end of each
+            input segment (called `"</s>"` for RoBERTa). The dtype much match the
+            dtype of the input tensors to the layer.
+        pad_value: The id or token that is to be placed into the unused
+            positions after the last segment in the sequence
+            (called "[PAD]" for RoBERTa).
+        truncate: The algorithm to truncate a list of batched segments to fit a
+            per-example length limit. The value can be either `round_robin` or
+            `waterfall`:
+                - `"round_robin"`: Available space is assigned one token at a
+                    time in a round-robin fashion to the inputs that still need
+                    some, until the limit is reached.
+                - `"waterfall"`: The allocation of the budget is done using a
+                    "waterfall" algorithm that allocates quota in a
+                    left-to-right manner and fills up the buckets until we run
+                    out of budget. It support arbitrary number of segments.
+
+    Returns:
+        A dense, packed token sequence.
+    """
+
+    def __init__(
+        self,
+        sequence_length,
+        start_value,
+        end_value,
+        pad_value=None,
+        truncate="round_robin",
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.sequence_length = sequence_length
+        if truncate not in ("round_robin", "waterfall"):
+            raise ValueError(
+                "Only 'round_robin' and 'waterfall' algorithms are "
+                "supported. Received %s" % truncate
+            )
+        self.truncate = truncate
+        self.start_value = start_value
+        self.end_value = end_value
+        self.pad_value = pad_value
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "sequence_length": self.sequence_length,
+                "start_value": self.start_value,
+                "end_value": self.end_value,
+                "pad_value": self.pad_value,
+                "truncate": self.truncate,
+            }
+        )
+        return config
+
+    def _sanitize_inputs(self, inputs):
+        """Force inputs to a list of rank 2 ragged tensors."""
+        # Sanitize inputs.
+        if not isinstance(inputs, (list, tuple)):
+            inputs = [inputs]
+        if not inputs:
+            raise ValueError("At least one input is required for packing")
+        input_ranks = [x.shape.rank for x in inputs]
+        if not all(0 < rank < 3 for rank in input_ranks):
+            raise ValueError(
+                "All inputs for packing must have rank 1 or 2. "
+                f"Received input ranks: {input_ranks}"
+            )
+        if None in input_ranks or len(set(input_ranks)) > 1:
+            raise ValueError(
+                "All inputs for packing must have the same rank. "
+                f"Received input ranks: {input_ranks}"
+            )
+        return inputs
+
+    def _convert_dense(self, x):
+        """Converts inputs to rank 2 ragged tensors."""
+        if isinstance(x, tf.Tensor):
+            return tf.RaggedTensor.from_tensor(x)
+        else:
+            return x
+
+    def _trim_inputs(self, inputs):
+        """Trim inputs to desired length."""
+        # Special tokens include the start token at the beginning of the
+        # sequence, two `end_value` at the end of every segment save the last,
+        # and the `end_value` at the end of the sequence.
+        num_special_tokens = 2 * len(inputs)
+        if self.truncate == "round_robin":
+            return tf_text.RoundRobinTrimmer(
+                self.sequence_length - num_special_tokens
+            ).trim(inputs)
+        elif self.truncate == "waterfall":
+            return tf_text.WaterfallTrimmer(
+                self.sequence_length - num_special_tokens
+            ).trim(inputs)
+        else:
+            raise ValueError("Unsupported truncate: %s" % self.truncate)
+
+    def _combine_inputs(self, segments):
+        """Combine inputs with start and end values added."""
+        dtype = segments[0].dtype
+        batch_size = segments[0].nrows()
+
+        start_value = tf.convert_to_tensor(self.start_value, dtype=dtype)
+        segment_split_values = tf.convert_to_tensor(
+            [self.end_value, self.end_value], dtype=dtype
+        )
+        end_value = tf.convert_to_tensor(self.end_value, dtype=dtype)
+
+        start_column = tf.fill((batch_size, 1), start_value)
+        segment_end_columns = tf.repeat(
+            segment_split_values[tf.newaxis, :], repeats=batch_size, axis=0
+        )
+        end_column = tf.fill((batch_size, 1), end_value)
+
+        segments_to_combine = [start_column]
+        for seg in segments[:-1]:
+            # Combine all segments adding end tokens.
+            segments_to_combine.append(seg)
+            segments_to_combine.append(segment_end_columns)
+        segments_to_combine.append(segments[-1])
+        segments_to_combine.append(end_column)
+
+        token_ids = tf.concat(segments_to_combine, 1)
+        return token_ids
+
+    def call(self, inputs):
+        inputs = self._sanitize_inputs(inputs)
+
+        # If rank 1, add a batch dim.
+        rank_1 = inputs[0].shape.rank == 1
+        if rank_1:
+            inputs = [tf.expand_dims(x, 0) for x in inputs]
+        inputs = [self._convert_dense(x) for x in inputs]
+
+        segments = self._trim_inputs(inputs)
+        token_ids = self._combine_inputs(segments)
+        # Pad to dense tensor output.
+        shape = tf.cast([-1, self.sequence_length], tf.int64)
+        token_ids = token_ids.to_tensor(
+            shape=shape, default_value=self.pad_value
+        )
+        # Remove the batch dim if added.
+        if rank_1:
+            token_ids = tf.squeeze(token_ids, 0)
+
+        return token_ids
 
 
 class RobertaClassifier(keras.Model):

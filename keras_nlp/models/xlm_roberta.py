@@ -74,8 +74,7 @@ class XLMRobertaCustom(roberta.RobertaCustom):
     pass
 
 
-def XLMRobertaBase(vocabulary_size, name=None, trainable=True):
-    """XLM-RoBERTa implementation using "Base" architecture.
+MODEL_DOCSTRING = """XLM-RoBERTa "{type}" architecture.
 
     This network implements a bi-directional Transformer-based encoder as
     described in
@@ -91,8 +90,8 @@ def XLMRobertaBase(vocabulary_size, name=None, trainable=True):
 
     Example usage:
     ```python
-    # Randomly initialized RobertaBase encoder
-    model = keras_nlp.models.RobertaBase(vocabulary_size=10000)
+    # Randomly initialized XLMRoberta{type} encoder
+    model = keras_nlp.models.XLMRoberta{type}(vocabulary_size=10000)
 
     # Call encoder on the inputs.
     input_data = {
@@ -102,14 +101,30 @@ def XLMRobertaBase(vocabulary_size, name=None, trainable=True):
     }
     output = model(input_data)
     ```
-    """
+"""
 
+
+def XLMRobertaBase(vocabulary_size, name=None, trainable=True):
     return XLMRobertaCustom(
         vocabulary_size=vocabulary_size,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
+        dropout=0.1,
+        max_sequence_length=512,
+        name=name,
+        trainable=trainable,
+    )
+
+
+def XLMRobertaLarge(vocabulary_size, name=None, trainable=True):
+    return XLMRobertaCustom(
+        vocabulary_size=vocabulary_size,
+        num_layers=24,
+        num_heads=16,
+        hidden_dim=1024,
+        intermediate_dim=4096,
         dropout=0.1,
         max_sequence_length=512,
         name=name,
