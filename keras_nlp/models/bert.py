@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BERT model configurable class, preconfigured versions, and task heads."""
+"""BERT model configurable class and preconfigured versions."""
 
 import os
+from collections import defaultdict
 
 import tensorflow as tf
 from tensorflow import keras
@@ -25,91 +26,109 @@ from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
-def _bert_kernel_initializer(stddev=0.02):
+def bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
+# TODO(jbischof): document checkpoints in keras.io and use URL in docstrings
 # Metadata for loading pretrained model weights.
 checkpoints = {
-    "bert_tiny": {
-        "uncased_en": {
-            "description": (
-                "Tiny size of BERT where all input is lowercased. "
-                "Trained on English Wikipedia + BooksCorpus."
-            ),
-            "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_uncased_en/model.h5",
-            "weights_hash": "c2b29fcbf8f814a0812e4ab89ef5c068",
-        }
+    "bert_tiny_uncased_en": {
+        "model": "BertTiny",
+        "vocabulary": "uncased_en",
+        "description": (
+            "Tiny size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_uncased_en/model.h5",
+        "weights_hash": "c2b29fcbf8f814a0812e4ab89ef5c068",
     },
-    "bert_small": {
-        "uncased_en": {
-            "description": (
-                "Small size of BERT where all input is lowercased. "
-                "Trained on English Wikipedia + BooksCorpus."
-            ),
-            "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_small_uncased_en/model.h5",
-            "weights_hash": "08632c9479b034f342ba2c2b7afba5f7",
-        }
+    "bert_small_uncased_en": {
+        "model": "BertSmall",
+        "vocabulary": "uncased_en",
+        "description": (
+            "Small size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_small_uncased_en/model.h5",
+        "weights_hash": "08632c9479b034f342ba2c2b7afba5f7",
     },
-    "bert_medium": {
-        "uncased_en": {
-            "description": (
-                "Medium size of BERT where all input is lowercased. "
-                "Trained on English Wikipedia + BooksCorpus."
-            ),
-            "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_medium_uncased_en/model.h5",
-            "weights_hash": "bb990e1184ec6b6185450c73833cd661",
-        }
+    "bert_medium_uncased_en": {
+        "model": "BertMedium",
+        "vocabulary": "uncased_en",
+        "description": (
+            "Medium size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_medium_uncased_en/model.h5",
+        "weights_hash": "bb990e1184ec6b6185450c73833cd661",
     },
-    "bert_base": {
-        "uncased_en": {
-            "description": (
-                "Base size of BERT where all input is lowercased. "
-                "Trained on English Wikipedia + BooksCorpus."
-            ),
-            "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_uncased_en/model.h5",
-            "weights_hash": "9b2b2139f221988759ac9cdd17050b31",
-        },
-        "cased_en": {
-            "description": (
-                "Base size of BERT where case is maintained. "
-                "Trained on English Wikipedia + BooksCorpus."
-            ),
-            "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_cased_en/model.h5",
-            "weights_hash": "f94a6cb012e18f4fb8ec92abb91864e9",
-        },
-        "zh": {
-            "description": ("Base size of BERT. Trained on Chinese Wikipedia."),
-            "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_zh/model.h5",
-            "weights_hash": "79afa421e386076e62ab42dad555ab0c",
-        },
-        "multi_cased": {
-            "description": (
-                "Base size of BERT. Trained on Wikipedias of 104 languages."
-            ),
-            "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_multi_cased/model.h5",
-            "weights_hash": "b0631cec0a1f2513c6cfd75ba29c33aa",
-        },
+    "bert_base_uncased_en": {
+        "model": "BertBase",
+        "vocabulary": "uncased_en",
+        "description": (
+            "Base size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_uncased_en/model.h5",
+        "weights_hash": "9b2b2139f221988759ac9cdd17050b31",
     },
-    "bert_large": {
-        "uncased_en": {
-            "description": (
-                "Large size of BERT where all input is lowercased. "
-                "Trained on English Wikipedia + BooksCorpus."
-            ),
-            "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_uncased_en/model.h5",
-            "weights_hash": "cc5cacc9565ef400ee4376105f40ddae",
-        },
-        "cased_en": {
-            "description": (
-                "Large size of BERT where case is maintained. "
-                "Trained on English Wikipedia + BooksCorpus."
-            ),
-            "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_cased_en/model.h5",
-            "weights_hash": "8b8ab82290bbf4f8db87d4f100648890",
-        },
+    "bert_base_cased_en": {
+        "model": "BertBase",
+        "vocabulary": "cased_en",
+        "description": (
+            "Base size of BERT where case is maintained. "
+            "Trained on English Wikipedia + BooksCorpus."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_cased_en/model.h5",
+        "weights_hash": "f94a6cb012e18f4fb8ec92abb91864e9",
+    },
+    "bert_base_zh": {
+        "model": "BertBase",
+        "vocabulary": "zh",
+        "description": ("Base size of BERT. Trained on Chinese Wikipedia."),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_zh/model.h5",
+        "weights_hash": "79afa421e386076e62ab42dad555ab0c",
+    },
+    "bert_base_multi_cased": {
+        "model": "BertBase",
+        "vocabulary": "multi_cased",
+        "description": ("Base size of BERT. Trained on Chinese Wikipedia."),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_multi_cased/model.h5",
+        "weights_hash": "b0631cec0a1f2513c6cfd75ba29c33aa",
+    },
+    "bert_large_uncased_en": {
+        "model": "BertLarge",
+        "vocabulary": "uncased_en",
+        "description": (
+            "Large size of BERT where all input is lowercased. "
+            "Trained on English Wikipedia + BooksCorpus."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_uncased_en/model.h5",
+        "weights_hash": "cc5cacc9565ef400ee4376105f40ddae",
+    },
+    "bert_large_cased_en": {
+        "model": "BertLarge",
+        "vocabulary": "cased_en",
+        "description": (
+            "Base size of BERT where case is maintained. "
+            "Trained on English Wikipedia + BooksCorpus."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_cased_en/model.h5",
+        "weights_hash": "8b8ab82290bbf4f8db87d4f100648890",
     },
 }
+
+
+# Index checkpoints by arch compatibility and create lookup function
+checkpoints_per_arch = defaultdict(set)
+for arch, metadata in checkpoints.items():
+    checkpoints_per_arch[metadata["model"]].add(arch)
+
+
+def compatible_checkpoints(arch):
+    """Returns a list of compatible checkpoints per arch"""
+    return checkpoints_per_arch[arch]
 
 
 # Metadata for loading pretrained tokenizer vocabularies.
@@ -167,6 +186,7 @@ def _handle_pretrained_tokenizer_arguments(vocabulary, lowercase):
     fully resolve them in the case we are loading pretrained weights.
     """
 
+    # TODO(jbischof): allow user to lookup vocabulary from checkpoint name
     if isinstance(vocabulary, str) and vocabulary in vocabularies:
         metadata = vocabularies[vocabulary]
         vocabulary = keras.utils.get_file(
@@ -197,14 +217,16 @@ def _handle_pretrained_model_arguments(bert_variant, weights, vocabulary_size):
         )
 
     if weights:
-        if weights not in checkpoints[bert_variant]:
+        arch_checkpoints = compatible_checkpoints(bert_variant)
+        if weights not in arch_checkpoints:
             raise ValueError(
                 "`weights` must be one of "
-                f"""{", ".join(checkpoints[bert_variant])}. """
+                f"""{", ".join(arch_checkpoints)}. """
                 f"Received: {weights}"
             )
-        metadata = checkpoints[bert_variant][weights]
-        vocabulary_size = vocabularies[weights]["vocabulary_size"]
+        metadata = checkpoints[weights]
+        vocabulary = metadata["vocabulary"]
+        vocabulary_size = vocabularies[vocabulary]["vocabulary_size"]
 
         # TODO(jbischof): consider changing format from `h5` to
         # `tf.train.Checkpoint` once
@@ -212,7 +234,7 @@ def _handle_pretrained_model_arguments(bert_variant, weights, vocabulary_size):
         weights = keras.utils.get_file(
             "model.h5",
             metadata["weights_url"],
-            cache_subdir=os.path.join("models", "bert", weights, bert_variant),
+            cache_subdir=os.path.join("models", weights),
             file_hash=metadata["weights_hash"],
         )
 
@@ -314,19 +336,19 @@ class BertCustom(keras.Model):
         token_embedding_layer = keras.layers.Embedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            embeddings_initializer=_bert_kernel_initializer(),
+            embeddings_initializer=bert_kernel_initializer(),
             name="token_embedding",
         )
         token_embedding = token_embedding_layer(token_id_input)
         position_embedding = PositionEmbedding(
-            initializer=_bert_kernel_initializer(),
+            initializer=bert_kernel_initializer(),
             sequence_length=max_sequence_length,
             name="position_embedding",
         )(token_embedding)
         segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
             output_dim=hidden_dim,
-            embeddings_initializer=_bert_kernel_initializer(),
+            embeddings_initializer=bert_kernel_initializer(),
             name="segment_embedding",
         )(segment_id_input)
 
@@ -354,7 +376,7 @@ class BertCustom(keras.Model):
                     x, approximate=True
                 ),
                 dropout=dropout,
-                kernel_initializer=_bert_kernel_initializer(),
+                kernel_initializer=bert_kernel_initializer(),
                 name=f"transformer_layer_{i}",
             )(x, padding_mask=padding_mask)
 
@@ -363,7 +385,7 @@ class BertCustom(keras.Model):
         sequence_output = x
         pooled_output = keras.layers.Dense(
             hidden_dim,
-            kernel_initializer=_bert_kernel_initializer(),
+            kernel_initializer=bert_kernel_initializer(),
             activation="tanh",
             name="pooled_dense",
         )(x[:, cls_token_index, :])
@@ -561,69 +583,7 @@ setattr(
 )
 
 
-class BertClassifier(keras.Model):
-    """BERT encoder model with a classification head.
-
-    Args:
-        base_model: A `keras_nlp.models.BertCustom` to encode inputs.
-        num_classes: int. Number of classes to predict.
-        name: string, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
-
-    Examples:
-    ```python
-    # Randomly initialized BERT encoder
-    model = keras_nlp.models.BertCustom(
-        vocabulary_size=30522,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
-    )
-
-    # Call classifier on the inputs.
-    input_data = {
-        "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
-        ),
-        "segment_ids": tf.constant(
-            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
-        "padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
-    }
-    classifier = bert.BertClassifier(model, 4, name="classifier")
-    logits = classifier(input_data)
-    ```
-    """
-
-    def __init__(
-        self,
-        base_model,
-        num_classes,
-        name=None,
-        trainable=True,
-    ):
-        inputs = base_model.input
-        pooled = base_model(inputs)["pooled_output"]
-        outputs = keras.layers.Dense(
-            num_classes,
-            kernel_initializer=_bert_kernel_initializer(),
-            name="logits",
-        )(pooled)
-        # Instantiate using Functional API Model constructor
-        super().__init__(
-            inputs=inputs, outputs=outputs, name=name, trainable=trainable
-        )
-        # All references to `self` below this line
-        self.base_model = base_model
-        self.num_classes = num_classes
-
-
-MODEL_DOCSTRING = """BERT "{type}" architecture.
+MODEL_DOCSTRING = """Bert "{type}" architecture.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["BERT: Pre-training of Deep Bidirectional Transformers for
@@ -658,7 +618,7 @@ MODEL_DOCSTRING = """BERT "{type}" architecture.
     output = model(input_data)
 
     # Load a pretrained model
-    model = keras_nlp.models.Bert{type}(weights="uncased_en")
+    model = keras_nlp.models.Bert{type}(weights="bert_base_uncased_en")
     # Call encoder on the inputs.
     output = model(input_data)
     ```
@@ -667,7 +627,7 @@ MODEL_DOCSTRING = """BERT "{type}" architecture.
 
 def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
     weights, vocabulary_size = _handle_pretrained_model_arguments(
-        "bert_tiny", weights, vocabulary_size
+        "BertTiny", weights, vocabulary_size
     )
 
     model = BertCustom(
@@ -685,14 +645,12 @@ def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
     if weights:
         model.load_weights(weights)
 
-    # TODO(jbischof): attach the tokenizer or create separate tokenizer class.
-    # This comment applies to other variants as well.
     return model
 
 
 def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
     weights, vocabulary_size = _handle_pretrained_model_arguments(
-        "bert_small", weights, vocabulary_size
+        "BertSmall", weights, vocabulary_size
     )
 
     model = BertCustom(
@@ -715,7 +673,7 @@ def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
 
 def BertMedium(weights=None, vocabulary_size=None, name=None, trainable=True):
     weights, vocabulary_size = _handle_pretrained_model_arguments(
-        "bert_medium", weights, vocabulary_size
+        "BertMedium", weights, vocabulary_size
     )
 
     model = BertCustom(
@@ -738,7 +696,7 @@ def BertMedium(weights=None, vocabulary_size=None, name=None, trainable=True):
 
 def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
     weights, vocabulary_size = _handle_pretrained_model_arguments(
-        "bert_base", weights, vocabulary_size
+        "BertBase", weights, vocabulary_size
     )
 
     model = BertCustom(
@@ -761,7 +719,7 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
 
 def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
     weights, vocabulary_size = _handle_pretrained_model_arguments(
-        "bert_large", weights, vocabulary_size
+        "BertLarge", weights, vocabulary_size
     )
 
     model = BertCustom(
@@ -782,11 +740,22 @@ def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
     return model
 
 
+def model_class_by_name(classname):
+    """Return model class given the class name."""
+    return {
+        "BertTiny": BertTiny,
+        "BertSmall": BertSmall,
+        "BertMedium": BertMedium,
+        "BertBase": BertBase,
+        "BertLarge": BertLarge,
+    }[classname]
+
+
 setattr(
     BertTiny,
     "__doc__",
     MODEL_DOCSTRING.format(
-        type="Tiny", names=", ".join(checkpoints["bert_tiny"])
+        type="Tiny", names=", ".join(compatible_checkpoints("BertTiny"))
     ),
 )
 
@@ -794,7 +763,7 @@ setattr(
     BertSmall,
     "__doc__",
     MODEL_DOCSTRING.format(
-        type="Small", names=", ".join(checkpoints["bert_small"])
+        type="Small", names=", ".join(compatible_checkpoints("BertSmall"))
     ),
 )
 
@@ -802,7 +771,7 @@ setattr(
     BertMedium,
     "__doc__",
     MODEL_DOCSTRING.format(
-        type="Medium", names=", ".join(checkpoints["bert_medium"])
+        type="Medium", names=", ".join(compatible_checkpoints("BertMedium"))
     ),
 )
 
@@ -810,13 +779,13 @@ setattr(
     BertBase,
     "__doc__",
     MODEL_DOCSTRING.format(
-        type="Base", names=", ".join(checkpoints["bert_base"])
+        type="Base", names=", ".join(compatible_checkpoints("BertBase"))
     ),
 )
 setattr(
     BertLarge,
     "__doc__",
     MODEL_DOCSTRING.format(
-        type="Large", names=", ".join(checkpoints["bert_large"])
+        type="Large", names=", ".join(compatible_checkpoints("BertLarge"))
     ),
 )
