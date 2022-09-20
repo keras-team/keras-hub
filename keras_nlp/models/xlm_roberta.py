@@ -213,10 +213,9 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
             inputs = [inputs]
 
         inputs = [self.tokenizer(x) for x in inputs]
-        token_ids, segment_ids = self.packer(inputs)
+        token_ids = self.packer(inputs)
         return {
             "token_ids": token_ids,
-            "segment_ids": segment_ids,
             "padding_mask": token_ids != 0,
         }
 
