@@ -77,6 +77,8 @@ class BertClassifier(keras.Model):
         trainable=True,
     ):
         # Load backbone from string identifier
+        # TODO(jbischof): create util function when ready to load backbones in
+        # other task classes (e.g., load_backbone_from_string())
         if isinstance(backbone, str):
             if backbone not in bert.checkpoints:
                 raise ValueError(

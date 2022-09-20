@@ -30,7 +30,7 @@ def bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-# TODO(jbischof): consider moving `checkpoints`` and `vocabularies` to JSON
+# TODO(jbischof): document checkpoints in keras.io and use URL in docstrings
 # Metadata for loading pretrained model weights.
 checkpoints = {
     "bert_tiny_uncased_en": {
