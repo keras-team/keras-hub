@@ -187,7 +187,8 @@ class RobertaMultiSegmentPacker(keras.layers.Layer):
        the `truncate` strategy.
      - Concatenate all input segments, adding a single `start_value` at the
        start of the entire sequence, `[end_value, end_value]` at the end of
-       each segment and a single `end_value` at the end of the entire sequence.
+       each segment save the last, and a single `end_value` at the end of the
+       entire sequence.
      - Pad the resulting sequence to `sequence_length` using `pad_tokens`.
 
     Input should be either a `tf.RaggedTensor` or a dense `tf.Tensor`, and
