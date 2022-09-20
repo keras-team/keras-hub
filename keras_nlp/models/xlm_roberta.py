@@ -163,21 +163,32 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         self.tokenizer = SentencePieceTokenizer(proto=spm_proto)
 
         # Check for necessary special tokens.
+        # Note: If `"<pad>"` is not present, it means the ID for `"<pad>"` is
+        # -1. This is keeping in mind the default for `pad_id` in the
+        # `sentencepiece` repo.
         start_token = "<s>"
         end_token = "</s>"
         pad_token = "<pad>"
+        pad_id = None
         for token in [start_token, end_token, pad_token]:
             if token not in self.tokenizer.get_vocabulary():
+                if token == pad_token:
+                    pad_id = -1
+                    continue
+
                 raise ValueError(
                     f"Cannot find token `'{token}'` in the provided "
-                    f"`vocabulary`. Please provide `'{token}'` in your "
-                    "`vocabulary` or use a pretrained `vocabulary` name."
+                    f"`spm_proto`. Please provide `'{token}'` in your "
+                    "`spm_proto`."
                 )
+
+        if pad_id is None:
+            pad_id = self.tokenizer.token_to_id(pad_token)
 
         self.packer = RobertaMultiSegmentPacker(
             start_value=self.tokenizer.token_to_id(start_token),
             end_value=self.tokenizer.token_to_id(end_token),
-            pad_value=self.tokenizer.token_to_id(pad_token),
+            pad_value=pad_id,
             truncate=truncate,
             sequence_length=sequence_length,
         )
