@@ -216,7 +216,7 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         token_ids = self.packer(inputs)
         return {
             "token_ids": token_ids,
-            "padding_mask": token_ids != 0,
+            "padding_mask": token_ids != pad_id,
         }
 
 
