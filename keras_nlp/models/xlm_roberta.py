@@ -13,8 +13,7 @@
 # limitations under the License.
 """XLM-RoBERTa model configurable class, preconfigured versions, and task heads."""
 
-# import tensorflow as tf
-# from tensorflow import keras
+from tensorflow import keras
 
 from keras_nlp.models import roberta
 from keras_nlp.models.roberta import RobertaMultiSegmentPacker
