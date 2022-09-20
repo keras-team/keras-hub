@@ -169,11 +169,11 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         start_token = "<s>"
         end_token = "</s>"
         pad_token = "<pad>"
-        pad_id = None
+        self.pad_id = None
         for token in [start_token, end_token, pad_token]:
             if token not in self.tokenizer.get_vocabulary():
                 if token == pad_token:
-                    pad_id = -1
+                    self.pad_id = -1
                     continue
 
                 raise ValueError(
@@ -182,13 +182,13 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
                     "`spm_proto`."
                 )
 
-        if pad_id is None:
-            pad_id = self.tokenizer.token_to_id(pad_token)
+        if self.pad_id is None:
+            self.pad_id = self.tokenizer.token_to_id(pad_token)
 
         self.packer = RobertaMultiSegmentPacker(
             start_value=self.tokenizer.token_to_id(start_token),
             end_value=self.tokenizer.token_to_id(end_token),
-            pad_value=pad_id,
+            pad_value=self.pad_id,
             truncate=truncate,
             sequence_length=sequence_length,
         )
@@ -216,7 +216,7 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         token_ids = self.packer(inputs)
         return {
             "token_ids": token_ids,
-            "padding_mask": token_ids != pad_id,
+            "padding_mask": token_ids != self.pad_id,
         }
 
 
