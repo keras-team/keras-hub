@@ -17,6 +17,8 @@
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.utils.keras_utils import clone_initializer
+
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class FNetEncoder(keras.layers.Layer):
@@ -104,13 +106,13 @@ class FNetEncoder(keras.layers.Layer):
         self._intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             activation=self.activation,
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
         )
         self._output_dense = keras.layers.Dense(
             feature_size,
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
         )
         self._output_dropout = keras.layers.Dropout(rate=self.dropout)
 
