@@ -114,10 +114,11 @@ def _handle_pretrained_model_arguments(gpt2_variant, weights, vocabulary_size):
         )
 
     if weights:
-        if weights not in checkpoints_per_arch[gpt2_variant]:
+        arch_checkpoints = compatible_checkpoints(gpt2_variant)
+        if weights not in arch_checkpoints:
             raise ValueError(
                 "`weights` must be one of "
-                f"""{", ".join(checkpoints_per_arch[gpt2_variant])}. """
+                f"""{", ".join(arch_checkpoints)}. """
                 f"Received: {weights}."
             )
         metadata = checkpoints[weights]
@@ -412,6 +413,16 @@ def Gpt2ExtraLarge(
         model.load_weights(weights)
 
     return model
+
+
+def model_class_by_name(classname):
+    """Return model class given the class name."""
+    return {
+        "Gpt2Base": Gpt2Base,
+        "Gpt2Medium": Gpt2Medium,
+        "Gpt2Large": Gpt2Large,
+        "Gpt2ExtraLarge": Gpt2ExtraLarge,
+    }[classname]
 
 
 setattr(

@@ -22,6 +22,10 @@ from keras_nlp.models.bert import (
     model_class_by_name as bert_model_class_by_name,
 )
 from keras_nlp.models.bert import vocabularies as bert_vocabularies
+from keras_nlp.models.gpt2 import checkpoints as gpt2_checkpoints
+from keras_nlp.models.gpt2 import (
+    model_class_by_name as gpt2_model_class_by_name,
+)
 
 
 @pytest.mark.slow
@@ -78,31 +82,19 @@ class BertCkptTest(tf.test.TestCase):
             tokenizer = keras_nlp.models.BertPreprocessor(vocabulary=vocabulary)
             tokenizer("The quick brown fox.")
 
-    @parameterized.named_parameters(
-        ("uncased_en", "uncased_en"),
-        ("cased_en", "cased_en"),
-        ("zh", "zh"),
-        ("multi_cased", "multi_cased"),
-    )
-    def test_load_vocabularies(self, vocabulary):
-        tokenizer = keras_nlp.models.BertPreprocessor(vocabulary=vocabulary)
-        tokenizer("The quick brown fox.")
-
 
 @pytest.mark.slow
-class Gpt2CkptTest(tf.test.TestCase, parameterized.TestCase):
-    @parameterized.named_parameters(
-        ("base", keras_nlp.models.Gpt2Base, "gpt2_base"),
-        ("medium", keras_nlp.models.Gpt2Medium, "gpt2_medium"),
-        ("large", keras_nlp.models.Gpt2Large, "gpt2_large"),
-        ("extra_large", keras_nlp.models.Gpt2ExtraLarge, "gpt2_extra_large"),
-    )
+class Gpt2CkptTest(tf.test.TestCase):
     def test_load_gpt2(self, gpt2_variant, weights):
-        model = gpt2_variant(weights=weights)
-        input_data = {
-            "token_ids": tf.random.uniform(
-                shape=(1, 1024), dtype=tf.int64, maxval=model.vocabulary_size
-            ),
-            "padding_mask": tf.constant([1] * 1024, shape=(1, 1024)),
-        }
-        model(input_data)
+        for checkpoint in gpt2_checkpoints:
+            gpt2_class = gpt2_model_class_by_name(gpt2_variant)
+            model = gpt2_class(weights=checkpoint)
+            input_data = {
+                "token_ids": tf.random.uniform(
+                    shape=(1, 1024),
+                    dtype=tf.int64,
+                    maxval=model.vocabulary_size,
+                ),
+                "padding_mask": tf.constant([1] * 1024, shape=(1, 1024)),
+            }
+            model(input_data)
