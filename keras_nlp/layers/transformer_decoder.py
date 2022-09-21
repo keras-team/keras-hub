@@ -17,6 +17,8 @@
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.utils.keras_utils import clone_initializer
+
 from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
     compute_causal_mask,
     merge_padding_and_attention_mask,
@@ -143,8 +145,8 @@ class TransformerDecoder(keras.layers.Layer):
             num_heads=self.num_heads,
             key_dim=head_dim,
             dropout=self.dropout,
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
         )
         self._self_attention_layer._build_from_signature(
             query=input_shape,
@@ -165,8 +167,8 @@ class TransformerDecoder(keras.layers.Layer):
                 key_dim=head_dim,
                 value_dim=hidden_dim,
                 dropout=self.dropout,
-                kernel_initializer=self.kernel_initializer,
-                bias_initializer=self.bias_initializer,
+                kernel_initializer=clone_initializer(self.kernel_initializer),
+                bias_initializer=clone_initializer(self.bias_initializer),
             )
             self._cross_attention_layer._build_from_signature(
                 query=input_shape,
@@ -183,13 +185,13 @@ class TransformerDecoder(keras.layers.Layer):
         self._feedforward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             activation=self.activation,
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
         )
         self._feedforward_output_dense = keras.layers.Dense(
             hidden_dim,
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
         )
         self._feedforward_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,

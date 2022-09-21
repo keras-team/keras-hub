@@ -22,13 +22,6 @@ from tensorflow import keras
 from keras_nlp.layers import TokenAndPositionEmbedding
 
 
-def custom_embed_init(shape, dtype=None):
-    count = 1
-    for length in shape:
-        count *= length
-    return tf.ones(shape, dtype=dtype)
-
-
 class TokenAndPositionEmbeddingTest(tf.test.TestCase, parameterized.TestCase):
     def test_get_config_and_from_config(self):
         token_and_position_embed = TokenAndPositionEmbedding(
@@ -65,7 +58,7 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase, parameterized.TestCase):
             vocabulary_size=vocabulary_size,
             sequence_length=sequence_length,
             embedding_dim=embedding_dim,
-            embeddings_initializer=custom_embed_init,
+            embeddings_initializer=keras.initializers.Constant(1.0),
         )
         # Create a 2-dimensional ragged input
         # (the first dimension is implicit).
@@ -109,7 +102,7 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase, parameterized.TestCase):
             vocabulary_size=vocabulary_size,
             sequence_length=sequence_length,
             embedding_dim=embedding_dim,
-            embeddings_initializer=custom_embed_init,
+            embeddings_initializer=keras.initializers.Constant(1.0),
         )
         # Create a 2-dimensional input
         # (the first dimension is implicit).
