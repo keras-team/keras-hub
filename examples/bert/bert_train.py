@@ -202,10 +202,12 @@ class BertPretrainingModel(keras.Model):
         self.masked_lm_head = MaskedLMHead(
             embedding_table=encoder.token_embedding.embeddings,
             initializer=keras.initializers.TruncatedNormal(stddev=0.02),
+            name="mlm_layer",
         )
         self.next_sentence_head = keras.layers.Dense(
             encoder.num_segments,
             kernel_initializer=keras.initializers.TruncatedNormal(stddev=0.02),
+            name="nsp_layer",
         )
 
     def call(self, data):
@@ -224,7 +226,7 @@ class BertPretrainingModel(keras.Model):
             sequence_output, data["masked_lm_positions"]
         )
         nsp_preds = self.next_sentence_head(pooled_output)
-        return lm_preds, nsp_preds
+        return {"mlm": lm_preds, "nsp": nsp_preds}
 
 
 class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
@@ -293,8 +295,11 @@ def decode_record(record):
         "segment_ids": example["segment_ids"],
         "masked_lm_positions": example["masked_lm_positions"],
     }
-    labels = (example["masked_lm_ids"], example["next_sentence_labels"])
-    sample_weights = (example["masked_lm_weights"], tf.ones((1,)))
+    labels = {
+        "mlm": example["masked_lm_ids"],
+        "nsp": example["next_sentence_labels"],
+    }
+    sample_weights = {"mlm": example["masked_lm_weights"], "nsp": tf.ones((1,))}
     sample = (inputs, labels, sample_weights)
     return sample
 
@@ -406,18 +411,14 @@ def main(_):
             name="nsp_loss",
         )
 
-        lm_accuracy = keras.metrics.SparseCategoricalAccuracy(
-            name="lm_accuracy"
-        )
-        nsp_accuracy = keras.metrics.SparseCategoricalAccuracy(
-            name="nsp_accuracy"
-        )
+        lm_accuracy = keras.metrics.SparseCategoricalAccuracy(name="accuracy")
+        nsp_accuracy = keras.metrics.SparseCategoricalAccuracy(name="accuracy")
 
         pretraining_model = BertPretrainingModel(encoder)
         pretraining_model.compile(
             optimizer=optimizer,
-            loss=(lm_loss, nsp_loss),
-            weighted_metrics=((lm_accuracy,), (nsp_accuracy,)),
+            loss={"mlm": lm_loss, "nsp": nsp_loss},
+            weighted_metrics={"mlm": lm_accuracy, "nsp": nsp_accuracy},
         )
 
     epochs = TRAINING_CONFIG["epochs"]
