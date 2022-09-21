@@ -70,10 +70,16 @@ checkpoints = {
     },
 }
 
-# Index checkpoints by arch compatibility
-arch_checkpoints = defaultdict(set)
+# Index checkpoints by arch compatibility.
+checkpoints_per_arch = defaultdict(set)
 for arch, metadata in checkpoints.items():
-    arch_checkpoints[metadata["model"]].add(arch)
+    checkpoints_per_arch[metadata["model"]].add(arch)
+
+
+def compatible_checkpoints(arch):
+    """Returns a list of compatible checkpoints per arch"""
+    return checkpoints_per_arch[arch]
+
 
 # TODO: Iron out this part after BPE tokenizer has been finalized. Also, check
 # the to-do comment in `keras_nlp/models/bert.py`.
@@ -108,10 +114,10 @@ def _handle_pretrained_model_arguments(gpt2_variant, weights, vocabulary_size):
         )
 
     if weights:
-        if weights not in arch_checkpoints[gpt2_variant]:
+        if weights not in checkpoints_per_arch[gpt2_variant]:
             raise ValueError(
                 "`weights` must be one of "
-                f"""{", ".join(arch_checkpoints[gpt2_variant])}. """
+                f"""{", ".join(checkpoints_per_arch[gpt2_variant])}. """
                 f"Received: {weights}."
             )
         metadata = checkpoints[weights]
