@@ -308,7 +308,7 @@ MODEL_DOCSTRING = """GPT-2 "{type}" architecture.
     Example usage:
     ```python
     # Randomly initialized Gpt2{type} encoder
-    model = keras_nlp.models.Gpt2{type}(vocabulary_size=10000)
+    model = keras_nlp.models.Gpt2{type}(weights=None, vocabulary_size=10000)
 
     # Call encoder on the inputs.
     input_data = {{
@@ -321,7 +321,9 @@ MODEL_DOCSTRING = """GPT-2 "{type}" architecture.
 """
 
 
-def Gpt2Base(weights=None, vocabulary_size=None, name=None, trainable=True):
+def Gpt2Base(
+    weights="gpt2_base", vocabulary_size=None, name=None, trainable=True
+):
     weights, vocabulary_size = _handle_pretrained_model_arguments(
         "Gpt2Base", weights, vocabulary_size
     )
@@ -344,7 +346,9 @@ def Gpt2Base(weights=None, vocabulary_size=None, name=None, trainable=True):
     return model
 
 
-def Gpt2Medium(weights=None, vocabulary_size=None, name=None, trainable=True):
+def Gpt2Medium(
+    weights="gpt2_medium", vocabulary_size=None, name=None, trainable=True
+):
     weights, vocabulary_size = _handle_pretrained_model_arguments(
         "Gpt2Medium", weights, vocabulary_size
     )
@@ -367,7 +371,9 @@ def Gpt2Medium(weights=None, vocabulary_size=None, name=None, trainable=True):
     return model
 
 
-def Gpt2Large(weights=None, vocabulary_size=None, name=None, trainable=True):
+def Gpt2Large(
+    weights="gpt2_large", vocabulary_size=None, name=None, trainable=True
+):
     weights, vocabulary_size = _handle_pretrained_model_arguments(
         "Gpt2Large", weights, vocabulary_size
     )
@@ -391,7 +397,7 @@ def Gpt2Large(weights=None, vocabulary_size=None, name=None, trainable=True):
 
 
 def Gpt2ExtraLarge(
-    weights=None, vocabulary_size=None, name=None, trainable=True
+    weights="gpt2_extra_large", vocabulary_size=None, name=None, trainable=True
 ):
     weights, vocabulary_size = _handle_pretrained_model_arguments(
         "Gpt2ExtraLarge", weights, vocabulary_size
