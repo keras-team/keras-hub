@@ -190,6 +190,8 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
             sequence_length=sequence_length,
         )
 
+        self.pad_token_id = pad_token_id
+
     def vocabulary_size(self):
         """Returns the vocabulary size of the tokenizer."""
         return self.tokenizer.vocabulary_size()
@@ -229,12 +231,12 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         token_ids = self.packer(inputs)
         return {
             "token_ids": token_ids,
-            "padding_mask": token_ids != self.pad_id,
+            "padding_mask": token_ids != self.pad_token_id,
         }
 
 
-# TODO(abheesht17): Will have to add args to `PREPROCESSOR_DOCSTRING` once
-# weights are uploaded.
+# TODO(abheesht17): Add args to `PREPROCESSOR_DOCSTRING` once weights are
+# uploaded.
 setattr(
     XLMRobertaPreprocessor,
     "__doc__",

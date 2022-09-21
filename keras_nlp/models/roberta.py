@@ -204,7 +204,7 @@ class RobertaMultiSegmentPacker(keras.layers.Layer):
             dtype of the input tensors to the layer.
         pad_value: The id or token that is to be placed into the unused
             positions after the last segment in the sequence
-            (called "[PAD]" for RoBERTa).
+            (called "<pad>" for RoBERTa).
         truncate: The algorithm to truncate a list of batched segments to fit a
             per-example length limit. The value can be either `round_robin` or
             `waterfall`:
