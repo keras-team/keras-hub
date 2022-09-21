@@ -539,10 +539,11 @@ class BertPreprocessor(keras.layers.Layer):
                     "`vocabulary` or use a pretrained `vocabulary` name."
                 )
 
+        self.pad_token_id = self.tokenizer.token_to_id(pad_token)
         self.packer = MultiSegmentPacker(
             start_value=self.tokenizer.token_to_id(cls_token),
             end_value=self.tokenizer.token_to_id(sep_token),
-            pad_value=self.tokenizer.token_to_id(pad_token),
+            pad_value=self.pad_token_id,
             truncate=truncate,
             sequence_length=sequence_length,
         )
@@ -558,7 +559,7 @@ class BertPreprocessor(keras.layers.Layer):
                 "vocabulary": self.tokenizer.vocabulary,
                 "lowercase": self.tokenizer.lowercase,
                 "sequence_length": self.packer.sequence_length,
-                "trucator": self.packer.trucator,
+                "truncate": self.packer.truncate,
             }
         )
         return config
@@ -572,7 +573,7 @@ class BertPreprocessor(keras.layers.Layer):
         return {
             "token_ids": token_ids,
             "segment_ids": segment_ids,
-            "padding_mask": token_ids != 0,
+            "padding_mask": token_ids != self.pad_token_id,
         }
 
 
