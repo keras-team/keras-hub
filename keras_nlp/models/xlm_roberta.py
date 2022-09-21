@@ -13,6 +13,7 @@
 # limitations under the License.
 """XLM-RoBERTa model configurable class, preconfigured versions, and task heads."""
 
+import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.models import roberta
@@ -89,6 +90,20 @@ This preprocessing layer will do three things:
  - Construct a dictionary of with keys `"token_ids"`, `"padding_mask"`, that can
    be passed directly to a XLM-RoBERTa model.
 
+The original fairseq implementation implements a very hacky solution to
+take care of `pad_id`. Brace yourself for some crazy stuff.
+
+Original fairseq vocab and spm vocab must be "aligned":
+Vocab    |    0    |    1    |   2    |    3    |  4  |  5  |  6  |   7   |   8   |  9
+-------- | ------- | ------- | ------ | ------- | --- | --- | --- | ----- | ----- | ----
+fairseq  | '<s>'   | '<pad>' | '</s>' | '<unk>' | ',' | '.' | '▁' | 's'   | '▁de' | '-'
+spm      | '<unk>' | '<s>'   | '</s>' | ','     | '.' | '▁' | 's' | '▁de' | '-'   | '▁a'
+
+In this layer, we will ignore the indices of special tokens, i.e., `<s>`,
+`<pad>`, `</s>`, `<unk>` and hardcode them to the fairseq token IDs given above.
+For the rest of the tokens, we will use indices of the spm vocab, and shift them
+by one.
+
 This layer will accept either a tuple of (possibly batched) inputs, or a single
 input tensor. If a single tensor is passed, it will be packed equivalently to
 a tuple with a single element.
@@ -163,32 +178,14 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         self.tokenizer = SentencePieceTokenizer(proto=spm_proto)
 
         # Check for necessary special tokens.
-        # Note: If `"<pad>"` is not present, it means the ID for `"<pad>"` is
-        # -1. This is keeping in mind the default for `pad_id` in the
-        # `sentencepiece` repo.
-        start_token = "<s>"
-        end_token = "</s>"
-        pad_token = "<pad>"
-        self.pad_id = None
-        for token in [start_token, end_token, pad_token]:
-            if token not in self.tokenizer.get_vocabulary():
-                if token == pad_token:
-                    self.pad_id = -1
-                    continue
-
-                raise ValueError(
-                    f"Cannot find token `'{token}'` in the provided "
-                    f"`spm_proto`. Please provide `'{token}'` in your "
-                    "`spm_proto`."
-                )
-
-        if self.pad_id is None:
-            self.pad_id = self.tokenizer.token_to_id(pad_token)
+        start_token_id = 0
+        pad_token_id = 1
+        end_token_id = 2
 
         self.packer = RobertaMultiSegmentPacker(
-            start_value=self.tokenizer.token_to_id(start_token),
-            end_value=self.tokenizer.token_to_id(end_token),
-            pad_value=self.pad_id,
+            start_value=start_token_id,
+            end_value=end_token_id,
+            pad_value=pad_token_id,
             truncate=truncate,
             sequence_length=sequence_length,
         )
@@ -212,7 +209,23 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         if not isinstance(inputs, (list, tuple)):
             inputs = [inputs]
 
-        inputs = [self.tokenizer(x) for x in inputs]
+        def _tokenize(x):
+            tokenized = self.tokenizer(x)
+            dtype = tokenized.dtype
+
+            # In the official SPM proto file, `[unk]`'s ID is 0. Replace that
+            # with 2. This will be changed to 3 (`[unk]`'s ID is 3 in the
+            # official implementation) after adding by 1.
+            tokenized = tf.where(
+                tf.equal(tokenized, tf.constant(0, dtype=dtype)),
+                tf.constant(2, dtype=dtype),
+                tokenized,
+            )
+            # Shift the tokens IDs by one.
+            tokenized = tf.add(tokenized, tf.constant(1, dtype=dtype))
+            return tokenized
+
+        inputs = [_tokenize(x) for x in inputs]
         token_ids = self.packer(inputs)
         return {
             "token_ids": token_ids,
