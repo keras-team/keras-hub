@@ -63,14 +63,18 @@ class Gpt2Test(tf.test.TestCase, parameterized.TestCase):
             self.model(input_data)
 
     def test_valid_call_gpt2_base(self):
-        model = gpt2.Gpt2Base(vocabulary_size=1000, name="gpt2_base_test")
+        model = gpt2.Gpt2Base(
+            weights=None, vocabulary_size=1000, name="gpt2_base_test"
+        )
         model(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_gpt2_base_compile(self, jit_compile):
-        model = gpt2.Gpt2Base(vocabulary_size=1000, name="gpt2_base_test")
+        model = gpt2.Gpt2Base(
+            weights=None, vocabulary_size=1000, name="gpt2_base_test"
+        )
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_batch)
 
@@ -78,7 +82,9 @@ class Gpt2Test(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_gpt2_base_compile_batched_ds(self, jit_compile):
-        model = gpt2.Gpt2Base(vocabulary_size=1000, name="gpt2_base_test")
+        model = gpt2.Gpt2Base(
+            weights=None, vocabulary_size=1000, name="gpt2_base_test"
+        )
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_dataset)
 

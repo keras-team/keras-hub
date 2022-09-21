@@ -85,8 +85,9 @@ class BertCkptTest(tf.test.TestCase):
 
 @pytest.mark.slow
 class Gpt2CkptTest(tf.test.TestCase):
-    def test_load_gpt2(self, gpt2_variant, weights):
+    def test_load_gpt2(self):
         for checkpoint in gpt2_checkpoints:
+            gpt2_variant = gpt2_checkpoints[checkpoint]["model"]
             gpt2_class = gpt2_model_class_by_name(gpt2_variant)
             model = gpt2_class(weights=checkpoint)
             input_data = {

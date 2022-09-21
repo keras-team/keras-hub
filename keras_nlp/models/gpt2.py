@@ -100,6 +100,7 @@ vocabularies = {
 
 def _handle_pretrained_model_arguments(gpt2_variant, weights, vocabulary_size):
     """Look up pretrained defaults for model arguments.
+
     This helper will validate the `weights` and `vocabulary_size` arguments, and
     fully resolve them in the case we are loading pretrained weights.
     """
