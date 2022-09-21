@@ -47,10 +47,10 @@ class MultiSegmentPacker(keras.layers.Layer):
     Args:
         sequence_length: The desired output length.
         start_value: The id or token that is to be placed at the start of each
-            sequence (called "[CLS]" for BERT). The dtype must mach the dtype of
-            the input tensors to the layer.
+            sequence (called "[CLS]" for BERT). The dtype must match the dtype
+            of the input tensors to the layer.
         end_value: The id or token that is to be placed at the end of each
-            input segment (called "[SEP]" for BERT). The dtype much mach the
+            input segment (called "[SEP]" for BERT). The dtype much match the
             dtype of the input tensors to the layer.
         pad_value: The id or token that is to be placed into the unused
             positions after the last segment in the sequence
