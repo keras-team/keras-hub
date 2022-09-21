@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Bert model."""
+"""Test for BERT backbone models."""
 
 import os
 
@@ -19,50 +19,13 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models import bert
-
-
-class BertPreprocessorTest(tf.test.TestCase):
-    def setUp(self):
-        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
-        self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
-        self.vocab += ["the", "quick", "brown", "fox"]
-
-    def test_tokenize(self):
-        input_data = ["THE QUICK BROWN FOX."]
-        preprocessor = bert.BertPreprocessor(
-            vocabulary=self.vocab,
-            sequence_length=8,
-        )
-        output = preprocessor(input_data)
-        self.assertAllEqual(output["token_ids"], [2, 5, 6, 7, 8, 1, 3, 0])
-        self.assertAllEqual(output["segment_ids"], [0, 0, 0, 0, 0, 0, 0, 0])
-        self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0])
-
-    def test_lowercase(self):
-        input_data = ["THE QUICK BROWN FOX."]
-        preprocessor = bert.BertPreprocessor(
-            vocabulary=self.vocab,
-            sequence_length=8,
-            lowercase=True,
-        )
-        output = preprocessor(input_data)
-        self.assertAllEqual(output["token_ids"], [2, 9, 10, 11, 12, 1, 3, 0])
-
-    def test_detokenize(self):
-        input_data = [[5, 6, 7, 8]]
-        preprocessor = bert.BertPreprocessor(vocabulary=self.vocab)
-        output = preprocessor.tokenizer.detokenize(input_data)
-        self.assertAllEqual(output, ["THE QUICK BROWN FOX"])
-
-    def test_vocabulary_size(self):
-        preprocessor = bert.BertPreprocessor(vocabulary=self.vocab)
-        self.assertEqual(preprocessor.vocabulary_size(), 13)
+from keras_nlp.models.bert.bert_models import BertBase
+from keras_nlp.models.bert.bert_models import BertCustom
 
 
 class BertTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = bert.BertCustom(
+        self.model = BertCustom(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -107,7 +70,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             self.model(input_data)
 
     def test_valid_call_bert_base(self):
-        model = bert.BertBase(vocabulary_size=1000, name="encoder")
+        model = BertBase(vocabulary_size=1000, name="encoder")
         input_data = {
             "token_ids": tf.ones(
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
@@ -125,7 +88,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_bert_base_compile(self, jit_compile):
-        model = bert.BertBase(vocabulary_size=1000, name="encoder")
+        model = BertBase(vocabulary_size=1000, name="encoder")
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_batch)
 
@@ -133,18 +96,18 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_bert_base_compile_batched_ds(self, jit_compile):
-        model = bert.BertBase(vocabulary_size=1000, name="encoder")
+        model = BertBase(vocabulary_size=1000, name="encoder")
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_dataset)
 
     def test_bert_base_vocab_error(self):
         # Need `vocabulary_size` or `weights`
         with self.assertRaises(ValueError):
-            bert.BertBase(name="encoder")
+            BertBase(name="encoder")
 
         # Only one of `vocabulary_size` or `weights`
         with self.assertRaises(ValueError):
-            bert.BertBase(
+            BertBase(
                 weights="bert_base_uncased_en",
                 vocabulary_size=1000,
                 name="encoder",
@@ -152,7 +115,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
 
         # Not a checkpoint name
         with self.assertRaises(ValueError):
-            bert.BertBase(
+            BertBase(
                 weights="bert_base_uncased_clowntown",
                 name="encoder",
             )
