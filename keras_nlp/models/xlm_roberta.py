@@ -31,8 +31,9 @@ class XLMRobertaCustom(roberta.RobertaCustom):
     include the masked language modeling head used during pretraining.
 
     This class gives a fully configurable XLM-R model with any number of
-    layers, heads, and embedding dimensions. For specific XLM-R architectures
-    defined in the paper, see, for example, `keras_nlp.models.XLMRoberta`.
+    layers, heads, and embedding dimensions. The graph of XLM-R is
+    exactly the same as RoBERTa's. For specific XLM-R architectures
+    defined in the paper, see, for example, `keras_nlp.models.XLMRobertaBase`.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -82,27 +83,18 @@ This preprocessing layer will do three things:
 
  - Tokenize any number of inputs using a
    `keras_nlp.tokenizers.SentencePieceTokenizer`.
- - Pack the inputs together using a
-   `keras_nlp.models.roberta.RobertaMultiSegmentPacker` with the appropriate
-   `"<s>"`, `"</s>"` and `"<pad>"` tokens, i.e., adding a single `<s>` at the
-   start of the entire sequence, `[</s>, </s>]` at the end of each segment,
-   save the last and a `</s>` at the end of the entire sequence.
+ - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and `"<pad>"`
+   tokens, i.e., adding a single `"<s>"` at the start of the entire sequence,
+   `"</s></s>"` at the end of each segment, save the last and a `"</s>"` at the
+   end of the entire sequence.
  - Construct a dictionary of with keys `"token_ids"`, `"padding_mask"`, that can
    be passed directly to a XLM-RoBERTa model.
 
-The original fairseq implementation implements a very hacky solution to
-take care of `pad_id`. Brace yourself for some crazy stuff.
-
-Original fairseq vocab and spm vocab must be "aligned":
-Vocab    |    0    |    1    |   2    |    3    |  4  |  5  |  6  |   7   |   8   |  9
--------- | ------- | ------- | ------ | ------- | --- | --- | --- | ----- | ----- | ----
-fairseq  | '<s>'   | '<pad>' | '</s>' | '<unk>' | ',' | '.' | '▁' | 's'   | '▁de' | '-'
-spm      | '<unk>' | '<s>'   | '</s>' | ','     | '.' | '▁' | 's' | '▁de' | '-'   | '▁a'
-
-In this layer, we will ignore the indices of special tokens, i.e., `<s>`,
-`<pad>`, `</s>`, `<unk>` and hardcode them to the fairseq token IDs given above.
-For the rest of the tokens, we will use indices of the spm vocab, and shift them
-by one.
+Note that the original fairseq implementation modifies the indices of the
+SentencePiece tokenizer output. To preserve compatibility, we make the same
+changes, i.e., `"<s>"`, `"<pad>"`, `"</s>"` and `"<unk>"` are mapped to
+1, 2, 3, 4, respectively, and non-special tokens' indices are shifted right by
+one. Keep this in mind if generating your own vocabulary for tokenization.
 
 This layer will accept either a tuple of (possibly batched) inputs, or a single
 input tensor. If a single tensor is passed, it will be packed equivalently to
@@ -112,7 +104,7 @@ The SentencePiece tokenizer can be accessed via the `tokenizer` property on this
 layer, and can be used directly for custom packing on inputs.
 
 Args:
-    spm_proto: Either a `string` path to a SentencePiece proto file, or a
+    proto: Either a `string` path to a SentencePiece proto file, or a
                `bytes` object with a serialized SentencePiece proto. See the
                [SentencePiece repository](https://github.com/google/sentencepiece)
                for more details on the format.
@@ -132,7 +124,7 @@ Args:
 
 Examples:
 ```python
-preprocessor = keras_nlp.models.XLMRobertaPreprocessor(spm_proto="model.spm")
+preprocessor = keras_nlp.models.XLMRobertaPreprocessor(proto="model.spm")
 
 # Tokenize and pack a single sentence directly.
 preprocessor("The quick brown fox jumped.")
@@ -165,17 +157,17 @@ ds = ds.map(
 class XLMRobertaPreprocessor(keras.layers.Layer):
     def __init__(
         self,
-        spm_proto,
+        proto,
         sequence_length=512,
         truncate="round_robin",
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        # TODO(abheesht17): Instead of passing `spm_proto`, do something similar
+        # TODO(abheesht17): Instead of passing `proto`, do something similar
         # to `BertPreprocessor` once weights have been uploaded.
 
-        self.tokenizer = SentencePieceTokenizer(proto=spm_proto)
+        self.tokenizer = SentencePieceTokenizer(proto=proto)
 
         # Check for necessary special tokens.
         start_token_id = 0
@@ -200,7 +192,7 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "spm_proto": self.tokenizer.proto,
+                "proto": self.tokenizer.proto,
                 "sequence_length": self.packer.sequence_length,
                 "truncate": self.packer.truncate,
             }
