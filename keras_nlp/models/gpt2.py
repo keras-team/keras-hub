@@ -301,6 +301,8 @@ MODEL_DOCSTRING = """GPT-2 "{type}" architecture.
     It includes the embedding lookups and transformer layers.
 
     Args:
+        weights: string, optional. Name of pretrained model to load weights.
+            Should be one of {names}.
         vocabulary_size: int, optional. The size of the token vocabulary.
         name: String, optional. Name of the model.
         trainable: boolean, optional. If the model's variables should be
@@ -435,20 +437,29 @@ def model_class_by_name(classname):
 setattr(
     Gpt2Base,
     "__doc__",
-    MODEL_DOCSTRING.format(type="Base"),
+    MODEL_DOCSTRING.format(
+        type="Base", names=", ".join(compatible_checkpoints("Gpt2Base"))
+    ),
 )
 setattr(
     Gpt2Medium,
     "__doc__",
-    MODEL_DOCSTRING.format(type="Medium"),
+    MODEL_DOCSTRING.format(
+        type="Medium", names=", ".join(compatible_checkpoints("Gpt2Medium"))
+    ),
 )
 setattr(
     Gpt2Large,
     "__doc__",
-    MODEL_DOCSTRING.format(type="Large"),
+    MODEL_DOCSTRING.format(
+        type="Large", names=", ".join(compatible_checkpoints("Gpt2Large"))
+    ),
 )
 setattr(
     Gpt2ExtraLarge,
     "__doc__",
-    MODEL_DOCSTRING.format(type="ExtraLarge"),
+    MODEL_DOCSTRING.format(
+        type="ExtraLarge",
+        names=", ".join(compatible_checkpoints("Gpt2ExtraLarge")),
+    ),
 )
