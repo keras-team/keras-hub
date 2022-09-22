@@ -29,7 +29,6 @@ def _gpt_2_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-# TODO(abheesht17): Remove "webtext" from URLs?
 checkpoints = {
     "gpt2_base": {
         "model": "Gpt2Base",
@@ -126,9 +125,6 @@ def _handle_pretrained_model_arguments(gpt2_variant, weights, vocabulary_size):
         vocabulary = metadata["vocabulary"]
         vocabulary_size = vocabularies[vocabulary]["vocabulary_size"]
 
-        # TODO(jbischof): consider changing format from `h5` to
-        # `tf.train.Checkpoint` once
-        # https://github.com/keras-team/keras/issues/16946 is resolved.
         weights = keras.utils.get_file(
             "model.h5",
             metadata["weights_url"],
