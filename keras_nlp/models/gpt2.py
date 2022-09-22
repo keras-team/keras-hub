@@ -37,7 +37,7 @@ checkpoints = {
         "description": (
             "Base size of GPT-2 with 124M parameters. Trained on WebText."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_webtext/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base/model.h5",
         "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
     },
     "gpt2_medium": {
@@ -46,7 +46,7 @@ checkpoints = {
         "description": (
             "Medium size of GPT-2 with 355M parameters. Trained on WebText."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_medium_webtext/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_medium/model.h5",
         "weights_hash": "580ff9b79c04fc90e6d6f47e975c5afe",
     },
     "gpt2_large": {
@@ -55,7 +55,7 @@ checkpoints = {
         "description": (
             "Large size of GPT-2 with 774M parameters. Trained on WebText."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_large_webtext/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_large/model.h5",
         "weights_hash": "67957cb3dfc9e965960dabe068811e1a",
     },
     "gpt2_extra_large": {
@@ -65,7 +65,7 @@ checkpoints = {
             "Extra Large size of GPT-2 with 1558M parameters. "
             "Trained on WebText."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_extra_large_webtext/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_extra_large/model.h5",
         "weights_hash": "d093c1ee0d9705d845c0190909aa2917",
     },
 }
@@ -89,10 +89,10 @@ vocabularies = {
             "The BPE vocabulary for GPT-2 models trained on "
             "the WebText dataset."
         ),
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_webtext/vocab.json",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base/vocab.json",
         "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
         "vocabulary_size": 50257,
-        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_webtext/merges.txt",
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
 }

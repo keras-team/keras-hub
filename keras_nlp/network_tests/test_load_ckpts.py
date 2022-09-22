@@ -99,3 +99,7 @@ class Gpt2CkptTest(tf.test.TestCase):
                 "padding_mask": tf.constant([1] * 1024, shape=(1, 1024)),
             }
             model(input_data)
+
+    def test_defaults(self):
+        for _, model_class in gpt2_model_class_by_name.items():
+            model_class()
