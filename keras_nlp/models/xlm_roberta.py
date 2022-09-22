@@ -11,7 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""XLM-RoBERTa model configurable class, preconfigured versions, and task heads."""
+"""XLM-RoBERTa model configurable class and preconfigured versions."""
+
+import os
+from collections import defaultdict
 
 import tensorflow as tf
 from tensorflow import keras
@@ -19,6 +22,110 @@ from tensorflow import keras
 from keras_nlp.models import roberta
 from keras_nlp.models.roberta import RobertaMultiSegmentPacker
 from keras_nlp.tokenizers import SentencePieceTokenizer
+
+checkpoints = {
+    "xlm_roberta_base": {
+        "model": "XLMRobertaBase",
+        "vocabulary": "common_crawl",
+        "description": (
+            "Base size of XLM-RoBERTa with 277M parameters. Trained on "
+            "the CommonCrawl dataset (100 languages)."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base/model.h5",
+        "weights_hash": "2eb6fcda5a42f0a88056213ba3d93906",
+    },
+    "xlm_roberta_large": {
+        "model": "XLMRobertaLarge",
+        "vocabulary": "common_crawl",
+        "description": (
+            "Large size of XLM-RoBERTa with 558M parameters. Trained on "
+            "the CommonCrawl dataset (100 languages)."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base/model.h5",
+        "weights_hash": "276211827174b71751f2ce3a89da503a",
+    },
+}
+
+# Index checkpoints by arch compatibility.
+checkpoints_per_arch = defaultdict(set)
+for arch, metadata in checkpoints.items():
+    checkpoints_per_arch[metadata["model"]].add(arch)
+
+
+def compatible_checkpoints(arch):
+    """Returns a list of compatible checkpoints per arch"""
+    return checkpoints_per_arch[arch]
+
+
+vocabularies = {
+    "common_crawl": {
+        "description": (
+            "The BPE SentencePiece vocabulary for XLM-RoBERTa models trained on "
+            "the CommonCrawl dataset."
+        ),
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base/vocab.spm",
+        "vocabulary_hash": "bf25eb5120ad92ef5c7d8596b5dc4046",
+        "vocabulary_size": 250002,
+    }
+}
+
+
+def _handle_pretrained_tokenizer_arguments(vocabulary):
+    """Look up pretrained defaults for tokenizer arguments.
+
+    This helper will validate the `vocabulary` argument, and
+    fully resolve it in the case we are loading pretrained weights.
+    """
+    if isinstance(vocabulary, str) and vocabulary in vocabularies:
+        metadata = vocabularies[vocabulary]
+        vocabulary = keras.utils.get_file(
+            "vocab.spm",
+            metadata["vocabulary_url"],
+            cache_subdir=os.path.join("models", "xlm_roberta", vocabulary),
+            file_hash=metadata["vocabulary_hash"],
+        )
+
+    return vocabulary
+
+
+def _handle_pretrained_model_arguments(
+    xlm_roberta_variant, weights, vocabulary_size
+):
+    """Look up pretrained defaults for model arguments.
+
+    This helper will validate the `weights` and `vocabulary_size` arguments, and
+    fully resolve them in the case we are loading pretrained weights.
+    """
+    if (vocabulary_size is None and weights is None) or (
+        vocabulary_size and weights
+    ):
+        raise ValueError(
+            "One of `vocabulary_size` or `weights` must be specified "
+            "(but not both). "
+            f"Received: weights={weights}, "
+            f"vocabulary_size={vocabulary_size}"
+        )
+
+    if weights:
+        arch_checkpoints = compatible_checkpoints(xlm_roberta_variant)
+        if weights not in arch_checkpoints:
+            raise ValueError(
+                "`weights` must be one of "
+                f"""{", ".join(arch_checkpoints)}. """
+                f"Received: {weights}"
+            )
+        metadata = checkpoints[weights]
+        vocabulary = metadata["vocabulary"]
+        vocabulary_size = vocabularies[vocabulary]["vocabulary_size"]
+
+        weights = keras.utils.get_file(
+            "model.h5",
+            metadata["weights_url"],
+            cache_subdir=os.path.join("models", weights),
+            file_hash=metadata["weights_hash"],
+        )
+
+    return weights, vocabulary_size
 
 
 class XLMRobertaCustom(roberta.RobertaCustom):
@@ -104,10 +211,10 @@ The SentencePiece tokenizer can be accessed via the `tokenizer` property on this
 layer, and can be used directly for custom packing on inputs.
 
 Args:
-    proto: Either a `string` path to a SentencePiece proto file, or a
-               `bytes` object with a serialized SentencePiece proto. See the
-               [SentencePiece repository](https://github.com/google/sentencepiece)
-               for more details on the format.
+    proto: Either a `string` path to a SentencePiece proto file, a
+        `bytes` object with a serialized SentencePiece proto, or the name of a
+        pretrained vocabulary. For a pretrained vocabulary, `proto` should be
+        one of {names}.
     sequence_length: The length of the packed inputs. Only used if
         `pack_inputs` is True.
     truncate: The algorithm to truncate a list of batched segments to fit
@@ -164,9 +271,7 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
 
-        # TODO(abheesht17): Instead of passing `proto`, do something similar
-        # to `BertPreprocessor` once weights have been uploaded.
-
+        proto = _handle_pretrained_tokenizer_arguments(proto)
         self.tokenizer = SentencePieceTokenizer(proto=proto)
 
         # Check for necessary special tokens.
@@ -227,12 +332,10 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         }
 
 
-# TODO(abheesht17): Add args to `PREPROCESSOR_DOCSTRING` once weights are
-# uploaded.
 setattr(
     XLMRobertaPreprocessor,
     "__doc__",
-    PREPROCESSOR_DOCSTRING,
+    PREPROCESSOR_DOCSTRING.format(names=", ".join(vocabularies)),
 )
 
 
@@ -253,7 +356,7 @@ MODEL_DOCSTRING = """XLM-RoBERTa "{type}" architecture.
     Example usage:
     ```python
     # Randomly initialized XLMRoberta{type} encoder
-    model = keras_nlp.models.XLMRoberta{type}(vocabulary_size=10000)
+    model = keras_nlp.models.XLMRoberta{type}(weights=None, vocabulary_size=10000)
 
     # Call encoder on the inputs.
     input_data = {
@@ -266,8 +369,14 @@ MODEL_DOCSTRING = """XLM-RoBERTa "{type}" architecture.
 """
 
 
-def XLMRobertaBase(vocabulary_size, name=None, trainable=True):
-    return XLMRobertaCustom(
+def XLMRobertaBase(
+    weights="xlm_roberta_base", vocabulary_size=None, name=None, trainable=True
+):
+    weights, vocabulary_size = _handle_pretrained_model_arguments(
+        "XLMRobertaBase", weights, vocabulary_size
+    )
+
+    model = XLMRobertaCustom(
         vocabulary_size=vocabulary_size,
         num_layers=12,
         num_heads=12,
@@ -279,9 +388,20 @@ def XLMRobertaBase(vocabulary_size, name=None, trainable=True):
         trainable=trainable,
     )
 
+    if weights:
+        model.load_weights(weights)
 
-def XLMRobertaLarge(vocabulary_size, name=None, trainable=True):
-    return XLMRobertaCustom(
+    return model
+
+
+def XLMRobertaLarge(
+    weights="xlm_roberta_large", vocabulary_size=None, name=None, trainable=True
+):
+    weights, vocabulary_size = _handle_pretrained_model_arguments(
+        "XLMRobertaLarge", weights, vocabulary_size
+    )
+
+    model = XLMRobertaCustom(
         vocabulary_size=vocabulary_size,
         num_layers=24,
         num_heads=16,
@@ -292,3 +412,8 @@ def XLMRobertaLarge(vocabulary_size, name=None, trainable=True):
         name=name,
         trainable=trainable,
     )
+
+    if weights:
+        model.load_weights(weights)
+
+    return model
