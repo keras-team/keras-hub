@@ -30,3 +30,4 @@ from keras_nlp.models.roberta import RobertaClassifier
 from keras_nlp.models.roberta import RobertaCustom
 from keras_nlp.models.xlm_roberta import XLMRobertaBase
 from keras_nlp.models.xlm_roberta import XLMRobertaCustom
+from keras_nlp.models.xlm_roberta import XLMRobertaLarge
