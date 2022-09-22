@@ -41,7 +41,7 @@ checkpoints = {
             "Large size of XLM-RoBERTa with 558M parameters. Trained on "
             "the CommonCrawl dataset (100 languages)."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_large/model.h5",
         "weights_hash": "276211827174b71751f2ce3a89da503a",
     },
 }
@@ -348,6 +348,8 @@ MODEL_DOCSTRING = """XLM-RoBERTa "{type}" architecture.
     include the masked language modeling head used during pretraining.
 
     Args:
+        weights: string, optional. Name of pretrained model to load weights.
+            Should be one of {names}.
         vocabulary_size: int, optional. The size of the token vocabulary.
         name: string, optional. Name of the model.
         trainable: boolean, optional. If the model's variables should be
@@ -417,3 +419,20 @@ def XLMRobertaLarge(
         model.load_weights(weights)
 
     return model
+
+
+setattr(
+    XLMRobertaBase,
+    "__doc__",
+    MODEL_DOCSTRING.format(
+        type="Base", names=", ".join(compatible_checkpoints("XLMRobertaBase"))
+    ),
+)
+
+setattr(
+    XLMRobertaLarge,
+    "__doc__",
+    MODEL_DOCSTRING.format(
+        type="Large", names=", ".join(compatible_checkpoints("XLMRobertaLarge"))
+    ),
+)
