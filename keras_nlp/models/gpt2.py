@@ -420,15 +420,12 @@ def Gpt2ExtraLarge(
     return model
 
 
-def model_class_by_name(classname):
-    """Return model class given the class name."""
-    return {
-        "Gpt2Base": Gpt2Base,
-        "Gpt2Medium": Gpt2Medium,
-        "Gpt2Large": Gpt2Large,
-        "Gpt2ExtraLarge": Gpt2ExtraLarge,
-    }[classname]
-
+model_classes = {
+    "Gpt2Base": Gpt2Base,
+    "Gpt2Medium": Gpt2Medium,
+    "Gpt2Large": Gpt2Large,
+    "Gpt2ExtraLarge": Gpt2ExtraLarge,
+}
 
 setattr(
     Gpt2Base,

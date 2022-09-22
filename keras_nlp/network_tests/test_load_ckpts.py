@@ -23,9 +23,7 @@ from keras_nlp.models.bert import (
 )
 from keras_nlp.models.bert import vocabularies as bert_vocabularies
 from keras_nlp.models.gpt2 import checkpoints as gpt2_checkpoints
-from keras_nlp.models.gpt2 import (
-    model_class_by_name as gpt2_model_class_by_name,
-)
+from keras_nlp.models.gpt2 import model_classes as gpt2_model_classes
 
 
 @pytest.mark.slow
@@ -88,7 +86,7 @@ class Gpt2CkptTest(tf.test.TestCase):
     def test_load_gpt2(self):
         for checkpoint in gpt2_checkpoints:
             gpt2_variant = gpt2_checkpoints[checkpoint]["model"]
-            gpt2_class = gpt2_model_class_by_name(gpt2_variant)
+            gpt2_class = gpt2_model_classes[gpt2_variant]
             model = gpt2_class(weights=checkpoint)
             input_data = {
                 "token_ids": tf.random.uniform(
@@ -101,5 +99,5 @@ class Gpt2CkptTest(tf.test.TestCase):
             model(input_data)
 
     def test_defaults(self):
-        for _, model_class in gpt2_model_class_by_name.items():
+        for _, model_class in gpt2_model_classes.items():
             model_class()
