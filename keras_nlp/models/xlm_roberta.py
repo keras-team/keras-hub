@@ -361,11 +361,11 @@ MODEL_DOCSTRING = """XLM-RoBERTa "{type}" architecture.
     model = keras_nlp.models.XLMRoberta{type}(weights=None, vocabulary_size=10000)
 
     # Call encoder on the inputs.
-    input_data = {
+    input_data = {{
         "token_ids": tf.random.uniform(
             shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size),
         "padding_mask": tf.ones((1, 512)),
-    }
+    }}
     output = model(input_data)
     ```
 """
