@@ -11,12 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from keras_nlp.models.bert.bert_models import BertBase
-from keras_nlp.models.bert.bert_models import BertCustom
-from keras_nlp.models.bert.bert_models import BertLarge
-from keras_nlp.models.bert.bert_models import BertMedium
-from keras_nlp.models.bert.bert_models import BertSmall
-from keras_nlp.models.bert.bert_models import BertTiny
-from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
-from keras_nlp.models.bert.bert_tasks import BertClassifier
