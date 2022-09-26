@@ -11,14 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-"""BERT model task heads and preconfigured versions."""
+"""BERT task specific models and heads."""
 
 from tensorflow import keras
 
-from keras_nlp.models import bert
-from keras_nlp.models.bert import bert_kernel_initializer
-from keras_nlp.models.bert import checkpoints
+from keras_nlp.models.bert.bert_checkpoints import checkpoints
+from keras_nlp.models.bert.bert_models import bert_kernel_initializer
+from keras_nlp.models.bert.bert_models import model_class_by_name
 
 # TODO(jbischof): Find more scalable way to list checkpoints.
 CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
@@ -80,14 +79,14 @@ class BertClassifier(keras.Model):
         # TODO(jbischof): create util function when ready to load backbones in
         # other task classes (e.g., load_backbone_from_string())
         if isinstance(backbone, str):
-            if backbone not in bert.checkpoints:
+            if backbone not in checkpoints:
                 raise ValueError(
                     "`backbone` must be one of "
-                    f"""{", ".join(bert.checkpoints.keys())}. """
+                    f"""{", ".join(checkpoints.keys())}. """
                     f"Received: {backbone}"
                 )
-            backbone_class_str = bert.checkpoints[backbone]["model"]
-            backbone_class = bert.model_class_by_name(backbone_class_str)
+            backbone_class_str = checkpoints[backbone]["model"]
+            backbone_class = model_class_by_name(backbone_class_str)
             backbone = backbone_class(backbone)
 
         inputs = backbone.input
