@@ -11,8 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-"""RoBERTa model configurable class, preconfigured versions, and task heads."""
+"""RoBERTa backbone models."""
 
 import tensorflow as tf
 from tensorflow import keras
@@ -21,7 +20,7 @@ from keras_nlp.layers import TokenAndPositionEmbedding
 from keras_nlp.layers import TransformerEncoder
 
 
-def _roberta_kernel_initializer(stddev=0.02):
+def roberta_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
@@ -104,7 +103,7 @@ class RobertaCustom(keras.Model):
             vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
             embedding_dim=hidden_dim,
-            embeddings_initializer=_roberta_kernel_initializer(),
+            embeddings_initializer=roberta_kernel_initializer(),
             name="embeddings",
         )
         embedding = embedding_layer(token_id_input)
@@ -128,7 +127,7 @@ class RobertaCustom(keras.Model):
                 intermediate_dim=intermediate_dim,
                 activation="gelu",
                 dropout=dropout,
-                kernel_initializer=_roberta_kernel_initializer(),
+                kernel_initializer=roberta_kernel_initializer(),
                 name=f"transformer_layer_{i}",
             )(x, padding_mask=padding_mask)
 
@@ -168,75 +167,6 @@ class RobertaCustom(keras.Model):
             }
         )
         return config
-
-
-class RobertaClassifier(keras.Model):
-    """RoBERTa encoder model with a classification head.
-
-    Args:
-        base_model: A `keras_nlp.models.Roberta` to encode inputs.
-        num_classes: int. Number of classes to predict.
-        hidden_dim: int. The size of the pooler layer.
-        name: string, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
-
-    Example usage:
-    ```python
-    # Randomly initialized RoBERTa encoder
-    model = keras_nlp.models.RobertaCustom(
-        vocabulary_size=50265,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
-    )
-
-    # Call classifier on the inputs.
-    input_data = {
-        "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size),
-        "padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
-    }
-    classifier = keras_nlp.models.RobertaClassifier(model, 4)
-    logits = classifier(input_data)
-    ```
-    """
-
-    def __init__(
-        self,
-        base_model,
-        num_classes,
-        hidden_dim=None,
-        dropout=0.0,
-        name=None,
-        trainable=True,
-    ):
-        inputs = base_model.input
-        if hidden_dim is None:
-            hidden_dim = base_model.hidden_dim
-
-        x = base_model(inputs)[:, base_model.cls_token_index, :]
-        x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
-        x = keras.layers.Dense(
-            hidden_dim, activation="tanh", name="pooled_dense"
-        )(x)
-        x = keras.layers.Dropout(dropout, name="classifier_dropout")(x)
-        outputs = keras.layers.Dense(
-            num_classes,
-            kernel_initializer=_roberta_kernel_initializer(),
-            name="logits",
-        )(x)
-
-        # Instantiate using Functional API Model constructor
-        super().__init__(
-            inputs=inputs, outputs=outputs, name=name, trainable=trainable
-        )
-        # All references to `self` below this line
-        self.base_model = base_model
-        self.num_classes = num_classes
 
 
 def RobertaBase(vocabulary_size, name=None, trainable=True):
