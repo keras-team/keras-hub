@@ -20,11 +20,11 @@ from keras_nlp.models.bert.bert_models import BertSmall
 from keras_nlp.models.bert.bert_models import BertTiny
 from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
 from keras_nlp.models.bert.bert_tasks import BertClassifier
-from keras_nlp.models.gpt2 import Gpt2Base
-from keras_nlp.models.gpt2 import Gpt2Custom
-from keras_nlp.models.gpt2 import Gpt2ExtraLarge
-from keras_nlp.models.gpt2 import Gpt2Large
-from keras_nlp.models.gpt2 import Gpt2Medium
+from keras_nlp.models.gpt2.gpt2_models import Gpt2Base
+from keras_nlp.models.gpt2.gpt2_models import Gpt2Custom
+from keras_nlp.models.gpt2.gpt2_models import Gpt2ExtraLarge
+from keras_nlp.models.gpt2.gpt2_models import Gpt2Large
+from keras_nlp.models.gpt2.gpt2_models import Gpt2Medium
 from keras_nlp.models.roberta import RobertaBase
 from keras_nlp.models.roberta import RobertaClassifier
 from keras_nlp.models.roberta import RobertaCustom
