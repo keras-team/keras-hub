@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""GPT-2 model configurable class, preconfigured versions, and task heads."""
+"""GPT-2 backbone models."""
 
 import tensorflow as tf
 from tensorflow import keras
