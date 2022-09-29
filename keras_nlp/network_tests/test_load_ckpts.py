@@ -119,4 +119,5 @@ class Gpt2CkptTest(tf.test.TestCase, parameterized.TestCase):
         )
     )
     def test_defaults(self, model_class_name):
-        gpt2_models.model_class_by_name(model_class_name)()
+        model_class = gpt2_models.model_class_by_name(model_class_name)
+        model_class()
