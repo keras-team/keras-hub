@@ -16,12 +16,12 @@
 import pytest
 import tensorflow as tf
 
-from keras_nlp.models.gpt2 import checkpoints as gpt2_checkpoints
-from keras_nlp.models.gpt2 import model_classes as gpt2_model_classes
 from keras_nlp.models.bert import bert_checkpoints
 from keras_nlp.models.bert import bert_models
 from keras_nlp.models.bert import bert_preprocessing
 from keras_nlp.models.bert import bert_tasks
+from keras_nlp.models.gpt2 import checkpoints as gpt2_checkpoints
+from keras_nlp.models.gpt2 import model_classes as gpt2_model_classes
 
 
 @pytest.mark.slow
