@@ -12,19 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.models.bert import BertBase
-from keras_nlp.models.bert import BertCustom
-from keras_nlp.models.bert import BertLarge
-from keras_nlp.models.bert import BertMedium
-from keras_nlp.models.bert import BertPreprocessor
-from keras_nlp.models.bert import BertSmall
-from keras_nlp.models.bert import BertTiny
-from keras_nlp.models.bert_tasks import BertClassifier
-from keras_nlp.models.gpt2 import Gpt2Base
-from keras_nlp.models.gpt2 import Gpt2Custom
-from keras_nlp.models.gpt2 import Gpt2ExtraLarge
-from keras_nlp.models.gpt2 import Gpt2Large
-from keras_nlp.models.gpt2 import Gpt2Medium
-from keras_nlp.models.roberta import RobertaBase
-from keras_nlp.models.roberta import RobertaClassifier
-from keras_nlp.models.roberta import RobertaCustom
+from keras_nlp.models.bert.bert_models import BertBase
+from keras_nlp.models.bert.bert_models import BertCustom
+from keras_nlp.models.bert.bert_models import BertLarge
+from keras_nlp.models.bert.bert_models import BertMedium
+from keras_nlp.models.bert.bert_models import BertSmall
+from keras_nlp.models.bert.bert_models import BertTiny
+from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
+from keras_nlp.models.bert.bert_tasks import BertClassifier
+from keras_nlp.models.gpt2.gpt2_models import Gpt2Base
+from keras_nlp.models.gpt2.gpt2_models import Gpt2Custom
+from keras_nlp.models.gpt2.gpt2_models import Gpt2ExtraLarge
+from keras_nlp.models.gpt2.gpt2_models import Gpt2Large
+from keras_nlp.models.gpt2.gpt2_models import Gpt2Medium
+from keras_nlp.models.roberta.roberta_models import RobertaBase
+from keras_nlp.models.roberta.roberta_models import RobertaCustom
+from keras_nlp.models.roberta.roberta_tasks import RobertaClassifier

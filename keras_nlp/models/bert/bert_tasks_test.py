@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Bert model."""
+"""Tests for BERT task specific models and heads."""
 
 import os
 
@@ -19,13 +19,13 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models import bert
-from keras_nlp.models import bert_tasks
+from keras_nlp.models.bert.bert_models import BertCustom
+from keras_nlp.models.bert.bert_tasks import BertClassifier
 
 
-class BertTest(tf.test.TestCase, parameterized.TestCase):
+class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.backbone = bert.BertCustom(
+        self.backbone = BertCustom(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -34,9 +34,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             max_sequence_length=128,
             name="encoder",
         )
-        self.classifier = bert_tasks.BertClassifier(
-            self.backbone, 4, name="classifier"
-        )
+        self.classifier = BertClassifier(self.backbone, 4, name="classifier")
         self.batch_size = 8
         self.input_batch = {
             "token_ids": tf.ones(
@@ -62,7 +60,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
 
         # Not a checkpoint name
         with self.assertRaises(ValueError):
-            bert_tasks.BertClassifier("bert_clowntown", 4, name="classifier")
+            BertClassifier("bert_clowntown", 4, name="classifier")
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)

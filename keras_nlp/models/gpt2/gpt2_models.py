@@ -14,9 +14,7 @@
 
 """GPT-2 backbone models."""
 
-
 import os
-
 import tensorflow as tf
 from tensorflow import keras
 
@@ -25,7 +23,6 @@ from keras_nlp.layers import TransformerDecoder
 from keras_nlp.models.gpt2.gpt2_checkpoints import checkpoints
 from keras_nlp.models.gpt2.gpt2_checkpoints import compatible_checkpoints
 from keras_nlp.models.gpt2.gpt2_checkpoints import vocabularies
-
 
 def _gpt_2_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)

@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Roberta model."""
+"""Test for RoBERTa backbone models."""
 
 import os
 
@@ -19,12 +19,13 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models import roberta
+from keras_nlp.models.roberta.roberta_models import RobertaBase
+from keras_nlp.models.roberta.roberta_models import RobertaCustom
 
 
 class RobertaTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = roberta.RobertaCustom(
+        self.model = RobertaCustom(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -50,14 +51,8 @@ class RobertaTest(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call_roberta(self):
         self.model(self.input_batch)
 
-    def test_valid_call_classifier(self):
-        classifier = roberta.RobertaClassifier(
-            self.model, 4, 128, name="classifier"
-        )
-        classifier(self.input_batch)
-
     def test_valid_call_roberta_base(self):
-        model = roberta.RobertaBase(vocabulary_size=1000, name="encoder")
+        model = RobertaBase(vocabulary_size=1000, name="encoder")
         input_data = {
             "token_ids": tf.ones(
                 (self.batch_size, model.max_sequence_length), dtype="int32"
@@ -72,7 +67,7 @@ class RobertaTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_roberta_base_compile(self, jit_compile):
-        model = roberta.RobertaBase(vocabulary_size=1000, name="encoder")
+        model = RobertaBase(vocabulary_size=1000, name="encoder")
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_batch)
 
@@ -80,23 +75,7 @@ class RobertaTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_roberta_base_compile_batched_ds(self, jit_compile):
-        model = roberta.RobertaBase(vocabulary_size=1000, name="encoder")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_dataset)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_roberta_classifier_compile(self, jit_compile):
-        model = roberta.RobertaClassifier(self.model, 4, 128, name="classifier")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_roberta_classifier_compile_batched_ds(self, jit_compile):
-        model = roberta.RobertaClassifier(self.model, 4, 128, name="classifier")
+        model = RobertaBase(vocabulary_size=1000, name="encoder")
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_dataset)
 
