@@ -110,13 +110,13 @@ class Gpt2CkptTest(tf.test.TestCase, parameterized.TestCase):
         model(input_data)
 
     @parameterized.named_parameters(
-        (model_class, model_class)
-        for model_class in set(
+        (model_class_name, model_class_name)
+        for model_class_name in set(
             [
                 gpt2_checkpoints.checkpoints[checkpoint]["model"]
                 for checkpoint in gpt2_checkpoints.checkpoints
             ]
         )
     )
-    def test_defaults(self, model_class):
-        model_class()
+    def test_defaults(self, model_class_name):
+        gpt2_models.model_class_by_name(model_class_name)()
