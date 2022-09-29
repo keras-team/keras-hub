@@ -37,7 +37,7 @@ class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
         )
         for checkpoint in bert_checkpoints.checkpoints
     )
-    def test_load_bert(self, checkpoint, bert_class):
+    def test_load(self, checkpoint, bert_class):
         model = bert_class(weights=checkpoint)
         input_data = {
             "token_ids": tf.random.uniform(
@@ -51,7 +51,7 @@ class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         (checkpoint, checkpoint) for checkpoint in bert_checkpoints.checkpoints
     )
-    def test_load_bert_backbone_string(self, checkpoint):
+    def test_load_backbone_string(self, checkpoint):
         classifier = bert_tasks.BertClassifier(checkpoint, 4, name="classifier")
         input_data = {
             "token_ids": tf.random.uniform(
@@ -86,6 +86,7 @@ class BertCkptTest(tf.test.TestCase, parameterized.TestCase):
         )
         tokenizer("The quick brown fox.")
 
+
 @pytest.mark.slow
 class Gpt2CkptTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
@@ -98,7 +99,7 @@ class Gpt2CkptTest(tf.test.TestCase, parameterized.TestCase):
         )
         for checkpoint in gpt2_checkpoints.checkpoints
     )
-    def test_load_gpt2(self, checkpoint, gpt2_class):
+    def test_load(self, checkpoint, gpt2_class):
         model = gpt2_class(weights=checkpoint)
         input_data = {
             "token_ids": tf.random.uniform(
