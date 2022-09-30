@@ -104,7 +104,6 @@ class RobertaCustom(keras.Model):
             vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
             embedding_dim=hidden_dim,
-
             embeddings_initializer=roberta_kernel_initializer(),
             name="embeddings",
         )
@@ -129,7 +128,7 @@ class RobertaCustom(keras.Model):
                 intermediate_dim=intermediate_dim,
                 activation="gelu",
                 dropout=dropout,
-                kernel_initializer=_roberta_kernel_initializer(),
+                kernel_initializer=roberta_kernel_initializer(),
                 name=f"transformer_layer_{i}",
             )(x, padding_mask=padding_mask)
 
