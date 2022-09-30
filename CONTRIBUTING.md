@@ -94,7 +94,8 @@ cd keras-nlp
 
 Next we must setup a python environment with the correct dependencies. We
 recommend using `conda` to install tensorflow dependencies (such as CUDA), and
-`pip` to install packages from PyPI. The exact method will depend on 
+`pip` to install python packages from PyPI. The exact method will depend on your
+OS.
 
 ### Linux (recommended)
 
