@@ -25,6 +25,7 @@ try:
 except ImportError:
     learner = None
 
+
 def compute_word_piece_vocabulary(
     data,
     vocabulary_size,

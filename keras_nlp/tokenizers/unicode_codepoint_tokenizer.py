@@ -23,6 +23,7 @@ try:
 except ImportError:
     tf_text = None
 
+
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     """A unicode character tokenizer layer.

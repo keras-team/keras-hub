@@ -1,18 +1,6 @@
 # Core deps.
-tensorflow=2.10
-tensorflow-text=2.10
-# Tooling.
-packaging
-black
-flake8
-isort
-pytest
-pytest-cov
-# Optional deps.
-rouge-score
-sentencepiece
-# Examples deps.
-nltk
-tensorflow_datasets
-wikiextractor
-keras-tuner
+tensorflow==2.10
+tensorflow-text==2.10
+
+# Common deps.
+-r requirements-common.txt

@@ -108,9 +108,10 @@ conda activate keras-nlp
 
 # The following can be omitted if GPU support is not required.
 conda install -c conda-forge cudatoolkit-dev=11.2 cudnn=8.1.0
+mkdir -p $CONDA_PREFIX/etc/conda/activate.d/
 echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
 echo 'export XLA_FLAGS=--xla_gpu_cuda_data_dir=$CONDA_PREFIX/' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
-conda deactivate && conda activate keras-nlp
+source $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
 
 # Install dependencies.
 python -m pip install --upgrade pip

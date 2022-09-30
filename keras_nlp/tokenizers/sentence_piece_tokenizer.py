@@ -20,13 +20,14 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.tokenizers import tokenizer
-from keras_nlp.utils.tf_utils import tensor_to_string_list
 from keras_nlp.utils.tf_utils import assert_tf_text_installed
+from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 try:
     import tensorflow_text as tf_text
 except ImportError:
     tf_text = None
+
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class SentencePieceTokenizer(tokenizer.Tokenizer):

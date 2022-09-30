@@ -24,6 +24,7 @@ try:
 except ImportError:
     tf_text = None
 
+
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class MultiSegmentPacker(keras.layers.Layer):
     """Packs multiple sequences into a single fixed width model input.
