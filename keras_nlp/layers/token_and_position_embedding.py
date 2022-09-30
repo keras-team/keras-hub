@@ -17,6 +17,7 @@
 from tensorflow import keras
 
 import keras_nlp.layers
+from keras_nlp.utils.keras_utils import clone_initializer
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -87,14 +88,16 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         self.token_embedding = keras.layers.Embedding(
             vocabulary_size,
             embedding_dim,
-            embeddings_initializer=self.embeddings_initializer,
+            embeddings_initializer=clone_initializer(
+                self.embeddings_initializer
+            ),
             mask_zero=mask_zero,
             name="token_embedding"
             + str(keras.backend.get_uid("token_embedding")),
         )
         self.position_embedding = keras_nlp.layers.PositionEmbedding(
             sequence_length=sequence_length,
-            initializer=self.embeddings_initializer,
+            initializer=clone_initializer(self.embeddings_initializer),
             name="position_embedding"
             + str(keras.backend.get_uid("position_embedding")),
         )

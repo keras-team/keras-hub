@@ -21,7 +21,7 @@ from keras_nlp.layers import TokenAndPositionEmbedding
 from keras_nlp.layers import TransformerEncoder
 
 
-def _roberta_kernel_initializer(stddev=0.02):
+def roberta_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
@@ -104,7 +104,8 @@ class RobertaCustom(keras.Model):
             vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
             embedding_dim=hidden_dim,
-            embeddings_initializer=_roberta_kernel_initializer(),
+
+            embeddings_initializer=roberta_kernel_initializer(),
             name="embeddings",
         )
         embedding = embedding_layer(token_id_input)

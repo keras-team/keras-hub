@@ -11,8 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-"""Test for RoBERTa backbone models."""
+"""Test for GPT-2 backbone models."""
 
 import os
 
@@ -20,20 +19,20 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.roberta.roberta_models import RobertaBase
-from keras_nlp.models.roberta.roberta_models import RobertaCustom
+from keras_nlp.models.gpt2.gpt2_models import Gpt2Base
+from keras_nlp.models.gpt2.gpt2_models import Gpt2Custom
 
 
-class RobertaTest(tf.test.TestCase, parameterized.TestCase):
+class Gpt2Test(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = RobertaCustom(
+        self.model = Gpt2Custom(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
             hidden_dim=64,
             intermediate_dim=128,
             max_sequence_length=128,
-            name="encoder",
+            name="gpt2_test",
         )
         self.batch_size = 8
         self.input_batch = {
@@ -49,38 +48,10 @@ class RobertaTest(tf.test.TestCase, parameterized.TestCase):
             self.input_batch
         ).batch(2)
 
-    def test_valid_call_roberta(self):
+    def test_valid_call_gpt2(self):
         self.model(self.input_batch)
 
-    def test_valid_call_roberta_base(self):
-        model = RobertaBase(vocabulary_size=1000, name="encoder")
-        input_data = {
-            "token_ids": tf.ones(
-                (self.batch_size, model.max_sequence_length), dtype="int32"
-            ),
-            "padding_mask": tf.ones(
-                (self.batch_size, model.max_sequence_length), dtype="int32"
-            ),
-        }
-        model(input_data)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_roberta_base_compile(self, jit_compile):
-        model = RobertaBase(vocabulary_size=1000, name="encoder")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_roberta_base_compile_batched_ds(self, jit_compile):
-        model = RobertaBase(vocabulary_size=1000, name="encoder")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_dataset)
-
-    def test_variable_sequence_length_call_roberta(self):
+    def test_variable_sequence_length_call_gpt2(self):
         for seq_length in (25, 50, 75):
             input_data = {
                 "token_ids": tf.ones(
@@ -90,21 +61,33 @@ class RobertaTest(tf.test.TestCase, parameterized.TestCase):
                     (self.batch_size, seq_length), dtype="int32"
                 ),
             }
-            output = self.model(input_data)
-            self.assertAllEqual(
-                tf.shape(output),
-                [self.batch_size, seq_length, self.model.hidden_dim],
-            )
+            self.model(input_data)
+
+    def test_valid_call_gpt2_base(self):
+        model = Gpt2Base(vocabulary_size=1000, name="gpt2_base_test")
+        model(self.input_batch)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_gpt2_base_compile(self, jit_compile):
+        model = Gpt2Base(vocabulary_size=1000, name="gpt2_base_test")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.input_batch)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_gpt2_base_compile_batched_ds(self, jit_compile):
+        model = Gpt2Base(vocabulary_size=1000, name="gpt2_base_test")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.input_dataset)
 
     def test_saving_model(self):
-        model_output = self.model.predict(self.input_batch)
-
+        model_output = self.model(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), "model")
         self.model.save(save_path)
         restored_model = keras.models.load_model(save_path)
 
-        restored_output = restored_model.predict(self.input_batch)
-        self.assertAllClose(
-            model_output,
-            restored_output,
-        )
+        restored_output = restored_model(self.input_batch)
+        self.assertAllClose(model_output, restored_output)

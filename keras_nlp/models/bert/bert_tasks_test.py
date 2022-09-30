@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for GPT-2 model."""
+"""Tests for BERT task specific models and heads."""
 
 import os
 
@@ -19,27 +19,35 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models import gpt2
+from keras_nlp.models.bert.bert_models import BertCustom
+from keras_nlp.models.bert.bert_tasks import BertClassifier
 
 
-class Gpt2Test(tf.test.TestCase, parameterized.TestCase):
+class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = gpt2.Gpt2Custom(
+        self.backbone = BertCustom(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
             hidden_dim=64,
             intermediate_dim=128,
             max_sequence_length=128,
-            name="gpt2_test",
+            name="encoder",
         )
+        self.classifier = BertClassifier(self.backbone, 4, name="classifier")
         self.batch_size = 8
         self.input_batch = {
             "token_ids": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
+                (self.batch_size, self.backbone.max_sequence_length),
+                dtype="int32",
+            ),
+            "segment_ids": tf.ones(
+                (self.batch_size, self.backbone.max_sequence_length),
+                dtype="int32",
             ),
             "padding_mask": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
+                (self.batch_size, self.backbone.max_sequence_length),
+                dtype="int32",
             ),
         }
 
@@ -47,45 +55,31 @@ class Gpt2Test(tf.test.TestCase, parameterized.TestCase):
             self.input_batch
         ).batch(2)
 
-    def test_valid_call_gpt2(self):
-        self.model(self.input_batch)
+    def test_valid_call_classifier(self):
+        self.classifier(self.input_batch)
 
-    def test_variable_sequence_length_call_gpt2(self):
-        for seq_length in (25, 50, 75):
-            input_data = {
-                "token_ids": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
-                "padding_mask": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
-            }
-            self.model(input_data)
-
-    def test_valid_call_gpt2_base(self):
-        model = gpt2.Gpt2Base(vocabulary_size=1000, name="gpt2_base_test")
-        model(self.input_batch)
+        # Not a checkpoint name
+        with self.assertRaises(ValueError):
+            BertClassifier("bert_clowntown", 4, name="classifier")
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_gpt2_base_compile(self, jit_compile):
-        model = gpt2.Gpt2Base(vocabulary_size=1000, name="gpt2_base_test")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_batch)
+    def test_bert_classifier_compile(self, jit_compile):
+        self.classifier.compile(jit_compile=jit_compile)
+        self.classifier.predict(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_gpt2_base_compile_batched_ds(self, jit_compile):
-        model = gpt2.Gpt2Base(vocabulary_size=1000, name="gpt2_base_test")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_dataset)
+    def test_bert_classifier_compile_batched_ds(self, jit_compile):
+        self.classifier.compile(jit_compile=jit_compile)
+        self.classifier.predict(self.input_dataset)
 
     def test_saving_model(self):
-        model_output = self.model(self.input_batch)
+        model_output = self.classifier(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), "model")
-        self.model.save(save_path)
+        self.classifier.save(save_path)
         restored_model = keras.models.load_model(save_path)
 
         restored_output = restored_model(self.input_batch)
