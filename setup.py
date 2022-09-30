@@ -38,8 +38,10 @@ setup(
         "absl-py",
         "numpy",
         "packaging",
-        "tensorflow",
-        "tensorflow-text",
+        # Don't require tensorflow on MacOS; tensorflow-macos will not
+        # satisfy the requirement.
+        "tensorflow; platform_system != 'Darwin'",
+        "tensorflow-text; platform_system != 'Darwin'",
     ],
     extras_require={
         "tests": [

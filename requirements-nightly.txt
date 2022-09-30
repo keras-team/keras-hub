@@ -1,0 +1,18 @@
+# Core deps.
+tf-nightly
+tensorflow-text-nightly
+# Tooling.
+packaging
+black
+flake8
+isort
+pytest
+pytest-cov
+# Optional deps.
+rouge-score
+sentencepiece
+# Examples deps.
+nltk
+tensorflow_datasets
+wikiextractor
+keras-tuner

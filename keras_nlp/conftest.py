@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import pytest
+import sys
 
 
 def pytest_addoption(parser):
@@ -29,6 +30,10 @@ def pytest_collection_modifyitems(config, items):
         # --runslow given in cli: do not skip slow tests
         return
     skip_slow = pytest.mark.skip(reason="need --runslow option to run")
+    skip_xla = pytest.mark.skipif(sys.platform == "darwin", reason="XLA unsupported on MacOS.")
+
     for item in items:
         if "slow" in item.keywords:
             item.add_marker(skip_slow)
+        if "jit_compile_true" in item.name:
+            item.add_marker(skip_xla)

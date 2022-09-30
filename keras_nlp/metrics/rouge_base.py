@@ -20,7 +20,7 @@ import types
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.utils.tensor_utils import tensor_to_string_list
+from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 try:
     import rouge_score
