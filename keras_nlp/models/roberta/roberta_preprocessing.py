@@ -115,16 +115,13 @@ class RobertaMultiSegmentPacker(keras.layers.Layer):
         return token_ids
 
     def call(self, inputs):
-        if not isinstance(inputs, (list, tuple)):
-            inputs = [inputs]
+        def to_ragged(x):
+            return tf.RaggedTensor.from_tensor(x[tf.newaxis, :])
 
         # If rank 1, add a batch dim.
         rank_1 = inputs[0].shape.rank == 1
         if rank_1:
-            for i, x in enumerate(inputs):
-                x = tf.expand_dims(x, 0)
-                x = tf.RaggedTensor.from_tensor(x)
-                inputs[i] = x
+            inputs = [to_ragged(x) for x in inputs]
 
         segments = self._trim_inputs(inputs)
         token_ids = self._combine_inputs(segments)

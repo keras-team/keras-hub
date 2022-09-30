@@ -170,18 +170,13 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
 
         def _tokenize(x):
             tokenized = self.tokenizer(x)
-            dtype = tokenized.dtype
 
             # In the official SPM proto file, `[unk]`'s ID is 0. Replace that
             # with 2. This will be changed to 3 (`[unk]`'s ID is 3 in the
             # official implementation) after adding by 1.
-            tokenized = tf.where(
-                tf.equal(tokenized, tf.constant(0, dtype=dtype)),
-                tf.constant(2, dtype=dtype),
-                tokenized,
-            )
+            tokenized = tf.where(tf.equal(tokenized, 0), 2, tokenized)
             # Shift the tokens IDs by one.
-            tokenized = tf.add(tokenized, tf.constant(1, dtype=dtype))
+            tokenized = tf.add(tokenized, 1)
             return tokenized
 
         inputs = [_tokenize(x) for x in inputs]

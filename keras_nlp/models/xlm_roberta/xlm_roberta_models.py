@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """XLM-RoBERTa backbone models."""
 
 import os
@@ -123,38 +124,41 @@ class XLMRobertaCustom(roberta_models.RobertaCustom):
 
 MODEL_DOCSTRING = """XLM-RoBERTa "{type}" architecture.
 
-    This network implements a bi-directional Transformer-based encoder as
-    described in
-    ["Unsupervised Cross-lingual Representation Learning at Scale"](https://arxiv.org/abs/1911.02116).
-    It includes the embedding lookups and transformer layers, but does not
-    include the masked language modeling head used during pretraining.
+This network implements a bi-directional Transformer-based encoder as
+described in
+["Unsupervised Cross-lingual Representation Learning at Scale"](https://arxiv.org/abs/1911.02116).
+It includes the embedding lookups and transformer layers, but does not
+include the masked language modeling head used during pretraining.
 
-    Args:
-        weights: string, optional. Name of pretrained model to load weights.
-            Should be one of {names}.
-        vocabulary_size: int, optional. The size of the token vocabulary.
-        name: string, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
+Args:
+    weights: string, optional. Name of pretrained model to load weights.
+        Should be one of {names}.
+    vocabulary_size: int, optional. The size of the token vocabulary.
+    name: string, optional. Name of the model.
+    trainable: boolean, optional. If the model's variables should be
+        trainable.
 
-    Example usage:
-    ```python
-    # Randomly initialized XLMRoberta{type} encoder
-    model = keras_nlp.models.XLMRoberta{type}(weights=None, vocabulary_size=10000)
+Example usage:
+```python
+# Randomly initialized XLMRoberta{type} encoder
+model = keras_nlp.models.XLMRoberta{type}(weights=None, vocabulary_size=10000)
 
-    # Call encoder on the inputs.
-    input_data = {{
-        "token_ids": tf.random.uniform(
-            shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size),
-        "padding_mask": tf.ones((1, 512)),
-    }}
-    output = model(input_data)
-    ```
+# Call encoder on the inputs.
+input_data = {{
+    "token_ids": tf.random.uniform(
+        shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size),
+    "padding_mask": tf.ones((1, 512)),
+}}
+output = model(input_data)
+```
 """
 
 
 def XLMRobertaBase(
-    weights="xlm_roberta_base", vocabulary_size=None, name=None, trainable=True
+    weights=None,
+    vocabulary_size=None,
+    name=None,
+    trainable=True,
 ):
     weights, vocabulary_size = _handle_pretrained_model_arguments(
         "XLMRobertaBase", weights, vocabulary_size
@@ -179,7 +183,10 @@ def XLMRobertaBase(
 
 
 def XLMRobertaLarge(
-    weights="xlm_roberta_large", vocabulary_size=None, name=None, trainable=True
+    weights=None,
+    vocabulary_size=None,
+    name=None,
+    trainable=True,
 ):
     weights, vocabulary_size = _handle_pretrained_model_arguments(
         "XLMRobertaLarge", weights, vocabulary_size
