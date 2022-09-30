@@ -203,6 +203,14 @@ def XLMRobertaLarge(
     return model
 
 
+def model_class_by_name(classname):
+    """Return model class given the class name."""
+    return {
+        "XLMRobertaBase": XLMRobertaBase,
+        "XLMRobertaLarge": XLMRobertaLarge,
+    }[classname]
+
+
 setattr(
     XLMRobertaBase,
     "__doc__",

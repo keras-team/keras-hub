@@ -15,11 +15,15 @@
 
 import pytest
 import tensorflow as tf
+from absl.testing import parameterized
 
 from keras_nlp.models.bert import bert_checkpoints
 from keras_nlp.models.bert import bert_models
 from keras_nlp.models.bert import bert_preprocessing
 from keras_nlp.models.bert import bert_tasks
+from keras_nlp.models.xlm_roberta import xlm_roberta_checkpoints
+from keras_nlp.models.xlm_roberta import xlm_roberta_models
+from keras_nlp.models.xlm_roberta import xlm_roberta_preprocessing
 
 
 @pytest.mark.slow
@@ -77,3 +81,36 @@ class BertCkptTest(tf.test.TestCase):
                 vocabulary=vocabulary,
             )
             tokenizer("The quick brown fox.")
+
+
+@pytest.mark.slow
+class XLMRobertaCkptTest(tf.test.TestCase, parameterized.TestCase):
+    @parameterized.named_parameters(
+        (
+            checkpoint,
+            checkpoint,
+            xlm_roberta_models.model_class_by_name(
+                xlm_roberta_checkpoints.checkpoints[checkpoint]["model"]
+            ),
+        )
+        for checkpoint in xlm_roberta_checkpoints.checkpoints
+    )
+    def test_load(self, checkpoint, xlm_roberta_class):
+        model = xlm_roberta_class(weights=checkpoint)
+        input_data = {
+            "token_ids": tf.random.uniform(
+                shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
+            ),
+            "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
+            "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+        }
+        model(input_data)
+
+    @parameterized.named_parameters(
+        (proto, proto) for proto in xlm_roberta_checkpoints.vocabularies
+    )
+    def test_load_vocabularies(self, proto):
+        tokenizer = xlm_roberta_preprocessing.XLMRobertaPreprocessor(
+            proto=proto,
+        )
+        tokenizer("The quick brown fox.")
