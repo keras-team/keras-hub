@@ -63,7 +63,7 @@ def tensor_to_string_list(inputs):
 def assert_tf_text_installed(symbol_name):
     """Detokenize and convert tensor to nested lists of python strings."""
     if tensorflow_text is None:
-        raise RuntimeError(
-            f"{symbol_name} requires `tensorflow_text` for text preprocessing "
-            "ops. Please install with `pip install tensorflow_text`."
+        raise ImportError(
+            f"{symbol_name} requires the `tensorflow-text` package. "
+            "Please install with `pip install tensorflow-text`."
         )

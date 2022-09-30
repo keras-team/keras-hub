@@ -65,8 +65,8 @@ class RougeBase(keras.metrics.Metric):
 
         if rouge_score is None:
             raise ImportError(
-                "ROUGE metric requires the `rouge_score` package. "
-                "Please install it with `pip install rouge-score`."
+                f"{self.__class__.__name__} requires the `rouge_score` "
+                "package. Please install it with `pip install rouge-score`."
             )
 
         if not tf.as_dtype(self.dtype).is_floating:
