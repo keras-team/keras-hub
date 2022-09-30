@@ -22,7 +22,6 @@ from tensorflow import keras
 
 from keras_nlp.models.xlm_roberta.xlm_roberta_models import XLMRobertaBase
 from keras_nlp.models.xlm_roberta.xlm_roberta_models import XLMRobertaCustom
-from keras_nlp.models.xlm_roberta.xlm_roberta_tasks import XLMRobertaClassifier
 
 
 class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
@@ -53,10 +52,6 @@ class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call_xlm_roberta(self):
         self.model(self.input_batch)
 
-    def test_valid_call_classifier(self):
-        classifier = XLMRobertaClassifier(self.model, 4, 128, name="classifier")
-        classifier(self.input_batch)
-
     def test_valid_call_xlm_roberta_base(self):
         model = XLMRobertaBase(vocabulary_size=1000, name="encoder")
         input_data = {
@@ -82,22 +77,6 @@ class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_xlm_roberta_base_compile_batched_ds(self, jit_compile):
         model = XLMRobertaBase(vocabulary_size=1000, name="encoder")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_dataset)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_xlm_roberta_classifier_compile(self, jit_compile):
-        model = XLMRobertaClassifier(self.model, 4, 128, name="classifier")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_xlm_roberta_classifier_compile_batched_ds(self, jit_compile):
-        model = XLMRobertaClassifier(self.model, 4, 128, name="classifier")
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_dataset)
 
