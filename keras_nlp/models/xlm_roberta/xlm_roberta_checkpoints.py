@@ -14,41 +14,9 @@
 
 from collections import defaultdict
 
-checkpoints = {
-    "xlm_roberta_base": {
-        "model": "XLMRobertaBase",
-        "vocabulary": "common_crawl",
-        "description": (
-            "Base size of XLM-RoBERTa with 277M parameters. Trained on "
-            "the CommonCrawl dataset (100 languages)."
-        ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base/model.h5",
-        "weights_hash": "2eb6fcda5a42f0a88056213ba3d93906",
-    },
-    "xlm_roberta_large": {
-        "model": "XLMRobertaLarge",
-        "vocabulary": "common_crawl",
-        "description": (
-            "Large size of XLM-RoBERTa with 558M parameters. Trained on "
-            "the CommonCrawl dataset (100 languages)."
-        ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_large/model.h5",
-        "weights_hash": "276211827174b71751f2ce3a89da503a",
-    },
-}
+checkpoints = {}
 
-
-vocabularies = {
-    "common_crawl": {
-        "description": (
-            "The BPE SentencePiece vocabulary for XLM-RoBERTa models trained on "
-            "the CommonCrawl dataset."
-        ),
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base/vocab.spm",
-        "vocabulary_hash": "bf25eb5120ad92ef5c7d8596b5dc4046",
-        "vocabulary_size": 250002,
-    }
-}
+vocabularies = {}
 
 # Index checkpoints by arch compatibility.
 checkpoints_per_arch = defaultdict(set)
