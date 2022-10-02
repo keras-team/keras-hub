@@ -226,44 +226,44 @@ class DistilBertCustom(keras.Model):
 
 MODEL_DOCSTRING = """DistilBert "{type}" architecture.
 
-    This network implements a bi-directional Transformer-based encoder as
-    described in ["DistilBERT, a distilled version of BERT: smaller, faster,
-    cheaper and lighter"](https://arxiv.org/abs/1910.01108). It includes the
-    embedding lookups and transformer layers, but not the masked language model
-    or classification task networks.
+This network implements a bi-directional Transformer-based encoder as
+described in ["DistilBERT, a distilled version of BERT: smaller, faster,
+cheaper and lighter"](https://arxiv.org/abs/1910.01108). It includes the
+embedding lookups and transformer layers, but not the masked language model
+or classification task networks.
 
-    Args:
-        weights: string, optional. Name of pretrained model to load weights.
-            Should be one of {names}.
-            If None, model is randomly initialized. Either `weights` or
-            `vocabulary_size` must be specified, but not both.
-        vocabulary_size: Int, optional. The size of the token vocabulary. Either
-            `weights` or `vocabulary_size` must be specified, but not both.
-        name: string, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
+Args:
+    weights: string, optional. Name of pretrained model to load weights.
+        Should be one of {names}.
+        If None, model is randomly initialized. Either `weights` or
+        `vocabulary_size` must be specified, but not both.
+    vocabulary_size: Int, optional. The size of the token vocabulary. Either
+        `weights` or `vocabulary_size` must be specified, but not both.
+    name: string, optional. Name of the model.
+    trainable: boolean, optional. If the model's variables should be
+        trainable.
 
-    Examples:
-    ```python
-    # Randomly initialized DistilBert{type} encoder
-    model = keras_nlp.models.DistilBert{type}(vocabulary_size=10000)
+Examples:
+```python
+# Randomly initialized DistilBert{type} encoder
+model = keras_nlp.models.DistilBert{type}(vocabulary_size=10000)
 
-    # Call encoder on the inputs.
-    input_data = {{
-        "token_ids": tf.random.uniform(
-            shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
-        ),
-        "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
-    }}
-    output = model(input_data)
+# Call encoder on the inputs.
+input_data = {{
+    "token_ids": tf.random.uniform(
+        shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
+    ),
+    "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+}}
+output = model(input_data)
 
-    # Load a pretrained model
-    model = keras_nlp.models.DistilBert{type}(
-        weights="distilbert_base_uncased_en"
-    )
-    # Call encoder on the inputs.
-    output = model(input_data)
-    ```
+# Load a pretrained model
+model = keras_nlp.models.DistilBert{type}(
+    weights="distilbert_base_uncased_en"
+)
+# Call encoder on the inputs.
+output = model(input_data)
+```
 """
 
 
