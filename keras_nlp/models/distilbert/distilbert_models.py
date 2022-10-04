@@ -200,25 +200,24 @@ class DistilBertCustom(keras.Model):
         )
         # All references to `self` below this line
         self.vocabulary_size = vocabulary_size
-        self.hidden_dim = hidden_dim
-        self.intermediate_dim = intermediate_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
-        self.max_sequence_length = max_sequence_length
+        self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
+        self.max_sequence_length = max_sequence_length
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "vocabulary_size": self.vocabulary_size,
-                "hidden_dim": self.hidden_dim,
-                "intermediate_dim": self.intermediate_dim,
                 "num_layers": self.num_layers,
                 "num_heads": self.num_heads,
-                "max_sequence_length": self.max_sequence_length,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
+                "max_sequence_length": self.max_sequence_length,
             }
         )
         return config
