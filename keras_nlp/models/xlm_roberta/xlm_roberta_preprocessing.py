@@ -14,35 +14,13 @@
 
 """XLM-RoBERTa preprocessing layers."""
 
-import os
-
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.models.roberta.roberta_preprocessing import (
     RobertaMultiSegmentPacker,
 )
-from keras_nlp.models.xlm_roberta.xlm_roberta_checkpoints import vocabularies
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
-
-
-def _handle_pretrained_tokenizer_arguments(vocabulary):
-    """Look up pretrained defaults for tokenizer arguments.
-
-    This helper will validate the `vocabulary` argument, and
-    fully resolve it in the case we are loading pretrained weights.
-    """
-    if isinstance(vocabulary, str) and vocabulary in vocabularies:
-        metadata = vocabularies[vocabulary]
-        vocabulary = keras.utils.get_file(
-            "vocab.spm",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", "xlm_roberta", vocabulary),
-            file_hash=metadata["vocabulary_hash"],
-        )
-
-    return vocabulary
-
 
 PREPROCESSOR_DOCSTRING = """XLM-RoBERTa preprocessor with pretrained vocabularies.
 
@@ -72,9 +50,7 @@ layer, and can be used directly for custom packing on inputs.
 
 Args:
     proto: Either a `string` path to a SentencePiece proto file, a
-        `bytes` object with a serialized SentencePiece proto, or the name of a
-        pretrained vocabulary. For a pretrained vocabulary, `proto` should be
-        one of {names}.
+        `bytes` object with a serialized SentencePiece proto.
     sequence_length: The length of the packed inputs. Only used if
         `pack_inputs` is True.
     truncate: The algorithm to truncate a list of batched segments to fit
@@ -131,7 +107,6 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
 
-        proto = _handle_pretrained_tokenizer_arguments(proto)
         self.tokenizer = SentencePieceTokenizer(proto=proto)
 
         # Check for necessary special tokens.
@@ -187,8 +162,4 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         }
 
 
-setattr(
-    XLMRobertaPreprocessor,
-    "__doc__",
-    PREPROCESSOR_DOCSTRING.format(names=", ".join(vocabularies)),
-)
+setattr(XLMRobertaPreprocessor, "__doc__", PREPROCESSOR_DOCSTRING)

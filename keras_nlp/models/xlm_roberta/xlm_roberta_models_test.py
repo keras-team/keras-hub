@@ -53,9 +53,7 @@ class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
         self.model(self.input_batch)
 
     def test_valid_call_xlm_roberta_base(self):
-        model = XLMRobertaBase(
-            weights=None, vocabulary_size=1000, name="encoder"
-        )
+        model = XLMRobertaBase(vocabulary_size=1000, name="encoder")
         input_data = {
             "token_ids": tf.ones(
                 (self.batch_size, model.max_sequence_length), dtype="int32"
@@ -70,9 +68,7 @@ class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_xlm_roberta_base_compile(self, jit_compile):
-        model = XLMRobertaBase(
-            weights=None, vocabulary_size=1000, name="encoder"
-        )
+        model = XLMRobertaBase(vocabulary_size=1000, name="encoder")
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_batch)
 
@@ -80,9 +76,7 @@ class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_xlm_roberta_base_compile_batched_ds(self, jit_compile):
-        model = XLMRobertaBase(
-            weights=None, vocabulary_size=1000, name="encoder"
-        )
+        model = XLMRobertaBase(vocabulary_size=1000, name="encoder")
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_dataset)
 

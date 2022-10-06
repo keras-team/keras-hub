@@ -14,56 +14,8 @@
 
 """XLM-RoBERTa backbone models."""
 
-import os
-
-from tensorflow import keras
 
 from keras_nlp.models.roberta import roberta_models
-from keras_nlp.models.xlm_roberta.xlm_roberta_checkpoints import checkpoints
-from keras_nlp.models.xlm_roberta.xlm_roberta_checkpoints import (
-    compatible_checkpoints,
-)
-from keras_nlp.models.xlm_roberta.xlm_roberta_checkpoints import vocabularies
-
-
-def _handle_pretrained_model_arguments(
-    xlm_roberta_variant, weights, vocabulary_size
-):
-    """Look up pretrained defaults for model arguments.
-
-    This helper will validate the `weights` and `vocabulary_size` arguments, and
-    fully resolve them in the case we are loading pretrained weights.
-    """
-    if (vocabulary_size is None and weights is None) or (
-        vocabulary_size and weights
-    ):
-        raise ValueError(
-            "One of `vocabulary_size` or `weights` must be specified "
-            "(but not both). "
-            f"Received: weights={weights}, "
-            f"vocabulary_size={vocabulary_size}"
-        )
-
-    if weights:
-        arch_checkpoints = compatible_checkpoints(xlm_roberta_variant)
-        if weights not in arch_checkpoints:
-            raise ValueError(
-                "`weights` must be one of "
-                f"""{", ".join(arch_checkpoints)}. """
-                f"Received: {weights}"
-            )
-        metadata = checkpoints[weights]
-        vocabulary = metadata["vocabulary"]
-        vocabulary_size = vocabularies[vocabulary]["vocabulary_size"]
-
-        weights = keras.utils.get_file(
-            "model.h5",
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", weights),
-            file_hash=metadata["weights_hash"],
-        )
-
-    return weights, vocabulary_size
 
 
 class XLMRobertaCustom(roberta_models.RobertaCustom):
@@ -131,8 +83,6 @@ It includes the embedding lookups and transformer layers, but does not
 include the masked language modeling head used during pretraining.
 
 Args:
-    weights: string, optional. Name of pretrained model to load weights.
-        Should be one of {names}.
     vocabulary_size: int, optional. The size of the token vocabulary.
     name: string, optional. Name of the model.
     trainable: boolean, optional. If the model's variables should be
@@ -154,15 +104,7 @@ output = model(input_data)
 """
 
 
-def XLMRobertaBase(
-    weights=None,
-    vocabulary_size=None,
-    name=None,
-    trainable=True,
-):
-    weights, vocabulary_size = _handle_pretrained_model_arguments(
-        "XLMRobertaBase", weights, vocabulary_size
-    )
+def XLMRobertaBase(vocabulary_size, name=None, trainable=True):
 
     model = XLMRobertaCustom(
         vocabulary_size=vocabulary_size,
@@ -176,21 +118,14 @@ def XLMRobertaBase(
         trainable=trainable,
     )
 
-    if weights:
-        model.load_weights(weights)
-
     return model
 
 
 def XLMRobertaLarge(
-    weights=None,
-    vocabulary_size=None,
+    vocabulary_size,
     name=None,
     trainable=True,
 ):
-    weights, vocabulary_size = _handle_pretrained_model_arguments(
-        "XLMRobertaLarge", weights, vocabulary_size
-    )
 
     model = XLMRobertaCustom(
         vocabulary_size=vocabulary_size,
@@ -203,9 +138,6 @@ def XLMRobertaLarge(
         name=name,
         trainable=trainable,
     )
-
-    if weights:
-        model.load_weights(weights)
 
     return model
 
@@ -221,15 +153,11 @@ def model_class_by_name(classname):
 setattr(
     XLMRobertaBase,
     "__doc__",
-    MODEL_DOCSTRING.format(
-        type="Base", names=", ".join(compatible_checkpoints("XLMRobertaBase"))
-    ),
+    MODEL_DOCSTRING.format(type="Base"),
 )
 
 setattr(
     XLMRobertaLarge,
     "__doc__",
-    MODEL_DOCSTRING.format(
-        type="Large", names=", ".join(compatible_checkpoints("XLMRobertaLarge"))
-    ),
+    MODEL_DOCSTRING.format(type="Large"),
 )
