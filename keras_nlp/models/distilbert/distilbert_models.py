@@ -116,10 +116,10 @@ class DistilBertCustom(keras.Model):
 
         # Normalize and apply dropout to embeddings.
         x = keras.layers.LayerNormalization(
-            name="embeddings_layer_norm",
             axis=-1,
             epsilon=1e-12,
             dtype=tf.float32,
+            name="embeddings_layer_norm",
         )(x)
         x = keras.layers.Dropout(
             dropout,
@@ -131,9 +131,7 @@ class DistilBertCustom(keras.Model):
             x = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=False
-                ),
+                activation="gelu",
                 dropout=dropout,
                 kernel_initializer=distilbert_kernel_initializer(),
                 name=f"transformer_layer_{i}",
