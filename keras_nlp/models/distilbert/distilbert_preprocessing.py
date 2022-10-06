@@ -13,34 +13,10 @@
 # limitations under the License.
 """DistilBERT preprocessing layers."""
 
-import os
-
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
-from keras_nlp.models.distilbert.distilbert_checkpoints import vocabularies
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
-
-
-def _handle_pretrained_tokenizer_arguments(vocabulary, lowercase):
-    """Look up pretrained defaults for tokenizer arguments.
-
-    This helper will validate the `vocabulary` and `lowercase` arguments, and
-    fully resolve them in the case we are loading pretrained weights.
-    """
-
-    if isinstance(vocabulary, str) and vocabulary in vocabularies:
-        metadata = vocabularies[vocabulary]
-        vocabulary = keras.utils.get_file(
-            "vocab.txt",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", "distilbert", vocabulary),
-            file_hash=metadata["vocabulary_hash"],
-        )
-        lowercase = metadata["lowercase"]
-
-    return vocabulary, lowercase
-
 
 PREPROCESSOR_DOCSTRING = """DistilBERT preprocessor with pretrained vocabularies.
 
@@ -62,9 +38,7 @@ layer, and can be used directly for custom packing on inputs.
 
 Args:
     vocabulary: One of a list of vocabulary terms, a vocabulary filename, or
-        the name of the pretrained vocabulary. For a pretrained vocabulary,
-        `vocabulary` should be one of {names}, and should match the `weights`
-        parameter of any pretrained DistilBERT model.
+        the name of the pretrained vocabulary.
     lowercase: If `True`, input will be lowercase before tokenization. If
         `vocabulary` is set to a pretrained vocabulary, this parameter will
         be inferred.
@@ -125,10 +99,6 @@ class DistilBertPreprocessor(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
 
-        vocabulary, lowercase = _handle_pretrained_tokenizer_arguments(
-            vocabulary, lowercase
-        )
-
         self.tokenizer = WordPieceTokenizer(
             vocabulary=vocabulary,
             lowercase=lowercase,
@@ -186,5 +156,5 @@ class DistilBertPreprocessor(keras.layers.Layer):
 setattr(
     DistilBertPreprocessor,
     "__doc__",
-    PREPROCESSOR_DOCSTRING.format(names=", ".join(vocabularies)),
+    PREPROCESSOR_DOCSTRING,
 )

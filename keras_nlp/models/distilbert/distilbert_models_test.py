@@ -91,26 +91,6 @@ class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_dataset)
 
-    def test_distilbert_base_vocab_error(self):
-        # Need `vocabulary_size` or `weights`
-        with self.assertRaises(ValueError):
-            DistilBertBase(name="encoder")
-
-        # Only one of `vocabulary_size` or `weights`
-        with self.assertRaises(ValueError):
-            DistilBertBase(
-                weights="distilbert_base_uncased_en",
-                vocabulary_size=1000,
-                name="encoder",
-            )
-
-        # Not a checkpoint name
-        with self.assertRaises(ValueError):
-            DistilBertBase(
-                weights="distilbert_base_uncased_clowntown",
-                name="encoder",
-            )
-
     def test_saving_model(self):
         model_output = self.model(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), "model")

@@ -14,7 +14,6 @@
 
 """DistilBERT backbone models."""
 
-import os
 
 import tensorflow as tf
 from tensorflow import keras
@@ -23,58 +22,10 @@ from keras_nlp.layers.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
-from keras_nlp.models.distilbert.distilbert_checkpoints import checkpoints
-from keras_nlp.models.distilbert.distilbert_checkpoints import (
-    compatible_checkpoints,
-)
-from keras_nlp.models.distilbert.distilbert_checkpoints import vocabularies
 
 
 def distilbert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
-
-
-def _handle_pretrained_model_arguments(
-    distilbert_variant, weights, vocabulary_size
-):
-    """Look up pretrained defaults for model arguments.
-
-    This helper will validate the `weights` and `vocabulary_size` arguments, and
-    fully resolve them in the case we are loading pretrained weights.
-    """
-    if (vocabulary_size is None and weights is None) or (
-        vocabulary_size and weights
-    ):
-        raise ValueError(
-            "One of `vocabulary_size` or `weights` must be specified "
-            "(but not both). "
-            f"Received: weights={weights}, "
-            f"vocabulary_size={vocabulary_size}"
-        )
-
-    if weights:
-        arch_checkpoints = compatible_checkpoints(distilbert_variant)
-        if weights not in arch_checkpoints:
-            raise ValueError(
-                "`weights` must be one of "
-                f"""{", ".join(arch_checkpoints)}. """
-                f"Received: {weights}"
-            )
-        metadata = checkpoints[weights]
-        vocabulary = metadata["vocabulary"]
-        vocabulary_size = vocabularies[vocabulary]["vocabulary_size"]
-
-        # TODO(jbischof): consider changing format from `h5` to
-        # `tf.train.Checkpoint` once
-        # https://github.com/keras-team/keras/issues/16946 is resolved.
-        weights = keras.utils.get_file(
-            "model.h5",
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", weights),
-            file_hash=metadata["weights_hash"],
-        )
-
-    return weights, vocabulary_size
 
 
 class DistilBertCustom(keras.Model):
@@ -232,12 +183,7 @@ embedding lookups and transformer layers, but not the masked language model
 or classification task networks.
 
 Args:
-    weights: string, optional. Name of pretrained model to load weights.
-        Should be one of {names}.
-        If None, model is randomly initialized. Either `weights` or
-        `vocabulary_size` must be specified, but not both.
-    vocabulary_size: Int, optional. The size of the token vocabulary. Either
-        `weights` or `vocabulary_size` must be specified, but not both.
+    vocabulary_size: int, optional. The size of the token vocabulary.
     name: string, optional. Name of the model.
     trainable: boolean, optional. If the model's variables should be
         trainable.
@@ -255,23 +201,11 @@ input_data = {{
     "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
 }}
 output = model(input_data)
-
-# Load a pretrained model
-model = keras_nlp.models.DistilBert{type}(
-    weights="distilbert_base_uncased_en"
-)
-# Call encoder on the inputs.
-output = model(input_data)
 ```
 """
 
 
-def DistilBertBase(
-    weights=None, vocabulary_size=None, name=None, trainable=True
-):
-    weights, vocabulary_size = _handle_pretrained_model_arguments(
-        "DistilBertBase", weights, vocabulary_size
-    )
+def DistilBertBase(vocabulary_size, name=None, trainable=True):
 
     model = DistilBertCustom(
         vocabulary_size=vocabulary_size,
@@ -284,9 +218,6 @@ def DistilBertBase(
         name=name,
         trainable=trainable,
     )
-
-    if weights is not None:
-        model.load_weights(weights)
 
     return model
 
@@ -301,7 +232,5 @@ def model_class_by_name(classname):
 setattr(
     DistilBertBase,
     "__doc__",
-    MODEL_DOCSTRING.format(
-        type="Base", names=", ".join(compatible_checkpoints("DistilBertBase"))
-    ),
+    MODEL_DOCSTRING.format(type="Base"),
 )
