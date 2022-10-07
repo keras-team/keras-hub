@@ -207,7 +207,7 @@ def DistilBertBase(vocabulary_size, name=None, trainable=True):
 
     model = DistilBertCustom(
         vocabulary_size=vocabulary_size,
-        num_layers=12,
+        num_layers=6,
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
