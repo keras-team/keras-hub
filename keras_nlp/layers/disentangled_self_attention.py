@@ -302,7 +302,8 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
         # Reshape `attention_output` to `(batch_size, sequence_length, hidden_dim)`.
         attention_output = tf.reshape(
-            attention_output, attention_output.shape.as_list()[:-2] + [-1]
+            attention_output,
+            [tf.shape(attention_output)[0], tf.shape(attention_output)[1], -1],
         )
         attention_output = self._output_dense(attention_output)
 
