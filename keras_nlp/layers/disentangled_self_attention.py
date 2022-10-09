@@ -16,6 +16,8 @@ import math
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.utils.keras_utils import clone_initializer
+
 
 def torch_gather(x, indices, gather_axis):
     if gather_axis < 0:
@@ -130,15 +132,8 @@ class DisentangledSelfAttention(keras.layers.Layer):
     def _get_common_kwargs_for_sublayer(self, use_bias=True):
         common_kwargs = {}
 
-        # Create new clone of kernel/bias initializer, so that we don't reuse
-        # the initializer instance, which could lead to same init value since
-        # initializer is stateless.
-        kernel_initializer = self._kernel_initializer.__class__.from_config(
-            self._kernel_initializer.get_config()
-        )
-        bias_initializer = self._bias_initializer.__class__.from_config(
-            self._bias_initializer.get_config()
-        )
+        kernel_initializer = clone_initializer(self._kernel_initializer)
+        bias_initializer = clone_initializer(self._bias_initializer)
 
         common_kwargs["kernel_initializer"] = kernel_initializer
         if use_bias:
@@ -321,7 +316,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
             {
                 "num_heads": self.num_heads,
                 "hidden_dim": self.hidden_dim,
-                "max_position_embeddigs": self.max_position_embeddings,
+                "max_position_embeddings": self.max_position_embeddings,
                 "dropout": self.dropout,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
