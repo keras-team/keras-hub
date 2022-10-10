@@ -238,7 +238,7 @@ class Bert(keras.Model):
         config = metadata["config"]
         config["name"] = name
         config["trainable"] = trainable
-        model = cls.from_config(config)
+        model = cls(**config)
 
         if not load_weights:
             return model
@@ -263,6 +263,30 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset.
         name: string, optional. Name of the model.
         trainable: boolean, optional. If the model's variables should be
             trainable.
+    # Examples:
+
+    ```python
+    # Load pretrained model from preset
+    model = Bert.from_preset("bert_base_uncased_en")
+
+    # Call encoder on the inputs
+    input_data = {{
+        "token_ids": tf.random.uniform(
+            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
+        ),
+        "segment_ids": tf.constant(
+            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+        ),
+        "padding_mask": tf.constant(
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+        ),
+    }}
+    output = model(input_data)
+
+    # Load random model with same graph as preset
+    model = Bert.from_preset("bert_base_uncased_en", load_weights=False)
+    output = model(input_data)
+    ```
     """
 
 setattr(
