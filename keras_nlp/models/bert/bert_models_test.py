@@ -19,13 +19,13 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_models import BertBase
-from keras_nlp.models.bert.bert_models import BertCustom
+from keras_nlp.models.bert.bert_models import Bert
+from keras_nlp.models.bert.bert_presets import presets
 
 
 class BertTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = BertCustom(
+        self.model = Bert(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -69,56 +69,48 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             }
             self.model(input_data)
 
-    def test_valid_call_bert_base(self):
-        model = BertBase(vocabulary_size=1000, name="encoder")
-        input_data = {
-            "token_ids": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-            "segment_ids": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-            "padding_mask": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-        }
-        model(input_data)
+    def test_valid_call_bert_presets(self):
+        # Test preset loading without weights
+        for preset in presets:
+            model = Bert.from_preset(preset, load_weights=False, name="encoder")
+            input_data = {
+                "token_ids": tf.ones(
+                    (self.batch_size, self.model.max_sequence_length),
+                    dtype="int32",
+                ),
+                "segment_ids": tf.ones(
+                    (self.batch_size, self.model.max_sequence_length),
+                    dtype="int32",
+                ),
+                "padding_mask": tf.ones(
+                    (self.batch_size, self.model.max_sequence_length),
+                    dtype="int32",
+                ),
+            }
+            model(input_data)
+
+    def test_bert_preset_error(self):
+        # Not a preset name
+        with self.assertRaises(ValueError):
+            Bert.from_preset(
+                "bert_base_uncased_clowntown",
+                load_weights=False,
+                name="encoder",
+            )
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_bert_base_compile(self, jit_compile):
-        model = BertBase(vocabulary_size=1000, name="encoder")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_batch)
+    def test_bert_compile(self, jit_compile):
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_bert_base_compile_batched_ds(self, jit_compile):
-        model = BertBase(vocabulary_size=1000, name="encoder")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_dataset)
-
-    def test_bert_base_vocab_error(self):
-        # Need `vocabulary_size` or `weights`
-        with self.assertRaises(ValueError):
-            BertBase(name="encoder")
-
-        # Only one of `vocabulary_size` or `weights`
-        with self.assertRaises(ValueError):
-            BertBase(
-                weights="bert_base_uncased_en",
-                vocabulary_size=1000,
-                name="encoder",
-            )
-
-        # Not a checkpoint name
-        with self.assertRaises(ValueError):
-            BertBase(
-                weights="bert_base_uncased_clowntown",
-                name="encoder",
-            )
+    def test_bert_compile_batched_ds(self, jit_compile):
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_dataset)
 
     def test_saving_model(self):
         model_output = self.model(self.input_batch)
