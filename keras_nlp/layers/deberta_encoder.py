@@ -118,13 +118,6 @@ class DebertaEncoder(keras.layers.Layer):
         # Infer the dimension of our hidden feature size from the build shape.
         hidden_dim = input_shape[-1]
 
-        # Relative embedding layer.
-        self.rel_embeddings = self.add_weight(
-            shape=[self.max_position_embeddings * 2, hidden_dim],
-            initializer=clone_initializer(self.kernel_initializer),
-            name="rel_embeddings",
-        )
-
         # Self attention layers.
         self._self_attention_layer = DisentangledSelfAttention(
             num_heads=self.num_heads,
@@ -164,7 +157,9 @@ class DebertaEncoder(keras.layers.Layer):
             rate=self.dropout,
         )
 
-    def call(self, inputs, padding_mask=None, attention_mask=None):
+    def call(
+        self, inputs, rel_embeddings, padding_mask=None, attention_mask=None
+    ):
         """Forward pass of the TransformerEncoder.
 
         Args:
@@ -196,7 +191,7 @@ class DebertaEncoder(keras.layers.Layer):
         residual = x
         x = self._self_attention_layer(
             hidden_states=x,
-            rel_embeddings=self.rel_embeddings,
+            rel_embeddings=rel_embeddings,
             attention_mask=self_attention_mask,
         )
         x = self._self_attention_dropout(x)
