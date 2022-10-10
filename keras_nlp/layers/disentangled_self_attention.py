@@ -182,7 +182,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         if rel_attn_scores is not None:
             attention_scores += rel_attn_scores
         attention_scores = self._masked_softmax(attention_scores)
-        attention_scores = self._attn_dropout_layer(attention_scores)
+        attention_scores = self._attn_dropout_layer(attention_scores, training=training)
 
         attention_output = tf.einsum("acbe,aecd->abcd", attention_scores, value)
 
