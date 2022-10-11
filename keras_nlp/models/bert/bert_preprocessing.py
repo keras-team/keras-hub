@@ -115,6 +115,7 @@ ds = ds.map(
 """
 
 
+# TODO(jbischof): add `from_preset` classmethod
 class BertPreprocessor(keras.layers.Layer):
     def __init__(
         self,

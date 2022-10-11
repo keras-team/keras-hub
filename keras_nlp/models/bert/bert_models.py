@@ -219,6 +219,8 @@ class Bert(keras.Model):
         )
         return config
 
+    # TODO(jbischof): consider exposing `presets` as member variable.
+    # Need to protect dict from mutation.
     @classmethod
     def from_preset(
         cls,
