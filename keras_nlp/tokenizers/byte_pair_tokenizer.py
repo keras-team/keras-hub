@@ -42,36 +42,40 @@ def bytes_to_unicode():
 
 
 class BytePairTokenizerCache:
+    """Cache that stores the encoded result of seen tokens."""
+
     def __init__(self):
-        self.key2id = tf.lookup.experimental.DenseHashTable(
-            tf.string,
-            tf.int64,
-            -1,
-            "a ",
-            "b ",  # These tokens will never appear as keys.
-        )
+        # `tf.lookup.experimental.MutableHashTable` does not support string to
+        # string mapping. So we first convert to string to an integer key, and
+        # use the integer key to find the value.
+        self.factors = tf.pow(256, tf.range(0, 8, dtype=tf.int64))
         self.id2value = tf.lookup.experimental.MutableHashTable(
             tf.int64, tf.string, ""
         )
-        self.id = tf.Variable(0, dtype=tf.int64)
+
+    def get_key(self, keys):
+        """Get the hash key for given inputs."""
+        # `tf.fingerprint` converts token to a array of uint8 of length 8, we
+        # need to convert it to a uint64.
+        return tf.squeeze(
+            tf.matmul(
+                tf.cast(tf.fingerprint(keys), dtype=tf.int64),
+                self.factors[:, tf.newaxis],
+            ),
+            -1,
+        )
 
     def lookup(self, keys):
-        """Look up a tensor of tokens."""
-        ids = self.key2id.lookup(keys)
+        """Look up the encoded outputs of given tokens."""
+        ids = self.get_key(keys)
         result = self.id2value.lookup(ids)
         # Ensure output shape for graph mode.
         result.set_shape([None])
         return result
 
     def insert(self, keys, values):
-        """Insert a tensor of tokens to bp words mapping"""
-        size = tf.cast(tf.shape(keys)[0], tf.int64)
-        ids = tf.range(self.id, self.id + size)
-        self.id.assign(self.id + size)
-
-        self.key2id.insert(keys, ids)
-        self.id2value.insert(ids, values)
-        return ids
+        """Insert token <=> encoded outputs pairs."""
+        self.id2value.insert(self.get_key(keys), values)
 
 
 def create_static_hashtable(keys, values, default):
@@ -86,6 +90,24 @@ def create_static_hashtable(keys, values, default):
 
 
 class BytePairTokenizer(tokenizer.Tokenizer):
+    """Bype-pair encoder.
+
+    This BPE encoder provides the same funtionality as official GPT2 tokenizer.
+    Given the same `vocabulary` and `merges`, it should provide the same output
+    as fairseq implementation (https://github.com/facebookresearch/fairseq/blob/main/fairseq/data/encoders/gpt2_bpe.py).
+    Different from fairseq, this implementation is graph-compatible, so you can
+    use it within a tf.data pipeline.
+
+    Args:
+        vocabulary: string or dict, maps token to integer ids. If it is a
+            string, it should be the file path to a json file.
+        merges: string or list, contains the merge rule. If it is a string,
+            it should be the file path to merge rules. The merge rule file
+            should have one merge rule per line.
+        sequence_length: int, defaults to None. If set, the output will be
+            padded or truncated to the `sequence_length`.
+    """
+
     def __init__(
         self,
         vocabulary,
@@ -110,12 +132,11 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             with open(vocabulary, "r") as f:
                 self.vocabulary = json.load(f)
         elif isinstance(vocabulary, dict):
-            # Make a copy.
             self.vocabulary = vocabulary.copy()
         else:
             raise ValueError(
-                "Vocabulary must be an file path or dictionary mapping byte "
-                f"pairs to token ids. Received: vocabulary={vocabulary}."
+                "Vocabulary must be an file path or dictionary mapping string "
+                f"token to int ids. Received type: {type(vocabulary)}."
             )
         if isinstance(merges, str):
             self.merges = [bp.rstrip() for bp in tf.io.gfile.GFile(merges)]
@@ -123,39 +144,44 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             self.merges = list(merges)
         else:
             raise ValueError(
-                "Merges must be a file path or a list of merges. Recieved: "
-                f"merges={merges}."
+                "Merges must be a file path or a list of merge rules. "
+                f"Received type: {type(merges)}."
             )
         self.sequence_length = sequence_length
 
-        # TODO: use dtype to cast output
+        # String splitting regex pattern.
         self.pat = (
             r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+"""
         )
 
-        # Map byte to unicode.
-        bs, cs = bytes_to_unicode()
-        self.byte2unicode = create_static_hashtable(bs, cs, default="")
-        self.unicode2byte = create_static_hashtable(cs, bs, default="")
+        # Create byte <=> unicode mapping. This is useful for handling
+        # whitespace tokens.
+        byte_list, unicode_list = bytes_to_unicode()
+        self.byte2unicode = create_static_hashtable(
+            byte_list, unicode_list, default=""
+        )
+        self.unicode2byte = create_static_hashtable(
+            unicode_list, byte_list, default=""
+        )
 
-        # Caching.
         self.cache = BytePairTokenizerCache()
 
-        # BytePair encodings.
+        # Create mapping between string tokens to int ids, and vice versa.
         byte_pairs = [x[0] for x in self.vocabulary.items()]
         byte_pair_encoding_idxs = [x[1] for x in self.vocabulary.items()]
-        self.byte_pair_encoder = create_static_hashtable(
+        self.token_to_id_map = create_static_hashtable(
             byte_pairs,
             byte_pair_encoding_idxs,
             default=-1,
         )
-        self.byte_pair_decoder = create_static_hashtable(
+        self.id_to_token_map = create_static_hashtable(
             byte_pair_encoding_idxs,
             byte_pairs,
             default="",
         )
 
-        # Merging rankings.
+        # Create ranking of merge rules, this is the same as order of merge
+        # pairs in `self.merges`.
         self.max_bpe_rank = len(self.merges) + 1
         self.bpe_ranks = create_static_hashtable(
             self.merges,
@@ -232,7 +258,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
         # Encode merged tokens.
         result = tf.strings.split(result, sep=" ")
-        encoding = self.byte_pair_encoder.lookup(result)
+        encoding = self.token_to_id_map.lookup(result)
 
         # Unflatten to match input.
         encoding = tf.RaggedTensor.from_row_splits(
@@ -261,7 +287,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             inputs = tf.expand_dims(inputs, 0)
 
         unicode_text = tf.strings.reduce_join(
-            self.byte_pair_decoder.lookup(inputs), axis=1
+            self.id_to_token_map.lookup(inputs), axis=1
         )
         split_unicode_text = tf.strings.unicode_split(unicode_text, "UTF-8")
         byte_text = tf.strings.reduce_join(
@@ -272,8 +298,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             byte_text = tf.expand_dims(byte_text, 0)
 
         return byte_text
-
-    # Helper functions go here.
 
     def _encode_tokens(self, tokens):
         """Map token bytes to unicode using `byte2unicode`."""
@@ -293,51 +317,15 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         )
         return result
 
-    def _find_top_pair_and_merge(self, words, top_pair_first, top_pair_second):
-        """Merges the top pair in word."""
-        # Get shifted word tokens.
-        word_pair_first = words[:, :-1]
-        word_pair_second = words[:, 1:]
-
-        # Get top pair occurances.
-        top_pair_first = tf.expand_dims(top_pair_first, axis=1)
-        top_pair_second = tf.expand_dims(top_pair_second, axis=1)
-        top_pair_starts = tf.math.logical_and(
-            word_pair_first == top_pair_first,
-            word_pair_second == top_pair_second,
-        )
-
-        # Fixing off by one indexing.
-        num_words = tf.shape(top_pair_starts)[0]
-        front_mask = tf.logical_not(
-            tf.concat([tf.fill([num_words, 1], False), top_pair_starts], 1)
-        )
-        back_mask = tf.concat(
-            [tf.fill([num_words, 1], False), top_pair_starts], 1
-        )
-
-        # Filter word tokens to keep.
-        front = tf.where(front_mask, words, "")
-        # Filter `top_pair_second` tokens to merge.
-        back = tf.concat(
-            [
-                tf.where(back_mask[:, 1:], word_pair_second, ""),
-                tf.fill([num_words, 1], ""),
-            ],
-            1,
-        )
-        # Merge and clean up empty strings.
-        joined = tf.strings.join([front, back])
-        return self._remove_empty_strings(joined)
-
-    def _get_pairs(self, words):
-        return words[:, :-1], words[:, 1:]
-
     @tf.function
     def _byte_pair_merge_loop_body(self, words, mask):
-        """Iterative merging process for byte pair encoding algorithm."""
+        """Iterative merging process for byte pair encoding algorithm.
+
+        The end condition is either the word has been fully merged (list has
+        only one byte string), or it can no longer perform a merge.
+        """
         # Get all word pairs.
-        first, second = self._get_pairs(words)
+        first, second = words[:, :-1], words[:, 1:]
 
         # Mask empty.
         non_empty_mask = second.nested_row_lengths()[0] != 0
@@ -348,13 +336,15 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         tmp_first = tf.ragged.boolean_mask(first, mask)
         tmp_second = tf.ragged.boolean_mask(second, mask)
 
-        # Get top word pair.
-        pair_hash = tf.strings.join([tmp_first, tmp_second], separator=" ")
-        pair_rank = self.bpe_ranks.lookup(pair_hash)
+        # Get byte pair ranking in merge rules.
+        pairs = tf.strings.join([tmp_first, tmp_second], separator=" ")
+        pair_rank = self.bpe_ranks.lookup(pairs)
 
         # Get BPE pair ranks.
         min_pair_rank = tf.reduce_min(pair_rank, axis=1)
         not_found_mask = min_pair_rank != self.max_bpe_rank
+
+        # Tokens cannot be further merged are marked as finished.
         mask = tf.tensor_scatter_nd_update(
             mask, tf.expand_dims(non_empty_idxs, axis=1), not_found_mask
         )
@@ -367,28 +357,45 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         )
 
         # Get words and pairs to process.
-        p_words = tf.ragged.boolean_mask(words, mask)
-        p_first = tf.ragged.boolean_mask(first, mask)
-        p_second = tf.ragged.boolean_mask(second, mask)
-        p_min_rank_first = tf.gather(p_first, min_pair_rank_idx, batch_dims=1)
-        p_min_rank_second = tf.gather(p_second, min_pair_rank_idx, batch_dims=1)
+        unfinished_words = tf.ragged.boolean_mask(words, mask)
 
-        # Process merges of top pairs.
-        p_words = self._find_top_pair_and_merge(
-            p_words, p_min_rank_first, p_min_rank_second
+        pair_left = tf.gather(unfinished_words, min_pair_rank_idx, batch_dims=1)
+        pair_right = tf.gather(
+            unfinished_words, min_pair_rank_idx + 1, batch_dims=1
         )
 
-        # Update words.
-        p_idxs = tf.boolean_mask(tf.range(tf.shape(mask)[0]), mask)
+        merged_pairs = tf.strings.join([pair_left, pair_right])
+        empty_strs = tf.fill(tf.shape(merged_pairs), "")
+
+        unfinished_indices = tf.cast(
+            tf.boolean_mask(tf.range(tf.shape(mask)[0]), mask), dtype=tf.int64
+        )
+        merge_update_indices_left = tf.concat(
+            [
+                unfinished_indices[:, tf.newaxis],
+                min_pair_rank_idx[:, tf.newaxis],
+            ],
+            axis=1,
+        )
+        merge_update_indices_right = tf.concat(
+            [
+                unfinished_indices[:, tf.newaxis],
+                min_pair_rank_idx[:, tf.newaxis] + 1,
+            ],
+            axis=1,
+        )
+
         tensor_words = words.to_tensor(default_value="")
-        tensor_p_words = p_words.to_tensor(
-            default_value="",
-            shape=[tf.shape(p_idxs)[0], tf.shape(tensor_words)[1]],
+        tensor_words = tf.tensor_scatter_nd_update(
+            tensor_words,
+            merge_update_indices_left,
+            merged_pairs,
         )
+
         words = tf.tensor_scatter_nd_update(
             tensor_words,
-            tf.expand_dims(p_idxs, axis=1),
-            tensor_p_words,
+            merge_update_indices_right,
+            empty_strs,
         )
         words = self._remove_empty_strings(words)
         return [words, mask]
@@ -396,7 +403,10 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     def _byte_pair_encoding(self, tokens):
         """Process unseen tokens and add to cache."""
         words = self._encode_tokens(tokens)
-        num_words = tf.shape(words)[0]
+        if isinstance(words, tf.RaggedTensor):
+            num_words = words.bounding_shape(0)
+        else:
+            num_words = tf.shape(words)[0]
 
         # Merge bytes.
         def loop_condition(words, mask):
