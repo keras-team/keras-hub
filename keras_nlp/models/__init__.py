@@ -20,6 +20,11 @@ from keras_nlp.models.bert.bert_models import BertSmall
 from keras_nlp.models.bert.bert_models import BertTiny
 from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
 from keras_nlp.models.bert.bert_tasks import BertClassifier
+from keras_nlp.models.distilbert.distilbert_models import DistilBertBase
+from keras_nlp.models.distilbert.distilbert_models import DistilBertCustom
+from keras_nlp.models.distilbert.distilbert_preprocessing import (
+    DistilBertPreprocessor,
+)
 from keras_nlp.models.gpt2.gpt2_models import Gpt2Base
 from keras_nlp.models.gpt2.gpt2_models import Gpt2Custom
 from keras_nlp.models.gpt2.gpt2_models import Gpt2ExtraLarge
