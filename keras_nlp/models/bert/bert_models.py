@@ -258,6 +258,8 @@ class BertCustom(keras.Model):
             "max_sequence_length": self.max_sequence_length,
             "num_segments": self.num_segments,
             "dropout": self.dropout,
+            "name": self.name,
+            "trainable": self.trainable,
         }
 
     @classmethod

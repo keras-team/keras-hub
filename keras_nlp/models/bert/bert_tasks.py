@@ -109,6 +109,8 @@ class BertClassifier(keras.Model):
         return {
             "backbone": keras.layers.serialize(self.backbone),
             "num_classes": self.num_classes,
+            "name": self.name,
+            "trainable": self.trainable,
         }
 
     @classmethod
