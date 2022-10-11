@@ -38,7 +38,7 @@ class Bert(keras.Model):
     or classification task networks.
 
     This class gives a fully customizable, randomly initalized BERT model with
-    any number of layers, heads, and embedding dimensions. To load preset 
+    any number of layers, heads, and embedding dimensions. To load preset
     architectures and weights, use the `from_presets` constructor.
 
     Args:
@@ -255,7 +255,7 @@ class Bert(keras.Model):
         return model
 
 
-FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset.
+FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset architecture and weights.
 
     Args:
         preset: string. Must be one of {names}.
