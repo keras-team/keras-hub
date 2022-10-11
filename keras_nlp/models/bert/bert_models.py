@@ -264,10 +264,10 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset architecture and w
         name: string, optional. Name of the model.
         trainable: boolean, optional. If the model's variables should be
             trainable.
-    # Examples:
 
+    # Examples:
     ```python
-    # Load pretrained model from preset
+    # Load architecture and weights from preset
     model = Bert.from_preset("bert_base_uncased_en")
 
     # Call encoder on the inputs
@@ -284,7 +284,7 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset architecture and w
     }}
     output = model(input_data)
 
-    # Load random model with same graph as preset
+    # Load randomly initalized model only from preset architecture
     model = Bert.from_preset("bert_base_uncased_en", load_weights=False)
     output = model(input_data)
     ```
