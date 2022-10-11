@@ -26,9 +26,7 @@ from keras_nlp.models.bert import bert_tasks
 class BertPresetTest(tf.test.TestCase):
     def test_load_bert(self):
         for preset in bert_presets.presets:
-            bert_variant = bert_presets.presets[preset]["model"]
-            bert_class = bert_models.model_class_by_name(bert_variant)
-            model = bert_class(weights=preset)
+            model = bert_models.Bert.from_preset(preset, load_weights=True)
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size

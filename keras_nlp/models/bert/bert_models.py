@@ -37,9 +37,9 @@ class Bert(keras.Model):
     embedding lookups and transformer layers, but not the masked language model
     or classification task networks.
 
-    This class gives a fully customizable BERT model with any number of layers,
-    heads, and embedding dimensions. To load pretrained models, use the
-    `from_presets` constructor.
+    This class gives a fully customizable, randomly initalized BERT model with
+    any number of layers, heads, and embedding dimensions. To load preset 
+    architectures and weights, use the `from_presets` constructor.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -231,8 +231,7 @@ class Bert(keras.Model):
         if preset not in presets:
             raise ValueError(
                 "`preset` must be one of "
-                f"""{", ".join(presets)}. """
-                f"Received: {preset}"
+                f"""{", ".join(presets)}. Received: {preset}."""
             )
         metadata = presets[preset]
         config = metadata["config"]
@@ -259,7 +258,7 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset.
     Args:
         preset: string. Must be one of {names}.
         load_weights: Whether to load pre-trained weights into model. Defaults
-        to `True`.
+            to `True`.
         name: string, optional. Name of the model.
         trainable: boolean, optional. If the model's variables should be
             trainable.
@@ -292,5 +291,5 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset.
 setattr(
     Bert.from_preset.__func__,
     "__doc__",
-    FROM_PRESET_DOCSTRING.format(names=", ".join(presets.keys())),
+    FROM_PRESET_DOCSTRING.format(names=", ".join(presets)),
 )

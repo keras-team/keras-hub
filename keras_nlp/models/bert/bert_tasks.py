@@ -81,8 +81,7 @@ class BertClassifier(keras.Model):
             if backbone not in presets:
                 raise ValueError(
                     "`backbone` must be one of "
-                    f"""{", ".join(presets.keys())}. """
-                    f"Received: {backbone}"
+                    f"""{", ".join(presets)}. Received: {backbone}."""
                 )
             backbone = Bert.from_preset(backbone)
 

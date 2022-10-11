@@ -17,7 +17,7 @@
 presets = {
     "bert_tiny_uncased_en": {
         "config": {
-            "vocabulary_size": 30552,
+            "vocabulary_size": 30522,
             "num_layers": 2,
             "num_heads": 2,
             "hidden_dim": 128,
@@ -36,7 +36,7 @@ presets = {
     },
     "bert_small_uncased_en": {
         "config": {
-            "vocabulary_size": 30552,
+            "vocabulary_size": 30522,
             "num_layers": 4,
             "num_heads": 8,
             "hidden_dim": 512,
@@ -55,7 +55,7 @@ presets = {
     },
     "bert_medium_uncased_en": {
         "config": {
-            "vocabulary_size": 30552,
+            "vocabulary_size": 30522,
             "num_layers": 8,
             "num_heads": 8,
             "hidden_dim": 512,
@@ -74,7 +74,7 @@ presets = {
     },
     "bert_base_uncased_en": {
         "config": {
-            "vocabulary_size": 30552,
+            "vocabulary_size": 30522,
             "num_layers": 12,
             "num_heads": 12,
             "hidden_dim": 768,
@@ -144,7 +144,7 @@ presets = {
     },
     "bert_large_uncased_en": {
         "config": {
-            "vocabulary_size": 30552,
+            "vocabulary_size": 30522,
             "num_layers": 24,
             "num_heads": 16,
             "hidden_dim": 1024,
