@@ -16,11 +16,6 @@ need to be trained for much longer on a much larger dataset.
 OUTPUT_DIR=~/bert_test_output
 DATA_URL=https://storage.googleapis.com/tensorflow/keras-nlp/examples/bert
 
-# Create a virtual env and install dependencies.
-mkdir $OUTPUT_DIR
-python3 -m venv $OUTPUT_DIR/env && source $OUTPUT_DIR/env/bin/activate
-pip install -e ".[tests,examples]"
-
 # Download example data.
 wget ${DATA_URL}/bert_vocab_uncased.txt -O $OUTPUT_DIR/bert_vocab_uncased.txt
 wget ${DATA_URL}/wiki_example_data.txt -O $OUTPUT_DIR/wiki_example_data.txt

@@ -30,12 +30,8 @@ jobs:
             ${{ runner.os }}-pip-
       - name: Install dependencies
         run: |
-          pip install -e ".[tests]" --progress-bar off --upgrade
-          pip uninstall keras -y
-          pip uninstall tensorflow -y
-          pip uninstall tensorflow_text -y
-          pip install tf-nightly --progress-bar off --upgrade
-          pip install tensorflow-text-nightly --progress-bar off --upgrade
+          pip install -r requirements-nightly.txt --progress-bar off
+          pip install -e "." --progress-bar off
       - name: Test with pytest
         run: |
           pytest --cov=keras_nlp --cov-report xml:coverage.xml

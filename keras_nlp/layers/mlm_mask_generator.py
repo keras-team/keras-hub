@@ -13,8 +13,14 @@
 # limitations under the License.
 
 import tensorflow as tf
-import tensorflow_text as tf_text
 from tensorflow import keras
+
+from keras_nlp.utils.tf_utils import assert_tf_text_installed
+
+try:
+    import tensorflow_text as tf_text
+except ImportError:
+    tf_text = None
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -97,6 +103,8 @@ class MLMMaskGenerator(keras.layers.Layer):
         random_token_rate=0.1,
         **kwargs,
     ):
+        assert_tf_text_installed(self.__class__.__name__)
+
         super().__init__(**kwargs)
         self.vocabulary_size = vocabulary_size
         self.unselectable_token_ids = unselectable_token_ids
