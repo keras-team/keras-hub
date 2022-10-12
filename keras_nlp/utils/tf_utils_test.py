@@ -14,7 +14,7 @@
 
 import tensorflow as tf
 
-from keras_nlp.utils.tensor_utils import tensor_to_string_list
+from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 
 class TensorToStringListTest(tf.test.TestCase):

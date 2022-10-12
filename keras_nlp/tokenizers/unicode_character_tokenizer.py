@@ -13,9 +13,14 @@
 # limitations under the License.
 
 import tensorflow as tf
-import tensorflow_text as tf_text
 
 from keras_nlp.tokenizers import tokenizer
+from keras_nlp.utils.tf_utils import assert_tf_text_installed
+
+try:
+    import tensorflow_text as tf_text
+except ImportError:
+    tf_text = None
 
 
 class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
@@ -199,6 +204,8 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         vocabulary_size: int = None,
         **kwargs,
     ) -> None:
+        assert_tf_text_installed(self.__class__.__name__)
+
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
