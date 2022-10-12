@@ -99,8 +99,8 @@ OS.
 
 ### Linux (recommended)
 
-Run the following to create a tensorflow install, or adapt it to suit your
-needs.
+To setup a complete environment with TensorFlow, a local install of keras-nlp,
+and all development tools, run the following or adapt it to suit your needs.
 
 ```shell
 # Create and activate conda environment.
