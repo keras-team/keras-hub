@@ -8,10 +8,7 @@ on:
 jobs:
   build:
     name: Run tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python 3.7
@@ -32,7 +29,8 @@ jobs:
             ${{ runner.os }}-pip-
       - name: Install dependencies
         run: |
-          pip install -e ".[tests]" --progress-bar off --upgrade
+          pip install -r requirements.txt --progress-bar off
+          pip install -e "." --progress-bar off
       - name: Test with pytest
         run: |
           pytest --cov=keras_nlp --cov-report xml:coverage.xml
@@ -59,6 +57,7 @@ jobs:
             ${{ runner.os }}-pip-
       - name: Install dependencies
         run: |
-          pip install -e ".[tests]" --progress-bar off --upgrade
+          pip install -r requirements.txt --progress-bar off
+          pip install -e "." --progress-bar off
       - name: Lint
         run: bash shell/lint.sh

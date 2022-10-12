@@ -66,6 +66,7 @@ CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
 """
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class BertClassifier(keras.Model):
     def __init__(
         self,
@@ -99,6 +100,20 @@ class BertClassifier(keras.Model):
         # All references to `self` below this line
         self.backbone = backbone
         self.num_classes = num_classes
+
+    def get_config(self):
+        return {
+            "backbone": keras.layers.serialize(self.backbone),
+            "num_classes": self.num_classes,
+            "name": self.name,
+            "trainable": self.trainable,
+        }
+
+    @classmethod
+    def from_config(cls, config):
+        if "backbone" in config:
+            config["backbone"] = keras.layers.deserialize(config["backbone"])
+        return cls(**config)
 
 
 setattr(

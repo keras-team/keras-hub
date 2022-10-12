@@ -28,6 +28,7 @@ def bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class Bert(keras.Model):
     """BERT encoder network.
 
@@ -35,10 +36,10 @@ class Bert(keras.Model):
     described in ["BERT: Pre-training of Deep Bidirectional Transformers for
     Language Understanding"](https://arxiv.org/abs/1810.04805). It includes the
     embedding lookups and transformer layers, but not the masked language model
-    or classification task networks.
+    or next sentence prediction heads.
 
     The default constructor gives a fully customizable, randomly initalized BERT
-    model with any number of layers, heads, and embedding dimensions. To load
+    encoder with any number of layers, heads, and embedding dimensions. To load
     preset architectures and weights, use the `from_presets` constructor.
 
     Args:
@@ -62,18 +63,6 @@ class Bert(keras.Model):
 
     Examples:
     ```python
-    # Randomly initialized BERT encoder
-    model = keras_nlp.models.Bert(
-        vocabulary_size=30522,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12,
-        name="encoder",
-    )
-
-    # Call encoder on the inputs
     input_data = {
         "token_ids": tf.random.uniform(
             shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
@@ -85,12 +74,20 @@ class Bert(keras.Model):
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
     }
+
+    # Randomly initialized BERT encoder
+    model = keras_nlp.models.Bert(
+        vocabulary_size=30522,
+        num_layers=12,
+        num_heads=12,
+        hidden_dim=768,
+        intermediate_dim=3072,
+        max_sequence_length=12,
+        name="encoder",
+    )
     output = model(input_data)
     ```
     """
-
-    # TODO(jbischof): consider changing `intermediate_dim` and `hidden_dim` to
-    # less confusing name here and in TransformerEncoder (`feed_forward_dim`?)
 
     def __init__(
         self,
@@ -204,20 +201,22 @@ class Bert(keras.Model):
         self.cls_token_index = cls_token_index
 
     def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "vocabulary_size": self.vocabulary_size,
-                "hidden_dim": self.hidden_dim,
-                "intermediate_dim": self.intermediate_dim,
-                "num_layers": self.num_layers,
-                "num_heads": self.num_heads,
-                "max_sequence_length": self.max_sequence_length,
-                "num_segments": self.num_segments,
-                "dropout": self.dropout,
-            }
-        )
-        return config
+        return {
+            "vocabulary_size": self.vocabulary_size,
+            "hidden_dim": self.hidden_dim,
+            "intermediate_dim": self.intermediate_dim,
+            "num_layers": self.num_layers,
+            "num_heads": self.num_heads,
+            "max_sequence_length": self.max_sequence_length,
+            "num_segments": self.num_segments,
+            "dropout": self.dropout,
+            "name": self.name,
+            "trainable": self.trainable,
+        }
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     # TODO(jbischof): consider exposing `presets` as member variable.
     # Need to protect dict from mutation.
@@ -239,7 +238,7 @@ class Bert(keras.Model):
         config = metadata["config"]
         config["name"] = name
         config["trainable"] = trainable
-        model = cls(**config)
+        model = cls.from_config(config)
 
         if not load_weights:
             return model
@@ -267,7 +266,6 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset architecture and w
 
     Examples:
     ```python
-    # Input data
     input_data = {{
         "token_ids": tf.random.uniform(
             shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
@@ -284,7 +282,7 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset architecture and w
     model = Bert.from_preset("bert_base_uncased_en")
     output = model(input_data)
 
-    # Load randomly initalized model only from preset architecture
+    # Load randomly initalized model from preset architecture
     model = Bert.from_preset("bert_base_uncased_en", load_weights=False)
     output = model(input_data)
     ```

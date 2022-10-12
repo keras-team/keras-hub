@@ -1,0 +1,6 @@
+# Core deps.
+tf-nightly
+tensorflow-text-nightly
+
+# Common deps.
+-r requirements-common.txt

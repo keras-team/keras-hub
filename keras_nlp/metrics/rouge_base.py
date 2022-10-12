@@ -20,7 +20,7 @@ import types
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.utils.tensor_utils import tensor_to_string_list
+from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 try:
     import rouge_score
@@ -65,8 +65,8 @@ class RougeBase(keras.metrics.Metric):
 
         if rouge_score is None:
             raise ImportError(
-                "ROUGE metric requires the `rouge_score` package. "
-                "Please install it with `pip install rouge-score`."
+                f"{self.__class__.__name__} requires the `rouge_score` "
+                "package. Please install it with `pip install rouge-score`."
             )
 
         if not tf.as_dtype(self.dtype).is_floating:
