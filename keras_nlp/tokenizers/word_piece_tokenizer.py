@@ -16,9 +16,14 @@ from typing import Iterable
 from typing import List
 
 import tensorflow as tf
-import tensorflow_text as tf_text
 
 from keras_nlp.tokenizers import tokenizer
+from keras_nlp.utils.tf_utils import assert_tf_text_installed
+
+try:
+    import tensorflow_text as tf_text
+except ImportError:
+    tf_text = None
 
 # Matches whitespace and control characters.
 WHITESPACE_REGEX = r"|".join(
@@ -183,6 +188,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         oov_token: str = "[UNK]",
         **kwargs,
     ) -> None:
+        assert_tf_text_installed(self.__class__.__name__)
+
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32

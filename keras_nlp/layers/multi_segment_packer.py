@@ -15,8 +15,14 @@
 """BERT token packing layer."""
 
 import tensorflow as tf
-import tensorflow_text as tf_text
 from tensorflow import keras
+
+from keras_nlp.utils.tf_utils import assert_tf_text_installed
+
+try:
+    import tensorflow_text as tf_text
+except ImportError:
+    tf_text = None
 
 
 class MultiSegmentPacker(keras.layers.Layer):
@@ -106,6 +112,8 @@ class MultiSegmentPacker(keras.layers.Layer):
         truncator="round_robin",
         **kwargs,
     ):
+        assert_tf_text_installed(self.__class__.__name__)
+
         super().__init__(**kwargs)
         self.sequence_length = sequence_length
         if truncator not in ("round_robin", "waterfall"):

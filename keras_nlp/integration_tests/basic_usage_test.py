@@ -13,13 +13,17 @@
 # limitations under the License.
 
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 import keras_nlp
 
 
-class BasicUsageTest(tf.test.TestCase):
-    def test_quick_start(self):
+class BasicUsageTest(tf.test.TestCase, parameterized.TestCase):
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_quick_start(self, jit_compile):
         """This matches the quick start example in our base README."""
 
         # Tokenize some inputs with a binary label.
@@ -47,7 +51,7 @@ class BasicUsageTest(tf.test.TestCase):
         model = keras.Model(inputs, outputs)
 
         # Run a single batch of gradient descent.
-        model.compile(loss="binary_crossentropy", jit_compile=True)
+        model.compile(loss="binary_crossentropy", jit_compile=jit_compile)
         loss = model.train_on_batch(x, y)
 
         # Make sure we have a valid loss.
