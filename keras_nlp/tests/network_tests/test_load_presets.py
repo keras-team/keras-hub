@@ -25,7 +25,7 @@ from keras_nlp.models.bert import bert_tasks
 @pytest.mark.slow
 class BertPresetTest(tf.test.TestCase):
     def test_load_bert(self):
-        for preset in bert_presets.presets:
+        for preset in bert_presets.backbone_presets:
             model = bert_models.Bert.from_preset(preset, load_weights=True)
             input_data = {
                 "token_ids": tf.random.uniform(
@@ -39,7 +39,7 @@ class BertPresetTest(tf.test.TestCase):
             model(input_data)
 
     def test_load_bert_backbone_string(self):
-        for preset in bert_presets.presets:
+        for preset in bert_presets.backbone_presets:
             classifier = bert_tasks.BertClassifier(preset, 4, name="classifier")
             input_data = {
                 "token_ids": tf.random.uniform(

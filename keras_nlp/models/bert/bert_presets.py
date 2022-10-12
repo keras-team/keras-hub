@@ -14,7 +14,7 @@
 
 # TODO(jbischof): document presets in keras.io and use URL in docstrings
 # Metadata for loading pretrained model weights.
-presets = {
+backbone_presets = {
     "bert_tiny_uncased_en": {
         "config": {
             "vocabulary_size": 30522,

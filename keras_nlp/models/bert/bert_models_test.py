@@ -20,7 +20,7 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.bert.bert_models import Bert
-from keras_nlp.models.bert.bert_presets import presets
+from keras_nlp.models.bert.bert_presets import backbone_presets
 
 
 class BertTest(tf.test.TestCase, parameterized.TestCase):
@@ -71,7 +71,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_valid_call_bert_presets(self):
         # Test preset loading without weights
-        for preset in presets:
+        for preset in backbone_presets:
             model = Bert.from_preset(preset, load_weights=False, name="encoder")
             input_data = {
                 "token_ids": tf.ones(
@@ -89,7 +89,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             }
             model(input_data)
 
-    def test_bert_preset_error(self):
+    def test_bert_unknown_preset_error(self):
         # Not a preset name
         with self.assertRaises(ValueError):
             Bert.from_preset(

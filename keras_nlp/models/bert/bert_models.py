@@ -21,7 +21,7 @@ from tensorflow import keras
 
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
-from keras_nlp.models.bert.bert_presets import presets
+from keras_nlp.models.bert.bert_presets import backbone_presets
 
 
 def bert_kernel_initializer(stddev=0.02):
@@ -31,15 +31,15 @@ def bert_kernel_initializer(stddev=0.02):
 class Bert(keras.Model):
     """BERT encoder network.
 
-    This network implements a bi-directional Transformer-based encoder as
+    This class implements a bi-directional Transformer-based encoder as
     described in ["BERT: Pre-training of Deep Bidirectional Transformers for
     Language Understanding"](https://arxiv.org/abs/1810.04805). It includes the
     embedding lookups and transformer layers, but not the masked language model
     or classification task networks.
 
-    This class gives a fully customizable, randomly initalized BERT model with
-    any number of layers, heads, and embedding dimensions. To load preset
-    architectures and weights, use the `from_presets` constructor.
+    The default constructor gives a fully customizable, randomly initalized BERT
+    model with any number of layers, heads, and embedding dimensions. To load
+    preset architectures and weights, use the `from_presets` constructor.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -230,12 +230,12 @@ class Bert(keras.Model):
         trainable=True,
     ):
 
-        if preset not in presets:
+        if preset not in backbone_presets:
             raise ValueError(
                 "`preset` must be one of "
-                f"""{", ".join(presets)}. Received: {preset}."""
+                f"""{", ".join(backbone_presets)}. Received: {preset}."""
             )
-        metadata = presets[preset]
+        metadata = backbone_presets[preset]
         config = metadata["config"]
         config["name"] = name
         config["trainable"] = trainable
@@ -265,12 +265,9 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset architecture and w
         trainable: boolean, optional. If the model's variables should be
             trainable.
 
-    # Examples:
+    Examples:
     ```python
-    # Load architecture and weights from preset
-    model = Bert.from_preset("bert_base_uncased_en")
-
-    # Call encoder on the inputs
+    # Input data
     input_data = {{
         "token_ids": tf.random.uniform(
             shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
@@ -282,6 +279,9 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset architecture and w
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
     }}
+
+    # Load architecture and weights from preset
+    model = Bert.from_preset("bert_base_uncased_en")
     output = model(input_data)
 
     # Load randomly initalized model only from preset architecture
@@ -293,5 +293,5 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset architecture and w
 setattr(
     Bert.from_preset.__func__,
     "__doc__",
-    FROM_PRESET_DOCSTRING.format(names=", ".join(presets)),
+    FROM_PRESET_DOCSTRING.format(names=", ".join(backbone_presets)),
 )
