@@ -29,7 +29,8 @@ jobs:
             ${{ runner.os }}-pip-
       - name: Install dependencies
         run: |
-          pip install -e ".[tests]" --progress-bar off --upgrade
+          pip install -r requirements.txt --progress-bar off
+          pip install -e "." --progress-bar off
       - name: Test with pytest
         run: |
           pytest --cov=keras_nlp --cov-report xml:coverage.xml
@@ -56,6 +57,7 @@ jobs:
             ${{ runner.os }}-pip-
       - name: Install dependencies
         run: |
-          pip install -e ".[tests]" --progress-bar off --upgrade
+          pip install -r requirements.txt --progress-bar off
+          pip install -e "." --progress-bar off
       - name: Lint
         run: bash shell/lint.sh
