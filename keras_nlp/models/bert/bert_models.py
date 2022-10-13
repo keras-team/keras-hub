@@ -57,9 +57,6 @@ class Bert(keras.Model):
             embeddings.
         num_segments: int. The number of types that the 'segment_ids' input can
             take.
-        name: string, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
 
     Examples:
     ```python
@@ -99,8 +96,7 @@ class Bert(keras.Model):
         dropout=0.1,
         max_sequence_length=512,
         num_segments=2,
-        name=None,
-        trainable=True,
+        **kwargs,
     ):
 
         # Index of classification token in the vocabulary
@@ -185,8 +181,7 @@ class Bert(keras.Model):
                 "sequence_output": sequence_output,
                 "pooled_output": pooled_output,
             },
-            name=name,
-            trainable=trainable,
+            **kwargs,
         )
         # All references to `self` below this line
         self.vocabulary_size = vocabulary_size
@@ -225,8 +220,7 @@ class Bert(keras.Model):
         cls,
         preset,
         load_weights=True,
-        name=None,
-        trainable=True,
+        **kwargs,
     ):
 
         if preset not in backbone_presets:
@@ -236,9 +230,7 @@ class Bert(keras.Model):
             )
         metadata = backbone_presets[preset]
         config = metadata["config"]
-        config["name"] = name
-        config["trainable"] = trainable
-        model = cls.from_config(config)
+        model = cls.from_config({**config, **kwargs})
 
         if not load_weights:
             return model
@@ -260,9 +252,6 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset architecture and w
         preset: string. Must be one of {names}.
         load_weights: Whether to load pre-trained weights into model. Defaults
             to `True`.
-        name: string, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
 
     Examples:
     ```python
