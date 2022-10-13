@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BERT backbone model."""
+"""BERT backbone models."""
 
 import os
 
@@ -26,6 +26,12 @@ from keras_nlp.models.bert.bert_presets import backbone_presets
 
 def bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
+
+
+# TODO(jbischof): refactor into util file
+class classproperty(property):
+    def __get__(self, _, owner_cls):
+        return self.fget(owner_cls)
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -213,8 +219,10 @@ class Bert(keras.Model):
     def from_config(cls, config):
         return cls(**config)
 
-    # TODO(jbischof): consider exposing `presets` as member variable.
-    # Need to protect dict from mutation.
+    @classproperty
+    def presets(cls):
+        return backbone_presets
+
     @classmethod
     def from_preset(
         cls,
@@ -223,12 +231,12 @@ class Bert(keras.Model):
         **kwargs,
     ):
 
-        if preset not in backbone_presets:
+        if preset not in cls.presets:
             raise ValueError(
                 "`preset` must be one of "
-                f"""{", ".join(backbone_presets)}. Received: {preset}."""
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
-        metadata = backbone_presets[preset]
+        metadata = cls.presets[preset]
         config = metadata["config"]
         model = cls.from_config({**config, **kwargs})
 

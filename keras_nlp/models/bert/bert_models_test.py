@@ -70,7 +70,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             }
             self.model(input_data)
 
-    def test_valid_call_bert_presets(self):
+    def test_valid_call_presets(self):
         # Test preset loading without weights
         for preset in backbone_presets:
             model = Bert.from_preset(preset, load_weights=False, name="encoder")
@@ -90,7 +90,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             }
             model(input_data)
 
-    def test_bert_unknown_preset_error(self):
+    def test_unknown_preset_error(self):
         # Not a preset name
         with self.assertRaises(ValueError):
             Bert.from_preset(
@@ -99,17 +99,21 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
                 name="encoder",
             )
 
+    def test_preset_write_protected(self):
+        with self.assertRaises(AttributeError):
+            self.model.presets = {"my_model": "clowntown"}
+
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_bert_compile(self, jit_compile):
+    def test_compile(self, jit_compile):
         self.model.compile(jit_compile=jit_compile)
         self.model.predict(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_bert_compile_batched_ds(self, jit_compile):
+    def test_compile_batched_ds(self, jit_compile):
         self.model.compile(jit_compile=jit_compile)
         self.model.predict(self.input_dataset)
 
