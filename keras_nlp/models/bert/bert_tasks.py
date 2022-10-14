@@ -15,17 +15,15 @@
 
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_checkpoints import checkpoints
+from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_models import bert_kernel_initializer
-from keras_nlp.models.bert.bert_models import model_class_by_name
 
 # TODO(jbischof): Find more scalable way to list checkpoints.
 CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
 
     Args:
-        backbone: A string, `keras_nlp.models.BertCustom` or derivative such as
-            `keras_nlp.models.BertBase` to encode inputs. If a string, should be
-            one of {names}.
+        backbone: A string or `keras_nlp.models.Bert` instance. If a string,
+            should be one of {names}.
         num_classes: int. Number of classes to predict.
         name: string, optional. Name of the model.
         trainable: boolean, optional. If the model's variables should be
@@ -80,15 +78,12 @@ class BertClassifier(keras.Model):
         # TODO(jbischof): create util function when ready to load backbones in
         # other task classes (e.g., load_backbone_from_string())
         if isinstance(backbone, str):
-            if backbone not in checkpoints:
+            if backbone not in Bert.presets:
                 raise ValueError(
                     "`backbone` must be one of "
-                    f"""{", ".join(checkpoints.keys())}. """
-                    f"Received: {backbone}"
+                    f"""{", ".join(Bert.presets)}. Received: {backbone}."""
                 )
-            backbone_class_str = checkpoints[backbone]["model"]
-            backbone_class = model_class_by_name(backbone_class_str)
-            backbone = backbone_class(backbone)
+            backbone = Bert.from_preset(backbone)
 
         inputs = backbone.input
         pooled = backbone(inputs)["pooled_output"]
@@ -123,5 +118,5 @@ class BertClassifier(keras.Model):
 setattr(
     BertClassifier,
     "__doc__",
-    CLASSIFIER_DOCSTRING.format(names=", ".join(checkpoints.keys())),
+    CLASSIFIER_DOCSTRING.format(names=", ".join(Bert.presets)),
 )

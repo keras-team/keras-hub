@@ -11,24 +11,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for loading pretrained model checkpoints."""
+"""Tests for loading pretrained model presets."""
 
 import pytest
 import tensorflow as tf
 
-from keras_nlp.models.bert import bert_checkpoints
 from keras_nlp.models.bert import bert_models
 from keras_nlp.models.bert import bert_preprocessing
+from keras_nlp.models.bert import bert_presets
 from keras_nlp.models.bert import bert_tasks
 
 
 @pytest.mark.slow
-class BertCkptTest(tf.test.TestCase):
+class BertPresetTest(tf.test.TestCase):
     def test_load_bert(self):
-        for checkpoint in bert_checkpoints.checkpoints:
-            bert_variant = bert_checkpoints.checkpoints[checkpoint]["model"]
-            bert_class = bert_models.model_class_by_name(bert_variant)
-            model = bert_class(weights=checkpoint)
+        for preset in bert_models.Bert.presets:
+            model = bert_models.Bert.from_preset(preset, load_weights=True)
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
@@ -41,10 +39,8 @@ class BertCkptTest(tf.test.TestCase):
             model(input_data)
 
     def test_load_bert_backbone_string(self):
-        for checkpoint in bert_checkpoints.checkpoints:
-            classifier = bert_tasks.BertClassifier(
-                checkpoint, 4, name="classifier"
-            )
+        for preset in bert_models.Bert.presets:
+            classifier = bert_tasks.BertClassifier(preset, 4, name="classifier")
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512),
@@ -72,7 +68,7 @@ class BertCkptTest(tf.test.TestCase):
         classifier(input_data)
 
     def test_load_vocabularies(self):
-        for vocabulary in bert_checkpoints.vocabularies:
+        for vocabulary in bert_presets.vocabularies:
             tokenizer = bert_preprocessing.BertPreprocessor(
                 vocabulary=vocabulary,
             )

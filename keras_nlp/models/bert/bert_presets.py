@@ -12,13 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import defaultdict
-
-# TODO(jbischof): document checkpoints in keras.io and use URL in docstrings
+# TODO(jbischof): document presets in keras.io and use URL in docstrings
 # Metadata for loading pretrained model weights.
-checkpoints = {
+backbone_presets = {
     "bert_tiny_uncased_en": {
-        "model": "BertTiny",
+        "config": {
+            "vocabulary_size": 30522,
+            "num_layers": 2,
+            "num_heads": 2,
+            "hidden_dim": 128,
+            "intermediate_dim": 512,
+            "dropout": 0.1,
+            "max_sequence_length": 512,
+            "num_segments": 2,
+        },
         "vocabulary": "uncased_en",
         "description": (
             "Tiny size of BERT where all input is lowercased. "
@@ -28,7 +35,16 @@ checkpoints = {
         "weights_hash": "c2b29fcbf8f814a0812e4ab89ef5c068",
     },
     "bert_small_uncased_en": {
-        "model": "BertSmall",
+        "config": {
+            "vocabulary_size": 30522,
+            "num_layers": 4,
+            "num_heads": 8,
+            "hidden_dim": 512,
+            "intermediate_dim": 2048,
+            "dropout": 0.1,
+            "max_sequence_length": 512,
+            "num_segments": 2,
+        },
         "vocabulary": "uncased_en",
         "description": (
             "Small size of BERT where all input is lowercased. "
@@ -38,7 +54,16 @@ checkpoints = {
         "weights_hash": "08632c9479b034f342ba2c2b7afba5f7",
     },
     "bert_medium_uncased_en": {
-        "model": "BertMedium",
+        "config": {
+            "vocabulary_size": 30522,
+            "num_layers": 8,
+            "num_heads": 8,
+            "hidden_dim": 512,
+            "intermediate_dim": 2048,
+            "dropout": 0.1,
+            "max_sequence_length": 512,
+            "num_segments": 2,
+        },
         "vocabulary": "uncased_en",
         "description": (
             "Medium size of BERT where all input is lowercased. "
@@ -48,7 +73,16 @@ checkpoints = {
         "weights_hash": "bb990e1184ec6b6185450c73833cd661",
     },
     "bert_base_uncased_en": {
-        "model": "BertBase",
+        "config": {
+            "vocabulary_size": 30522,
+            "num_layers": 12,
+            "num_heads": 12,
+            "hidden_dim": 768,
+            "intermediate_dim": 3072,
+            "dropout": 0.1,
+            "max_sequence_length": 512,
+            "num_segments": 2,
+        },
         "vocabulary": "uncased_en",
         "description": (
             "Base size of BERT where all input is lowercased. "
@@ -58,7 +92,16 @@ checkpoints = {
         "weights_hash": "9b2b2139f221988759ac9cdd17050b31",
     },
     "bert_base_cased_en": {
-        "model": "BertBase",
+        "config": {
+            "vocabulary_size": 28996,
+            "num_layers": 12,
+            "num_heads": 12,
+            "hidden_dim": 768,
+            "intermediate_dim": 3072,
+            "dropout": 0.1,
+            "max_sequence_length": 512,
+            "num_segments": 2,
+        },
         "vocabulary": "cased_en",
         "description": (
             "Base size of BERT where case is maintained. "
@@ -68,21 +111,48 @@ checkpoints = {
         "weights_hash": "f94a6cb012e18f4fb8ec92abb91864e9",
     },
     "bert_base_zh": {
-        "model": "BertBase",
+        "config": {
+            "vocabulary_size": 21128,
+            "num_layers": 12,
+            "num_heads": 12,
+            "hidden_dim": 768,
+            "intermediate_dim": 3072,
+            "dropout": 0.1,
+            "max_sequence_length": 512,
+            "num_segments": 2,
+        },
         "vocabulary": "zh",
         "description": ("Base size of BERT. Trained on Chinese Wikipedia."),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_zh/model.h5",
         "weights_hash": "79afa421e386076e62ab42dad555ab0c",
     },
     "bert_base_multi_cased": {
-        "model": "BertBase",
+        "config": {
+            "vocabulary_size": 119547,
+            "num_layers": 12,
+            "num_heads": 12,
+            "hidden_dim": 768,
+            "intermediate_dim": 3072,
+            "dropout": 0.1,
+            "max_sequence_length": 512,
+            "num_segments": 2,
+        },
         "vocabulary": "multi_cased",
         "description": ("Base size of BERT. Trained on Chinese Wikipedia."),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_multi_cased/model.h5",
         "weights_hash": "b0631cec0a1f2513c6cfd75ba29c33aa",
     },
     "bert_large_uncased_en": {
-        "model": "BertLarge",
+        "config": {
+            "vocabulary_size": 30522,
+            "num_layers": 24,
+            "num_heads": 16,
+            "hidden_dim": 1024,
+            "intermediate_dim": 4096,
+            "dropout": 0.1,
+            "max_sequence_length": 512,
+            "num_segments": 2,
+        },
         "vocabulary": "uncased_en",
         "description": (
             "Large size of BERT where all input is lowercased. "
@@ -92,7 +162,16 @@ checkpoints = {
         "weights_hash": "cc5cacc9565ef400ee4376105f40ddae",
     },
     "bert_large_cased_en": {
-        "model": "BertLarge",
+        "config": {
+            "vocabulary_size": 28996,
+            "num_layers": 24,
+            "num_heads": 16,
+            "hidden_dim": 1024,
+            "intermediate_dim": 4096,
+            "dropout": 0.1,
+            "max_sequence_length": 512,
+            "num_segments": 2,
+        },
         "vocabulary": "cased_en",
         "description": (
             "Base size of BERT where case is maintained. "
@@ -150,13 +229,3 @@ vocabularies = {
         "lowercase": False,
     },
 }
-
-# Index checkpoints by arch compatibility and create lookup function
-checkpoints_per_arch = defaultdict(set)
-for arch, metadata in checkpoints.items():
-    checkpoints_per_arch[metadata["model"]].add(arch)
-
-
-def compatible_checkpoints(arch):
-    """Returns a list of compatible checkpoints per arch"""
-    return checkpoints_per_arch[arch]

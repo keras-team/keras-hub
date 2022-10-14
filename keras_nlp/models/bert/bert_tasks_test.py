@@ -19,13 +19,13 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_models import BertCustom
+from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_tasks import BertClassifier
 
 
 class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.backbone = BertCustom(
+        self.backbone = Bert(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
