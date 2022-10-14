@@ -14,6 +14,7 @@
 
 """BERT backbone models."""
 
+import copy
 import os
 
 import tensorflow as tf
@@ -221,7 +222,7 @@ class Bert(keras.Model):
 
     @classproperty
     def presets(cls):
-        return backbone_presets
+        return copy.deepcopy(backbone_presets)
 
     @classmethod
     def from_preset(
