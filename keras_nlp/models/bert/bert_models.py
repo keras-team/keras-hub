@@ -289,5 +289,5 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset architecture and w
 setattr(
     Bert.from_preset.__func__,
     "__doc__",
-    FROM_PRESET_DOCSTRING.format(names=", ".join(backbone_presets)),
+    FROM_PRESET_DOCSTRING.format(names=", ".join(Bert.presets)),
 )

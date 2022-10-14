@@ -25,7 +25,7 @@ class BertPreprocessorTest(tf.test.TestCase):
         self.vocab += ["the", "quick", "brown", "fox"]
 
     def test_tokenize(self):
-        input_data = ["THE QUICK BROWN FOX."]
+        input_data = ["THE QUICK BROWN FOX."] 
         preprocessor = BertPreprocessor(
             vocabulary=self.vocab,
             sequence_length=8,
@@ -36,7 +36,7 @@ class BertPreprocessorTest(tf.test.TestCase):
         self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0])
 
     def test_lowercase(self):
-        input_data = ["THE QUICK BROWN FOX."]
+        input_data = ["THE QUICK BROWN FOX."] 
         preprocessor = BertPreprocessor(
             vocabulary=self.vocab,
             sequence_length=8,
@@ -46,11 +46,16 @@ class BertPreprocessorTest(tf.test.TestCase):
         self.assertAllEqual(output["token_ids"], [2, 9, 10, 11, 12, 1, 3, 0])
 
     def test_detokenize(self):
-        input_data = [[5, 6, 7, 8]]
+        input_tokens = [[5, 6, 7, 8]]
         preprocessor = BertPreprocessor(vocabulary=self.vocab)
-        output = preprocessor.tokenizer.detokenize(input_data)
+        output = preprocessor.tokenizer.detokenize(input_tokens)
         self.assertAllEqual(output, ["THE QUICK BROWN FOX"])
 
     def test_vocabulary_size(self):
         preprocessor = BertPreprocessor(vocabulary=self.vocab)
         self.assertEqual(preprocessor.vocabulary_size(), 13)
+
+    def test_unknown_preset_error(self):
+        # Not a preset name
+        with self.assertRaises(ValueError):
+            BertPreprocessor.from_preset("bert_base_uncased_clowntown")
