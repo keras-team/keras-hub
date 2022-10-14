@@ -17,14 +17,13 @@ from tensorflow import keras
 
 from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_models import bert_kernel_initializer
-from keras_nlp.models.bert.bert_presets import backbone_presets
 
 # TODO(jbischof): Find more scalable way to list checkpoints.
 CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
 
     Args:
-        backbone: A string or `keras_nlp.models.Bert`. If a string, should be
-            one of {names}.
+        backbone: A string or `keras_nlp.models.Bert` instance. If a string,
+            should be one of {names}.
         num_classes: int. Number of classes to predict.
         name: string, optional. Name of the model.
         trainable: boolean, optional. If the model's variables should be
@@ -79,10 +78,10 @@ class BertClassifier(keras.Model):
         # TODO(jbischof): create util function when ready to load backbones in
         # other task classes (e.g., load_backbone_from_string())
         if isinstance(backbone, str):
-            if backbone not in backbone_presets:
+            if backbone not in Bert.presets:
                 raise ValueError(
                     "`backbone` must be one of "
-                    f"""{", ".join(backbone_presets)}. Received: {backbone}."""
+                    f"""{", ".join(Bert.presets)}. Received: {backbone}."""
                 )
             backbone = Bert.from_preset(backbone)
 
@@ -119,5 +118,5 @@ class BertClassifier(keras.Model):
 setattr(
     BertClassifier,
     "__doc__",
-    CLASSIFIER_DOCSTRING.format(names=", ".join(backbone_presets.keys())),
+    CLASSIFIER_DOCSTRING.format(names=", ".join(Bert.presets)),
 )
