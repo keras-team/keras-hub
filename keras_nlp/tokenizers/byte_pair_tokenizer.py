@@ -150,9 +150,13 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         self.sequence_length = sequence_length
 
         # String splitting regex pattern.
-        self.pat = (
-            r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+"""
-        )
+        self.special_space = r"\x{a0}\x{2009}\x{202f}\x{3000}"
+
+        self.pat1 = r"""'s|'t|'re|'ve|'m|'ll|'d
+            |[\s{special_space}]+[\n\r\t\f६{special_space}]| ?\p{L}+| ?[\p{N}]+
+            | ?[^\s\p{L}\p{N}{special_space}]+"""
+        self.pat1 = self.pat1.replace("{special_space}", self.special_space)
+        self.pat2 = rf"""[\s६{self.special_space}]$"""
 
         # Create byte <=> unicode mapping. This is useful for handling
         # whitespace tokens.
@@ -233,8 +237,22 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
 
-        # Regex match tokens.
-        raw_tokens = tf_text.regex_split(inputs, self.pat, self.pat)
+        # As re2 does not support lookahead match, we are using an alternative
+        # to insert a special token "६" before leading space of non-space
+        # characters and after the trailing space, e.g., " keras" will be
+        # "६ keras".
+        inputs = tf.strings.regex_replace(
+            inputs, rf"( )([^\s{self.special_space}])", r"६\1\2"
+        )
+        inputs = tf.strings.regex_replace(
+            inputs, rf"(\s{self.special_space})$", r"\1६"
+        )
+        raw_tokens = tf_text.regex_split(inputs, self.pat1, self.pat1)
+        # Second pass splits out the last whilespace char or "६".
+        raw_tokens = tf_text.regex_split(raw_tokens, self.pat2, self.pat2)
+        if raw_tokens.shape.rank > 2:
+            raw_tokens = raw_tokens.merge_dims(1, 2)
+        raw_tokens = self._remove_whitespace_placeholder(raw_tokens)
         token_row_splits = raw_tokens.row_splits
         flatten_tokens = raw_tokens.flat_values
 
@@ -305,9 +323,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         split_unicode = self.byte2unicode.lookup(split_bytes)
         return split_unicode
 
-    def _remove_empty_strings(self, tensor):
-        """Remove empty strings in a tensor"""
-        non_empty_mask = tensor != ""
+    def _remove_strings(self, tensor, string_to_remove):
+        """Remove certain strings from input tensor."""
+        non_empty_mask = tensor != string_to_remove
         flatten_indexes = tf.where(non_empty_mask)
         flatten_result = tf.gather_nd(tensor, flatten_indexes)
         row_lengths = tf.reduce_sum(tf.cast(non_empty_mask, tf.int64), axis=1)
@@ -316,6 +334,13 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             row_lengths=row_lengths,
         )
         return result
+
+    def _remove_empty_strings(self, tensor):
+        """Remove empty strings in a tensor"""
+        return self._remove_strings(tensor, "")
+
+    def _remove_whitespace_placeholder(self, tensor):
+        return self._remove_strings(tensor, "६")
 
     @tf.function
     def _byte_pair_merge_loop_body(self, words, mask):
