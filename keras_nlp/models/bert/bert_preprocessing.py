@@ -18,7 +18,7 @@ import os
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
-from keras_nlp.models.bert.bert_checkpoints import vocabularies
+from keras_nlp.models.bert.bert_presets import vocabularies
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
@@ -115,6 +115,7 @@ ds = ds.map(
 """
 
 
+# TODO(jbischof): add `from_preset` classmethod
 class BertPreprocessor(keras.layers.Layer):
     def __init__(
         self,
