@@ -119,13 +119,6 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             Bert.presets[preset]["config"]["max_sequence_length"], 512
         )
 
-    def test_preset_write_protected3(self):
-        preset = "bert_base_uncased_en"
-        config = self.model.presets[preset]["config"]
-        config["max_sequence_length"] = 1
-        self.assertNotEqual(Bert.presets[preset], 1)
-        self.assertNotEqual(backbone_presets[preset], 1)
-
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
