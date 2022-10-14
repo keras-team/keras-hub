@@ -25,7 +25,7 @@ class BertPreprocessorTest(tf.test.TestCase):
         self.vocab += ["the", "quick", "brown", "fox"]
 
     def test_tokenize(self):
-        input_data = ["THE QUICK BROWN FOX."] 
+        input_data = ["THE QUICK BROWN FOX."]
         preprocessor = BertPreprocessor(
             vocabulary=self.vocab,
             sequence_length=8,
@@ -36,7 +36,7 @@ class BertPreprocessorTest(tf.test.TestCase):
         self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0])
 
     def test_lowercase(self):
-        input_data = ["THE QUICK BROWN FOX."] 
+        input_data = ["THE QUICK BROWN FOX."]
         preprocessor = BertPreprocessor(
             vocabulary=self.vocab,
             sequence_length=8,

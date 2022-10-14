@@ -34,8 +34,8 @@ class BertPreprocessor(keras.layers.Layer):
      - Construct a dictionary of with keys `"token_ids"`, `"segment_ids"`,
        `"padding_mask"`, that can be passed directly to a BERT model.
 
-    This layer will accept either a tuple of (possibly batched) inputs, or a 
-    single input tensor. If a single tensor is passed, it will be packed 
+    This layer will accept either a tuple of (possibly batched) inputs, or a
+    single input tensor. If a single tensor is passed, it will be packed
     equivalently to a tuple with a single element.
 
     The WordPiece tokenizer can be accessed via the `tokenizer` property on this
@@ -47,8 +47,8 @@ class BertPreprocessor(keras.layers.Layer):
             `vocabulary` is set to a pretrained vocabulary, this parameter will
             be inferred.
         sequence_length: The length of the packed inputs.
-        truncate: string. The algorithm to truncate a list of batched segments 
-            to fit within `sequence_length`. The value can be either 
+        truncate: string. The algorithm to truncate a list of batched segments
+            to fit within `sequence_length`. The value can be either
             `round_robin` or `waterfall`:
                 - `"round_robin"`: Available space is assigned one token at a
                     time in a round-robin fashion to the inputs that still need
@@ -160,7 +160,7 @@ class BertPreprocessor(keras.layers.Layer):
             "segment_ids": segment_ids,
             "padding_mask": token_ids != self.pad_token_id,
         }
-    
+
     @classmethod
     def from_preset(
         cls,
@@ -176,7 +176,7 @@ class BertPreprocessor(keras.layers.Layer):
                 f"""{", ".join(Bert.presets)}. Received: {preset}."""
             )
         metadata = Bert.presets[preset]
-        
+
         vocabulary = keras.utils.get_file(
             "vocab.txt",
             metadata["vocabulary_url"],
@@ -205,8 +205,8 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT preprocessor from preset architectur
             equal to or smaller than the `max_sequence_length` of the preset. If
             left as default, the `max_sequence_length` of the preset will be
             used.
-        truncate: string. The algorithm to truncate a list of batched segments 
-            to fit within `sequence_length`. The value can be either 
+        truncate: string. The algorithm to truncate a list of batched segments
+            to fit within `sequence_length`. The value can be either
             `round_robin` or `waterfall`:
                 - `"round_robin"`: Available space is assigned one token at a
                     time in a round-robin fashion to the inputs that still need
