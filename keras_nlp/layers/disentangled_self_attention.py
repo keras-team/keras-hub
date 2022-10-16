@@ -225,7 +225,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         batch_size = tf.shape(query)[0]
         num_positions = tf.shape(query)[1]
 
-        rel_pos = self._get_rel_pos_ids(num_positions)
+        rel_pos = self._get_rel_pos(num_positions)
 
         rel_attn_span = self.bucket_size
         rel_embeddings = rel_embeddings[
