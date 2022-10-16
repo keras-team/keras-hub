@@ -174,8 +174,10 @@ class DisentangledSelfAttention(keras.layers.Layer):
         return attention_output, attention_scores
 
     def _make_log_bucket_position(self, rel_pos):
+        dtype = rel_pos.dtype
         sign = tf.math.sign(rel_pos)
         mid = self.bucket_size // 2
+        mid = tf.cast(mid, dtype=dtype)
 
         # If `rel_pos[i][j]` is out of bounds, assign value `mid`.
         abs_pos = tf.where(
