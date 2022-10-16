@@ -141,7 +141,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
         key,
         value,
         rel_embeddings,
-        rel_pos=None,
         attention_mask=None,
         training=None,
     ):
@@ -161,7 +160,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
             query=query,
             key=key,
             rel_embeddings=rel_embeddings,
-            rel_pos=rel_pos,
         )
         if rel_attn_scores is not None:
             attention_scores += rel_attn_scores
@@ -323,7 +321,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
             key=key,
             value=value,
             rel_embeddings=rel_embeddings,
-            rel_pos=None,
             attention_mask=attention_mask,
             training=training,
         )
