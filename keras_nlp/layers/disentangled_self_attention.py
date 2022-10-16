@@ -187,10 +187,10 @@ class DisentangledSelfAttention(keras.layers.Layer):
         )
 
         def _get_log_pos(abs_pos, mid):
-            numerator = tf.math.log(abs_pos / mid) * (mid - 1)
+            numerator = tf.math.log(abs_pos / mid)
+            numerator = numerator * tf.cast(mid - 1, dtype=numerator.dtype)
             denominator = tf.math.log((self.max_position_embeddings - 1) / mid)
             val = tf.math.ceil(numerator / denominator) + mid
-            val = tf.cast(val, dtype=tf.float32)
             return val
 
         log_pos = _get_log_pos(abs_pos, mid)
