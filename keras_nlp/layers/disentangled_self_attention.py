@@ -254,7 +254,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
         pos_key = tf.repeat(pos_key, repeats=batch_size, axis=0)
 
         # c2p
-        pos_key = self._c2p_dense(rel_embeddings)
         c2p_attn_scores = tf.einsum(
             "abcd,efcd->acbf",
             query,
@@ -279,7 +278,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
         score += c2p_attn_scores / self.scale_factor
 
         # p2c
-        pos_query = self._p2c_dense(rel_embeddings)
         pos_query = tf.multiply(pos_query, self.scale_factor)
         p2c_attn_scores = tf.einsum(
             "abcd,efcd->acbf",
