@@ -46,6 +46,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         num_heads,
         hidden_dim,
         max_position_embeddings=512,
+        bucket_size=256,
         dropout=0.1,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
@@ -58,6 +59,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.max_position_embeddings = max_position_embeddings
+        self.bucket_size = bucket_size
         self.dropout = dropout
 
         # Initializers.
@@ -65,11 +67,9 @@ class DisentangledSelfAttention(keras.layers.Layer):
         self._bias_initializer = keras.initializers.get(bias_initializer)
 
         # Derived args.
-        self.max_relative_positions = max_position_embeddings
-
         self.attn_head_size = hidden_dim // num_heads
 
-        self.scale_factor = 1.0 / math.sqrt(float(3 * self.attn_head_size))
+        self.scale_factor = 1.0 / math.sqrt(float(self.attn_head_size))
 
         # Layers.
 
@@ -84,8 +84,8 @@ class DisentangledSelfAttention(keras.layers.Layer):
         self._key_dense = keras.layers.EinsumDense(
             equation="abc,cde->abde",
             output_shape=(None, self.num_heads, self.attn_head_size),
-            bias_axes=None,
-            **self._get_common_kwargs_for_sublayer(use_bias=False),
+            bias_axes="de",
+            **self._get_common_kwargs_for_sublayer(use_bias=True),
             name="key",
         )
         self._value_dense = keras.layers.EinsumDense(
@@ -98,22 +98,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
         # Relative attention.
         self._position_dropout_layer = keras.layers.Dropout(self.dropout)
-        # For context->position.
-        self._c2p_dense = keras.layers.EinsumDense(
-            equation="abc,cde->abde",
-            output_shape=(None, self.num_heads, self.attn_head_size),
-            bias_axes=None,
-            **self._get_common_kwargs_for_sublayer(use_bias=False),
-            name="c2p",
-        )
-        # For position->context.
-        self._p2c_dense = keras.layers.EinsumDense(
-            equation="abc,cde->abde",
-            output_shape=(None, self.num_heads, self.attn_head_size),
-            bias_axes="de",
-            **self._get_common_kwargs_for_sublayer(use_bias=True),
-            name="p2c",
-        )
 
         self._attn_dropout_layer = keras.layers.Dropout(
             self.dropout, name="attention_dropout"
@@ -181,6 +165,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         )
         if rel_attn_scores is not None:
             attention_scores += rel_attn_scores
+
         attention_scores = self._masked_softmax(attention_scores)
         attention_scores = self._attn_dropout_layer(
             attention_scores, training=training
@@ -190,52 +175,83 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
         return attention_output, attention_scores
 
-    def _get_rel_pos_ids(self, query_length, key_length):
-        query_ids = tf.range(query_length, dtype=tf.int64)[:, tf.newaxis]
-        key_ids = tf.range(key_length, dtype=tf.int64)[tf.newaxis, :]
-        rel_pos_ids = query_ids - tf.tile(key_ids, [query_length, 1])
-        rel_pos_ids = rel_pos_ids[:query_length, :]
-        return rel_pos_ids
+    def _make_log_bucket_position(self, rel_pos):
+        sign = tf.math.sign(rel_pos)
+        mid = self.bucket_size // 2
 
-    def _get_rel_attn_span(self, query_length, key_length):
-        rel_attn_span = tf.maximum(query_length, key_length)
-        rel_attn_span = tf.minimum(rel_attn_span, self.max_relative_positions)
-        rel_attn_span = tf.cast(rel_attn_span, dtype=tf.int64)
-        return rel_attn_span
+        # If `rel_pos[i][j]` is out of bounds, assign value `mid`.
+        abs_pos = tf.where(
+            condition=(rel_pos < mid) & (rel_pos > -mid),
+            x=mid - 1,
+            y=tf.math.abs(rel_pos),
+        )
+
+        def _get_log_pos(abs_pos, mid):
+            numerator = tf.math.log(abs_pos / mid) * (mid - 1)
+            denominator = tf.math.log((self.max_position_embeddings - 1) / mid)
+            val = tf.math.ceil(numerator / denominator) + mid
+            val = tf.cast(val, dtype=tf.float32)
+            return val
+
+        log_pos = _get_log_pos(abs_pos, mid)
+
+        bucket_pos = tf.where(
+            condition=abs_pos <= mid,
+            x=rel_pos,
+            y=log_pos * sign,
+        )
+        bucket_pos = tf.cast(bucket_pos, dtype=tf.int64)
+
+        return bucket_pos
+
+    def _get_rel_pos(self, num_positions):
+        ids = tf.range(num_positions, dtype=tf.int64)
+        query_ids = ids[:, tf.newaxis]
+        # query_ids = tf.repeat(query_ids, repeats=num_positions, axis=1)
+        key_ids = ids[tf.newaxis, :]
+        key_ids = tf.repeat(key_ids, repeats=num_positions, axis=0)
+
+        rel_pos = query_ids - key_ids
+        rel_pos = self._make_log_bucket_position(rel_pos)
+
+        rel_pos = rel_pos[tf.newaxis, tf.newaxis, :, :]
+        return rel_pos
 
     def _compute_disentangled_attention(
         self,
         query,
         key,
         rel_embeddings,
-        rel_pos=None,
     ):
 
         batch_size = tf.shape(query)[0]
-        query_length = tf.shape(query)[-3]
-        key_length = tf.shape(key)[-3]
-        if rel_pos is None:
-            rel_pos = self._get_rel_pos_ids(query_length, key_length)
-        if rel_pos.shape.rank == 2:
-            rel_pos = rel_pos[tf.newaxis, tf.newaxis, :, :]
-        elif rel_pos.shape.rank == 3:
-            rel_pos = rel_pos[tf.newaxis, :, :, :]
-        elif rel_pos.shape.rank != 4:
-            raise ValueError("`rel_pos` must be of rank 2 or 3 or 4.")
+        num_positions = tf.shape(query)[1]
 
-        rel_attn_span = self._get_rel_attn_span(query_length, key_length)
+        rel_pos = self._get_rel_pos_ids(num_positions)
+
+        rel_attn_span = self.bucket_size
         rel_embeddings = rel_embeddings[
-            self.max_relative_positions
-            - rel_attn_span : self.max_relative_positions
-            + rel_attn_span,
+            self.bucket_size + rel_attn_span : self.bucket_size + rel_attn_span,
             :,
         ]
         rel_embeddings = rel_embeddings[tf.newaxis, :]
 
         score = 0
 
+        # def _reshape_rel_dense_output(inputs):
+        #     # `inputs` is of shape `(batch_size, seq_length, num_heads, attn_head_size)`.
+        #     # Reshape this to `(batch_size * num_heads, seq_length, attn_head_size)`.
+        #     inputs = tf.transpose(inputs, perm=(0, 2, 1, 3))
+        #     inputs = tf.reshape(inputs, (-1, tf.shape(inputs)[-2], tf.shape(inputs)[-1]))
+        #     return inputs
+
+        pos_query = self._query_dense(rel_embeddings)
+        pos_query = tf.repeat(pos_query, repeats=batch_size, axis=0)
+
+        pos_key = self._key_dense(rel_embeddings)
+        pos_key = tf.repeat(pos_key, repeats=batch_size, axis=0)
+
         # c2p
-        # `pos_key` is of shape `(1, 2 * rel_attn_span, num_heads, attn_head_size)`.
         pos_key = self._c2p_dense(rel_embeddings)
         c2p_attn_scores = tf.einsum(
             "abcd,efcd->acbf",
@@ -249,11 +265,16 @@ class DisentangledSelfAttention(keras.layers.Layer):
             c2p_attn_scores,
             indices=tf.broadcast_to(
                 c2p_pos,
-                shape=(batch_size, self.num_heads, query_length, query_length),
+                shape=(
+                    batch_size,
+                    self.num_heads,
+                    num_positions,
+                    num_positions,
+                ),
             ),
             gather_axis=-1,
         )
-        score += c2p_attn_scores
+        score += c2p_attn_scores / self.scale_factor
 
         # p2c
         pos_query = self._p2c_dense(rel_embeddings)
@@ -270,11 +291,16 @@ class DisentangledSelfAttention(keras.layers.Layer):
             p2c_attn_scores,
             indices=tf.broadcast_to(
                 p2c_pos,
-                shape=(batch_size, self.num_heads, key_length, key_length),
+                shape=(
+                    batch_size,
+                    self.num_heads,
+                    num_positions,
+                    num_positions,
+                ),
             ),
             gather_axis=-1,
         )
-        score += p2c_attn_scores
+        score += p2c_attn_scores / self.scale_factor
 
         return score
 

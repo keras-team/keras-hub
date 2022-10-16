@@ -84,7 +84,8 @@ class DebertaEncoder(keras.layers.Layer):
         self,
         intermediate_dim,
         num_heads,
-        max_position_embeddings,
+        max_position_embeddings=512,
+        bucket_size=256,
         dropout=0,
         activation="relu",
         layer_norm_epsilon=1e-05,
@@ -100,6 +101,7 @@ class DebertaEncoder(keras.layers.Layer):
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.max_position_embeddings = max_position_embeddings
+        self.bucket_size = bucket_size
         self.dropout = dropout
         self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -123,6 +125,7 @@ class DebertaEncoder(keras.layers.Layer):
             num_heads=self.num_heads,
             hidden_dim=hidden_dim,
             max_position_embeddings=self.max_position_embeddings,
+            bucket_size=self.bucket_size,
             dropout=self.dropout,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
