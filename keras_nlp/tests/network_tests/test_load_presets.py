@@ -70,9 +70,3 @@ class BertPresetTest(tf.test.TestCase):
         for preset in Bert.presets:
             preprocessor = BertPreprocessor.from_preset(preset)
             preprocessor("The quick brown fox.")
-
-    def test_override_preprocessor_sequence_length(self):
-        preprocessor = BertPreprocessor.from_preset(
-            "bert_base_uncased_en", sequence_length=64
-        )
-        preprocessor("The quick brown fox.")

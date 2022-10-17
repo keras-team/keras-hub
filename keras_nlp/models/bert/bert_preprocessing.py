@@ -22,6 +22,16 @@ from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
+def download_vocabulary(preset, url, hash):
+    """Download vocabulary pretaining to preset."""
+    return keras.utils.get_file(
+        "vocab.txt",
+        url,
+        cache_subdir=os.path.join("models", preset),
+        file_hash=hash,
+    )
+
+
 class BertPreprocessor(keras.layers.Layer):
     """BERT preprocessing layer.
 
@@ -177,16 +187,24 @@ class BertPreprocessor(keras.layers.Layer):
             )
         metadata = Bert.presets[preset]
 
-        vocabulary = keras.utils.get_file(
-            "vocab.txt",
+        vocabulary = download_vocabulary(
+            preset,
             metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["vocabulary_hash"],
+            metadata["vocabulary_hash"],
         )
         lowercase = metadata["lowercase"]
-        # Use model's `max_sequence_length` if `sequence_length` unspecified
-        if sequence_length is None:
-            sequence_length = metadata["config"]["max_sequence_length"]
+        # Use model's `max_sequence_length` if `sequence_length` unspecified;
+        # otherwise check that `sequence_length` not too long.
+        max_sequence_length = metadata["config"]["max_sequence_length"]
+        if sequence_length is not None:
+            if sequence_length > max_sequence_length:
+                raise ValueError(
+                    f"`sequence_length` cannot be longer than `{preset}` "
+                    f"preset's `max_sequence_length` of {max_sequence_length}. "
+                    f"Received: {sequence_length}."
+                )
+        else:
+            sequence_length = max_sequence_length
 
         return cls(
             vocabulary,
