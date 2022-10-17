@@ -22,8 +22,8 @@ from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
-def download_vocabulary(preset, url, hash):
-    """Download vocabulary pretaining to preset."""
+def _download_vocabulary(preset, url, hash):
+    """Download vocabulary associated with preset."""
     return keras.utils.get_file(
         "vocab.txt",
         url,
@@ -187,12 +187,12 @@ class BertPreprocessor(keras.layers.Layer):
             )
         metadata = Bert.presets[preset]
 
-        vocabulary = download_vocabulary(
+        vocabulary = _download_vocabulary(
             preset,
             metadata["vocabulary_url"],
             metadata["vocabulary_hash"],
         )
-        lowercase = metadata["lowercase"]
+        config = metadata["preprocessor_config"]
         # Use model's `max_sequence_length` if `sequence_length` unspecified;
         # otherwise check that `sequence_length` not too long.
         max_sequence_length = metadata["config"]["max_sequence_length"]
@@ -206,13 +206,15 @@ class BertPreprocessor(keras.layers.Layer):
         else:
             sequence_length = max_sequence_length
 
-        return cls(
-            vocabulary,
-            lowercase,
-            sequence_length,
-            truncate,
-            **kwargs,
+        config.update(
+            {
+                "sequence_length": sequence_length,
+                "vocabulary": vocabulary,
+                "truncate": truncate,
+            },
         )
+
+        return cls.from_config({**config, **kwargs})
 
 
 FROM_PRESET_DOCSTRING = """Instantiate BERT preprocessor from preset architecture.

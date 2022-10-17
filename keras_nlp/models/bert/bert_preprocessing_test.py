@@ -64,7 +64,7 @@ class BertPreprocessorTest(tf.test.TestCase):
             BertPreprocessor.from_preset("bert_base_uncased_clowntown")
 
     @unittest.mock.patch(
-        "keras_nlp.models.bert.bert_preprocessing.download_vocabulary"
+        "keras_nlp.models.bert.bert_preprocessing._download_vocabulary"
     )
     def test_valid_call_presets(self, download_mock):
         """Ensure presets have necessary structure, but no RCPs."""
@@ -75,7 +75,7 @@ class BertPreprocessorTest(tf.test.TestCase):
             preprocessor(input_data)
 
     @unittest.mock.patch(
-        "keras_nlp.models.bert.bert_preprocessing.download_vocabulary"
+        "keras_nlp.models.bert.bert_preprocessing._download_vocabulary"
     )
     def test_override_preprocessor_sequence_length(self, download_mock):
         download_mock.return_value = self.vocab
@@ -87,7 +87,7 @@ class BertPreprocessorTest(tf.test.TestCase):
         preprocessor("The quick brown fox.")
 
     @unittest.mock.patch(
-        "keras_nlp.models.bert.bert_preprocessing.download_vocabulary"
+        "keras_nlp.models.bert.bert_preprocessing._download_vocabulary"
     )
     def test_override_preprocessor_sequence_length_gt_max(self, download_mock):
         """Override sequence length longer than model's maximum."""
