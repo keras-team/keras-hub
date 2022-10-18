@@ -25,6 +25,7 @@ def roberta_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class RobertaCustom(keras.Model):
     """RoBERTa encoder with a customizable set of hyperparameters.
 
@@ -154,20 +155,21 @@ class RobertaCustom(keras.Model):
         self.cls_token_index = cls_token_index
 
     def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "vocabulary_size": self.vocabulary_size,
-                "hidden_dim": self.hidden_dim,
-                "intermediate_dim": self.intermediate_dim,
-                "num_layers": self.num_layers,
-                "num_heads": self.num_heads,
-                "max_sequence_length": self.max_sequence_length,
-                "dropout": self.dropout,
-                "cls_token_index": self.cls_token_index,
-            }
-        )
-        return config
+        return {
+            "vocabulary_size": self.vocabulary_size,
+            "hidden_dim": self.hidden_dim,
+            "intermediate_dim": self.intermediate_dim,
+            "num_layers": self.num_layers,
+            "num_heads": self.num_heads,
+            "max_sequence_length": self.max_sequence_length,
+            "dropout": self.dropout,
+            "name": self.name,
+            "trainable": self.trainable,
+        }
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 
 def RobertaBase(vocabulary_size, name=None, trainable=True):
