@@ -13,6 +13,8 @@
 # limitations under the License.
 """Tests for BERT preprocessing layers."""
 
+import unittest
+
 import tensorflow as tf
 
 from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
@@ -46,11 +48,50 @@ class BertPreprocessorTest(tf.test.TestCase):
         self.assertAllEqual(output["token_ids"], [2, 9, 10, 11, 12, 1, 3, 0])
 
     def test_detokenize(self):
-        input_data = [[5, 6, 7, 8]]
+        input_tokens = [[5, 6, 7, 8]]
         preprocessor = BertPreprocessor(vocabulary=self.vocab)
-        output = preprocessor.tokenizer.detokenize(input_data)
+        output = preprocessor.tokenizer.detokenize(input_tokens)
         self.assertAllEqual(output, ["THE QUICK BROWN FOX"])
 
     def test_vocabulary_size(self):
         preprocessor = BertPreprocessor(vocabulary=self.vocab)
         self.assertEqual(preprocessor.vocabulary_size(), 13)
+
+    def test_unknown_preset_error(self):
+        # Not a preset name
+        with self.assertRaises(ValueError):
+            BertPreprocessor.from_preset("bert_base_uncased_clowntown")
+
+    @unittest.mock.patch("tensorflow.keras.utils.get_file")
+    def test_valid_call_presets(self, get_file_mock):
+        """Ensure presets have necessary structure, but no RCPs."""
+        input_data = ["THE QUICK BROWN FOX."]
+        get_file_mock.return_value = self.vocab
+        for preset in BertPreprocessor.presets:
+            preprocessor = BertPreprocessor.from_preset(preset)
+            preprocessor(input_data)
+        self.assertEqual(
+            get_file_mock.call_count, len(BertPreprocessor.presets)
+        )
+
+    @unittest.mock.patch("tensorflow.keras.utils.get_file")
+    def test_override_preprocessor_sequence_length(self, get_file_mock):
+        get_file_mock.return_value = self.vocab
+        preprocessor = BertPreprocessor.from_preset(
+            "bert_base_uncased_en",
+            sequence_length=64,
+        )
+        self.assertEqual(preprocessor.get_config()["sequence_length"], 64)
+        preprocessor("The quick brown fox.")
+        get_file_mock.assert_called_once()
+
+    @unittest.mock.patch("tensorflow.keras.utils.get_file")
+    def test_override_preprocessor_sequence_length_gt_max(self, get_file_mock):
+        """Override sequence length longer than model's maximum."""
+        get_file_mock.return_value = self.vocab
+        with self.assertRaises(ValueError):
+            BertPreprocessor.from_preset(
+                "bert_base_uncased_en",
+                sequence_length=1024,
+            )
+        get_file_mock.assert_called_once()
