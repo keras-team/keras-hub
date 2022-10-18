@@ -23,16 +23,11 @@ from tensorflow import keras
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.models.bert.bert_presets import backbone_presets
+from keras_nlp.models.utils import classproperty
 
 
 def bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
-
-
-# TODO(jbischof): refactor into util file
-class classproperty(property):
-    def __get__(self, _, owner_cls):
-        return self.fget(owner_cls)
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -289,5 +284,5 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset architecture and w
 setattr(
     Bert.from_preset.__func__,
     "__doc__",
-    FROM_PRESET_DOCSTRING.format(names=", ".join(backbone_presets)),
+    FROM_PRESET_DOCSTRING.format(names=", ".join(Bert.presets)),
 )

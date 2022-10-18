@@ -16,17 +16,16 @@
 import pytest
 import tensorflow as tf
 
-from keras_nlp.models.bert import bert_models
-from keras_nlp.models.bert import bert_preprocessing
-from keras_nlp.models.bert import bert_presets
-from keras_nlp.models.bert import bert_tasks
+from keras_nlp.models.bert.bert_models import Bert
+from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
+from keras_nlp.models.bert.bert_tasks import BertClassifier
 
 
 @pytest.mark.slow
 class BertPresetTest(tf.test.TestCase):
     def test_load_bert(self):
-        for preset in bert_models.Bert.presets:
-            model = bert_models.Bert.from_preset(preset, load_weights=True)
+        for preset in Bert.presets:
+            model = Bert.from_preset(preset, load_weights=True)
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
@@ -39,8 +38,8 @@ class BertPresetTest(tf.test.TestCase):
             model(input_data)
 
     def test_load_bert_backbone_string(self):
-        for preset in bert_models.Bert.presets:
-            classifier = bert_tasks.BertClassifier(preset, 4, name="classifier")
+        for preset in Bert.presets:
+            classifier = BertClassifier(preset, 4, name="classifier")
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512),
@@ -55,7 +54,7 @@ class BertPresetTest(tf.test.TestCase):
             classifier(input_data)
 
     def test_classifier_default_args(self):
-        classifier = bert_tasks.BertClassifier()
+        classifier = BertClassifier()
         input_data = {
             "token_ids": tf.random.uniform(
                 shape=(1, 512),
@@ -67,9 +66,7 @@ class BertPresetTest(tf.test.TestCase):
         }
         classifier(input_data)
 
-    def test_load_vocabularies(self):
-        for vocabulary in bert_presets.vocabularies:
-            tokenizer = bert_preprocessing.BertPreprocessor(
-                vocabulary=vocabulary,
-            )
-            tokenizer("The quick brown fox.")
+    def test_load_preprocessors(self):
+        for preset in BertPreprocessor.presets:
+            preprocessor = BertPreprocessor.from_preset(preset)
+            preprocessor("The quick brown fox.")
