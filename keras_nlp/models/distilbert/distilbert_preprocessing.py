@@ -88,6 +88,7 @@ ds = ds.map(
 """
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class DistilBertPreprocessor(keras.layers.Layer):
     def __init__(
         self,
