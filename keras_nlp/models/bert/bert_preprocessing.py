@@ -13,23 +13,15 @@
 # limitations under the License.
 """BERT preprocessing layers."""
 
+import copy
 import os
 
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
-from keras_nlp.models.bert.bert_models import Bert
+from keras_nlp.models.bert.bert_presets import backbone_presets
+from keras_nlp.models.utils import classproperty
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
-
-
-def _download_vocabulary(preset, url, hash):
-    """Download vocabulary associated with preset."""
-    return keras.utils.get_file(
-        "vocab.txt",
-        url,
-        cache_subdir=os.path.join("models", preset),
-        file_hash=hash,
-    )
 
 
 class BertPreprocessor(keras.layers.Layer):
@@ -48,8 +40,8 @@ class BertPreprocessor(keras.layers.Layer):
     single input tensor. If a single tensor is passed, it will be packed
     equivalently to a tuple with a single element.
 
-    The WordPiece tokenizer can be accessed via the `tokenizer` property on this
-    layer, and can be used directly for custom packing on inputs.
+    The `WordPieceTokenizer` can be accessed via the `tokenizer` property on
+    this layer, and can be used directly for custom packing on inputs.
 
     Args:
         vocabulary: A list of vocabulary terms or a vocabulary filename.
@@ -171,6 +163,10 @@ class BertPreprocessor(keras.layers.Layer):
             "padding_mask": token_ids != self.pad_token_id,
         }
 
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
+
     @classmethod
     def from_preset(
         cls,
@@ -179,19 +175,20 @@ class BertPreprocessor(keras.layers.Layer):
         truncate="round_robin",
         **kwargs,
     ):
-
-        if preset not in Bert.presets:
+        if preset not in cls.presets:
             raise ValueError(
                 "`preset` must be one of "
-                f"""{", ".join(Bert.presets)}. Received: {preset}."""
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
-        metadata = Bert.presets[preset]
+        metadata = cls.presets[preset]
 
-        vocabulary = _download_vocabulary(
-            preset,
+        vocabulary = keras.utils.get_file(
+            "vocab.txt",
             metadata["vocabulary_url"],
-            metadata["vocabulary_hash"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["vocabulary_hash"],
         )
+
         config = metadata["preprocessor_config"]
         # Use model's `max_sequence_length` if `sequence_length` unspecified;
         # otherwise check that `sequence_length` not too long.
@@ -254,5 +251,5 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT preprocessor from preset architectur
 setattr(
     BertPreprocessor.from_preset.__func__,
     "__doc__",
-    FROM_PRESET_DOCSTRING.format(names=", ".join(Bert.presets)),
+    FROM_PRESET_DOCSTRING.format(names=", ".join(BertPreprocessor.presets)),
 )

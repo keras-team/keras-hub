@@ -14,8 +14,6 @@
 
 # TODO(jbischof): document presets in keras.io and use URL in docstrings
 # Metadata for loading pretrained model weights.
-# TODO(mattdangerw): Update our bucket structure so the vocabularies are
-# stored in an independent way, rather than reading from the base model.
 backbone_presets = {
     "bert_tiny_uncased_en": {
         "config": {
@@ -37,7 +35,7 @@ backbone_presets = {
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_uncased_en/model.h5",
         "weights_hash": "c2b29fcbf8f814a0812e4ab89ef5c068",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_uncased_en/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_uncased_en/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
     "bert_small_uncased_en": {
@@ -60,7 +58,7 @@ backbone_presets = {
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_small_uncased_en/model.h5",
         "weights_hash": "08632c9479b034f342ba2c2b7afba5f7",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_uncased_en/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_small_uncased_en/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
     "bert_medium_uncased_en": {
@@ -83,7 +81,7 @@ backbone_presets = {
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_medium_uncased_en/model.h5",
         "weights_hash": "bb990e1184ec6b6185450c73833cd661",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_uncased_en/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_medium_uncased_en/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
     "bert_base_uncased_en": {
@@ -195,7 +193,7 @@ backbone_presets = {
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_uncased_en/model.h5",
         "weights_hash": "cc5cacc9565ef400ee4376105f40ddae",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_uncased_en/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_uncased_en/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
     "bert_large_cased_en": {
@@ -218,7 +216,7 @@ backbone_presets = {
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_cased_en/model.h5",
         "weights_hash": "8b8ab82290bbf4f8db87d4f100648890",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_cased_en/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_cased_en/vocab.txt",
         "vocabulary_hash": "bb6ca9b42e790e5cd986bbb16444d0e0",
     },
 }

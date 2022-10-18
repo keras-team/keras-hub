@@ -67,6 +67,6 @@ class BertPresetTest(tf.test.TestCase):
         classifier(input_data)
 
     def test_load_preprocessors(self):
-        for preset in Bert.presets:
+        for preset in BertPreprocessor.presets:
             preprocessor = BertPreprocessor.from_preset(preset)
             preprocessor("The quick brown fox.")
