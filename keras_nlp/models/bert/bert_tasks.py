@@ -61,6 +61,9 @@ CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
         "bert_base_uncased_en", 4, name="classifier"
     )
     logits = classifier(input_data)
+
+    # Access backbone programatically (e.g., to change `trainable`)
+    classifier.backbone.trainable = False
     ```
 """
 
