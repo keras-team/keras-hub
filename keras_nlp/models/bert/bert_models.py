@@ -98,6 +98,7 @@ class Bert(keras.Model):
         dropout=0.1,
         max_sequence_length=512,
         num_segments=2,
+        name="encoder",
         **kwargs,
     ):
 
@@ -183,6 +184,7 @@ class Bert(keras.Model):
                 "sequence_output": sequence_output,
                 "pooled_output": pooled_output,
             },
+            name=name,
             **kwargs,
         )
         # All references to `self` below this line

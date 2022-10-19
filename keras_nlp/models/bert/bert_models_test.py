@@ -31,7 +31,6 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             hidden_dim=64,
             intermediate_dim=128,
             max_sequence_length=128,
-            name="encoder",
         )
         self.batch_size = 8
         self.input_batch = {
@@ -52,6 +51,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_valid_call_bert(self):
         self.model(self.input_batch)
+        # Check default name passed through
         self.assertEqual(self.model.name, "encoder")
 
     def test_variable_sequence_length_call_bert(self):
@@ -95,7 +95,6 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             Bert.from_preset(
                 "bert_base_uncased_clowntown",
                 load_weights=False,
-                name="encoder",
             )
 
     def test_preset_mutability(self):
