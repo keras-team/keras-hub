@@ -25,6 +25,7 @@ def _gpt_2_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class Gpt2Custom(keras.Model):
     """GPT-2 core network with customizable hyperparameters.
 
@@ -164,19 +165,21 @@ class Gpt2Custom(keras.Model):
         self.max_sequence_length = max_sequence_length
 
     def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "vocabulary_size": self.vocabulary_size,
-                "num_layers": self.num_layers,
-                "num_heads": self.num_heads,
-                "hidden_dim": self.hidden_dim,
-                "intermediate_dim": self.intermediate_dim,
-                "dropout": self.dropout,
-                "max_sequence_length": self.max_sequence_length,
-            }
-        )
-        return config
+        return {
+            "vocabulary_size": self.vocabulary_size,
+            "num_layers": self.num_layers,
+            "num_heads": self.num_heads,
+            "hidden_dim": self.hidden_dim,
+            "intermediate_dim": self.intermediate_dim,
+            "dropout": self.dropout,
+            "max_sequence_length": self.max_sequence_length,
+            "name": self.name,
+            "trainable": self.trainable,
+        }
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 
 MODEL_DOCSTRING = """GPT-2 "{type}" architecture.
