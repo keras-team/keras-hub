@@ -58,6 +58,9 @@ CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
         "bert_base_uncased_en", 4, name="classifier"
     )
     logits = classifier(input_data)
+
+    # Access backbone programatically (e.g., to change `trainable`)
+    classifier.backbone.trainable = False
     ```
 """
 
@@ -95,8 +98,13 @@ class BertClassifier(keras.Model):
             **kwargs,
         )
         # All references to `self` below this line
-        self.backbone = backbone
+        self._backbone = backbone
         self.num_classes = num_classes
+
+    @property
+    def backbone(self):
+        """A `keras_nlp.models.Bert` instance providing the encoder submodel."""
+        return self._backbone
 
     def get_config(self):
         return {
