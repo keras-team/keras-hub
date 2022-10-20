@@ -13,8 +13,11 @@
 # limitations under the License.
 """Tests for RoBERTa task specific models and heads."""
 
+import os
+
 import tensorflow as tf
 from absl.testing import parameterized
+from tensorflow import keras
 
 from keras_nlp.models.roberta.roberta_models import RobertaCustom
 from keras_nlp.models.roberta.roberta_tasks import RobertaClassifier
@@ -64,3 +67,20 @@ class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
         model = RobertaClassifier(self.model, 4, 128, name="classifier")
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_dataset)
+
+    @parameterized.named_parameters(
+        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+    )
+    def test_saving_model(self, save_format):
+        model = RobertaClassifier(self.model, 4, 128, name="classifier")
+        model_output = model(self.input_batch)
+        save_path = os.path.join(self.get_temp_dir(), "model")
+        model.save(save_path, save_format)
+        restored_model = keras.models.load_model(save_path)
+
+        # Check we got the real object back.
+        self.assertIsInstance(restored_model, RobertaClassifier)
+
+        # Check that output matches.
+        restored_output = restored_model(self.input_batch)
+        self.assertAllClose(model_output, restored_output)

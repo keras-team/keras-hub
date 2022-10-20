@@ -96,13 +96,20 @@ class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
                 [self.batch_size, seq_length, self.model.hidden_dim],
             )
 
-    def test_saving_model(self):
+    @parameterized.named_parameters(
+        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+    )
+    def test_saving_model(self, save_format):
         model_output = self.model.predict(self.input_batch)
 
         save_path = os.path.join(self.get_temp_dir(), "model")
-        self.model.save(save_path)
+        self.model.save(save_path, save_format)
         restored_model = keras.models.load_model(save_path)
 
+        # Check we got the real object back.
+        self.assertIsInstance(restored_model, XLMRobertaCustom)
+
+        # Check that output matches.
         restored_output = restored_model.predict(self.input_batch)
         self.assertAllClose(
             model_output,
