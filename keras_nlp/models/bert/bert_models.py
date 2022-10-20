@@ -82,7 +82,6 @@ class Bert(keras.Model):
         hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12,
-        name="encoder",
     )
     output = model(input_data)
     ```
@@ -98,7 +97,6 @@ class Bert(keras.Model):
         dropout=0.1,
         max_sequence_length=512,
         num_segments=2,
-        name="backbone",
         **kwargs,
     ):
 
@@ -173,6 +171,10 @@ class Bert(keras.Model):
             name="pooled_dense",
         )(x[:, cls_token_index, :])
 
+        # Set default for `name` if none given
+        if "name" not in kwargs:
+            kwargs["name"] = "backbone"
+
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs={
@@ -184,7 +186,6 @@ class Bert(keras.Model):
                 "sequence_output": sequence_output,
                 "pooled_output": pooled_output,
             },
-            name=name,
             **kwargs,
         )
         # All references to `self` below this line
