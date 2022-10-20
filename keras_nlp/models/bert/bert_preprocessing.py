@@ -24,6 +24,7 @@ from keras_nlp.models.utils import classproperty
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class BertPreprocessor(keras.layers.Layer):
     """BERT preprocessing layer.
 
