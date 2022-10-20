@@ -25,9 +25,6 @@ CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
         backbone: A string or `keras_nlp.models.Bert` instance. If a string,
             should be one of {names}.
         num_classes: int. Number of classes to predict.
-        name: string, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
 
     Examples:
     ```python
@@ -71,8 +68,7 @@ class BertClassifier(keras.Model):
         self,
         backbone="bert_base_uncased_en",
         num_classes=2,
-        name=None,
-        trainable=True,
+        **kwargs,
     ):
         # Load backbone from string identifier
         # TODO(jbischof): create util function when ready to load backbones in
@@ -94,7 +90,9 @@ class BertClassifier(keras.Model):
         )(pooled)
         # Instantiate using Functional API Model constructor
         super().__init__(
-            inputs=inputs, outputs=outputs, name=name, trainable=trainable
+            inputs=inputs,
+            outputs=outputs,
+            **kwargs,
         )
         # All references to `self` below this line
         self.backbone = backbone
