@@ -233,7 +233,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
         rel_attn_span = self.bucket_size
         rel_embeddings = rel_embeddings[
-            self.bucket_size + rel_attn_span : self.bucket_size + rel_attn_span,
+            self.bucket_size - rel_attn_span : self.bucket_size + rel_attn_span,
             :,
         ]
         rel_embeddings = rel_embeddings[tf.newaxis, :]
