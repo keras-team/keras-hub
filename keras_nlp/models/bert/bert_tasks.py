@@ -100,8 +100,13 @@ class BertClassifier(keras.Model):
             inputs=inputs, outputs=outputs, name=name, trainable=trainable
         )
         # All references to `self` below this line
-        self.backbone = backbone
+        self._backbone = backbone
         self.num_classes = num_classes
+
+    @property
+    def backbone(self):
+        """A `keras_nlp.models.Bert` instance providing the encoder submodel."""
+        return self._backbone
 
     def get_config(self):
         return {
