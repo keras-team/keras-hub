@@ -19,6 +19,7 @@ from tensorflow import keras
 
 # TODO: This is a temporary, unexported layer until we find a way to make the
 # `MultiSegmentPacker` layer more generic.
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class RobertaMultiSegmentPacker(keras.layers.Layer):
     """Packs multiple sequences into a single fixed width model input.
 

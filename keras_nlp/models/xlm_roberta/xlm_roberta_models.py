@@ -15,9 +15,12 @@
 """XLM-RoBERTa backbone models."""
 
 
+from tensorflow import keras
+
 from keras_nlp.models.roberta import roberta_models
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class XLMRobertaCustom(roberta_models.RobertaCustom):
     """XLM-RoBERTa encoder with a customizable set of hyperparameters.
 
