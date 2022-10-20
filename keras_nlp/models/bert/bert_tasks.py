@@ -25,7 +25,6 @@ CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
         backbone: A string or `keras_nlp.models.Bert` instance. If a string,
             should be one of {names}.
         num_classes: int. Number of classes to predict.
-            trainable.
 
     Examples:
     ```python
