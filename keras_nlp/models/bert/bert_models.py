@@ -98,7 +98,7 @@ class Bert(keras.Model):
         dropout=0.1,
         max_sequence_length=512,
         num_segments=2,
-        name="encoder",
+        name="backbone",
         **kwargs,
     ):
 
