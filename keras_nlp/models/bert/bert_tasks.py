@@ -91,7 +91,9 @@ class BertClassifier(keras.Model):
         )(pooled)
         # Instantiate using Functional API Model constructor
         super().__init__(
-            inputs=inputs, outputs=outputs, **kwargs,
+            inputs=inputs,
+            outputs=outputs,
+            **kwargs,
         )
         # All references to `self` below this line
         self.backbone = backbone
