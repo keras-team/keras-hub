@@ -64,6 +64,8 @@ class BertPreprocessorTest(tf.test.TestCase):
             vocabulary=self.vocab,
             sequence_length=8,
         )
+        # The first tuple or list is always interpreted as an enumeration of
+        # separate sequences to concatenate.
         output = preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(output["token_ids"], [2, 5, 6, 3, 7, 8, 1, 3])
         self.assertAllEqual(output["segment_ids"], [0, 0, 0, 0, 1, 1, 1, 1])
@@ -90,6 +92,8 @@ class BertPreprocessorTest(tf.test.TestCase):
             vocabulary=self.vocab,
             sequence_length=8,
         )
+        # The first tuple or list is always interpreted as an enumeration of
+        # separate sequences to concatenate.
         output = preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(output["token_ids"], [[2, 5, 6, 3, 7, 8, 1, 3]] * 4)
         self.assertAllEqual(
