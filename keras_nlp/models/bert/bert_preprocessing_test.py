@@ -37,6 +37,74 @@ class BertPreprocessorTest(tf.test.TestCase):
         self.assertAllEqual(output["segment_ids"], [0, 0, 0, 0, 0, 0, 0, 0])
         self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0])
 
+    def test_tokenize_batch(self):
+        input_data = tf.constant(
+            [
+                "THE QUICK BROWN FOX.",
+                "THE QUICK BROWN FOX.",
+                "THE QUICK BROWN FOX.",
+                "THE QUICK BROWN FOX.",
+            ]
+        )
+        preprocessor = BertPreprocessor(
+            vocabulary=self.vocab,
+            sequence_length=8,
+        )
+        output = preprocessor(input_data)
+        self.assertAllEqual(output["token_ids"], [[2, 5, 6, 7, 8, 1, 3, 0]] * 4)
+        self.assertAllEqual(
+            output["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0]] * 4
+        )
+        self.assertAllEqual(
+            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
+        )
+
+    def test_tokenize_multiple_sentences(self):
+        sentence_one = "THE QUICK"
+        sentence_two = "BROWN FOX."
+        preprocessor = BertPreprocessor(
+            vocabulary=self.vocab,
+            sequence_length=8,
+        )
+        # The first tuple or list is always interpreted as an enumeration of
+        # separate sequences to concatenate.
+        output = preprocessor((sentence_one, sentence_two))
+        self.assertAllEqual(output["token_ids"], [2, 5, 6, 3, 7, 8, 1, 3])
+        self.assertAllEqual(output["segment_ids"], [0, 0, 0, 0, 1, 1, 1, 1])
+        self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1])
+
+    def test_tokenize_multiple_batched_sentences(self):
+        sentence_one = tf.constant(
+            [
+                "THE QUICK",
+                "THE QUICK",
+                "THE QUICK",
+                "THE QUICK",
+            ]
+        )
+        sentence_two = tf.constant(
+            [
+                "BROWN FOX.",
+                "BROWN FOX.",
+                "BROWN FOX.",
+                "BROWN FOX.",
+            ]
+        )
+        preprocessor = BertPreprocessor(
+            vocabulary=self.vocab,
+            sequence_length=8,
+        )
+        # The first tuple or list is always interpreted as an enumeration of
+        # separate sequences to concatenate.
+        output = preprocessor((sentence_one, sentence_two))
+        self.assertAllEqual(output["token_ids"], [[2, 5, 6, 3, 7, 8, 1, 3]] * 4)
+        self.assertAllEqual(
+            output["segment_ids"], [[0, 0, 0, 0, 1, 1, 1, 1]] * 4
+        )
+        self.assertAllEqual(
+            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1]] * 4
+        )
+
     def test_lowercase(self):
         input_data = ["THE QUICK BROWN FOX."]
         preprocessor = BertPreprocessor(
