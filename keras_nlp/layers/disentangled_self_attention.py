@@ -240,13 +240,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
         score = 0
 
-        # def _reshape_rel_dense_output(inputs):
-        #     # `inputs` is of shape `(batch_size, seq_length, num_heads, attn_head_size)`.
-        #     # Reshape this to `(batch_size * num_heads, seq_length, attn_head_size)`.
-        #     inputs = tf.transpose(inputs, perm=(0, 2, 1, 3))
-        #     inputs = tf.reshape(inputs, (-1, tf.shape(inputs)[-2], tf.shape(inputs)[-1]))
-        #     return inputs
-
         pos_query = self._query_dense(rel_embeddings)
         pos_query = tf.repeat(pos_query, repeats=batch_size, axis=0)
 
@@ -262,18 +255,19 @@ class DisentangledSelfAttention(keras.layers.Layer):
         c2p_pos = tf.clip_by_value(
             rel_pos + rel_attn_span, 0, rel_attn_span * 2 - 1
         )
-        c2p_attn_scores = torch_gather(
-            c2p_attn_scores,
-            indices=tf.broadcast_to(
-                c2p_pos,
-                shape=(
-                    batch_size,
-                    self.num_heads,
-                    num_positions,
-                    num_positions,
-                ),
+        c2p_pos = tf.broadcast_to(
+            c2p_pos,
+            shape=(
+                batch_size,
+                self.num_heads,
+                num_positions,
+                num_positions,
             ),
-            gather_axis=-1,
+        )
+        c2p_attn_scores = tf.gather(
+            c2p_attn_scores,
+            indices=c2p_pos,
+            batch_dims=3,
         )
         score += c2p_attn_scores / self.scale_factor
 
@@ -287,18 +281,19 @@ class DisentangledSelfAttention(keras.layers.Layer):
         p2c_pos = tf.clip_by_value(
             -rel_pos + rel_attn_span, 0, rel_attn_span * 2 - 1
         )
-        p2c_attn_scores = torch_gather(
-            p2c_attn_scores,
-            indices=tf.broadcast_to(
-                p2c_pos,
-                shape=(
-                    batch_size,
-                    self.num_heads,
-                    num_positions,
-                    num_positions,
-                ),
+        p2c_pos = tf.broadcast_to(
+            p2c_pos,
+            shape=(
+                batch_size,
+                self.num_heads,
+                num_positions,
+                num_positions,
             ),
-            gather_axis=-1,
+        )
+        p2c_attn_scores = tf.gather(
+            p2c_attn_scores,
+            indices=p2c_pos,
+            batch_dims=3,
         )
         score += p2c_attn_scores / self.scale_factor
 
