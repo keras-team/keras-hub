@@ -160,7 +160,8 @@ class DistilBertPreprocessor(keras.layers.Layer):
     def from_preset(
         cls,
         preset,
-        load_weights=True,
+        sequence_length=None,
+        truncate="round_robin",
         **kwargs,
     ):
         raise NotImplementedError
