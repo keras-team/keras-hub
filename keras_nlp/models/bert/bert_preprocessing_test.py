@@ -13,14 +13,17 @@
 # limitations under the License.
 """Tests for BERT preprocessing layers."""
 
+import os
 import unittest
 
 import tensorflow as tf
+from absl.testing import parameterized
+from tensorflow import keras
 
 from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
 
 
-class BertPreprocessorTest(tf.test.TestCase):
+class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
@@ -163,3 +166,23 @@ class BertPreprocessorTest(tf.test.TestCase):
                 sequence_length=1024,
             )
         get_file_mock.assert_called_once()
+
+    @parameterized.named_parameters(
+        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+    )
+    def test_saving_model(self, save_format):
+        input_data = tf.constant(["THE QUICK BROWN FOX."])
+        preprocessor = BertPreprocessor(
+            vocabulary=self.vocab,
+            sequence_length=8,
+        )
+        inputs = keras.Input(dtype="string", shape=())
+        outputs = preprocessor(inputs)
+        model = keras.Model(inputs, outputs)
+        path = os.path.join(self.get_temp_dir(), "model")
+        model.save(path, save_format=save_format)
+        restored_model = keras.models.load_model(path)
+        self.assertAllEqual(
+            model(input_data)["token_ids"],
+            restored_model(input_data)["token_ids"],
+        )
