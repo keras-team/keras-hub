@@ -29,7 +29,7 @@ def distilbert_kernel_initializer(stddev=0.02):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class DistilBertCustom(keras.Model):
+class DistilBert(keras.Model):
     """DistilBERT encoder network with custom hyperparmeters.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -62,7 +62,7 @@ class DistilBertCustom(keras.Model):
     Examples:
     ```python
     # Randomly initialized DistilBERT encoder
-    model = keras_nlp.models.DistilBertCustom(
+    model = keras_nlp.models.DistilBert(
         vocabulary_size=30522,
         num_layers=12,
         num_heads=12,
@@ -94,8 +94,7 @@ class DistilBertCustom(keras.Model):
         intermediate_dim,
         dropout=0.1,
         max_sequence_length=512,
-        name=None,
-        trainable=True,
+        **kwargs,
     ):
 
         # Inputs
@@ -138,6 +137,10 @@ class DistilBertCustom(keras.Model):
                 name=f"transformer_layer_{i}",
             )(x, padding_mask=padding_mask)
 
+        # Set default for `name` if none given
+        if "name" not in kwargs:
+            kwargs["name"] = "backbone"
+
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs={
@@ -145,8 +148,6 @@ class DistilBertCustom(keras.Model):
                 "padding_mask": padding_mask,
             },
             outputs=x,
-            name=name,
-            trainable=trainable,
         )
         # All references to `self` below this line
         self.vocabulary_size = vocabulary_size
@@ -174,64 +175,11 @@ class DistilBertCustom(keras.Model):
     def from_config(cls, config):
         return cls(**config)
 
-
-MODEL_DOCSTRING = """DistilBert "{type}" architecture.
-
-This network implements a bi-directional Transformer-based encoder as
-described in ["DistilBERT, a distilled version of BERT: smaller, faster,
-cheaper and lighter"](https://arxiv.org/abs/1910.01108). It includes the
-embedding lookups and transformer layers, but not the masked language model
-or classification task networks.
-
-Args:
-    vocabulary_size: int, optional. The size of the token vocabulary.
-    name: string, optional. Name of the model.
-    trainable: boolean, optional. If the model's variables should be
-        trainable.
-
-Examples:
-```python
-# Randomly initialized DistilBert{type} encoder
-model = keras_nlp.models.DistilBert{type}(vocabulary_size=10000)
-
-# Call encoder on the inputs.
-input_data = {{
-    "token_ids": tf.random.uniform(
-        shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
-    ),
-    "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
-}}
-output = model(input_data)
-```
-"""
-
-
-def DistilBertBase(vocabulary_size, name=None, trainable=True):
-
-    model = DistilBertCustom(
-        vocabulary_size=vocabulary_size,
-        num_layers=6,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        dropout=0.1,
-        max_sequence_length=512,
-        name=name,
-        trainable=trainable,
-    )
-
-    return model
-
-
-def model_class_by_name(classname):
-    """Return model class given the class name."""
-    return {
-        "DistilBertBase": DistilBertBase,
-    }[classname]
-
-
-setattr(
-    DistilBertBase,
-    "__doc__",
-    MODEL_DOCSTRING.format(type="Base"),
-)
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        load_weights=True,
+        **kwargs,
+    ):
+        raise NotImplementedError
