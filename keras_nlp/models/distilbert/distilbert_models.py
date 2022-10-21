@@ -38,9 +38,10 @@ class DistilBert(keras.Model):
     embedding lookups and transformer layers, but not the masked language model
     or classification task networks.
 
-    This class gives a fully customizable DistilBERT model with any number of layers,
-    heads, and embedding dimensions. For specific DistilBERT architectures defined in
-    the paper, see, for example, `keras_nlp.models.DistilBertBase`.
+    The default constructor gives a fully customizable, randomly initalized
+    DistilBERT encoder with any number of layers, heads, and embedding
+    dimensions. To load preset architectures and weights, use the `from_presets`
+    constructor.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.

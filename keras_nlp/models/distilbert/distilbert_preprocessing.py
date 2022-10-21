@@ -21,7 +21,7 @@ from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class DistilBertPreprocessor(keras.layers.Layer):
-    """DistilBERT preprocessor with pretrained vocabularies.
+    """DistilBERT preprocessing layer.
 
     This preprocessing layer will do three things:
 
@@ -40,8 +40,7 @@ class DistilBertPreprocessor(keras.layers.Layer):
     layer, and can be used directly for custom packing on inputs.
 
     Args:
-        vocabulary: One of a list of vocabulary terms, a vocabulary filename, or
-            the name of the pretrained vocabulary.
+        vocabulary: A list of vocabulary terms or a vocabulary filename.
         lowercase: If `True`, input will be lowercase before tokenization. If
             `vocabulary` is set to a pretrained vocabulary, this parameter will
             be inferred.
