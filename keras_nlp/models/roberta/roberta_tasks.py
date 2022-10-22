@@ -89,6 +89,7 @@ class RobertaClassifier(keras.Model):
         self.hidden_dim = hidden_dim
         self.dropout = dropout
 
+    @property
     def backbone(self):
         """A `keras_nlp.models.Roberta` instance providing the encoder submodel."""
         return self._backbone
