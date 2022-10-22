@@ -54,6 +54,13 @@ class Roberta(keras.Model):
 
     Example usage:
     ```python
+    input_data = {
+        "token_ids": tf.random.uniform(
+            shape=(1, 12), dtype=tf.int64, maxval=50265),
+        "padding_mask": tf.constant(
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
+    }
+
     # Randomly initialized RoBERTa model
     model = keras_nlp.models.Roberta(
         vocabulary_size=50265,
@@ -64,13 +71,7 @@ class Roberta(keras.Model):
         max_sequence_length=12
     )
 
-    # Call encoder on the inputs.
-    input_data = {
-        "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=50265),
-        "padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
-    }
+    # Call the model on the input data.
     output = model(input_data)
     ```
     """
