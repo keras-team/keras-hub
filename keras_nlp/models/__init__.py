@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.models.bert.bert_models import BertBase
-from keras_nlp.models.bert.bert_models import BertCustom
-from keras_nlp.models.bert.bert_models import BertLarge
-from keras_nlp.models.bert.bert_models import BertMedium
-from keras_nlp.models.bert.bert_models import BertSmall
-from keras_nlp.models.bert.bert_models import BertTiny
+from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
 from keras_nlp.models.bert.bert_tasks import BertClassifier
+from keras_nlp.models.distilbert.distilbert_models import DistilBertBase
+from keras_nlp.models.distilbert.distilbert_models import DistilBertCustom
+from keras_nlp.models.distilbert.distilbert_preprocessing import (
+    DistilBertPreprocessor,
+)
 from keras_nlp.models.gpt2.gpt2_models import Gpt2Base
 from keras_nlp.models.gpt2.gpt2_models import Gpt2Custom
 from keras_nlp.models.gpt2.gpt2_models import Gpt2ExtraLarge
@@ -27,3 +27,9 @@ from keras_nlp.models.gpt2.gpt2_models import Gpt2Large
 from keras_nlp.models.gpt2.gpt2_models import Gpt2Medium
 from keras_nlp.models.roberta.roberta_models import Roberta
 from keras_nlp.models.roberta.roberta_tasks import RobertaClassifier
+from keras_nlp.models.xlm_roberta.xlm_roberta_models import XLMRobertaBase
+from keras_nlp.models.xlm_roberta.xlm_roberta_models import XLMRobertaCustom
+from keras_nlp.models.xlm_roberta.xlm_roberta_models import XLMRobertaLarge
+from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessing import (
+    XLMRobertaPreprocessor,
+)

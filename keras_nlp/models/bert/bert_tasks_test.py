@@ -19,13 +19,13 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_models import BertCustom
+from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_tasks import BertClassifier
 
 
 class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.backbone = BertCustom(
+        self.backbone = Bert(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -76,11 +76,18 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.classifier.compile(jit_compile=jit_compile)
         self.classifier.predict(self.input_dataset)
 
-    def test_saving_model(self):
+    @parameterized.named_parameters(
+        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+    )
+    def test_saving_model(self, save_format):
         model_output = self.classifier(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), "model")
-        self.classifier.save(save_path)
+        self.classifier.save(save_path, save_format)
         restored_model = keras.models.load_model(save_path)
 
+        # Check we got the real object back.
+        self.assertIsInstance(restored_model, BertClassifier)
+
+        # Check that output matches.
         restored_output = restored_model(self.input_batch)
         self.assertAllClose(model_output, restored_output)

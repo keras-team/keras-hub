@@ -84,25 +84,90 @@ Once the pull request is approved, a team member will take care of merging.
 Python 3.7 or later is required.
 
 Setting up your KerasNLP development environment requires you to fork the
-KerasNLP repository, clone the repository, create a virtual environment, and
-install dependencies.
-
-You can achieve this by running the following commands:
+KerasNLP repository and clone it locally. With the
+[GitHub CLI](https://github.com/cli/cli) installed, you can do this as follows:
 
 ```shell
 gh repo fork keras-team/keras-nlp --clone --remote
 cd keras-nlp
-python -m venv ~/keras-nlp-venv
-source ~/keras-nlp-venv/bin/activate
-pip install -e ".[tests]"
 ```
 
-The first line relies on having an installation of
-[the GitHub CLI](https://github.com/cli/cli).
+Next we must setup a python environment with the correct dependencies. We
+recommend using `conda` to install tensorflow dependencies (such as CUDA), and
+`pip` to install python packages from PyPI. The exact method will depend on your
+OS.
 
-Following these commands you should be able to run the tests using
-`pytest keras_nlp`. Please report any issues running tests following these
-steps.
+### Linux (recommended)
+
+To setup a complete environment with TensorFlow, a local install of keras-nlp,
+and all development tools, run the following or adapt it to suit your needs.
+
+```shell
+# Create and activate conda environment.
+conda create -n keras-nlp python=3.9
+conda activate keras-nlp
+
+# The following can be omitted if GPU support is not required.
+conda install -c conda-forge cudatoolkit-dev=11.2 cudnn=8.1.0
+mkdir -p $CONDA_PREFIX/etc/conda/activate.d/
+echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+echo 'export XLA_FLAGS=--xla_gpu_cuda_data_dir=$CONDA_PREFIX/' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+source $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+
+# Install dependencies.
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e "."
+```
+
+### MacOS
+
+⚠️⚠️⚠️ MacOS binaries are for the M1 architecture are not currently available from
+official sources. You can try experimental development workflow leveraging the
+[tensorflow metal plugin](https://developer.apple.com/metal/tensorflow-plugin/)
+and a [community maintained build](https://github.com/sun1638650145/Libraries-and-Extensions-for-TensorFlow-for-Apple-Silicon)
+of `tensorflow-text`. These binaries are not provided by Google, so proceed at
+your own risk.
+
+#### Experimental instructions for Arm (M1)
+
+```shell
+# Create and activate conda environment.
+conda create -n keras-nlp python=3.9
+conda activate keras-nlp
+
+# Install dependencies.
+conda install -c apple tensorflow-deps=2.9
+python -m pip install --upgrade pip
+python -m pip install -r requirements-macos-m1.txt
+python -m pip install -e "."
+```
+
+#### Instructions for x86 (Intel)
+
+```shell
+# Create and activate conda environment.
+conda create -n keras-nlp python=3.9
+conda activate keras-nlp
+
+# Install dependencies.
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e "."
+```
+
+### Windows
+
+For the best experience developing on windows, please install
+[WSL](https://learn.microsoft.com/en-us/windows/wsl/install), and proceed with
+the linux installation instruction above.
+
+To run the format and lint scripts, make sure you clone the repo with Linux
+style line endings and change any line separator settings in your editor.
+This is automatically done if you clone using git inside WSL.
+
+Note that will not support Windows Shell/PowerShell for any scripts in this
+repository.
 
 ## Testing changes
 
@@ -150,18 +215,3 @@ the following commands manually every time you want to format your code:
 If after running these the CI flow is still failing, try updating `flake8`,
 `isort` and `black`. This can be done by running `pip install --upgrade black`,
 `pip install --upgrade flake8`, and `pip install --upgrade isort`.
-
-## Developing on Windows
-
-For Windows development, we recommend using WSL (Windows Subsystem for Linux),
-so you can run the shell scripts in this repository. We will not support
-Windows Shell/PowerShell. You can refer
-[to these instructions](https://docs.microsoft.com/en-us/windows/wsl/install)
-for WSL installation.
-
-Note that if you are using Windows Subsystem for Linux (WSL), make sure you 
-clone the repo with Linux style LF line endings and change the default setting
-for line separator in your Text Editor before running the format
-or lint scripts. This is automatically done if you clone using git inside WSL.
-If there is conflict due to the line endings you might see an error
-like - `: invalid option`.

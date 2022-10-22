@@ -15,21 +15,16 @@
 
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_checkpoints import checkpoints
+from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_models import bert_kernel_initializer
-from keras_nlp.models.bert.bert_models import model_class_by_name
 
 # TODO(jbischof): Find more scalable way to list checkpoints.
 CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
 
     Args:
-        backbone: A string, `keras_nlp.models.BertCustom` or derivative such as
-            `keras_nlp.models.BertBase` to encode inputs. If a string, should be
-            one of {names}.
+        backbone: A string or `keras_nlp.models.Bert` instance. If a string,
+            should be one of {names}.
         num_classes: int. Number of classes to predict.
-        name: string, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
 
     Examples:
     ```python
@@ -63,31 +58,31 @@ CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
         "bert_base_uncased_en", 4, name="classifier"
     )
     logits = classifier(input_data)
+
+    # Access backbone programatically (e.g., to change `trainable`)
+    classifier.backbone.trainable = False
     ```
 """
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class BertClassifier(keras.Model):
     def __init__(
         self,
         backbone="bert_base_uncased_en",
         num_classes=2,
-        name=None,
-        trainable=True,
+        **kwargs,
     ):
         # Load backbone from string identifier
         # TODO(jbischof): create util function when ready to load backbones in
         # other task classes (e.g., load_backbone_from_string())
         if isinstance(backbone, str):
-            if backbone not in checkpoints:
+            if backbone not in Bert.presets:
                 raise ValueError(
                     "`backbone` must be one of "
-                    f"""{", ".join(checkpoints.keys())}. """
-                    f"Received: {backbone}"
+                    f"""{", ".join(Bert.presets)}. Received: {backbone}."""
                 )
-            backbone_class_str = checkpoints[backbone]["model"]
-            backbone_class = model_class_by_name(backbone_class_str)
-            backbone = backbone_class(backbone)
+            backbone = Bert.from_preset(backbone)
 
         inputs = backbone.input
         pooled = backbone(inputs)["pooled_output"]
@@ -98,15 +93,36 @@ class BertClassifier(keras.Model):
         )(pooled)
         # Instantiate using Functional API Model constructor
         super().__init__(
-            inputs=inputs, outputs=outputs, name=name, trainable=trainable
+            inputs=inputs,
+            outputs=outputs,
+            **kwargs,
         )
         # All references to `self` below this line
-        self.backbone = backbone
+        self._backbone = backbone
         self.num_classes = num_classes
+
+    @property
+    def backbone(self):
+        """A `keras_nlp.models.Bert` instance providing the encoder submodel."""
+        return self._backbone
+
+    def get_config(self):
+        return {
+            "backbone": keras.layers.serialize(self.backbone),
+            "num_classes": self.num_classes,
+            "name": self.name,
+            "trainable": self.trainable,
+        }
+
+    @classmethod
+    def from_config(cls, config):
+        if "backbone" in config:
+            config["backbone"] = keras.layers.deserialize(config["backbone"])
+        return cls(**config)
 
 
 setattr(
     BertClassifier,
     "__doc__",
-    CLASSIFIER_DOCSTRING.format(names=", ".join(checkpoints.keys())),
+    CLASSIFIER_DOCSTRING.format(names=", ".join(Bert.presets)),
 )

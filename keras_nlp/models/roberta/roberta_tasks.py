@@ -86,8 +86,9 @@ class RobertaClassifier(keras.Model):
         # All references to `self` below this line
         self._backbone = backbone
         self.num_classes = num_classes
+        self.hidden_dim = hidden_dim
+        self.dropout = dropout
 
-    @property
     def backbone(self):
         """A `keras_nlp.models.Roberta` instance providing the encoder submodel."""
         return self._backbone
@@ -96,6 +97,8 @@ class RobertaClassifier(keras.Model):
         return {
             "backbone": keras.layers.serialize(self.backbone),
             "num_classes": self.num_classes,
+            "hidden_dim": self.hidden_dim,
+            "dropout": self.dropout,
             "name": self.name,
             "trainable": self.trainable,
         }
