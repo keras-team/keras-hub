@@ -27,7 +27,7 @@ def roberta_kernel_initializer(stddev=0.02):
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class Roberta(keras.Model):
-    """RoBERTa encoder with a custom hyperparameters.
+    """RoBERTa encoder with custom hyperparameters.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["RoBERTa: A Robustly Optimized BERT Pretraining Approach"](https://arxiv.org/abs/1907.11692).

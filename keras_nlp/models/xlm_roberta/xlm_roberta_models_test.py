@@ -49,6 +49,7 @@ class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_valid_call_xlm_roberta(self):
         self.model(self.input_batch)
+
         # Check default name passed through
         self.assertEqual(self.model.name, "backbone")
 
