@@ -66,22 +66,6 @@ class RobertaTest(tf.test.TestCase, parameterized.TestCase):
         self.model.compile(jit_compile=jit_compile)
         self.model.predict(self.input_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_roberta_classifier_compile(self, jit_compile):
-        model = RobertaClassifier(self.model, 4, 128, name="classifier")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_roberta_classifier_compile_batched_ds(self, jit_compile):
-        model = RobertaClassifier(self.model, 4, 128, name="classifier")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_dataset)
-
     def test_variable_sequence_length_call_roberta(self):
         for seq_length in (25, 50, 75):
             input_data = {
@@ -109,7 +93,7 @@ class RobertaTest(tf.test.TestCase, parameterized.TestCase):
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, RobertaCustom)
+        self.assertIsInstance(restored_model, Roberta)
 
         # Check that output matches.
         restored_output = restored_model.predict(self.input_batch)
