@@ -111,7 +111,7 @@ class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         )
 
     def test_detokenize(self):
-        input_tokens = [[627, 2119, 6219, 23602]]
+        input_tokens = [[627, 2119, 6219, 23602, 4]]
         output = self.preprocessor.tokenizer.detokenize(input_tokens)
         self.assertAllEqual(output, ["the quick brown fox."])
 
