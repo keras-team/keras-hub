@@ -18,11 +18,12 @@ from tensorflow import keras
 from keras_nlp.models.roberta.roberta_models import roberta_kernel_initializer
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class RobertaClassifier(keras.Model):
     """RoBERTa encoder model with a classification head.
 
     Args:
-        backbone: A `keras_nlp.models.Roberta` to encode inputs.
+        backbone: A `keras_nlp.models.Roberta` instance.
         num_classes: int. Number of classes to predict.
         hidden_dim: int. The size of the pooler layer.
         name: string, optional. Name of the model.
@@ -83,5 +84,24 @@ class RobertaClassifier(keras.Model):
             inputs=inputs, outputs=outputs, name=name, trainable=trainable
         )
         # All references to `self` below this line
-        self.backbone = backbone
+        self._backbone = backbone
         self.num_classes = num_classes
+
+    @property
+    def backbone(self):
+        """A `keras_nlp.models.Roberta` instance providing the encoder submodel."""
+        return self._backbone
+
+    def get_config(self):
+        return {
+            "backbone": keras.layers.serialize(self.backbone),
+            "num_classes": self.num_classes,
+            "name": self.name,
+            "trainable": self.trainable,
+        }
+
+    @classmethod
+    def from_config(cls, config):
+        if "backbone" in config:
+            config["backbone"] = keras.layers.deserialize(config["backbone"])
+        return cls(**config)
