@@ -26,9 +26,6 @@ class RobertaClassifier(keras.Model):
         backbone: A `keras_nlp.models.Roberta` instance.
         num_classes: int. Number of classes to predict.
         hidden_dim: int. The size of the pooler layer.
-        name: string, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
 
     Example usage:
     ```python
@@ -55,13 +52,7 @@ class RobertaClassifier(keras.Model):
     """
 
     def __init__(
-        self,
-        backbone,
-        num_classes,
-        hidden_dim=None,
-        dropout=0.0,
-        name=None,
-        trainable=True,
+        self, backbone, num_classes, hidden_dim=None, dropout=0.0, **kwargs
     ):
         inputs = backbone.input
         if hidden_dim is None:
@@ -81,7 +72,9 @@ class RobertaClassifier(keras.Model):
 
         # Instantiate using Functional API Model constructor
         super().__init__(
-            inputs=inputs, outputs=outputs, name=name, trainable=trainable
+            inputs=inputs,
+            outputs=outputs,
+            **kwargs,
         )
         # All references to `self` below this line
         self._backbone = backbone
