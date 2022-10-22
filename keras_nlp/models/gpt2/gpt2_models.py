@@ -55,6 +55,15 @@ class Gpt2(keras.Model):
 
     Example usage:
     ```python
+    input_data = {
+        "token_ids": tf.random.uniform(
+            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
+        ),
+        "padding_mask": tf.constant(
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+        ),
+    }
+
     # Randomly initialized GPT-2 decoder
     model = keras_nlp.models.Gpt2(
         vocabulary_size=50257,
@@ -65,15 +74,7 @@ class Gpt2(keras.Model):
         max_sequence_length=1024,
     )
 
-    # Call encoder on the inputs
-    input_data = {
-        "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
-        ),
-        "padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
-    }
+    # Call the model on the input data.
     output = model(input_data)
     ```
     """
