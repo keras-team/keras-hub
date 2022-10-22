@@ -30,7 +30,7 @@ class RobertaClassifier(keras.Model):
     Example usage:
     ```python
     # Randomly initialized RoBERTa encoder
-    model = keras_nlp.models.RobertaCustom(
+    model = keras_nlp.models.Roberta(
         vocabulary_size=50265,
         num_layers=12,
         num_heads=12,
