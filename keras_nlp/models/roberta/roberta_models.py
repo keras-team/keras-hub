@@ -87,7 +87,7 @@ class Roberta(keras.Model):
         max_sequence_length=512,
         **kwargs,
     ):
-        cls_token_index = 0
+        start_token_index = 0
 
         # Inputs
         token_id_input = keras.Input(
@@ -151,7 +151,7 @@ class Roberta(keras.Model):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
-        self.cls_token_index = cls_token_index
+        self.start_token_index = start_token_index
 
     def get_config(self):
         return {
