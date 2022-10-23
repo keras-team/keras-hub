@@ -63,6 +63,14 @@ class RobertaPreprocessor(keras.layers.Layer):
 
     Examples:
     ```python
+    vocab_path = tf.keras.utils.get_file(
+        "vocab.json",
+        "https://storage.googleapis.com/keras-nlp/models/roberta_base/vocab.json",
+    )
+    merge_path = tf.keras.utils.get_file(
+        "merges.txt",
+        "https://storage.googleapis.com/keras-nlp/models/roberta_base/merges.txt",
+    )
     preprocessor = keras_nlp.models.BertPreprocessor(
         vocabulary="vocab.json",
         merges="merges.txt",
