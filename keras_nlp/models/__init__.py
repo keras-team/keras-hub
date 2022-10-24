@@ -20,11 +20,7 @@ from keras_nlp.models.distilbert.distilbert_models import DistilBertCustom
 from keras_nlp.models.distilbert.distilbert_preprocessing import (
     DistilBertPreprocessor,
 )
-from keras_nlp.models.gpt2.gpt2_models import Gpt2Base
-from keras_nlp.models.gpt2.gpt2_models import Gpt2Custom
-from keras_nlp.models.gpt2.gpt2_models import Gpt2ExtraLarge
-from keras_nlp.models.gpt2.gpt2_models import Gpt2Large
-from keras_nlp.models.gpt2.gpt2_models import Gpt2Medium
+from keras_nlp.models.gpt2.gpt2_models import Gpt2
 from keras_nlp.models.roberta.roberta_models import RobertaBase
 from keras_nlp.models.roberta.roberta_models import RobertaCustom
 from keras_nlp.models.roberta.roberta_tasks import RobertaClassifier
