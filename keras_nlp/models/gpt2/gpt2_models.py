@@ -26,17 +26,18 @@ def _gpt_2_kernel_initializer(stddev=0.02):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class Gpt2Custom(keras.Model):
-    """GPT-2 core network with customizable hyperparameters.
+class Gpt2(keras.Model):
+    """GPT-2 core network with hyperparameters.
 
     This network implements a Transformer-based decoder network,
     Generative Pretrained Transformer-2 (GPT-2), as described in
     ["Language Models are Unsupervised Multitask Learners"](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf).
     It includes the embedding lookups and transformer layers.
 
-    This class gives a fully customizable GPT-2 model with any number of layers,
-    heads, and embedding dimensions. For specific GPT-2 architectures
-    defined in the paper, see, for example, `keras_nlp.models.Gpt2Base`.
+    The default constructor gives a fully customizable, randomly initalized
+    GPT-2 model with any number of layers, heads, and embedding
+    dimensions. To load preset architectures and weights, use the `from_presets`
+    constructor.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -51,24 +52,9 @@ class Gpt2Custom(keras.Model):
             can consume. If None, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
-        name: string, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
 
     Example usage:
     ```python
-    # Randomly initialized GPT-2 decoder
-    model = keras_nlp.models.Gpt2Custom(
-        vocabulary_size=50257,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=1024,
-        name="encoder",
-    )
-
-    # Call encoder on the inputs
     input_data = {
         "token_ids": tf.random.uniform(
             shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
@@ -77,6 +63,18 @@ class Gpt2Custom(keras.Model):
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
     }
+
+    # Randomly initialized GPT-2 decoder
+    model = keras_nlp.models.Gpt2(
+        vocabulary_size=50257,
+        num_layers=12,
+        num_heads=12,
+        hidden_dim=768,
+        intermediate_dim=3072,
+        max_sequence_length=1024,
+    )
+
+    # Call the model on the input data.
     output = model(input_data)
     ```
     """
@@ -90,8 +88,7 @@ class Gpt2Custom(keras.Model):
         intermediate_dim,
         dropout=0.1,
         max_sequence_length=1024,
-        name=None,
-        trainable=True,
+        **kwargs,
     ):
 
         # Inputs
@@ -145,6 +142,10 @@ class Gpt2Custom(keras.Model):
             dtype=tf.float32,
         )(x)
 
+        # Set default for `name` if none given
+        if "name" not in kwargs:
+            kwargs["name"] = "backbone"
+
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs={
@@ -152,8 +153,7 @@ class Gpt2Custom(keras.Model):
                 "padding_mask": padding_mask,
             },
             outputs=sequence_output,
-            name=name,
-            trainable=trainable,
+            **kwargs,
         )
         # All references to `self` below this line
         self.vocabulary_size = vocabulary_size
@@ -181,109 +181,11 @@ class Gpt2Custom(keras.Model):
     def from_config(cls, config):
         return cls(**config)
 
-
-MODEL_DOCSTRING = """GPT-2 "{type}" architecture.
-
-    This network implements a Transformer-based decoder as
-    described in
-    ["Language Models are Unsupervised Multitask Learners"](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf).
-    It includes the embedding lookups and transformer layers.
-
-    Args:
-        vocabulary_size: int, optional. The size of the token vocabulary.
-        name: String, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
-
-    Example usage:
-    ```python
-    # Randomly initialized Gpt2{type} encoder
-    model = keras_nlp.models.Gpt2{type}(vocabulary_size=10000)
-
-    # Call encoder on the inputs.
-    input_data = {{
-        "token_ids": tf.random.uniform(
-            shape=(1, 1024), dtype=tf.int64, maxval=model.vocabulary_size
-        ),
-        "padding_mask": tf.constant([1] * 1024, shape=(1, 1024)),
-    }}
-    output = model(input_data)
-"""
-
-
-def Gpt2Base(vocabulary_size, name=None, trainable=True):
-    return Gpt2Custom(
-        vocabulary_size=vocabulary_size,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        dropout=0.1,
-        max_sequence_length=1024,
-        name=name,
-        trainable=trainable,
-    )
-
-
-def Gpt2Medium(vocabulary_size, name=None, trainable=True):
-    return Gpt2Custom(
-        vocabulary_size=vocabulary_size,
-        num_layers=24,
-        num_heads=16,
-        hidden_dim=1024,
-        intermediate_dim=4096,
-        dropout=0.1,
-        max_sequence_length=1024,
-        name=name,
-        trainable=trainable,
-    )
-
-
-def Gpt2Large(vocabulary_size, name=None, trainable=True):
-    return Gpt2Custom(
-        vocabulary_size=vocabulary_size,
-        num_layers=36,
-        num_heads=20,
-        hidden_dim=1280,
-        intermediate_dim=5120,
-        dropout=0.1,
-        max_sequence_length=1024,
-        name=name,
-        trainable=trainable,
-    )
-
-
-def Gpt2ExtraLarge(vocabulary_size, name=None, trainable=True):
-    return Gpt2Custom(
-        vocabulary_size=vocabulary_size,
-        num_layers=48,
-        num_heads=25,
-        hidden_dim=1600,
-        intermediate_dim=6400,
-        dropout=0.1,
-        max_sequence_length=1024,
-        name=name,
-        trainable=trainable,
-    )
-
-
-setattr(
-    Gpt2Base,
-    "__doc__",
-    MODEL_DOCSTRING.format(type="Base"),
-)
-setattr(
-    Gpt2Medium,
-    "__doc__",
-    MODEL_DOCSTRING.format(type="Medium"),
-)
-setattr(
-    Gpt2Large,
-    "__doc__",
-    MODEL_DOCSTRING.format(type="Large"),
-)
-setattr(
-    Gpt2ExtraLarge,
-    "__doc__",
-    MODEL_DOCSTRING.format(type="ExtraLarge"),
-)
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        load_weights=True,
+        **kwargs,
+    ):
+        raise NotImplementedError
