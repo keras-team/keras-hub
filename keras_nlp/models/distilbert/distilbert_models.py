@@ -30,7 +30,7 @@ def distilbert_kernel_initializer(stddev=0.02):
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class DistilBert(keras.Model):
-    """DistilBERT encoder network with custom hyperparmeters.
+    """DistilBERT encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["DistilBERT, a distilled version of BERT: smaller, faster,
@@ -56,32 +56,27 @@ class DistilBert(keras.Model):
             can consume. If None, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
-        name: string, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
 
     Examples:
     ```python
-    # Randomly initialized DistilBERT encoder
-    model = keras_nlp.models.DistilBert(
-        vocabulary_size=30522,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12,
-        name="encoder",
-    )
-
-    # Call encoder on the inputs
     input_data = {
         "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
+            shape=(1, 12), dtype=tf.int64, maxval=30522
         ),
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
     }
+
+    # Randomly initialized DistilBERT encoder
+    model = keras_nlp.models.DistilBert(
+        vocabulary_size=30522,
+        num_layers=6,
+        num_heads=12,
+        hidden_dim=768,
+        intermediate_dim=3072,
+        max_sequence_length=12,
+    )
     output = model(input_data)
     ```
     """
@@ -149,6 +144,7 @@ class DistilBert(keras.Model):
                 "padding_mask": padding_mask,
             },
             outputs=x,
+            **kwargs,
         )
         # All references to `self` below this line
         self.vocabulary_size = vocabulary_size
