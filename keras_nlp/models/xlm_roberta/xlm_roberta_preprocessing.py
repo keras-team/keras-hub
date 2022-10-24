@@ -21,6 +21,7 @@ from keras_nlp.models.roberta.roberta_preprocessing import (
     RobertaMultiSegmentPacker,
 )
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
+from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -162,7 +163,13 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
 
 
 class XLMRobertaTokenizer(SentencePieceTokenizer):
-    def __init__(self, proto, sequence_length, pad_token="<pad>", **kwargs):
+    def __init__(
+        self,
+        proto,
+        sequence_length=None,
+        pad_token="<pad>",
+        **kwargs,
+    ):
 
         # Check dtype and provide a default. If dtype is string, we will resort
         # to the default.
@@ -176,6 +183,50 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         super().__init__(proto=proto, sequence_length=sequence_length, **kwargs)
 
         self.pad_token = pad_token
+
+    def vocabulary_size(self):
+        """Get the size of the tokenizer vocabulary."""
+        return super().vocabulary_size() + 1
+
+    def get_vocabulary(self):
+        """Get the size of the tokenizer vocabulary."""
+        vocabulary = tensor_to_string_list(
+            self._sentence_piece.id_to_string(
+                tf.range(self.vocabulary_size() - 1)
+            )
+        )
+        vocabulary = ["<s>"] + vocabulary
+        vocabulary[1] = "<pad>"
+        vocabulary[2] = "</s>"
+        vocabulary[3] = "<unk>"
+        return vocabulary
+
+    def id_to_token(self, id):
+        """Convert an integer id to a string token."""
+        if id == 0:
+            return "<s>"
+        elif id == 1:
+            return "<pad>"
+        elif id == 2:
+            return "</s>"
+        elif id == 3:
+            return "<unk>"
+
+        id -= 1
+        return tensor_to_string_list(self._sentence_piece.id_to_string(id))
+
+    def token_to_id(self, token):
+        """Convert a string token to an integer id."""
+        if token == "<s>":
+            return 0
+        elif token == "<pad>":
+            return 1
+        elif token == "</s>":
+            return 2
+        elif token == "<unk>":
+            return 3
+
+        return int(self._sentence_piece.string_to_id(token).numpy()) + 1
 
     def tokenize(self, inputs):
         tokens = super().tokenize(inputs)
@@ -197,7 +248,8 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         tokens = tf.subtract(inputs, 1)
 
         # Correct `unk_token_id`, `end_token_id`, `start_token_id`, respectively.
-        # Note that `pad_token_id` is mapped to 0 (`unk_token_id`).
+        # Note: The `pad_token_id` is mapped to 0 (`unk_token_id`). This is
+        # done automatically by the above subtraction.
         tokens = tf.where(tf.equal(tokens, 2), 0, tokens)
         tokens = tf.where(tf.equal(tokens, 1), 2, tokens)
         tokens = tf.where(tf.equal(tokens, -1), 1, tokens)
