@@ -52,7 +52,12 @@ class RobertaClassifier(keras.Model):
     """
 
     def __init__(
-        self, backbone, num_classes, hidden_dim=None, dropout=0.0, **kwargs
+        self,
+        backbone,
+        num_classes,
+        hidden_dim=None,
+        dropout=0.0,
+        **kwargs,
     ):
         inputs = backbone.input
         if hidden_dim is None:

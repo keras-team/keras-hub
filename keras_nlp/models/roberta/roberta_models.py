@@ -27,7 +27,7 @@ def roberta_kernel_initializer(stddev=0.02):
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class Roberta(keras.Model):
-    """RoBERTa encoder with custom hyperparameters.
+    """RoBERTa encoder with hyperparameters.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["RoBERTa: A Robustly Optimized BERT Pretraining Approach"](https://arxiv.org/abs/1907.11692).
@@ -87,7 +87,6 @@ class Roberta(keras.Model):
         max_sequence_length=512,
         **kwargs,
     ):
-        start_token_index = 0
 
         # Inputs
         token_id_input = keras.Input(
@@ -151,7 +150,7 @@ class Roberta(keras.Model):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
-        self.start_token_index = start_token_index
+        self.start_token_index = 0
 
     def get_config(self):
         return {

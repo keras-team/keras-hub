@@ -30,13 +30,13 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
     This preprocessing layer will do three things:
 
     - Tokenize any number of inputs using a
-    `keras_nlp.tokenizers.SentencePieceTokenizer`.
+      `keras_nlp.tokenizers.SentencePieceTokenizer`.
     - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
-    `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
-    entire sequence, `"</s></s>"` at the end of each segment, save the last and
-    a `"</s>"` at the end of the entire sequence.
-    - Construct a dictionary of with keys `"token_ids"`, `"padding_mask"`, that
-    can be passed directly to a XLM-RoBERTa model.
+      `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
+      entire sequence, `"</s></s>"` at the end of each segment, save the last
+      and a `"</s>"` at the end of the entire sequence.
+    - Construct a dictionary with keys `"token_ids"` and `"padding_mask"`
+      that can be passed directly to a XLM-RoBERTa model.
 
     Note that the original fairseq implementation modifies the indices of the
     SentencePiece tokenizer output. To preserve compatibility, we make the same
@@ -54,11 +54,10 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
     Args:
         proto: Either a `string` path to a SentencePiece proto file, a `bytes`
             object with a serialized SentencePiece proto.
-        sequence_length: The length of the packed inputs. Only used if
-            `pack_inputs` is True.
+        sequence_length: The length of the packed inputs.
         truncate: The algorithm to truncate a list of batched segments to fit
-            within `sequence_length`. Only used if `pack_inputs` is True. The
-            value can be either `round_robin` or `waterfall`:
+            within `sequence_length`. The value can be either `round_robin` or
+            `waterfall`:
                 - `"round_robin"`: Available space is assigned one token at a
                     time in a round-robin fashion to the inputs that still need
                     some, until the limit is reached.
