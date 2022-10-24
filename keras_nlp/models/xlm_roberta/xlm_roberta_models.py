@@ -22,7 +22,7 @@ from keras_nlp.models.roberta import roberta_models
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class XLMRoberta(roberta_models.Roberta):
-    """XLM-RoBERTa encoder with custom hyperparameters.
+    """XLM-RoBERTa encoder.
 
     This network implements a bi-directional Transformer-based encoder as
     described in
