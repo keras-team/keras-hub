@@ -107,7 +107,7 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
 
-        self.tokenizer = SentencePieceTokenizer(proto=proto)
+        self.tokenizer = XLMRobertaTokenizer(proto=proto)
 
         # Check for necessary special tokens.
         start_token_id = 0
@@ -143,18 +143,7 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         if not isinstance(inputs, (list, tuple)):
             inputs = [inputs]
 
-        def _tokenize(x):
-            tokenized = self.tokenizer(x)
-
-            # In the official SPM proto file, `[unk]`'s ID is 0. Replace that
-            # with 2. This will be changed to 3 (`[unk]`'s ID is 3 in the
-            # official implementation) after adding by 1.
-            tokenized = tf.where(tf.equal(tokenized, 0), 2, tokenized)
-            # Shift the tokens IDs by one.
-            tokenized = tf.add(tokenized, 1)
-            return tokenized
-
-        inputs = [_tokenize(x) for x in inputs]
+        inputs = [self.tokenizer(x) for x in inputs]
         token_ids = self.packer(inputs)
         return {
             "token_ids": token_ids,
@@ -170,3 +159,47 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         **kwargs,
     ):
         raise NotImplementedError
+
+
+class XLMRobertaTokenizer(SentencePieceTokenizer):
+    def __init__(self, proto, sequence_length, pad_token="<pad>", **kwargs):
+
+        # Check dtype and provide a default. If dtype is string, we will resort
+        # to the default.
+        if (
+            "dtype" not in kwargs
+            or kwargs["dtype"] == tf.string
+            or kwargs["dtype"] is None
+        ):
+            kwargs["dtype"] = tf.int32
+
+        super().__init__(proto=proto, sequence_length=sequence_length, **kwargs)
+
+        self.pad_token = pad_token
+
+    def tokenize(self, inputs):
+        tokens = super().tokenize(inputs)
+
+        # Correct `unk_token_id` (0 -> 3). Note that we do not correct
+        # `start_token_id` and `end_token_id`; they are dealt with in
+        # `XLMRobertaPreprocessor`.
+        tokens = tf.where(tf.equal(tokens, 0), 2, tokens)
+
+        # Shift the tokens IDs right by one.
+        tokens = tf.add(tokens, 1)
+        return tokens
+
+    def detokenize(self, inputs):
+        if inputs.dtype == tf.string:
+            return super().detokenize(inputs)
+
+        # Shift the tokens IDs left by one.
+        tokens = tf.subtract(inputs, 1)
+
+        # Correct `unk_token_id`, `end_token_id`, `start_token_id`, respectively.
+        # Note that `pad_token_id` is mapped to 0 (`unk_token_id`).
+        tokens = tf.where(tf.equal(tokens, 2), 0, tokens)
+        tokens = tf.where(tf.equal(tokens, 1), 2, tokens)
+        tokens = tf.where(tf.equal(tokens, -1), 1, tokens)
+
+        return super().detokenize(tokens)
