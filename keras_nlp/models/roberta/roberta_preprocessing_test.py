@@ -22,111 +22,121 @@ from tensorflow import keras
 
 from keras_nlp.models.roberta.roberta_preprocessing import RobertaPreprocessor
 
-VOCAB_PATH = keras.utils.get_file(
-    None,
-    "https://storage.googleapis.com/keras-nlp/models/roberta_base/vocab.json",
-)
-MERGE_PATH = keras.utils.get_file(
-    None,
-    "https://storage.googleapis.com/keras-nlp/models/roberta_base/merges.txt",
-)
-
 
 class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
+        vocab = {
+            "<s>": 0,
+            "<pad>": 1,
+            "</s>": 2,
+            "Ġair": 3,
+            "plane": 4,
+            "Ġat": 5,
+            "port": 6,
+            "Ġkoh": 7,
+            "li": 8,
+            "Ġis": 9,
+            "Ġthe": 10,
+            "Ġbest": 11,
+        }
+
+        merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
+        merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
+        merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
+        merges += ["pla ne"]
+
         self.preprocessor = RobertaPreprocessor(
-            vocabulary=VOCAB_PATH,
-            merges=MERGE_PATH,
-            sequence_length=10,
+            vocabulary=vocab,
+            merges=merges,
+            sequence_length=12,
         )
 
     def test_tokenize(self):
-        input_data = ["the quick brown fox."]
+        input_data = [" airplane at airport"]
 
         output = self.preprocessor(input_data)
         self.assertAllEqual(
-            output["token_ids"], [0, 627, 2119, 6219, 23602, 4, 2, 1, 1, 1]
+            output["token_ids"], [0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]
         )
         self.assertAllEqual(
-            output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0]
+            output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
         )
 
     def test_tokenize_batch(self):
         input_data = tf.constant(
             [
-                "the quick brown fox.",
-                "the quick brown fox.",
-                "the quick brown fox.",
-                "the quick brown fox.",
+                " airplane at airport",
+                " airplane at airport",
+                " airplane at airport",
+                " airplane at airport",
             ]
         )
 
         output = self.preprocessor(input_data)
         self.assertAllEqual(
             output["token_ids"],
-            [[0, 627, 2119, 6219, 23602, 4, 2, 1, 1, 1]] * 4,
+            [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]] * 4,
         )
 
         self.assertAllEqual(
-            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0]] * 4
+            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
         )
 
     def test_tokenize_multiple_sentences(self):
-        sentence_one = "kohli is the best batsman"
-        sentence_two = "bumrah is the best bowler"
+        sentence_one = " airplane at airport"
+        sentence_two = " kohli is the best"
 
         output = self.preprocessor((sentence_one, sentence_two))
+        print(output)
         self.assertAllEqual(
-            output["token_ids"], [0, 330, 2678, 3572, 2, 2, 30406, 9772, 16, 2]
+            output["token_ids"], [0, 3, 4, 5, 3, 2, 2, 7, 8, 9, 10, 2]
         )
         self.assertAllEqual(
-            output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
         )
 
     def test_tokenize_multiple_batched_sentences(self):
         sentence_one = tf.constant(
             [
-                "kohli is the best batsman",
-                "kohli is the best batsman",
-                "kohli is the best batsman",
-                "kohli is the best batsman",
+                " airplane at airport",
+                " airplane at airport",
+                " airplane at airport",
+                " airplane at airport",
             ]
         )
         sentence_two = tf.constant(
             [
-                "bumrah is the best bowler",
-                "bumrah is the best bowler",
-                "bumrah is the best bowler",
-                "bumrah is the best bowler",
+                " kohli is the best",
+                " kohli is the best",
+                " kohli is the best",
+                " kohli is the best",
             ]
         )
 
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
             output["token_ids"],
-            [[0, 330, 2678, 3572, 2, 2, 30406, 9772, 16, 2]] * 4,
+            [[0, 3, 4, 5, 3, 2, 2, 7, 8, 9, 10, 2]] * 4,
         )
         self.assertAllEqual(
-            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]] * 4
+            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]] * 4
         )
 
     def test_detokenize(self):
-        input_tokens = [[627, 2119, 6219, 23602, 4]]
+        input_tokens = [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]]
         output = self.preprocessor.tokenizer.detokenize(input_tokens)
-        self.assertAllEqual(output, ["the quick brown fox."])
+        self.assertAllEqual(
+            output, ["<s> airplane at airport</s><pad><pad><pad><pad><pad>"]
+        )
 
     def test_vocabulary_size(self):
-        preprocessor = RobertaPreprocessor(
-            vocabulary=VOCAB_PATH,
-            merges=MERGE_PATH,
-        )
-        self.assertEqual(preprocessor.vocabulary_size(), 50265)
+        self.assertEqual(self.preprocessor.vocabulary_size(), 12)
 
     @parameterized.named_parameters(
         ("save_format_tf", "tf"), ("save_format_h5", "h5")
     )
     def test_saving_model(self, save_format):
-        input_data = tf.constant(["the quick brown fox."])
+        input_data = tf.constant([" airplane at airport"])
 
         inputs = keras.Input(dtype="string", shape=())
         outputs = self.preprocessor(inputs)

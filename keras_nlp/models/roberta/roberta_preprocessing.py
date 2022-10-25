@@ -71,7 +71,7 @@ class RobertaPreprocessor(keras.layers.Layer):
         "merges.txt",
         "https://storage.googleapis.com/keras-nlp/models/roberta_base/merges.txt",
     )
-    preprocessor = keras_nlp.models.BertPreprocessor(
+    preprocessor = keras_nlp.models.RobertaPreprocessor(
         vocabulary="vocab.json",
         merges="merges.txt",
     )
