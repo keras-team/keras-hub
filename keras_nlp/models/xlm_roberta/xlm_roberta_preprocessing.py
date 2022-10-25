@@ -22,83 +22,81 @@ from keras_nlp.models.roberta.roberta_preprocessing import (
 )
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 
-PREPROCESSOR_DOCSTRING = """XLM-RoBERTa preprocessor with pretrained vocabularies.
-
-This preprocessing layer will do three things:
-
- - Tokenize any number of inputs using a
-   `keras_nlp.tokenizers.SentencePieceTokenizer`.
- - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and `"<pad>"`
-   tokens, i.e., adding a single `"<s>"` at the start of the entire sequence,
-   `"</s></s>"` at the end of each segment, save the last and a `"</s>"` at the
-   end of the entire sequence.
- - Construct a dictionary of with keys `"token_ids"`, `"padding_mask"`, that can
-   be passed directly to a XLM-RoBERTa model.
-
-Note that the original fairseq implementation modifies the indices of the
-SentencePiece tokenizer output. To preserve compatibility, we make the same
-changes, i.e., `"<s>"`, `"<pad>"`, `"</s>"` and `"<unk>"` are mapped to
-0, 1, 2, 3, respectively, and non-special tokens' indices are shifted right by
-one. Keep this in mind if generating your own vocabulary for tokenization.
-
-This layer will accept either a tuple of (possibly batched) inputs, or a single
-input tensor. If a single tensor is passed, it will be packed equivalently to
-a tuple with a single element.
-
-The SentencePiece tokenizer can be accessed via the `tokenizer` property on this
-layer, and can be used directly for custom packing on inputs.
-
-Args:
-    proto: Either a `string` path to a SentencePiece proto file, a
-        `bytes` object with a serialized SentencePiece proto.
-    sequence_length: The length of the packed inputs. Only used if
-        `pack_inputs` is True.
-    truncate: The algorithm to truncate a list of batched segments to fit
-        within `sequence_length`. Only used if
-        `pack_inputs` is True. The value can be either `round_robin` or
-        `waterfall`:
-            - `"round_robin"`: Available space is assigned one token at a
-                time in a round-robin fashion to the inputs that still need
-                some, until the limit is reached.
-            - `"waterfall"`: The allocation of the budget is done using a
-                "waterfall" algorithm that allocates quota in a
-                left-to-right manner and fills up the buckets until we run
-                out of budget. It supports an arbitrary number of segments.
-
-Examples:
-```python
-preprocessor = keras_nlp.models.XLMRobertaPreprocessor(proto="model.spm")
-
-# Tokenize and pack a single sentence directly.
-preprocessor("The quick brown fox jumped.")
-
-# Tokenize and pack a multiple sentence directly.
-preprocessor(("The quick brown fox jumped.", "Call me Ishmael."))
-
-# Map a dataset to preprocess a single sentence.
-features = ["The quick brown fox jumped.", "I forgot my homework."]
-labels = [0, 1]
-ds = tf.data.Dataset.from_tensor_slices((features, labels))
-ds = ds.map(
-    lambda x, y: (preprocessor(x), y),
-    num_parallel_calls=tf.data.AUTOTUNE,
-)
-
-# Map a dataset to preprocess a multiple sentences.
-first_sentences = ["The quick brown fox jumped.", "Call me Ishmael."]
-second_sentences = ["The fox tripped.", "Oh look, a whale."]
-labels = [1, 1]
-ds = tf.data.Dataset.from_tensor_slices(((first_sentences, second_sentences), labels))
-ds = ds.map(
-    lambda x, y: (preprocessor(x), y),
-    num_parallel_calls=tf.data.AUTOTUNE,
-)
-```
-"""
-
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class XLMRobertaPreprocessor(keras.layers.Layer):
+    """XLM-RoBERTa preprocessing layer.
+
+    This preprocessing layer will do three things:
+
+    - Tokenize any number of inputs using a
+      `keras_nlp.tokenizers.SentencePieceTokenizer`.
+    - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
+      `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
+      entire sequence, `"</s></s>"` at the end of each segment, save the last
+      and a `"</s>"` at the end of the entire sequence.
+    - Construct a dictionary with keys `"token_ids"` and `"padding_mask"`
+      that can be passed directly to a XLM-RoBERTa model.
+
+    Note that the original fairseq implementation modifies the indices of the
+    SentencePiece tokenizer output. To preserve compatibility, we make the same
+    changes, i.e., `"<s>"`, `"<pad>"`, `"</s>"` and `"<unk>"` are mapped to
+    0, 1, 2, 3, respectively, and non-special tokens' indices are shifted right
+    by one. Keep this in mind if generating your own vocabulary for tokenization.
+
+    This layer will accept either a tuple of (possibly batched) inputs, or a
+    single input tensor. If a single tensor is passed, it will be packed
+    equivalently to a tuple with a single element.
+
+    The SentencePiece tokenizer can be accessed via the `tokenizer` property on
+    this layer, and can be used directly for custom packing on inputs.
+
+    Args:
+        proto: Either a `string` path to a SentencePiece proto file, a `bytes`
+            object with a serialized SentencePiece proto.
+        sequence_length: The length of the packed inputs.
+        truncate: The algorithm to truncate a list of batched segments to fit
+            within `sequence_length`. The value can be either `round_robin` or
+            `waterfall`:
+                - `"round_robin"`: Available space is assigned one token at a
+                    time in a round-robin fashion to the inputs that still need
+                    some, until the limit is reached.
+                - `"waterfall"`: The allocation of the budget is done using a
+                    "waterfall" algorithm that allocates quota in a
+                    left-to-right manner and fills up the buckets until we run
+                    out of budget. It supports an arbitrary number of segments.
+
+    Examples:
+    ```python
+    preprocessor = keras_nlp.models.XLMRobertaPreprocessor(proto="model.spm")
+
+    # Tokenize and pack a single sentence directly.
+    preprocessor("The quick brown fox jumped.")
+
+    # Tokenize and pack a multiple sentence directly.
+    preprocessor(("The quick brown fox jumped.", "Call me Ishmael."))
+
+    # Map a dataset to preprocess a single sentence.
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    labels = [0, 1]
+    ds = tf.data.Dataset.from_tensor_slices((features, labels))
+    ds = ds.map(
+        lambda x, y: (preprocessor(x), y),
+        num_parallel_calls=tf.data.AUTOTUNE,
+    )
+
+    # Map a dataset to preprocess a multiple sentences.
+    first_sentences = ["The quick brown fox jumped.", "Call me Ishmael."]
+    second_sentences = ["The fox tripped.", "Oh look, a whale."]
+    labels = [1, 1]
+    ds = tf.data.Dataset.from_tensor_slices(((first_sentences, second_sentences), labels))
+    ds = ds.map(
+        lambda x, y: (preprocessor(x), y),
+        num_parallel_calls=tf.data.AUTOTUNE,
+    )
+    ```
+    """
+
     def __init__(
         self,
         proto,
@@ -162,5 +160,12 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
             "padding_mask": token_ids != self.pad_token_id,
         }
 
-
-setattr(XLMRobertaPreprocessor, "__doc__", PREPROCESSOR_DOCSTRING)
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        sequence_length=None,
+        truncate="round_robin",
+        **kwargs,
+    ):
+        raise NotImplementedError

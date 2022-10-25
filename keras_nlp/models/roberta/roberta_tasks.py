@@ -23,17 +23,14 @@ class RobertaClassifier(keras.Model):
     """RoBERTa encoder model with a classification head.
 
     Args:
-        backbone: A `keras_nlp.models.Roberta` to encode inputs.
+        backbone: A `keras_nlp.models.Roberta` instance.
         num_classes: int. Number of classes to predict.
         hidden_dim: int. The size of the pooler layer.
-        name: string, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
 
     Example usage:
     ```python
     # Randomly initialized RoBERTa encoder
-    model = keras_nlp.models.RobertaCustom(
+    model = keras_nlp.models.Roberta(
         vocabulary_size=50265,
         num_layers=12,
         num_heads=12,
@@ -60,14 +57,13 @@ class RobertaClassifier(keras.Model):
         num_classes,
         hidden_dim=None,
         dropout=0.0,
-        name=None,
-        trainable=True,
+        **kwargs,
     ):
         inputs = backbone.input
         if hidden_dim is None:
             hidden_dim = backbone.hidden_dim
 
-        x = backbone(inputs)[:, backbone.cls_token_index, :]
+        x = backbone(inputs)[:, backbone.start_token_index, :]
         x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
         x = keras.layers.Dense(
             hidden_dim, activation="tanh", name="pooled_dense"
@@ -81,13 +77,20 @@ class RobertaClassifier(keras.Model):
 
         # Instantiate using Functional API Model constructor
         super().__init__(
-            inputs=inputs, outputs=outputs, name=name, trainable=trainable
+            inputs=inputs,
+            outputs=outputs,
+            **kwargs,
         )
         # All references to `self` below this line
-        self.backbone = backbone
+        self._backbone = backbone
         self.num_classes = num_classes
         self.hidden_dim = hidden_dim
         self.dropout = dropout
+
+    @property
+    def backbone(self):
+        """A `keras_nlp.models.Roberta` instance providing the encoder submodel."""
+        return self._backbone
 
     def get_config(self):
         return {

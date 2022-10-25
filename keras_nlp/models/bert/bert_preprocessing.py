@@ -63,7 +63,8 @@ class BertPreprocessor(keras.layers.Layer):
 
     Examples:
     ```python
-    vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "tripped"]
+    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
+    vocab += ["the", "qu", "##ick", "br", "##own", "fox", "tripped"]
     vocab += ["call", "me", "ish", "##mael", "."]
     vocab += ["oh", "look", "a", "whale"]
     vocab += ["i", "forgot", "my", "home", "##work"]

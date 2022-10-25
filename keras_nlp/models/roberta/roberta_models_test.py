@@ -20,21 +20,18 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.roberta.roberta_models import RobertaBase
-from keras_nlp.models.roberta.roberta_models import RobertaCustom
-from keras_nlp.models.roberta.roberta_tasks import RobertaClassifier
+from keras_nlp.models.roberta.roberta_models import Roberta
 
 
 class RobertaTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = RobertaCustom(
+        self.model = Roberta(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
             hidden_dim=64,
             intermediate_dim=128,
             max_sequence_length=128,
-            name="encoder",
         )
         self.batch_size = 8
         self.input_batch = {
@@ -53,53 +50,22 @@ class RobertaTest(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call_roberta(self):
         self.model(self.input_batch)
 
-    def test_valid_call_classifier(self):
-        classifier = RobertaClassifier(self.model, 4, 128, name="classifier")
-        classifier(self.input_batch)
-
-    def test_valid_call_roberta_base(self):
-        model = RobertaBase(vocabulary_size=1000, name="encoder")
-        input_data = {
-            "token_ids": tf.ones(
-                (self.batch_size, model.max_sequence_length), dtype="int32"
-            ),
-            "padding_mask": tf.ones(
-                (self.batch_size, model.max_sequence_length), dtype="int32"
-            ),
-        }
-        model(input_data)
+        # Check default name passed through
+        self.assertEqual(self.model.name, "backbone")
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_roberta_base_compile(self, jit_compile):
-        model = RobertaBase(vocabulary_size=1000, name="encoder")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_batch)
+    def test_roberta_compile(self, jit_compile):
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_roberta_base_compile_batched_ds(self, jit_compile):
-        model = RobertaBase(vocabulary_size=1000, name="encoder")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_dataset)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_roberta_classifier_compile(self, jit_compile):
-        model = RobertaClassifier(self.model, 4, 128, name="classifier")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_roberta_classifier_compile_batched_ds(self, jit_compile):
-        model = RobertaClassifier(self.model, 4, 128, name="classifier")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_dataset)
+    def test_roberta_compile_batched_ds(self, jit_compile):
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_dataset)
 
     def test_variable_sequence_length_call_roberta(self):
         for seq_length in (25, 50, 75):
@@ -121,18 +87,14 @@ class RobertaTest(tf.test.TestCase, parameterized.TestCase):
         ("save_format_tf", "tf"), ("save_format_h5", "h5")
     )
     def test_saving_model(self, save_format):
-        model_output = self.model.predict(self.input_batch)
-
+        model_output = self.model(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), "model")
         self.model.save(save_path, save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, RobertaCustom)
+        self.assertIsInstance(restored_model, Roberta)
 
         # Check that output matches.
-        restored_output = restored_model.predict(self.input_batch)
-        self.assertAllClose(
-            model_output,
-            restored_output,
-        )
+        restored_output = restored_model(self.input_batch)
+        self.assertAllClose(model_output, restored_output)

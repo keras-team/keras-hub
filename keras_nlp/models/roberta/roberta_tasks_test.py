@@ -19,20 +19,19 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.roberta.roberta_models import RobertaCustom
+from keras_nlp.models.roberta.roberta_models import Roberta
 from keras_nlp.models.roberta.roberta_tasks import RobertaClassifier
 
 
 class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = RobertaCustom(
+        self.model = Roberta(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
             hidden_dim=64,
             intermediate_dim=128,
             max_sequence_length=128,
-            name="encoder",
         )
         self.batch_size = 8
         self.input_batch = {
