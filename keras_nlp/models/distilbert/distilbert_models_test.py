@@ -19,13 +19,12 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.distilbert.distilbert_models import DistilBertBase
-from keras_nlp.models.distilbert.distilbert_models import DistilBertCustom
+from keras_nlp.models.distilbert.distilbert_models import DistilBert
 
 
 class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = DistilBertCustom(
+        self.model = DistilBert(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -63,33 +62,19 @@ class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
             }
             self.model(input_data)
 
-    def test_valid_call_distilbert_base(self):
-        model = DistilBertBase(vocabulary_size=1000, name="encoder")
-        input_data = {
-            "token_ids": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-            "padding_mask": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-        }
-        model(input_data)
-
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_distilbert_base_compile(self, jit_compile):
-        model = DistilBertBase(vocabulary_size=1000, name="encoder")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_batch)
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_distilbert_base_compile_batched_ds(self, jit_compile):
-        model = DistilBertBase(vocabulary_size=1000, name="encoder")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_dataset)
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_dataset)
 
     @parameterized.named_parameters(
         ("save_format_tf", "tf"), ("save_format_h5", "h5")
@@ -101,7 +86,7 @@ class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, DistilBertCustom)
+        self.assertIsInstance(restored_model, DistilBert)
 
         # Check that output matches.
         restored_output = restored_model(self.input_batch)
