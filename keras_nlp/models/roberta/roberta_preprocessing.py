@@ -33,7 +33,7 @@ class RobertaPreprocessor(keras.layers.Layer):
       `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
       entire sequence, `"</s></s>"` at the end of each segment, save the last
       and a `"</s>"` at the end of the entire sequence.
-    - Construct a dictionary of with keys `"token_ids"`, `"padding_mask"`, that
+    - Construct a dictionary with keys `"token_ids"` and `"padding_mask"` that
       can be passed directly to a RoBERTa model.
 
     This layer will accept either a tuple of (possibly batched) inputs, or a
