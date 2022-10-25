@@ -15,8 +15,7 @@
 from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
 from keras_nlp.models.bert.bert_tasks import BertClassifier
-from keras_nlp.models.distilbert.distilbert_models import DistilBertBase
-from keras_nlp.models.distilbert.distilbert_models import DistilBertCustom
+from keras_nlp.models.distilbert.distilbert_models import DistilBert
 from keras_nlp.models.distilbert.distilbert_preprocessing import (
     DistilBertPreprocessor,
 )
