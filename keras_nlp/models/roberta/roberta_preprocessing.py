@@ -72,8 +72,8 @@ class RobertaPreprocessor(keras.layers.Layer):
         "https://storage.googleapis.com/keras-nlp/models/roberta_base/merges.txt",
     )
     preprocessor = keras_nlp.models.RobertaPreprocessor(
-        vocabulary="vocab.json",
-        merges="merges.txt",
+        vocabulary=vocab_path,
+        merges=merge_path,
     )
 
     # Tokenize and pack a single sentence directly.
