@@ -68,7 +68,7 @@ class GreedySearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_generate_with_ragged_prompt(self):
         def token_probability_fn(inputs):
-            # Assert that passed function is passed only dense tensors.
+            # Assert that user function is passed only dense tensors.
             self.assertIsInstance(inputs, tf.Tensor)
             prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, 2, axis=0)
@@ -262,7 +262,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_generate_with_ragged_prompt(self):
         def token_probability_fn(inputs):
-            # Assert that passed function is passed only dense tensors.
+            # Assert that user function is passed only dense tensors.
             self.assertIsInstance(inputs, tf.Tensor)
             repeat_times = tf.shape(inputs)[0]
             prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
@@ -450,7 +450,7 @@ class RandomSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_generate_with_ragged_prompt(self):
         def token_probability_fn(inputs):
-            # Assert that passed function is passed only dense tensors.
+            # Assert that user function is passed only dense tensors.
             self.assertIsInstance(inputs, tf.Tensor)
             prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, 2, axis=0)
@@ -673,7 +673,7 @@ class TopKSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_generate_with_ragged_prompt(self):
         def token_probability_fn(inputs):
-            # Assert that passed function is passed only dense tensors.
+            # Assert that user function is passed only dense tensors.
             self.assertIsInstance(inputs, tf.Tensor)
             prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, 2, axis=0)
@@ -914,7 +914,7 @@ class TopPSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_generate_with_ragged_prompt(self):
         def token_probability_fn(inputs):
-            # Assert that passed function is passed only dense tensors.
+            # Assert that user function is passed only dense tensors.
             self.assertIsInstance(inputs, tf.Tensor)
             prob = tf.constant([[0.0, 0.0, 0.0, 1.0]])
             return tf.repeat(prob, 2, axis=0)
