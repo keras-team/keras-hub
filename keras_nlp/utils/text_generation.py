@@ -170,10 +170,10 @@ def greedy_search(
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
 
-    _validate_token_probability_fn(token_probability_fn, prompt)
-
     batch_size, length = _get_prompt_shape(prompt)
     prompt, mask = _pad_prompt(prompt, max_length)
+
+    _validate_token_probability_fn(token_probability_fn, prompt)
 
     def one_step(length, prompt):
         pred = token_probability_fn(prompt[:, :length])
@@ -484,10 +484,10 @@ def random_search(
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
 
-    _validate_token_probability_fn(token_probability_fn, prompt)
-
     batch_size, length = _get_prompt_shape(prompt)
     prompt, mask = _pad_prompt(prompt, max_length)
+
+    _validate_token_probability_fn(token_probability_fn, prompt)
 
     def one_step(length, prompt):
         pred = token_probability_fn(prompt[:, :length])
@@ -622,6 +622,9 @@ def top_k_search(
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
 
+    batch_size, length = _get_prompt_shape(prompt)
+    prompt, mask = _pad_prompt(prompt, max_length)
+
     _validate_token_probability_fn(token_probability_fn, prompt)
 
     # If k is greater than the vocabulary size, use the entire vocabulary.
@@ -632,9 +635,6 @@ def top_k_search(
             f"Setting `k` to vocabulary size. Received: `k={k}`."
         )
         k = pred.shape[1]
-
-    batch_size, length = _get_prompt_shape(prompt)
-    prompt, mask = _pad_prompt(prompt, max_length)
 
     def one_step(length, prompt):
         pred = token_probability_fn(prompt[:, :length])
@@ -777,10 +777,10 @@ def top_p_search(
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
 
-    _validate_token_probability_fn(token_probability_fn, prompt)
-
     batch_size, length = _get_prompt_shape(prompt)
     prompt, mask = _pad_prompt(prompt, max_length)
+
+    _validate_token_probability_fn(token_probability_fn, prompt)
 
     def one_step(length, prompt):
         pred = token_probability_fn(prompt[:, :length])
