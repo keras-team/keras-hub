@@ -57,8 +57,14 @@ class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         encoded = self.tokenizer.tokenize(input_data)
         self.assertAllEqual(encoded, [31876, 4])
 
-    def test_detokenize(self):
-        input_data = ["brown."]
+    def test_detokenize_scalar_input(self):
+        input_data = ["quick brown fox."]
+        encoded = self.tokenizer.tokenize(input_data)
+        decoded = self.tokenizer.detokenize(encoded)
+        self.assertAllEqual(input_data, decoded)
+
+    def test_detokenize_list_input(self):
+        input_data = ["quick brown fox.", "slow black bear."]
         encoded = self.tokenizer.tokenize(input_data)
         decoded = self.tokenizer.detokenize(encoded)
         self.assertAllEqual(input_data, decoded)

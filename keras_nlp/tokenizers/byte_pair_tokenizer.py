@@ -516,15 +516,12 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             inputs = tf.expand_dims(inputs, 0)
 
         unicode_text = tf.strings.reduce_join(
-            self.id_to_token_map.lookup(inputs), axis=1
+            self.id_to_token_map.lookup(inputs), axis=-1
         )
         split_unicode_text = tf.strings.unicode_split(unicode_text, "UTF-8")
         byte_text = tf.strings.reduce_join(
-            self.unicode2byte.lookup(split_unicode_text)
+            self.unicode2byte.lookup(split_unicode_text), axis=-1
         )
-
-        if not scalar_input:
-            byte_text = tf.expand_dims(byte_text, 0)
 
         return byte_text
 
