@@ -19,12 +19,12 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.gpt2.gpt2_models import Gpt2
+from keras_nlp.models.gpt2.gpt2_models import GPT2
 
 
-class Gpt2Test(tf.test.TestCase, parameterized.TestCase):
+class GPT2Test(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = Gpt2(
+        self.model = GPT2(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -88,7 +88,7 @@ class Gpt2Test(tf.test.TestCase, parameterized.TestCase):
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, Gpt2)
+        self.assertIsInstance(restored_model, GPT2)
 
         # Check that output matches.
         restored_output = restored_model(self.input_batch)
