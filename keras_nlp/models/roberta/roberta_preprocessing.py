@@ -48,7 +48,9 @@ class RobertaPreprocessor(keras.layers.Layer):
             string, it should be the file path to a json file.
         merges: string or list, contains the merge rule. If it is a string,
             it should be the file path to merge rules. The merge rule file
-            should have one merge rule per line.
+            should have one merge rule per line. Every merge rule contains
+            merge entities separated by a space. For example, please refer to
+            https://storage.googleapis.com/keras-nlp/models/roberta_base/merges.txt.
         sequence_length: The length of the packed inputs.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
@@ -63,27 +65,38 @@ class RobertaPreprocessor(keras.layers.Layer):
 
     Examples:
     ```python
-    vocab_path = tf.keras.utils.get_file(
-        "vocab.json",
-        "https://storage.googleapis.com/keras-nlp/models/roberta_base/vocab.json",
-    )
-    merge_path = tf.keras.utils.get_file(
-        "merges.txt",
-        "https://storage.googleapis.com/keras-nlp/models/roberta_base/merges.txt",
-    )
+    vocab = {
+        "<s>": 0,
+        "<pad>": 1,
+        "</s>": 2,
+        "reful": 3,
+        "gent": 4,
+        "Ġafter": 5,
+        "noon": 6,
+        "Ġsun": 7,
+        "Ġbright": 8,
+        "Ġnight": 9,
+        "Ġmoon": 10,
+    }
+    merges = ["Ġ a", "Ġ m", "Ġ s", "Ġ b", "Ġ n", "r e", "f u", "g e", "n t"]
+    merges += ["e r", "n o", "o n", "i g", "h t"]
+    merges += ["Ġs u", "Ġa f", "Ġm o", "Ġb r","ge nt", "no on", "re fu", "ig ht"]
+    merges += ["Ġn ight", "Ġsu n", "Ġaf t", "Ġmo on", "Ġbr ight", "refu l", "Ġaft er"]
+
     preprocessor = keras_nlp.models.RobertaPreprocessor(
-        vocabulary=vocab_path,
-        merges=merge_path,
+        vocabulary=vocab,
+        merges=merges,
+        sequence_length=20,
     )
 
     # Tokenize and pack a single sentence directly.
-    preprocessor("The quick brown fox jumped.")
+    preprocessor(" afternoon sun")
 
-    # Tokenize and pack a multiple sentence directly.
-    preprocessor(("The quick brown fox jumped.", "Call me Ishmael."))
+    # Tokenize and pack multiples sentences directly.
+    preprocessor((" afternoon sun", "refulgent sun"))
 
-    # Map a dataset to preprocess a single sentence.
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    # Map a dataset to preprocess a single sentence at a time.
+    features = [" afternoon sun", "refulgent sun"]
     labels = [0, 1]
     ds = tf.data.Dataset.from_tensor_slices((features, labels))
     ds = ds.map(
@@ -91,9 +104,9 @@ class RobertaPreprocessor(keras.layers.Layer):
         num_parallel_calls=tf.data.AUTOTUNE,
     )
 
-    # Map a dataset to preprocess a multiple sentences.
-    first_sentences = ["The quick brown fox jumped.", "Call me Ishmael."]
-    second_sentences = ["The fox tripped.", "Oh look, a whale."]
+    # Map a dataset to preprocess multiple sentences.
+    first_sentences = [" afternoon sun", "refulgent sun"]
+    second_sentences = [" night moon", " bright moon"]
     labels = [1, 1]
     ds = tf.data.Dataset.from_tensor_slices(
         (
