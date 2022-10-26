@@ -26,7 +26,7 @@ def _gpt_2_kernel_initializer(stddev=0.02):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class Gpt2(keras.Model):
+class GPT2(keras.Model):
     """GPT-2 core network with hyperparameters.
 
     This network implements a Transformer-based decoder network,
@@ -65,7 +65,7 @@ class Gpt2(keras.Model):
     }
 
     # Randomly initialized GPT-2 decoder
-    model = keras_nlp.models.Gpt2(
+    model = keras_nlp.models.GPT2(
         vocabulary_size=50257,
         num_layers=12,
         num_heads=12,
