@@ -45,25 +45,6 @@ class XLMRobertaPreprocessorTest(tf.test.TestCase):
             sequence_length=12,
         )
 
-    def test_vocabulary(self):
-        vocabulary = self.preprocessor.tokenizer.get_vocabulary()
-        self.assertAllEqual(
-            vocabulary,
-            [
-                "<s>",
-                "<pad>",
-                "</s>",
-                "<unk>",
-                "▁the",
-                "▁brown",
-                "▁earth",
-                "▁fox",
-                "▁is",
-                "▁quick",
-                "▁round",
-            ],
-        )
-
     def test_tokenize(self):
         input_data = ["the quick brown fox"]
 
@@ -139,6 +120,30 @@ class XLMRobertaPreprocessorTest(tf.test.TestCase):
         output = self.preprocessor.tokenizer.detokenize(input_data)
         self.assertEqual(output, tf.constant(["the quick brown fox"]))
 
-    def test_vocabulary_size(self):
-        preprocessor = XLMRobertaPreprocessor(proto=self.proto)
-        self.assertEqual(preprocessor.vocabulary_size(), 11)
+    def test_vocabulary(self):
+        vocabulary = self.preprocessor.tokenizer.get_vocabulary()
+        self.assertAllEqual(
+            vocabulary,
+            [
+                "<s>",
+                "<pad>",
+                "</s>",
+                "<unk>",
+                "▁the",
+                "▁brown",
+                "▁earth",
+                "▁fox",
+                "▁is",
+                "▁quick",
+                "▁round",
+            ],
+        )
+        self.assertEqual(self.preprocessor.vocabulary_size(), 11)
+
+    def test_id_to_token(self):
+        self.assertEqual(self.preprocessor.tokenizer.id_to_token(9), "_quick")
+        self.assertEqual(self.preprocessor.tokenizer.id_to_token(5), "_brown")
+
+    def test_token_to_id(self):
+        self.assertEqual(self.preprocessor.tokenizer.token_to_id("_the"), 4)
+        self.assertEqual(self.preprocessor.tokenizer.token_to_id("_round"), 10)
