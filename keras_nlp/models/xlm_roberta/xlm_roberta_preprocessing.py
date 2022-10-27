@@ -191,6 +191,9 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         if id == 0:
             return "<s>"
         elif id == 1:
+            # Note that even though here, `"<pad>"` is mapped to 1, while
+            # detokenizing, we map it to `"<unk>"`'s ID, i.e., 0. This is
+            # because we the SPM proto file does not contain `"<pad>"`.
             return "<pad>"
         elif id == 2:
             return "</s>"
