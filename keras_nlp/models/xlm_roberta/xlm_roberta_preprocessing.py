@@ -201,8 +201,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         elif id == 3:
             return "<unk>"
 
-        id -= 1
-        return tensor_to_string_list(self._sentence_piece.id_to_string(id))
+        return tensor_to_string_list(self._sentence_piece.id_to_string(id - 1))
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
