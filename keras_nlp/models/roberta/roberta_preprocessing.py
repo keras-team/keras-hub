@@ -49,7 +49,7 @@ class RobertaPreprocessor(keras.layers.Layer):
         merges: string or list, contains the merge rule. If it is a string,
             it should be the file path to merge rules. The merge rule file
             should have one merge rule per line. Every merge rule contains
-            merge entities separated by a space. please refer to this example:
+            merge entities separated by a space. Please refer to this example:
             https://storage.googleapis.com/keras-nlp/models/roberta_base/merges.txt.
         sequence_length: The length of the packed inputs.
         truncate: string. The algorithm to truncate a list of batched segments
