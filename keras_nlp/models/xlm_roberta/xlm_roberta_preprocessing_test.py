@@ -141,9 +141,10 @@ class XLMRobertaPreprocessorTest(tf.test.TestCase):
         self.assertEqual(self.preprocessor.vocabulary_size(), 11)
 
     def test_id_to_token(self):
-        self.assertEqual(self.preprocessor.tokenizer.id_to_token(9), "_quick")
-        self.assertEqual(self.preprocessor.tokenizer.id_to_token(5), "_brown")
+        print(self.preprocessor.tokenizer.id_to_token(9))
+        self.assertEqual(self.preprocessor.tokenizer.id_to_token(9), "▁quick")
+        self.assertEqual(self.preprocessor.tokenizer.id_to_token(5), "▁brown")
 
     def test_token_to_id(self):
-        self.assertEqual(self.preprocessor.tokenizer.token_to_id("_the"), 4)
-        self.assertEqual(self.preprocessor.tokenizer.token_to_id("_round"), 10)
+        self.assertEqual(self.preprocessor.tokenizer.token_to_id("▁the"), 4)
+        self.assertEqual(self.preprocessor.tokenizer.token_to_id("▁round"), 10)
