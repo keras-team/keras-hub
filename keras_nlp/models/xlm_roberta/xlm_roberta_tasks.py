@@ -22,6 +22,10 @@ from keras_nlp.models.roberta.roberta_models import roberta_kernel_initializer
 class XLMRobertaClassifier(keras.Model):
     """XLM-RoBERTa encoder model with a classification head.
 
+    Disclaimer: KerasNLP model checkpoints are provided "as is" and are not
+    an officially supported product. Underlying models may be provided by
+    third parties and subject to their own, separate licenses.
+
     Args:
         backbone: A `keras_nlp.models.XLMRoberta` instance.
         num_classes: int. Number of classes to predict.
