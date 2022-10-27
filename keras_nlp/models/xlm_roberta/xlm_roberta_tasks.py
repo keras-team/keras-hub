@@ -15,11 +15,11 @@
 
 from tensorflow import keras
 
-from keras_nlp.models.roberta import roberta_tasks
+from keras_nlp.models.roberta.roberta_models import roberta_kernel_initializer
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class XLMRobertaClassifier(roberta_tasks.RobertaClassifier):
+class XLMRobertaClassifier(keras.Model):
     """XLM-RoBERTa encoder model with a classification head.
 
     Args:
@@ -54,4 +54,59 @@ class XLMRobertaClassifier(roberta_tasks.RobertaClassifier):
     ```
     """
 
-    pass
+    def __init__(
+        self,
+        backbone,
+        num_classes,
+        hidden_dim=None,
+        dropout=0.0,
+        **kwargs,
+    ):
+        inputs = backbone.input
+        if hidden_dim is None:
+            hidden_dim = backbone.hidden_dim
+
+        x = backbone(inputs)[:, backbone.start_token_index, :]
+        x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
+        x = keras.layers.Dense(
+            hidden_dim, activation="tanh", name="pooled_dense"
+        )(x)
+        x = keras.layers.Dropout(dropout, name="classifier_dropout")(x)
+        outputs = keras.layers.Dense(
+            num_classes,
+            kernel_initializer=roberta_kernel_initializer(),
+            name="logits",
+        )(x)
+
+        # Instantiate using Functional API Model constructor
+        super().__init__(
+            inputs=inputs,
+            outputs=outputs,
+            **kwargs,
+        )
+        # All references to `self` below this line
+        self._backbone = backbone
+        self.num_classes = num_classes
+        self.hidden_dim = hidden_dim
+        self.dropout = dropout
+
+    @property
+    def backbone(self):
+        """A `keras_nlp.models.XLMRoberta` instance providing the encoder submodel."""
+        return self._backbone
+
+    def get_config(self):
+        return {
+            "backbone": keras.layers.serialize(self.backbone),
+            "num_classes": self.num_classes,
+            "hidden_dim": self.hidden_dim,
+            "dropout": self.dropout,
+            "name": self.name,
+            "trainable": self.trainable,
+        }
+
+    @classmethod
+    def from_config(cls, config):
+        if "backbone" in config:
+            config["backbone"] = keras.layers.deserialize(config["backbone"])
+        return cls(**config)
