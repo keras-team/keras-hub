@@ -10,7 +10,7 @@ For the most part, following our code style is very simple, we just use
 
 Capitalize all abbreviations, e.g. LSTM not Lstm, KLDivergence not KlDivergence, GPT2, XLMRoberta, etc.
 
-But if a specific abbreviation is very common and is pronounceable (acronym), it's fine to consider it as a standalone word, e.g. Bert, Deberta, etc. In this case, we consider "Bert" to be a common noun, not an abbreviation anymore.
+When a specific abbreviation is very common and is pronounceable (acronym), consider it as a standalone word, e.g. Bert, Deberta, etc. In this case, "Bert" is considered as a common noun and not an abbreviation anymore.
 
 ## Import keras and keras_nlp as top-level objects
 
