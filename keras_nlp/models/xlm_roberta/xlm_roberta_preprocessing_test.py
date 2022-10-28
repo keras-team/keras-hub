@@ -57,6 +57,18 @@ class XLMRobertaPreprocessorTest(tf.test.TestCase):
             output["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
         )
 
+    def test_unk_token(self):
+        input_data = ["the quick brown fox running"]
+
+        output = self.preprocessor(input_data)
+        print(output)
+        self.assertAllEqual(
+            output["token_ids"], [0, 4, 9, 5, 7, 3, 2, 1, 1, 1, 1, 1]
+        )
+        self.assertAllEqual(
+            output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
+        )
+
     def test_tokenize_batch(self):
         input_data = tf.constant(
             [
