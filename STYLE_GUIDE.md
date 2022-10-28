@@ -6,6 +6,12 @@ For the most part, following our code style is very simple, we just use
 [black](https://github.com/psf/black) to format code. See our
 [Contributing Guide](CONTRIBUTING.md) for how to run our formatting scripts.
 
+## Naming of Layers and Models
+
+Capitalize all abbreviations, e.g. LSTM not Lstm, KLDivergence not KlDivergence, GPT2, XLMRoberta, etc.
+
+But if a specific abbreviation is very common and is pronounceable (acronym), it's fine to consider it as a standalone word, e.g. Bert, Deberta, etc. In this case, we consider "Bert" to be a common noun, not an abbreviation anymore.
+
 ## Import keras and keras_nlp as top-level objects
 
 Prefer importing `tf`, `keras` and `keras_nlp` as top-level objects. We want
