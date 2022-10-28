@@ -42,7 +42,7 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
     Note that the original fairseq implementation modifies the indices of the
     SentencePiece tokenizer output. To preserve compatibility, we make the same
     changes, i.e., `"<s>"`, `"<pad>"`, `"</s>"` and `"<unk>"` are mapped to
-    0, 1, 2, 3, respectively, and non-special tokens' indices are shifted right
+    0, 1, 2, 3, respectively, and non-special token indices are shifted right
     by one. Keep this in mind if generating your own vocabulary for tokenization.
 
     This layer will accept either a tuple of (possibly batched) inputs, or a
@@ -169,12 +169,8 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     because the original fairseq implementation modifies the indices of the
     SentencePiece tokenizer output. To preserve compatibility, we make the same
     changes, i.e., `"<s>"`, `"<pad>"`, `"</s>"` and `"<unk>"` are mapped to
-    0, 1, 2, 3, respectively, and non-special tokens' indices are shifted right
+    0, 1, 2, 3, respectively, and non-special token indices are shifted right
     by one.
-
-    Note: This is an unexported tokenizer, meant to be used in
-    `XLMRobertaPreprocessor`. For a detailed description of the arguments,
-    please refer to `keras_nlp.tokenizers.SentencePieceTokenizer`.
     """
 
     def __init__(
@@ -198,8 +194,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
                 tf.range(super().vocabulary_size())
             )
         )
-        vocabulary = self._vocabulary_prefix + vocabulary[3:]
-        return vocabulary
+        return self._vocabulary_prefix + vocabulary[3:]
 
     def id_to_token(self, id):
         """Convert an integer id to a string token."""
@@ -224,8 +219,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         tokens = tf.where(tf.equal(tokens, 0), 2, tokens)
 
         # Shift the tokens IDs right by one.
-        tokens = tf.add(tokens, 1)
-        return tokens
+        return tf.add(tokens, 1)
 
     def detokenize(self, inputs):
         if inputs.dtype == tf.string:
