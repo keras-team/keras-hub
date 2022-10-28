@@ -22,9 +22,10 @@ from keras_nlp.models.roberta.roberta_models import roberta_kernel_initializer
 class XLMRobertaClassifier(keras.Model):
     """XLM-RoBERTa encoder model with a classification head.
 
-    Disclaimer: KerasNLP model checkpoints are provided "as is" and are not
-    an officially supported product. Underlying models may be provided by
-    third parties and subject to their own, separate licenses.
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind. The underlying model is provided by a
+    third party and subject to a separate license, found at:
+    https://github.com/facebookresearch/fairseq
 
     Args:
         backbone: A `keras_nlp.models.XLMRoberta` instance.

@@ -35,9 +35,10 @@ class XLMRoberta(roberta_models.Roberta):
     dimensions. To load preset architectures and weights, use the `from_presets`
     constructor.
 
-    Disclaimer: KerasNLP model checkpoints are provided "as is" and are not
-    an officially supported product. Underlying models may be provided by
-    third parties and subject to their own, separate licenses.
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind. The underlying model is provided by a
+    third party and subject to a separate license, found at:
+    https://github.com/facebookresearch/fairseq
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
