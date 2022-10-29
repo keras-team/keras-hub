@@ -11,33 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+"""Disentangled self-attention layer."""
+
 import math
 
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.utils.keras_utils import clone_initializer
-
-
-def torch_gather(x, indices, gather_axis):
-    if gather_axis < 0:
-        gather_axis = tf.rank(x) + gather_axis
-    if gather_axis != tf.rank(x) - 1:
-        pre_roll = tf.rank(x) - 1 - gather_axis
-        permutation = tf.roll(tf.range(tf.rank(x)), pre_roll, axis=0)
-        x = tf.transpose(x, perm=permutation)
-        indices = tf.transpose(indices, perm=permutation)
-    else:
-        pre_roll = 0
-    flat_x = tf.reshape(x, (-1, tf.shape(x)[-1]))
-    flat_indices = tf.reshape(indices, (-1, tf.shape(indices)[-1]))
-    gathered = tf.gather(flat_x, flat_indices, batch_dims=1)
-    gathered = tf.reshape(gathered, tf.shape(indices))
-
-    if pre_roll != 0:
-        permutation = tf.roll(tf.range(tf.rank(x)), -pre_roll, axis=0)
-        gathered = tf.transpose(gathered, perm=permutation)
-    return gathered
 
 
 class DisentangledSelfAttention(keras.layers.Layer):
@@ -69,7 +51,10 @@ class DisentangledSelfAttention(keras.layers.Layer):
         # Derived args.
         self.attn_head_size = hidden_dim // num_heads
 
-        self.scale_factor = 1.0 / math.sqrt(float(self.attn_head_size))
+        num_type_attn = 3
+        self.scale_factor = 1.0 / math.sqrt(
+            float(num_type_attn * self.attn_head_size)
+        )
 
         # Layers.
 
@@ -127,12 +112,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
         # Normalize the attention scores to probabilities.
-        # `attention_scores` = [B, N, T, S]
-        if attention_mask is not None:
-            for _ in range(
-                len(attention_scores.shape) - len(attention_mask.shape)
-            ):
-                attention_mask = tf.expand_dims(attention_mask, axis=-3)
         return self._softmax(attention_scores, attention_mask)
 
     def _compute_attention(
@@ -144,27 +123,32 @@ class DisentangledSelfAttention(keras.layers.Layer):
         attention_mask=None,
         training=None,
     ):
-        query = tf.multiply(query, self.scale_factor)
-        # `attention_scores` -> `(batch_size, num_heads, sequence_length, sequence_length)`
+        # `attention_scores` is of shape
+        # `(batch_size, num_heads, sequence_length, sequence_length)`.
         attention_scores = tf.einsum(
             "aecd,abcd->acbe",
             key,
             query,
         )
+        attention_scores = tf.multiply(attention_scores, self.scale_factor)
 
         rel_embeddings = self._position_dropout_layer(
             rel_embeddings,
             training=training,
         )
+
         rel_attn_scores = self._compute_disentangled_attention(
             query=query,
             key=key,
             rel_embeddings=rel_embeddings,
         )
+
         if rel_attn_scores is not None:
             attention_scores += rel_attn_scores
 
-        attention_scores = self._masked_softmax(attention_scores)
+        attention_scores = self._masked_softmax(
+            attention_scores, attention_mask
+        )
         attention_scores = self._attn_dropout_layer(
             attention_scores, training=training
         )
@@ -264,15 +248,16 @@ class DisentangledSelfAttention(keras.layers.Layer):
                 num_positions,
             ),
         )
+
         c2p_attn_scores = tf.gather(
             c2p_attn_scores,
             indices=c2p_pos,
             batch_dims=3,
         )
-        score += c2p_attn_scores / self.scale_factor
+        c2p_attn_scores = tf.multiply(c2p_attn_scores, self.scale_factor)
+        score += c2p_attn_scores
 
         # p2c
-        pos_query = tf.multiply(pos_query, self.scale_factor)
         p2c_attn_scores = tf.einsum(
             "abcd,efcd->acbf",
             key,
@@ -295,7 +280,9 @@ class DisentangledSelfAttention(keras.layers.Layer):
             indices=p2c_pos,
             batch_dims=3,
         )
-        score += p2c_attn_scores / self.scale_factor
+        p2c_attn_scores = tf.transpose(p2c_attn_scores, [0, 1, 3, 2])
+        p2c_attn_scores = tf.multiply(p2c_attn_scores, self.scale_factor)
+        score += p2c_attn_scores
 
         return score
 
