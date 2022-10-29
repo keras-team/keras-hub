@@ -171,6 +171,9 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     changes, i.e., `"<s>"`, `"<pad>"`, `"</s>"` and `"<unk>"` are mapped to
     0, 1, 2, 3, respectively, and non-special token indices are shifted right
     by one.
+
+    For a description of the arguments, please refer to
+    `keras_nlp.tokenizers.SentencePieceTokenizer`.
     """
 
     def __init__(
