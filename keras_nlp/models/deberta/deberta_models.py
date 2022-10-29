@@ -103,7 +103,7 @@ class DebertaCustomEncoder(keras.layers.Layer):
         return config
 
 
-class DebertaCustom(keras.Model):
+class Deberta(keras.Model):
     def __init__(
         self,
         vocabulary_size,
