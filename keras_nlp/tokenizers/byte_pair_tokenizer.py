@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" Byte-pair encoder implementation.
+"""Byte-pair encoder implementation.
 
 This file implements the same logic as openai BPE:
 https://github.com/openai/gpt-2/blob/master/src/encoder.py,
