@@ -65,7 +65,7 @@ class DistilBertClassifier(keras.Model):
         if hidden_dim is None:
             hidden_dim = backbone.hidden_dim
 
-        x = backbone(inputs)[:, backbone.start_token_index, :]
+        x = backbone(inputs)[:, backbone.cls_token_index, :]
         x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
         x = keras.layers.Dense(
             hidden_dim, activation="tanh", name="pooled_dense"
