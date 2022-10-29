@@ -93,7 +93,9 @@ def compute_sentence_piece_proto(
 
     if spm is None:
         raise ImportError(
-            "sentencepiece is not installed. Please install it via `pip install sentencepiece`."
+            f"{compute_sentence_piece_proto.__name__} requires the "
+            "`sentencepiece` package. Please install it with "
+            "`pip install sentencepiece`."
         )
 
     if not isinstance(data, (list, tuple, tf.data.Dataset)):

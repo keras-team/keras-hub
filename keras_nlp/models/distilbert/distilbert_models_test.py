@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for BERT task specific models and heads."""
+"""Test for DistilBERT backbone models."""
 
 import os
 
@@ -19,13 +19,12 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_models import Bert
-from keras_nlp.models.bert.bert_tasks import BertClassifier
+from keras_nlp.models.distilbert.distilbert_models import DistilBert
 
 
-class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
+class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.backbone = Bert(
+        self.model = DistilBert(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -34,20 +33,13 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
             max_sequence_length=128,
             name="encoder",
         )
-        self.classifier = BertClassifier(self.backbone, 4, name="classifier")
         self.batch_size = 8
         self.input_batch = {
             "token_ids": tf.ones(
-                (self.batch_size, self.backbone.max_sequence_length),
-                dtype="int32",
-            ),
-            "segment_ids": tf.ones(
-                (self.batch_size, self.backbone.max_sequence_length),
-                dtype="int32",
+                (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
             "padding_mask": tf.ones(
-                (self.batch_size, self.backbone.max_sequence_length),
-                dtype="int32",
+                (self.batch_size, self.model.max_sequence_length), dtype="int32"
             ),
         }
 
@@ -55,38 +47,46 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
             self.input_batch
         ).batch(2)
 
-    def test_valid_call_classifier(self):
-        self.classifier(self.input_batch)
+    def test_valid_call_distilbert(self):
+        self.model(self.input_batch)
 
-        # Not a checkpoint name
-        with self.assertRaises(ValueError):
-            BertClassifier("bert_clowntown", 4, name="classifier")
+    def test_variable_sequence_length_call_distilbert(self):
+        for seq_length in (25, 50, 75):
+            input_data = {
+                "token_ids": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
+                "padding_mask": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
+            }
+            self.model(input_data)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_bert_classifier_compile(self, jit_compile):
-        self.classifier.compile(jit_compile=jit_compile)
-        self.classifier.predict(self.input_batch)
+    def test_distilbert_base_compile(self, jit_compile):
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_bert_classifier_compile_batched_ds(self, jit_compile):
-        self.classifier.compile(jit_compile=jit_compile)
-        self.classifier.predict(self.input_dataset)
+    def test_distilbert_base_compile_batched_ds(self, jit_compile):
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_dataset)
 
     @parameterized.named_parameters(
         ("save_format_tf", "tf"), ("save_format_h5", "h5")
     )
     def test_saving_model(self, save_format):
-        model_output = self.classifier(self.input_batch)
+        model_output = self.model(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), "model")
-        self.classifier.save(save_path, save_format)
+        self.model.save(save_path, save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, BertClassifier)
+        self.assertIsInstance(restored_model, DistilBert)
 
         # Check that output matches.
         restored_output = restored_model(self.input_batch)

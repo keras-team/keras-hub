@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""RoBERTa task specific models and heads."""
+"""XLM-RoBERTa task specific models and heads."""
 
 from tensorflow import keras
 
@@ -19,18 +19,18 @@ from keras_nlp.models.roberta.roberta_models import roberta_kernel_initializer
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class RobertaClassifier(keras.Model):
-    """RoBERTa encoder model with a classification head.
+class XLMRobertaClassifier(keras.Model):
+    """XLM-RoBERTa encoder model with a classification head.
 
     Args:
-        backbone: A `keras_nlp.models.Roberta` instance.
+        backbone: A `keras_nlp.models.XLMRoberta` instance.
         num_classes: int. Number of classes to predict.
         hidden_dim: int. The size of the pooler layer.
 
     Example usage:
     ```python
-    # Randomly initialized RoBERTa encoder
-    model = keras_nlp.models.Roberta(
+    # Randomly initialized XLM-RoBERTa encoder
+    model = keras_nlp.models.XLMRoberta(
         vocabulary_size=50265,
         num_layers=12,
         num_heads=12,
@@ -46,7 +46,10 @@ class RobertaClassifier(keras.Model):
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
-    classifier = keras_nlp.models.RobertaClassifier(model, 4)
+    classifier = keras_nlp.models.XLMRobertaClassifier(
+        backbone=model,
+        num_classes=4,
+    )
     logits = classifier(input_data)
     ```
     """
@@ -89,7 +92,7 @@ class RobertaClassifier(keras.Model):
 
     @property
     def backbone(self):
-        """A `keras_nlp.models.Roberta` instance providing the encoder submodel."""
+        """A `keras_nlp.models.XLMRoberta` instance providing the encoder submodel."""
         return self._backbone
 
     def get_config(self):

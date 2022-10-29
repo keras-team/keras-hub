@@ -14,11 +14,16 @@
 """Trainer for WordPiece Tokenizer."""
 
 import tensorflow as tf
-from tensorflow_text.tools.wordpiece_vocab import (
-    wordpiece_tokenizer_learner_lib as learner,
-)
 
 from keras_nlp.tokenizers.word_piece_tokenizer import pretokenize
+from keras_nlp.utils.tf_utils import assert_tf_text_installed
+
+try:
+    from tensorflow_text.tools.wordpiece_vocab import (
+        wordpiece_tokenizer_learner_lib as learner,
+    )
+except ImportError:
+    learner = None
 
 
 def compute_word_piece_vocabulary(
@@ -119,8 +124,9 @@ def compute_word_piece_vocabulary(
     inputs.map(tokenizer.tokenize)
     ```
     """
-    # Read data files.
+    assert_tf_text_installed(compute_word_piece_vocabulary.__name__)
 
+    # Read data files.
     if not isinstance(data, (list, tf.data.Dataset)):
         raise ValueError(
             "The `data` argument must be either `tf.data.Dataset` or `list`. "

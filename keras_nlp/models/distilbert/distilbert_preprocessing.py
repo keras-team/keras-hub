@@ -11,22 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""BERT preprocessing layers."""
-
-import copy
-import os
+"""DistilBERT preprocessing layers."""
 
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
-from keras_nlp.models.bert.bert_presets import backbone_presets
-from keras_nlp.models.utils import classproperty
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class BertPreprocessor(keras.layers.Layer):
-    """BERT preprocessing layer.
+class DistilBertPreprocessor(keras.layers.Layer):
+    """DistilBERT preprocessing layer.
 
     This preprocessing layer will do three things:
 
@@ -34,25 +29,27 @@ class BertPreprocessor(keras.layers.Layer):
        `keras_nlp.tokenizers.WordPieceTokenizer`.
      - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
        with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
-     - Construct a dictionary of with keys `"token_ids"`, `"segment_ids"`,
-       `"padding_mask"`, that can be passed directly to a BERT model.
+     - Construct a dictionary of with keys `"token_ids"`, `"padding_mask"`,
+       that can be passed directly to a DistilBERT model.
 
     This layer will accept either a tuple of (possibly batched) inputs, or a
     single input tensor. If a single tensor is passed, it will be packed
     equivalently to a tuple with a single element.
 
-    The `WordPieceTokenizer` can be accessed via the `tokenizer` property on
-    this layer, and can be used directly for custom packing on inputs.
+    The WordPiece tokenizer can be accessed via the `tokenizer` property on this
+    layer, and can be used directly for custom packing on inputs.
 
     Args:
         vocabulary: A list of vocabulary terms or a vocabulary filename.
         lowercase: If `True`, input will be lowercase before tokenization. If
             `vocabulary` is set to a pretrained vocabulary, this parameter will
             be inferred.
-        sequence_length: The length of the packed inputs.
-        truncate: string. The algorithm to truncate a list of batched segments
-            to fit within `sequence_length`. The value can be either
-            `round_robin` or `waterfall`:
+        sequence_length: The length of the packed inputs. Only used if
+            `pack_inputs` is True.
+        truncate: The algorithm to truncate a list of batched segments to fit
+            within `sequence_length`. Only used if
+            `pack_inputs` is True. The value can be either `round_robin` or
+            `waterfall`:
                 - `"round_robin"`: Available space is assigned one token at a
                     time in a round-robin fashion to the inputs that still need
                     some, until the limit is reached.
@@ -63,12 +60,9 @@ class BertPreprocessor(keras.layers.Layer):
 
     Examples:
     ```python
-    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
-    vocab += ["the", "qu", "##ick", "br", "##own", "fox", "tripped"]
-    vocab += ["call", "me", "ish", "##mael", "."]
-    vocab += ["oh", "look", "a", "whale"]
-    vocab += ["i", "forgot", "my", "home", "##work"]
-    preprocessor = keras_nlp.models.BertPreprocessor(vocabulary=vocab)
+    preprocessor = keras_nlp.models.DistilBertPreprocessor(
+        vocabulary="./vocab.txt",
+    )
 
     # Tokenize and pack a single sentence directly.
     preprocessor("The quick brown fox jumped.")
@@ -90,10 +84,7 @@ class BertPreprocessor(keras.layers.Layer):
     second_sentences = ["The fox tripped.", "Oh look, a whale."]
     labels = [1, 1]
     ds = tf.data.Dataset.from_tensor_slices(
-        (
-            (first_sentences, second_sentences), labels
-        )
-    )
+        ((first_sentences, second_sentences), labels))
     ds = ds.map(
         lambda x, y: (preprocessor(x), y),
         num_parallel_calls=tf.data.AUTOTUNE,
@@ -103,7 +94,7 @@ class BertPreprocessor(keras.layers.Layer):
 
     def __init__(
         self,
-        vocabulary,
+        vocabulary="uncased_en",
         lowercase=False,
         sequence_length=512,
         truncate="round_robin",
@@ -158,16 +149,11 @@ class BertPreprocessor(keras.layers.Layer):
             inputs = [inputs]
 
         inputs = [self.tokenizer(x) for x in inputs]
-        token_ids, segment_ids = self.packer(inputs)
+        token_ids, _ = self.packer(inputs)
         return {
             "token_ids": token_ids,
-            "segment_ids": segment_ids,
             "padding_mask": token_ids != self.pad_token_id,
         }
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
 
     @classmethod
     def from_preset(
@@ -177,81 +163,4 @@ class BertPreprocessor(keras.layers.Layer):
         truncate="round_robin",
         **kwargs,
     ):
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-
-        vocabulary = keras.utils.get_file(
-            "vocab.txt",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["vocabulary_hash"],
-        )
-
-        config = metadata["preprocessor_config"]
-        # Use model's `max_sequence_length` if `sequence_length` unspecified;
-        # otherwise check that `sequence_length` not too long.
-        max_sequence_length = metadata["config"]["max_sequence_length"]
-        if sequence_length is not None:
-            if sequence_length > max_sequence_length:
-                raise ValueError(
-                    f"`sequence_length` cannot be longer than `{preset}` "
-                    f"preset's `max_sequence_length` of {max_sequence_length}. "
-                    f"Received: {sequence_length}."
-                )
-        else:
-            sequence_length = max_sequence_length
-
-        config.update(
-            {
-                "sequence_length": sequence_length,
-                "vocabulary": vocabulary,
-                "truncate": truncate,
-            },
-        )
-
-        return cls.from_config({**config, **kwargs})
-
-
-FROM_PRESET_DOCSTRING = """Instantiate BERT preprocessor from preset architecture.
-
-    Args:
-        preset: string. Must be one of {names}.
-        sequence_length: int, optional. The length of the packed inputs. Must be
-            equal to or smaller than the `max_sequence_length` of the preset. If
-            left as default, the `max_sequence_length` of the preset will be
-            used.
-        truncate: string. The algorithm to truncate a list of batched segments
-            to fit within `sequence_length`. The value can be either
-            `round_robin` or `waterfall`:
-                - `"round_robin"`: Available space is assigned one token at a
-                    time in a round-robin fashion to the inputs that still need
-                    some, until the limit is reached.
-                - `"waterfall"`: The allocation of the budget is done using a
-                    "waterfall" algorithm that allocates quota in a
-                    left-to-right manner and fills up the buckets until we run
-                    out of budget. It supports an arbitrary number of segments.
-
-    Examples:
-    ```python
-    # Load preprocessor from preset
-    preprocessor = BertPreprocessor.from_preset("bert_base_uncased_en")
-    preprocessor("The quick brown fox jumped.")
-
-    # Override sequence_length
-    preprocessor = BertPreprocessor.from_preset(
-        "bert_base_uncased_en"
-        sequence_length=64
-    )
-    preprocessor("The quick brown fox jumped.")
-    ```
-    """
-
-setattr(
-    BertPreprocessor.from_preset.__func__,
-    "__doc__",
-    FROM_PRESET_DOCSTRING.format(names=", ".join(BertPreprocessor.presets)),
-)
+        raise NotImplementedError

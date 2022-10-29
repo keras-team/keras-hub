@@ -14,6 +14,11 @@
 
 import tensorflow as tf
 
+try:
+    import tensorflow_text
+except ImportError:
+    tensorflow_text = None
+
 
 def _decode_strings_to_utf8(inputs):
     """Recursively decodes to list of strings with 'utf-8' encoding."""
@@ -53,3 +58,12 @@ def tensor_to_string_list(inputs):
     """
     list_outputs = tensor_to_list(inputs)
     return _decode_strings_to_utf8(list_outputs)
+
+
+def assert_tf_text_installed(symbol_name):
+    """Detokenize and convert tensor to nested lists of python strings."""
+    if tensorflow_text is None:
+        raise ImportError(
+            f"{symbol_name} requires the `tensorflow-text` package. "
+            "Please install with `pip install tensorflow-text`."
+        )

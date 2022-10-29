@@ -12,30 +12,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""GPT-2 backbone models."""
+"""DistilBERT backbone models."""
+
 
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers import PositionEmbedding
-from keras_nlp.layers import TransformerDecoder
+from keras_nlp.layers.token_and_position_embedding import (
+    TokenAndPositionEmbedding,
+)
+from keras_nlp.layers.transformer_encoder import TransformerEncoder
 
 
-def _gpt_2_kernel_initializer(stddev=0.02):
-    return keras.initializers.RandomNormal(stddev=stddev)
+def distilbert_kernel_initializer(stddev=0.02):
+    return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class GPT2(keras.Model):
-    """GPT-2 core network with hyperparameters.
+class DistilBert(keras.Model):
+    """DistilBERT encoder network.
 
-    This network implements a Transformer-based decoder network,
-    Generative Pretrained Transformer-2 (GPT-2), as described in
-    ["Language Models are Unsupervised Multitask Learners"](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf).
-    It includes the embedding lookups and transformer layers.
+    This network implements a bi-directional Transformer-based encoder as
+    described in ["DistilBERT, a distilled version of BERT: smaller, faster,
+    cheaper and lighter"](https://arxiv.org/abs/1910.01108). It includes the
+    embedding lookups and transformer layers, but not the masked language model
+    or classification task networks.
 
     The default constructor gives a fully customizable, randomly initalized
-    GPT-2 model with any number of layers, heads, and embedding
+    DistilBERT encoder with any number of layers, heads, and embedding
     dimensions. To load preset architectures and weights, use the `from_presets`
     constructor.
 
@@ -53,28 +57,26 @@ class GPT2(keras.Model):
             sequence length. This determines the variable shape for positional
             embeddings.
 
-    Example usage:
+    Examples:
     ```python
     input_data = {
         "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
+            shape=(1, 12), dtype=tf.int64, maxval=30522
         ),
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
     }
 
-    # Randomly initialized GPT-2 decoder
-    model = keras_nlp.models.GPT2(
-        vocabulary_size=50257,
-        num_layers=12,
+    # Randomly initialized DistilBERT encoder
+    model = keras_nlp.models.DistilBert(
+        vocabulary_size=30522,
+        num_layers=6,
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
-        max_sequence_length=1024,
+        max_sequence_length=12,
     )
-
-    # Call the model on the input data.
     output = model(input_data)
     ```
     """
@@ -87,60 +89,49 @@ class GPT2(keras.Model):
         hidden_dim,
         intermediate_dim,
         dropout=0.1,
-        max_sequence_length=1024,
+        max_sequence_length=512,
         **kwargs,
     ):
 
         # Inputs
-        token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
         padding_mask = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
 
-        # Embed tokens, positions.
-        token_embedding = keras.layers.Embedding(
-            input_dim=vocabulary_size,
-            output_dim=hidden_dim,
-            embeddings_initializer=_gpt_2_kernel_initializer(stddev=0.01),
-            name="token_embedding",
-        )(token_ids)
-
-        # Can't use `TokenAndPositionEmbedding` layer here because of different
-        # initializers.
-        position_embedding = PositionEmbedding(
-            initializer=_gpt_2_kernel_initializer(stddev=0.02),
+        # Embed tokens and positions.
+        x = TokenAndPositionEmbedding(
+            vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
-            name="position_embedding",
-        )(token_embedding)
+            embedding_dim=hidden_dim,
+            embeddings_initializer=distilbert_kernel_initializer(),
+            name="token_and_position_embedding",
+        )(token_id_input)
 
-        # Sum and apply dropout to embeddings.
-        x = keras.layers.Add()((token_embedding, position_embedding))
+        # Normalize and apply dropout to embeddings.
+        x = keras.layers.LayerNormalization(
+            axis=-1,
+            epsilon=1e-12,
+            dtype=tf.float32,
+            name="embeddings_layer_norm",
+        )(x)
         x = keras.layers.Dropout(
             dropout,
             name="embeddings_dropout",
         )(x)
 
-        # Apply successive transformer decoder blocks.
+        # Apply successive transformer encoder blocks.
         for i in range(num_layers):
-            x = TransformerDecoder(
-                intermediate_dim=intermediate_dim,
+            x = TransformerEncoder(
                 num_heads=num_heads,
+                intermediate_dim=intermediate_dim,
+                activation="gelu",
                 dropout=dropout,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=True
-                ),
-                layer_norm_epsilon=1e-05,
-                kernel_initializer=_gpt_2_kernel_initializer(stddev=0.02),
-                normalize_first=True,
+                kernel_initializer=distilbert_kernel_initializer(),
                 name=f"transformer_layer_{i}",
-            )(x, decoder_padding_mask=padding_mask)
-
-        sequence_output = keras.layers.LayerNormalization(
-            name="layer_norm",
-            axis=-1,
-            epsilon=1e-05,
-            dtype=tf.float32,
-        )(x)
+            )(x, padding_mask=padding_mask)
 
         # Set default for `name` if none given
         if "name" not in kwargs:
@@ -149,10 +140,10 @@ class GPT2(keras.Model):
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs={
-                "token_ids": token_ids,
+                "token_ids": token_id_input,
                 "padding_mask": padding_mask,
             },
-            outputs=sequence_output,
+            outputs=x,
             **kwargs,
         )
         # All references to `self` below this line
