@@ -216,12 +216,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
         rel_pos = self._get_rel_pos(num_positions)
 
         rel_attn_span = self.bucket_size
-        rel_embeddings = rel_embeddings[
-            self.bucket_size - rel_attn_span : self.bucket_size + rel_attn_span,
-            :,
-        ]
-        rel_embeddings = rel_embeddings[tf.newaxis, :]
-
         score = 0
 
         pos_query = self._query_dense(rel_embeddings)
