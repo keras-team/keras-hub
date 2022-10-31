@@ -8,9 +8,15 @@ For the most part, following our code style is very simple, we just use
 
 ## Naming of Layers and Models
 
-Capitalize all abbreviations, e.g. LSTM not Lstm, KLDivergence not KlDivergence, GPT2, XLMRoberta, etc.
+Capitalize all acronyms, e.g. LSTM not Lstm, KLDivergence not KlDivergence,
+GPT2, XLMRoberta, etc.
 
-When a specific abbreviation is very common and is pronounceable (acronym), consider it as a standalone word, e.g. Bert, Deberta, etc. In this case, "Bert" is considered as a common noun and not an abbreviation anymore.
+Files should be named with snake case, and an acronym should be consider a
+single "segment". For example XLMRoberta would map to xlm_roberta.py filename.
+
+When a specific abbreviation is very common and is pronounceable (acronym),
+consider it as a standalone word, e.g. Bert, Deberta, etc. In this case, "Bert"
+is considered as a common noun and not an abbreviation anymore.
 
 ## Import keras and keras_nlp as top-level objects
 
