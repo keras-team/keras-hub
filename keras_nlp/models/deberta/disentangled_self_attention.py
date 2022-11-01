@@ -143,8 +143,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
         attention_mask=None,
         training=None,
     ):
-        # `attention_scores` is of shape
-        # `(batch_size, num_heads, sequence_length, sequence_length)`.
         attention_scores = tf.einsum(
             "aecd,abcd->acbe",
             key,
