@@ -234,10 +234,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         score = 0
 
         pos_query = self._query_dense(rel_embeddings)
-        # pos_query = tf.repeat(pos_query, repeats=batch_size, axis=0)
-
         pos_key = self._key_dense(rel_embeddings)
-        # pos_key = tf.repeat(pos_key, repeats=batch_size, axis=0)
 
         # c2p
         c2p_attn_scores = tf.einsum(
@@ -303,7 +300,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         return_attention_scores=False,
         training=None,
     ):
-        # `query`, `key`, `value` are of shape
+        # `query`, `key`, `value` shape:
         # `(batch_size, sequence_length, num_heads, attn_head_size)`.
         query = self._query_dense(hidden_states)
         key = self._key_dense(hidden_states)
