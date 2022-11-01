@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+"""DeBERTa encoder block implementation based on `keras.layers.Layer`."""
+
 from tensorflow import keras
 
 from keras_nlp.models.deberta.disentangled_self_attention import (
