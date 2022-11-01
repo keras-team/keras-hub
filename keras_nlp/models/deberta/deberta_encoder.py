@@ -33,7 +33,7 @@ class DebertaEncoder(keras.layers.Layer):
     paper
     ["DeBERTaV3: Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing"](https://arxiv.org/abs/2111.09543).
     Users can instantiate multiple instances of this class to stack up a
-    DeBERTa encoder.
+    DeBERTa encoder model.
 
     `DebertaEncoder` is similar to `keras.layers.TransformerEncoder`, except for
     the attention layer - it uses Disentangled Self-Attention instead of
