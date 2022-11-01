@@ -29,13 +29,16 @@ class RelativeEmbedding(keras.layers.Layer):
         self,
         hidden_dim,
         bucket_size,
-        kernel_initializer,
         epsilon,
+        kernel_initializer,
+        name=None,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(name=name, **kwargs)
 
         self.hidden_dim = hidden_dim
         self.bucket_size = bucket_size
+        self.epsilon = epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
         self.rel_embedding = self.add_weight(
@@ -62,6 +65,7 @@ class RelativeEmbedding(keras.layers.Layer):
             {
                 "hidden_dim": self.hidden_dim,
                 "bucket_size": self.bucket_size,
+                "epsilon": self.epsilon,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
@@ -116,6 +120,7 @@ class Deberta(keras.Model):
         rel_embeddings = RelativeEmbedding(
             hidden_dim=hidden_dim,
             bucket_size=bucket_size,
+            epsilon=1e-7,
             kernel_initializer=deberta_kernel_initializer(),
             name="rel_embedding",
         )(x)
