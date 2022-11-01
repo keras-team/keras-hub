@@ -95,6 +95,7 @@ class RelativeEmbedding(keras.layers.Layer):
         return config
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class Deberta(keras.Model):
     """DeBERTa encoder network.
 
