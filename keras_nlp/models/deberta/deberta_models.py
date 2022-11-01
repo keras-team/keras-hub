@@ -52,8 +52,10 @@ class RelativeEmbedding(keras.layers.Layer):
 
     def call(self, inputs):
         batch_size = tf.shape(inputs)[0]
+        sequence_length = tf.shape(input)[-2]
 
-        rel_embeddings = self.rel_embeddings[tf.newaxis, :]
+        rel_embeddings = self.rel_embeddings[:sequence_length, :]
+        rel_embeddings = rel_embeddings[tf.newaxis, :]
         rel_embeddings = self.layer_norm(rel_embeddings)
         rel_embeddings = tf.repeat(rel_embeddings, repeats=batch_size, axis=0)
 
