@@ -164,6 +164,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         if rel_attn_scores is not None:
             attention_scores += rel_attn_scores
 
+        tf.print(tf.shape(attention_scores), tf.shape(attention_mask))
         attention_scores = self._softmax(attention_scores, attention_mask)
         attention_scores = self._attn_dropout_layer(
             attention_scores, training=training
