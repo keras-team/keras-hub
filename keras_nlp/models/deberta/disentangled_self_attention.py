@@ -23,6 +23,30 @@ from keras_nlp.utils.keras_utils import clone_initializer
 
 
 class DisentangledSelfAttention(keras.layers.Layer):
+    """DisentangledSelfAttention layer.
+
+    This is an implementation of disentangled self-attention as described in the
+    paper ["DeBERTaV3: Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing"](https://arxiv.org/abs/2111.09543).
+    Effectively, this layer implements Multi-Head Self Attention with relative
+    attention, i.e., we compute the content-to-position and position-to-content
+    attention scores, and add these scores to the vanilla multi-head
+    self-attention scores to get the final attention score.
+
+    Args:
+        num_heads: int. Number of attention heads.
+        hidden_dim: int. Hidden dimension of the input, i.e., `hidden_states`.
+        max_position_embeddings: int, defaults to 512. The maximum input
+            sequence length.
+        bucket_size: int, defaults to 512. The size of the relative position
+            buckets. Generally equal to `max_sequence_length // 2`.
+        dropout: float, defaults to 0.1. Dropout probability.
+        kernel_initializer: string or `keras.initializers` initializer,
+            defaults to "glorot_uniform". The kernel initializer for
+            the dense layers.
+        bias_initializer: string or `keras.initializers` initializer,
+            defaults to "zeros". The bias initializer for the dense layers.
+    """
+
     def __init__(
         self,
         num_heads,
@@ -110,10 +134,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
         return common_kwargs
 
-    def _masked_softmax(self, attention_scores, attention_mask=None):
-        # Normalize the attention scores to probabilities.
-        return self._softmax(attention_scores, attention_mask)
-
     def _compute_attention(
         self,
         query,
@@ -146,13 +166,10 @@ class DisentangledSelfAttention(keras.layers.Layer):
         if rel_attn_scores is not None:
             attention_scores += rel_attn_scores
 
-        attention_scores = self._masked_softmax(
-            attention_scores, attention_mask
-        )
+        attention_scores = self._softmax(attention_scores, attention_mask)
         attention_scores = self._attn_dropout_layer(
             attention_scores, training=training
         )
-
         attention_output = tf.einsum("acbe,aecd->abcd", attention_scores, value)
 
         return attention_output, attention_scores

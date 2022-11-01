@@ -27,6 +27,59 @@ from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
 
 
 class DebertaEncoder(keras.layers.Layer):
+    """DeBERTa encoder.
+
+    This class follows the architecture of the DeBERTa encoder layer in the
+    paper
+    ["DeBERTaV3: Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing"](https://arxiv.org/abs/2111.09543).
+    Users can instantiate multiple instances of this class to stack up a
+    DeBERTa encoder.
+
+    `DebertaEncoder` is similar to `keras.layers.TransformerEncoder`, except for
+    the attention layer - it uses Disentangled Self-Attention instead of
+    Multi-Head Attention.
+
+    Args:
+        intermediate_dim: int, the hidden size of feedforward network.
+        num_heads: int, the number of heads in the
+            `keras.layers.MultiHeadAttention` layer.
+        max_position_embeddings: int, defaults to 512. The maximum input
+            sequence length.
+        bucket_size: int, defaults to 512. The size of the relative position
+            buckets. Generally equal to `max_sequence_length // 2`.
+        dropout: float, defaults to 0. the dropout value, shared by
+            `keras.layers.MultiHeadAttention` and feedforward network.
+        activation: string or `keras.activations`, defaults to "relu". the
+            activation function of feedforward network.
+        layer_norm_epsilon: float, defaults to 1e-5. The epsilon value in layer
+            normalization components.
+        kernel_initializer: string or `keras.initializers` initializer,
+            defaults to "glorot_uniform". The kernel initializer for
+            the dense and disentangled self-attention layers.
+        bias_initializer: string or `keras.initializers` initializer,
+            defaults to "zeros". The bias initializer for
+            the dense and disentangled self-attention layers.
+        name: string, defaults to None. The name of the layer.
+        **kwargs: other keyword arguments.
+
+    Examples:
+
+    ```python
+    # Create a single transformer encoder layer.
+    encoder = keras_nlp.layers.DebertaEncoder(
+        intermediate_dim=64, num_heads=8)
+
+    # Create a simple model containing the encoder.
+    input = keras.Input(shape=[10, 64])
+    output = encoder(input)
+    model = keras.Model(inputs=input, outputs=output)
+
+    # Call encoder on the inputs.
+    input_data = tf.random.uniform(shape=[2, 10, 64])
+    output = model(input_data)
+    ```
+    """
+
     def __init__(
         self,
         intermediate_dim,
@@ -45,6 +98,7 @@ class DebertaEncoder(keras.layers.Layer):
         self._input_shape = kwargs.pop("build_input_shape", None)
 
         super().__init__(name=name, **kwargs)
+
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.max_position_embeddings = max_position_embeddings
@@ -104,8 +158,30 @@ class DebertaEncoder(keras.layers.Layer):
         )
 
     def call(
-        self, inputs, rel_embeddings, padding_mask=None, attention_mask=None
+        self,
+        inputs,
+        rel_embeddings,
+        padding_mask=None,
+        attention_mask=None,
     ):
+        """Forward pass of `DebertaEncoder`.
+
+        Args:
+            inputs: a Tensor. The input data to `DebertaEncoder`, should be
+                of shape [batch_size, sequence_length, hidden_dim].
+            rel_embeddings: a Tensor. The relative position embedding matrix,
+                should be of shape `[batch_size, 2 * bucket_size, hidden_dim]`.
+            padding_mask: a boolean Tensor. It indicates if the token should be
+                masked because the token is introduced due to padding.
+                `padding_mask` should have shape [batch_size, sequence_length].
+                False means the certain certain is masked out.
+            attention_mask: a boolean Tensor. Customized mask used to mask out
+                certain tokens. `attention_mask` should have shape
+                [batch_size, sequence_length, sequence_length].
+
+        Returns:
+            A Tensor of the same shape as the `inputs`.
+        """
 
         if not self._built:
             self._build(inputs.shape)

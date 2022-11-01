@@ -25,6 +25,24 @@ def deberta_kernel_initializer(stddev=0.02):
 
 
 class RelativeEmbedding(keras.layers.Layer):
+    """Relative embedding layer.
+
+    This layer initializes an embedding matrix (of shape
+    `(2 * batch_size, hidden_dim)`) for relative position encoding. It then
+    applies layer normalization on the embedding matrix and returns the relative
+    embedding matrix. This is in accordance with the original DeBERTa V3
+    implementation.
+
+    Args:
+        hidden_dim: int. The size of the dense embedding.
+        bucket_size: int. The size of the relative position buckets.
+        layer_norm_epsilon: float. Epsilon value to initialize the layer
+            normalization layer.
+        kernel_initializer: string or `keras.initializers` initializer,
+            defaults to "glorot_uniform". The kernel initializer for
+            the dense embedding.
+    """
+
     def __init__(
         self,
         hidden_dim,
@@ -56,7 +74,7 @@ class RelativeEmbedding(keras.layers.Layer):
         rel_embeddings = self.rel_embeddings[tf.newaxis, :]
         rel_embeddings = self.layer_norm(rel_embeddings)
 
-        # Repeat `rel_embeddings` along axis = 0 for `batch_size` times. The
+        # Repeat `rel_embeddings` along axis = 0 `batch_size` times. The
         # resultant shape is `(batch_size, bucket_size * 2, hidden_dim)`.
         rel_embeddings = tf.repeat(rel_embeddings, repeats=batch_size, axis=0)
 
@@ -99,30 +117,32 @@ class Deberta(keras.Model):
         hidden_dim: int. The size of the transformer encoding layer.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
-        dropout: float. Dropout probability for the Transformer encoder.
-        max_sequence_length: int. The maximum sequence length this encoder can
-            consume. The sequence length of the input must be less than
-            `max_sequence_length`.
-        bucket_size: int. The size of the relative position buckets. Generally
-            kept as `max_sequence_length // 2`.
+        dropout: float, defaults to 0.1. Dropout probability for the
+            DeBERTa model.
+        max_sequence_length: int, defaults to 512. The maximum sequence length
+            this encoder can consume. The sequence length of the input must be
+            less than `max_sequence_length`.
+        bucket_size: int, defaults to 512. The size of the relative position
+            buckets. Generally equal to `max_sequence_length // 2`.
 
     Example usage:
     ```python
     input_data = {
         "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=50265),
+            shape=(1, 12), dtype=tf.int64, maxval=128100),
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
 
-    # Randomly initialized RoBERTa model
-    model = keras_nlp.models.Roberta(
-        vocabulary_size=50265,
+    # Randomly initialized DeBERTa model
+    model = keras_nlp.models.Deberta(
+        vocabulary_size=128100,
         num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
+        num_heads=6,
+        hidden_dim=384,
+        intermediate_dim=1536,
+        max_sequence_length=512,
+        bucket_size=256,
     )
 
     # Call the model on the input data.
