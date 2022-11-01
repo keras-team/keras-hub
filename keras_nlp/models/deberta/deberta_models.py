@@ -41,7 +41,7 @@ class RelativeEmbedding(keras.layers.Layer):
         self.epsilon = epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
-        self.rel_embedding = self.add_weight(
+        self.rel_embeddings = self.add_weight(
             shape=(self.bucket_size * 2, self.hidden_dim),
             initializer=self.kernel_initializer,
             name="rel_embedding",
