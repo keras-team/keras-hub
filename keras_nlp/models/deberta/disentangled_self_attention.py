@@ -126,7 +126,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         # `attention_scores` is of shape
         # `(batch_size, num_heads, sequence_length, sequence_length)`.
         attention_scores = tf.einsum(
-            "abcd,afcd->acbf",
+            "aecd,abcd->acbe",
             key,
             query,
         )
@@ -226,7 +226,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
         # c2p
         c2p_attn_scores = tf.einsum(
-            "abcd,afcd->acbf",
+            "aecd,abcd->acbe",
             query,
             pos_key,
         )
@@ -253,7 +253,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
         # p2c
         p2c_attn_scores = tf.einsum(
-            "abcd,afcd->acbf",
+            "aecd,abcd->acbe",
             key,
             pos_query,
         )
