@@ -226,9 +226,9 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
         # c2p
         c2p_attn_scores = tf.einsum(
-            "abcd,afcd->acbf",
-            query,
+            "aecd,abcd->acbe",
             pos_key,
+            query,
         )
         c2p_pos = tf.clip_by_value(
             rel_pos + rel_attn_span, 0, rel_attn_span * 2 - 1
@@ -253,9 +253,9 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
         # p2c
         p2c_attn_scores = tf.einsum(
-            "abcd,afcd->acbf",
-            key,
+            "aecd,abcd->acbe",
             pos_query,
+            key,
         )
         p2c_pos = tf.clip_by_value(
             -rel_pos + rel_attn_span, 0, rel_attn_span * 2 - 1
