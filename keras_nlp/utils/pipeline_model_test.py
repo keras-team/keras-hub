@@ -60,7 +60,7 @@ class DataPipeline(PipelineModel):
     def preprocess_features(self, x):
         return tf.strings.to_number(x)
 
-    def preprocess_data(self, x, y=None, sample_weight=None):
+    def preprocess_samples(self, x, y=None, sample_weight=None):
         return tf.strings.to_number(x), tf.strings.to_number(x), sample_weight
 
     def call(self, inputs):

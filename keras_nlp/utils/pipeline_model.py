@@ -112,7 +112,7 @@ class PipelineModel(keras.Model):
         """An overridable function which preprocesses labels."""
         return y
 
-    def preprocess_data(self, x, y=None, sample_weight=None):
+    def preprocess_samples(self, x, y=None, sample_weight=None):
         """An overridable function which preprocesses entire samples."""
         x, y = self.preprocess_features(x), self.preprocess_labels(y)
         return x, y, sample_weight
@@ -137,7 +137,7 @@ class PipelineModel(keras.Model):
 
         x = convert_inputs_to_dataset(x, y, sample_weight, batch_size)
         if self.include_preprocessing:
-            x = x.map(self.preprocess_data, tf.data.AUTOTUNE)
+            x = x.map(self.preprocess_samples, tf.data.AUTOTUNE)
             x = x.prefetch(tf.data.AUTOTUNE)
 
         if validation_data is not None:
@@ -171,14 +171,12 @@ class PipelineModel(keras.Model):
         kwargs.pop("_use_cached_eval_dataset", None)
         x = convert_inputs_to_dataset(x, y, sample_weight, batch_size)
         if self.include_preprocessing:
-            x = x.map(self.preprocess_data, tf.data.AUTOTUNE)
+            x = x.map(self.preprocess_samples, tf.data.AUTOTUNE)
             x = x.prefetch(tf.data.AUTOTUNE)
-
         return super().evaluate(
             x=x,
             y=None,
             batch_size=None,
-            sample_weight=None,
             **kwargs,
         )
 
@@ -241,7 +239,7 @@ class PipelineModel(keras.Model):
         **kwargs,
     ):
         if self.include_preprocessing:
-            x, y, sample_weight = self.preprocess_data(x, y, sample_weight)
+            x, y, sample_weight = self.preprocess_samples(x, y, sample_weight)
         return super().train_on_batch(
             x=x,
             y=y,
@@ -257,7 +255,7 @@ class PipelineModel(keras.Model):
         **kwargs,
     ):
         if self.include_preprocessing:
-            x, y, sample_weight = self.preprocess_data(x, y, sample_weight)
+            x, y, sample_weight = self.preprocess_samples(x, y, sample_weight)
         return super().test_on_batch(
             x=x,
             y=y,
