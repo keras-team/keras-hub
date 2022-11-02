@@ -41,8 +41,8 @@ class GPT2(keras.Model):
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
-    third party and subject to a separate license, found at:
-    https://github.com/openai/gpt-2
+    third party and subject to a separate license, available
+    [here](https://github.com/openai/gpt-2).
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.

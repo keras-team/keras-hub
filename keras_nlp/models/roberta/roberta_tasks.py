@@ -24,8 +24,8 @@ class RobertaClassifier(keras.Model):
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
-    third party and subject to a separate license, found at:
-    https://github.com/facebookresearch/fairseq
+    third party and subject to a separate license, available
+    [here](https://github.com/facebookresearch/fairseq).
 
     Args:
         backbone: A `keras_nlp.models.Roberta` instance.

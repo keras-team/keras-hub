@@ -45,8 +45,8 @@ class DistilBert(keras.Model):
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
-    third party and subject to a separate license, found at:
-    https://github.com/huggingface/transformers
+    third party and subject to a separate license, available
+    [here](https://github.com/huggingface/transformers).
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
