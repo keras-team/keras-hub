@@ -187,8 +187,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
     Examples:
 
-    Use in-memory vocabulary and merge list.
-
+    Tokenize
     >>> vocab = {"butter": 1, "fly": 2}
     >>> merge = ["b u", "t t", "e r", "bu tt", "butt er", "f l", "fl y"]
     >>> tokenizer = keras_nlp.tokenizers.BytePairTokenizer(vocab, merge)
@@ -205,23 +204,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     array([[1, 2],
            [1, 0]], dtype=int32)>
 
-    Use hosted vocabluary and merge list.
-
-    ```python
-    vocab_path = tf.keras.utils.get_file(
-        "vocab.json",
-        "https://storage.googleapis.com/keras-nlp/models/roberta_base/vocab.json",
-    )
-    merge_path = tf.keras.utils.get_file(
-        "merges.txt",
-        "https://storage.googleapis.com/keras-nlp/models/roberta_base/merges.txt",
-    )
-    tokenizer = BytePairTokenizer(
-        vocabulary=vocab_path, merges=merge_path
-    )
-    tokenizer("Butterfly is not flying butter!")
-    ```
-
     Detokenize
     >>> vocab = {"butter": 1, "fly": 2}
     >>> merge = ["b u", "t t", "e r", "bu tt", "butt er", "f l", "fl y"]
@@ -229,7 +211,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     >>> tokenizer.detokenize([[1, 2]])
     <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'butterfly'],
     dtype=object)>
-
     """
 
     def __init__(
