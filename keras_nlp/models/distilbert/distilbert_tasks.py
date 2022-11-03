@@ -58,7 +58,7 @@ class DistilBertClassifier(keras.Model):
         backbone,
         num_classes,
         hidden_dim=None,
-        dropout=0.0,
+        dropout=0.2,
         **kwargs,
     ):
         inputs = backbone.input
@@ -66,9 +66,11 @@ class DistilBertClassifier(keras.Model):
             hidden_dim = backbone.hidden_dim
 
         x = backbone(inputs)[:, backbone.cls_token_index, :]
-        x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
         x = keras.layers.Dense(
-            hidden_dim, activation="tanh", name="pooled_dense"
+            hidden_dim,
+            activation="relu",
+            kernel_initializer=distilbert_kernel_initializer(),
+            name="pooled_dense",
         )(x)
         x = keras.layers.Dropout(dropout, name="classifier_dropout")(x)
         outputs = keras.layers.Dense(
