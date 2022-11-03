@@ -57,9 +57,6 @@ class DataPipeline(PipelineModel):
         super().__init__(**kwargs)
         self.dense = keras.layers.Dense(1)
 
-    def preprocess_features(self, x):
-        return tf.strings.to_number(x)
-
     def preprocess_samples(self, x, y=None, sample_weight=None):
         return tf.strings.to_number(x), tf.strings.to_number(x), sample_weight
 

@@ -20,6 +20,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
+
 try:
     import pandas as pd
 except ImportError:
@@ -114,8 +116,10 @@ class PipelineModel(keras.Model):
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
         """An overridable function which preprocesses entire samples."""
-        x, y = self.preprocess_features(x), self.preprocess_labels(y)
-        return x, y, sample_weight
+        x = self.preprocess_features(x)
+        if y is not None:
+            y = self.preprocess_labels(y)
+        return pack_x_y_sample_weight(x, y, sample_weight)
 
     # ========================================================================
     # Below are overrides to keras.Model methods to apply the functions above.
@@ -188,7 +192,7 @@ class PipelineModel(keras.Model):
     ):
         x = convert_inputs_to_dataset(x, None, None, batch_size)
         if self.include_preprocessing:
-            x = x.map(self.preprocess_features, tf.data.AUTOTUNE)
+            x = x.map(self.preprocess_samples, tf.data.AUTOTUNE)
             x = x.prefetch(tf.data.AUTOTUNE)
 
         return super().predict(
@@ -205,7 +209,8 @@ class PipelineModel(keras.Model):
         if include_preprocessing is None:
             include_preprocessing = self.include_preprocessing
         if include_preprocessing and not tracing:
-            inputs = self.preprocess_features(inputs)
+            data = self.preprocess_samples(inputs)
+            inputs, _, _ = tf.keras.utils.unpack_x_y_sample_weight(data)
         return super().__call__(inputs, **kwargs)
 
     def train_step(self, data):
@@ -239,7 +244,8 @@ class PipelineModel(keras.Model):
         **kwargs,
     ):
         if self.include_preprocessing:
-            x, y, sample_weight = self.preprocess_samples(x, y, sample_weight)
+            data = self.preprocess_samples(x, y, sample_weight)
+            x, y, sample_weight = tf.keras.utils.unpack_x_y_sample_weight(data)
         return super().train_on_batch(
             x=x,
             y=y,
@@ -255,7 +261,8 @@ class PipelineModel(keras.Model):
         **kwargs,
     ):
         if self.include_preprocessing:
-            x, y, sample_weight = self.preprocess_samples(x, y, sample_weight)
+            data = self.preprocess_samples(x, y, sample_weight)
+            x, y, sample_weight = tf.keras.utils.unpack_x_y_sample_weight(data)
         return super().test_on_batch(
             x=x,
             y=y,
@@ -269,7 +276,8 @@ class PipelineModel(keras.Model):
         **kwargs,
     ):
         if self.include_preprocessing:
-            x = self.preprocess_features(x)
+            data = self.preprocess_samples(x)
+            x, _, _ = tf.keras.utils.unpack_x_y_sample_weight(data)
         return super().predict_on_batch(
             x=x,
             **kwargs,
