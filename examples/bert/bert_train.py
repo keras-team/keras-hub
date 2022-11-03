@@ -380,7 +380,7 @@ def main(_):
 
     with strategy.scope():
         # Create a Bert model the input config.
-        encoder = keras_nlp.models.BertCustom(
+        encoder = keras_nlp.models.Bert(
             vocabulary_size=len(vocab), **model_config
         )
         # Make sure model has been called.

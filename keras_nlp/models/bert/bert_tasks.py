@@ -28,16 +28,6 @@ CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
 
     Examples:
     ```python
-    # Randomly initialized BERT encoder
-    model = keras_nlp.models.BertCustom(
-        vocabulary_size=30522,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
-    )
-
     # Call classifier on the inputs.
     input_data = {{
         "token_ids": tf.random.uniform(
@@ -50,7 +40,17 @@ CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
     }}
-    classifier = keras_nlp.models.BertClassifier(model, 4, name="classifier")
+
+    # Randomly initialized BERT encoder
+    backbone = keras_nlp.models.Bert(
+        vocabulary_size=30522,
+        num_layers=12,
+        num_heads=12,
+        hidden_dim=768,
+        intermediate_dim=3072,
+        max_sequence_length=12
+    )
+    classifier = keras_nlp.models.BertClassifier(backbone, 4, name="classifier")
     logits = classifier(input_data)
 
     # String backbone specification
