@@ -189,20 +189,32 @@ whose names contain `import`:
 pytest keras_nlp/keras_nlp/integration_tests/import_test.py -k="import"
 ```
 
-### Run all tests
+### Run the full test suite
 
-You can run the full testing suite by simply invoking pytest:
+You can run the default testing suite by simply invoking pytest:
 
 ```shell
 pytest
 ```
 
-Some slow integration tests (e.g. tests that download large files) are
-disabled by default. You can include these by running:
+We annotate tests that are slower or require a network connection as "large",
+and by default `pytest` will skip these tests. We run large tests continuously
+on GCP. You can specify these by running:
 
 ```shell
-pytest --runslow
+pytest --run_large
 ```
+
+Finally, for tests that are very slow and resource intensive (e.g. downloading
+a 5GB checkpoint), we use an "extra_large" annotation and do not run them
+continuously at all. You can specify these by running:
+
+```shell
+pytest --run_extra_large
+```
+
+When running "extra_large" tests, we recommend also specify a specific test file
+so you aren't waiting around forever!
 
 ## Formatting Code
 

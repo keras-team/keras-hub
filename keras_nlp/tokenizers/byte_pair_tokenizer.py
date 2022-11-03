@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" Byte-pair encoder implementation.
+"""Byte-pair encoder implementation.
 
 This file implements the same logic as openai BPE:
 https://github.com/openai/gpt-2/blob/master/src/encoder.py,
@@ -159,12 +159,12 @@ def create_static_hashtable(keys, values, default):
 class BytePairTokenizer(tokenizer.Tokenizer):
     """Bype-pair encoding tokenizer layer.
 
-    This BPE tokenizer provides the same funtionality as official GPT2
+    This BPE tokenizer provides the same functionality as the official GPT-2
     tokenizer. Given the same `vocabulary` which maps tokens to ids, and `merges`
     which describes BPE merge rules, it should provide the same output
-    as openai implementation (https://github.com/openai/gpt-2/blob/master/src/encoder.py).
-    Different from openai, this implementation is graph-compatible, so you can
-    use it within a tf.data pipeline.
+    as OpenAI implementation (https://github.com/openai/gpt-2/blob/master/src/encoder.py).
+    Different from OpenAI, this implementation is graph-compatible, so you can
+    use it within a `tf.data` pipeline.
 
     If input is a batch of strings (rank > 0):
     By default, the layer will output a `tf.RaggedTensor` where the last
@@ -187,8 +187,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
     Examples:
 
-    Use in-momery vocabulary and merge list.
-
+    Tokenize
     >>> vocab = {"butter": 1, "fly": 2}
     >>> merge = ["b u", "t t", "e r", "bu tt", "butt er", "f l", "fl y"]
     >>> tokenizer = keras_nlp.tokenizers.BytePairTokenizer(vocab, merge)
@@ -205,23 +204,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     array([[1, 2],
            [1, 0]], dtype=int32)>
 
-    Use hosted vocabluary and merge list.
-
-    ```python
-    vocab_path = tf.keras.utils.get_file(
-        "vocab.json",
-        "https://storage.googleapis.com/keras-nlp/models/roberta_base/vocab.json",
-    )
-    merge_path = tf.keras.utils.get_file(
-        "merges.txt",
-        "https://storage.googleapis.com/keras-nlp/models/roberta_base/merges.txt",
-    )
-    tokenizer = BytePairTokenizer(
-        vocabulary=vocab_path, merges=merge_path
-    )
-    tokenizer("Butterfly is not flying butter!")
-    ```
-
     Detokenize
     >>> vocab = {"butter": 1, "fly": 2}
     >>> merge = ["b u", "t t", "e r", "bu tt", "butt er", "f l", "fl y"]
@@ -229,7 +211,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     >>> tokenizer.detokenize([[1, 2]])
     <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'butterfly'],
     dtype=object)>
-
     """
 
     def __init__(
@@ -244,7 +225,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             kwargs["dtype"] = tf.int32
         else:
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
-            if not dtype.is_integer:
+            if not dtype.is_integer and dtype != tf.string:
                 raise ValueError(
                     "Output dtype must be an integer type or a string. "
                     f"Received: `dtype={dtype}`"
@@ -484,28 +465,29 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             lambda: cache_lookup,
         )
 
-        # Encode merged tokens.
-        tokenized_words = tf.strings.split(tokenized_words, sep=" ")
-        encoding = self.token_to_id_map.lookup(tokenized_words)
+        tokens = tf.strings.split(tokenized_words, sep=" ")
+        if self.compute_dtype != tf.string:
+            # Encode merged tokens.
+            tokens = self.token_to_id_map.lookup(tokens)
 
         # Unflatten to match input.
-        encoding = tf.RaggedTensor.from_row_splits(
-            encoding.flat_values,
-            tf.gather(encoding.row_splits, token_row_splits),
+        tokens = tf.RaggedTensor.from_row_splits(
+            tokens.flat_values,
+            tf.gather(tokens.row_splits, token_row_splits),
         )
 
         # Convert to a dense output if `sequence_length` is set.
         if self.sequence_length:
-            output_shape = encoding.shape.as_list()
+            output_shape = tokens.shape.as_list()
             output_shape[-1] = self.sequence_length
-            encoding = encoding.to_tensor(shape=output_shape)
+            tokens = tokens.to_tensor(shape=output_shape)
 
         # Convert to a dense output if input in scalar
         if scalar_input:
-            encoding = tf.squeeze(encoding, 0)
-            tf.ensure_shape(encoding, shape=[self.sequence_length])
+            tokens = tf.squeeze(tokens, 0)
+            tf.ensure_shape(tokens, shape=[self.sequence_length])
 
-        return encoding
+        return tokens
 
     def detokenize(self, inputs):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):

@@ -31,7 +31,7 @@ MERGE_PATH = keras.utils.get_file(
 )
 
 
-@pytest.mark.slow
+@pytest.mark.large
 class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
@@ -51,6 +51,20 @@ class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         input_data = tf.convert_to_tensor(["brown.", "black."])
         encoded = self.tokenizer(input_data)
         self.assertAllEqual(encoded, expected)
+
+    def test_tokenize_string_output(self):
+        input_data = ["quick brown fox.", "slow black bear."]
+        tokenizer = BytePairTokenizer(
+            vocabulary=VOCAB_PATH, merges=MERGE_PATH, dtype=tf.string
+        )
+        call_output = tokenizer(input_data)
+        expected = tf.ragged.constant(
+            [
+                ["quick", "Ġbrown", "Ġfox", "."],
+                ["slow", "Ġblack", "Ġbear", "."],
+            ]
+        )
+        self.assertAllEqual(call_output, expected)
 
     def test_tokenize_scalar_input(self):
         input_data = "brown."
