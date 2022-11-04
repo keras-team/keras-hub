@@ -154,6 +154,7 @@ class DistilBert(keras.Model):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
+        self.cls_token_index = 0
 
     def get_config(self):
         return {
