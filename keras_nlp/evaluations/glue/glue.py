@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import csv
+import os
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -35,6 +36,18 @@ flags.DEFINE_integer(
     "Batch size of data.",
 )
 
+flags.DEFINE_integer(
+    "epochs",
+    2,
+    "Number of epochs to run finetuning.",
+)
+
+flags.DEFINE_float(
+    "learning_rate",
+    5e-5,
+    "Learning rate",
+)
+
 flags.DEFINE_string(
     "submission_file_path",
     None,
@@ -42,9 +55,15 @@ flags.DEFINE_string(
 )
 
 flags.DEFINE_bool(
-    "use_default_classification_head",
+    "use_default_classifier",
     True,
-    "If using the default classification head.",
+    "If using the default classifier.",
+)
+
+flags.DEFINE_string(
+    "finetuning_model_save_path",
+    None,
+    "The path to save the finetuning model. If None, the model is not saved.",
 )
 
 
@@ -123,7 +142,8 @@ def generate_submission_files(finetuning_model, test_ds):
         "qnli": ["entailment", "not_entailment"],
         "rte": ["entailment", "not_entailment"],
     }
-
+    if not os.path.exists(FLAGS.submission_file_path):
+        os.makedirs(FLAGS.submission_file_path)
     filename = FLAGS.submission_file_path + "/" + filenames[FLAGS.task_name]
 
     # This format is used for distribution strategy compatibility.
@@ -154,6 +174,7 @@ def generate_submission_files(finetuning_model, test_ds):
                 else:
                     pred_value = pred[j]
                 writer.writerow([idx, pred_value])
+            break
 
 
 @keras.utils.register_keras_serializable(package="custom")
@@ -206,35 +227,30 @@ class GlueClassifier(keras.Model):
 def main(_):
     train_ds, test_ds, val_ds = load_data(FLAGS.task_name)
 
-    bert_model = keras_nlp.models.Bert.from_preset("bert_small_uncased_en")
+    # ----- Custom code block starts -----
+    bert_model = keras_nlp.models.Bert.from_preset("bert_tiny_uncased_en")
     bert_preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-        "bert_small_uncased_en"
+        "bert_tiny_uncased_en"
     )
 
-    def preprocess_data(feature, label):
+    def preprocess_fn(feature, label):
         return bert_preprocessor(feature), label
 
-    train_ds = (
-        train_ds.map(preprocess_data)
-        .batch(FLAGS.batch_size)
-        .prefetch(tf.data.AUTOTUNE)
-    )
-    test_ds = (
-        test_ds.map(preprocess_data)
-        .batch(FLAGS.batch_size)
-        .prefetch(tf.data.AUTOTUNE)
-    )
-    val_ds = (
-        val_ds.map(preprocess_data)
-        .batch(FLAGS.batch_size)
-        .prefetch(tf.data.AUTOTUNE)
-    )
+    # ----- Custom code block ends -----
 
-    if FLAGS.use_default_classification_head:
+    train_ds = preprocess_data(preprocess_fn, train_ds)
+    val_ds = preprocess_data(preprocess_fn, val_ds)
+    test_ds = preprocess_data(preprocess_fn, test_ds)
+
+    if FLAGS.use_default_classifier:
+
+        # ----- Custom code block starts -----
         # `bert_model` outputs a dictionary, so we need a wrapper model to
         # output the single representation, i.e., "pooled_output" in the output.
         inputs = bert_model.inputs
         outputs = bert_model(inputs)["pooled_output"]
+        # ----- Custom code block ends -----
+
         model_wrapper = keras.Model(inputs=inputs, outputs=outputs)
         # Build the classifier based on the wrapper model.
         finetuning_model = GlueClassifier(
@@ -242,22 +258,29 @@ def main(_):
             num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
         )
     else:
-        # If `use_default_classification_head=False`, use the custom classifier.
+        # ----- Custom code block starts -----
+        # If `use_default_classifier=False`, use the custom classifier.
         finetuning_model = keras_nlp.models.BertClassifier(
             backbone="bert_small_uncased_en",
             num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
         )
+        # ----- Custom code block ends -----
 
     finetuning_model.compile(
-        optimizer=tf.keras.optimizers.Adam(5e-5),
+        optimizer=tf.keras.optimizers.Adam(FLAGS.learning_rate),
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         metrics=[keras.metrics.SparseCategoricalAccuracy()],
     )
 
-    finetuning_model.fit(train_ds, validation_data=val_ds)
+    finetuning_model.fit(
+        train_ds, validation_data=val_ds, epochs=FLAGS.epochs, steps_per_epoch=1
+    )
 
     if FLAGS.submission_file_path:
         generate_submission_files(finetuning_model, test_ds)
+
+    if FLAGS.finetuning_model_save_path:
+        finetuning_model.save(FLAGS.finetuning_model_save_path)
 
 
 if __name__ == "__main__":
