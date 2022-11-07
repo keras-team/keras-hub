@@ -43,6 +43,11 @@ class DistilBert(keras.Model):
     dimensions. To load preset architectures and weights, use the `from_presets`
     constructor.
 
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind. The underlying model is provided by a
+    third party and subject to a separate license, available
+    [here](https://github.com/huggingface/transformers).
+
     Args:
         vocabulary_size: int. The size of the token vocabulary.
         num_layers: int. The number of transformer layers.
