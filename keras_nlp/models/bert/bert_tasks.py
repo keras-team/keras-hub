@@ -21,6 +21,9 @@ from keras_nlp.models.bert.bert_models import bert_kernel_initializer
 # TODO(jbischof): Find more scalable way to list checkpoints.
 CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
 
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind.
+
     Args:
         backbone: A string or `keras_nlp.models.Bert` instance. If a string,
             should be one of {names}.
