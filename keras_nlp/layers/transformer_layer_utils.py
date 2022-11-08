@@ -19,6 +19,8 @@ from absl import logging
 
 
 def compute_causal_mask(inputs):
+    if isinstance(inputs, tf.RaggedTensor):
+        inputs = inputs.to_tensor()
     input_shape = tf.shape(inputs)
     batch_size, sequence_length = input_shape[0], input_shape[1]
     i = tf.range(sequence_length)[:, tf.newaxis]

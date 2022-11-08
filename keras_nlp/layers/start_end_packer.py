@@ -88,7 +88,7 @@ class StartEndPacker(keras.layers.Layer):
 
     def __init__(
         self,
-        sequence_length,
+        sequence_length=None,
         start_value=None,
         end_value=None,
         pad_value=None,
@@ -130,14 +130,16 @@ class StartEndPacker(keras.layers.Layer):
             end_token_id_tensor = tf.fill((batch_size, 1), self.end_value)
 
             # Trim to leave room for end token.
-            inputs = inputs[..., : self.sequence_length - 1]
+            if self.sequence_length:
+                inputs = inputs[..., : self.sequence_length - 1]
             inputs = tf.concat([inputs, end_token_id_tensor], axis=-1)
 
         # Pad to desired length.
-        inputs = inputs.to_tensor(
-            default_value=self.pad_value,
-            shape=(batch_size, self.sequence_length),
-        )
+        if self.sequence_length:
+            inputs = inputs.to_tensor(
+                default_value=self.pad_value,
+                shape=(batch_size, self.sequence_length),
+            )
 
         if input_is_1d:
             inputs = tf.squeeze(inputs, axis=0)
