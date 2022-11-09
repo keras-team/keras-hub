@@ -27,22 +27,15 @@ from keras_nlp.models.utils import classproperty
 class BertClassifier(keras.Model):
     """BERT encoder model with a classification head.
 
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind.
+
     Args:
         backbone: A `keras_nlp.models.Bert` instance.
         num_classes: int. Number of classes to predict.
 
     Examples:
     ```python
-    # Randomly initialized BERT encoder
-    encoder = keras_nlp.models.Bert(
-        vocabulary_size=30522,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
-    )
-
     # Call classifier on the inputs.
     input_data = {{
         "token_ids": tf.random.uniform(
@@ -55,7 +48,17 @@ class BertClassifier(keras.Model):
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
     }}
-    classifier = keras_nlp.models.BertClassifier(encoder, 4, name="classifier")
+
+    # Randomly initialized BERT encoder
+    backbone = keras_nlp.models.Bert(
+        vocabulary_size=30522,
+        num_layers=12,
+        num_heads=12,
+        hidden_dim=768,
+        intermediate_dim=3072,
+        max_sequence_length=12
+    )
+    classifier = keras_nlp.models.BertClassifier(backbone, 4, name="classifier")
     logits = classifier(input_data)
 
     # Access backbone programatically (e.g., to change `trainable`)

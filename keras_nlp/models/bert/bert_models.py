@@ -44,6 +44,9 @@ class Bert(keras.Model):
     encoder with any number of layers, heads, and embedding dimensions. To load
     preset architectures and weights, use the `from_presets` constructor.
 
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind.
+
     Args:
         vocabulary_size: int. The size of the token vocabulary.
         num_layers: int. The number of transformer layers.

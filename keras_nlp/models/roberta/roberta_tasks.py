@@ -22,6 +22,11 @@ from keras_nlp.models.roberta.roberta_models import roberta_kernel_initializer
 class RobertaClassifier(keras.Model):
     """RoBERTa encoder model with a classification head.
 
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind. The underlying model is provided by a
+    third party and subject to a separate license, available
+    [here](https://github.com/facebookresearch/fairseq).
+
     Args:
         backbone: A `keras_nlp.models.Roberta` instance.
         num_classes: int. Number of classes to predict.
