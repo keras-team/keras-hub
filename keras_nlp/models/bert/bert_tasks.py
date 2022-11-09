@@ -157,11 +157,18 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT classification model from preset arc
     }}
 
     # Load architecture and weights from preset
-    classifier = BertClassifier.from_preset("bert_base_uncased_en")
+    classifier = BertClassifier.from_preset(
+        "bert_base_uncased_en",
+        num_classes=4,
+    )
     output = classifier(input_data)
 
     # Load randomly initalized model from preset architecture
-    classifier = Bert.from_preset("bert_base_uncased_en", load_weights=False)
+    classifier = BertClassifier.from_preset(
+        "bert_base_uncased_en",
+        load_weights=False,
+        num_classes=4,
+    )
     output = classifier(input_data)
     ```
     """
