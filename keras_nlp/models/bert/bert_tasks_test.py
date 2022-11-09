@@ -58,9 +58,33 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call_classifier(self):
         self.classifier(self.input_batch)
 
-        # Not a checkpoint name
+    def test_valid_call_presets(self):
+        # Test preset loading without weights
+        for preset in BertClassifier.presets:
+            classifier = BertClassifier.from_preset(preset, load_weights=False)
+            input_data = {
+                "token_ids": tf.ones(
+                    (self.batch_size, self.backbone.max_sequence_length),
+                    dtype="int32",
+                ),
+                "segment_ids": tf.ones(
+                    (self.batch_size, self.backbone.max_sequence_length),
+                    dtype="int32",
+                ),
+                "padding_mask": tf.ones(
+                    (self.batch_size, self.backbone.max_sequence_length),
+                    dtype="int32",
+                ),
+            }
+            classifier(input_data)
+
+    def test_unknown_preset_error(self):
+        # Not a preset name
         with self.assertRaises(ValueError):
-            BertClassifier("bert_clowntown", 4, name="classifier")
+            BertClassifier.from_preset(
+                "bert_base_uncased_clowntown",
+                load_weights=False,
+            )
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)

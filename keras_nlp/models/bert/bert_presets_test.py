@@ -93,9 +93,11 @@ class BertPresetTest(tf.test.TestCase):
             }
             model(input_data)
 
-    def test_load_bert_backbone_string(self):
-        for preset in Bert.presets:
-            classifier = BertClassifier(preset, 4, name="classifier")
+    def test_load_bert_classifier(self):
+        for preset in BertClassifier.presets:
+            classifier = BertClassifier.from_preset(
+                preset, num_classes=4, name="classifier"
+            )
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512),
