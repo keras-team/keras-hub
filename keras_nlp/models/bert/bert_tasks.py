@@ -167,7 +167,7 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT classification model from preset arc
     """
 
 setattr(
-    Bert.from_preset.__func__,
+    BertClassifier.from_preset.__func__,
     "__doc__",
-    FROM_PRESET_DOCSTRING.format(names=", ".join(Bert.presets)),
+    FROM_PRESET_DOCSTRING.format(names=", ".join(BertClassifier.presets)),
 )
