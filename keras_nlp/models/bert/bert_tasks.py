@@ -69,10 +69,6 @@ class BertClassifier(keras.Model):
         num_classes=2,
         **kwargs,
     ):
-        # Load backbone from string identifier
-        # TODO(jbischof): create util function when ready to load backbones in
-        # other task classes (e.g., load_backbone_from_string())
-
         inputs = backbone.input
         pooled = backbone(inputs)["pooled_output"]
         outputs = keras.layers.Dense(
@@ -156,7 +152,7 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT classification model from preset arc
         ),
     }}
 
-    # Load architecture and weights from preset
+    # Load backbone architecture and weights from preset
     classifier = BertClassifier.from_preset(
         "bert_base_uncased_en",
         num_classes=4,
