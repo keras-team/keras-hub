@@ -62,7 +62,7 @@ class BertPresetSmokeTest(tf.test.TestCase):
             "segment_ids": tf.constant([[0, 0, 0, 0]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
-        model = BertClassifier(
+        model = BertClassifier.from_preset(
             "bert_tiny_uncased_en",
         )
         # We don't assert output values, as the head weights are random.
@@ -110,19 +110,6 @@ class BertPresetTest(tf.test.TestCase):
                 "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
             }
             classifier(input_data)
-
-    def test_classifier_default_args(self):
-        classifier = BertClassifier()
-        input_data = {
-            "token_ids": tf.random.uniform(
-                shape=(1, 512),
-                dtype=tf.int64,
-                maxval=classifier.backbone.vocabulary_size,
-            ),
-            "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
-            "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
-        }
-        classifier(input_data)
 
     def test_load_preprocessors(self):
         for preset in BertPreprocessor.presets:
