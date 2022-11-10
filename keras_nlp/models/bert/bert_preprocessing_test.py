@@ -65,7 +65,7 @@ class BertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
 
     @unittest.mock.patch("tensorflow.keras.utils.get_file")
     def test_valid_call_presets(self, get_file_mock):
-        """Ensure presets have necessary structure, but no RCPs."""
+        """Ensure presets have necessary structure, but no RPCs."""
         input_data = ["THE QUICK BROWN FOX."]
         get_file_mock.return_value = self.vocab
         for preset in BertTokenizer.presets:
@@ -183,7 +183,7 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
 
     @unittest.mock.patch("tensorflow.keras.utils.get_file")
     def test_valid_call_presets(self, get_file_mock):
-        """Ensure presets have necessary structure, but no RCPs."""
+        """Ensure presets have necessary structure, but no RPCs."""
         input_data = ["THE QUICK BROWN FOX."]
         get_file_mock.return_value = self.vocab
         for preset in BertPreprocessor.presets:

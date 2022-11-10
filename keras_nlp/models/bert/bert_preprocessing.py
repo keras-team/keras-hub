@@ -28,16 +28,14 @@ from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 class BertTokenizer(WordPieceTokenizer):
     """A BERT tokenizer using WordPiece subword segmentation.
 
-    This tokenizer class will tokenize raw strings into integer sequences, and
+    This tokenizer class will tokenize raw strings into integer sequences and
     is based on `keras_nlp.tokenizers.WordPieceTokenizer`. Unlike the
     underlying tokenizer, it will check for all special tokens needed by BERT
-    models, and provides a `from_preset()` method to automatically download
+    models and provides a `from_preset()` method to automatically download
     a matching vocabulary for a BERT preset.
 
-    This tokenizer will not do any truncation or padding of inputs by default.
-    It can be used with a `keras_nlp.models.BertPreprocessor` layer for common
-    input packing, or used directly with a standalone step to combine sequences
-    with any truncation, padding, and special token packing desired.
+    This tokenizer does not provide truncation or padding of inputs. It can be
+    combined with a `keras_nlp.models.BertPreprocessor` layer for input packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -54,7 +52,6 @@ class BertTokenizer(WordPieceTokenizer):
             tokenization.
 
     Examples:
-
 
     Batched input.
     >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]"]
@@ -150,20 +147,15 @@ FROM_PRESET_DOCSTRING = """Instantiate a BERT tokenizer from preset vocabulary.
 
     Examples:
     ```python
+    # Load a preset tokenizer.
     tokenizer = keras_nlp.models.BertTokenizer.from_preset(
         "bert_base_uncased_en",
     )
 
-    # Tokenize a single sentence directly.
+    # Tokenize some input.
     tokenizer("The quick brown fox tripped.")
 
-    # Tokenize a batch of sentences directly.
-    tokenizer([
-        "The quick brown fox tripped.",
-        "Call me Ishmael.",
-    ])
-
-    # Detokenize a sequence of ints to a single string.
+    # Detokenize some input.
     tokenizer.detokenize([5, 6, 7, 8, 9])
     ```
     """
@@ -247,7 +239,7 @@ class BertPreprocessor(keras.layers.Layer):
 
     def __init__(
         self,
-        tokenizer="bert_base_uncased_en",
+        tokenizer,
         sequence_length=512,
         truncate="round_robin",
         **kwargs,
