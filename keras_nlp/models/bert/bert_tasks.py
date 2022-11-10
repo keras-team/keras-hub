@@ -13,20 +13,25 @@
 # limitations under the License.
 """BERT task specific models and heads."""
 
+import copy
+
 from tensorflow import keras
 
 from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_models import bert_kernel_initializer
+from keras_nlp.models.bert.bert_presets import backbone_presets
+from keras_nlp.models.utils import classproperty
 
-# TODO(jbischof): Find more scalable way to list checkpoints.
-CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
+
+@keras.utils.register_keras_serializable(package="keras_nlp")
+class BertClassifier(keras.Model):
+    """BERT encoder model with a classification head.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind.
 
     Args:
-        backbone: A string or `keras_nlp.models.Bert` instance. If a string,
-            should be one of {names}.
+        backbone: A `keras_nlp.models.Bert` instance.
         num_classes: int. Number of classes to predict.
 
     Examples:
@@ -56,37 +61,17 @@ CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
     classifier = keras_nlp.models.BertClassifier(backbone, 4, name="classifier")
     logits = classifier(input_data)
 
-    # String backbone specification
-    classifier = keras_nlp.models.BertClassifier(
-        "bert_base_uncased_en", 4, name="classifier"
-    )
-    logits = classifier(input_data)
-
     # Access backbone programatically (e.g., to change `trainable`)
     classifier.backbone.trainable = False
     ```
-"""
+    """
 
-
-@keras.utils.register_keras_serializable(package="keras_nlp")
-class BertClassifier(keras.Model):
     def __init__(
         self,
-        backbone="bert_base_uncased_en",
+        backbone,
         num_classes=2,
         **kwargs,
     ):
-        # Load backbone from string identifier
-        # TODO(jbischof): create util function when ready to load backbones in
-        # other task classes (e.g., load_backbone_from_string())
-        if isinstance(backbone, str):
-            if backbone not in Bert.presets:
-                raise ValueError(
-                    "`backbone` must be one of "
-                    f"""{", ".join(Bert.presets)}. Received: {backbone}."""
-                )
-            backbone = Bert.from_preset(backbone)
-
         inputs = backbone.input
         pooled = backbone(inputs)["pooled_output"]
         outputs = keras.layers.Dense(
@@ -123,9 +108,72 @@ class BertClassifier(keras.Model):
             config["backbone"] = keras.layers.deserialize(config["backbone"])
         return cls(**config)
 
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        load_weights=True,
+        **kwargs,
+    ):
+        # Check if preset is backbone-only model
+        if preset in Bert.presets:
+            backbone = Bert.from_preset(preset, load_weights)
+            return cls(backbone, **kwargs)
+
+        # Otherwise must be one of class presets
+        # Currently no classifier-level presets, so must throw.
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+
+
+FROM_PRESET_DOCSTRING = """Instantiate BERT classification model from preset architecture and
+    weights.
+
+    Args:
+        preset: string. Must be one of {names}.
+        load_weights: Whether to load pre-trained weights into model. Defaults
+            to `True`.
+
+    Examples:
+    ```python
+    input_data = {{
+        "token_ids": tf.random.uniform(
+            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
+        ),
+        "segment_ids": tf.constant(
+            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+        ),
+        "padding_mask": tf.constant(
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+        ),
+    }}
+
+    # Load backbone architecture and weights from preset
+    classifier = BertClassifier.from_preset(
+        "bert_base_uncased_en",
+        num_classes=4,
+    )
+    output = classifier(input_data)
+
+    # Load randomly initalized model from preset architecture
+    classifier = BertClassifier.from_preset(
+        "bert_base_uncased_en",
+        load_weights=False,
+        num_classes=4,
+    )
+    output = classifier(input_data)
+    ```
+    """
 
 setattr(
-    BertClassifier,
+    BertClassifier.from_preset.__func__,
     "__doc__",
-    CLASSIFIER_DOCSTRING.format(names=", ".join(Bert.presets)),
+    FROM_PRESET_DOCSTRING.format(names=", ".join(BertClassifier.presets)),
 )
