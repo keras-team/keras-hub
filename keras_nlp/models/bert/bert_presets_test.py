@@ -18,6 +18,7 @@ import tensorflow as tf
 
 from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
+from keras_nlp.models.bert.bert_preprocessing import BertTokenizer
 from keras_nlp.models.bert.bert_tasks import BertClassifier
 
 
@@ -29,6 +30,14 @@ class BertPresetSmokeTest(tf.test.TestCase):
     This only tests the smallest weights we have available. Run with:
     `pytest keras_nlp/models/bert/bert_presets_test.py --run_large`
     """
+
+    def test_tokenizer_output(self):
+        tokenizer = BertTokenizer.from_preset(
+            "bert_tiny_uncased_en",
+        )
+        outputs = tokenizer("The quick brown fox.")
+        expected_outputs = [1996, 4248, 2829, 4419, 1012]
+        self.assertAllEqual(outputs, expected_outputs)
 
     def test_preprocessor_output(self):
         tokenizer = BertPreprocessor.from_preset(
@@ -110,6 +119,11 @@ class BertPresetTest(tf.test.TestCase):
                 "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
             }
             classifier(input_data)
+
+    def test_load_tokenizers(self):
+        for preset in BertTokenizer.presets:
+            tokenizer = BertTokenizer.from_preset(preset)
+            tokenizer("The quick brown fox.")
 
     def test_load_preprocessors(self):
         for preset in BertPreprocessor.presets:
