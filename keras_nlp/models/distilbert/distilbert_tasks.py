@@ -24,6 +24,11 @@ from keras_nlp.models.distilbert.distilbert_models import (
 class DistilBertClassifier(keras.Model):
     """DistilBERT encoder model with a classification head.
 
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind. The underlying model is provided by a
+    third party and subject to a separate license, available
+    [here](https://github.com/huggingface/transformers).
+
     Args:
         backbone: A `keras_nlp.models.DistilBert` instance.
         num_classes: int. Number of classes to predict.
