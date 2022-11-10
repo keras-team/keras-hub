@@ -215,6 +215,11 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             )
         get_file_mock.assert_called_once()
 
+    def test_preset_docstring(self):
+        """Check we did our docstring formatting correctly."""
+        for name in BertPreprocessor.presets:
+            self.assertRegex(BertPreprocessor.from_preset.__doc__, name)
+
     @parameterized.named_parameters(
         ("save_format_tf", "tf"), ("save_format_h5", "h5")
     )

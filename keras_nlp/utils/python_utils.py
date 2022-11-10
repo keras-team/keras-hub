@@ -11,9 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Utilities for models and preprocessors."""
+"""Utilities with miscellaneous python extensions."""
 
 
 class classproperty(property):
+    """Define a class level property."""
+
     def __get__(self, _, owner_cls):
         return self.fget(owner_cls)
+
+
+def format_docstring(**replacements):
+    """Format a python docstring using a dictionary of replacements."""
+
+    def decorate(obj):
+        obj.__doc__ = obj.__doc__.format(**replacements)
+        return obj
+
+    return decorate
