@@ -25,13 +25,155 @@ from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
+class BertTokenizer(WordPieceTokenizer):
+    """A BERT tokenizer using WordPiece subword segmentation.
+
+    This tokenizer class will tokenize raw strings into integer sequences and
+    is based on `keras_nlp.tokenizers.WordPieceTokenizer`. Unlike the
+    underlying tokenizer, it will check for all special tokens needed by BERT
+    models and provides a `from_preset()` method to automatically download
+    a matching vocabulary for a BERT preset.
+
+    This tokenizer does not provide truncation or padding of inputs. It can be
+    combined with a `keras_nlp.models.BertPreprocessor` layer for input packing.
+
+    If input is a batch of strings (rank > 0), the layer will output a
+    `tf.RaggedTensor` where the last dimension of the output is ragged.
+
+    If input is a scalar string (rank == 0), the layer will output a dense
+    `tf.Tensor` with static shape `[None]`.
+
+    Args:
+        vocabulary: A list of strings or a string filename path. If
+            passing a list, each element of the list should be a single word
+            piece token string. If passing a filename, the file should be a
+            plain text file containing a single word piece token per line.
+        lowercase: If true, the input text will be first lowered before
+            tokenization.
+
+    Examples:
+
+    Batched input.
+    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]"]
+    >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
+    >>> inputs = ["The quick brown fox.", "The fox."]
+    >>> tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
+    >>> tokenizer(inputs)
+    <tf.RaggedTensor [[4, 5, 6, 7, 8, 9], [4, 8, 9]]>
+
+    Unbatched input.
+    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]"]
+    >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
+    >>> inputs = "The fox."
+    >>> tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
+    >>> tokenizer(inputs)
+    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([4, 8, 9], dtype=int32)>
+
+    Detokenization.
+    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]"]
+    >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
+    >>> inputs = "The quick brown fox."
+    >>> tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
+    >>> tokenizer.detokenize(tokenizer.tokenize(inputs)).numpy().decode('utf-8')
+    'The quick brown fox .'
+    """
+
+    def __init__(
+        self,
+        vocabulary,
+        lowercase=False,
+        **kwargs,
+    ):
+        super().__init__(
+            vocabulary=vocabulary,
+            lowercase=lowercase,
+            **kwargs,
+        )
+
+        # Check for necessary special tokens.
+        cls_token = "[CLS]"
+        sep_token = "[SEP]"
+        pad_token = "[PAD]"
+        for token in [cls_token, pad_token, sep_token]:
+            if token not in self.get_vocabulary():
+                raise ValueError(
+                    f"Cannot find token `'{token}'` in the provided "
+                    f"`vocabulary`. Please provide `'{token}'` in your "
+                    "`vocabulary` or use a pretrained `vocabulary` name."
+                )
+
+        self.cls_token_id = self.token_to_id(cls_token)
+        self.sep_token_id = self.token_to_id(sep_token)
+        self.pad_token_id = self.token_to_id(pad_token)
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+        metadata = cls.presets[preset]
+
+        vocabulary = keras.utils.get_file(
+            "vocab.txt",
+            metadata["vocabulary_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["vocabulary_hash"],
+        )
+
+        config = metadata["preprocessor_config"]
+        config.update(
+            {
+                "vocabulary": vocabulary,
+            },
+        )
+
+        return cls.from_config({**config, **kwargs})
+
+
+FROM_PRESET_DOCSTRING = """Instantiate a BERT tokenizer from preset vocabulary.
+
+    Args:
+        preset: string. Must be one of {names}.
+
+    Examples:
+    ```python
+    # Load a preset tokenizer.
+    tokenizer = keras_nlp.models.BertTokenizer.from_preset(
+        "bert_base_uncased_en",
+    )
+
+    # Tokenize some input.
+    tokenizer("The quick brown fox tripped.")
+
+    # Detokenize some input.
+    tokenizer.detokenize([5, 6, 7, 8, 9])
+    ```
+    """
+
+setattr(
+    BertTokenizer.from_preset.__func__,
+    "__doc__",
+    FROM_PRESET_DOCSTRING.format(names=", ".join(BertTokenizer.presets)),
+)
+
+
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class BertPreprocessor(keras.layers.Layer):
-    """BERT preprocessing layer.
+    """A BERT preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
 
-     - Tokenize any number of inputs using a
-       `keras_nlp.tokenizers.WordPieceTokenizer`.
+     - Tokenize any number of inputs using the `tokenizer`.
      - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
        with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
      - Construct a dictionary of with keys `"token_ids"`, `"segment_ids"`,
@@ -41,14 +183,8 @@ class BertPreprocessor(keras.layers.Layer):
     single input tensor. If a single tensor is passed, it will be packed
     equivalently to a tuple with a single element.
 
-    The `WordPieceTokenizer` can be accessed via the `tokenizer` property on
-    this layer, and can be used directly for custom packing on inputs.
-
     Args:
-        vocabulary: A list of vocabulary terms or a vocabulary filename.
-        lowercase: If `True`, input will be lowercase before tokenization. If
-            `vocabulary` is set to a pretrained vocabulary, this parameter will
-            be inferred.
+        tokenizer: A `keras_nlp.models.BertTokenizer` instance.
         sequence_length: The length of the packed inputs.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
@@ -64,11 +200,12 @@ class BertPreprocessor(keras.layers.Layer):
     Examples:
     ```python
     vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
-    vocab += ["the", "qu", "##ick", "br", "##own", "fox", "tripped"]
-    vocab += ["call", "me", "ish", "##mael", "."]
-    vocab += ["oh", "look", "a", "whale"]
-    vocab += ["i", "forgot", "my", "home", "##work"]
-    preprocessor = keras_nlp.models.BertPreprocessor(vocabulary=vocab)
+    vocab += ["The", "qu", "##ick", "br", "##own", "fox", "tripped"]
+    vocab += ["Call", "me", "Ish", "##mael", "."]
+    vocab += ["Oh", "look", "a", "whale"]
+    vocab += ["I", "forgot", "my", "home", "##work"]
+    tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
+    preprocessor = keras_nlp.models.BertPreprocessor(tokenizer)
 
     # Tokenize and pack a single sentence directly.
     preprocessor("The quick brown fox jumped.")
@@ -97,61 +234,47 @@ class BertPreprocessor(keras.layers.Layer):
     ds = ds.map(
         lambda x, y: (preprocessor(x), y),
         num_parallel_calls=tf.data.AUTOTUNE,
-    )
-    ```
+    )    ```
     """
 
     def __init__(
         self,
-        vocabulary,
-        lowercase=False,
+        tokenizer,
         sequence_length=512,
         truncate="round_robin",
         **kwargs,
     ):
         super().__init__(**kwargs)
-
-        self.tokenizer = WordPieceTokenizer(
-            vocabulary=vocabulary,
-            lowercase=lowercase,
-        )
-
-        # Check for necessary special tokens.
-        cls_token = "[CLS]"
-        sep_token = "[SEP]"
-        pad_token = "[PAD]"
-        for token in [cls_token, pad_token, sep_token]:
-            if token not in self.tokenizer.get_vocabulary():
-                raise ValueError(
-                    f"Cannot find token `'{token}'` in the provided "
-                    f"`vocabulary`. Please provide `'{token}'` in your "
-                    "`vocabulary` or use a pretrained `vocabulary` name."
-                )
-
-        self.pad_token_id = self.tokenizer.token_to_id(pad_token)
+        self._tokenizer = tokenizer
         self.packer = MultiSegmentPacker(
-            start_value=self.tokenizer.token_to_id(cls_token),
-            end_value=self.tokenizer.token_to_id(sep_token),
-            pad_value=self.pad_token_id,
+            start_value=self.tokenizer.cls_token_id,
+            end_value=self.tokenizer.sep_token_id,
+            pad_value=self.tokenizer.pad_token_id,
             truncate=truncate,
             sequence_length=sequence_length,
         )
 
-    def vocabulary_size(self):
-        """Returns the vocabulary size of the tokenizer."""
-        return self.tokenizer.vocabulary_size()
+    @property
+    def tokenizer(self):
+        """The `keras_nlp.models.BertTokenizer` used to tokenize strings."""
+        return self._tokenizer
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "vocabulary": self.tokenizer.vocabulary,
-                "lowercase": self.tokenizer.lowercase,
+                "tokenizer": keras.layers.serialize(self.tokenizer),
                 "sequence_length": self.packer.sequence_length,
                 "truncate": self.packer.truncate,
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        if "tokenizer" in config:
+            config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
+        return cls(**config)
 
     def call(self, inputs):
         if not isinstance(inputs, (list, tuple)):
@@ -162,7 +285,7 @@ class BertPreprocessor(keras.layers.Layer):
         return {
             "token_ids": token_ids,
             "segment_ids": segment_ids,
-            "padding_mask": token_ids != self.pad_token_id,
+            "padding_mask": token_ids != self.tokenizer.pad_token_id,
         }
 
     @classproperty
@@ -182,18 +305,12 @@ class BertPreprocessor(keras.layers.Layer):
                 "`preset` must be one of "
                 f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
-        metadata = cls.presets[preset]
 
-        vocabulary = keras.utils.get_file(
-            "vocab.txt",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["vocabulary_hash"],
-        )
+        tokenizer = BertTokenizer.from_preset(preset)
 
-        config = metadata["preprocessor_config"]
         # Use model's `max_sequence_length` if `sequence_length` unspecified;
         # otherwise check that `sequence_length` not too long.
+        metadata = cls.presets[preset]
         max_sequence_length = metadata["config"]["max_sequence_length"]
         if sequence_length is not None:
             if sequence_length > max_sequence_length:
@@ -205,15 +322,12 @@ class BertPreprocessor(keras.layers.Layer):
         else:
             sequence_length = max_sequence_length
 
-        config.update(
-            {
-                "sequence_length": sequence_length,
-                "vocabulary": vocabulary,
-                "truncate": truncate,
-            },
+        return cls(
+            tokenizer=tokenizer,
+            sequence_length=sequence_length,
+            truncate=truncate,
+            **kwargs,
         )
-
-        return cls.from_config({**config, **kwargs})
 
 
 FROM_PRESET_DOCSTRING = """Instantiate BERT preprocessor from preset architecture.
@@ -238,11 +352,13 @@ FROM_PRESET_DOCSTRING = """Instantiate BERT preprocessor from preset architectur
     Examples:
     ```python
     # Load preprocessor from preset
-    preprocessor = BertPreprocessor.from_preset("bert_base_uncased_en")
+    preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
+        "bert_base_uncased_en",
+    )
     preprocessor("The quick brown fox jumped.")
 
     # Override sequence_length
-    preprocessor = BertPreprocessor.from_preset(
+    preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
         "bert_base_uncased_en"
         sequence_length=64
     )
