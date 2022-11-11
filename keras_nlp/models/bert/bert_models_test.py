@@ -117,6 +117,11 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             Bert.presets[preset]["config"]["max_sequence_length"], 512
         )
 
+    def test_preset_docstring(self):
+        """Check we did our docstring formatting correctly."""
+        for name in Bert.presets:
+            self.assertRegex(Bert.from_preset.__doc__, name)
+
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
