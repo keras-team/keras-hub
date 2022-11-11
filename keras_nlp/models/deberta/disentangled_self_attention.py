@@ -134,6 +134,23 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
         return common_kwargs
 
+    def _masked_softmax(self, attention_scores, attention_mask=None):
+        # Normalize the attention scores to probabilities.
+        # `attention_scores` = [B, N, T, S]
+        if attention_mask is not None:
+            # The expand dim happens starting from the `num_heads` dimension,
+            # (<batch_dims>, num_heads, <query_attention_dims,
+            # key_attention_dims>)
+            mask_expansion_axis = -3
+            for _ in range(
+                len(attention_scores.shape) - len(attention_mask.shape)
+            ):
+                attention_mask = tf.expand_dims(
+                    attention_mask, axis=mask_expansion_axis
+                )
+        tf.print(tf.shape(attention_scores), tf.shape(attention_mask))
+        return self._softmax(attention_scores, attention_mask)
+
     def _compute_attention(
         self,
         query,
@@ -165,7 +182,9 @@ class DisentangledSelfAttention(keras.layers.Layer):
             attention_scores += rel_attn_scores
 
         tf.print(tf.shape(attention_scores), tf.shape(attention_mask))
-        attention_scores = self._softmax(attention_scores, attention_mask)
+        attention_scores = self._masked_softmax(
+            attention_scores, attention_mask
+        )
         attention_scores = self._attn_dropout_layer(
             attention_scores, training=training
         )
