@@ -39,11 +39,15 @@ except ImportError:
 SPECIAL_WHITESPACES = r"\x{a0}\x{2009}\x{202f}\x{3000}"
 
 # String splitting regex pattern.
-SPLIT_PATTERN_1 = r"""'s|'t|'re|'ve|'m|'ll|'d
-    |[\s{special_spaces}]+[\n\r\t\f६{special_spaces}]| ?\p{L}+
-    | ?[\p{N}]+| ?[^\s\p{L}\p{N}{special_spaces}]+""".replace(
+SPLIT_PATTERN_1 = (
+    r"'s|'t|'re|'ve|'m|'ll|'d"
+    + r"|[\s{special_spaces}]+[\n\r\t\f६{special_spaces}]| ?\p{L}+|"
+    + r" ?[\p{N}]+| ?[^\s\p{L}\p{N}{special_spaces}]+"
+)
+SPLIT_PATTERN_1 = SPLIT_PATTERN_1.replace(
     "{special_spaces}", SPECIAL_WHITESPACES
 )
+
 
 SPLIT_PATTERN_2 = rf"""[\s६{SPECIAL_WHITESPACES}]$"""
 
