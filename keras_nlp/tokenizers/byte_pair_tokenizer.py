@@ -24,21 +24,30 @@ from typing import Iterable
 from typing import List
 
 import tensorflow as tf
-import tensorflow_text as tf_text
 from tensorflow import keras
 
 from keras_nlp.tokenizers import tokenizer
+from keras_nlp.utils.tf_utils import assert_tf_text_installed
+
+try:
+    import tensorflow_text as tf_text
+except ImportError:
+    tf_text = None
 
 # As python and TF handles special spaces differently, we need to
 # manually handle special spaces during string split.
 SPECIAL_WHITESPACES = r"\x{a0}\x{2009}\x{202f}\x{3000}"
 
 # String splitting regex pattern.
-SPLIT_PATTERN_1 = r"""'s|'t|'re|'ve|'m|'ll|'d
-    |[\s{special_spaces}]+[\n\r\t\f६{special_spaces}]| ?\p{L}+
-    | ?[\p{N}]+| ?[^\s\p{L}\p{N}{special_spaces}]+""".replace(
+SPLIT_PATTERN_1 = (
+    r"'s|'t|'re|'ve|'m|'ll|'d"
+    + r"|[\s{special_spaces}]+[\n\r\t\f६{special_spaces}]| ?\p{L}+|"
+    + r" ?[\p{N}]+| ?[^\s\p{L}\p{N}{special_spaces}]+"
+)
+SPLIT_PATTERN_1 = SPLIT_PATTERN_1.replace(
     "{special_spaces}", SPECIAL_WHITESPACES
 )
+
 
 SPLIT_PATTERN_2 = rf"""[\s६{SPECIAL_WHITESPACES}]$"""
 
@@ -187,8 +196,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
     Examples:
 
-    Use in-memory vocabulary and merge list.
-
+    Tokenize
     >>> vocab = {"butter": 1, "fly": 2}
     >>> merge = ["b u", "t t", "e r", "bu tt", "butt er", "f l", "fl y"]
     >>> tokenizer = keras_nlp.tokenizers.BytePairTokenizer(vocab, merge)
@@ -205,23 +213,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     array([[1, 2],
            [1, 0]], dtype=int32)>
 
-    Use hosted vocabluary and merge list.
-
-    ```python
-    vocab_path = tf.keras.utils.get_file(
-        "vocab.json",
-        "https://storage.googleapis.com/keras-nlp/models/roberta_base/vocab.json",
-    )
-    merge_path = tf.keras.utils.get_file(
-        "merges.txt",
-        "https://storage.googleapis.com/keras-nlp/models/roberta_base/merges.txt",
-    )
-    tokenizer = BytePairTokenizer(
-        vocabulary=vocab_path, merges=merge_path
-    )
-    tokenizer("Butterfly is not flying butter!")
-    ```
-
     Detokenize
     >>> vocab = {"butter": 1, "fly": 2}
     >>> merge = ["b u", "t t", "e r", "bu tt", "butt er", "f l", "fl y"]
@@ -229,7 +220,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     >>> tokenizer.detokenize([[1, 2]])
     <tf.Tensor: shape=(1,), dtype=string, numpy=array([b'butterfly'],
     dtype=object)>
-
     """
 
     def __init__(
@@ -239,6 +229,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         sequence_length=None,
         **kwargs,
     ) -> None:
+        assert_tf_text_installed(self.__class__.__name__)
+
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.int32
@@ -260,7 +252,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         else:
             raise ValueError(
                 "Vocabulary must be an file path or dictionary mapping string "
-                f"token to int ids. Received: `type(vocabulary)={type(vocabulary)}`."
+                "token to int ids. Received: "
+                f"`type(vocabulary)={type(vocabulary)}`."
             )
         if isinstance(merges, str):
             self.merges = [bp.rstrip() for bp in tf.io.gfile.GFile(merges)]

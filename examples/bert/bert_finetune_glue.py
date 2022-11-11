@@ -89,7 +89,9 @@ def load_data(task_name):
         test_suffix = "_mismatched"
 
     def split_features(x):
-        return {feature_name: x[feature_name] for feature_name in feature_names}
+        features = tuple([x[name] for name in feature_names])
+        labels = x["label"]
+        return features, labels
 
     train_ds, test_ds, validation_ds = tfds.load(
         f"glue/{task_name}",
@@ -109,7 +111,7 @@ class BertHyperModel(keras_tuner.HyperModel):
     def build(self, hp):
         model = keras.models.load_model(FLAGS.saved_model_input, compile=False)
         finetuning_model = keras_nlp.models.BertClassifier(
-            base_model=model,
+            backbone=model,
             num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
         )
         finetuning_model.compile(

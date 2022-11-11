@@ -98,6 +98,14 @@ provide backwards compatibility guarantees both for code and saved models built
 with our components. While we continue with pre-release `0.y.z` development, we
 may break compatibility at any time and APIs should not be consider stable.
 
+## Disclaimer
+
+KerasNLP provides access to pre-trained models via the `keras_nlp.models` API.
+These pre-trained models are provided on an "as is" basis, without warranties
+or conditions of any kind. The following underlying models are provided by third
+parties, and subject to separate licenses:
+DistilBERT, RoBERTa, XLM-RoBERTa, GPT-2.
+
 ## Citing KerasNLP
 
 If KerasNLP helps your research, we appreciate your citations.

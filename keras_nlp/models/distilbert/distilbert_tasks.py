@@ -11,37 +11,39 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""XLM-RoBERTa task specific models and heads."""
+"""DistilBERT task specific models and heads."""
 
 from tensorflow import keras
 
-from keras_nlp.models.roberta.roberta_models import roberta_kernel_initializer
+from keras_nlp.models.distilbert.distilbert_models import (
+    distilbert_kernel_initializer,
+)
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class XLMRobertaClassifier(keras.Model):
-    """XLM-RoBERTa encoder model with a classification head.
+class DistilBertClassifier(keras.Model):
+    """DistilBERT encoder model with a classification head.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
     third party and subject to a separate license, available
-    [here](https://github.com/facebookresearch/fairseq).
+    [here](https://github.com/huggingface/transformers).
 
     Args:
-        backbone: A `keras_nlp.models.XLMRoberta` instance.
+        backbone: A `keras_nlp.models.DistilBert` instance.
         num_classes: int. Number of classes to predict.
         hidden_dim: int. The size of the pooler layer.
 
     Example usage:
     ```python
-    # Randomly initialized XLM-RoBERTa encoder
-    model = keras_nlp.models.XLMRoberta(
-        vocabulary_size=50265,
-        num_layers=12,
+    # Randomly initialized DistilBERT encoder
+    model = keras_nlp.models.DistilBert(
+        vocabulary_size=30522,
+        num_layers=6,
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
-        max_sequence_length=12
+        max_sequence_length=512
     )
 
     # Call classifier on the inputs.
@@ -51,10 +53,7 @@ class XLMRobertaClassifier(keras.Model):
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
-    classifier = keras_nlp.models.XLMRobertaClassifier(
-        backbone=model,
-        num_classes=4,
-    )
+    classifier = keras_nlp.models.DistilBertClassifier(model, 4)
     logits = classifier(input_data)
     ```
     """
@@ -64,22 +63,24 @@ class XLMRobertaClassifier(keras.Model):
         backbone,
         num_classes,
         hidden_dim=None,
-        dropout=0.0,
+        dropout=0.2,
         **kwargs,
     ):
         inputs = backbone.input
         if hidden_dim is None:
             hidden_dim = backbone.hidden_dim
 
-        x = backbone(inputs)[:, backbone.start_token_index, :]
-        x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
+        x = backbone(inputs)[:, backbone.cls_token_index, :]
         x = keras.layers.Dense(
-            hidden_dim, activation="tanh", name="pooled_dense"
+            hidden_dim,
+            activation="relu",
+            kernel_initializer=distilbert_kernel_initializer(),
+            name="pooled_dense",
         )(x)
         x = keras.layers.Dropout(dropout, name="classifier_dropout")(x)
         outputs = keras.layers.Dense(
             num_classes,
-            kernel_initializer=roberta_kernel_initializer(),
+            kernel_initializer=distilbert_kernel_initializer(),
             name="logits",
         )(x)
 
@@ -97,7 +98,7 @@ class XLMRobertaClassifier(keras.Model):
 
     @property
     def backbone(self):
-        """A `keras_nlp.models.XLMRoberta` instance providing the encoder submodel."""
+        """A `keras_nlp.models.DistilBert` instance providing the encoder submodel."""
         return self._backbone
 
     def get_config(self):

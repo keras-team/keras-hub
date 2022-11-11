@@ -30,6 +30,7 @@ local unittest = base.BaseTest {
   command: [
     'pytest',
     'keras_nlp',
+    '--run_large',
   ],
 };
 
