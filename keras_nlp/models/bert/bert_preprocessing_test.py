@@ -63,6 +63,11 @@ class BertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         with self.assertRaises(ValueError):
             BertPreprocessor.from_preset("bert_base_uncased_clowntown")
 
+    def test_preset_docstring(self):
+        """Check we did our docstring formatting correctly."""
+        for name in BertPreprocessor.presets:
+            self.assertRegex(BertPreprocessor.from_preset.__doc__, name)
+
     @unittest.mock.patch("tensorflow.keras.utils.get_file")
     def test_valid_call_presets(self, get_file_mock):
         """Ensure presets have necessary structure, but no RPCs."""
@@ -180,6 +185,11 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         # Not a preset name
         with self.assertRaises(ValueError):
             BertPreprocessor.from_preset("bert_base_uncased_clowntown")
+
+    def test_preset_docstring(self):
+        """Check we did our docstring formatting correctly."""
+        for name in BertPreprocessor.presets:
+            self.assertRegex(BertPreprocessor.from_preset.__doc__, name)
 
     @unittest.mock.patch("tensorflow.keras.utils.get_file")
     def test_valid_call_presets(self, get_file_mock):
