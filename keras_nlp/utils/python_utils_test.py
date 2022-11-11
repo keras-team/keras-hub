@@ -26,13 +26,13 @@ class ClassWithClassProperty:
 
 @format_docstring(adjective="salubrious")
 def foo():
-    """It was a {adjective} November day."""
+    """It was a {{adjective}} November day."""
     return "function"
 
 
 @format_docstring(adjective="smelly", name="Mortimer")
 class ClassWithDocstrings:
-    """I saw my {adjective} friend {name}."""
+    """I saw my {{adjective}} friend {{name}}."""
 
     def __init__(self):
         self.bar = "property"
@@ -40,8 +40,14 @@ class ClassWithDocstrings:
     @classmethod
     @format_docstring(noun="cactus", bodypart="nostril")
     def foo(cls):
-        """He was holding a {noun} in his {bodypart}."""
+        """He was holding a {{noun}} in his {{bodypart}}."""
         return "class method"
+
+
+@format_docstring(nickname="dumdum")
+def bar():
+    """Use `{}` to create a dictionary, {{nickname}}."""
+    return "function"
 
 
 class ClassPropertyTest(tf.test.TestCase):
@@ -69,4 +75,10 @@ class FormatDocstringTest(tf.test.TestCase):
         self.assertAllEqual(
             ClassWithDocstrings.foo.__func__.__doc__,
             "He was holding a cactus in his nostril.",
+        )
+
+    def test_brackets(self):
+        self.assertAllEqual(bar(), "function")
+        self.assertAllEqual(
+            bar.__doc__, "Use `{}` to create a dictionary, dumdum."
         )

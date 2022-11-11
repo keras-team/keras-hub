@@ -305,7 +305,7 @@ class BertPreprocessor(keras.layers.Layer):
         """Instantiate BERT preprocessor from preset architecture.
 
         Args:
-            preset: string. Must be one of {names}.
+            preset: string. Must be one of {{names}}.
             sequence_length: int, optional. The length of the packed inputs.
                 Must be equal to or smaller than the `max_sequence_length` of
                 the preset. If left as default, the `max_sequence_length` of

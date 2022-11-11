@@ -237,13 +237,13 @@ class Bert(keras.Model):
         """Instantiate BERT model from preset architecture and weights.
 
         Args:
-            preset: string. Must be one of {names}.
+            preset: string. Must be one of {{names}}.
             load_weights: Whether to load pre-trained weights into model.
                 Defaults to `True`.
 
         Examples:
         ```python
-        input_data = {{
+        input_data = {
             "token_ids": tf.random.uniform(
                 shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
             ),
@@ -253,7 +253,7 @@ class Bert(keras.Model):
             "padding_mask": tf.constant(
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
             ),
-        }}
+        }
 
         # Load architecture and weights from preset
         model = Bert.from_preset("bert_base_uncased_en")
