@@ -20,7 +20,8 @@ from tensorflow import keras
 from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_models import bert_kernel_initializer
 from keras_nlp.models.bert.bert_presets import backbone_presets
-from keras_nlp.models.utils import classproperty
+from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -113,12 +114,50 @@ class BertClassifier(keras.Model):
         return copy.deepcopy(backbone_presets)
 
     @classmethod
+    @format_docstring(names=", ".join(backbone_presets))
     def from_preset(
         cls,
         preset,
         load_weights=True,
         **kwargs,
     ):
+        """Create a classification model from a preset architecture and weights.
+
+        Args:
+            preset: string. Must be one of {{names}}.
+            load_weights: Whether to load pre-trained weights into model.
+                Defaults to `True`.
+
+        Examples:
+        ```python
+        input_data = {
+            "token_ids": tf.random.uniform(
+                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
+            ),
+            "segment_ids": tf.constant(
+                [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+            ),
+            "padding_mask": tf.constant(
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+            ),
+        }
+
+        # Load backbone architecture and weights from preset
+        classifier = BertClassifier.from_preset(
+            "bert_base_uncased_en",
+            num_classes=4,
+        )
+        output = classifier(input_data)
+
+        # Load randomly initalized model from preset architecture
+        classifier = BertClassifier.from_preset(
+            "bert_base_uncased_en",
+            load_weights=False,
+            num_classes=4,
+        )
+        output = classifier(input_data)
+        ```
+        """
         # Check if preset is backbone-only model
         if preset in Bert.presets:
             backbone = Bert.from_preset(preset, load_weights)
@@ -131,49 +170,3 @@ class BertClassifier(keras.Model):
                 "`preset` must be one of "
                 f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
-
-
-FROM_PRESET_DOCSTRING = """Instantiate BERT classification model from preset architecture and
-    weights.
-
-    Args:
-        preset: string. Must be one of {names}.
-        load_weights: Whether to load pre-trained weights into model. Defaults
-            to `True`.
-
-    Examples:
-    ```python
-    input_data = {{
-        "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
-        ),
-        "segment_ids": tf.constant(
-            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
-        "padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
-    }}
-
-    # Load backbone architecture and weights from preset
-    classifier = BertClassifier.from_preset(
-        "bert_base_uncased_en",
-        num_classes=4,
-    )
-    output = classifier(input_data)
-
-    # Load randomly initalized model from preset architecture
-    classifier = BertClassifier.from_preset(
-        "bert_base_uncased_en",
-        load_weights=False,
-        num_classes=4,
-    )
-    output = classifier(input_data)
-    ```
-    """
-
-setattr(
-    BertClassifier.from_preset.__func__,
-    "__doc__",
-    FROM_PRESET_DOCSTRING.format(names=", ".join(BertClassifier.presets)),
-)

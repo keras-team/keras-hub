@@ -112,11 +112,31 @@ class BertTokenizer(WordPieceTokenizer):
         return copy.deepcopy(backbone_presets)
 
     @classmethod
+    @format_docstring(names=", ".join(backbone_presets))
     def from_preset(
         cls,
         preset,
         **kwargs,
     ):
+        """Instantiate a BERT tokenizer from preset vocabulary.
+
+        Args:
+            preset: string. Must be one of {{names}}.
+
+        Examples:
+        ```python
+        # Load a preset tokenizer.
+        tokenizer = keras_nlp.models.BertTokenizer.from_preset(
+            "bert_base_uncased_en",
+        )
+
+        # Tokenize some input.
+        tokenizer("The quick brown fox tripped.")
+
+        # Detokenize some input.
+        tokenizer.detokenize([5, 6, 7, 8, 9])
+        ```
+        """
         if preset not in cls.presets:
             raise ValueError(
                 "`preset` must be one of "
@@ -139,33 +159,6 @@ class BertTokenizer(WordPieceTokenizer):
         )
 
         return cls.from_config({**config, **kwargs})
-
-
-FROM_PRESET_DOCSTRING = """Instantiate a BERT tokenizer from preset vocabulary.
-
-    Args:
-        preset: string. Must be one of {names}.
-
-    Examples:
-    ```python
-    # Load a preset tokenizer.
-    tokenizer = keras_nlp.models.BertTokenizer.from_preset(
-        "bert_base_uncased_en",
-    )
-
-    # Tokenize some input.
-    tokenizer("The quick brown fox tripped.")
-
-    # Detokenize some input.
-    tokenizer.detokenize([5, 6, 7, 8, 9])
-    ```
-    """
-
-setattr(
-    BertTokenizer.from_preset.__func__,
-    "__doc__",
-    FROM_PRESET_DOCSTRING.format(names=", ".join(BertTokenizer.presets)),
-)
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
