@@ -102,8 +102,7 @@ def greedy_search(
     end_token_id=None,
     pad_token_id=0,
 ):
-    """
-    Text generation utility based on greedy search.
+    """Text generation utility based on greedy search.
 
     Greedy search always appends the token having the largest probability to
     existing sequence.
@@ -220,8 +219,7 @@ def beam_search(
     end_token_id=None,
     pad_token_id=0,
 ):
-    """
-    Text generation utility based on beam search algorithm.
+    """Text generation utility based on beam search algorithm.
 
     At each time-step, beam search keeps the beams (sequences) of the top
     `num_beams` highest accumulated probabilities, and uses each one of the
@@ -411,8 +409,7 @@ def random_search(
     end_token_id=None,
     pad_token_id=0,
 ):
-    """
-    Text generation utility based on randomly sampling the entire probability
+    """Text generation utility based on randomly sampling the entire probability
     distribution.
 
     Random sampling samples the next token from the probability distribution
@@ -543,8 +540,7 @@ def top_k_search(
     end_token_id=None,
     pad_token_id=0,
 ):
-    """
-    Text generation utility based on top-k sampling.
+    """Text generation utility based on top-k sampling.
 
     Top-k search samples the next token from the top-k tokens in the
     probability distribution provided by `token_probability_fn` and appends it
@@ -694,8 +690,7 @@ def top_p_search(
     end_token_id=None,
     pad_token_id=0,
 ):
-    """
-    Text generation utility based on top-p (nucleus) sampling.
+    """Text generation utility based on top-p (nucleus) sampling.
 
     Top-p search selects tokens from the smallest subset of output probabilities
     that sum to greater than `p`. Put another way, top-p will first order
