@@ -86,6 +86,11 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
                 load_weights=False,
             )
 
+    def test_preset_docstring(self):
+        """Check we did our docstring formatting correctly."""
+        for name in BertClassifier.presets:
+            self.assertRegex(BertClassifier.from_preset.__doc__, name)
+
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )

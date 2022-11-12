@@ -57,6 +57,8 @@ do the following:
 - Document the layer behavior thoroughly including call behavior though a
   class level docstring. Generally methods like `build()` and `call()` should
   not have their own docstring.
+- Docstring text should start on the same line as the opening quotes and
+  otherwise follow [PEP 257](https://peps.python.org/pep-0257/).
 - Document the
   [masking](https://keras.io/guides/understanding_masking_and_padding/) behavior
   of the layer in the class level docstring as well.
