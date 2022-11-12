@@ -124,8 +124,8 @@ class DistilBertPreprocessor(keras.layers.Layer):
      - Tokenize any number of inputs using the `tokenizer`.
      - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
        with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
-     - Construct a dictionary of with keys `"token_ids"`, `"segment_ids"`,
-       `"padding_mask"`, that can be passed directly to a DistilBERT model.
+     - Construct a dictionary of with keys `"token_ids"` and `"padding_mask"`,
+       that can be passed directly to a DistilBERT model.
 
     This layer will accept either a tuple of (possibly batched) inputs, or a
     single input tensor. If a single tensor is passed, it will be packed
