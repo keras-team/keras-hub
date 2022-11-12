@@ -18,8 +18,8 @@ import tensorflow as tf
 import tensorflow_text as tf_text
 from tensorflow import keras
 
-from keras_nlp.models.utils import classproperty
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+from keras_nlp.utils.python_utils import classproperty
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
