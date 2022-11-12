@@ -170,7 +170,7 @@ class RobertaPreprocessor(keras.layers.Layer):
 
     This preprocessing layer will do three things:
 
-    - Tokenize any number of inputs using `tokenizer`
+    - Tokenize any number of inputs using `tokenizer`.
     - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
       `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
       entire sequence, `"</s></s>"` at the end of each segment, save the last
