@@ -86,10 +86,10 @@ backbone_presets = {
     "gpt2_extra_large_webtext": {
         "config": {
             "vocabulary_size": 50257,
-            "num_layers": 36,
-            "num_heads": 20,
-            "hidden_dim": 1280,
-            "intermediate_dim": 5120,
+            "num_layers": 48,
+            "num_heads": 25,
+            "hidden_dim": 1600,
+            "intermediate_dim": 6400,
             "dropout": 0.1,
             "max_sequence_length": 1024,
         },
