@@ -152,6 +152,9 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         tokens = tf.where(tf.equal(tokens, self.end_token_id - 1), 2, tokens)
         tokens = tf.where(tf.equal(tokens, self.start_token_id - 1), 1, tokens)
 
+        # Note: Even though we map `"<s>" and `"</s>"` to the correct IDs,
+        # the `detokenize` method will return empty strings for these tokens.
+        # This is a vagary of the `sentencepiece` library.
         return super().detokenize(tokens)
 
 
