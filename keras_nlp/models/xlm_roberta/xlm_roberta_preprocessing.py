@@ -26,6 +26,136 @@ from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
+class XLMRobertaTokenizer(SentencePieceTokenizer):
+    """XLM-RoBERTa tokenizer layer based on the SentencePiece subword tokenizer.
+
+    This tokenizer class will tokenize raw strings into integer sequences and
+    is based on `keras_nlp.tokenizers.SentencePieceTokenizer`. Unlike the
+    underlying tokenizer, it will check for all special tokens needed by
+    XLM-RoBERTa models and provides a `from_preset()` method to automatically
+    download a matching vocabulary for a XLM-RoBERTa preset.
+
+    The original fairseq implementation of XLM-RoBERTa modifies the indices of
+    the SentencePiece tokenizer output. To preserve compatibility, we make the
+    same changes, i.e., `"<s>"`, `"<pad>"`, `"</s>"` and `"<unk>"` are mapped to
+    0, 1, 2, 3, respectively, and non-special token indices are shifted right
+    by one.
+
+    If input is a batch of strings (rank > 0), the layer will output a
+    `tf.RaggedTensor` where the last dimension of the output is ragged.
+
+    If input is a scalar string (rank == 0), the layer will output a dense
+    `tf.Tensor` with static shape `[None]`.
+
+    Args:
+        proto: Either a `string` path to a SentencePiece proto file, or a
+            `bytes` object with a serialized SentencePiece proto. See the
+            [SentencePiece repository](https://github.com/google/sentencepiece)
+            for more details on the format.
+
+    Examples:
+
+    ```python
+    def train_sentencepiece(ds, vocab_size):
+        bytes_io = io.BytesIO()
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=ds.as_numpy_iterator(),
+            model_writer=bytes_io,
+            vocab_size=vocab_size,
+            model_type="WORD",
+            unk_id=0,
+            bos_id=1,
+            eos_id=2,
+        )
+        return bytes_io.getvalue()
+
+    ds = tf.data.Dataset.from_tensor_slices(
+        ["the quick brown fox", "the earth is round"]
+    )
+
+    proto = train_sentencepiece(ds, vocab_size=10)
+    tokenizer = keras_nlp.models.XLMRobertaTokenizer(proto=proto)
+
+    # Batched inputs.
+    tokenizer(["the quick brown fox", "the earth is round"])
+
+    # Unbatched inputs.
+    tokenizer("the quick brown fox")
+
+    # Detokenization.
+    tokenizer.detokenize(tf.constant([[0, 4, 9, 5, 7, 2]]))
+    ```
+    """
+
+    def __init__(self, proto, **kwargs):
+        super().__init__(proto=proto, **kwargs)
+
+        # List of special tokens.
+        self._vocabulary_prefix = ["<s>", "<pad>", "</s>", "<unk>"]
+
+        # IDs of special tokens.
+        self.start_token_id = 0  # <s>
+        self.pad_token_id = 1  # <pad>
+        self.end_token_id = 2  # </s>
+        self.unk_token_id = 3  # <unk>
+
+    def vocabulary_size(self):
+        """Get the size of the tokenizer vocabulary."""
+        return super().vocabulary_size() + 1
+
+    def get_vocabulary(self):
+        """Get the size of the tokenizer vocabulary."""
+        vocabulary = tensor_to_string_list(
+            self._sentence_piece.id_to_string(
+                tf.range(super().vocabulary_size())
+            )
+        )
+        return self._vocabulary_prefix + vocabulary[3:]
+
+    def id_to_token(self, id):
+        """Convert an integer id to a string token."""
+        if id < len(self._vocabulary_prefix):
+            return self._vocabulary_prefix[id]
+
+        return tensor_to_string_list(self._sentence_piece.id_to_string(id - 1))
+
+    def token_to_id(self, token):
+        """Convert a string token to an integer id."""
+        if token in self._vocabulary_prefix:
+            return self._vocabulary_prefix.index(token)
+
+        return int(self._sentence_piece.string_to_id(token).numpy()) + 1
+
+    def tokenize(self, inputs):
+        tokens = super().tokenize(inputs)
+
+        # Correct `unk_token_id` (0 -> 3). Note that we do not correct
+        # `start_token_id` and `end_token_id`; they are dealt with in
+        # `XLMRobertaPreprocessor`.
+        tokens = tf.where(tf.equal(tokens, 0), self.unk_token_id - 1, tokens)
+
+        # Shift the tokens IDs right by one.
+        return tf.add(tokens, 1)
+
+    def detokenize(self, inputs):
+        if inputs.dtype == tf.string:
+            return super().detokenize(inputs)
+
+        # Shift the tokens IDs left by one.
+        tokens = tf.subtract(inputs, 1)
+
+        # Correct `unk_token_id`, `end_token_id`, `start_token_id`, respectively.
+        # Note: The `pad_token_id` is taken as 0 (`unk_token_id`) since the
+        # proto does not contain `pad_token_id`. This mapping of the pad token
+        # is done automatically by the above subtraction.
+        tokens = tf.where(tf.equal(tokens, self.unk_token_id - 1), 0, tokens)
+        tokens = tf.where(tf.equal(tokens, self.end_token_id - 1), 2, tokens)
+        tokens = tf.where(tf.equal(tokens, self.start_token_id - 1), 1, tokens)
+
+        return super().detokenize(tokens)
+
+
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class XLMRobertaPreprocessor(keras.layers.Layer):
     """XLM-RoBERTa preprocessing layer.
 
@@ -163,133 +293,3 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         **kwargs,
     ):
         raise NotImplementedError
-
-
-@keras.utils.register_keras_serializable(package="keras_nlp")
-class XLMRobertaTokenizer(SentencePieceTokenizer):
-    """XLM-RoBERTa tokenizer layer based on the SentencePiece subword tokenizer.
-
-    This tokenizer class will tokenize raw strings into integer sequences and
-    is based on `keras_nlp.tokenizers.SentencePieceTokenizer`. Unlike the
-    underlying tokenizer, it will check for all special tokens needed by
-    XLM-RoBERTa models and provides a `from_preset()` method to automatically
-    download a matching vocabulary for a XLM-RoBERTa preset.
-
-    The original fairseq implementation of XLM-RoBERTa modifies the indices of
-    the SentencePiece tokenizer output. To preserve compatibility, we make the
-    same changes, i.e., `"<s>"`, `"<pad>"`, `"</s>"` and `"<unk>"` are mapped to
-    0, 1, 2, 3, respectively, and non-special token indices are shifted right
-    by one.
-
-    If input is a batch of strings (rank > 0), the layer will output a
-    `tf.RaggedTensor` where the last dimension of the output is ragged.
-
-    If input is a scalar string (rank == 0), the layer will output a dense
-    `tf.Tensor` with static shape `[None]`.
-
-    Args:
-        proto: Either a `string` path to a SentencePiece proto file, or a
-            `bytes` object with a serialized SentencePiece proto. See the
-            [SentencePiece repository](https://github.com/google/sentencepiece)
-            for more details on the format.
-
-    Examples:
-
-    ```python
-    def train_sentencepiece(ds, vocab_size):
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=ds.as_numpy_iterator(),
-            model_writer=bytes_io,
-            vocab_size=vocab_size,
-            model_type="WORD",
-            unk_id=0,
-            bos_id=1,
-            eos_id=2,
-        )
-        return bytes_io.getvalue()
-
-    ds = tf.data.Dataset.from_tensor_slices(
-        ["the quick brown fox", "the earth is round"]
-    )
-
-    proto = train_sentencepiece(ds, vocab_size=10)
-    tokenizer = keras_nlp.models.XLMRobertaTokenizer(proto=proto)
-
-    # Batched inputs.
-    tokenizer(["the quick brown fox", "the earth is round"])
-
-    # Unbatched inputs.
-    tokenizer("the quick brown fox")
-
-    # Detokenization.
-    tokenizer.detokenize(tf.constant([[0, 4, 9, 5, 7, 2]]))
-    ```
-    """
-
-    def __init__(self, proto, **kwargs):
-        super().__init__(proto=proto, **kwargs)
-
-        # List of special tokens.
-        self._vocabulary_prefix = ["<s>", "<pad>", "</s>", "<unk>"]
-
-        # IDs of special tokens.
-        self.start_token_id = 0  # <s>
-        self.pad_token_id = 1  # <pad>
-        self.end_token_id = 2  # </s>
-        self.unk_token_id = 3  # <unk>
-
-    def vocabulary_size(self):
-        """Get the size of the tokenizer vocabulary."""
-        return super().vocabulary_size() + 1
-
-    def get_vocabulary(self):
-        """Get the size of the tokenizer vocabulary."""
-        vocabulary = tensor_to_string_list(
-            self._sentence_piece.id_to_string(
-                tf.range(super().vocabulary_size())
-            )
-        )
-        return self._vocabulary_prefix + vocabulary[3:]
-
-    def id_to_token(self, id):
-        """Convert an integer id to a string token."""
-        if id < len(self._vocabulary_prefix):
-            return self._vocabulary_prefix[id]
-
-        return tensor_to_string_list(self._sentence_piece.id_to_string(id - 1))
-
-    def token_to_id(self, token):
-        """Convert a string token to an integer id."""
-        if token in self._vocabulary_prefix:
-            return self._vocabulary_prefix.index(token)
-
-        return int(self._sentence_piece.string_to_id(token).numpy()) + 1
-
-    def tokenize(self, inputs):
-        tokens = super().tokenize(inputs)
-
-        # Correct `unk_token_id` (0 -> 3). Note that we do not correct
-        # `start_token_id` and `end_token_id`; they are dealt with in
-        # `XLMRobertaPreprocessor`.
-        tokens = tf.where(tf.equal(tokens, 0), self.unk_token_id - 1, tokens)
-
-        # Shift the tokens IDs right by one.
-        return tf.add(tokens, 1)
-
-    def detokenize(self, inputs):
-        if inputs.dtype == tf.string:
-            return super().detokenize(inputs)
-
-        # Shift the tokens IDs left by one.
-        tokens = tf.subtract(inputs, 1)
-
-        # Correct `unk_token_id`, `end_token_id`, `start_token_id`, respectively.
-        # Note: The `pad_token_id` is taken as 0 (`unk_token_id`) since the
-        # proto does not contain `pad_token_id`. This mapping of the pad token
-        # is done automatically by the above subtraction.
-        tokens = tf.where(tf.equal(tokens, self.unk_token_id - 1), 0, tokens)
-        tokens = tf.where(tf.equal(tokens, self.end_token_id - 1), 2, tokens)
-        tokens = tf.where(tf.equal(tokens, self.start_token_id - 1), 1, tokens)
-
-        return super().detokenize(tokens)
