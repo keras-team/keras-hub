@@ -54,17 +54,17 @@ class GreedySearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
     def test_generate_with_1d_prompt(self):
         inputs = tf.constant([1])
         outputs = greedy_search(self.token_probability_fn, inputs, max_length=5)
-        self.assertEquals(outputs.shape, [5])
+        self.assertEqual(outputs.shape, [5])
 
     def test_generate_with_2d_prompt(self):
         inputs = tf.constant([[1], [1]])
         outputs = greedy_search(self.token_probability_fn, inputs, max_length=5)
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_generate_with_list_prompt(self):
         inputs = [[1], [1]]
         outputs = greedy_search(self.token_probability_fn, inputs, max_length=5)
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_generate_with_ragged_prompt(self):
         def token_probability_fn(inputs):
@@ -75,7 +75,7 @@ class GreedySearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
 
         inputs = tf.ragged.constant([[1], [2, 1, 2]])
         outputs = greedy_search(token_probability_fn, inputs, max_length=5)
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_assert_generation_is_correct(self):
         def token_probability_fn(inputs):
@@ -219,7 +219,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             max_length=5,
             num_beams=5,
         )
-        self.assertEquals(outputs.shape, [5])
+        self.assertEqual(outputs.shape, [5])
 
     def test_generate_with_max_length_prompt(self):
         inputs = tf.ones(shape=(5,))
@@ -229,7 +229,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             max_length=5,
             num_beams=5,
         )
-        self.assertEquals(outputs.shape, [5])
+        self.assertEqual(outputs.shape, [5])
 
         inputs = tf.ones(shape=(6,))
         outputs = beam_search(
@@ -238,7 +238,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             max_length=5,
             num_beams=5,
         )
-        self.assertEquals(outputs.shape, [6])
+        self.assertEqual(outputs.shape, [6])
 
     def test_generate_with_2d_prompt(self):
         inputs = tf.constant([[1], [1]])
@@ -248,7 +248,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             max_length=5,
             num_beams=5,
         )
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_generate_with_list_prompt(self):
         inputs = [[1], [1]]
@@ -258,7 +258,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             max_length=5,
             num_beams=5,
         )
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_generate_with_ragged_prompt(self):
         def token_probability_fn(inputs):
@@ -272,7 +272,7 @@ class BeamSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
         outputs = beam_search(
             token_probability_fn, inputs, max_length=5, num_beams=2
         )
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_one_beam_generation(self):
         for i in range(50):
@@ -436,17 +436,17 @@ class RandomSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
     def test_generate_with_1d_prompt(self):
         inputs = tf.constant([1])
         outputs = random_search(self.token_probability_fn, inputs, max_length=5)
-        self.assertEquals(outputs.shape, [5])
+        self.assertEqual(outputs.shape, [5])
 
     def test_generate_with_2d_prompt(self):
         inputs = tf.constant([[1], [1]])
         outputs = random_search(self.token_probability_fn, inputs, max_length=5)
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_generate_with_list_prompt(self):
         inputs = [[1], [1]]
         outputs = random_search(self.token_probability_fn, inputs, max_length=5)
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_generate_with_ragged_prompt(self):
         def token_probability_fn(inputs):
@@ -457,7 +457,7 @@ class RandomSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
 
         inputs = tf.ragged.constant([[1], [2, 1, 2]])
         outputs = random_search(token_probability_fn, inputs, max_length=5)
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_assert_probability_distribution_generation_is_correct(self):
         def token_probability_fn(inputs):
@@ -645,7 +645,7 @@ class TopKSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
         outputs = top_k_search(
             self.token_probability_fn, inputs, max_length=5, k=2
         )
-        self.assertEquals(outputs.shape, [5])
+        self.assertEqual(outputs.shape, [5])
 
     def test_generate_with_k_too_big(self):
         inputs = tf.constant([1])
@@ -655,21 +655,21 @@ class TopKSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
             max_length=5,
             k=self.vocab_size + 1,
         )
-        self.assertEquals(outputs.shape, [5])
+        self.assertEqual(outputs.shape, [5])
 
     def test_generate_with_2d_prompt(self):
         inputs = tf.constant([[1], [1]])
         outputs = top_k_search(
             self.token_probability_fn, inputs, max_length=5, k=2
         )
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_generate_with_list_prompt(self):
         inputs = [[1], [1]]
         outputs = top_k_search(
             self.token_probability_fn, inputs, max_length=5, k=2
         )
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_generate_with_ragged_prompt(self):
         def token_probability_fn(inputs):
@@ -680,7 +680,7 @@ class TopKSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
 
         inputs = tf.ragged.constant([[1], [2, 1, 2]])
         outputs = top_k_search(token_probability_fn, inputs, max_length=5, k=2)
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_assert_probability_distribution_generation_is_correct(self):
         def token_probability_fn(inputs):
@@ -896,21 +896,21 @@ class TopPSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
         outputs = top_p_search(
             self.token_probability_fn, inputs, max_length=5, p=0.8
         )
-        self.assertEquals(outputs.shape, [5])
+        self.assertEqual(outputs.shape, [5])
 
     def test_generate_with_2d_prompt(self):
         inputs = tf.constant([[1], [1]])
         outputs = top_p_search(
             self.token_probability_fn, inputs, max_length=5, p=0.8
         )
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_generate_with_list_prompt(self):
         inputs = [[1], [1]]
         outputs = top_p_search(
             self.token_probability_fn, inputs, max_length=5, p=0.8
         )
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_generate_with_ragged_prompt(self):
         def token_probability_fn(inputs):
@@ -923,7 +923,7 @@ class TopPSearchTextGenerationTest(tf.test.TestCase, parameterized.TestCase):
         outputs = top_p_search(
             token_probability_fn, inputs, max_length=5, p=0.8
         )
-        self.assertEquals(outputs.shape, [2, 5])
+        self.assertEqual(outputs.shape, [2, 5])
 
     def test_assert_probability_distribution_generation_is_correct(self):
         def token_probability_fn(inputs):
