@@ -29,3 +29,6 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_models import XLMRoberta
 from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessing import (
     XLMRobertaPreprocessor,
 )
+from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessing import (
+    XLMRobertaTokenizer,
+)
