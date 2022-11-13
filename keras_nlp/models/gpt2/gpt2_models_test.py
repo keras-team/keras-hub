@@ -64,6 +64,55 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
             }
             self.model(input_data)
 
+    def test_valid_call_presets(self):
+        # Test preset loading without weights
+        for preset in GPT2.presets:
+            model = GPT2.from_preset(preset, load_weights=False, name="encoder")
+            input_data = {
+                "token_ids": tf.ones(
+                    (self.batch_size, self.model.max_sequence_length),
+                    dtype="int32",
+                ),
+                "padding_mask": tf.ones(
+                    (self.batch_size, self.model.max_sequence_length),
+                    dtype="int32",
+                ),
+            }
+            model(input_data)
+
+    def test_unknown_preset_error(self):
+        # Not a preset name
+        with self.assertRaises(ValueError):
+            GPT2.from_preset(
+                "gpt2_base_clowntown",
+                load_weights=False,
+            )
+
+    def test_preset_mutability(self):
+        preset = "gpt2_base_webtext"
+        # Cannot overwrite the presents attribute in an object
+        with self.assertRaises(AttributeError):
+            self.model.presets = {"my_model": "clowntown"}
+        # Cannot mutate presents in an object
+        config = self.model.presets[preset]["config"]
+        config["max_sequence_length"] = 1
+        self.assertEqual(config["max_sequence_length"], 1)
+        self.assertEqual(
+            self.model.presets[preset]["config"]["max_sequence_length"], 512
+        )
+        # Cannot mutate presets in the class
+        config = GPT2.presets[preset]["config"]
+        config["max_sequence_length"] = 1
+        self.assertEqual(config["max_sequence_length"], 1)
+        self.assertEqual(
+            GPT2.presets[preset]["config"]["max_sequence_length"], 512
+        )
+
+    def test_preset_docstring(self):
+        """Check we did our docstring formatting correctly."""
+        for name in GPT2.presets:
+            self.assertRegex(GPT2.from_preset.__doc__, name)
+
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
