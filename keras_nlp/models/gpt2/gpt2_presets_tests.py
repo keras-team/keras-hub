@@ -30,17 +30,15 @@ class GPT2PresetSmokeTest(tf.test.TestCase):
 
     def test_backbone_output(self):
         input_data = {
-            "token_ids": tf.constant([[101, 1996, 4248, 102]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+            "token_ids": tf.constant([[1169, 2068, 7586, 21831, 13]]),
+            "padding_mask": tf.constant([[1, 1, 1, 1, 1]]),
         }
-        model = GPT2.from_preset(
-            "gpt2_base_webtext",
-        )
+        model = GPT2.from_preset("gpt2_base_webtext")
         outputs = model(input_data)[0, 0, :5]
         # Outputs from our preset checkpoints should be stable!
         # We should only update these numbers if we are updating a weights file,
         # or have found a bug where output did not match the upstream source.
-        expected_outputs = [-1.38173, 0.16598, -2.92788, -2.66958, -0.61556]
+        expected_outputs = [-0.1116, -0.0375, -0.2624, 0.00891, -0.0061]
         # Keep a high tolerance, so we are robust to different hardware.
         self.assertAllClose(outputs, expected_outputs, atol=0.01, rtol=0.01)
 
