@@ -98,14 +98,14 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
         config["max_sequence_length"] = 1
         self.assertEqual(config["max_sequence_length"], 1)
         self.assertEqual(
-            self.model.presets[preset]["config"]["max_sequence_length"], 512
+            self.model.presets[preset]["config"]["max_sequence_length"], 1024
         )
         # Cannot mutate presets in the class
         config = GPT2.presets[preset]["config"]
         config["max_sequence_length"] = 1
         self.assertEqual(config["max_sequence_length"], 1)
         self.assertEqual(
-            GPT2.presets[preset]["config"]["max_sequence_length"], 512
+            GPT2.presets[preset]["config"]["max_sequence_length"], 1024
         )
 
     def test_preset_docstring(self):
