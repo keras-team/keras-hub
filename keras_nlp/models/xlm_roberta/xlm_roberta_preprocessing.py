@@ -27,7 +27,7 @@ from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class XLMRobertaTokenizer(SentencePieceTokenizer):
-    """XLM-RoBERTa tokenizer layer based on the SentencePiece subword tokenizer.
+    """XLM-RoBERTa tokenizer layer based on SentencePiece.
 
     This tokenizer class will tokenize raw strings into integer sequences and
     is based on `keras_nlp.tokenizers.SentencePieceTokenizer`. Unlike the
