@@ -55,7 +55,7 @@ class GPT2Tokenizer(BytePairTokenizer):
     >>> merges += ["i g", "h t", "Ġs u", "Ġa f", "ge nt", "no on", "re fu"]
     >>> merges += ["Ġsu n", "Ġaf t", "refu l", "Ġaft er"] # Ġ for whitespace
     >>> inputs = [" afternoon sun", "refulgent sun"]
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
+    >>> tokenizer = keras_nlp.models.GPT2Tokenizer(
     ...     vocabulary=vocab,
     ...     merges=merges,
     ... )
@@ -67,7 +67,7 @@ class GPT2Tokenizer(BytePairTokenizer):
     >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
     >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
     >>> inputs = " afternoon sun"
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
+    >>> tokenizer = keras_nlp.models.GPT2Tokenizer(
     ...     vocabulary=vocab,
     ...     merges=merges,
     ... )
@@ -79,7 +79,7 @@ class GPT2Tokenizer(BytePairTokenizer):
     >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
     >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
     >>> inputs = " afternoon sun"
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
+    >>> tokenizer = keras_nlp.models.GPT2Tokenizer(
     ...     vocabulary=vocab,
     ...     merges=merges,
     ... )
