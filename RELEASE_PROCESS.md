@@ -65,6 +65,9 @@ Use the following steps to create an `X.Y.0` release.
 
    ![Release page screenshot](.github/assets/release_screenshot.png)
 
+   Making a github release will automatically kick off a pypi release, as
+   configured by [this file](.github/workflows/publish-to-pypi.yml).
+
 4. Wait a few minutes until the release appears on pypi, then test out the
    release by running `pip install keras-nlp==X.Y.0.dev0`.
 
@@ -169,6 +172,9 @@ to push certain fixes out to our users.
    same name on publish. You can use the following screenshot as a reference.
 
    ![Release page screenshot](.github/assets/release_screenshot.png)
+
+   Making a github release will automatically kick off a pypi release, as
+   configured by [this file](.github/workflows/publish-to-pypi.yml).
 
 4. Wait a few minutes until the release appears on pypi, then test out the
    release by running `pip install keras-nlp==X.Y.Z.dev0`.
