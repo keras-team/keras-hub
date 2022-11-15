@@ -182,7 +182,8 @@ class DistilBertPreprocessor(keras.layers.Layer):
     ds = ds.map(
         lambda x, y: (preprocessor(x), y),
         num_parallel_calls=tf.data.AUTOTUNE,
-    )    ```
+    )
+    ```
     """
 
     def __init__(
