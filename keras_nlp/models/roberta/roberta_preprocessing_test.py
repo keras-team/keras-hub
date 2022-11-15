@@ -187,10 +187,10 @@ class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         )
 
     def test_detokenize(self):
-        input_tokens = [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]]
+        input_tokens = [0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]
         output = self.preprocessor.tokenizer.detokenize(input_tokens)
-        self.assertAllEqual(
-            output, ["<s> airplane at airport</s><pad><pad><pad><pad><pad>"]
+        self.assertEqual(
+            output, "<s> airplane at airport</s><pad><pad><pad><pad><pad>"
         )
 
     @parameterized.named_parameters(
