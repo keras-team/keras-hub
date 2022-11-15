@@ -65,20 +65,21 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
             self.model(input_data)
 
     def test_valid_call_presets(self):
-        # Test preset loading without weights
-        for preset in GPT2.presets:
-            model = GPT2.from_preset(preset, load_weights=False, name="encoder")
-            input_data = {
-                "token_ids": tf.ones(
-                    (self.batch_size, self.model.max_sequence_length),
-                    dtype="int32",
-                ),
-                "padding_mask": tf.ones(
-                    (self.batch_size, self.model.max_sequence_length),
-                    dtype="int32",
-                ),
-            }
-            model(input_data)
+        # Test preset loading without weights. Here, we test only `gpt2_base`.
+        model = GPT2.from_preset(
+            GPT2.presets["gpt2_base"], load_weights=False, name="encoder"
+        )
+        input_data = {
+            "token_ids": tf.ones(
+                (self.batch_size, self.model.max_sequence_length),
+                dtype="int32",
+            ),
+            "padding_mask": tf.ones(
+                (self.batch_size, self.model.max_sequence_length),
+                dtype="int32",
+            ),
+        }
+        model(input_data)
 
     def test_unknown_preset_error(self):
         # Not a preset name
