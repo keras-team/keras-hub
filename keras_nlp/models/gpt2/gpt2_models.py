@@ -223,14 +223,15 @@ class GPT2(keras.Model):
         }
 
         # Load architecture and weights from preset
-        model = GPT2.from_preset("gpt2_base_webtext")
+        model = GPT2.from_preset("gpt2_base")
         output = model(input_data)
 
         # Load randomly initalized model from preset architecture
-        model = GPT2.from_preset("gpt2_base_webtext", load_weights=False)
+        model = GPT2.from_preset("gpt2_base", load_weights=False)
         output = model(input_data)
         ```
         """
+
         if preset not in cls.presets:
             raise ValueError(
                 "`preset` must be one of "

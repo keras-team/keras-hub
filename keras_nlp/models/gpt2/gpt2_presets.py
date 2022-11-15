@@ -14,7 +14,7 @@
 
 # Metadata for loading pretrained model weights.
 backbone_presets = {
-    "gpt2_base_webtext": {
+    "gpt2_base": {
         "config": {
             "vocabulary_size": 50257,
             "num_layers": 12,
@@ -37,7 +37,7 @@ backbone_presets = {
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
-    "gpt2_medium_webtext": {
+    "gpt2_medium": {
         "config": {
             "vocabulary_size": 50257,
             "num_layers": 24,
@@ -60,7 +60,7 @@ backbone_presets = {
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_medium/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
-    "gpt2_large_webtext": {
+    "gpt2_large": {
         "config": {
             "vocabulary_size": 50257,
             "num_layers": 36,
@@ -83,7 +83,7 @@ backbone_presets = {
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_large/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
-    "gpt2_extra_large_webtext": {
+    "gpt2_extra_large": {
         "config": {
             "vocabulary_size": 50257,
             "num_layers": 48,

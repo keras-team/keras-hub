@@ -33,7 +33,7 @@ class GPT2PresetSmokeTest(tf.test.TestCase):
             "token_ids": tf.constant([[1169, 2068, 7586, 21831, 13]]),
             "padding_mask": tf.constant([[1, 1, 1, 1, 1]]),
         }
-        model = GPT2.from_preset("gpt2_base_webtext")
+        model = GPT2.from_preset("gpt2_base")
         outputs = model(input_data)[0, 0, :5]
         # Outputs from our preset checkpoints should be stable!
         # We should only update these numbers if we are updating a weights file,

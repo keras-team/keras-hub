@@ -88,26 +88,6 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
                 load_weights=False,
             )
 
-    def test_preset_mutability(self):
-        preset = "gpt2_base_webtext"
-        # Cannot overwrite the presents attribute in an object
-        with self.assertRaises(AttributeError):
-            self.model.presets = {"my_model": "clowntown"}
-        # Cannot mutate presents in an object
-        config = self.model.presets[preset]["config"]
-        config["max_sequence_length"] = 1
-        self.assertEqual(config["max_sequence_length"], 1)
-        self.assertEqual(
-            self.model.presets[preset]["config"]["max_sequence_length"], 1024
-        )
-        # Cannot mutate presets in the class
-        config = GPT2.presets[preset]["config"]
-        config["max_sequence_length"] = 1
-        self.assertEqual(config["max_sequence_length"], 1)
-        self.assertEqual(
-            GPT2.presets[preset]["config"]["max_sequence_length"], 1024
-        )
-
     def test_preset_docstring(self):
         """Check we did our docstring formatting correctly."""
         for name in GPT2.presets:
