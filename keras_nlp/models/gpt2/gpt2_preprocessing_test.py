@@ -56,9 +56,9 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output, [[1, 2, 3, 1, 4], [5, 6, 7, 8, 9]])
 
     def test_detokenize(self):
-        input_tokens = [[1, 2, 3, 1, 4]]
+        input_tokens = [1, 2, 3, 1, 4]
         output = self.tokenizer.detokenize(input_tokens)
-        self.assertAllEqual(output, [" airplane at airport"])
+        self.assertAllEqual(output, " airplane at airport")
 
     def test_vocabulary_size(self):
         self.assertEqual(self.tokenizer.vocabulary_size(), 10)

@@ -49,41 +49,26 @@ class GPT2Tokenizer(BytePairTokenizer):
     Examples:
 
     Batched inputs.
-    >>> vocab = {
-    ...     "<|endoftext|>": 0,
-    ...     "reful": 1,
-    ...     "gent": 2,
-    ...     "Ġafter": 3,
-    ...     "noon": 4,
-    ...     "Ġsun": 5,
-    ... }
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "reful": 3, "gent": 4}
+    >>> vocab = {**vocab, **{"Ġafter": 5, "noon": 6, "Ġsun": 7}}
     >>> merges = ["Ġ a", "Ġ s", "r e", "f u", "g e", "n t"]
     >>> merges += ["e r", "n o", "o n", "i g", "h t"]
     >>> merges += ["Ġs u", "Ġa f", "ge nt", "no on", "re fu"]
     >>> merges += ["Ġsu n", "Ġaf t", "refu l", "Ġaft er"]
     >>> inputs = [" afternoon sun", "refulgent sun"]
-    >>> tokenizer = keras_nlp.models.GPT2Tokenizer(
+    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
     ...     vocabulary=vocab,
     ...     merges=merges,
     ... )
     >>> tokenizer(inputs)
-    <tf.RaggedTensor [[3, 4, 5], [1, 2, 5]]>
+    <tf.RaggedTensor [[5, 6, 7], [3, 4, 7]]>
 
     Unbatched input.
-    >>> vocab = {
-    ...     "<|endoftext|>": 0,
-    ...     "reful": 1,
-    ...     "gent": 2,
-    ...     "Ġafter": 3,
-    ...     "noon": 4,
-    ...     "Ġsun": 5,
-    ... }
-    >>> merges = ["Ġ a", "Ġ s", "r e", "f u", "g e", "n t"]
-    >>> merges += ["e r", "n o", "o n", "i g", "h t"]
-    >>> merges += ["Ġs u", "Ġa f", "ge nt", "no on", "re fu"]
-    >>> merges += ["Ġsu n", "Ġaf t", "refu l", "Ġaft er"]
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "Ġafter": 3, "noon": 4, "Ġsun": 5}
+    >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
+    >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
     >>> inputs = " afternoon sun"
-    >>> tokenizer = keras_nlp.models.GPT2Tokenizer(
+    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
     ...     vocabulary=vocab,
     ...     merges=merges,
     ... )
@@ -91,20 +76,11 @@ class GPT2Tokenizer(BytePairTokenizer):
     <tf.Tensor: shape=(3,), dtype=int32, numpy=array([3, 4, 5], dtype=int32)>
 
     Detokenization.
-    >>> vocab = {
-    ...     "<|endoftext|>": 0,
-    ...     "reful": 1,
-    ...     "gent": 2,
-    ...     "Ġafter": 3,
-    ...     "noon": 4,
-    ...     "Ġsun": 5,
-    ... }
-    >>> merges = ["Ġ a", "Ġ s", "r e", "f u", "g e", "n t"]
-    >>> merges += ["e r", "n o", "o n", "i g", "h t"]
-    >>> merges += ["Ġs u", "Ġa f", "ge nt", "no on", "re fu"]
-    >>> merges += ["Ġsu n", "Ġaf t", "refu l", "Ġaft er"]
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "Ġafter": 3, "noon": 4, "Ġsun": 5}
+    >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
+    >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
     >>> inputs = " afternoon sun"
-    >>> tokenizer = keras_nlp.models.GPT2Tokenizer(
+    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
     ...     vocabulary=vocab,
     ...     merges=merges,
     ... )
