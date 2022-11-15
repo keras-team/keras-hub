@@ -91,12 +91,12 @@ Use the following steps to create an `X.Y.0` release.
    ```
 
 5. We are now ready to cut the official release! Make a PR similar to step 2,
-   but updating the release number to `X.Y.0`. Land the PR.
+   but updating the release number to `X.Y.0` (no `.dev0` suffix). Land the PR.
 
    Confirm that the latest commit on our release branch is green before making
    the actual release! We should not release if there are any test failures.
 
-   Make a release similar to step 3, but without `.dev0` in the tag or title.
+   Make a release similar to step 3, but updating the tag and title to `X.Y.0`.
    Leave "Set as pre-release" unchecked and check the box that says
    "Set as the latest release".
 
@@ -184,12 +184,12 @@ to push certain fixes out to our users.
    the release.
 
 5. We are now ready to cut the official release! Make a PR similar to step 2,
-   but updating the release number to `X.Y.0`. Land the PR.
+   but updating the release number to `X.Y.Z` (no `.dev0` suffix). Land the PR.
 
    Confirm that the latest commit on our release branch is green before making
    the actual release! We should not release if there are any test failures.
 
-   Make a release similar to step 3, but without `.dev0` in the tag or title.
+   Make a release similar to step 3, but updating the tag and title to `X.Y.Z`.
    Leave "Set as pre-release" unchecked and check the box that says
    "Set as the latest release" if `X.Y` is the latest stable release series.
 
