@@ -51,10 +51,9 @@ class GPT2Tokenizer(BytePairTokenizer):
     Batched inputs.
     >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "reful": 3, "gent": 4}
     >>> vocab = {**vocab, **{"Ġafter": 5, "noon": 6, "Ġsun": 7}}
-    >>> merges = ["Ġ a", "Ġ s", "r e", "f u", "g e", "n t"]
-    >>> merges += ["e r", "n o", "o n", "i g", "h t"]
-    >>> merges += ["Ġs u", "Ġa f", "ge nt", "no on", "re fu"]
-    >>> merges += ["Ġsu n", "Ġaf t", "refu l", "Ġaft er"]
+    >>> merges = ["Ġ a", "Ġ s", "r e", "f u", "g e", "n t", "e r", "n o", "o n"]
+    >>> merges += ["i g", "h t", "Ġs u", "Ġa f", "ge nt", "no on", "re fu"]
+    >>> merges += ["Ġsu n", "Ġaf t", "refu l", "Ġaft er"] # Ġ for whitespace
     >>> inputs = [" afternoon sun", "refulgent sun"]
     >>> tokenizer = keras_nlp.models.RobertaTokenizer(
     ...     vocabulary=vocab,
