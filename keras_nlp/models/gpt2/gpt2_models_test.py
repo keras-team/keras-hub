@@ -67,7 +67,7 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call_presets(self):
         # Test preset loading without weights. Here, we test only `gpt2_base`.
         model = GPT2.from_preset(
-            GPT2.presets["gpt2_base"], load_weights=False, name="encoder"
+            "gpt2_base", load_weights=False, name="encoder"
         )
         input_data = {
             "token_ids": tf.ones(
