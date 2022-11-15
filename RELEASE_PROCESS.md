@@ -30,7 +30,7 @@ Use the following steps to create an `X.Y.0` release.
 
    ```shell
    git fetch --all
-   git checkout -b rX.Y upstream/master
+   git checkout --no-track -b rX.Y upstream/master
    git push -u upstream rX.Y
    ```
 
@@ -47,7 +47,7 @@ Use the following steps to create an `X.Y.0` release.
 
    ```shell
    git fetch --all
-   git checkout -b version-bump-X.Y.0.dev0 upstream/rX.Y
+   git checkout --no-track -b version-bump-X.Y.0.dev0 upstream/rX.Y
    # Update both setup.py and keras_nlp/__init__.py with an editor.
    git commit -m "Version bump to X.Y.0.dev0"
    git push -u origin version-bump-X.Y.0.dev0
@@ -108,7 +108,7 @@ Use the following steps to create an `X.Y.0` release.
 
    ```shell
    git fetch --all
-   git checkout -b version-bump-X.Ŷ.0 upstream/master
+   git checkout --no-track -b version-bump-X.Ŷ.0 upstream/master
    # Update both setup.py and keras_nlp/__init__.py with an editor.
    git commit -m "Version bump to X.Ŷ.0"
    git push -u origin version-bump-X.Ŷ.0
@@ -156,7 +156,7 @@ to push certain fixes out to our users.
 
    ```shell
    git fetch --all
-   git checkout -b version-bump-X.Y.Z.dev0 upstream/rX.Y
+   git checkout --no-track -b version-bump-X.Y.Z.dev0 upstream/rX.Y
    # Update both setup.py and keras_nlp/__init__.py with an editor.
    git commit -m "Version bump to X.Y.Z.dev0"
    git push -u origin version-bump-X.Y.Z.dev0
