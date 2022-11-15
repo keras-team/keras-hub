@@ -169,9 +169,8 @@ to push certain fixes out to our users.
    [this link](https://github.com/keras-team/keras-nlp/releases/new).
 
    This release should be titled `X.Y.Z.dev0`, and create a new tag with the
-   same name on publish. You can use the following screenshot as a reference.
-
-   ![Release page screenshot](.github/assets/release_screenshot.png)
+   same name on publish. Refer to the screenshot above for details on the
+   github release page setup.
 
    Making a github release will automatically kick off a pypi release, as
    configured by [this file](.github/workflows/publish-to-pypi.yml).
