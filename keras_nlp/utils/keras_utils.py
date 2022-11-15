@@ -27,3 +27,28 @@ def clone_initializer(initializer):
         return initializer
     config = initializer.get_config()
     return initializer.__class__.from_config(config)
+
+
+def pack_x_y_sample_weight(x, y=None, sample_weight=None):
+    """Packs user-provided data into a tuple.
+
+    This is a temporary copy of `keras.utils.pack_x_y_sample_weight` while we
+    wait for the change in the following PR to get released:
+    https://github.com/keras-team/keras/pull/17233
+
+    The change makes it so that dictionary features are not packed in a tuple
+    needlessly. This is important for KerasNLP as almost all of our model inputs
+    are dicts.
+
+    We will likely want to carry this change until Tensorflow 2.12 is the
+    default installation on colab.
+    """
+    if y is None:
+        if not isinstance(x, (list, tuple)):
+            return x
+        else:
+            return (x,)
+    elif sample_weight is None:
+        return (x, y)
+    else:
+        return (x, y, sample_weight)
