@@ -49,8 +49,8 @@ class GPT2Tokenizer(BytePairTokenizer):
     Examples:
 
     Batched inputs.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "reful": 3, "gent": 4}
-    >>> vocab = {**vocab, **{"Ġafter": 5, "noon": 6, "Ġsun": 7}}
+    >>> vocab = {"<|endoftext|>": 0, "reful":1, "gent": 2, "Ġafter": 3}
+    >>> vocab = {**vocab, **{"noon": 4, "Ġsun": 5}}
     >>> merges = ["Ġ a", "Ġ s", "r e", "f u", "g e", "n t", "e r", "n o", "o n"]
     >>> merges += ["i g", "h t", "Ġs u", "Ġa f", "ge nt", "no on", "re fu"]
     >>> merges += ["Ġsu n", "Ġaf t", "refu l", "Ġaft er"] # Ġ for whitespace
@@ -60,10 +60,10 @@ class GPT2Tokenizer(BytePairTokenizer):
     ...     merges=merges,
     ... )
     >>> tokenizer(inputs)
-    <tf.RaggedTensor [[5, 6, 7], [3, 4, 7]]>
+    <tf.RaggedTensor [[3, 4, 5], [1, 2, 5]]>
 
     Unbatched input.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "Ġafter": 3, "noon": 4, "Ġsun": 5}
+    >>> vocab = {"<|endoftext|>": 0, "Ġafter": 1, "noon": 2, "Ġsun": 3}
     >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
     >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
     >>> inputs = " afternoon sun"
@@ -72,10 +72,10 @@ class GPT2Tokenizer(BytePairTokenizer):
     ...     merges=merges,
     ... )
     >>> tokenizer(inputs)
-    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([3, 4, 5], dtype=int32)>
+    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([1, 2, 3], dtype=int32)>
 
     Detokenization.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "Ġafter": 3, "noon": 4, "Ġsun": 5}
+    >>> vocab = {"<|endoftext|>": 0, "Ġafter": 1, "noon": 2, "Ġsun": 3}
     >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
     >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
     >>> inputs = " afternoon sun"
