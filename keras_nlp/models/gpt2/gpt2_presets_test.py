@@ -34,7 +34,7 @@ class GPT2PresetSmokeTest(tf.test.TestCase):
             "gpt2_base",
         )
         outputs = tokenizer("The quick brown fox.")
-        expected_outputs = [464, 2068, 7586, 21831]
+        expected_outputs = [464, 2068, 7586, 21831, 13]
         self.assertAllEqual(outputs, expected_outputs)
 
     def test_backbone_output(self):
