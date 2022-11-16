@@ -18,4 +18,4 @@ from keras_nlp import models
 from keras_nlp import tokenizers
 from keras_nlp import utils
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
