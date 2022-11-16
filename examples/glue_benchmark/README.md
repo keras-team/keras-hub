@@ -9,13 +9,35 @@ It provides the functionalities below:
 
 To use the script, you need to change the code to load your pretrained model,
 and run the command below:
+
 ```shell
 python glue.py --task_name="mrpc" --batch_size=32 \
     --submission_file_path="glue_submissions/"
 ```
+
 By default the script finetunes on KerasNLP BERT model 
 `keras_nlp.models.Bert.from_preset("bert_tiny_uncased_en")`.
 
+To make a real GLUE leaderboard submission, you need to call the finetuning on 
+all tasks, and enter the submission directory then zip the submission files:
+
+```shell
+cd glue_submissions
+zip -r submission.zip *.tsv
+```
+
+GLUE submission requires the `submission.zip` contains `.tsv` file for all tasks
+, otherwise it will be a failed submission. An empty `.tsv` will also fail 
+because it checks the content. If you only want to evaluate on certain tasks, 
+you can download the sample submission, and put the `.tsv` files for tasks you 
+don't run inside your submission file. For example if you don't want to 
+run the `ax` task, then you can do:
+
+```
+curl -O https://gluebenchmark.com/assets/CBOW.zip
+unzip CBOW.zip -d sample_submissions
+cp sample_submissions/AX.tsv glue_submissions
+```
 
 ## How to Use the Script
 
@@ -91,6 +113,6 @@ using the default `GlueClassifier`. Remember to set flag
 | batch_size                 	| Data batch size                                 	| 32      	|
 | epochs                     	| Number of epochs to run finetuning.             	| 2       	|
 | learning_rate              	| The optimizer's learning rate                   	| 5e-5    	|
-| submission_file_path       	| The file path to save the glue submission file. 	| None    	|
+| submission_directory       	| The file path to save the glue submission file. 	| None    	|
 | use_default_classifier     	| If using the default classifier.                	| True    	|
 | finetuning_model_save_path 	| The path to save the finetuning model.          	| None    	|

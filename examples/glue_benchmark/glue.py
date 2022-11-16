@@ -13,6 +13,7 @@
 # limitations under the License.
 import csv
 import os
+import numpy as np
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -49,9 +50,9 @@ flags.DEFINE_float(
 )
 
 flags.DEFINE_string(
-    "submission_file_path",
+    "submission_directory",
     None,
-    "The file path to save the glue submission file.",
+    "The directory to save the glue submission file.",
 )
 
 flags.DEFINE_bool(
@@ -68,13 +69,17 @@ flags.DEFINE_string(
 
 
 def load_data(task_name):
-    # Load GLUE dataset, and convert the dictionary format to (features, label),
-    # where features is a tuple of all input sentences.
+    """
+    Load GLUE dataset.
+
+    Load GLUE dataset, and convert the dictionary format to (features, label),
+    where features is a tuple of all input sentences.
+    """
     if task_name in ("cola", "sst2"):
         feature_names = ("sentence",)
     elif task_name in ("mrpc", "stsb", "rte", "wnli"):
         feature_names = ("sentence1", "sentence2")
-    elif task_name in ("mnli", "mnli_matched", "mnli_mismatched"):
+    elif task_name in ("mnli", "mnli_matched", "mnli_mismatched", "ax"):
         feature_names = ("premise", "hypothesis")
     elif task_name in "qnli":
         feature_names = ("question", "sentence")
@@ -88,7 +93,7 @@ def load_data(task_name):
         # For "mnli", just run default to "mnli_matched".
         task_name = "mnli"
         test_suffix = "_matched"
-    elif task_name in ("mnli_mismatched",):
+    elif task_name in ("mnli_mismatched"):
         task_name = "mnli"
         test_suffix = "_mismatched"
 
@@ -100,10 +105,21 @@ def load_data(task_name):
         label = x["label"]
         return (features, label)
 
-    train_ds, test_ds, validation_ds = tfds.load(
-        f"glue/{task_name}",
-        split=["train", "test" + test_suffix, "validation" + test_suffix],
-    )
+    if task_name == "ax":
+        # AX is trained and evaluated on MNLI, and has its own test split.
+        train_ds, validation_ds = tfds.load(
+            "glue/mnli",
+            split=["train", "validation_matched"],
+        )
+        test_ds = tfds.load(
+            "glue/ax",
+            split="test",
+        )
+    else:
+        train_ds, test_ds, validation_ds = tfds.load(
+            f"glue/{task_name}",
+            split=["train", "test" + test_suffix, "validation" + test_suffix],
+        )
     train_ds = train_ds.map(split_features, num_parallel_calls=tf.data.AUTOTUNE)
     test_ds = test_ds.map(split_features, num_parallel_calls=tf.data.AUTOTUNE)
     validation_ds = validation_ds.map(
@@ -113,7 +129,7 @@ def load_data(task_name):
 
 
 def preprocess_data(preprocess_fn, dataset):
-    # Run `proprocess_fn` on input dataset then batch & prefetch.
+    """Run `proprocess_fn` on input dataset then batch & prefetch."""
     return (
         dataset.map(preprocess_fn)
         .batch(FLAGS.batch_size)
@@ -122,7 +138,7 @@ def preprocess_data(preprocess_fn, dataset):
 
 
 def generate_submission_files(finetuning_model, test_ds):
-    # Generate GLUE leaderboard submission files.
+    """Generate GLUE leaderboard submission files."""
     filenames = {
         "cola": "CoLA.tsv",
         "sst2": "SST-2.tsv",
@@ -134,50 +150,37 @@ def generate_submission_files(finetuning_model, test_ds):
         "qnli": "QNLI.tsv",
         "rte": "RTE.tsv",
         "wnli": "WNLI.tsv",
+        "ax": "AX.tsv"
     }
 
     labelnames = {
         "mnli_matched": ["entailment", "neutral", "contradiction"],
         "mnli_mismatched": ["entailment", "neutral", "contradiction"],
+        "ax": ["entailment", "neutral", "contradiction"],
         "qnli": ["entailment", "not_entailment"],
         "rte": ["entailment", "not_entailment"],
     }
-    if not os.path.exists(FLAGS.submission_file_path):
-        os.makedirs(FLAGS.submission_file_path)
-    filename = FLAGS.submission_file_path + "/" + filenames[FLAGS.task_name]
-
-    # This format is used for distribution strategy compatibility.
-    def eval_step(iterator):
-        def step_fn(inputs):
-            x, _ = inputs
-            prob = finetuning_model(x)
-            pred = tf.argmax(prob, -1)
-            return pred
-
-        return step_fn(next(iterator))
+    if not os.path.exists(FLAGS.submission_directory):
+        os.makedirs(FLAGS.submission_directory)
+    filename = FLAGS.submission_directory + "/" + filenames[FLAGS.task_name]
 
     labelname = labelnames.get(FLAGS.task_name)
-    test_iterator = iter(test_ds)
     with tf.io.gfile.GFile(filename, "w") as f:
         # GLUE requires a format of index + tab + prediction.
         writer = csv.writer(f, delimiter="\t")
         # Write the required headline for GLUE.
         writer.writerow(["index", "prediction"])
-        for i in range(test_ds.cardinality()):
-            # TODO(chenmoneygithub): Add distribution strategy support.
-            pred = eval_step(test_iterator)
-            pred = pred.numpy()
-            for j in range(len(pred)):
-                idx = i * FLAGS.batch_size + j
-                if labelname:
-                    pred_value = labelname[int(pred[j])]
-                else:
-                    pred_value = pred[j]
-                writer.writerow([idx, pred_value])
-            break
+        predictions = finetuning_model.predict(test_ds.take(5))
+        predictions = np.argmax(predictions, -1)
+        for idx, pred in enumerate(predictions):
+            if labelname:
+                pred_value = labelname[int(pred)]
+            else:
+                pred_value = pred
+            writer.writerow([idx, pred_value])
 
 
-@keras.utils.register_keras_serializable(package="custom")
+@keras.utils.register_keras_serializable(package="keras_nlp/examples")
 class GlueClassifier(keras.Model):
     """Default classification model for GLUE tasks.
 
@@ -276,7 +279,7 @@ def main(_):
         train_ds, validation_data=val_ds, epochs=FLAGS.epochs, steps_per_epoch=1
     )
 
-    if FLAGS.submission_file_path:
+    if FLAGS.submission_directory:
         generate_submission_files(finetuning_model, test_ds)
 
     if FLAGS.finetuning_model_save_path:
