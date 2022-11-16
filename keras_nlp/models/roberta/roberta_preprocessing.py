@@ -19,16 +19,127 @@ import tensorflow_text as tf_text
 from tensorflow import keras
 
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+from keras_nlp.utils.python_utils import classproperty
+
+
+@keras.utils.register_keras_serializable(package="keras_nlp")
+class RobertaTokenizer(BytePairTokenizer):
+    """A RoBERTa tokenizer using Byte-Pair Encoding subword segmentation.
+
+    This tokenizer class will tokenize raw strings into integer sequences and
+    is based on `keras_nlp.tokenizers.BytePairTokenizer`. Unlike the
+    underlying tokenizer, it will check for all special tokens needed by RoBERTa
+    models and provides a `from_preset()` method to automatically download
+    a matching vocabulary for a RoBERTa preset.
+
+    This tokenizer does not provide truncation or padding of inputs. It can be
+    combined with a `keras_nlp.models.RobertaPreprocessor` layer for input
+    packing.
+
+    If input is a batch of strings (rank > 0), the layer will output a
+    `tf.RaggedTensor` where the last dimension of the output is ragged.
+
+    If input is a scalar string (rank == 0), the layer will output a dense
+    `tf.Tensor` with static shape `[None]`.
+
+    Args:
+        vocabulary: string or dict, maps token to integer ids. If it is a
+            string, it should be the file path to a json file.
+        merges: string or list, contains the merge rule. If it is a string,
+            it should be the file path to merge rules. The merge rule file
+            should have one merge rule per line. Every merge rule contains
+            merge entities separated by a space.
+
+    Examples:
+
+    Batched inputs.
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "reful": 3, "gent": 4}
+    >>> vocab = {**vocab, **{"Ġafter": 5, "noon": 6, "Ġsun": 7}}
+    >>> merges = ["Ġ a", "Ġ s", "r e", "f u", "g e", "n t"]
+    >>> merges += ["e r", "n o", "o n", "i g", "h t"]
+    >>> merges += ["Ġs u", "Ġa f", "ge nt", "no on", "re fu"]
+    >>> merges += ["Ġsu n", "Ġaf t", "refu l", "Ġaft er"]
+    >>> inputs = [" afternoon sun", "refulgent sun"]
+    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
+    ...     vocabulary=vocab,
+    ...     merges=merges,
+    ... )
+    >>> tokenizer(inputs)
+    <tf.RaggedTensor [[5, 6, 7], [3, 4, 7]]>
+
+    Unbatched input.
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "Ġafter": 3, "noon": 4, "Ġsun": 5}
+    >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
+    >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
+    >>> inputs = " afternoon sun"
+    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
+    ...     vocabulary=vocab,
+    ...     merges=merges,
+    ... )
+    >>> tokenizer(inputs)
+    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([3, 4, 5], dtype=int32)>
+
+    Detokenization.
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "Ġafter": 3, "noon": 4, "Ġsun": 5}
+    >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
+    >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
+    >>> inputs = " afternoon sun"
+    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
+    ...     vocabulary=vocab,
+    ...     merges=merges,
+    ... )
+    >>> tokenizer.detokenize(tokenizer.tokenize(inputs)).numpy().decode('utf-8')
+    ' afternoon sun'
+    """
+
+    def __init__(
+        self,
+        vocabulary,
+        merges,
+        **kwargs,
+    ):
+        super().__init__(
+            vocabulary=vocabulary,
+            merges=merges,
+            **kwargs,
+        )
+
+        # Check for necessary special tokens.
+        start_token = "<s>"
+        pad_token = "<pad>"
+        end_token = "</s>"
+        for token in [start_token, pad_token, end_token]:
+            if token not in self.get_vocabulary():
+                raise ValueError(
+                    f"Cannot find token `'{token}'` in the provided "
+                    f"`vocabulary`. Please provide `'{token}'` in your "
+                    "`vocabulary` or use a pretrained `vocabulary` name."
+                )
+
+        self.start_token_id = self.token_to_id(start_token)
+        self.pad_token_id = self.token_to_id(pad_token)
+        self.end_token_id = self.token_to_id(end_token)
+
+    @classproperty
+    def presets(cls):
+        raise NotImplementedError
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        raise NotImplementedError
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class RobertaPreprocessor(keras.layers.Layer):
-    """RoBERTa preprocessing layer.
+    """RoBERTa preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
 
-    - Tokenize any number of inputs using a
-      `keras_nlp.tokenizers.BytePairTokenizer`.
+    - Tokenize any number of inputs using `tokenizer`.
     - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
       `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
       entire sequence, `"</s></s>"` at the end of each segment, save the last
@@ -40,17 +151,8 @@ class RobertaPreprocessor(keras.layers.Layer):
     single input tensor. If a single tensor is passed, it will be packed
     equivalently to a tuple with a single element.
 
-    The `BytePairTokenizer` can be accessed via the `tokenizer` property on
-    this layer, and can be used directly for custom packing on inputs.
-
     Args:
-        vocabulary: string or dict, maps token to integer ids. If it is a
-            string, it should be the file path to a json file.
-        merges: string or list, contains the merge rule. If it is a string,
-            it should be the file path to merge rules. The merge rule file
-            should have one merge rule per line. Every merge rule contains
-            merge entities separated by a space. Please refer to this example:
-            https://storage.googleapis.com/keras-nlp/models/roberta_base/merges.txt.
+        tokenizer: A `keras_nlp.models.RobertaTokenizer` instance.
         sequence_length: The length of the packed inputs.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
@@ -83,9 +185,12 @@ class RobertaPreprocessor(keras.layers.Layer):
     merges += ["Ġs u", "Ġa f", "Ġm o", "Ġb r","ge nt", "no on", "re fu", "ig ht"]
     merges += ["Ġn ight", "Ġsu n", "Ġaf t", "Ġmo on", "Ġbr ight", "refu l", "Ġaft er"]
 
-    preprocessor = keras_nlp.models.RobertaPreprocessor(
+    tokenizer = keras_nlp.models.RobertaTokenizer(
         vocabulary=vocab,
         merges=merges,
+    )
+    preprocessor = keras_nlp.models.RobertaPreprocessor(
+        tokenizer=tokenizer,
         sequence_length=20,
     )
 
@@ -122,55 +227,44 @@ class RobertaPreprocessor(keras.layers.Layer):
 
     def __init__(
         self,
-        vocabulary,
-        merges,
+        tokenizer,
         sequence_length=512,
         truncate="round_robin",
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self.tokenizer = BytePairTokenizer(
-            vocabulary=vocabulary,
-            merges=merges,
-        )
+        self._tokenizer = tokenizer
 
-        # Check for necessary special tokens.
-        start_token = "<s>"
-        pad_token = "<pad>"
-        end_token = "</s>"
-        for token in [start_token, pad_token, end_token]:
-            if token not in self.tokenizer.get_vocabulary():
-                raise ValueError(
-                    f"Cannot find token `'{token}'` in the provided "
-                    f"`vocabulary`. Please provide `'{token}'` in your "
-                    "`vocabulary` or use a pretrained `vocabulary` name."
-                )
-
-        self.pad_token_id = self.tokenizer.token_to_id(pad_token)
         self.packer = RobertaMultiSegmentPacker(
-            start_value=self.tokenizer.token_to_id(start_token),
-            end_value=self.tokenizer.token_to_id(end_token),
-            pad_value=self.pad_token_id,
+            start_value=self.tokenizer.start_token_id,
+            end_value=self.tokenizer.end_token_id,
+            pad_value=self.tokenizer.pad_token_id,
             truncate=truncate,
             sequence_length=sequence_length,
         )
 
-    def vocabulary_size(self):
-        """Returns the vocabulary size of the tokenizer."""
-        return self.tokenizer.vocabulary_size()
+    @property
+    def tokenizer(self):
+        """The `keras_nlp.models.RobertaTokenizer` used to tokenize strings."""
+        return self._tokenizer
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "vocabulary": self.tokenizer.vocabulary,
-                "merges": self.tokenizer.merges,
+                "tokenizer": keras.layers.serialize(self.tokenizer),
                 "sequence_length": self.packer.sequence_length,
                 "truncate": self.packer.truncate,
             }
         )
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        if "tokenizer" in config:
+            config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
+        return cls(**config)
 
     def call(self, inputs):
         if not isinstance(inputs, (list, tuple)):
@@ -180,7 +274,7 @@ class RobertaPreprocessor(keras.layers.Layer):
         token_ids = self.packer(inputs)
         return {
             "token_ids": token_ids,
-            "padding_mask": token_ids != self.pad_token_id,
+            "padding_mask": token_ids != self.tokenizer.pad_token_id,
         }
 
     @classmethod

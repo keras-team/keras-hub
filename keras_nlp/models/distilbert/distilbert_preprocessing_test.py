@@ -13,14 +13,73 @@
 # limitations under the License.
 """Tests for DistilBERT preprocessing layers."""
 
+import os
+
 import tensorflow as tf
+from absl.testing import parameterized
+from tensorflow import keras
 
 from keras_nlp.models.distilbert.distilbert_preprocessing import (
     DistilBertPreprocessor,
 )
+from keras_nlp.models.distilbert.distilbert_preprocessing import (
+    DistilBertTokenizer,
+)
 
 
-class DistilBertPreprocessorTest(tf.test.TestCase):
+class DistilBertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+    def setUp(self):
+        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
+        self.vocab += ["the", "quick", "brown", "fox"]
+
+    def test_tokenize(self):
+        input_data = "THE QUICK BROWN FOX."
+        tokenizer = DistilBertTokenizer(vocabulary=self.vocab)
+        output = tokenizer(input_data)
+        self.assertAllEqual(output, [5, 6, 7, 8, 1])
+
+    def test_tokenize_batch(self):
+        input_data = tf.constant(["THE QUICK BROWN FOX.", "THE FOX."])
+        tokenizer = DistilBertTokenizer(vocabulary=self.vocab)
+        output = tokenizer(input_data)
+        self.assertAllEqual(output, [[5, 6, 7, 8, 1], [5, 8, 1]])
+
+    def test_lowercase(self):
+        input_data = "THE QUICK BROWN FOX."
+        tokenizer = DistilBertTokenizer(vocabulary=self.vocab, lowercase=True)
+        output = tokenizer(input_data)
+        self.assertAllEqual(output, [9, 10, 11, 12, 1])
+
+    def test_detokenize(self):
+        input_tokens = [[5, 6, 7, 8]]
+        tokenizer = DistilBertTokenizer(vocabulary=self.vocab)
+        output = tokenizer.detokenize(input_tokens)
+        self.assertAllEqual(output, ["THE QUICK BROWN FOX"])
+
+    def test_vocabulary_size(self):
+        tokenizer = DistilBertTokenizer(vocabulary=self.vocab)
+        self.assertEqual(tokenizer.vocabulary_size(), 13)
+
+    @parameterized.named_parameters(
+        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+    )
+    def test_saving_model(self, save_format):
+        input_data = tf.constant(["THE QUICK BROWN FOX."])
+        tokenizer = DistilBertTokenizer(vocabulary=self.vocab)
+        inputs = keras.Input(dtype="string", shape=())
+        outputs = tokenizer(inputs)
+        model = keras.Model(inputs, outputs)
+        path = os.path.join(self.get_temp_dir(), "model")
+        model.save(path, save_format=save_format)
+        restored_model = keras.models.load_model(path)
+        self.assertAllEqual(
+            model(input_data),
+            restored_model(input_data),
+        )
+
+
+class DistilBertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
@@ -29,29 +88,90 @@ class DistilBertPreprocessorTest(tf.test.TestCase):
     def test_tokenize(self):
         input_data = ["THE QUICK BROWN FOX."]
         preprocessor = DistilBertPreprocessor(
-            vocabulary=self.vocab,
+            DistilBertTokenizer(vocabulary=self.vocab),
             sequence_length=8,
         )
         output = preprocessor(input_data)
         self.assertAllEqual(output["token_ids"], [2, 5, 6, 7, 8, 1, 3, 0])
         self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0])
 
-    def test_lowercase(self):
-        input_data = ["THE QUICK BROWN FOX."]
+    def test_tokenize_batch(self):
+        input_data = tf.constant(
+            [
+                "THE QUICK BROWN FOX.",
+                "THE QUICK BROWN FOX.",
+                "THE QUICK BROWN FOX.",
+                "THE QUICK BROWN FOX.",
+            ]
+        )
         preprocessor = DistilBertPreprocessor(
-            vocabulary=self.vocab,
+            DistilBertTokenizer(vocabulary=self.vocab),
             sequence_length=8,
-            lowercase=True,
         )
         output = preprocessor(input_data)
-        self.assertAllEqual(output["token_ids"], [2, 9, 10, 11, 12, 1, 3, 0])
+        self.assertAllEqual(output["token_ids"], [[2, 5, 6, 7, 8, 1, 3, 0]] * 4)
+        self.assertAllEqual(
+            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
+        )
 
-    def test_detokenize(self):
-        input_data = [[5, 6, 7, 8]]
-        preprocessor = DistilBertPreprocessor(vocabulary=self.vocab)
-        output = preprocessor.tokenizer.detokenize(input_data)
-        self.assertAllEqual(output, ["THE QUICK BROWN FOX"])
+    def test_tokenize_multiple_sentences(self):
+        sentence_one = "THE QUICK"
+        sentence_two = "BROWN FOX."
+        preprocessor = DistilBertPreprocessor(
+            DistilBertTokenizer(vocabulary=self.vocab),
+            sequence_length=8,
+        )
+        # The first tuple or list is always interpreted as an enumeration of
+        # separate sequences to concatenate.
+        output = preprocessor((sentence_one, sentence_two))
+        self.assertAllEqual(output["token_ids"], [2, 5, 6, 3, 7, 8, 1, 3])
+        self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1])
 
-    def test_vocabulary_size(self):
-        preprocessor = DistilBertPreprocessor(vocabulary=self.vocab)
-        self.assertEqual(preprocessor.vocabulary_size(), 13)
+    def test_tokenize_multiple_batched_sentences(self):
+        sentence_one = tf.constant(
+            [
+                "THE QUICK",
+                "THE QUICK",
+                "THE QUICK",
+                "THE QUICK",
+            ]
+        )
+        sentence_two = tf.constant(
+            [
+                "BROWN FOX.",
+                "BROWN FOX.",
+                "BROWN FOX.",
+                "BROWN FOX.",
+            ]
+        )
+        preprocessor = DistilBertPreprocessor(
+            DistilBertTokenizer(vocabulary=self.vocab),
+            sequence_length=8,
+        )
+        # The first tuple or list is always interpreted as an enumeration of
+        # separate sequences to concatenate.
+        output = preprocessor((sentence_one, sentence_two))
+        self.assertAllEqual(output["token_ids"], [[2, 5, 6, 3, 7, 8, 1, 3]] * 4)
+        self.assertAllEqual(
+            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1]] * 4
+        )
+
+    @parameterized.named_parameters(
+        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+    )
+    def test_saving_model(self, save_format):
+        input_data = tf.constant(["THE QUICK BROWN FOX."])
+        preprocessor = DistilBertPreprocessor(
+            DistilBertTokenizer(vocabulary=self.vocab),
+            sequence_length=8,
+        )
+        inputs = keras.Input(dtype="string", shape=())
+        outputs = preprocessor(inputs)
+        model = keras.Model(inputs, outputs)
+        path = os.path.join(self.get_temp_dir(), "model")
+        model.save(path, save_format=save_format)
+        restored_model = keras.models.load_model(path)
+        self.assertAllEqual(
+            model(input_data)["token_ids"],
+            restored_model(input_data)["token_ids"],
+        )

@@ -20,12 +20,20 @@ from keras_nlp.models.distilbert.distilbert_models import DistilBert
 from keras_nlp.models.distilbert.distilbert_preprocessing import (
     DistilBertPreprocessor,
 )
+from keras_nlp.models.distilbert.distilbert_preprocessing import (
+    DistilBertTokenizer,
+)
 from keras_nlp.models.distilbert.distilbert_tasks import DistilBertClassifier
 from keras_nlp.models.gpt2.gpt2_models import GPT2
+from keras_nlp.models.gpt2.gpt2_preprocessing import GPT2Tokenizer
 from keras_nlp.models.roberta.roberta_models import Roberta
 from keras_nlp.models.roberta.roberta_preprocessing import RobertaPreprocessor
+from keras_nlp.models.roberta.roberta_preprocessing import RobertaTokenizer
 from keras_nlp.models.roberta.roberta_tasks import RobertaClassifier
 from keras_nlp.models.xlm_roberta.xlm_roberta_models import XLMRoberta
 from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessing import (
     XLMRobertaPreprocessor,
+)
+from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessing import (
+    XLMRobertaTokenizer,
 )
