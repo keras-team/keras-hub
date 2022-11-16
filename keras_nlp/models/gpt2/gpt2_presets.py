@@ -24,9 +24,7 @@ backbone_presets = {
             "dropout": 0.1,
             "max_sequence_length": 1024,
         },
-        "preprocessor_config": {
-            # TODO: Add args here once the preprocessor has been implemented.
-        },
+        "preprocessor_config": {},
         "description": (
             "Base size of GPT-2 with 124M parameters. Trained on WebText."
         ),
@@ -47,9 +45,7 @@ backbone_presets = {
             "dropout": 0.1,
             "max_sequence_length": 1024,
         },
-        "preprocessor_config": {
-            # TODO: Add args here once the preprocessor has been implemented.
-        },
+        "preprocessor_config": {},
         "description": (
             "Medium size of GPT-2 with 355M parameters. Trained on WebText."
         ),
@@ -70,9 +66,7 @@ backbone_presets = {
             "dropout": 0.1,
             "max_sequence_length": 1024,
         },
-        "preprocessor_config": {
-            # TODO: Add args here once the preprocessor has been implemented.
-        },
+        "preprocessor_config": {},
         "description": (
             "Large size of GPT-2 with 774M parameters. Trained on WebText."
         ),
@@ -93,9 +87,7 @@ backbone_presets = {
             "dropout": 0.1,
             "max_sequence_length": 1024,
         },
-        "preprocessor_config": {
-            # TODO: Add args here once the preprocessor has been implemented.
-        },
+        "preprocessor_config": {},
         "description": (
             "Extra large size of GPT-2 with 1558M parameters. "
             "Trained on WebText."

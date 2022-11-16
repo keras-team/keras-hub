@@ -15,6 +15,7 @@
 """Tests for GPT-2 preprocessing layers."""
 
 import os
+import unittest
 
 import tensorflow as tf
 from absl.testing import parameterized
@@ -25,7 +26,7 @@ from keras_nlp.models.gpt2.gpt2_preprocessing import GPT2Tokenizer
 
 class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        vocab = {
+        self.vocab = {
             "<|endoftext|>": 0,
             "Ġair": 1,
             "plane": 2,
@@ -42,8 +43,9 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
         merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
         merges += ["pla ne"]
+        self.merges = merges
 
-        self.tokenizer = GPT2Tokenizer(vocabulary=vocab, merges=merges)
+        self.tokenizer = GPT2Tokenizer(vocabulary=self.vocab, merges=merges)
 
     def test_tokenize(self):
         input_data = " airplane at airport"
@@ -62,6 +64,30 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_vocabulary_size(self):
         self.assertEqual(self.tokenizer.vocabulary_size(), 10)
+
+    def test_unknown_preset_error(self):
+        # Not a preset name
+        with self.assertRaises(ValueError):
+            GPT2Tokenizer.from_preset("gpt2_base_clowntown")
+
+    def test_preset_docstring(self):
+        """Check we did our docstring formatting correctly."""
+        for name in GPT2Tokenizer.presets:
+            self.assertRegex(GPT2Tokenizer.from_preset.__doc__, name)
+
+    @unittest.mock.patch("tensorflow.keras.utils.get_file")
+    def test_valid_call_presets(self, get_file_mock):
+        """Ensure presets have necessary structure, but no RPCs."""
+        input_data = ["THE QUICK BROWN FOX."]
+        get_file_mock.side_effect = [self.vocab, self.merges] * len(
+            GPT2Tokenizer.presets
+        )
+        for preset in GPT2Tokenizer.presets:
+            tokenizer = GPT2Tokenizer.from_preset(preset)
+            tokenizer(input_data)
+        self.assertEqual(
+            get_file_mock.call_count, 2 * len(GPT2Tokenizer.presets)
+        )
 
     @parameterized.named_parameters(
         ("save_format_tf", "tf"), ("save_format_h5", "h5")

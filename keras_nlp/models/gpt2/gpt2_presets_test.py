@@ -17,6 +17,7 @@ import pytest
 import tensorflow as tf
 
 from keras_nlp.models.gpt2.gpt2_models import GPT2
+from keras_nlp.models.gpt2.gpt2_preprocessing import GPT2Tokenizer
 
 
 @pytest.mark.large
@@ -27,6 +28,14 @@ class GPT2PresetSmokeTest(tf.test.TestCase):
     This only tests the smallest weights we have available. Run with:
     `pytest keras_nlp/models/gpt2/gpt2_presets_test.py --run_large`
     """
+
+    def test_tokenizer_output(self):
+        tokenizer = GPT2Tokenizer.from_preset(
+            "gpt2_base",
+        )
+        outputs = tokenizer("The quick brown fox.")
+        expected_outputs = [464, 2068, 7586, 21831]
+        self.assertAllEqual(outputs, expected_outputs)
 
     def test_backbone_output(self):
         input_data = {
@@ -66,8 +75,7 @@ class GPT2PresetTest(tf.test.TestCase):
             }
             model(input_data)
 
-    # TODO
-    # def test_load_tokenizers(self):
-    #     for preset in GPT2Tokenizer.presets:
-    #         tokenizer = GPT2Tokenizer.from_preset(preset)
-    #         tokenizer("The quick brown fox.")
+    def test_load_tokenizers(self):
+        for preset in GPT2Tokenizer.presets:
+            tokenizer = GPT2Tokenizer.from_preset(preset)
+            tokenizer("The quick brown fox.")
