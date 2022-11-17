@@ -13,8 +13,8 @@
 # limitations under the License.
 import csv
 import os
-import numpy as np
 
+import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
 from absl import app
@@ -55,11 +55,6 @@ flags.DEFINE_string(
     "The directory to save the glue submission file.",
 )
 
-flags.DEFINE_bool(
-    "use_default_classifier",
-    True,
-    "If using the default classifier.",
-)
 
 flags.DEFINE_string(
     "finetuning_model_save_path",
@@ -150,7 +145,7 @@ def generate_submission_files(finetuning_model, test_ds):
         "qnli": "QNLI.tsv",
         "rte": "RTE.tsv",
         "wnli": "WNLI.tsv",
-        "ax": "AX.tsv"
+        "ax": "AX.tsv",
     }
 
     labelnames = {
@@ -170,7 +165,7 @@ def generate_submission_files(finetuning_model, test_ds):
         writer = csv.writer(f, delimiter="\t")
         # Write the required headline for GLUE.
         writer.writerow(["index", "prediction"])
-        predictions = finetuning_model.predict(test_ds.take(5))
+        predictions = finetuning_model.predict(test_ds.take(2))
         predictions = np.argmax(predictions, -1)
         for idx, pred in enumerate(predictions):
             if labelname:
@@ -178,53 +173,6 @@ def generate_submission_files(finetuning_model, test_ds):
             else:
                 pred_value = pred
             writer.writerow([idx, pred_value])
-
-
-@keras.utils.register_keras_serializable(package="keras_nlp/examples")
-class GlueClassifier(keras.Model):
-    """Default classification model for GLUE tasks.
-
-    `GlueClassifier` takes in a pretrained model as `backbone`, which must
-    output a single vector representation per input data. If the pretrained
-    model outputs a dictionary, users need to make a wrapper model to
-    extract out the representation.
-
-
-    Args:
-        backbone: A keras model instance. The output must be a single vector
-            representation per input data.
-        num_classes: int, the number of classes to predict.
-    """
-
-    def __init__(
-        self,
-        backbone,
-        num_classes=2,
-    ):
-        inputs = backbone.input
-        representation = backbone(inputs)
-        outputs = keras.layers.Dense(
-            num_classes,
-            kernel_initializer=keras.initializers.TruncatedNormal(stddev=0.02),
-            name="logits",
-        )(representation)
-        # Instantiate using Functional API Model constructor.
-        super().__init__(inputs=inputs, outputs=outputs)
-        # All references to `self` below this line.
-        self.backbone = backbone
-        self.num_classes = num_classes
-
-    def get_config(self):
-        return {
-            "backbone": keras.layers.serialize(self.backbone),
-            "num_classes": self.num_classes,
-        }
-
-    @classmethod
-    def from_config(cls, config):
-        if "backbone" in config:
-            config["backbone"] = keras.layers.deserialize(config["backbone"])
-        return cls(**config)
 
 
 def main(_):
@@ -245,34 +193,32 @@ def main(_):
     val_ds = preprocess_data(preprocess_fn, val_ds)
     test_ds = preprocess_data(preprocess_fn, test_ds)
 
-    if FLAGS.use_default_classifier:
-
-        # ----- Custom code block starts -----
-        # `bert_model` outputs a dictionary, so we need a wrapper model to
-        # output the single representation, i.e., "pooled_output" in the output.
-        inputs = bert_model.inputs
-        outputs = bert_model(inputs)["pooled_output"]
-        # ----- Custom code block ends -----
-
-        model_wrapper = keras.Model(inputs=inputs, outputs=outputs)
-        # Build the classifier based on the wrapper model.
-        finetuning_model = GlueClassifier(
-            backbone=model_wrapper,
-            num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
-        )
+    # ----- Custom code block starts -----
+    # Users should change this `BertClassifier` to your own classifier.
+    # Commonly the classifier is simply your model + several dense layers,
+    # please refer to "Make the Finetuning Model" section in README for
+    # detailed instructions.
+    loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    metrics = [keras.metrics.SparseCategoricalAccuracy()]
+    if FLAGS.task_name == "stsb":
+        num_classes = 1
+        loss = keras.losses.MeanSquaredError()
+        metrics = [keras.losses.MeanSquaredError()]
+    elif FLAGS.task_name in ("mnli", "mnli_mismatched", "mnli_matched", "ax"):
+        num_classes = 3
     else:
-        # ----- Custom code block starts -----
-        # If `use_default_classifier=False`, use the custom classifier.
-        finetuning_model = keras_nlp.models.BertClassifier(
-            backbone="bert_small_uncased_en",
-            num_classes=3 if FLAGS.task_name in ("mnli", "ax") else 2,
-        )
-        # ----- Custom code block ends -----
+        num_classes = 2
+
+    finetuning_model = keras_nlp.models.BertClassifier(
+        backbone=bert_model,
+        num_classes=num_classes,
+    )
+    # ----- Custom code block ends -----
 
     finetuning_model.compile(
         optimizer=tf.keras.optimizers.Adam(FLAGS.learning_rate),
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        metrics=[keras.metrics.SparseCategoricalAccuracy()],
+        loss=loss,
+        metrics=metrics,
     )
 
     finetuning_model.fit(
