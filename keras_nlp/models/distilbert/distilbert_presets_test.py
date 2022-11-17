@@ -64,9 +64,9 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         model = DistilBert.from_preset(
             "distilbert_base_uncased_en", load_weights=load_weights
         )
-        outputs = model(input_data)["sequence_output"][0, 0, :5]
+        outputs = model(input_data)[0, 0, :5]
         if load_weights:
-            expected_outputs = [-1.38173, 0.16598, -2.92788, -2.66958, -0.61556]
+            expected_outputs = [-0.2381, -0.1965, 0.1053, -0.0847, -0.145]
             self.assertAllClose(outputs, expected_outputs, atol=0.01, rtol=0.01)
 
     @parameterized.named_parameters(
@@ -112,7 +112,7 @@ class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
 
     This tests every DistilBERT preset and is only run manually.
     Run with:
-    `pytest keras_nlp/models/distilbert_presets_test.py --run_extra_large`
+    `pytest keras_nlp/models/distilbert/distilbert_presets_test.py --run_extra_large`
     """
 
     @parameterized.named_parameters(
