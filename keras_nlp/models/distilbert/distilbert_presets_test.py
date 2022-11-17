@@ -15,6 +15,7 @@
 
 import pytest
 import tensorflow as tf
+from absl.testing import parameterized
 
 from keras_nlp.models.distilbert.distilbert_models import DistilBert
 from keras_nlp.models.distilbert.distilbert_preprocessing import (
@@ -27,7 +28,7 @@ from keras_nlp.models.distilbert.distilbert_tasks import DistilBertClassifier
 
 
 @pytest.mark.large
-class DistilBertPresetSmokeTest(tf.test.TestCase):
+class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     """
     A smoke test for DistilBERT presets we run continuously.
 
@@ -52,47 +53,74 @@ class DistilBertPresetSmokeTest(tf.test.TestCase):
         expected_outputs = [101, 1996, 4248, 102]
         self.assertAllEqual(outputs, expected_outputs)
 
-    def test_backbone_output(self):
+    @parameterized.named_parameters(
+        ("preset_weights", True), ("random_weights", False)
+    )
+    def test_backbone_output(self, load_weights):
         input_data = {
             "token_ids": tf.constant([[101, 1996, 4248, 102]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = DistilBert.from_preset(
-            "distilbert_base_uncased_en",
+            "distilbert_base_uncased_en", load_weights=load_weights
         )
         outputs = model(input_data)["sequence_output"][0, 0, :5]
-        # Outputs from our preset checkpoints should be stable!
-        # We should only update these numbers if we are updating a weights file,
-        # or have found a bug where output did not match the upstream source.
-        expected_outputs = [-1.38173, 0.16598, -2.92788, -2.66958, -0.61556]
-        # Keep a high tolerance, so we are robust to different hardware.
-        self.assertAllClose(outputs, expected_outputs, atol=0.01, rtol=0.01)
+        if load_weights:
+            expected_outputs = [-1.38173, 0.16598, -2.92788, -2.66958, -0.61556]
+            self.assertAllClose(outputs, expected_outputs, atol=0.01, rtol=0.01)
 
-    def test_classifier_output(self):
+    @parameterized.named_parameters(
+        ("preset_weights", True), ("random_weights", False)
+    )
+    def test_classifier_output(self, load_weights):
         input_data = {
             "token_ids": tf.constant([[101, 1996, 4248, 102]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = DistilBertClassifier.from_preset(
-            "distilbert_base_uncased_en",
+            "distilbert_base_uncased_en", load_weights=load_weights
         )
-        # We don't assert output values, as the head weights are random.
         model(input_data)
+
+    @parameterized.named_parameters(
+        ("distilbert_tokenizer", DistilBertTokenizer),
+        ("distilbert_preprocessor", DistilBertPreprocessor),
+        ("distilbert", DistilBert),
+        ("distilbert_classifier", DistilBertClassifier),
+    )
+    def test_preset_docstring(self, cls):
+        """Check we did our docstring formatting correctly."""
+        for name in cls.presets:
+            self.assertRegex(cls.from_preset.__doc__, name)
+
+    @parameterized.named_parameters(
+        ("distilbert_tokenizer", DistilBertTokenizer),
+        ("distilbert_preprocessor", DistilBertPreprocessor),
+        ("distilbert", DistilBert),
+        ("distilbert_classifier", DistilBertClassifier),
+    )
+    def test_unknown_preset_error(self, cls):
+        # Not a preset name
+        with self.assertRaises(ValueError):
+            cls.from_preset("distilbert_base_uncased_clowntown")
 
 
 @pytest.mark.extra_large
-class DistilBertPresetTest(tf.test.TestCase):
+class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
     """
-    Test the full enumeration of our preset.
+    Tests the full enumeration of our preset.
 
-    This only tests all enumeration of our presets and is only run manually.
+    This tests every DistilBERT preset and is only run manually.
     Run with:
     `pytest keras_nlp/models/distilbert_presets_test.py --run_extra_large`
     """
 
-    def test_load_distilbert(self):
+    @parameterized.named_parameters(
+        ("preset_weights", True), ("random_weights", False)
+    )
+    def test_load_distilbert(self, load_weights):
         for preset in DistilBert.presets:
-            model = DistilBert.from_preset(preset, load_weights=True)
+            model = DistilBert.from_preset(preset, load_weights=load_weights)
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
@@ -101,10 +129,13 @@ class DistilBertPresetTest(tf.test.TestCase):
             }
             model(input_data)
 
-    def test_load_distilbert_classifier(self):
+    @parameterized.named_parameters(
+        ("preset_weights", True), ("random_weights", False)
+    )
+    def test_load_distilbert_classifier(self, load_weights):
         for preset in DistilBertClassifier.presets:
             classifier = DistilBertClassifier.from_preset(
-                preset, num_classes=4, name="classifier"
+                preset, num_classes=4, load_weights=load_weights
             )
             input_data = {
                 "token_ids": tf.random.uniform(

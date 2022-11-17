@@ -62,37 +62,6 @@ class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
             }
             self.model(input_data)
 
-    def test_valid_call_presets(self):
-        # Test preset loading without weights
-        for preset in DistilBert.presets:
-            model = DistilBert.from_preset(
-                preset, load_weights=False, name="encoder"
-            )
-            input_data = {
-                "token_ids": tf.ones(
-                    (self.batch_size, self.model.max_sequence_length),
-                    dtype="int32",
-                ),
-                "padding_mask": tf.ones(
-                    (self.batch_size, self.model.max_sequence_length),
-                    dtype="int32",
-                ),
-            }
-            model(input_data)
-
-    def test_unknown_preset_error(self):
-        # Not a preset name
-        with self.assertRaises(ValueError):
-            DistilBert.from_preset(
-                "distilbert_base_uncased_clowntown",
-                load_weights=False,
-            )
-
-    def test_preset_docstring(self):
-        """Check we did our docstring formatting correctly."""
-        for name in DistilBert.presets:
-            self.assertRegex(DistilBert.from_preset.__doc__, name)
-
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )

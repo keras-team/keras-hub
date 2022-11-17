@@ -14,7 +14,6 @@
 """Tests for DistilBERT preprocessing layers."""
 
 import os
-import unittest
 
 import tensorflow as tf
 from absl.testing import parameterized
@@ -61,28 +60,6 @@ class DistilBertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_vocabulary_size(self):
         tokenizer = DistilBertTokenizer(vocabulary=self.vocab)
         self.assertEqual(tokenizer.vocabulary_size(), 13)
-
-    def test_unknown_preset_error(self):
-        # Not a preset name
-        with self.assertRaises(ValueError):
-            DistilBertTokenizer.from_preset("distilbert_base_uncased_clowntown")
-
-    def test_preset_docstring(self):
-        """Check we did our docstring formatting correctly."""
-        for name in DistilBertPreprocessor.presets:
-            self.assertRegex(DistilBertPreprocessor.from_preset.__doc__, name)
-
-    @unittest.mock.patch("tensorflow.keras.utils.get_file")
-    def test_valid_call_presets(self, get_file_mock):
-        """Ensure presets have necessary structure, but no RPCs."""
-        input_data = ["THE QUICK BROWN FOX."]
-        get_file_mock.return_value = self.vocab
-        for preset in DistilBertTokenizer.presets:
-            tokenizer = DistilBertTokenizer.from_preset(preset)
-            tokenizer(input_data)
-        self.assertEqual(
-            get_file_mock.call_count, len(DistilBertTokenizer.presets)
-        )
 
     @parameterized.named_parameters(
         ("save_format_tf", "tf"), ("save_format_h5", "h5")
@@ -177,30 +154,6 @@ class DistilBertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output["token_ids"], [[2, 5, 6, 3, 7, 8, 1, 3]] * 4)
         self.assertAllEqual(
             output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1]] * 4
-        )
-
-    def test_unknown_preset_error(self):
-        # Not a preset name
-        with self.assertRaises(ValueError):
-            DistilBertPreprocessor.from_preset(
-                "distilbert_base_uncased_clowntown"
-            )
-
-    def test_preset_docstring(self):
-        """Check we did our docstring formatting correctly."""
-        for name in DistilBertPreprocessor.presets:
-            self.assertRegex(DistilBertPreprocessor.from_preset.__doc__, name)
-
-    @unittest.mock.patch("tensorflow.keras.utils.get_file")
-    def test_valid_call_presets(self, get_file_mock):
-        """Ensure presets have necessary structure, but no RPCs."""
-        input_data = ["THE QUICK BROWN FOX."]
-        get_file_mock.return_value = self.vocab
-        for preset in DistilBertPreprocessor.presets:
-            preprocessor = DistilBertPreprocessor.from_preset(preset)
-            preprocessor(input_data)
-        self.assertEqual(
-            get_file_mock.call_count, len(DistilBertPreprocessor.presets)
         )
 
     @parameterized.named_parameters(
