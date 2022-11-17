@@ -22,7 +22,7 @@ from keras_nlp.models.gpt2.gpt2_preprocessing import GPT2Tokenizer
 
 
 @pytest.mark.large
-class GPT2PresetSmokeTest(tf.test.TestCase):
+class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     """
     A smoke test for GPT-2 presets we run continuously.
 
@@ -72,7 +72,7 @@ class GPT2PresetSmokeTest(tf.test.TestCase):
 
 
 @pytest.mark.extra_large
-class GPT2PresetFullTest(tf.test.TestCase):
+class GPT2PresetFullTest(tf.test.TestCase, parameterized.TestCase):
     """
     Test the full enumeration of our preset.
 
