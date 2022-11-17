@@ -165,7 +165,7 @@ def generate_submission_files(finetuning_model, test_ds):
         writer = csv.writer(f, delimiter="\t")
         # Write the required headline for GLUE.
         writer.writerow(["index", "prediction"])
-        predictions = finetuning_model.predict(test_ds.take(2))
+        predictions = finetuning_model.predict(test_ds)
         predictions = np.argmax(predictions, -1)
         for idx, pred in enumerate(predictions):
             if labelname:
@@ -221,9 +221,7 @@ def main(_):
         metrics=metrics,
     )
 
-    finetuning_model.fit(
-        train_ds, validation_data=val_ds, epochs=FLAGS.epochs, steps_per_epoch=1
-    )
+    finetuning_model.fit(train_ds, validation_data=val_ds, epochs=FLAGS.epochs)
 
     if FLAGS.submission_directory:
         generate_submission_files(finetuning_model, test_ds)
