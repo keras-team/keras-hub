@@ -201,18 +201,6 @@ class PipelineModel(keras.Model):
             **kwargs,
         )
 
-    def __call__(self, inputs, include_preprocessing=None, **kwargs):
-        # We don't trace if `including_preprocessing` is `False`, or we are
-        # currently tracing a functional model.
-        flat_inputs = tf.nest.flatten(inputs)
-        tracing = any([type(t).__name__ == "KerasTensor" for t in flat_inputs])
-        if include_preprocessing is None:
-            include_preprocessing = self.include_preprocessing
-        if include_preprocessing and not tracing:
-            data = self.preprocess_samples(inputs)
-            inputs, _, _ = tf.keras.utils.unpack_x_y_sample_weight(data)
-        return super().__call__(inputs, **kwargs)
-
     def train_step(self, data):
         x, y, sample_weight = tf.keras.utils.unpack_x_y_sample_weight(data)
         # Run forward pass.
@@ -282,3 +270,17 @@ class PipelineModel(keras.Model):
             x=x,
             **kwargs,
         )
+
+    def __call__(self, inputs, include_preprocessing=None, **kwargs):
+        # We don't trace if `including_preprocessing` is `False`, or we are
+        # called on functional model inputs.
+        flat_inputs = tf.nest.flatten(inputs)
+        is_functional_input = any(
+            [type(t).__name__ == "KerasTensor" for t in flat_inputs]
+        )
+        if include_preprocessing is None:
+            include_preprocessing = self.include_preprocessing
+        if include_preprocessing and not is_functional_input:
+            data = self.preprocess_samples(inputs)
+            inputs, _, _ = tf.keras.utils.unpack_x_y_sample_weight(data)
+        return super().__call__(inputs, **kwargs)
