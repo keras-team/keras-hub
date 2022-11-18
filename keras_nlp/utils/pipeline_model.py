@@ -38,19 +38,19 @@ def convert_inputs_to_dataset(
     if isinstance(x, tf.data.Dataset):
         if y is not None:
             raise ValueError(
-                f"When `x` is a `tf.data.Dataset`, please do not provide "
+                "When `x` is a `tf.data.Dataset`, please do not provide "
                 f"`y`. Received: `type(y)={type(y)}`."
             )
         if sample_weight is not None:
             raise ValueError(
-                f"When `x` is a `tf.data.Dataset`, please do not provide "
-                f"`sample_weight`. Received: "
+                "When `x` is a `tf.data.Dataset`, please do not provide "
+                "`sample_weight`. Received: "
                 f"`type(sample_weight)={type(sample_weight)}`."
             )
         if batch_size is not None:
             raise ValueError(
-                f"When `x` is a `tf.data.Dataset`, please do not provide "
-                f"`batch_size`. Received: "
+                "When `x` is a `tf.data.Dataset`, please do not provide "
+                "`batch_size`. Received: "
                 f"`type(batch_size)={type(batch_size)}`."
             )
         return x
@@ -70,7 +70,7 @@ def train_validation_split(data, validation_split):
     for t in flat_data:
         if not isinstance(t, supported_types):
             raise ValueError(
-                f"`validation_split` is only supported for Tensors or NumPy "
+                "`validation_split` is only supported for Tensors or NumPy "
                 f"arrays, found following types in the input: {type(t)}"
             )
 
@@ -84,10 +84,10 @@ def train_validation_split(data, validation_split):
     if split_at == 0 or split_at == batch_dim:
         raise ValueError(
             f"Training data contains {batch_dim} samples, which is not "
-            f"sufficient to split it into a validation and training set as "
+            "sufficient to split it into a validation and training set as "
             f"specified by `validation_split={validation_split}`. Either "
-            f"provide more data, or a different value for the "
-            f"`validation_split` argument."
+            "provide more data, or a different value for the "
+            "`validation_split` argument."
         )
 
     training_data = tf.nest.map_structure(
@@ -141,8 +141,9 @@ class PipelineModel(keras.Model):
 
         x = convert_inputs_to_dataset(x, y, sample_weight, batch_size)
         if self.include_preprocessing:
-            x = x.map(self.preprocess_samples, tf.data.AUTOTUNE)
-            x = x.prefetch(tf.data.AUTOTUNE)
+            x = x.map(
+                self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
+            ).prefetch(tf.data.AUTOTUNE)
 
         if validation_data is not None:
             if not isinstance(validation_data, tf.data.Dataset):
@@ -175,8 +176,9 @@ class PipelineModel(keras.Model):
         kwargs.pop("_use_cached_eval_dataset", None)
         x = convert_inputs_to_dataset(x, y, sample_weight, batch_size)
         if self.include_preprocessing:
-            x = x.map(self.preprocess_samples, tf.data.AUTOTUNE)
-            x = x.prefetch(tf.data.AUTOTUNE)
+            x = x.map(
+                self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
+            ).prefetch(tf.data.AUTOTUNE)
         return super().evaluate(
             x=x,
             y=None,
@@ -192,8 +194,9 @@ class PipelineModel(keras.Model):
     ):
         x = convert_inputs_to_dataset(x, None, None, batch_size)
         if self.include_preprocessing:
-            x = x.map(self.preprocess_samples, tf.data.AUTOTUNE)
-            x = x.prefetch(tf.data.AUTOTUNE)
+            x = x.map(
+                self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
+            ).prefetch(tf.data.AUTOTUNE)
 
         return super().predict(
             x=x,
