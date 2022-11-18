@@ -104,7 +104,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_unknown_preset_error(self, cls):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("xlm_roberta_base_uncased_clowntown")
+            cls.from_preset("xlm_roberta_base_clowntown")
 
 
 @pytest.mark.extra_large
@@ -112,7 +112,7 @@ class XLMRobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
     """
     Test the full enumeration of our preset.
 
-    This every presets for XLM-RoBERTa and is only run manually.
+    This tests every XLM-RoBERTa preset and is only run manually.
     Run with:
     `pytest keras_nlp/models/xlm_roberta/xlm_roberta_presets_test.py --run_extra_large`
     """
