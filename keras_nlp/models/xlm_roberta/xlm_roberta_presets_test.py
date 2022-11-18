@@ -67,7 +67,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         outputs = model(input_data)
         if load_weights:
             outputs = outputs[0, 0, :5]
-            expected = [-1.38173, 0.16598, -2.92788, -2.66958, -0.61556]
+            expected = [0.084763, 0.097018, 0.051329, -0.000805, 0.028415]
             self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
 
     @parameterized.named_parameters(
@@ -114,7 +114,7 @@ class XLMRobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
 
     This every presets for XLM-RoBERTa and is only run manually.
     Run with:
-    `pytest keras_nlp/models/xlm_roberta_presets_test.py --run_extra_large`
+    `pytest keras_nlp/models/xlm_roberta/xlm_roberta_presets_test.py --run_extra_large`
     """
 
     @parameterized.named_parameters(
