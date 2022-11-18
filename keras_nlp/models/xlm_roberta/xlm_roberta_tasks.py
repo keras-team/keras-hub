@@ -68,7 +68,7 @@ class XLMRobertaClassifier(keras.Model):
     def __init__(
         self,
         backbone,
-        num_classes,
+        num_classes=2,
         hidden_dim=None,
         dropout=0.0,
         **kwargs,
