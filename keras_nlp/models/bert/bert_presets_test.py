@@ -58,9 +58,11 @@ class BertPresetSmokeTest(tf.test.TestCase):
             "bert_tiny_uncased_en",
         )
         outputs = model(input_data)["sequence_output"][0, 0, :5]
-        # Outputs from our preset checkpoints should be stable!
-        # We should only update these numbers if we are updating a weights file,
-        # or have found a bug where output did not match the upstream source.
+        # The forward pass from a preset should be stable!
+        # This test should catch cases where we unintentionally change our
+        # network code in a way that would invalidate our preset weights.
+        # We should only update these numbers if we are updating a weights
+        # file, or have found a discrepancy with the upstream source.
         expected_outputs = [-1.38173, 0.16598, -2.92788, -2.66958, -0.61556]
         # Keep a high tolerance, so we are robust to different hardware.
         self.assertAllClose(outputs, expected_outputs, atol=0.01, rtol=0.01)
