@@ -105,6 +105,9 @@ class PipelineModel(keras.Model):
     def __init__(self, *args, include_preprocessing=True, **kwargs):
         super().__init__(*args, **kwargs)
         self.include_preprocessing = include_preprocessing
+        # Stop SavedModel from trying to trace pipeline models, and rather
+        # always restore from config to an actual python object.
+        self._must_restore_from_config = True
 
     def preprocess_features(self, x):
         """An overridable function which preprocesses features."""

@@ -11,7 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
+
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.utils.pipeline_model import PipelineModel
@@ -73,8 +76,15 @@ class FunctionalPipeline(PipelineModel):
     def preprocess_features(self, x):
         return tf.strings.to_number(x)
 
+    def get_config(self):
+        return {}
 
-class TestNoopPipelineModel(tf.test.TestCase):
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
+
+class TestNoopPipelineModel(tf.test.TestCase, parameterized.TestCase):
     def test_call(self):
         x = tf.random.uniform((8, 5))
         model = NoopPipeline()
@@ -128,8 +138,27 @@ class TestNoopPipelineModel(tf.test.TestCase):
         model.test_on_batch(x=x, y=y)
         model.predict_on_batch(x=x)
 
+    @parameterized.named_parameters(
+        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+    )
+    def test_saving_model(self, save_format):
+        model = NoopPipeline()
+        x = tf.random.uniform((8, 5))
+        model_output = model(x)
+        save_path = os.path.join(self.get_temp_dir(), "model")
+        model.save(save_path, save_format)
+        restored_model = keras.models.load_model(
+            save_path, custom_objects={"NoopPipeline": NoopPipeline}
+        )
 
-class TestFeaturePreprocessingModel(tf.test.TestCase):
+        # Check we got the real object back.
+        self.assertIsInstance(restored_model, NoopPipeline)
+        # Check that output matches.
+        restored_output = restored_model(x)
+        self.assertAllClose(model_output, restored_output)
+
+
+class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
     def test_call(self):
         x = tf.random.uniform((8, 5))
         model = FeaturePipeline()
@@ -230,8 +259,27 @@ class TestFeaturePreprocessingModel(tf.test.TestCase):
         model.test_on_batch(x=x, y=y)
         model.predict_on_batch(x=x)
 
+    @parameterized.named_parameters(
+        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+    )
+    def test_saving_model(self, save_format):
+        model = FeaturePipeline()
+        x = tf.strings.as_string(tf.random.uniform((8, 5)))
+        model_output = model(x)
+        save_path = os.path.join(self.get_temp_dir(), "model")
+        model.save(save_path, save_format)
+        restored_model = keras.models.load_model(
+            save_path, custom_objects={"FeaturePipeline": FeaturePipeline}
+        )
 
-class TestLabelPreprocessingModel(tf.test.TestCase):
+        # Check we got the real object back.
+        self.assertIsInstance(restored_model, FeaturePipeline)
+        # Check that output matches.
+        restored_output = restored_model(x)
+        self.assertAllClose(model_output, restored_output)
+
+
+class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
     def test_call(self):
         x = tf.random.uniform((8, 5))
         model = LabelPipeline()
@@ -325,8 +373,27 @@ class TestLabelPreprocessingModel(tf.test.TestCase):
         model.test_on_batch(x=x, y=y)
         model.predict_on_batch(x=x)
 
+    @parameterized.named_parameters(
+        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+    )
+    def test_saving_model(self, save_format):
+        model = LabelPipeline()
+        x = tf.random.uniform((8, 5))
+        model_output = model(x)
+        save_path = os.path.join(self.get_temp_dir(), "model")
+        model.save(save_path, save_format)
+        restored_model = keras.models.load_model(
+            save_path, custom_objects={"LabelPipeline": LabelPipeline}
+        )
 
-class TestDataPreprocessingModel(tf.test.TestCase):
+        # Check we got the real object back.
+        self.assertIsInstance(restored_model, LabelPipeline)
+        # Check that output matches.
+        restored_output = restored_model(x)
+        self.assertAllClose(model_output, restored_output)
+
+
+class TestDataPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
     def test_call(self):
         data = tf.random.uniform((8, 1))
         model = DataPipeline()
@@ -403,6 +470,25 @@ class TestDataPreprocessingModel(tf.test.TestCase):
         model.test_on_batch(x=x, y=y)
         model.predict_on_batch(x=x)
 
+    @parameterized.named_parameters(
+        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+    )
+    def test_saving_model(self, save_format):
+        model = DataPipeline()
+        data = tf.strings.as_string(tf.random.uniform((8, 1)))
+        model_output = model(data)
+        save_path = os.path.join(self.get_temp_dir(), "model")
+        model.save(save_path, save_format)
+        restored_model = keras.models.load_model(
+            save_path, custom_objects={"DataPipeline": DataPipeline}
+        )
+
+        # Check we got the real object back.
+        self.assertIsInstance(restored_model, DataPipeline)
+        # Check that output matches.
+        restored_output = restored_model(data)
+        self.assertAllClose(model_output, restored_output)
+
 
 class TestFitArguments(tf.test.TestCase):
     def test_validation_data(self):
@@ -449,7 +535,7 @@ class TestFitArguments(tf.test.TestCase):
             model.fit(ds, sample_weight=sw)
 
 
-class TestFunctional(tf.test.TestCase):
+class TestFunctional(tf.test.TestCase, parameterized.TestCase):
     def test_call(self):
         x = tf.random.uniform((8, 5))
         model = FunctionalPipeline()
@@ -482,3 +568,22 @@ class TestFunctional(tf.test.TestCase):
         # Without sample weight.
         model.fit(x=x, y=y, batch_size=8)
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
+
+    @parameterized.named_parameters(
+        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+    )
+    def test_saving_model(self, save_format):
+        model = FunctionalPipeline()
+        x = tf.strings.as_string(tf.random.uniform((8, 5)))
+        model_output = model(x)
+        save_path = os.path.join(self.get_temp_dir(), "model")
+        model.save(save_path, save_format)
+        restored_model = keras.models.load_model(
+            save_path, custom_objects={"FunctionalPipeline": FunctionalPipeline}
+        )
+
+        # Check we got the real object back.
+        self.assertIsInstance(restored_model, FunctionalPipeline)
+        # Check that output matches.
+        restored_output = restored_model(x)
+        self.assertAllClose(model_output, restored_output)
