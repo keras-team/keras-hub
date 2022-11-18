@@ -20,10 +20,13 @@ from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.bert.bert_presets import backbone_presets
+from keras_nlp.models.bert.bert_presets import classifier_presets
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
+
+PRESET_NAMES = ", ".join(list(backbone_presets) + list(classifier_presets))
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -110,10 +113,10 @@ class BertTokenizer(WordPieceTokenizer):
 
     @classproperty
     def presets(cls):
-        return copy.deepcopy(backbone_presets)
+        return copy.deepcopy({**backbone_presets, **classifier_presets})
 
     @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
+    @format_docstring(names=PRESET_NAMES)
     def from_preset(
         cls,
         preset,
@@ -285,7 +288,7 @@ class BertPreprocessor(keras.layers.Layer):
 
     @classmethod
     def from_config(cls, config):
-        if "tokenizer" in config:
+        if "tokenizer" in config and isinstance(config["tokenizer"], dict):
             config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
         return cls(**config)
 
@@ -304,10 +307,10 @@ class BertPreprocessor(keras.layers.Layer):
 
     @classproperty
     def presets(cls):
-        return copy.deepcopy(backbone_presets)
+        return copy.deepcopy({**backbone_presets, **classifier_presets})
 
     @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
+    @format_docstring(names=PRESET_NAMES)
     def from_preset(
         cls,
         preset,
@@ -362,7 +365,12 @@ class BertPreprocessor(keras.layers.Layer):
         # Use model's `max_sequence_length` if `sequence_length` unspecified;
         # otherwise check that `sequence_length` not too long.
         metadata = cls.presets[preset]
-        max_sequence_length = metadata["config"]["max_sequence_length"]
+        if preset in backbone_presets:
+            backbone_config = metadata["config"]
+        else:
+            # For task model presets, the backbone config is nested.
+            backbone_config = metadata["config"]["backbone"]["config"]
+        max_sequence_length = backbone_config["max_sequence_length"]
         if sequence_length is not None:
             if sequence_length > max_sequence_length:
                 raise ValueError(
