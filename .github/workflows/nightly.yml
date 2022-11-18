@@ -31,7 +31,9 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements-nightly.txt --progress-bar off
-          pip install -e "." --progress-bar off
+          # --no-deps so pip will not try to install tf and tf-text stable
+          # versions after installing the nightly versions above.
+          pip install --no-deps -e "." --progress-bar off
       - name: Test with pytest
         run: |
           pytest --cov=keras_nlp --cov-report xml:coverage.xml
