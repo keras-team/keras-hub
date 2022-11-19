@@ -73,7 +73,7 @@ def convert_checkpoints(preset, num_params):
         weights[name] = weight
 
     keras_nlp_model = keras_nlp.models.GPT2.from_preset(
-        "gpt2_base",
+        preset,
         load_weights=False,
     )
 
