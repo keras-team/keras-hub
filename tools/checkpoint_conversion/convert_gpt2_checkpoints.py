@@ -22,11 +22,10 @@ import tensorflow as tf
 import transformers
 
 import keras_nlp
-from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 
 PRESET_MAP = {
     "gpt2_base": ("124M", "gpt2"),
-    "gpt_medium": ("355M", "gpt2-medium"),
+    "gpt2_medium": ("355M", "gpt2-medium"),
     "gpt2_large": ("774M", "gpt2-large"),
     "gpt2_extra_large": ("1558M", "gpt2-xl"),
 }
@@ -244,9 +243,7 @@ def check_output(
 
     print("KerasNLP output:", keras_nlp_output[0, 0, :10])
     print("HF output:", hf_output[0, 0, :10])
-    print(
-        "Difference:", np.mean(keras_nlp_output - hf_output.detach().numpy())
-    )
+    print("Difference:", np.mean(keras_nlp_output - hf_output.detach().numpy()))
 
     if check_cloud_output:
         print("\n-> Check KerasNLP cloud output.")
@@ -299,7 +296,7 @@ if __name__ == "__main__":
         "--preset",
         type=str,
         required=True,
-        help=(f'Must be one of {",".join(backbone_presets.keys())}'),
+        help=(f'Must be one of {",".join(PRESET_MAP.keys())}'),
     )
     parser.add_argument(
         "--check_cloud_output",
@@ -307,5 +304,9 @@ if __name__ == "__main__":
         help="If specified, check the output of the cloud model.",
     )
     args = parser.parse_args()
+
+    assert (
+        args.preset in PRESET_MAP.keys()
+    ), f'Invalid preset {args.preset}. Must be one of {",".join(PRESET_MAP.keys())}'
 
     main(preset=args.preset, check_cloud_output=args.check_cloud_output)
