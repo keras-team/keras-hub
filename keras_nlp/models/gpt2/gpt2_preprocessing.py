@@ -127,8 +127,10 @@ class GPT2Tokenizer(BytePairTokenizer):
         **kwargs,
     ):
         """Instantiate a GPT-2 tokenizer from preset vocabulary and merge rules.
+
         Args:
             preset: string. Must be one of {{names}}.
+
         Examples:
         ```python
         # Load a preset tokenizer.

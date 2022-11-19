@@ -31,9 +31,7 @@ class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     """
 
     def test_tokenizer_output(self):
-        tokenizer = GPT2Tokenizer.from_preset(
-            "gpt2_base",
-        )
+        tokenizer = GPT2Tokenizer.from_preset("gpt2_base")
         outputs = tokenizer("The quick brown fox.")
         expected_outputs = [464, 2068, 7586, 21831, 13]
         self.assertAllEqual(outputs, expected_outputs)
@@ -49,7 +47,13 @@ class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         model = GPT2.from_preset("gpt2_base", load_weights=load_weights)
         outputs = model(input_data)[0, 0, :5]
         if load_weights:
+            # The forward pass from a preset should be stable!
+            # This test should catch cases where we unintentionally change our
+            # network code in a way that would invalidate our preset weights.
+            # We should only update these numbers if we are updating a weights
+            # file, or have found a discrepancy with the upstream source.
             expected_outputs = [-0.1116, -0.0375, -0.2624, 0.00891, -0.0061]
+            # Keep a high tolerance, so we are robust to different hardware.
             self.assertAllClose(outputs, expected_outputs, atol=0.01, rtol=0.01)
 
     @parameterized.named_parameters(
