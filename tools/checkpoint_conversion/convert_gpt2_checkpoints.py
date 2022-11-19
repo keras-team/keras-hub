@@ -188,7 +188,7 @@ def convert_checkpoints(preset, num_params):
     keras_nlp_model.get_layer("layer_norm").beta.assign(weights["model/ln_f/b"])
 
     # Save the model.
-    print(f"\n-> Save KerasNLP model weights to {preset}.h5.")
+    print(f"\n-> Save KerasNLP model weights to `{preset}.h5`.")
     keras_nlp_model.save_weights(f"{preset}.h5")
 
     return keras_nlp_model
@@ -210,8 +210,8 @@ def define_tokenizer(
 
     if not check_cloud_output:
         print("\n-> Print MD5 checksum of the vocab files.")
-        print(f"{vocab_path} md5sum: ", get_md5_checksum(vocab_path))
-        print(f"{merges_path} md5sum: ", get_md5_checksum(merges_path))
+        print(f"`{vocab_path}` md5sum: ", get_md5_checksum(vocab_path))
+        print(f"`{merges_path}` md5sum: ", get_md5_checksum(merges_path))
 
     return keras_nlp_tokenizer, hf_tokenizer
 
