@@ -193,11 +193,6 @@ def main(_):
     val_ds = preprocess_data(preprocess_fn, val_ds)
     test_ds = preprocess_data(preprocess_fn, test_ds)
 
-    # ----- Custom code block starts -----
-    # Users should change this `BertClassifier` to your own classifier.
-    # Commonly the classifier is simply your model + several dense layers,
-    # please refer to "Make the Finetuning Model" section in README for
-    # detailed instructions.
     loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     metrics = [keras.metrics.SparseCategoricalAccuracy()]
     if FLAGS.task_name == "stsb":
@@ -209,6 +204,11 @@ def main(_):
     else:
         num_classes = 2
 
+    # ----- Custom code block starts -----
+    # Users should change this `BertClassifier` to your own classifier.
+    # Commonly the classifier is simply your model + several dense layers,
+    # please refer to "Make the Finetuning Model" section in README for
+    # detailed instructions.
     finetuning_model = keras_nlp.models.BertClassifier(
         backbone=bert_model,
         num_classes=num_classes,
