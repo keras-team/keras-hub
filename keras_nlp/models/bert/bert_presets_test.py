@@ -15,6 +15,7 @@
 
 import pytest
 import tensorflow as tf
+from absl.testing import parameterized
 
 from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
@@ -23,7 +24,7 @@ from keras_nlp.models.bert.bert_tasks import BertClassifier
 
 
 @pytest.mark.large
-class BertPresetSmokeTest(tf.test.TestCase):
+class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     """
     A smoke test for BERT presets we run continuously.
 
@@ -48,51 +49,124 @@ class BertPresetSmokeTest(tf.test.TestCase):
         expected_outputs = [101, 1996, 4248, 102]
         self.assertAllEqual(outputs, expected_outputs)
 
-    def test_backbone_output(self):
+    @parameterized.named_parameters(
+        ("load_weights", True), ("no_load_weights", False)
+    )
+    def test_backbone_output(self, load_weights):
         input_data = {
             "token_ids": tf.constant([[101, 1996, 4248, 102]]),
             "segment_ids": tf.constant([[0, 0, 0, 0]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = Bert.from_preset(
-            "bert_tiny_uncased_en",
+            "bert_tiny_uncased_en", load_weights=load_weights
         )
-        outputs = model(input_data)["sequence_output"][0, 0, :5]
-        # The forward pass from a preset should be stable!
-        # This test should catch cases where we unintentionally change our
-        # network code in a way that would invalidate our preset weights.
-        # We should only update these numbers if we are updating a weights
-        # file, or have found a discrepancy with the upstream source.
-        expected_outputs = [-1.38173, 0.16598, -2.92788, -2.66958, -0.61556]
-        # Keep a high tolerance, so we are robust to different hardware.
-        self.assertAllClose(outputs, expected_outputs, atol=0.01, rtol=0.01)
+        outputs = model(input_data)["sequence_output"]
+        if load_weights:
+            # The forward pass from a preset should be stable!
+            # This test should catch cases where we unintentionally change our
+            # network code in a way that would invalidate our preset weights.
+            # We should only update these numbers if we are updating a weights
+            # file, or have found a discrepancy with the upstream source.
+            outputs = outputs[0, 0, :5]
+            expected = [-1.38173, 0.16598, -2.92788, -2.66958, -0.61556]
+            # Keep a high tolerance, so we are robust to different hardware.
+            self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
 
-    def test_classifier_output(self):
+    @parameterized.named_parameters(
+        ("load_weights", True), ("no_load_weights", False)
+    )
+    def test_classifier_output(self, load_weights):
         input_data = {
             "token_ids": tf.constant([[101, 1996, 4248, 102]]),
             "segment_ids": tf.constant([[0, 0, 0, 0]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = BertClassifier.from_preset(
-            "bert_tiny_uncased_en",
+            "bert_tiny_uncased_en", load_weights=load_weights
         )
-        # We don't assert output values, as the head weights are random.
+        # Never assert output values, as the head weights are random.
         model(input_data)
+
+    @parameterized.named_parameters(
+        ("bert_tokenizer", BertTokenizer),
+        ("bert_preprocessor", BertPreprocessor),
+        ("bert", Bert),
+        ("bert_classifier", BertClassifier),
+    )
+    def test_preset_mutability(self, cls):
+        preset = "bert_tiny_uncased_en"
+        obj = cls.from_preset(preset)
+        # Cannot overwrite the presents attribute in an object
+        with self.assertRaises(AttributeError):
+            obj.presets = {"my_model": "clowntown"}
+        # Cannot mutate presents in an object
+        config = obj.presets[preset]["config"]
+        config["num_layers"] = 1
+        self.assertEqual(config["num_layers"], 1)
+        self.assertEqual(obj.presets[preset]["config"]["num_layers"], 2)
+        # Cannot mutate presets in the class
+        config = Bert.presets[preset]["config"]
+        config["num_layers"] = 1
+        self.assertEqual(config["num_layers"], 1)
+        self.assertEqual(Bert.presets[preset]["config"]["num_layers"], 2)
+
+    @parameterized.named_parameters(
+        ("bert_tokenizer", BertTokenizer),
+        ("bert_preprocessor", BertPreprocessor),
+        ("bert", Bert),
+        ("bert_classifier", BertClassifier),
+    )
+    def test_preset_docstring(self, cls):
+        """Check we did our docstring formatting correctly."""
+        for name in cls.presets:
+            self.assertRegex(cls.from_preset.__doc__, name)
+
+    @parameterized.named_parameters(
+        ("bert_tokenizer", BertTokenizer),
+        ("bert_preprocessor", BertPreprocessor),
+        ("bert", Bert),
+        ("bert_classifier", BertClassifier),
+    )
+    def test_unknown_preset_error(self, cls):
+        # Not a preset name
+        with self.assertRaises(ValueError):
+            cls.from_preset("bert_base_uncased_clowntown")
+
+    def test_override_preprocessor_sequence_length(self):
+        """Override sequence length longer than model's maximum."""
+        preprocessor = BertPreprocessor.from_preset(
+            "bert_base_uncased_en",
+            sequence_length=64,
+        )
+        self.assertEqual(preprocessor.get_config()["sequence_length"], 64)
+        preprocessor("The quick brown fox.")
+
+    def test_override_preprocessor_sequence_length_gt_max(self):
+        """Override sequence length longer than model's maximum."""
+        with self.assertRaises(ValueError):
+            BertPreprocessor.from_preset(
+                "bert_base_uncased_en",
+                sequence_length=1024,
+            )
 
 
 @pytest.mark.extra_large
-class BertPresetTest(tf.test.TestCase):
+class BertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
     """
     Test the full enumeration of our preset.
 
-    This only tests all enumeration of our presets and is only run manually.
+    This every presets for BERT and is only run manually.
     Run with:
     `pytest keras_nlp/models/bert_presets_test.py --run_extra_large`
     """
 
-    def test_load_bert(self):
+    @parameterized.named_parameters(
+        ("load_weights", True), ("no_load_weights", False)
+    )
+    def test_load_bert(self, load_weights):
         for preset in Bert.presets:
-            model = Bert.from_preset(preset, load_weights=True)
+            model = Bert.from_preset(preset, load_weights=load_weights)
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
@@ -104,10 +178,13 @@ class BertPresetTest(tf.test.TestCase):
             }
             model(input_data)
 
-    def test_load_bert_classifier(self):
+    @parameterized.named_parameters(
+        ("load_weights", True), ("no_load_weights", False)
+    )
+    def test_load_bert_classifier(self, load_weights):
         for preset in BertClassifier.presets:
             classifier = BertClassifier.from_preset(
-                preset, num_classes=4, name="classifier"
+                preset, num_classes=4, load_weights=load_weights
             )
             input_data = {
                 "token_ids": tf.random.uniform(

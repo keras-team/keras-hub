@@ -69,59 +69,6 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             }
             self.model(input_data)
 
-    def test_valid_call_presets(self):
-        # Test preset loading without weights
-        for preset in Bert.presets:
-            model = Bert.from_preset(preset, load_weights=False, name="encoder")
-            input_data = {
-                "token_ids": tf.ones(
-                    (self.batch_size, self.model.max_sequence_length),
-                    dtype="int32",
-                ),
-                "segment_ids": tf.ones(
-                    (self.batch_size, self.model.max_sequence_length),
-                    dtype="int32",
-                ),
-                "padding_mask": tf.ones(
-                    (self.batch_size, self.model.max_sequence_length),
-                    dtype="int32",
-                ),
-            }
-            model(input_data)
-
-    def test_unknown_preset_error(self):
-        # Not a preset name
-        with self.assertRaises(ValueError):
-            Bert.from_preset(
-                "bert_base_uncased_clowntown",
-                load_weights=False,
-            )
-
-    def test_preset_mutability(self):
-        preset = "bert_base_uncased_en"
-        # Cannot overwrite the presents attribute in an object
-        with self.assertRaises(AttributeError):
-            self.model.presets = {"my_model": "clowntown"}
-        # Cannot mutate presents in an object
-        config = self.model.presets[preset]["config"]
-        config["max_sequence_length"] = 1
-        self.assertEqual(config["max_sequence_length"], 1)
-        self.assertEqual(
-            self.model.presets[preset]["config"]["max_sequence_length"], 512
-        )
-        # Cannot mutate presets in the class
-        config = Bert.presets[preset]["config"]
-        config["max_sequence_length"] = 1
-        self.assertEqual(config["max_sequence_length"], 1)
-        self.assertEqual(
-            Bert.presets[preset]["config"]["max_sequence_length"], 512
-        )
-
-    def test_preset_docstring(self):
-        """Check we did our docstring formatting correctly."""
-        for name in Bert.presets:
-            self.assertRegex(Bert.from_preset.__doc__, name)
-
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
