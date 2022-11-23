@@ -93,14 +93,7 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant(
-            [
-                "THE QUICK BROWN FOX.",
-                "THE QUICK BROWN FOX.",
-                "THE QUICK BROWN FOX.",
-                "THE QUICK BROWN FOX.",
-            ]
-        )
+        input_data = tf.constant(["THE QUICK BROWN FOX."] * 4)
         preprocessor = BertPreprocessor(
             BertTokenizer(vocabulary=self.vocab),
             sequence_length=8,
@@ -113,6 +106,46 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(
             output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
         )
+
+    def test_tokenize_labeled_batch(self):
+        x = tf.constant(["THE QUICK BROWN FOX."] * 4)
+        y = tf.constant([1] * 4)
+        sw = tf.constant([1.0] * 4)
+        preprocessor = BertPreprocessor(
+            BertTokenizer(vocabulary=self.vocab),
+            sequence_length=8,
+        )
+        x_out, y_out, sw_out = preprocessor(x, y, sw)
+        self.assertAllEqual(x_out["token_ids"], [[2, 5, 6, 7, 8, 1, 3, 0]] * 4)
+        self.assertAllEqual(
+            x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0]] * 4
+        )
+        self.assertAllEqual(
+            x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
+        )
+        self.assertAllEqual(y_out, y)
+        self.assertAllEqual(sw_out, sw)
+
+    def test_tokenize_labeled_dataset(self):
+        x = tf.constant(["THE QUICK BROWN FOX."] * 4)
+        y = tf.constant([1] * 4)
+        sw = tf.constant([1.0] * 4)
+        ds = tf.data.Dataset.from_tensor_slices((x, y, sw))
+        preprocessor = BertPreprocessor(
+            BertTokenizer(vocabulary=self.vocab),
+            sequence_length=8,
+        )
+        ds = ds.map(preprocessor)
+        x_out, y_out, sw_out = ds.batch(4).take(1).get_single_element()
+        self.assertAllEqual(x_out["token_ids"], [[2, 5, 6, 7, 8, 1, 3, 0]] * 4)
+        self.assertAllEqual(
+            x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0]] * 4
+        )
+        self.assertAllEqual(
+            x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
+        )
+        self.assertAllEqual(y_out, y)
+        self.assertAllEqual(sw_out, sw)
 
     def test_tokenize_multiple_sentences(self):
         sentence_one = "THE QUICK"
@@ -129,22 +162,8 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1])
 
     def test_tokenize_multiple_batched_sentences(self):
-        sentence_one = tf.constant(
-            [
-                "THE QUICK",
-                "THE QUICK",
-                "THE QUICK",
-                "THE QUICK",
-            ]
-        )
-        sentence_two = tf.constant(
-            [
-                "BROWN FOX.",
-                "BROWN FOX.",
-                "BROWN FOX.",
-                "BROWN FOX.",
-            ]
-        )
+        sentence_one = tf.constant(["THE QUICK"] * 4)
+        sentence_two = tf.constant(["BROWN FOX."] * 4)
         preprocessor = BertPreprocessor(
             BertTokenizer(vocabulary=self.vocab),
             sequence_length=8,

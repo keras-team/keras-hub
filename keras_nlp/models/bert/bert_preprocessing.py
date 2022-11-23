@@ -21,6 +21,7 @@ from tensorflow import keras
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
+from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -167,15 +168,27 @@ class BertPreprocessor(keras.layers.Layer):
 
     This preprocessing layer will do three things:
 
-     - Tokenize any number of inputs using the `tokenizer`.
+     - Tokenize any number of input segments using the `tokenizer`.
      - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
        with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
      - Construct a dictionary of with keys `"token_ids"`, `"segment_ids"`,
        `"padding_mask"`, that can be passed directly to a BERT model.
 
-    This layer will accept either a tuple of (possibly batched) inputs, or a
-    single input tensor. If a single tensor is passed, it will be packed
-    equivalently to a tuple with a single element.
+    This layer can be used directly with `tf.data.Dataset.map` to preprocess
+    string data in the `(x, y, sample_weight)` format used by
+    `keras.Model.fit`.
+
+    The call method of this layer accepts three arguments, `x`, `y`, and
+    `sample_weights`. `x` should be either a (possibly batched) string tensor,
+    or a tuple of (possibly batched) string tensors. `y` and `sample_weights`
+    are both optional, can have any format, and will be passed through
+    unaltered.
+
+    Special care should be taken when using `tf.data` to map over an unlabeled
+    tuple of string segments. `tf.data` will unpack this tuple directly into the
+    call arguments of this layer, rather than forward all argument to `x`. To
+    handle this case, it is recommended to  explicitly call the layer, e.g.
+    `ds.map(lambda seg1, seg2: preprocessor(x=(seg1, seg2)))`.
 
     Args:
         tokenizer: A `keras_nlp.models.BertTokenizer` instance.
@@ -211,12 +224,9 @@ class BertPreprocessor(keras.layers.Layer):
     features = ["The quick brown fox jumped.", "I forgot my homework."]
     labels = [0, 1]
     ds = tf.data.Dataset.from_tensor_slices((features, labels))
-    ds = ds.map(
-        lambda x, y: (preprocessor(x), y),
-        num_parallel_calls=tf.data.AUTOTUNE,
-    )
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
-    # Map a dataset to preprocess a multiple sentences.
+    # Map a dataset to preprocess multiple sentence pairs.
     first_sentences = ["The quick brown fox jumped.", "Call me Ishmael."]
     second_sentences = ["The fox tripped.", "Oh look, a whale."]
     labels = [1, 1]
@@ -225,10 +235,19 @@ class BertPreprocessor(keras.layers.Layer):
             (first_sentences, second_sentences), labels
         )
     )
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map a dataset to preprocess unlabeled sentence pairs.
+    first_sentences = ["The quick brown fox jumped.", "Call me Ishmael."]
+    second_sentences = ["The fox tripped.", "Oh look, a whale."]
+    ds = tf.data.Dataset.from_tensor_slices((first_sentences, second_sentences))
+    # Watch out for tf.data's default unpacking of tuples here!
+    # Best to invoke the `preprocessor` directly in this case.
     ds = ds.map(
-        lambda x, y: (preprocessor(x), y),
+        lambda s1, s2: preprocessor(x=(s1, s2)),
         num_parallel_calls=tf.data.AUTOTUNE,
-    )    ```
+    )
+    ```
     """
 
     def __init__(
@@ -270,17 +289,18 @@ class BertPreprocessor(keras.layers.Layer):
             config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
         return cls(**config)
 
-    def call(self, inputs):
-        if not isinstance(inputs, (list, tuple)):
-            inputs = [inputs]
+    def call(self, x, y=None, sample_weight=None):
+        if not isinstance(x, (list, tuple)):
+            x = [x]
 
-        inputs = [self.tokenizer(x) for x in inputs]
-        token_ids, segment_ids = self.packer(inputs)
-        return {
+        x = [self.tokenizer(segment) for segment in x]
+        token_ids, segment_ids = self.packer(x)
+        x = {
             "token_ids": token_ids,
             "segment_ids": segment_ids,
             "padding_mask": token_ids != self.tokenizer.pad_token_id,
         }
+        return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty
     def presets(cls):
