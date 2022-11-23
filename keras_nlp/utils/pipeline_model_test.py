@@ -490,51 +490,6 @@ class TestDataPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
-class TestFitArguments(tf.test.TestCase):
-    def test_validation_data(self):
-        x = tf.strings.as_string(tf.random.uniform((80, 5)))
-        y = tf.random.uniform((80, 1))
-        val_x = tf.strings.as_string(tf.random.uniform((20, 5)))
-        val_y = tf.random.uniform((20, 1))
-
-        model = FeaturePipeline()
-        model.compile(loss="mse")
-
-        model.fit(x=x, y=y, validation_data=(val_x, val_y), batch_size=8)
-        model.fit(
-            x=tf.data.Dataset.from_tensor_slices((x, y)).batch(8),
-            validation_data=tf.data.Dataset.from_tensor_slices(
-                (val_x, val_y)
-            ).batch(8),
-        )
-
-    def test_validation_split(self):
-        x = tf.strings.as_string(tf.random.uniform((100, 5)))
-        y = tf.random.uniform((100, 1))
-
-        model = FeaturePipeline()
-        model.compile(loss="mse")
-
-        model.fit(x=x, y=y, validation_split=0.2, batch_size=8)
-
-    def test_error_dataset_and_invalid_arguments(self):
-        x = tf.strings.as_string(tf.random.uniform((100, 5)))
-        y = tf.random.uniform((100, 1))
-        sw = tf.random.uniform((100, 1))
-        ds = tf.data.Dataset.from_tensor_slices((x, y))
-
-        model = FeaturePipeline()
-        model.compile(loss="mse")
-        with self.assertRaises(ValueError):
-            model.fit(ds, validation_split=0.2)
-        with self.assertRaises(ValueError):
-            model.fit(ds, batch_size=0.2)
-        with self.assertRaises(ValueError):
-            model.fit(ds, y=y)
-        with self.assertRaises(ValueError):
-            model.fit(ds, sample_weight=sw)
-
-
 class TestFunctional(tf.test.TestCase, parameterized.TestCase):
     def test_call(self):
         x = tf.random.uniform((8, 5))
@@ -587,3 +542,48 @@ class TestFunctional(tf.test.TestCase, parameterized.TestCase):
         # Check that output matches.
         restored_output = restored_model(x)
         self.assertAllClose(model_output, restored_output)
+
+
+class TestFitArguments(tf.test.TestCase):
+    def test_validation_data(self):
+        x = tf.strings.as_string(tf.random.uniform((80, 5)))
+        y = tf.random.uniform((80, 1))
+        val_x = tf.strings.as_string(tf.random.uniform((20, 5)))
+        val_y = tf.random.uniform((20, 1))
+
+        model = FeaturePipeline()
+        model.compile(loss="mse")
+
+        model.fit(x=x, y=y, validation_data=(val_x, val_y), batch_size=8)
+        model.fit(
+            x=tf.data.Dataset.from_tensor_slices((x, y)).batch(8),
+            validation_data=tf.data.Dataset.from_tensor_slices(
+                (val_x, val_y)
+            ).batch(8),
+        )
+
+    def test_validation_split(self):
+        x = tf.strings.as_string(tf.random.uniform((100, 5)))
+        y = tf.random.uniform((100, 1))
+
+        model = FeaturePipeline()
+        model.compile(loss="mse")
+
+        model.fit(x=x, y=y, validation_split=0.2, batch_size=8)
+
+    def test_error_dataset_and_invalid_arguments(self):
+        x = tf.strings.as_string(tf.random.uniform((100, 5)))
+        y = tf.random.uniform((100, 1))
+        sw = tf.random.uniform((100, 1))
+        ds = tf.data.Dataset.from_tensor_slices((x, y))
+
+        model = FeaturePipeline()
+        model.compile(loss="mse")
+        with self.assertRaises(ValueError):
+            model.fit(ds, validation_split=0.2)
+        with self.assertRaises(ValueError):
+            model.fit(ds, batch_size=0.2)
+        with self.assertRaises(ValueError):
+            model.fit(ds, y=y)
+        with self.assertRaises(ValueError):
+            model.fit(ds, sample_weight=sw)

@@ -103,6 +103,10 @@ class PipelineModel(keras.Model):
     """A model which allows automatically applying preprocessing."""
 
     def __init__(self, *args, include_preprocessing=True, **kwargs):
+        # Workaround for https://github.com/keras-team/keras/issues/17270
+        # Reset any attempt to overwrite this classes base class to this class
+        # can continue to be used for functional and non-functional models.
+        PipelineModel.__bases__ = (keras.Model,)
         super().__init__(*args, **kwargs)
         self.include_preprocessing = include_preprocessing
         # Stop SavedModel from trying to trace pipeline models, and rather
