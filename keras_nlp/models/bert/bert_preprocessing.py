@@ -179,8 +179,8 @@ class BertPreprocessor(keras.layers.Layer):
     `keras.Model.fit`.
 
     The call method of this layer accepts three arguments, `x`, `y`, and
-    `sample_weights`. `x` should be either a (possible batched) string tensor,
-    or a tuple of (possible batched) string tensors. `y` and `sample_weights`
+    `sample_weights`. `x` should be either a (possibly batched) string tensor,
+    or a tuple of (possibly batched) string tensors. `y` and `sample_weights`
     are both optional, can have any format, and will be passed through
     unaltered.
 

@@ -33,15 +33,8 @@ def pack_x_y_sample_weight(x, y=None, sample_weight=None):
     """Packs user-provided data into a tuple.
 
     This is a temporary copy of `keras.utils.pack_x_y_sample_weight` while we
-    wait for the change in the following PR to get released:
-    https://github.com/keras-team/keras/pull/17233
-
-    The change makes it so that dictionary features are not packed in a tuple
-    needlessly. This is important for KerasNLP as almost all of our model inputs
-    are dicts.
-
-    We will likely want to carry this change until Tensorflow 2.12 is the
-    default installation on colab.
+    wait for the a change to the upstream version to propagate to a stable
+    release. See https://github.com/keras-team/keras-nlp/issues/492
     """
     if y is None:
         if not isinstance(x, (list, tuple)):
