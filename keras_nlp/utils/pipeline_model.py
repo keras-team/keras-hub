@@ -14,6 +14,7 @@
 
 """A base class for models including preprocessing."""
 
+import functools
 import math
 
 import numpy as np
@@ -28,13 +29,23 @@ except ImportError:
     pd = None
 
 
-def convert_inputs_to_dataset(
+def _get_tensor_types():
+    if pd is None:
+        return (tf.Tensor, np.ndarray)
+    else:
+        return (tf.Tensor, np.ndarray, pd.Series, pd.DataFrame)
+
+
+def _convert_inputs_to_dataset(
     x=None,
     y=None,
     sample_weight=None,
     batch_size=None,
 ):
-    """Convert inputs to a `tf.data.Dataset`."""
+    """Convert inputs to a `tf.data.Dataset`.
+
+    This is a stand in for the `TensorLikeDataAdapter` in core Keras.
+    """
     if isinstance(x, tf.data.Dataset):
         if y is not None:
             raise ValueError(
@@ -59,44 +70,61 @@ def convert_inputs_to_dataset(
     return tf.data.Dataset.from_tensor_slices(inputs).batch(batch_size or 32)
 
 
-def train_validation_split(data, validation_split):
-    """Mimic the `validation_split` of `keras.Model.fit()`."""
-    flat_data = list(filter(lambda t: t is not None, tf.nest.flatten(data)))
+def _train_validation_split(arrays, validation_split):
+    """Split arrays into train and validation subsets in deterministic order.
 
-    supported_types = (tf.Tensor, np.ndarray)
-    if pd is not None:
-        supported_types += (pd.Series, pd.DataFrame)
+    This is copied directly from core Keras.
+    """
 
-    for t in flat_data:
-        if not isinstance(t, supported_types):
-            raise ValueError(
-                "`validation_split` is only supported for Tensors or NumPy "
-                f"arrays, found following types in the input: {type(t)}"
-            )
+    def _can_split(t):
+        tensor_types = _get_tensor_types()
+        return isinstance(t, tensor_types) or t is None
 
-    if not flat_data:
-        return data, data
+    flat_arrays = tf.nest.flatten(arrays)
+    unsplitable = [type(t) for t in flat_arrays if not _can_split(t)]
+    if unsplitable:
+        raise ValueError(
+            "`validation_split` is only supported for Tensors or NumPy "
+            "arrays, found following types in the input: {}".format(unsplitable)
+        )
 
-    # Assumes all data have the same batch shape or are `None`.
-    batch_dim = int(flat_data[0].shape[0])
+    if all(t is None for t in flat_arrays):
+        return arrays, arrays
+
+    first_non_none = None
+    for t in flat_arrays:
+        if t is not None:
+            first_non_none = t
+            break
+
+    # Assumes all arrays have the same batch shape or are `None`.
+    batch_dim = int(first_non_none.shape[0])
     split_at = int(math.floor(batch_dim * (1.0 - validation_split)))
 
     if split_at == 0 or split_at == batch_dim:
         raise ValueError(
-            f"Training data contains {batch_dim} samples, which is not "
+            "Training data contains {batch_dim} samples, which is not "
             "sufficient to split it into a validation and training set as "
-            f"specified by `validation_split={validation_split}`. Either "
+            "specified by `validation_split={validation_split}`. Either "
             "provide more data, or a different value for the "
-            "`validation_split` argument."
+            "`validation_split` argument.".format(
+                batch_dim=batch_dim, validation_split=validation_split
+            )
         )
 
-    training_data = tf.nest.map_structure(
-        lambda t: None if t is None else t[:split_at], data
+    def _split(t, start, end):
+        if t is None:
+            return t
+        return t[start:end]
+
+    train_arrays = tf.nest.map_structure(
+        functools.partial(_split, start=0, end=split_at), arrays
     )
-    validation_data = tf.nest.map_structure(
-        lambda t: None if t is None else t[split_at:], data
+    val_arrays = tf.nest.map_structure(
+        functools.partial(_split, start=split_at, end=batch_dim), arrays
     )
-    return training_data, validation_data
+
+    return train_arrays, val_arrays
 
 
 class PipelineModel(keras.Model):
@@ -142,11 +170,11 @@ class PipelineModel(keras.Model):
         **kwargs,
     ):
         if validation_split and validation_data is None:
-            (x, y, sample_weight), validation_data = train_validation_split(
+            (x, y, sample_weight), validation_data = _train_validation_split(
                 (x, y, sample_weight), validation_split=validation_split
             )
 
-        x = convert_inputs_to_dataset(x, y, sample_weight, batch_size)
+        x = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
         if self.include_preprocessing:
             x = x.map(
                 self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
@@ -157,7 +185,7 @@ class PipelineModel(keras.Model):
                 (vx, vy, vsw) = keras.utils.unpack_x_y_sample_weight(
                     validation_data
                 )
-                validation_data = convert_inputs_to_dataset(
+                validation_data = _convert_inputs_to_dataset(
                     vx, vy, vsw, batch_size
                 )
 
@@ -178,10 +206,12 @@ class PipelineModel(keras.Model):
         sample_weight=None,
         **kwargs,
     ):
-        # TODO: we can't support a cached eval dataset until we make changes to
-        # the upstream model. Otherwise we would cache the raw dataset.
+        # During `fit()`, `keras.Model` attempts to cache the validation
+        # dataset and ignores the values for `x`, `y`, and `sample_weight`.
+        # We don't want that behavior here, as the validation dataset still
+        # needs preprocessing.
         kwargs.pop("_use_cached_eval_dataset", None)
-        x = convert_inputs_to_dataset(x, y, sample_weight, batch_size)
+        x = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
         if self.include_preprocessing:
             x = x.map(
                 self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
@@ -199,7 +229,7 @@ class PipelineModel(keras.Model):
         batch_size=None,
         **kwargs,
     ):
-        x = convert_inputs_to_dataset(x, None, None, batch_size)
+        x = _convert_inputs_to_dataset(x, None, None, batch_size)
         if self.include_preprocessing:
             x = x.map(
                 self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
