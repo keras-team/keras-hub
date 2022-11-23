@@ -226,7 +226,7 @@ class BertPreprocessor(keras.layers.Layer):
     ds = tf.data.Dataset.from_tensor_slices((features, labels))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
-    # Map a dataset to preprocess a multiple sentences.
+    # Map a dataset to preprocess multiple sentence pairs.
     first_sentences = ["The quick brown fox jumped.", "Call me Ishmael."]
     second_sentences = ["The fox tripped.", "Oh look, a whale."]
     labels = [1, 1]
@@ -236,6 +236,17 @@ class BertPreprocessor(keras.layers.Layer):
         )
     )
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map a dataset to preprocess unlabeled sentence pairs.
+    first_sentences = ["The quick brown fox jumped.", "Call me Ishmael."]
+    second_sentences = ["The fox tripped.", "Oh look, a whale."]
+    ds = tf.data.Dataset.from_tensor_slices((first_sentences, second_sentences))
+    # Watch out for tf.data's default unpacking of tuples here!
+    # Best to invoke the `preprocessor` directly in this case.
+    ds = ds.map(
+        lambda s1, s2: preprocessor(x=(s1, s2)),
+        num_parallel_calls=tf.data.AUTOTUNE,
+    )
     ```
     """
 
