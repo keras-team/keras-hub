@@ -249,6 +249,5 @@ classifier_presets = {
         "weights_hash": "1f9c2d59f9e229e08f3fbd44239cfb0b",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_uncased_en_sst2/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
-
     }
 }

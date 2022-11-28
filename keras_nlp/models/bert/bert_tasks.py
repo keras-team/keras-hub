@@ -18,12 +18,11 @@ import os
 
 from tensorflow import keras
 
+import keras_nlp.models.bert.bert_presets as bert_presets
 from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_models import bert_kernel_initializer
-import keras_nlp.models.bert.bert_presets as bert_presets
-from keras_nlp.models.bert.bert_presets import (
-    backbone_presets, classifier_presets
-)
+from keras_nlp.models.bert.bert_presets import backbone_presets
+from keras_nlp.models.bert.bert_presets import classifier_presets
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -122,7 +121,9 @@ class BertClassifier(keras.Model):
         return copy.deepcopy(backbone_presets | classifier_presets)
 
     @classmethod
-    @format_docstring(names=", ".join(bert_presets.backbone_presets | classifier_presets))
+    @format_docstring(
+        names=", ".join(bert_presets.backbone_presets | classifier_presets)
+    )
     def from_preset(
         cls,
         preset,
@@ -195,4 +196,3 @@ class BertClassifier(keras.Model):
 
         model.load_weights(weights)
         return model
-
