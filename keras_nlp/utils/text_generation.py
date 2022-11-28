@@ -18,11 +18,6 @@ import tensorflow as tf
 from absl import logging
 from tensorflow import keras
 
-def top_k_generate(self, prompt, k=5):
-    processed_prompt = self.tokenizer(prompt)
-    generated = top_k_search(self._get_token_probability, processed_prompt, self.max_sequence_length)
-    return self.tokenizer.detokenize(generated)
-
 
 def _validate_prompt(prompt):
     """Helper function to validate input to text_generation utils."""
