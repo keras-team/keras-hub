@@ -184,6 +184,8 @@ def main(_):
         "bert_tiny_uncased_en"
     )
 
+    # Users should change this function to implement the preprocessing required
+    # by the model.
     def preprocess_fn(feature, label):
         return bert_preprocessor(feature), label
 

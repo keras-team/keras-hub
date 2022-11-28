@@ -3,9 +3,9 @@
 This script is written to help you evaluate your model on GLUE benchmarking.
 It provides the functionalities below:
 
-- GLUE dataset loading & common preprocessing
-- Finetuning flow 
-- Generate GLUE submission files
+- Load and preprocess GLUE data.
+- Finetuning your Keras text classification model. 
+- Generate GLUE submission files.
 
 To use the script, you need to change the code to load your pretrained model,
 and run the command below:
@@ -15,11 +15,11 @@ python glue.py --task_name="mrpc" --batch_size=32 \
     --submission_file_path="glue_submissions/"
 ```
 
-By default the script finetunes on KerasNLP BERT model 
-`keras_nlp.models.Bert.from_preset("bert_tiny_uncased_en")`.
+By default the script finetunes on the tiniest BERT model we have available 
+(this will be fast but not top performing).
 
 To make a real GLUE leaderboard submission, you need to call the finetuning on 
-all tasks, then enter the submission directory then zip the submission files::
+all tasks, then enter the submission directory then zip the submission files:
 ```shell
 for task in cola sst2 mrpc rte mnli_matched mnli_mismatched ax qnli qqp; do
   python glue.py --task_name="$task" --submission_directory="glue_submissions/"
@@ -28,8 +28,8 @@ cd glue_submissions
 zip -r submission.zip *.tsv
 ```
 
-GLUE submission requires the `submission.zip` contains `.tsv` file for all tasks
-, otherwise it will be a failed submission. An empty `.tsv` will also fail 
+GLUE submission requires the `submission.zip` contains `.tsv` file for all 
+tasks, otherwise it will be a failed submission. An empty `.tsv` will also fail 
 because it checks the content. If you only want to evaluate on certain tasks, 
 you can download the sample submission, and put the `.tsv` files for tasks you 
 don't run inside your submission file. For example if you don't want to 
@@ -73,7 +73,7 @@ It uses the `BertPreprocessor` to convert input feature formats.
 
 ### Load Pretrained Model
 
-As long as it is a TF model, you can use it with this script. 
+As long as it is a Keras model, you can use it with this script. 
 
 ### Make the Finetuning Model
 
