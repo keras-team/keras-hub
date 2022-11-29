@@ -220,3 +220,34 @@ backbone_presets = {
         "vocabulary_hash": "bb6ca9b42e790e5cd986bbb16444d0e0",
     },
 }
+
+classifier_presets = {
+    "bert_tiny_uncased_en_sst2": {
+        "config": {
+            "backbone": {
+                "class_name": "keras_nlp>Bert",
+                "config": {
+                    "vocabulary_size": 30522,
+                    "hidden_dim": 128,
+                    "intermediate_dim": 512,
+                    "num_layers": 2,
+                    "num_heads": 2,
+                    "max_sequence_length": 512,
+                    "num_segments": 2,
+                    "dropout": 0.1,
+                },
+            },
+            "num_classes": 2,
+        },
+        "preprocessor_config": {
+            "lowercase": True,
+        },
+        "description": (
+            "bert_tiny_uncased_en backbone fine-tuned on the glue/sst2 dataset."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_uncased_en_sst2/model.h5",
+        "weights_hash": "1f9c2d59f9e229e08f3fbd44239cfb0b",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_uncased_en_sst2/vocab.txt",
+        "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
+    }
+}

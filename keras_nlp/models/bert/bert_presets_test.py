@@ -184,7 +184,7 @@ class BertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
     def test_load_bert_classifier(self, load_weights):
         for preset in BertClassifier.presets:
             classifier = BertClassifier.from_preset(
-                preset, num_classes=4, load_weights=load_weights
+                preset, load_weights=load_weights
             )
             input_data = {
                 "token_ids": tf.random.uniform(
