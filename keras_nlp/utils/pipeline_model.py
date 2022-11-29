@@ -137,9 +137,6 @@ class PipelineModel(keras.Model):
         PipelineModel.__bases__ = (keras.Model,)
         super().__init__(*args, **kwargs)
         self.include_preprocessing = include_preprocessing
-        # Stop SavedModel from trying to trace pipeline models, and rather
-        # always restore from config to an actual python object.
-        self._must_restore_from_config = True
 
     def preprocess_features(self, x):
         """An overridable function which preprocesses features."""
@@ -241,29 +238,6 @@ class PipelineModel(keras.Model):
             **kwargs,
         )
 
-    def train_step(self, data):
-        x, y, sample_weight = tf.keras.utils.unpack_x_y_sample_weight(data)
-        # Run forward pass.
-        with tf.GradientTape() as tape:
-            y_pred = self(x, training=True, include_preprocessing=False)
-            loss = self.compute_loss(x, y, y_pred, sample_weight)
-        self._validate_target_and_loss(y, loss)
-        # Run backwards pass.
-        self.optimizer.minimize(loss, self.trainable_variables, tape=tape)
-        return self.compute_metrics(x, y, y_pred, sample_weight)
-
-    def test_step(self, data):
-        x, y, sample_weight = tf.keras.utils.unpack_x_y_sample_weight(data)
-
-        y_pred = self(x, training=False, include_preprocessing=False)
-        # Updates stateful loss metrics.
-        self.compute_loss(x, y, y_pred, sample_weight)
-        return self.compute_metrics(x, y, y_pred, sample_weight)
-
-    def predict_step(self, data):
-        x, _, _ = tf.keras.utils.unpack_x_y_sample_weight(data)
-        return self(x, training=False, include_preprocessing=False)
-
     def train_on_batch(
         self,
         x,
@@ -310,17 +284,3 @@ class PipelineModel(keras.Model):
             x=x,
             **kwargs,
         )
-
-    def __call__(self, inputs, include_preprocessing=None, **kwargs):
-        # We don't trace if `including_preprocessing` is `False`, or we are
-        # called on functional model inputs.
-        flat_inputs = tf.nest.flatten(inputs)
-        is_functional_input = any(
-            [type(t).__name__ == "KerasTensor" for t in flat_inputs]
-        )
-        if include_preprocessing is None:
-            include_preprocessing = self.include_preprocessing
-        if include_preprocessing and not is_functional_input:
-            data = self.preprocess_samples(inputs)
-            inputs, _, _ = tf.keras.utils.unpack_x_y_sample_weight(data)
-        return super().__call__(inputs, **kwargs)

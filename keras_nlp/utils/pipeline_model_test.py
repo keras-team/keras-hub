@@ -85,12 +85,6 @@ class FunctionalPipeline(PipelineModel):
 
 
 class TestNoopPipelineModel(tf.test.TestCase, parameterized.TestCase):
-    def test_call(self):
-        x = tf.random.uniform((8, 5))
-        model = NoopPipeline()
-        model(x)
-        model(x, include_preprocessing=False)
-
     def test_fit(self):
         x = tf.random.uniform((8, 5))
         y = tf.random.uniform((8, 1))
@@ -144,7 +138,7 @@ class TestNoopPipelineModel(tf.test.TestCase, parameterized.TestCase):
     def test_saving_model(self, save_format):
         model = NoopPipeline()
         x = tf.random.uniform((8, 5))
-        model_output = model(x)
+        model_output = model.predict(x)
         save_path = os.path.join(self.get_temp_dir(), "model")
         model.save(save_path, save_format)
         restored_model = keras.models.load_model(
@@ -154,17 +148,11 @@ class TestNoopPipelineModel(tf.test.TestCase, parameterized.TestCase):
         # Check we got the real object back.
         self.assertIsInstance(restored_model, NoopPipeline)
         # Check that output matches.
-        restored_output = restored_model(x)
+        restored_output = restored_model.predict(x)
         self.assertAllClose(model_output, restored_output)
 
 
 class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
-    def test_call(self):
-        x = tf.random.uniform((8, 5))
-        model = FeaturePipeline()
-        model(tf.strings.as_string(x))
-        model(x, include_preprocessing=False)
-
     def test_fit_with_preprocessing(self):
         x = tf.strings.as_string(tf.random.uniform((100, 5)))
         y = tf.random.uniform((100, 1))
@@ -265,7 +253,7 @@ class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
     def test_saving_model(self, save_format):
         model = FeaturePipeline()
         x = tf.strings.as_string(tf.random.uniform((8, 5)))
-        model_output = model(x)
+        model_output = model.predict(x)
         save_path = os.path.join(self.get_temp_dir(), "model")
         model.save(save_path, save_format)
         restored_model = keras.models.load_model(
@@ -275,17 +263,11 @@ class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         # Check we got the real object back.
         self.assertIsInstance(restored_model, FeaturePipeline)
         # Check that output matches.
-        restored_output = restored_model(x)
+        restored_output = restored_model.predict(x)
         self.assertAllClose(model_output, restored_output)
 
 
 class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
-    def test_call(self):
-        x = tf.random.uniform((8, 5))
-        model = LabelPipeline()
-        model(x)
-        model(x, include_preprocessing=False)
-
     def test_fit_with_preprocessing(self):
         x = tf.random.uniform((100, 5))
         y = tf.strings.as_string(tf.random.uniform((100, 1)))
@@ -379,7 +361,7 @@ class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
     def test_saving_model(self, save_format):
         model = LabelPipeline()
         x = tf.random.uniform((8, 5))
-        model_output = model(x)
+        model_output = model.predict(x)
         save_path = os.path.join(self.get_temp_dir(), "model")
         model.save(save_path, save_format)
         restored_model = keras.models.load_model(
@@ -389,17 +371,11 @@ class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         # Check we got the real object back.
         self.assertIsInstance(restored_model, LabelPipeline)
         # Check that output matches.
-        restored_output = restored_model(x)
+        restored_output = restored_model.predict(x)
         self.assertAllClose(model_output, restored_output)
 
 
 class TestDataPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
-    def test_call(self):
-        data = tf.random.uniform((8, 1))
-        model = DataPipeline()
-        model(tf.strings.as_string(data))
-        model(data, include_preprocessing=False)
-
     def test_fit_with_preprocessing(self):
         data = tf.strings.as_string(tf.random.uniform((100, 1)))
         model = DataPipeline()
@@ -476,7 +452,7 @@ class TestDataPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
     def test_saving_model(self, save_format):
         model = DataPipeline()
         data = tf.strings.as_string(tf.random.uniform((8, 1)))
-        model_output = model(data)
+        model_output = model.predict(data)
         save_path = os.path.join(self.get_temp_dir(), "model")
         model.save(save_path, save_format)
         restored_model = keras.models.load_model(
@@ -486,17 +462,11 @@ class TestDataPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         # Check we got the real object back.
         self.assertIsInstance(restored_model, DataPipeline)
         # Check that output matches.
-        restored_output = restored_model(data)
+        restored_output = restored_model.predict(data)
         self.assertAllClose(model_output, restored_output)
 
 
 class TestFunctional(tf.test.TestCase, parameterized.TestCase):
-    def test_call(self):
-        x = tf.random.uniform((8, 5))
-        model = FunctionalPipeline()
-        model(tf.strings.as_string(x))
-        model(x, include_preprocessing=False)
-
     def test_fit(self):
         x = tf.strings.as_string(tf.random.uniform((100, 5)))
         y = tf.random.uniform((100, 1))
@@ -530,7 +500,7 @@ class TestFunctional(tf.test.TestCase, parameterized.TestCase):
     def test_saving_model(self, save_format):
         model = FunctionalPipeline()
         x = tf.strings.as_string(tf.random.uniform((8, 5)))
-        model_output = model(x)
+        model_output = model.predict(x)
         save_path = os.path.join(self.get_temp_dir(), "model")
         model.save(save_path, save_format)
         restored_model = keras.models.load_model(
@@ -540,7 +510,7 @@ class TestFunctional(tf.test.TestCase, parameterized.TestCase):
         # Check we got the real object back.
         self.assertIsInstance(restored_model, FunctionalPipeline)
         # Check that output matches.
-        restored_output = restored_model(x)
+        restored_output = restored_model.predict(x)
         self.assertAllClose(model_output, restored_output)
 
 
