@@ -14,11 +14,17 @@
 
 """GPT-2 backbone models."""
 
+import copy
+import os
+
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers import PositionEmbedding
 from keras_nlp.layers import TransformerDecoder
+from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
+from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 def _gpt_2_kernel_initializer(stddev=0.02):
@@ -186,11 +192,64 @@ class GPT2(keras.Model):
     def from_config(cls, config):
         return cls(**config)
 
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
+
     @classmethod
+    @format_docstring(names=", ".join(backbone_presets))
     def from_preset(
         cls,
         preset,
         load_weights=True,
         **kwargs,
     ):
-        raise NotImplementedError
+        """Instantiate GPT-2 model from preset architecture and weights.
+
+        Args:
+            preset: string. Must be one of {{names}}.
+            load_weights: Whether to load pre-trained weights into model.
+                Defaults to `True`.
+
+        Examples:
+        ```python
+        input_data = {
+            "token_ids": tf.random.uniform(
+                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
+            ),
+            "padding_mask": tf.constant(
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+            ),
+        }
+
+        # Load architecture and weights from preset
+        model = GPT2.from_preset("gpt2_base")
+        output = model(input_data)
+
+        # Load randomly initalized model from preset architecture
+        model = GPT2.from_preset("gpt2_base", load_weights=False)
+        output = model(input_data)
+        ```
+        """
+
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+        metadata = cls.presets[preset]
+        config = metadata["config"]
+        model = cls.from_config({**config, **kwargs})
+
+        if not load_weights:
+            return model
+
+        weights = keras.utils.get_file(
+            "model.h5",
+            metadata["weights_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["weights_hash"],
+        )
+
+        model.load_weights(weights)
+        return model
