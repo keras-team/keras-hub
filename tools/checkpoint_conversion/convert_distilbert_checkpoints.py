@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import argparse
-import hashlib
 import json
 import os
 
@@ -20,24 +18,20 @@ import numpy as np
 import requests
 import tensorflow as tf
 import transformers
+from absl import app
+from absl import flags
+from checkpoint_conversion_utils import get_md5_checksum
 
 import keras_nlp
 
 PRESET_MAP = {"distilbert_base_uncased_en": "distilbert-base-uncased"}
 
-# DOWNLOAD_SCRIPT_URL = (
-#     "https://raw.githubusercontent.com/openai/gpt-2/master/download_model.py"
-# )
-
 EXTRACT_DIR = "./{}"
 
-
-def get_md5_checksum(file_path):
-    md5_hash = hashlib.md5()
-    with open(file_path, "rb") as f:
-        for byte_block in iter(lambda: f.read(4096), b""):
-            md5_hash.update(byte_block)
-    return md5_hash.hexdigest()
+FLAGS = flags.FLAGS
+flags.DEFINE_string(
+    "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
+)
 
 
 def download_files(preset, hf_model_name):
@@ -64,7 +58,7 @@ def download_files(preset, hf_model_name):
     print(f"`{vocab_path}`")
 
 
-def define_preprocessor(preset, hf_model_name, check_cloud_output=False):
+def define_preprocessor(preset, hf_model_name):
     print("\n-> Define the tokenizers.")
     extract_dir = EXTRACT_DIR.format(preset)
     vocab_path = os.path.join(extract_dir, "vocab.txt")
@@ -78,9 +72,8 @@ def define_preprocessor(preset, hf_model_name, check_cloud_output=False):
 
     hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_name)
 
-    if not check_cloud_output:
-        print("\n-> Print MD5 checksum of the vocab files.")
-        print(f"`{vocab_path}` md5sum: ", get_md5_checksum(vocab_path))
+    print("\n-> Print MD5 checksum of the vocab files.")
+    print(f"`{vocab_path}` md5sum: ", get_md5_checksum(vocab_path))
 
     return keras_nlp_preprocessor, hf_tokenizer
 
@@ -257,7 +250,6 @@ def check_output(
     keras_nlp_model,
     hf_tokenizer,
     hf_model,
-    check_cloud_output=False,
 ):
     print("\n-> Check the outputs.")
     sample_text = ["cricket is awesome, easily the best sport in the world!"]
@@ -276,70 +268,41 @@ def check_output(
     print("HF output:", hf_output[0, 0, :10])
     print("Difference:", np.mean(keras_nlp_output - hf_output.detach().numpy()))
 
-    if check_cloud_output:
-        print("\n-> Check KerasNLP cloud output.")
-        keras_nlp_cloud_model = keras_nlp.models.DistilBert.from_preset(
-            preset,
-            load_weights=True,
-        )
-        keras_nlp_cloud_output = keras_nlp_cloud_model.predict(keras_nlp_inputs)
-        print(
-            "Difference:",
-            tf.reduce_mean(keras_nlp_output - keras_nlp_cloud_output),
-        )
-    else:
-        # Show the MD5 checksum of the model weights.
-        print("Model md5sum: ", get_md5_checksum(f"./{preset}.h5"))
+    # Show the MD5 checksum of the model weights.
+    print("Model md5sum: ", get_md5_checksum(f"./{preset}.h5"))
 
 
-def main(preset, check_cloud_output):
-    hf_model_name = PRESET_MAP[preset]
+def main(_):
+    hf_model_name = PRESET_MAP[FLAGS.preset]
 
-    download_files(preset, hf_model_name)
+    download_files(FLAGS.preset, hf_model_name)
 
     keras_nlp_preprocessor, hf_tokenizer = define_preprocessor(
-        preset, hf_model_name, check_cloud_output
+        FLAGS.preset, hf_model_name
     )
 
     print("\n-> Load KerasNLP model.")
     keras_nlp_model = keras_nlp.models.DistilBert.from_preset(
-        preset, load_weights=False
+        FLAGS.preset, load_weights=False
     )
 
     print("\n-> Load HF model.")
     hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
     hf_model.eval()
 
-    keras_nlp_model = convert_checkpoints(preset, keras_nlp_model, hf_model)
+    keras_nlp_model = convert_checkpoints(
+        FLAGS.preset, keras_nlp_model, hf_model
+    )
 
     check_output(
-        preset,
+        FLAGS.preset,
         keras_nlp_preprocessor,
         keras_nlp_model,
         hf_tokenizer,
         hf_model,
-        check_cloud_output,
     )
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--preset",
-        type=str,
-        required=True,
-        help=(f'Must be one of {",".join(PRESET_MAP.keys())}'),
-    )
-    parser.add_argument(
-        "--check_cloud_output",
-        action="store_true",
-        help="If specified, check the output of the cloud model.",
-    )
-    args = parser.parse_args()
-
-    assert (
-        args.preset in PRESET_MAP.keys()
-    ), f'Invalid preset {args.preset}. Must be one of {",".join(PRESET_MAP.keys())}'
-
-    main(preset=args.preset, check_cloud_output=args.check_cloud_output)
+    flags.mark_flag_as_required("preset")
+    app.run(main)
