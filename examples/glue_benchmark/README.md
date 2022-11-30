@@ -12,7 +12,7 @@ and run the command below:
 
 ```shell
 python glue.py --task_name="mrpc" --batch_size=32 \
-    --submission_file_path="glue_submissions/"
+    --submission_directory="glue_submissions/"
 ```
 
 By default the script finetunes on the tiniest BERT model we have available 
