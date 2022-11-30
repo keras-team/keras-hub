@@ -24,7 +24,10 @@ from checkpoint_conversion_utils import get_md5_checksum
 
 import keras_nlp
 
-PRESET_MAP = {"distilbert_base_uncased_en": "distilbert-base-uncased"}
+PRESET_MAP = {
+    "distilbert_base_uncased_en": "distilbert-base-uncased",
+    "distilbert_base_cased_en": "distilbert-base-multilingual-cased",
+}
 
 EXTRACT_DIR = "./{}"
 

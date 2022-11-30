@@ -34,5 +34,25 @@ backbone_presets = {
         "weights_hash": "6625a649572e74086d74c46b8d0b0da3",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/distilbert_base_uncased_en/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
-    }
+    },
+    "distilbert_base_multi_cased": {
+        "config": {
+            "vocabulary_size": 30522,
+            "num_layers": 6,
+            "num_heads": 12,
+            "hidden_dim": 768,
+            "intermediate_dim": 3072,
+            "dropout": 0.1,
+            "max_sequence_length": 512,
+        },
+        "preprocessor_config": {},
+        "description": (
+            "Base size of DistilBERT. Trained on Wikipedias of 104 languages "
+            "using BERT the teacher model."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/distilbert_base_multi_cased/model.h5",
+        "weights_hash": "6625a649572e74086d74c46b8d0b0da3",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/distilbert_base_multi_cased/vocab.txt",
+        "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
+    },
 }
