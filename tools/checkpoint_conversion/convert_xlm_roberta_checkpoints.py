@@ -286,7 +286,9 @@ def check_output(
     keras_nlp_output = keras_nlp_model.predict(keras_nlp_inputs)
 
     # HF
-    hf_inputs = hf_tokenizer(input_str, return_tensors="pt")
+    hf_inputs = hf_tokenizer(
+        input_str, padding="max_length", return_tensors="pt"
+    )
     hf_output = hf_model(**hf_inputs).last_hidden_state
 
     print("KerasNLP output:", keras_nlp_output[0, 0, :10])
