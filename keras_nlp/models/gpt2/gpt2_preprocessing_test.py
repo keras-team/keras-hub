@@ -25,7 +25,7 @@ from keras_nlp.models.gpt2.gpt2_preprocessing import GPT2Tokenizer
 
 class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        vocab = {
+        self.vocab = {
             "<|endoftext|>": 0,
             "Ġair": 1,
             "plane": 2,
@@ -42,8 +42,11 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
         merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
         merges += ["pla ne"]
+        self.merges = merges
 
-        self.tokenizer = GPT2Tokenizer(vocabulary=vocab, merges=merges)
+        self.tokenizer = GPT2Tokenizer(
+            vocabulary=self.vocab, merges=self.merges
+        )
 
     def test_tokenize(self):
         input_data = " airplane at airport"

@@ -13,10 +13,15 @@
 # limitations under the License.
 """GPT-2 preprocessing layers."""
 
+import copy
+import os
+
 from tensorflow import keras
 
+from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -43,8 +48,7 @@ class GPT2Tokenizer(BytePairTokenizer):
         merges: string or list, contains the merge rule. If it is a string,
             it should be the file path to merge rules. The merge rule file
             should have one merge rule per line. Every merge rule contains
-            merge entities separated by a space. Please refer to this example:
-            https://storage.googleapis.com/keras-nlp/models/roberta_base/merges.txt.
+            merge entities separated by a space.
 
     Examples:
 
@@ -113,12 +117,59 @@ class GPT2Tokenizer(BytePairTokenizer):
 
     @classproperty
     def presets(cls):
-        raise NotImplementedError
+        return copy.deepcopy(backbone_presets)
 
     @classmethod
+    @format_docstring(names=", ".join(backbone_presets))
     def from_preset(
         cls,
         preset,
         **kwargs,
     ):
-        raise NotImplementedError
+        """Instantiate a GPT-2 tokenizer from preset vocabulary and merge rules.
+
+        Args:
+            preset: string. Must be one of {{names}}.
+
+        Examples:
+        ```python
+        # Load a preset tokenizer.
+        tokenizer = keras_nlp.models.GPT2Tokenizer.from_preset(
+            "gpt2_base",
+        )
+        # Tokenize some input.
+        tokenizer("The quick brown fox tripped.")
+        # Detokenize some input.
+        tokenizer.detokenize([5, 6, 7, 8, 9])
+        ```
+        """
+
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+        metadata = cls.presets[preset]
+
+        vocabulary = keras.utils.get_file(
+            "vocab.json",
+            metadata["vocabulary_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["vocabulary_hash"],
+        )
+        merges = keras.utils.get_file(
+            "merges.txt",
+            metadata["merges_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["merges_hash"],
+        )
+
+        config = metadata["preprocessor_config"]
+        config.update(
+            {
+                "vocabulary": vocabulary,
+                "merges": merges,
+            },
+        )
+
+        return cls.from_config({**config, **kwargs})
