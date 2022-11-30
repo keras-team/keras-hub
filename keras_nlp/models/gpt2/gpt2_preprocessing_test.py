@@ -44,7 +44,9 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         merges += ["pla ne"]
         self.merges = merges
 
-        self.tokenizer = GPT2Tokenizer(vocabulary=self.vocab, merges=merges)
+        self.tokenizer = GPT2Tokenizer(
+            vocabulary=self.vocab, merges=self.merges
+        )
 
     def test_tokenize(self):
         input_data = " airplane at airport"
