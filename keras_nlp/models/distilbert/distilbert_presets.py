@@ -45,7 +45,9 @@ backbone_presets = {
             "dropout": 0.1,
             "max_sequence_length": 512,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": {
+            "lowercase": False,
+        },
         "description": (
             "Base size of DistilBERT. Trained on Wikipedias of 104 languages "
             "using BERT the teacher model."
