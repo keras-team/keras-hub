@@ -37,7 +37,7 @@ backbone_presets = {
     },
     "distilbert_base_multi_cased": {
         "config": {
-            "vocabulary_size": 30522,
+            "vocabulary_size": 119547,
             "num_layers": 6,
             "num_heads": 12,
             "hidden_dim": 768,
