@@ -53,8 +53,8 @@ backbone_presets = {
             "using BERT the teacher model."
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/distilbert_base_multi_cased/model.h5",
-        "weights_hash": "6625a649572e74086d74c46b8d0b0da3",
+        "weights_hash": "4af2c90b4ef36a78ef770f9cc0db874d",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/distilbert_base_multi_cased/vocab.txt",
-        "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
+        "vocabulary_hash": "d9d865138d17f1958502ed060ecfeeb6",
     },
 }
