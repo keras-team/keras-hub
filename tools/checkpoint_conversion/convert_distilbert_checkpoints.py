@@ -26,6 +26,7 @@ import keras_nlp
 
 PRESET_MAP = {
     "distilbert_base_uncased_en": "distilbert-base-uncased",
+    "distilbert_base_cased_en": "distilbert-base-cased",
     "distilbert_base_multi_cased": "distilbert-base-multilingual-cased",
 }
 

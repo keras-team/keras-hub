@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 base_dir=$(dirname $(dirname $0))
-targets="${base_dir}/*.py ${base_dir}/examples/ ${base_dir}/keras_nlp/ ${base_dir}/tools/checkpoint_conversion/*.py"
+targets="${base_dir}/*.py ${base_dir}/examples/ ${base_dir}/keras_nlp/ ${base_dir}/tools/"
 
 isort --sp "${base_dir}/setup.cfg" --sl ${targets}
 black --line-length 80 ${targets}

@@ -35,6 +35,29 @@ backbone_presets = {
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/distilbert_base_uncased_en/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
+    "distilbert_base_cased_en": {
+        "config": {
+            "vocabulary_size": 28996,
+            "num_layers": 6,
+            "num_heads": 12,
+            "hidden_dim": 768,
+            "intermediate_dim": 3072,
+            "dropout": 0.1,
+            "max_sequence_length": 512,
+        },
+        "preprocessor_config": {
+            "lowercase": False,
+        },
+        "description": (
+            "Base size of DistilBERT where case is maintained. "
+            "Trained on English Wikipedia + BooksCorpus using BERT as the "
+            "teacher model."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/distilbert_base_uncased_en/model.h5",
+        "weights_hash": "fa36aa6865978efbf85a5c8264e5eb57",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/distilbert_base_uncased_en/vocab.txt",
+        "vocabulary_hash": "bb6ca9b42e790e5cd986bbb16444d0e0",
+    },
     "distilbert_base_multi_cased": {
         "config": {
             "vocabulary_size": 119547,
