@@ -32,7 +32,7 @@ PRESET_MAP = {
 }
 
 DOWNLOAD_SCRIPT_URL = (
-    "https://dl.fbaipublicfiles.com/fairseq/models/xlmr.{}.tar.gz"
+    "https://dl.fbaipublicfiles.com/fairseq/models/{}.tar.gz"
 )
 
 EXTRACT_DIR = "./{}"
@@ -47,7 +47,7 @@ def download_model(preset, size):
     print("-> Download original weights.")
     archive_file_path = keras.utils.get_file(
         fname=None,
-        origin=f"https://dl.fbaipublicfiles.com/fairseq/models/{size}.tar.gz",
+        origin=DOWNLOAD_SCRIPT_URL.format(size),
         cache_subdir=os.path.join("checkpoint_conversion", preset),
     )
 
