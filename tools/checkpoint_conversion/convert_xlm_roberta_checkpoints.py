@@ -66,7 +66,7 @@ def convert_checkpoints(preset, size):
     pt_model = pt_ckpt["model"]
 
     cfg = {
-        "nm_layers": pt_cfg.encoder_layers,
+        "num_layers": pt_cfg.encoder_layers,
         "num_heads": pt_cfg.encoder_attention_heads,
         "hidden_dim": pt_cfg.encoder_embed_dim,
         "intermediate_dim": pt_cfg.encoder_ffn_embed_dim,
