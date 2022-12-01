@@ -48,7 +48,7 @@ def download_model(preset, size):
     archive_file_path = keras.utils.get_file(
         fname=None,
         origin=f"https://dl.fbaipublicfiles.com/fairseq/models/{size}.tar.gz",
-        cache_subdir=os.join("checkpoint_conversion", preset),
+        cache_subdir=os.path.join("checkpoint_conversion", preset),
     )
 
     os.system(f"tar -xvf {archive_file_path}")
