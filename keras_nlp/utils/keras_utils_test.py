@@ -16,6 +16,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.utils.keras_utils import clone_initializer
+from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
 class CloneInitializerTest(tf.test.TestCase):
@@ -39,3 +40,28 @@ class CloneInitializerTest(tf.test.TestCase):
         initializer = "glorot_uniform"
         clone = clone_initializer(initializer)
         self.assertAllEqual(initializer, clone)
+
+
+class PackTest(tf.test.TestCase):
+    def test_pack_dict(self):
+        tensor_dict = {"foo": tf.constant([1, 2])}
+        data = pack_x_y_sample_weight(tensor_dict)
+        self.assertAllEqual(data, tensor_dict)
+
+    def test_pack_tuple(self):
+        tensor_tuple = (tf.constant([1, 2]),)
+        data = pack_x_y_sample_weight(tensor_tuple)
+        self.assertAllEqual(data, (tensor_tuple,))
+
+    def test_pack_pair(self):
+        x = tf.constant([1, 2])
+        y = tf.constant([3, 4])
+        data = pack_x_y_sample_weight(x, y)
+        self.assertAllEqual(data, (x, y))
+
+    def test_pack_triplet(self):
+        x = tf.constant([1, 2])
+        y = tf.constant([3, 4])
+        sw = tf.constant([5, 6])
+        data = pack_x_y_sample_weight(x, y, sw)
+        self.assertAllEqual(data, (x, y, sw))
