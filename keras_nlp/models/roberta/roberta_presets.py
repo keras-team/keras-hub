@@ -28,9 +28,9 @@ backbone_presets = {
             "Trained on a 160 GB English dataset."
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_cased_en/model.h5",
-        "weights_hash": "2eb6fcda5a42f0a88056213ba3d93906",
+        "weights_hash": "958eede1c7edaa9308e027be18fde7a8",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_cased_en/vocab.json",
-        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "vocabulary_hash": "be4d3c6f3f5495426b2c03b334334354",
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_cased_en/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
@@ -50,9 +50,9 @@ backbone_presets = {
             "Trained on a 160 GB English dataset."
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_largee_cased_en/model.h5",
-        "weights_hash": "2eb6fcda5a42f0a88056213ba3d93906",
+        "weights_hash": "1978b864c317a697fe62a894d3664f14",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_cased_en/vocab.json",
-        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "vocabulary_hash": "be4d3c6f3f5495426b2c03b334334354",
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_cased_en/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
