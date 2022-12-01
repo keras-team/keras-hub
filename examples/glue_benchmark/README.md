@@ -95,4 +95,5 @@ its performance.
 | epochs                     	| Number of epochs to run finetuning.             	| 2       	|
 | learning_rate              	| The optimizer's learning rate                   	| 5e-5    	|
 | submission_directory       	| The file path to save the glue submission file. 	| None    	|
-| finetuning_model_save_path 	| The path to save the finetuning model.          	| None    	|
+| load_finetuning_model 	    | The path to load the finetuning model.          	| None    	|
+| save_finetuning_model 	    | The path to save the finetuning model.          	| None    	|
