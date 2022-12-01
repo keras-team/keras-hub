@@ -153,14 +153,14 @@ class XLMRobertaClassifier(keras.Model):
         }
 
         # Load backbone architecture and weights from preset
-        classifier = XLMRobertaClassifier.from_preset(
+        classifier = keras_nlp.models.XLMRobertaClassifier.from_preset(
             "xlm_roberta_base",
             num_classes=4,
         )
         output = classifier(input_data)
 
         # Load randomly initalized model from preset architecture
-        classifier = XLMRobertaClassifier.from_preset(
+        classifier = keras_nlp.models.XLMRobertaClassifier.from_preset(
             "xlm_roberta_base",
             load_weights=False,
             num_classes=4,

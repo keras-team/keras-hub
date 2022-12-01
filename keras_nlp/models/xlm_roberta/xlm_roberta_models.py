@@ -113,11 +113,11 @@ class XLMRoberta(roberta_models.Roberta):
         }
 
         # Load architecture and weights from preset
-        model = XLMRoberta.from_preset("xlm_roberta_base")
+        model = keras_nlp.models.XLMRoberta.from_preset("xlm_roberta_base")
         output = model(input_data)
 
         # Load randomly initalized model from preset architecture
-        model = XLMRoberta.from_preset(
+        model = keras_nlp.models.XLMRoberta.from_preset(
             "xlm_roberta_base", load_weights=False
         )
         output = model(input_data)

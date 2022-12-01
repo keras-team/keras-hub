@@ -19,10 +19,12 @@ import torch
 import transformers
 from absl import app
 from absl import flags
-from checkpoint_conversion_utils import get_md5_checksum
 from tensorflow import keras
 
 import keras_nlp
+from tools.checkpoint_conversion.checkpoint_conversion_utils import (
+    get_md5_checksum,
+)
 
 PRESET_MAP = {
     "xlm_roberta_base": ("xlmr.base", "xlm-roberta-base"),
@@ -46,6 +48,7 @@ def download_model(preset, size):
     archive_file_path = keras.utils.get_file(
         fname=None,
         origin=f"https://dl.fbaipublicfiles.com/fairseq/models/{size}.tar.gz",
+        cache_subdir=os.join("checkpoint_conversion", preset),
     )
 
     os.system(f"tar -xvf {archive_file_path}")
