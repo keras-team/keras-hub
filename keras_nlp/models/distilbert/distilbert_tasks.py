@@ -13,11 +13,17 @@
 # limitations under the License.
 """DistilBERT task specific models and heads."""
 
+import copy
+
 from tensorflow import keras
 
+from keras_nlp.models.distilbert.distilbert_models import DistilBert
 from keras_nlp.models.distilbert.distilbert_models import (
     distilbert_kernel_initializer,
 )
+from keras_nlp.models.distilbert.distilbert_presets import backbone_presets
+from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -61,7 +67,7 @@ class DistilBertClassifier(keras.Model):
     def __init__(
         self,
         backbone,
-        num_classes,
+        num_classes=2,
         hidden_dim=None,
         dropout=0.2,
         **kwargs,
@@ -116,3 +122,62 @@ class DistilBertClassifier(keras.Model):
         if "backbone" in config:
             config["backbone"] = keras.layers.deserialize(config["backbone"])
         return cls(**config)
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
+
+    @classmethod
+    @format_docstring(names=", ".join(backbone_presets))
+    def from_preset(
+        cls,
+        preset,
+        load_weights=True,
+        **kwargs,
+    ):
+        """Create a classification model from a preset architecture and weights.
+
+        Args:
+            preset: string. Must be one of {{names}}.
+            load_weights: Whether to load pre-trained weights into model.
+                Defaults to `True`.
+
+        Examples:
+        ```python
+        input_data = {
+            "token_ids": tf.random.uniform(
+                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
+            ),
+            "padding_mask": tf.constant(
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+            ),
+        }
+
+        # Load backbone architecture and weights from preset
+        classifier = keras_nlp.models.DistilBertClassifier.from_preset(
+            "distilbert_base_uncased_en",
+            num_classes=4,
+        )
+        output = classifier(input_data)
+
+        # Load randomly initalized model from preset architecture
+        classifier = keras_nlp.models.DistilBertClassifier.from_preset(
+            "distilbert_base_uncased_en",
+            load_weights=False,
+            num_classes=4,
+        )
+        output = classifier(input_data)
+        ```
+        """
+        # Check if preset is backbone-only model
+        if preset in DistilBert.presets:
+            backbone = DistilBert.from_preset(preset, load_weights)
+            return cls(backbone, **kwargs)
+
+        # Otherwise must be one of class presets
+        # Currently no classifier-level presets, so must throw.
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
