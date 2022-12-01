@@ -326,7 +326,7 @@ def main(_):
     size = PRESET_MAP[FLAGS.preset][0]
     hf_model_name = PRESET_MAP[FLAGS.preset][1]
 
-    download_model(FLAGS.preset, size)
+    download_model(FLAGS.preset, size, hf_model_name)
 
     keras_nlp_model = convert_checkpoints(FLAGS.preset, size)
 
