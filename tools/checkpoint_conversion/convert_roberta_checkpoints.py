@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import shutil
 
 import numpy as np
 import tensorflow as tf
@@ -41,8 +42,9 @@ flags.DEFINE_string(
 )
 
 
-def download_model(preset, size):
+def download_model(preset, size, hf_model_name):
     print("-> Download original weights.")
+    extract_dir = EXTRACT_DIR.format(size)
     archive_file_path = keras.utils.get_file(
         fname=None,
         origin=DOWNLOAD_SCRIPT_URL.format(size),
@@ -50,6 +52,19 @@ def download_model(preset, size):
     )
 
     os.system(f"tar -xvf {archive_file_path}")
+
+    # The original `tar.gz` file does not have the vocab files. Let's fetch
+    # them from HF.
+    vocabulary_path = keras.utils.get_file(
+        fname=None,
+        origin=f"https://huggingface.co/{hf_model_name}/raw/main/vocab.json",
+    )
+    shutil.copy(vocabulary_path, extract_dir)
+    merges_path = keras.utils.get_file(
+        fname=None,
+        origin=f"https://huggingface.co/{hf_model_name}/raw/main/merges.txt",
+    )
+    shutil.copy(merges_path, extract_dir)
 
 
 def convert_checkpoints(preset, size):
@@ -255,10 +270,11 @@ def convert_checkpoints(preset, size):
 def define_preprocessor(preset, hf_model_name, size):
     print("\n-> Define the tokenizers.")
     extract_dir = EXTRACT_DIR.format(size)
-    spm_path = os.path.join(extract_dir, "sentencepiece.bpe.model")
+    vocabulary_path = os.path.join(extract_dir, "vocab.json")
+    merges_path = os.path.join(extract_dir, "merges.txt")
 
     keras_nlp_tokenizer = keras_nlp.models.RobertaTokenizer(
-        proto=spm_path,
+        vocabulary=vocabulary_path, merges=merges_path
     )
     keras_nlp_preprocessor = keras_nlp.models.RobertaPreprocessor(
         keras_nlp_tokenizer
@@ -267,7 +283,8 @@ def define_preprocessor(preset, hf_model_name, size):
     hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_name)
 
     print("\n-> Print MD5 checksum of the vocab files.")
-    print(f"`{spm_path}` md5sum: ", get_md5_checksum(spm_path))
+    print(f"`{vocabulary_path}` md5sum: ", get_md5_checksum(vocabulary_path))
+    print(f"`{merges_path}` md5sum: ", get_md5_checksum(merges_path))
 
     return keras_nlp_preprocessor, hf_tokenizer
 
