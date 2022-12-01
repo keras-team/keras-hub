@@ -27,3 +27,21 @@ def clone_initializer(initializer):
         return initializer
     config = initializer.get_config()
     return initializer.__class__.from_config(config)
+
+
+def pack_x_y_sample_weight(x, y=None, sample_weight=None):
+    """Packs user-provided data into a tuple.
+
+    This is a temporary copy of `keras.utils.pack_x_y_sample_weight` while we
+    wait for the a change to the upstream version to propagate to a stable
+    release. See https://github.com/keras-team/keras-nlp/issues/492
+    """
+    if y is None:
+        if not isinstance(x, (list, tuple)):
+            return x
+        else:
+            return (x,)
+    elif sample_weight is None:
+        return (x, y)
+    else:
+        return (x, y, sample_weight)

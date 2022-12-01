@@ -14,14 +14,20 @@
 """BERT task specific models and heads."""
 
 import copy
+import os
 
 from tensorflow import keras
 
 from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_models import bert_kernel_initializer
 from keras_nlp.models.bert.bert_presets import backbone_presets
+from keras_nlp.models.bert.bert_presets import classifier_presets
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
+
+CLASSIFIER_PRESET_NAMES = ", ".join(
+    list(backbone_presets) + list(classifier_presets)
+)
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -110,11 +116,15 @@ class BertClassifier(keras.Model):
         return cls(**config)
 
     @classproperty
-    def presets(cls):
+    def backbone_presets(cls):
         return copy.deepcopy(backbone_presets)
 
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy({**backbone_presets, **classifier_presets})
+
     @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
+    @format_docstring(names=CLASSIFIER_PRESET_NAMES)
     def from_preset(
         cls,
         preset,
@@ -158,15 +168,31 @@ class BertClassifier(keras.Model):
         output = classifier(input_data)
         ```
         """
-        # Check if preset is backbone-only model
-        if preset in Bert.presets:
-            backbone = Bert.from_preset(preset, load_weights)
-            return cls(backbone, **kwargs)
-
-        # Otherwise must be one of class presets
-        # Currently no classifier-level presets, so must throw.
         if preset not in cls.presets:
             raise ValueError(
                 "`preset` must be one of "
                 f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
+
+        # Check if preset is backbone-only model
+        if preset in cls.backbone_presets:
+            backbone = Bert.from_preset(preset, load_weights)
+            return cls(backbone, **kwargs)
+
+        # Otherwise must be one of class presets
+        metadata = cls.presets[preset]
+        config = metadata["config"]
+        model = cls.from_config({**config, **kwargs})
+
+        if not load_weights:
+            return model
+
+        weights = keras.utils.get_file(
+            "model.h5",
+            metadata["weights_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["weights_hash"],
+        )
+
+        model.load_weights(weights)
+        return model

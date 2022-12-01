@@ -14,7 +14,6 @@
 """Tests for BERT preprocessing layers."""
 
 import os
-import unittest
 
 import tensorflow as tf
 from absl.testing import parameterized
@@ -58,26 +57,6 @@ class BertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         tokenizer = BertTokenizer(vocabulary=self.vocab)
         self.assertEqual(tokenizer.vocabulary_size(), 13)
 
-    def test_unknown_preset_error(self):
-        # Not a preset name
-        with self.assertRaises(ValueError):
-            BertPreprocessor.from_preset("bert_base_uncased_clowntown")
-
-    def test_preset_docstring(self):
-        """Check we did our docstring formatting correctly."""
-        for name in BertPreprocessor.presets:
-            self.assertRegex(BertPreprocessor.from_preset.__doc__, name)
-
-    @unittest.mock.patch("tensorflow.keras.utils.get_file")
-    def test_valid_call_presets(self, get_file_mock):
-        """Ensure presets have necessary structure, but no RPCs."""
-        input_data = ["THE QUICK BROWN FOX."]
-        get_file_mock.return_value = self.vocab
-        for preset in BertTokenizer.presets:
-            tokenizer = BertTokenizer.from_preset(preset)
-            tokenizer(input_data)
-        self.assertEqual(get_file_mock.call_count, len(BertTokenizer.presets))
-
     @parameterized.named_parameters(
         ("save_format_tf", "tf"), ("save_format_h5", "h5")
     )
@@ -114,14 +93,7 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant(
-            [
-                "THE QUICK BROWN FOX.",
-                "THE QUICK BROWN FOX.",
-                "THE QUICK BROWN FOX.",
-                "THE QUICK BROWN FOX.",
-            ]
-        )
+        input_data = tf.constant(["THE QUICK BROWN FOX."] * 4)
         preprocessor = BertPreprocessor(
             BertTokenizer(vocabulary=self.vocab),
             sequence_length=8,
@@ -134,6 +106,46 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(
             output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
         )
+
+    def test_tokenize_labeled_batch(self):
+        x = tf.constant(["THE QUICK BROWN FOX."] * 4)
+        y = tf.constant([1] * 4)
+        sw = tf.constant([1.0] * 4)
+        preprocessor = BertPreprocessor(
+            BertTokenizer(vocabulary=self.vocab),
+            sequence_length=8,
+        )
+        x_out, y_out, sw_out = preprocessor(x, y, sw)
+        self.assertAllEqual(x_out["token_ids"], [[2, 5, 6, 7, 8, 1, 3, 0]] * 4)
+        self.assertAllEqual(
+            x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0]] * 4
+        )
+        self.assertAllEqual(
+            x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
+        )
+        self.assertAllEqual(y_out, y)
+        self.assertAllEqual(sw_out, sw)
+
+    def test_tokenize_labeled_dataset(self):
+        x = tf.constant(["THE QUICK BROWN FOX."] * 4)
+        y = tf.constant([1] * 4)
+        sw = tf.constant([1.0] * 4)
+        ds = tf.data.Dataset.from_tensor_slices((x, y, sw))
+        preprocessor = BertPreprocessor(
+            BertTokenizer(vocabulary=self.vocab),
+            sequence_length=8,
+        )
+        ds = ds.map(preprocessor)
+        x_out, y_out, sw_out = ds.batch(4).take(1).get_single_element()
+        self.assertAllEqual(x_out["token_ids"], [[2, 5, 6, 7, 8, 1, 3, 0]] * 4)
+        self.assertAllEqual(
+            x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0]] * 4
+        )
+        self.assertAllEqual(
+            x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
+        )
+        self.assertAllEqual(y_out, y)
+        self.assertAllEqual(sw_out, sw)
 
     def test_tokenize_multiple_sentences(self):
         sentence_one = "THE QUICK"
@@ -150,22 +162,8 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1])
 
     def test_tokenize_multiple_batched_sentences(self):
-        sentence_one = tf.constant(
-            [
-                "THE QUICK",
-                "THE QUICK",
-                "THE QUICK",
-                "THE QUICK",
-            ]
-        )
-        sentence_two = tf.constant(
-            [
-                "BROWN FOX.",
-                "BROWN FOX.",
-                "BROWN FOX.",
-                "BROWN FOX.",
-            ]
-        )
+        sentence_one = tf.constant(["THE QUICK"] * 4)
+        sentence_two = tf.constant(["BROWN FOX."] * 4)
         preprocessor = BertPreprocessor(
             BertTokenizer(vocabulary=self.vocab),
             sequence_length=8,
@@ -180,50 +178,6 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(
             output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1]] * 4
         )
-
-    def test_unknown_preset_error(self):
-        # Not a preset name
-        with self.assertRaises(ValueError):
-            BertPreprocessor.from_preset("bert_base_uncased_clowntown")
-
-    def test_preset_docstring(self):
-        """Check we did our docstring formatting correctly."""
-        for name in BertPreprocessor.presets:
-            self.assertRegex(BertPreprocessor.from_preset.__doc__, name)
-
-    @unittest.mock.patch("tensorflow.keras.utils.get_file")
-    def test_valid_call_presets(self, get_file_mock):
-        """Ensure presets have necessary structure, but no RPCs."""
-        input_data = ["THE QUICK BROWN FOX."]
-        get_file_mock.return_value = self.vocab
-        for preset in BertPreprocessor.presets:
-            preprocessor = BertPreprocessor.from_preset(preset)
-            preprocessor(input_data)
-        self.assertEqual(
-            get_file_mock.call_count, len(BertPreprocessor.presets)
-        )
-
-    @unittest.mock.patch("tensorflow.keras.utils.get_file")
-    def test_override_preprocessor_sequence_length(self, get_file_mock):
-        get_file_mock.return_value = self.vocab
-        preprocessor = BertPreprocessor.from_preset(
-            "bert_base_uncased_en",
-            sequence_length=64,
-        )
-        self.assertEqual(preprocessor.get_config()["sequence_length"], 64)
-        preprocessor("The quick brown fox.")
-        get_file_mock.assert_called_once()
-
-    @unittest.mock.patch("tensorflow.keras.utils.get_file")
-    def test_override_preprocessor_sequence_length_gt_max(self, get_file_mock):
-        """Override sequence length longer than model's maximum."""
-        get_file_mock.return_value = self.vocab
-        with self.assertRaises(ValueError):
-            BertPreprocessor.from_preset(
-                "bert_base_uncased_en",
-                sequence_length=1024,
-            )
-        get_file_mock.assert_called_once()
 
     @parameterized.named_parameters(
         ("save_format_tf", "tf"), ("save_format_h5", "h5")
