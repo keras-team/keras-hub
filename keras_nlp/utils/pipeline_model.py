@@ -17,23 +17,11 @@
 import functools
 import math
 
-import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
-
-try:
-    import pandas as pd
-except ImportError:
-    pd = None
-
-
-def _get_tensor_types():
-    if pd is None:
-        return (tf.Tensor, np.ndarray)
-    else:
-        return (tf.Tensor, np.ndarray, pd.Series, pd.DataFrame)
+from keras_nlp.utils.tf_utils import is_tensor_type
 
 
 def _convert_inputs_to_dataset(
@@ -77,8 +65,7 @@ def _train_validation_split(arrays, validation_split):
     """
 
     def _can_split(t):
-        tensor_types = _get_tensor_types()
-        return isinstance(t, tensor_types) or t is None
+        return is_tensor_type(t) or t is None
 
     flat_arrays = tf.nest.flatten(arrays)
     unsplitable = [type(t) for t in flat_arrays if not _can_split(t)]
