@@ -31,9 +31,7 @@ PRESET_MAP = {
     "xlm_roberta_large": ("xlmr.large", "xlm-roberta-large"),
 }
 
-DOWNLOAD_SCRIPT_URL = (
-    "https://dl.fbaipublicfiles.com/fairseq/models/{}.tar.gz"
-)
+DOWNLOAD_SCRIPT_URL = "https://dl.fbaipublicfiles.com/fairseq/models/{}.tar.gz"
 
 EXTRACT_DIR = "./{}"
 
