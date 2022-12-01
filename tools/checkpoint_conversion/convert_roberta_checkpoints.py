@@ -28,8 +28,8 @@ from tools.checkpoint_conversion.checkpoint_conversion_utils import (
 )
 
 PRESET_MAP = {
-    "roberta_base_cased_en": ("roberta.base", "roberta-base"),
-    "roberta_large_cased_en": ("roberta.large", "roberta-large"),
+    "roberta_base": ("roberta.base", "roberta-base"),
+    "roberta_large": ("roberta.large", "roberta-large"),
 }
 
 DOWNLOAD_SCRIPT_URL = "https://dl.fbaipublicfiles.com/fairseq/models/{}.tar.gz"

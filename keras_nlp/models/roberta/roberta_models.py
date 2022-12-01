@@ -211,12 +211,12 @@ class Roberta(keras.Model):
         }
 
         # Load architecture and weights from preset
-        model = keras_nlp.models.Roberta.from_preset("roberta_base_cased_en")
+        model = keras_nlp.models.Roberta.from_preset("roberta_base")
         output = model(input_data)
 
         # Load randomly initalized model from preset architecture
         model = keras_nlp.models.Roberta.from_preset(
-            "roberta_base_cased_en", load_weights=False
+            "roberta_base", load_weights=False
         )
         output = model(input_data)
         ```

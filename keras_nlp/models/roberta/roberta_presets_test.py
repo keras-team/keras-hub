@@ -34,7 +34,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_tokenizer_output(self):
         tokenizer = RobertaTokenizer.from_preset(
-            "roberta_base_cased_en",
+            "roberta_base",
         )
         outputs = tokenizer("The quick brown fox.")
         expected_outputs = [581, 63773, 119455, 6, 147797, 5]
@@ -42,7 +42,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_preprocessor_output(self):
         preprocessor = RobertaPreprocessor.from_preset(
-            "roberta_base_cased_en",
+            "roberta_base",
             sequence_length=4,
         )
         outputs = preprocessor("The quick brown fox.")["token_ids"]
@@ -57,9 +57,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "token_ids": tf.constant([[0, 581, 63773, 2]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
-        model = Roberta.from_preset(
-            "roberta_base_cased_en", load_weights=load_weights
-        )
+        model = Roberta.from_preset("roberta_base", load_weights=load_weights)
         outputs = model(input_data)
         if load_weights:
             outputs = outputs[0, 0, :5]
@@ -75,7 +73,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = RobertaClassifier.from_preset(
-            "roberta_base_cased_en", load_weights=load_weights
+            "roberta_base", load_weights=load_weights
         )
         # Never assert output values, as the head weights are random.
         model(input_data)

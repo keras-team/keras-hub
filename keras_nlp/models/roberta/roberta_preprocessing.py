@@ -145,7 +145,7 @@ class RobertaTokenizer(BytePairTokenizer):
         ```python
         # Load a preset tokenizer.
         tokenizer = keras_nlp.models.RobertaTokenizer.from_preset(
-            "roberta_base_cased_en",
+            "roberta_base",
         )
         # Tokenize some input.
         tokenizer("The quick brown fox tripped.")
@@ -366,13 +366,13 @@ class RobertaPreprocessor(keras.layers.Layer):
         ```python
         # Load preprocessor from preset
         preprocessor = keras_nlp.models.RobertPreprocessor.from_preset(
-            "roberta_base_cased_en",
+            "roberta_base",
         )
         preprocessor("The quick brown fox jumped.")
 
         # Override sequence_length
         preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-            "roberta_base_cased_en",
+            "roberta_base",
             sequence_length=64
         )
         preprocessor("The quick brown fox jumped.")

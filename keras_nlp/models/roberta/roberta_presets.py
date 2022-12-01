@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 backbone_presets = {
-    "roberta_base_cased_en": {
+    "roberta_base": {
         "config": {
             "vocabulary_size": 50265,
             "num_layers": 12,
@@ -27,14 +27,14 @@ backbone_presets = {
             "Base size of RoBERTa where case is maintained."
             "Trained on a 160 GB English dataset."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_cased_en/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base/model.h5",
         "weights_hash": "958eede1c7edaa9308e027be18fde7a8",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_cased_en/vocab.json",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base/vocab.json",
         "vocabulary_hash": "be4d3c6f3f5495426b2c03b334334354",
-        "merges_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_cased_en/merges.txt",
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
-    "roberta_large_cased_en": {
+    "roberta_large": {
         "config": {
             "vocabulary_size": 50265,
             "num_layers": 24,
@@ -49,11 +49,11 @@ backbone_presets = {
             "Large size of RoBERTa where case is maintained."
             "Trained on a 160 GB English dataset."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_largee_cased_en/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large/model.h5",
         "weights_hash": "1978b864c317a697fe62a894d3664f14",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_cased_en/vocab.json",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large/vocab.json",
         "vocabulary_hash": "be4d3c6f3f5495426b2c03b334334354",
-        "merges_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_cased_en/merges.txt",
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
 }

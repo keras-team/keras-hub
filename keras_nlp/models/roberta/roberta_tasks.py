@@ -151,14 +151,14 @@ class RobertaClassifier(keras.Model):
 
         # Load backbone architecture and weights from preset
         classifier = keras_nlp.models.RobertaClassifier.from_preset(
-            "roberta_base_cased_en",
+            "roberta_base",
             num_classes=4,
         )
         output = classifier(input_data)
 
         # Load randomly initalized model from preset architecture
         classifier = keras_nlp.models.RobertaClassifier.from_preset(
-            "roberta_base_cased_en",
+            "roberta_base",
             load_weights=False,
             num_classes=4,
         )
