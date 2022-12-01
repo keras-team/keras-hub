@@ -53,9 +53,9 @@ backbone_presets = {
             "Trained on English Wikipedia + BooksCorpus using BERT as the "
             "teacher model."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/distilbert_base_uncased_en/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/distilbert_base_cased_en/model.h5",
         "weights_hash": "fa36aa6865978efbf85a5c8264e5eb57",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/distilbert_base_uncased_en/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/distilbert_base_cased_en/vocab.txt",
         "vocabulary_hash": "bb6ca9b42e790e5cd986bbb16444d0e0",
     },
     "distilbert_base_multi_cased": {
