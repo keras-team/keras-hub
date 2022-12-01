@@ -37,7 +37,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "roberta_base",
         )
         outputs = tokenizer("The quick brown fox.")
-        expected_outputs = [581, 63773, 119455, 6, 147797, 5]
+        expected_outputs = [133, 2119, 6219, 23602, 4]
         self.assertAllEqual(outputs, expected_outputs)
 
     def test_preprocessor_output(self):
@@ -46,7 +46,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             sequence_length=4,
         )
         outputs = preprocessor("The quick brown fox.")["token_ids"]
-        expected_outputs = [0, 581, 63773, 2]
+        expected_outputs = [0, 133, 2119, 2]
         self.assertAllEqual(outputs, expected_outputs)
 
     @parameterized.named_parameters(
@@ -54,14 +54,14 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_backbone_output(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[0, 581, 63773, 2]]),
+            "token_ids": tf.constant([[0, 133, 2119, 2]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = Roberta.from_preset("roberta_base", load_weights=load_weights)
         outputs = model(input_data)
         if load_weights:
             outputs = outputs[0, 0, :5]
-            expected = [0.084763, 0.097018, 0.051329, -0.000805, 0.028415]
+            expected = [-0.051, 0.100, -0.010, -0.097, 0.059]
             self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
 
     @parameterized.named_parameters(
@@ -69,7 +69,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_classifier_output(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[0, 581, 63773, 2]]),
+            "token_ids": tf.constant([[0, 133, 2119, 2]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = RobertaClassifier.from_preset(
