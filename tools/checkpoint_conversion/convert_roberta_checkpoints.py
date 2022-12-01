@@ -117,6 +117,10 @@ def convert_checkpoints(preset, size):
         pt_model["decoder.sentence_encoder.emb_layer_norm.bias"].numpy()
     )
 
+    # The QKV weights in the original checkpoint are present as one single
+    # dense layer of shape `(3 * cfg["hidden_dim"], cfg["hidden_dim"])`. Our
+    # model has three separate dense layers for each of QKV. Hence, we need to
+    # split the original QKV weights into three chunks.
     range_1 = (0, cfg["hidden_dim"])
     range_2 = (cfg["hidden_dim"], 2 * cfg["hidden_dim"])
     range_3 = (2 * cfg["hidden_dim"], 3 * cfg["hidden_dim"])
