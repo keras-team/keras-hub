@@ -177,7 +177,7 @@ def generate_submission_files(finetuning_model, test_ds, idx_order):
     filename = FLAGS.submission_directory + "/" + filenames[FLAGS.task_name]
     labelname = labelnames.get(FLAGS.task_name)
 
-    predictions = finetuning_model.predict(test_ds.take(1))
+    predictions = finetuning_model.predict(test_ds)
     if FLAGS.task_name == "stsb":
         predictions = np.squeeze(predictions)
     else:
@@ -267,7 +267,6 @@ def main(_):
             train_ds,
             validation_data=val_ds,
             epochs=FLAGS.epochs,
-            steps_per_epoch=1,
         )
 
     if FLAGS.submission_directory:
