@@ -344,8 +344,10 @@ class UnicodeCodepointTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             exp_config_different_encoding,
         )
 
-    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
-    def test_saving(self, format):
+    @parameterized.named_parameters(
+        ("tf_format", "tf"), ("keras_format", "keras_v3")
+    )
+    def test_saving(self, save_format):
         input_data = tf.constant(["ninjas and samurais", "time travel"])
 
         tokenizer = UnicodeCodepointTokenizer(
@@ -360,7 +362,7 @@ class UnicodeCodepointTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
         path = os.path.join(self.get_temp_dir(), "model")
-        model.save(path, save_format=format)
+        model.save(path, save_format=save_format)
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),

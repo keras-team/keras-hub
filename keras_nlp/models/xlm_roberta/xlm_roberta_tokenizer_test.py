@@ -97,7 +97,7 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(self.tokenizer.token_to_id("▁round"), 10)
 
     @parameterized.named_parameters(
-        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+        ("save_format_tf", "tf"), ("save_format_keras", "keras_v3")
     )
     def test_saving_model(self, save_format):
         input_data = tf.constant(["the quick brown fox"])

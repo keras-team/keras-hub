@@ -265,8 +265,10 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         outputs = decoder(decoder_sequence)
         self.assertAllEqual(outputs._keras_mask, mask)
 
-    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
-    def test_save_model(self, format):
+    @parameterized.named_parameters(
+        ("tf_format", "tf"), ("keras_format", "keras_v3")
+    )
+    def test_save_model(self, save_format):
         encoder_input = keras.Input(shape=[4, 6])
         decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
@@ -283,15 +285,17 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model([decoder_sequence, encoder_sequence])
         path = os.path.join(self.get_temp_dir(), "model")
-        model.save(path, save_format=format)
+        model.save(path, save_format=save_format)
 
         loaded_model = keras.models.load_model(path)
         model_output = model([decoder_sequence, encoder_sequence])
         loaded_model_output = loaded_model([decoder_sequence, encoder_sequence])
         self.assertAllClose(model_output, loaded_model_output)
 
-    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
-    def test_save_model_without_cross_attention(self, format):
+    @parameterized.named_parameters(
+        ("tf_format", "tf"), ("keras_format", "keras_v3")
+    )
+    def test_save_model_without_cross_attention(self, save_format):
         decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
@@ -306,7 +310,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model(decoder_sequence)
         path = os.path.join(self.get_temp_dir(), "model")
-        model.save(path, save_format=format)
+        model.save(path, save_format=save_format)
         loaded_model = keras.models.load_model(path)
 
         model_output = model(decoder_sequence)

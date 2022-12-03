@@ -105,12 +105,12 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.classifier_no_preprocessing.fit(self.preprocessed_dataset)
 
     @parameterized.named_parameters(
-        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+        ("save_format_tf", "tf"), ("save_format_keras", "keras_v3")
     )
     def test_saving_model(self, save_format):
         model_output = self.classifier.predict(self.raw_batch)
         save_path = os.path.join(self.get_temp_dir(), "model")
-        self.classifier.save(save_path, save_format)
+        self.classifier.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.

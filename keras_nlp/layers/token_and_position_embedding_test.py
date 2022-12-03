@@ -127,8 +127,10 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase, parameterized.TestCase):
         outputs = test_layer(input_data)
         self.assertAllEqual(outputs._keras_mask, mask)
 
-    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
-    def test_save_model(self, format):
+    @parameterized.named_parameters(
+        ("tf_format", "tf"), ("keras_format", "keras_v3")
+    )
+    def test_save_model(self, save_format):
         vocabulary_size = 5
         sequence_length = 4
         embedding_dim = 3
@@ -145,7 +147,7 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase, parameterized.TestCase):
         model(data)
 
         path = os.path.join(self.get_temp_dir(), "model")
-        model.save(path, save_format=format)
+        model.save(path, save_format=save_format)
         loaded_model = keras.models.load_model(path)
 
         model_output = model.predict(data)
