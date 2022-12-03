@@ -14,12 +14,17 @@
 
 """RoBERTa preprocessing layers."""
 
+import copy
+import os
+
 import tensorflow as tf
 import tensorflow_text as tf_text
 from tensorflow import keras
 
+from keras_nlp.models.roberta.roberta_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -122,15 +127,62 @@ class RobertaTokenizer(BytePairTokenizer):
 
     @classproperty
     def presets(cls):
-        raise NotImplementedError
+        return copy.deepcopy(backbone_presets)
 
     @classmethod
+    @format_docstring(names=", ".join(backbone_presets))
     def from_preset(
         cls,
         preset,
         **kwargs,
     ):
-        raise NotImplementedError
+        """Instantiate a RoBERTa tokenizer from preset vocabulary and merge rules.
+
+        Args:
+            preset: string. Must be one of {{names}}.
+
+        Examples:
+        ```python
+        # Load a preset tokenizer.
+        tokenizer = keras_nlp.models.RobertaTokenizer.from_preset(
+            "roberta_base",
+        )
+        # Tokenize some input.
+        tokenizer("The quick brown fox tripped.")
+        # Detokenize some input.
+        tokenizer.detokenize([5, 6, 7, 8, 9])
+        ```
+        """
+
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+        metadata = cls.presets[preset]
+
+        vocabulary = keras.utils.get_file(
+            "vocab.json",
+            metadata["vocabulary_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["vocabulary_hash"],
+        )
+        merges = keras.utils.get_file(
+            "merges.txt",
+            metadata["merges_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["merges_hash"],
+        )
+
+        config = metadata["preprocessor_config"]
+        config.update(
+            {
+                "vocabulary": vocabulary,
+                "merges": merges,
+            },
+        )
+
+        return cls.from_config({**config, **kwargs})
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -277,7 +329,12 @@ class RobertaPreprocessor(keras.layers.Layer):
             "padding_mask": token_ids != self.tokenizer.pad_token_id,
         }
 
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
+
     @classmethod
+    @format_docstring(names=", ".join(backbone_presets))
     def from_preset(
         cls,
         preset,
@@ -285,7 +342,70 @@ class RobertaPreprocessor(keras.layers.Layer):
         truncate="round_robin",
         **kwargs,
     ):
-        raise NotImplementedError
+        """Instantiate RoBERTa preprocessor from preset architecture.
+
+        Args:
+            preset: string. Must be one of {{names}}.
+            sequence_length: int, optional. The length of the packed inputs.
+                Must be equal to or smaller than the `max_sequence_length` of
+                the preset. If left as default, the `max_sequence_length` of
+                the preset will be used.
+            truncate: string. The algorithm to truncate a list of batched
+                segments to fit within `sequence_length`. The value can be
+                either `round_robin` or `waterfall`:
+                    - `"round_robin"`: Available space is assigned one token at
+                        a time in a round-robin fashion to the inputs that still
+                        need some, until the limit is reached.
+                    - `"waterfall"`: The allocation of the budget is done using
+                        a "waterfall" algorithm that allocates quota in a
+                        left-to-right manner and fills up the buckets until we
+                        run out of budget. It supports an arbitrary number of
+                        segments.
+
+        Examples:
+        ```python
+        # Load preprocessor from preset
+        preprocessor = keras_nlp.models.RobertPreprocessor.from_preset(
+            "roberta_base",
+        )
+        preprocessor("The quick brown fox jumped.")
+
+        # Override sequence_length
+        preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
+            "roberta_base",
+            sequence_length=64
+        )
+        preprocessor("The quick brown fox jumped.")
+        ```
+        """
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+
+        tokenizer = RobertaTokenizer.from_preset(preset)
+
+        # Use model's `max_sequence_length` if `sequence_length` unspecified;
+        # otherwise check that `sequence_length` not too long.
+        metadata = cls.presets[preset]
+        max_sequence_length = metadata["config"]["max_sequence_length"]
+        if sequence_length is not None:
+            if sequence_length > max_sequence_length:
+                raise ValueError(
+                    f"`sequence_length` cannot be longer than `{preset}` "
+                    f"preset's `max_sequence_length` of {max_sequence_length}. "
+                    f"Received: {sequence_length}."
+                )
+        else:
+            sequence_length = max_sequence_length
+
+        return cls(
+            tokenizer=tokenizer,
+            sequence_length=sequence_length,
+            truncate=truncate,
+            **kwargs,
+        )
 
 
 # TODO: This is a temporary, unexported layer until we find a way to make the
