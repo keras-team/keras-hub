@@ -69,9 +69,10 @@ class DistilBert(keras.Model):
 
     Examples:
     ```python
+    vocabulary_size = 30522
     input_data = {
         "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=30522
+            shape=(1, 12), dtype=tf.int64, maxval=vocabulary_size
         ),
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
@@ -80,7 +81,7 @@ class DistilBert(keras.Model):
 
     # Randomly initialized DistilBERT encoder
     model = keras_nlp.models.DistilBert(
-        vocabulary_size=30522,
+        vocabulary_size=vocabulary_size,
         num_layers=6,
         num_heads=12,
         hidden_dim=768,
