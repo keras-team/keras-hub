@@ -65,16 +65,17 @@ class Roberta(keras.Model):
 
     Example usage:
     ```python
+    vocabulary_size = 50265
     input_data = {
         "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=50265),
+            shape=(1, 12), dtype=tf.int64, maxval=vocabulary_size),
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
 
     # Randomly initialized RoBERTa model
     model = keras_nlp.models.Roberta(
-        vocabulary_size=50265,
+        vocabulary_size=vocabulary_size,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,

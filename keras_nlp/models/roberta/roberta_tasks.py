@@ -40,25 +40,28 @@ class RobertaClassifier(keras.Model):
 
     Example usage:
     ```python
+    vocabulary_size = 50265
+    input_data = {
+        "token_ids": tf.random.uniform(
+            shape=(1, 12), dtype=tf.int64, maxval=vocabulary_size),
+        "padding_mask": tf.constant(
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
+    }
+
     # Randomly initialized RoBERTa encoder
     model = keras_nlp.models.Roberta(
-        vocabulary_size=50265,
+        vocabulary_size=vocabulary_size,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12
     )
-
-    # Call classifier on the inputs.
-    input_data = {
-        "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size),
-        "padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
-    }
     classifier = keras_nlp.models.RobertaClassifier(model, 4)
     logits = classifier(input_data)
+
+    # Access backbone programatically (e.g., to change `trainable`)
+    classifier.backbone.trainable = False
     ```
     """
 
