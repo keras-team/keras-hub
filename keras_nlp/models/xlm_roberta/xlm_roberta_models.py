@@ -60,7 +60,6 @@ class XLMRoberta(roberta_models.Roberta):
 
     Example usage:
     ```python
-    vocabulary_size = 250002
     input_data = {
         "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
         "padding_mask": tf.constant(

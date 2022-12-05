@@ -105,7 +105,7 @@ class XLMRobertaClassifier(keras.Model):
 
     @property
     def backbone(self):
-        """A `keras_nlp.models.XLMRoberta` instance providing the encoder 
+        """A `keras_nlp.models.XLMRoberta` instance providing the encoder
         submodel.
         """
         return self._backbone
