@@ -20,6 +20,8 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.bert.bert_models import Bert
+from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
+from keras_nlp.models.bert.bert_preprocessing import BertTokenizer
 from keras_nlp.models.bert.bert_tasks import BertClassifier
 
 
@@ -34,49 +36,79 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
             max_sequence_length=128,
             name="encoder",
         )
-        self.classifier = BertClassifier(self.backbone, 4, name="classifier")
-        self.batch_size = 8
-        self.input_batch = {
-            "token_ids": tf.ones(
-                (self.batch_size, self.backbone.max_sequence_length),
-                dtype="int32",
-            ),
-            "segment_ids": tf.ones(
-                (self.batch_size, self.backbone.max_sequence_length),
-                dtype="int32",
-            ),
-            "padding_mask": tf.ones(
-                (self.batch_size, self.backbone.max_sequence_length),
-                dtype="int32",
-            ),
-        }
+        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab += ["the", "quick", "brown", "fox", "."]
+        self.preprocessor = BertPreprocessor(
+            BertTokenizer(vocabulary=self.vocab),
+            sequence_length=8,
+        )
+        self.classifier = BertClassifier(
+            self.backbone,
+            4,
+            preprocessor=self.preprocessor,
+        )
+        self.classifier_no_preprocessing = BertClassifier(
+            self.backbone,
+            4,
+            preprocessor=None,
+        )
 
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(
-            self.input_batch
+        self.raw_batch = tf.constant(
+            [
+                "the quick brown fox.",
+                "the slow brown fox.",
+                "the smelly brown fox.",
+                "the old brown fox.",
+            ]
+        )
+        self.preprocessed_batch = self.preprocessor(self.raw_batch)
+        self.raw_dataset = tf.data.Dataset.from_tensor_slices(
+            (self.raw_batch, tf.ones((4,)))
         ).batch(2)
+        self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
     def test_valid_call_classifier(self):
-        self.classifier(self.input_batch)
+        self.classifier(self.preprocessed_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_bert_classifier_compile(self, jit_compile):
+    def test_bert_classifier_predict(self, jit_compile):
         self.classifier.compile(jit_compile=jit_compile)
-        self.classifier.predict(self.input_batch)
+        self.classifier.predict(self.raw_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_bert_classifier_compile_batched_ds(self, jit_compile):
-        self.classifier.compile(jit_compile=jit_compile)
-        self.classifier.predict(self.input_dataset)
+    def test_bert_classifier_predict_no_preprocessing(self, jit_compile):
+        self.classifier_no_preprocessing.compile(jit_compile=jit_compile)
+        self.classifier_no_preprocessing.predict(self.preprocessed_batch)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_bert_classifier_fit(self, jit_compile):
+        self.classifier.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            jit_compile=jit_compile,
+        )
+        self.classifier.fit(self.raw_dataset)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_bert_classifier_fit_no_preprocessing(self, jit_compile):
+        self.classifier_no_preprocessing.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            jit_compile=jit_compile,
+        )
+        self.classifier_no_preprocessing.fit(self.preprocessed_dataset)
 
     @parameterized.named_parameters(
         ("save_format_tf", "tf"), ("save_format_h5", "h5")
     )
     def test_saving_model(self, save_format):
-        model_output = self.classifier(self.input_batch)
+        model_output = self.classifier.predict(self.raw_batch)
         save_path = os.path.join(self.get_temp_dir(), "model")
         self.classifier.save(save_path, save_format)
         restored_model = keras.models.load_model(save_path)
@@ -85,5 +117,5 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.assertIsInstance(restored_model, BertClassifier)
 
         # Check that output matches.
-        restored_output = restored_model(self.input_batch)
+        restored_output = restored_model.predict(self.raw_batch)
         self.assertAllClose(model_output, restored_output)
