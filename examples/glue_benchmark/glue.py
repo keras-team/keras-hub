@@ -203,7 +203,6 @@ def generate_submission_files(finetuning_model, test_ds, idx_order):
 def main(_):
     train_ds, test_ds, val_ds, idx_order = load_data(FLAGS.task_name)
     # ----- Custom code block starts -----
-    bert_model = keras_nlp.models.Bert.from_preset("bert_tiny_uncased_en")
     bert_preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
         "bert_tiny_uncased_en"
     )
@@ -220,9 +219,7 @@ def main(_):
     test_ds = preprocess_data(preprocess_fn, test_ds)
 
     if FLAGS.load_finetuning_model:
-        finetuning_model = tf.keras.models.load_model(
-            FLAGS.load_finetuning_model
-        )
+        finetuning_model = keras.models.load_model(FLAGS.load_finetuning_model)
     else:
         loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
         metrics = [keras.metrics.SparseCategoricalAccuracy()]
@@ -245,6 +242,7 @@ def main(_):
         # Commonly the classifier is simply your model + several dense layers,
         # please refer to "Make the Finetuning Model" section in README for
         # detailed instructions.
+        bert_model = keras_nlp.models.Bert.from_preset("bert_tiny_uncased_en")
         finetuning_model = keras_nlp.models.BertClassifier(
             backbone=bert_model,
             num_classes=num_classes,
@@ -252,7 +250,7 @@ def main(_):
         # ----- Custom code block ends -----
 
         finetuning_model.compile(
-            optimizer=tf.keras.optimizers.experimental.AdamW(FLAGS.learning_rate),
+            optimizer=keras.optimizers.experimental.AdamW(FLAGS.learning_rate),
             loss=loss,
             metrics=metrics,
         )
