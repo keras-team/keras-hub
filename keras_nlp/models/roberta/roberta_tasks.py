@@ -40,17 +40,15 @@ class RobertaClassifier(keras.Model):
 
     Example usage:
     ```python
-    vocabulary_size = 50265
     input_data = {
-        "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=vocabulary_size),
+        "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
 
     # Randomly initialized RoBERTa encoder
     model = keras_nlp.models.Roberta(
-        vocabulary_size=vocabulary_size,
+        vocabulary_size=50265,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
@@ -144,9 +142,7 @@ class RobertaClassifier(keras.Model):
         Examples:
         ```python
         input_data = {
-            "token_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
-            ),
+            "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
             "padding_mask": tf.constant(
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
             ),

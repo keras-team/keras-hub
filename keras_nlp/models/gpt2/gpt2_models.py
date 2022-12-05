@@ -66,11 +66,8 @@ class GPT2(keras.Model):
 
     Example usage:
     ```python
-    vocabulary_size = 50257
     input_data = {
-        "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=vocabulary_size
-        ),
+        "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
@@ -78,7 +75,7 @@ class GPT2(keras.Model):
 
     # Randomly initialized GPT-2 decoder
     model = keras_nlp.models.GPT2(
-        vocabulary_size=vocabulary_size,
+        vocabulary_size=50257,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
@@ -215,9 +212,7 @@ class GPT2(keras.Model):
         Examples:
         ```python
         input_data = {
-            "token_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
-            ),
+            "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
             "padding_mask": tf.constant(
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
             ),

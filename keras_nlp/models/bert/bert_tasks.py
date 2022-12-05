@@ -60,11 +60,8 @@ class BertClassifier(PipelineModel):
 
     ```python
     # Call classifier on the inputs.
-    vocabulary_size = 30522
     preprocessed_features = {
-        "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=vocabulary_size
-        ),
+        "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
         "segment_ids": tf.constant(
             [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
         ),
@@ -76,7 +73,7 @@ class BertClassifier(PipelineModel):
 
     # Randomly initialize a BERT backbone.
     backbone = keras_nlp.models.Bert(
-        vocabulary_size=vocabulary_size,
+        vocabulary_size=30552,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
@@ -231,9 +228,7 @@ class BertClassifier(PipelineModel):
         ```python
         # Create a dataset with preprocessed features in an `(x, y)` format.
         preprocessed_features = {
-            "token_ids": tf.random.uniform(
-                shape=(2, 12), dtype=tf.int64, maxval=30522
-            ),
+            "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
             "segment_ids": tf.constant(
                 [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
             ),
