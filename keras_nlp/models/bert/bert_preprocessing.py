@@ -16,17 +16,18 @@
 import copy
 import os
 
-import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.bert.bert_presets import classifier_presets
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
+from keras_nlp.utils.keras_utils import (
+    convert_inputs_to_list_of_tensor_segments,
+)
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
-from keras_nlp.utils.tf_utils import is_tensor_type
 
 PRESET_NAMES = ", ".join(list(backbone_presets) + list(classifier_presets))
 
@@ -309,37 +310,7 @@ class BertPreprocessor(keras.layers.Layer):
         return cls(**config)
 
     def call(self, x, y=None, sample_weight=None):
-        # Check the input type.
-        is_string = isinstance(x, (str, bytes))
-        is_tensor = is_tensor_type(x)
-        is_string_list = (
-            isinstance(x, (list, tuple))
-            and x
-            and isinstance(x[0], (str, bytes))
-        )
-        is_tensor_list = (
-            isinstance(x, (list, tuple)) and x and is_tensor_type(x[0])
-        )
-
-        if is_string or is_string_list:
-            # Automatically convert raw strings or string lists to tensors.
-            # Wrap this input as a single (possibly batched) segment.
-            x = [tf.convert_to_tensor(x)]
-        elif is_tensor:
-            # Automatically wrap a single tensor as a single segment.
-            x = [x]
-        elif is_tensor_list:
-            # Pass lists of tensors though unaltered.
-            x = x
-        else:
-            # Error for all other input.
-            raise ValueError(
-                f"Unsupported input for `x`. `x` should be a string, a list of "
-                "strings, or a list of tensors. If passing multiple segments "
-                "which should packed together, please convert your inputs to a "
-                f"list of tensors. Received `x={x}`"
-            )
-
+        x = convert_inputs_to_list_of_tensor_segments(x)
         x = [self.tokenizer(segment) for segment in x]
         token_ids, segment_ids = self.packer(x)
         x = {

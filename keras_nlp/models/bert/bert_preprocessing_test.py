@@ -160,7 +160,6 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_errors_for_2d_list_input(self):
         ambiguous_input = [["one", "two"], ["three", "four"]]
-        # Not a preset name
         with self.assertRaises(ValueError):
             self.preprocessor(ambiguous_input)
 
