@@ -55,9 +55,14 @@ flags.DEFINE_string(
     "The directory to save the glue submission file.",
 )
 
+flags.DEFINE_string(
+    "load_finetuning_model",
+    None,
+    "The path to load the finetuning model. If None, the model is trained.",
+)
 
 flags.DEFINE_string(
-    "finetuning_model_save_path",
+    "save_finetuning_model",
     None,
     "The path to save the finetuning model. If None, the model is not saved.",
 )
@@ -115,12 +120,17 @@ def load_data(task_name):
             f"glue/{task_name}",
             split=["train", "test" + test_suffix, "validation" + test_suffix],
         )
+
+    # Extract out the index order of test dataset.
+    idx_order = test_ds.map(lambda data: data["idx"])
+
     train_ds = train_ds.map(split_features, num_parallel_calls=tf.data.AUTOTUNE)
     test_ds = test_ds.map(split_features, num_parallel_calls=tf.data.AUTOTUNE)
+
     validation_ds = validation_ds.map(
         split_features, num_parallel_calls=tf.data.AUTOTUNE
     )
-    return train_ds, test_ds, validation_ds
+    return train_ds, test_ds, validation_ds, idx_order
 
 
 def preprocess_data(preprocess_fn, dataset):
@@ -132,7 +142,7 @@ def preprocess_data(preprocess_fn, dataset):
     )
 
 
-def generate_submission_files(finetuning_model, test_ds):
+def generate_submission_files(finetuning_model, test_ds, idx_order):
     """Generate GLUE leaderboard submission files."""
     filenames = {
         "cola": "CoLA.tsv",
@@ -158,28 +168,41 @@ def generate_submission_files(finetuning_model, test_ds):
     if not os.path.exists(FLAGS.submission_directory):
         os.makedirs(FLAGS.submission_directory)
     filename = FLAGS.submission_directory + "/" + filenames[FLAGS.task_name]
-
     labelname = labelnames.get(FLAGS.task_name)
+
+    predictions = finetuning_model.predict(test_ds.take(1))
+    if FLAGS.task_name == "stsb":
+        predictions = np.squeeze(predictions)
+    else:
+        predictions = np.argmax(predictions, -1)
+
+    # Map the predictions to the right index order.
+    idx_order = list(idx_order.as_numpy_iterator())
+    contents = ["" for _ in idx_order]
+    for idx, pred in zip(idx_order, predictions):
+        if labelname:
+            pred_value = labelname[int(pred)]
+        else:
+            pred_value = pred
+            if FLAGS.task_name == "stsb":
+                pred_value = min(pred_value, 5)
+                pred_value = max(pred_value, 0)
+                pred_value = f"{pred_value:.3f}"
+        contents[idx] = pred_value
+
     with tf.io.gfile.GFile(filename, "w") as f:
         # GLUE requires a format of index + tab + prediction.
         writer = csv.writer(f, delimiter="\t")
         # Write the required headline for GLUE.
         writer.writerow(["index", "prediction"])
-        predictions = finetuning_model.predict(test_ds)
-        predictions = np.argmax(predictions, -1)
-        for idx, pred in enumerate(predictions):
-            if labelname:
-                pred_value = labelname[int(pred)]
-            else:
-                pred_value = pred
-            writer.writerow([idx, pred_value])
+
+        for idx, value in enumerate(contents):
+            writer.writerow([idx, value])
 
 
 def main(_):
-    train_ds, test_ds, val_ds = load_data(FLAGS.task_name)
-
+    train_ds, test_ds, val_ds, idx_order = load_data(FLAGS.task_name)
     # ----- Custom code block starts -----
-    bert_model = keras_nlp.models.Bert.from_preset("bert_tiny_uncased_en")
     bert_preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
         "bert_tiny_uncased_en"
     )
@@ -195,41 +218,55 @@ def main(_):
     val_ds = preprocess_data(preprocess_fn, val_ds)
     test_ds = preprocess_data(preprocess_fn, test_ds)
 
-    loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-    metrics = [keras.metrics.SparseCategoricalAccuracy()]
-    if FLAGS.task_name == "stsb":
-        num_classes = 1
-        loss = keras.losses.MeanSquaredError()
-        metrics = [keras.losses.MeanSquaredError()]
-    elif FLAGS.task_name in ("mnli", "mnli_mismatched", "mnli_matched", "ax"):
-        num_classes = 3
+    if FLAGS.load_finetuning_model:
+        finetuning_model = keras.models.load_model(FLAGS.load_finetuning_model)
     else:
-        num_classes = 2
+        loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+        metrics = [keras.metrics.SparseCategoricalAccuracy()]
+        if FLAGS.task_name == "stsb":
+            num_classes = 1
+            loss = keras.losses.MeanSquaredError()
+            metrics = [keras.metrics.MeanSquaredError()]
+        elif FLAGS.task_name in (
+            "mnli",
+            "mnli_mismatched",
+            "mnli_matched",
+            "ax",
+        ):
+            num_classes = 3
+        else:
+            num_classes = 2
 
-    # ----- Custom code block starts -----
-    # Users should change this `BertClassifier` to your own classifier.
-    # Commonly the classifier is simply your model + several dense layers,
-    # please refer to "Make the Finetuning Model" section in README for
-    # detailed instructions.
-    finetuning_model = keras_nlp.models.BertClassifier(
-        backbone=bert_model,
-        num_classes=num_classes,
-    )
-    # ----- Custom code block ends -----
+        # ----- Custom code block starts -----
+        # Users should change this `BertClassifier` to your own classifier.
+        # Commonly the classifier is simply your model + several dense layers,
+        # please refer to "Make the Finetuning Model" section in README for
+        # detailed instructions.
+        bert_model = keras_nlp.models.Bert.from_preset("bert_tiny_uncased_en")
+        finetuning_model = keras_nlp.models.BertClassifier(
+            backbone=bert_model,
+            num_classes=num_classes,
+        )
+        # ----- Custom code block ends -----
 
-    finetuning_model.compile(
-        optimizer=tf.keras.optimizers.Adam(FLAGS.learning_rate),
-        loss=loss,
-        metrics=metrics,
-    )
+        finetuning_model.compile(
+            optimizer=keras.optimizers.experimental.AdamW(FLAGS.learning_rate),
+            loss=loss,
+            metrics=metrics,
+        )
 
-    finetuning_model.fit(train_ds, validation_data=val_ds, epochs=FLAGS.epochs)
+        finetuning_model.fit(
+            train_ds,
+            validation_data=val_ds,
+            epochs=FLAGS.epochs,
+            steps_per_epoch=1,
+        )
 
     if FLAGS.submission_directory:
-        generate_submission_files(finetuning_model, test_ds)
+        generate_submission_files(finetuning_model, test_ds, idx_order)
 
-    if FLAGS.finetuning_model_save_path:
-        finetuning_model.save(FLAGS.finetuning_model_save_path)
+    if FLAGS.save_finetuning_model:
+        finetuning_model.save(FLAGS.save_finetuning_model)
 
 
 if __name__ == "__main__":
