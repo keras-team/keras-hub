@@ -44,11 +44,8 @@ class BertClassifier(keras.Model):
     Examples:
     ```python
     # Call classifier on the inputs.
-    vocabulary_size = 30522
     input_data = {{
-        "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=vocabulary_size
-        ),
+        "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
         "segment_ids": tf.constant(
             [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
@@ -59,7 +56,7 @@ class BertClassifier(keras.Model):
 
     # Randomly initialized BERT encoder
     backbone = keras_nlp.models.Bert(
-        vocabulary_size=vocabulary_size,
+        vocabulary_size=30552,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
@@ -142,9 +139,7 @@ class BertClassifier(keras.Model):
         Examples:
         ```python
         input_data = {
-            "token_ids": tf.random.uniform(
-                shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
-            ),
+            "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
             "segment_ids": tf.constant(
                 [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
             ),
