@@ -68,13 +68,6 @@ flags.DEFINE_string(
 )
 
 
-def get_test_data_idx_order(test_ds):
-    order = []
-    for data in test_ds:
-        order.append(int(data["idx"]))
-    return order
-
-
 def load_data(task_name):
     """
     Load GLUE dataset.
@@ -129,7 +122,7 @@ def load_data(task_name):
         )
 
     # Extract out the index order of test dataset.
-    idx_order = get_test_data_idx_order(test_ds)
+    idx_order = test_ds.map(lambda data: data["idx"])
 
     train_ds = train_ds.map(split_features, num_parallel_calls=tf.data.AUTOTUNE)
     test_ds = test_ds.map(split_features, num_parallel_calls=tf.data.AUTOTUNE)
@@ -177,15 +170,16 @@ def generate_submission_files(finetuning_model, test_ds, idx_order):
     filename = FLAGS.submission_directory + "/" + filenames[FLAGS.task_name]
     labelname = labelnames.get(FLAGS.task_name)
 
-    predictions = finetuning_model.predict(test_ds)
+    predictions = finetuning_model.predict(test_ds.take(1))
     if FLAGS.task_name == "stsb":
         predictions = np.squeeze(predictions)
     else:
         predictions = np.argmax(predictions, -1)
 
     # Map the predictions to the right index order.
+    idx_order = list(idx_order.as_numpy_iterator())
     contents = ["" for _ in idx_order]
-    for i, pred in enumerate(predictions):
+    for idx, pred in zip(idx_order, predictions):
         if labelname:
             pred_value = labelname[int(pred)]
         else:
@@ -194,7 +188,7 @@ def generate_submission_files(finetuning_model, test_ds, idx_order):
                 pred_value = min(pred_value, 5)
                 pred_value = max(pred_value, 0)
                 pred_value = f"{pred_value:.3f}"
-        contents[idx_order[i]] = pred_value
+        contents[idx] = pred_value
 
     with tf.io.gfile.GFile(filename, "w") as f:
         # GLUE requires a format of index + tab + prediction.
@@ -258,7 +252,7 @@ def main(_):
         # ----- Custom code block ends -----
 
         finetuning_model.compile(
-            optimizer=tf.keras.optimizers.Adam(FLAGS.learning_rate),
+            optimizer=tf.keras.optimizers.experimental.AdamW(FLAGS.learning_rate),
             loss=loss,
             metrics=metrics,
         )
@@ -267,6 +261,7 @@ def main(_):
             train_ds,
             validation_data=val_ds,
             epochs=FLAGS.epochs,
+            steps_per_epoch=1,
         )
 
     if FLAGS.submission_directory:
