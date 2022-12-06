@@ -18,8 +18,8 @@ import os
 
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_models import Bert
-from keras_nlp.models.bert.bert_models import bert_kernel_initializer
+from keras_nlp.models.bert.bert_backbone import BertBackbone
+from keras_nlp.models.bert.bert_backbone import bert_kernel_initializer
 from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.bert.bert_presets import classifier_presets
@@ -36,7 +36,7 @@ CLASSIFIER_PRESET_NAMES = ", ".join(
 class BertClassifier(PipelineModel):
     """An end-to-end BERT model for classification tasks
 
-    This model attaches a classification head to a `keras_nlp.model.Bert`
+    This model attaches a classification head to a `keras_nlp.model.BertBackbone`
     backbone, mapping from the backbone outputs to logit output suitable for
     a classification task. For usage of this model with pre-trained weights, see
     the `from_preset()` method.
@@ -50,7 +50,7 @@ class BertClassifier(PipelineModel):
     warranties or conditions of any kind.
 
     Args:
-        backbone: A `keras_nlp.models.Bert` instance.
+        backbone: A `keras_nlp.models.BertBackbone` instance.
         num_classes: int. Number of classes to predict.
         preprocessor: A `keras_nlp.models.BertPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
@@ -72,7 +72,7 @@ class BertClassifier(PipelineModel):
     labels = [0, 3]
 
     # Randomly initialize a BERT backbone.
-    backbone = keras_nlp.models.Bert(
+    backbone = keras_nlp.models.BertBackbone(
         vocabulary_size=30552,
         num_layers=12,
         num_heads=12,
@@ -128,7 +128,9 @@ class BertClassifier(PipelineModel):
 
     @property
     def backbone(self):
-        """A `keras_nlp.models.Bert` instance providing the encoder submodel."""
+        """A `keras_nlp.models.BertBackbone` instance providing the encoder
+        submodel.
+        """
         return self._backbone
 
     @property
@@ -260,8 +262,8 @@ class BertClassifier(PipelineModel):
             kwargs["preprocessor"] = BertPreprocessor.from_preset(preset)
 
         # Check if preset is backbone-only model
-        if preset in Bert.presets:
-            backbone = Bert.from_preset(preset, load_weights)
+        if preset in BertBackbone.presets:
+            backbone = BertBackbone.from_preset(preset, load_weights)
             return cls(backbone, **kwargs)
 
         # Otherwise must be one of class presets
