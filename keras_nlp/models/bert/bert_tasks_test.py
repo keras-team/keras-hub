@@ -19,7 +19,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_models import Bert
+from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
 from keras_nlp.models.bert.bert_preprocessing import BertTokenizer
 from keras_nlp.models.bert.bert_tasks import BertClassifier
@@ -27,7 +27,7 @@ from keras_nlp.models.bert.bert_tasks import BertClassifier
 
 class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.backbone = Bert(
+        self.backbone = BertBackbone(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,

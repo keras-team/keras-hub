@@ -242,7 +242,9 @@ def main(_):
         # Commonly the classifier is simply your model + several dense layers,
         # please refer to "Make the Finetuning Model" section in README for
         # detailed instructions.
-        bert_model = keras_nlp.models.Bert.from_preset("bert_tiny_uncased_en")
+        bert_model = keras_nlp.models.BertBackbone.from_preset(
+            "bert_tiny_uncased_en"
+        )
         finetuning_model = keras_nlp.models.BertClassifier(
             backbone=bert_model,
             num_classes=num_classes,

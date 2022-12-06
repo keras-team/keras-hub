@@ -225,7 +225,7 @@ classifier_presets = {
     "bert_tiny_uncased_en_sst2": {
         "config": {
             "backbone": {
-                "class_name": "keras_nlp>Bert",
+                "class_name": "keras_nlp>BertBackbone",
                 "config": {
                     "vocabulary_size": 30522,
                     "hidden_dim": 128,
