@@ -264,14 +264,8 @@ class BertClassifier(PipelineModel):
             kwargs["preprocessor"] = BertPreprocessor.from_preset(preset)
 
         # Check if preset is backbone-only model
-<<<<<<< HEAD
         if preset in BertBackbone.presets:
             backbone = BertBackbone.from_preset(preset, load_weights)
-=======
-        if preset in Bert.presets:
-            backbone = Bert.from_preset(preset, load_weights)
-            kwargs["dropout"] = Bert.presets[preset]["config"]["dropout"]
->>>>>>> 8000b83 (Add dropout to BertClassifier)
             return cls(backbone, **kwargs)
 
         # Otherwise must be one of class presets
