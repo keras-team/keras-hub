@@ -259,7 +259,7 @@ class BertBackbone(keras.Model):
         model = BertBackbone.from_preset(
             "bert_base_uncased_en",
             load_weights=False
-        )ß
+        )
         output = model(input_data)
         ```
         """
