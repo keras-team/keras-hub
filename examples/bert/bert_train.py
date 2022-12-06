@@ -91,7 +91,7 @@ flags.DEFINE_integer(
 
 
 class MaskedLMHead(keras.layers.Layer):
-    """Masked language model network head for Bert.
+    """Masked language model network head for BERT.
 
     This layer implements a masked language model based on the provided
     transformer based encoder. It assumes that the encoder network being passed
@@ -99,7 +99,14 @@ class MaskedLMHead(keras.layers.Layer):
 
     Example:
     ```python
-    encoder = keras_nlp.models.BertBase()
+    encoder = keras_nlp.models.BertBackbone(
+        vocabulary_size=30552,
+        num_layers=12,
+        num_heads=12,
+        hidden_dim=768,
+        intermediate_dim=3072,
+        max_sequence_length=12,
+    )
     lm_layer = MaskedLMHead(embedding_table=encoder.get_embedding_table())
     ```
 
@@ -380,7 +387,7 @@ def main(_):
 
     with strategy.scope():
         # Create a Bert model the input config.
-        encoder = keras_nlp.models.Bert(
+        encoder = keras_nlp.models.BertBackbone(
             vocabulary_size=len(vocab), **model_config
         )
         # Make sure model has been called.

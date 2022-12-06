@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.models.bert.bert_models import Bert
+from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
 from keras_nlp.models.bert.bert_preprocessing import BertTokenizer
 from keras_nlp.models.bert.bert_tasks import BertClassifier

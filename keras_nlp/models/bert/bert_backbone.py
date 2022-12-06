@@ -32,7 +32,7 @@ def bert_kernel_initializer(stddev=0.02):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class Bert(keras.Model):
+class BertBackbone(keras.Model):
     """BERT encoder network.
 
     This class implements a bi-directional Transformer-based encoder as
@@ -77,7 +77,7 @@ class Bert(keras.Model):
     }
 
     # Randomly initialized BERT encoder
-    model = keras_nlp.models.Bert(
+    model = keras_nlp.models.BertBackbone(
         vocabulary_size=30552,
         num_layers=12,
         num_heads=12,
@@ -252,11 +252,14 @@ class Bert(keras.Model):
         }
 
         # Load architecture and weights from preset
-        model = Bert.from_preset("bert_base_uncased_en")
+        model = BertBackbone.from_preset("bert_base_uncased_en")
         output = model(input_data)
 
         # Load randomly initalized model from preset architecture
-        model = Bert.from_preset("bert_base_uncased_en", load_weights=False)
+        model = BertBackbone.from_preset(
+            "bert_base_uncased_en",
+            load_weights=False
+        )
         output = model(input_data)
         ```
         """

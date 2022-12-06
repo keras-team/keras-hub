@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO(jbischof): remove in favor of BertBase, BertSmall, etc
+# TODO(jbischof): remove in favor of presets with load_weights=False
 MODEL_CONFIGS = {
     "tiny": {
         "num_layers": 2,

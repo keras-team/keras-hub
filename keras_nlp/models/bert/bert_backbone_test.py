@@ -19,12 +19,12 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_models import Bert
+from keras_nlp.models.bert.bert_backbone import BertBackbone
 
 
-class BertTest(tf.test.TestCase, parameterized.TestCase):
+class BertBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = Bert(
+        self.model = BertBackbone(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -93,7 +93,7 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, Bert)
+        self.assertIsInstance(restored_model, BertBackbone)
 
         # Check that output matches.
         restored_output = restored_model(self.input_batch)
