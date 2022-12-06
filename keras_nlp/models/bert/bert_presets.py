@@ -238,6 +238,7 @@ classifier_presets = {
                 },
             },
             "num_classes": 2,
+            "dropout": 0.1,
         },
         "preprocessor_config": {
             "lowercase": True,

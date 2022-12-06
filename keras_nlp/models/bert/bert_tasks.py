@@ -101,11 +101,13 @@ class BertClassifier(PipelineModel):
         self,
         backbone,
         num_classes=2,
+        dropout=0.1,
         preprocessor=None,
         **kwargs,
     ):
         inputs = backbone.input
         pooled = backbone(inputs)["pooled_output"]
+        pooled = keras.layers.Dropout(dropout)(pooled)
         outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=bert_kernel_initializer(),
@@ -262,8 +264,14 @@ class BertClassifier(PipelineModel):
             kwargs["preprocessor"] = BertPreprocessor.from_preset(preset)
 
         # Check if preset is backbone-only model
+<<<<<<< HEAD
         if preset in BertBackbone.presets:
             backbone = BertBackbone.from_preset(preset, load_weights)
+=======
+        if preset in Bert.presets:
+            backbone = Bert.from_preset(preset, load_weights)
+            kwargs["dropout"] = Bert.presets[preset]["config"]["dropout"]
+>>>>>>> 8000b83 (Add dropout to BertClassifier)
             return cls(backbone, **kwargs)
 
         # Otherwise must be one of class presets

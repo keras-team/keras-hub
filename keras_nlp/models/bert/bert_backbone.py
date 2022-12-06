@@ -43,7 +43,7 @@ class BertBackbone(keras.Model):
 
     The default constructor gives a fully customizable, randomly initalized BERT
     encoder with any number of layers, heads, and embedding dimensions. To load
-    preset architectures and weights, use the `from_presets` constructor.
+    preset architectures and weights, use the `from_preset` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind.
