@@ -21,12 +21,29 @@ By default the script finetunes on the tiniest BERT model we have available
 To make a real GLUE leaderboard submission, you need to call the finetuning on 
 all tasks, then enter the submission directory then zip the submission files:
 ```shell
-for task in cola sst2 mrpc rte mnli_matched mnli_mismatched ax qnli qqp; do
+for task in cola sst2 mrpc rte stsb qnli qqp; do
   python glue.py --task_name="$task" --submission_directory="glue_submissions/"
 done
+
+python glue.py --task_name="mnli_matched" \
+    --submission_directory="glue_submissions/" \
+    --save_finetuning_model="saved/mnli"
+
+python glue.py --task_name="mnli_mismatched" \
+    --submission_directory="glue_submissions/" \
+    --load_finetuning_model="saved/mnli"
+
+python glue.py --task_name="ax" \
+    --submission_directory="glue_submissions/" \
+    --load_finetuning_model="saved/mnli"
+
 cd glue_submissions
 zip -r submission.zip *.tsv
 ```
+
+Please note that `mnli_matched`, `mnli_mismatched` and `ax` share the same 
+training set, so we only train once on `mnli_matched` and use the saved model 
+to evaluate on `mnli_mismatched` and `ax`.
 
 GLUE submission requires the `submission.zip` contains `.tsv` file for all 
 tasks, otherwise it will be a failed submission. An empty `.tsv` will also fail 
@@ -93,7 +110,8 @@ its performance.
 | task_name                  	| The name of the GLUE task to finetune on.       	| "mrpc"  	|
 | batch_size                 	| Data batch size                                 	| 32      	|
 | epochs                     	| Number of epochs to run finetuning.             	| 2       	|
-| learning_rate              	| The optimizer's learning rate                   	| 5e-5    	|
+| learning_rate              	| The optimizer's learning rate.                  	| 5e-5    	|
+| tpu_name               	    | The name of TPU to connect to.                    | None    	|
 | submission_directory       	| The file path to save the glue submission file. 	| None    	|
 | load_finetuning_model 	    | The path to load the finetuning model.          	| None    	|
 | save_finetuning_model 	    | The path to save the finetuning model.          	| None    	|
