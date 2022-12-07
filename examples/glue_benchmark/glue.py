@@ -50,6 +50,13 @@ flags.DEFINE_float(
 )
 
 flags.DEFINE_string(
+    "tpu_name",
+    None,
+    "The name of TPU to connect to. If None, no TPU will be used. If you only "
+    "have one TPU, use `local`",
+)
+
+flags.DEFINE_string(
     "submission_directory",
     None,
     "The directory to save the glue submission file.",
@@ -126,7 +133,6 @@ def load_data(task_name):
 
     train_ds = train_ds.map(split_features, num_parallel_calls=tf.data.AUTOTUNE)
     test_ds = test_ds.map(split_features, num_parallel_calls=tf.data.AUTOTUNE)
-
     validation_ds = validation_ds.map(
         split_features, num_parallel_calls=tf.data.AUTOTUNE
     )
@@ -170,7 +176,7 @@ def generate_submission_files(finetuning_model, test_ds, idx_order):
     filename = FLAGS.submission_directory + "/" + filenames[FLAGS.task_name]
     labelname = labelnames.get(FLAGS.task_name)
 
-    predictions = finetuning_model.predict(test_ds.take(1))
+    predictions = finetuning_model.predict(test_ds)
     if FLAGS.task_name == "stsb":
         predictions = np.squeeze(predictions)
     else:
@@ -200,11 +206,24 @@ def generate_submission_files(finetuning_model, test_ds, idx_order):
             writer.writerow([idx, value])
 
 
+def connect_to_tpu(tpu_name):
+    resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
+        tpu=tpu_name
+    )
+    return tf.distribute.TPUStrategy(resolver)
+
+
 def main(_):
+    if FLAGS.tpu_name:
+        strategy = connect_to_tpu(FLAGS.tpu_name)
+    else:
+        # Use default strategy is not using TPU.
+        strategy = tf.distribute.get_strategy()
+
     train_ds, test_ds, val_ds, idx_order = load_data(FLAGS.task_name)
     # ----- Custom code block starts -----
     bert_preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-        "bert_tiny_uncased_en"
+        "bert_base_uncased_en"
     )
 
     # Users should change this function to implement the preprocessing required
@@ -219,55 +238,69 @@ def main(_):
     test_ds = preprocess_data(preprocess_fn, test_ds)
 
     if FLAGS.load_finetuning_model:
-        finetuning_model = keras.models.load_model(FLAGS.load_finetuning_model)
+        with strategy.scope():
+            finetuning_model = tf.keras.models.load_model(
+                FLAGS.load_finetuning_model
+            )
     else:
-        loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-        metrics = [keras.metrics.SparseCategoricalAccuracy()]
-        if FLAGS.task_name == "stsb":
-            num_classes = 1
-            loss = keras.losses.MeanSquaredError()
-            metrics = [keras.metrics.MeanSquaredError()]
-        elif FLAGS.task_name in (
-            "mnli",
-            "mnli_mismatched",
-            "mnli_matched",
-            "ax",
-        ):
-            num_classes = 3
-        else:
-            num_classes = 2
+        with strategy.scope():
+            loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+            metrics = [keras.metrics.SparseCategoricalAccuracy()]
+            if FLAGS.task_name == "stsb":
+                num_classes = 1
+                loss = keras.losses.MeanSquaredError()
+                metrics = [keras.metrics.MeanSquaredError()]
+            elif FLAGS.task_name in (
+                "mnli",
+                "mnli_mismatched",
+                "mnli_matched",
+                "ax",
+            ):
+                num_classes = 3
+            else:
+                num_classes = 2
 
-        # ----- Custom code block starts -----
-        # Users should change this `BertClassifier` to your own classifier.
-        # Commonly the classifier is simply your model + several dense layers,
-        # please refer to "Make the Finetuning Model" section in README for
-        # detailed instructions.
-        bert_model = keras_nlp.models.BertBackbone.from_preset(
-            "bert_tiny_uncased_en"
-        )
-        finetuning_model = keras_nlp.models.BertClassifier(
-            backbone=bert_model,
-            num_classes=num_classes,
-        )
-        # ----- Custom code block ends -----
-
-        finetuning_model.compile(
-            optimizer=keras.optimizers.experimental.AdamW(FLAGS.learning_rate),
-            loss=loss,
-            metrics=metrics,
-        )
+            # ----- Custom code block starts -----
+            # Users should change this `BertClassifier` to your own classifier.
+            # Commonly the classifier is simply your model + several dense layers,
+            # please refer to "Make the Finetuning Model" section in README for
+            # detailed instructions.
+            bert_model = keras_nlp.models.BertBackbone.from_preset(
+                "bert_base_uncased_en"
+            )
+            finetuning_model = keras_nlp.models.BertClassifier(
+                backbone=bert_model,
+                num_classes=num_classes,
+            )
+            # ----- Custom code block ends -----
+            lr = tf.keras.optimizers.schedules.PolynomialDecay(
+                FLAGS.learning_rate,
+                decay_steps=train_ds.cardinality() * FLAGS.epochs,
+                end_learning_rate=0.0,
+            )
+            optimizer = tf.keras.optimizers.experimental.AdamW(
+                lr, weight_decay=0.01, global_clipnorm=1.0
+            )
+            optimizer.exclude_from_weight_decay(
+                var_names=["LayerNorm", "layer_norm", "bias"]
+            )
+            finetuning_model.compile(
+                optimizer=optimizer,
+                loss=loss,
+                metrics=metrics,
+            )
 
         finetuning_model.fit(
             train_ds,
             validation_data=val_ds,
             epochs=FLAGS.epochs,
-            steps_per_epoch=1,
         )
-
-    if FLAGS.submission_directory:
-        generate_submission_files(finetuning_model, test_ds, idx_order)
-
+    with strategy.scope():
+        if FLAGS.submission_directory:
+            generate_submission_files(finetuning_model, test_ds, idx_order)
     if FLAGS.save_finetuning_model:
+        # Don't need to save the optimizer.
+        finetuning_model.optimizer = None
         finetuning_model.save(FLAGS.save_finetuning_model)
 
 
