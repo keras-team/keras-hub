@@ -222,8 +222,20 @@ class BertPreprocessor(keras.layers.Layer):
     preprocessor = keras_nlp.models.BertPreprocessor(tokenizer)
 
     # Tokenize and pack a single sentence.
-    first_sentence = tf.constant("The quick brown fox jumped.")
-    preprocessor(first_sentence)
+    sentence = tf.constant("The quick brown fox jumped.")
+    preprocessor(sentence)
+    # Same output.
+    preprocessor("The quick brown fox jumped.")
+
+    # Tokenize and a batch of single sentences.
+    sentences = tf.constant(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
+    preprocessor(sentences)
+    # Same output.
+    preprocessor(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
 
     # Tokenize and pack a sentence pair.
     first_sentence = tf.constant("The quick brown fox jumped.")
