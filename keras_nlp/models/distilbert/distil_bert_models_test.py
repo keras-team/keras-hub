@@ -19,7 +19,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.distilbert.distilbert_models import DistilBert
+from keras_nlp.models.distilbert.distil_bert_models import DistilBert
 
 
 class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
