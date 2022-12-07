@@ -20,7 +20,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.gpt2.gpt2_preprocessing import GPT2Tokenizer
+from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 
 
 class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):

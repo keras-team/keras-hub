@@ -17,10 +17,10 @@ import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
-from keras_nlp.models.roberta.roberta_models import Roberta
-from keras_nlp.models.roberta.roberta_preprocessing import RobertaPreprocessor
-from keras_nlp.models.roberta.roberta_preprocessing import RobertaTokenizer
-from keras_nlp.models.roberta.roberta_tasks import RobertaClassifier
+from keras_nlp.models.roberta.roberta_backbone import Roberta
+from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
+from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
+from keras_nlp.models.roberta.roberta_preprocessor import RobertaTokenizer
 
 
 @pytest.mark.large

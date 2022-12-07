@@ -24,7 +24,7 @@ from keras_nlp.layers.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
-from keras_nlp.models.distilbert.distil_bert_presets import backbone_presets
+from keras_nlp.models.distil_bert.distil_bert_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
