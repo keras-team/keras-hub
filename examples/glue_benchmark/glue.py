@@ -52,7 +52,8 @@ flags.DEFINE_float(
 flags.DEFINE_string(
     "tpu_name",
     None,
-    "The name of TPU to connect to. If you only have one TPU, use `local`",
+    "The name of TPU to connect to. If None, no TPU will be used. If you only "
+    "have one TPU, use `local`",
 )
 
 flags.DEFINE_string(
