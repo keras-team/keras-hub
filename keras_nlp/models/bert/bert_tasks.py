@@ -101,11 +101,13 @@ class BertClassifier(PipelineModel):
         self,
         backbone,
         num_classes=2,
+        dropout=0.1,
         preprocessor=None,
         **kwargs,
     ):
         inputs = backbone.input
         pooled = backbone(inputs)["pooled_output"]
+        pooled = keras.layers.Dropout(dropout)(pooled)
         outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=bert_kernel_initializer(),
