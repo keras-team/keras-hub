@@ -16,14 +16,14 @@ from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
 from keras_nlp.models.bert.bert_preprocessing import BertTokenizer
 from keras_nlp.models.bert.bert_tasks import BertClassifier
-from keras_nlp.models.distilbert.distilbert_models import DistilBert
-from keras_nlp.models.distilbert.distilbert_preprocessing import (
+from keras_nlp.models.distilbert.distil_bert_models import DistilBert
+from keras_nlp.models.distilbert.distil_bert_preprocessing import (
     DistilBertPreprocessor,
 )
-from keras_nlp.models.distilbert.distilbert_preprocessing import (
+from keras_nlp.models.distilbert.distil_bert_preprocessing import (
     DistilBertTokenizer,
 )
-from keras_nlp.models.distilbert.distilbert_tasks import DistilBertClassifier
+from keras_nlp.models.distilbert.distil_bert_tasks import DistilBertClassifier
 from keras_nlp.models.gpt2.gpt2_models import GPT2
 from keras_nlp.models.gpt2.gpt2_preprocessing import GPT2Tokenizer
 from keras_nlp.models.roberta.roberta_models import Roberta
