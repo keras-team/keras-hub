@@ -11,7 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for XLM-RoBERTa task specific models and heads."""
+
+"""Tests for XLM-RoBERTa backbone models."""
 
 import os
 
@@ -19,11 +20,10 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.xlm_roberta.xlm_roberta_models import XLMRoberta
-from keras_nlp.models.xlm_roberta.xlm_roberta_tasks import XLMRobertaClassifier
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRoberta
 
 
-class XLMRobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
+class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.model = XLMRoberta(
             vocabulary_size=1000,
@@ -47,39 +47,54 @@ class XLMRobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
             self.input_batch
         ).batch(2)
 
-    def test_valid_call_classifier(self):
-        classifier = XLMRobertaClassifier(self.model, 4, 128, name="classifier")
-        classifier(self.input_batch)
+    def test_valid_call_xlm_roberta(self):
+        self.model(self.input_batch)
+
+        # Check default name passed through
+        self.assertEqual(self.model.name, "backbone")
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_xlm_roberta_classifier_compile(self, jit_compile):
-        classifier = XLMRobertaClassifier(self.model, 4, 128, name="classifier")
-        classifier.compile(jit_compile=jit_compile)
-        classifier.predict(self.input_batch)
+    def test_xlm_roberta_compile(self, jit_compile):
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_xlm_roberta_classifier_compile_batched_ds(self, jit_compile):
-        classifier = XLMRobertaClassifier(self.model, 4, 128, name="classifier")
-        classifier.compile(jit_compile=jit_compile)
-        classifier.predict(self.input_dataset)
+    def test_xlm_roberta_compile_batched_ds(self, jit_compile):
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_dataset)
+
+    def test_variable_sequence_length_call_xlm_roberta(self):
+        for seq_length in (25, 50, 75):
+            input_data = {
+                "token_ids": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
+                "padding_mask": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
+            }
+            output = self.model(input_data)
+            self.assertAllEqual(
+                tf.shape(output),
+                [self.batch_size, seq_length, self.model.hidden_dim],
+            )
 
     @parameterized.named_parameters(
         ("save_format_tf", "tf"), ("save_format_h5", "h5")
     )
     def test_saving_model(self, save_format):
-        classifier = XLMRobertaClassifier(self.model, 4, 128, name="classifier")
-        classifier_output = classifier(self.input_batch)
+        model_output = self.model(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), "model")
-        classifier.save(save_path, save_format)
-        restored_classifier = keras.models.load_model(save_path)
+        self.model.save(save_path, save_format)
+        restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_classifier, XLMRobertaClassifier)
+        self.assertIsInstance(restored_model, XLMRoberta)
 
         # Check that output matches.
-        restored_output = restored_classifier(self.input_batch)
-        self.assertAllClose(classifier_output, restored_output)
+        restored_output = restored_model(self.input_batch)
+        self.assertAllClose(model_output, restored_output)

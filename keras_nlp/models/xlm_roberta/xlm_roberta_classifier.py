@@ -11,22 +11,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""RoBERTa task specific models and heads."""
+"""XLM-RoBERTa task specific models and heads."""
 
 import copy
 
 from tensorflow import keras
 
-from keras_nlp.models.roberta.roberta_models import Roberta
-from keras_nlp.models.roberta.roberta_models import roberta_kernel_initializer
-from keras_nlp.models.roberta.roberta_presets import backbone_presets
+from keras_nlp.models.roberta.roberta_backbone import roberta_kernel_initializer
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRoberta
+from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class RobertaClassifier(keras.Model):
-    """RoBERTa encoder model with a classification head.
+class XLMRobertaClassifier(keras.Model):
+    """XLM-RoBERTa encoder model with a classification head.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
@@ -34,28 +34,32 @@ class RobertaClassifier(keras.Model):
     [here](https://github.com/facebookresearch/fairseq).
 
     Args:
-        backbone: A `keras_nlp.models.Roberta` instance.
+        backbone: A `keras_nlp.models.XLMRoberta` instance.
         num_classes: int. Number of classes to predict.
         hidden_dim: int. The size of the pooler layer.
 
     Example usage:
     ```python
+    # Call classifier on the inputs.
     input_data = {
         "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
 
-    # Randomly initialized RoBERTa encoder
-    model = keras_nlp.models.Roberta(
-        vocabulary_size=50265,
+    # Randomly initialized XLM-RoBERTa encoder
+    model = keras_nlp.models.XLMRoberta(
+        vocabulary_size=250002,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12
     )
-    classifier = keras_nlp.models.RobertaClassifier(model, 4)
+    classifier = keras_nlp.models.XLMRobertaClassifier(
+        backbone=model,
+        num_classes=4,
+    )
     logits = classifier(input_data)
 
     # Access backbone programatically (e.g., to change `trainable`)
@@ -101,7 +105,9 @@ class RobertaClassifier(keras.Model):
 
     @property
     def backbone(self):
-        """A `keras_nlp.models.Roberta` instance providing the encoder submodel."""
+        """A `keras_nlp.models.XLMRoberta` instance providing the encoder
+        submodel.
+        """
         return self._backbone
 
     def get_config(self):
@@ -149,15 +155,15 @@ class RobertaClassifier(keras.Model):
         }
 
         # Load backbone architecture and weights from preset
-        classifier = keras_nlp.models.RobertaClassifier.from_preset(
-            "roberta_base",
+        classifier = keras_nlp.models.XLMRobertaClassifier.from_preset(
+            "xlm_roberta_base",
             num_classes=4,
         )
         output = classifier(input_data)
 
         # Load randomly initalized model from preset architecture
-        classifier = keras_nlp.models.RobertaClassifier.from_preset(
-            "roberta_base",
+        classifier = keras_nlp.models.XLMRobertaClassifier.from_preset(
+            "xlm_roberta_base",
             load_weights=False,
             num_classes=4,
         )
@@ -165,8 +171,8 @@ class RobertaClassifier(keras.Model):
         ```
         """
         # Check if preset is backbone-only model
-        if preset in Roberta.presets:
-            backbone = Roberta.from_preset(preset, load_weights)
+        if preset in XLMRoberta.presets:
+            backbone = XLMRoberta.from_preset(preset, load_weights)
             return cls(backbone, **kwargs)
 
         # Otherwise must be one of class presets

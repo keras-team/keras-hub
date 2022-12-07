@@ -18,9 +18,9 @@ import tensorflow as tf
 from absl.testing import parameterized
 
 from keras_nlp.models.bert.bert_backbone import BertBackbone
-from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
-from keras_nlp.models.bert.bert_preprocessing import BertTokenizer
-from keras_nlp.models.bert.bert_tasks import BertClassifier
+from keras_nlp.models.bert.bert_classifier import BertClassifier
+from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
+from keras_nlp.models.bert.bert_preprocessor import BertTokenizer
 
 
 @pytest.mark.large

@@ -20,7 +20,7 @@ from tensorflow import keras
 
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_backbone import bert_kernel_initializer
-from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
+from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.bert.bert_presets import classifier_presets
 from keras_nlp.utils.pipeline_model import PipelineModel

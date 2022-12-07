@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Test for GPT-2 backbone models."""
+"""Test for DistilBERT backbone models."""
 
 import os
 
@@ -19,18 +19,19 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.gpt2.gpt2_models import GPT2
+from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBert
 
 
-class GPT2Test(tf.test.TestCase, parameterized.TestCase):
+class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = GPT2(
+        self.model = DistilBert(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
             hidden_dim=64,
             intermediate_dim=128,
             max_sequence_length=128,
+            name="encoder",
         )
         self.batch_size = 8
         self.input_batch = {
@@ -46,13 +47,10 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
             self.input_batch
         ).batch(2)
 
-    def test_valid_call_gpt2(self):
+    def test_valid_call_distilbert(self):
         self.model(self.input_batch)
 
-        # Check default name passed through
-        self.assertEqual(self.model.name, "backbone")
-
-    def test_variable_sequence_length_call_gpt2(self):
+    def test_variable_sequence_length_call_distilbert(self):
         for seq_length in (25, 50, 75):
             input_data = {
                 "token_ids": tf.ones(
@@ -67,14 +65,14 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_gpt2_compile(self, jit_compile):
+    def test_distilbert_base_compile(self, jit_compile):
         self.model.compile(jit_compile=jit_compile)
         self.model.predict(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_gpt2_compile_batched_ds(self, jit_compile):
+    def test_distilbert_base_compile_batched_ds(self, jit_compile):
         self.model.compile(jit_compile=jit_compile)
         self.model.predict(self.input_dataset)
 
@@ -88,7 +86,7 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, GPT2)
+        self.assertIsInstance(restored_model, DistilBert)
 
         # Check that output matches.
         restored_output = restored_model(self.input_batch)

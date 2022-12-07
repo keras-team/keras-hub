@@ -11,40 +11,32 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-"""XLM-RoBERTa preprocessing layers."""
+"""DistilBERT preprocessing layers."""
 
 import copy
 import os
 
-import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.models.roberta.roberta_preprocessing import (
-    RobertaMultiSegmentPacker,
-)
-from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
-from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
+from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
+from keras_nlp.models.distil_bert.distil_bert_presets import backbone_presets
+from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
-from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class XLMRobertaTokenizer(SentencePieceTokenizer):
-    """XLM-RoBERTa tokenizer layer based on SentencePiece.
+class DistilBertTokenizer(WordPieceTokenizer):
+    """A DistilBERT tokenizer using WordPiece subword segmentation.
 
     This tokenizer class will tokenize raw strings into integer sequences and
-    is based on `keras_nlp.tokenizers.SentencePieceTokenizer`. Unlike the
-    underlying tokenizer, it will check for all special tokens needed by
-    XLM-RoBERTa models and provides a `from_preset()` method to automatically
-    download a matching vocabulary for a XLM-RoBERTa preset.
+    is based on `keras_nlp.tokenizers.WordPieceTokenizer`. Unlike the
+    underlying tokenizer, it will check for all special tokens needed by DistilBERT
+    models and provides a `from_preset()` method to automatically download
+    a matching vocabulary for a DistilBERT preset.
 
-    The original fairseq implementation of XLM-RoBERTa modifies the indices of
-    the SentencePiece tokenizer output. To preserve compatibility, we make the
-    same changes, i.e., `"<s>"`, `"<pad>"`, `"</s>"` and `"<unk>"` are mapped to
-    0, 1, 2, 3, respectively, and non-special token indices are shifted right
-    by one.
+    This tokenizer does not provide truncation or padding of inputs. It can be
+    combined with a `keras_nlp.models.DistilBertPreprocessor` layer for input packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -53,114 +45,67 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     `tf.Tensor` with static shape `[None]`.
 
     Args:
-        proto: Either a `string` path to a SentencePiece proto file, or a
-            `bytes` object with a serialized SentencePiece proto. See the
-            [SentencePiece repository](https://github.com/google/sentencepiece)
-            for more details on the format.
+        vocabulary: A list of strings or a string filename path. If
+            passing a list, each element of the list should be a single word
+            piece token string. If passing a filename, the file should be a
+            plain text file containing a single word piece token per line.
+        lowercase: If true, the input text will be first lowered before
+            tokenization.
 
     Examples:
 
-    ```python
-    def train_sentencepiece(ds, vocab_size):
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=ds.as_numpy_iterator(),
-            model_writer=bytes_io,
-            vocab_size=vocab_size,
-            model_type="WORD",
-            unk_id=0,
-            bos_id=1,
-            eos_id=2,
-        )
-        return bytes_io.getvalue()
+    Batched input.
+    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]"]
+    >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
+    >>> inputs = ["The quick brown fox.", "The fox."]
+    >>> tokenizer = keras_nlp.models.DistilBertTokenizer(vocabulary=vocab)
+    >>> tokenizer(inputs)
+    <tf.RaggedTensor [[4, 5, 6, 7, 8, 9], [4, 8, 9]]>
 
-    ds = tf.data.Dataset.from_tensor_slices(
-        ["the quick brown fox", "the earth is round"]
-    )
+    Unbatched input.
+    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]"]
+    >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
+    >>> inputs = "The fox."
+    >>> tokenizer = keras_nlp.models.DistilBertTokenizer(vocabulary=vocab)
+    >>> tokenizer(inputs)
+    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([4, 8, 9], dtype=int32)>
 
-    proto = train_sentencepiece(ds, vocab_size=10)
-    tokenizer = keras_nlp.models.XLMRobertaTokenizer(proto=proto)
-
-    # Batched inputs.
-    tokenizer(["the quick brown fox", "the earth is round"])
-
-    # Unbatched inputs.
-    tokenizer("the quick brown fox")
-
-    # Detokenization.
-    tokenizer.detokenize(tf.constant([[0, 4, 9, 5, 7, 2]]))
-    ```
+    Detokenization.
+    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]"]
+    >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
+    >>> inputs = "The quick brown fox."
+    >>> tokenizer = keras_nlp.models.DistilBertTokenizer(vocabulary=vocab)
+    >>> tokenizer.detokenize(tokenizer.tokenize(inputs)).numpy().decode('utf-8')
+    'The quick brown fox .'
     """
 
-    def __init__(self, proto, **kwargs):
-        super().__init__(proto=proto, **kwargs)
-
-        # List of special tokens.
-        self._vocabulary_prefix = ["<s>", "<pad>", "</s>", "<unk>"]
-
-        # IDs of special tokens.
-        self.start_token_id = 0  # <s>
-        self.pad_token_id = 1  # <pad>
-        self.end_token_id = 2  # </s>
-        self.unk_token_id = 3  # <unk>
-
-    def vocabulary_size(self):
-        """Get the size of the tokenizer vocabulary."""
-        return super().vocabulary_size() + 1
-
-    def get_vocabulary(self):
-        """Get the size of the tokenizer vocabulary."""
-        vocabulary = tensor_to_string_list(
-            self._sentence_piece.id_to_string(
-                tf.range(super().vocabulary_size())
-            )
+    def __init__(
+        self,
+        vocabulary,
+        lowercase=False,
+        **kwargs,
+    ):
+        super().__init__(
+            vocabulary=vocabulary,
+            lowercase=lowercase,
+            **kwargs,
         )
-        return self._vocabulary_prefix + vocabulary[3:]
 
-    def id_to_token(self, id):
-        """Convert an integer id to a string token."""
-        if id < len(self._vocabulary_prefix):
-            return self._vocabulary_prefix[id]
+        # Check for necessary special tokens.
+        cls_token = "[CLS]"
+        sep_token = "[SEP]"
+        pad_token = "[PAD]"
+        for token in [cls_token, pad_token, sep_token]:
+            if token not in self.get_vocabulary():
+                raise ValueError(
+                    f"Cannot find token `'{token}'` in the provided "
+                    f"`vocabulary`. Please provide `'{token}'` in your "
+                    "`vocabulary` or use a pretrained `vocabulary` name."
+                )
 
-        return tensor_to_string_list(self._sentence_piece.id_to_string(id - 1))
-
-    def token_to_id(self, token):
-        """Convert a string token to an integer id."""
-        if token in self._vocabulary_prefix:
-            return self._vocabulary_prefix.index(token)
-
-        return int(self._sentence_piece.string_to_id(token).numpy()) + 1
-
-    def tokenize(self, inputs):
-        tokens = super().tokenize(inputs)
-
-        # Correct `unk_token_id` (0 -> 3). Note that we do not correct
-        # `start_token_id` and `end_token_id`; they are dealt with in
-        # `XLMRobertaPreprocessor`.
-        tokens = tf.where(tf.equal(tokens, 0), self.unk_token_id - 1, tokens)
-
-        # Shift the tokens IDs right by one.
-        return tf.add(tokens, 1)
-
-    def detokenize(self, inputs):
-        if inputs.dtype == tf.string:
-            return super().detokenize(inputs)
-
-        # Shift the tokens IDs left by one.
-        tokens = tf.subtract(inputs, 1)
-
-        # Correct `unk_token_id`, `end_token_id`, `start_token_id`, respectively.
-        # Note: The `pad_token_id` is taken as 0 (`unk_token_id`) since the
-        # proto does not contain `pad_token_id`. This mapping of the pad token
-        # is done automatically by the above subtraction.
-        tokens = tf.where(tf.equal(tokens, self.unk_token_id - 1), 0, tokens)
-        tokens = tf.where(tf.equal(tokens, self.end_token_id - 1), 2, tokens)
-        tokens = tf.where(tf.equal(tokens, self.start_token_id - 1), 1, tokens)
-
-        # Note: Even though we map `"<s>" and `"</s>"` to the correct IDs,
-        # the `detokenize` method will return empty strings for these tokens.
-        # This is a vagary of the `sentencepiece` library.
-        return super().detokenize(tokens)
+        self.cls_token_id = self.token_to_id(cls_token)
+        self.sep_token_id = self.token_to_id(sep_token)
+        self.pad_token_id = self.token_to_id(pad_token)
 
     @classproperty
     def presets(cls):
@@ -173,7 +118,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         preset,
         **kwargs,
     ):
-        """Instantiate an XLM-RoBERTa tokenizer from preset vocabulary.
+        """Instantiate a DistilBERT tokenizer from preset vocabulary.
 
         Args:
             preset: string. Must be one of {{names}}.
@@ -181,8 +126,8 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         Examples:
         ```python
         # Load a preset tokenizer.
-        tokenizer = keras_nlp.models.XLMRobertaTokenizer.from_preset(
-            "xlm_roberta_base",
+        tokenizer = keras_nlp.models.DistilBertTokenizer.from_preset(
+            "distilbert_base_uncased_en",
         )
 
         # Tokenize some input.
@@ -199,17 +144,17 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
             )
         metadata = cls.presets[preset]
 
-        spm_proto = keras.utils.get_file(
-            "vocab.spm",
-            metadata["spm_proto_url"],
+        vocabulary = keras.utils.get_file(
+            "vocab.txt",
+            metadata["vocabulary_url"],
             cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["spm_proto_hash"],
+            file_hash=metadata["vocabulary_hash"],
         )
 
         config = metadata["preprocessor_config"]
         config.update(
             {
-                "proto": spm_proto,
+                "vocabulary": vocabulary,
             },
         )
 
@@ -217,35 +162,27 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class XLMRobertaPreprocessor(keras.layers.Layer):
-    """XLM-RoBERTa preprocessing layer.
+class DistilBertPreprocessor(keras.layers.Layer):
+    """A DistilBERT preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
 
-    - Tokenize any number of inputs using `tokenizer`.
-    - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
-      `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
-      entire sequence, `"</s></s>"` at the end of each segment, save the last
-      and a `"</s>"` at the end of the entire sequence.
-    - Construct a dictionary with keys `"token_ids"` and `"padding_mask"`
-      that can be passed directly to a XLM-RoBERTa model.
-
-    Note that the original fairseq implementation modifies the indices of the
-    SentencePiece tokenizer output. To preserve compatibility, we make the same
-    changes, i.e., `"<s>"`, `"<pad>"`, `"</s>"` and `"<unk>"` are mapped to
-    0, 1, 2, 3, respectively, and non-special token indices are shifted right
-    by one. Keep this in mind if generating your own vocabulary for tokenization.
+     - Tokenize any number of inputs using the `tokenizer`.
+     - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
+       with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
+     - Construct a dictionary of with keys `"token_ids"` and `"padding_mask"`,
+       that can be passed directly to a DistilBERT model.
 
     This layer will accept either a tuple of (possibly batched) inputs, or a
     single input tensor. If a single tensor is passed, it will be packed
     equivalently to a tuple with a single element.
 
     Args:
-        tokenizer: A `keras_nlp.tokenizers.XLMRobertaTokenizer` instance.
+        tokenizer: A `keras_nlp.models.DistilBertTokenizer` instance.
         sequence_length: The length of the packed inputs.
-        truncate: The algorithm to truncate a list of batched segments to fit
-            within `sequence_length`. The value can be either `round_robin` or
-            `waterfall`:
+        truncate: string. The algorithm to truncate a list of batched segments
+            to fit within `sequence_length`. The value can be either
+            `round_robin` or `waterfall`:
                 - `"round_robin"`: Available space is assigned one token at a
                     time in a round-robin fashion to the inputs that still need
                     some, until the limit is reached.
@@ -256,11 +193,13 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
 
     Examples:
     ```python
-    tokenizer = keras_nlp.models.XLMRobertaTokenizer(proto="model.spm")
-    preprocessor = keras_nlp.models.XLMRobertaPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=10,
-    )
+    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
+    vocab += ["The", "qu", "##ick", "br", "##own", "fox", "tripped"]
+    vocab += ["Call", "me", "Ish", "##mael", "."]
+    vocab += ["Oh", "look", "a", "whale"]
+    vocab += ["I", "forgot", "my", "home", "##work"]
+    tokenizer = keras_nlp.models.DistilBertTokenizer(vocabulary=vocab)
+    preprocessor = keras_nlp.models.DistilBertPreprocessor(tokenizer)
 
     # Tokenize and pack a single sentence directly.
     preprocessor("The quick brown fox jumped.")
@@ -281,7 +220,11 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
     first_sentences = ["The quick brown fox jumped.", "Call me Ishmael."]
     second_sentences = ["The fox tripped.", "Oh look, a whale."]
     labels = [1, 1]
-    ds = tf.data.Dataset.from_tensor_slices(((first_sentences, second_sentences), labels))
+    ds = tf.data.Dataset.from_tensor_slices(
+        (
+            (first_sentences, second_sentences), labels
+        )
+    )
     ds = ds.map(
         lambda x, y: (preprocessor(x), y),
         num_parallel_calls=tf.data.AUTOTUNE,
@@ -297,12 +240,10 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-
         self._tokenizer = tokenizer
-
-        self.packer = RobertaMultiSegmentPacker(
-            start_value=self.tokenizer.start_token_id,
-            end_value=self.tokenizer.end_token_id,
+        self.packer = MultiSegmentPacker(
+            start_value=self.tokenizer.cls_token_id,
+            end_value=self.tokenizer.sep_token_id,
             pad_value=self.tokenizer.pad_token_id,
             truncate=truncate,
             sequence_length=sequence_length,
@@ -310,7 +251,7 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
 
     @property
     def tokenizer(self):
-        """The `keras_nlp.models.XLMRobertaTokenizer` used to tokenize strings."""
+        """The `keras_nlp.models.DistilBertTokenizer` used to tokenize strings."""
         return self._tokenizer
 
     def get_config(self):
@@ -335,7 +276,7 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
             inputs = [inputs]
 
         inputs = [self.tokenizer(x) for x in inputs]
-        token_ids = self.packer(inputs)
+        token_ids, _ = self.packer(inputs)
         return {
             "token_ids": token_ids,
             "padding_mask": token_ids != self.tokenizer.pad_token_id,
@@ -354,7 +295,7 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         truncate="round_robin",
         **kwargs,
     ):
-        """Instantiate XLM-RoBERTa preprocessor from preset architecture.
+        """Instantiate DistilBERT preprocessor from preset architecture.
 
         Args:
             preset: string. Must be one of {{names}}.
@@ -377,14 +318,14 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         Examples:
         ```python
         # Load preprocessor from preset
-        preprocessor = keras_nlp.models.XLMRobertaPreprocessor.from_preset(
-            "xlm_roberta_base",
+        preprocessor = keras_nlp.models.DistilBertPreprocessor.from_preset(
+            "distilbert_base_uncased_en",
         )
         preprocessor("The quick brown fox jumped.")
 
         # Override sequence_length
-        preprocessor = keras_nlp.models.XLMRobertaPreprocessor.from_preset(
-            "xlm_roberta_base",
+        preprocessor = keras_nlp.models.DistilBertPreprocessor.from_preset(
+            "distilbert_base_uncased_en",
             sequence_length=64
         )
         preprocessor("The quick brown fox jumped.")
@@ -396,7 +337,7 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
                 f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
 
-        tokenizer = XLMRobertaTokenizer.from_preset(preset)
+        tokenizer = DistilBertTokenizer.from_preset(preset)
 
         # Use model's `max_sequence_length` if `sequence_length` unspecified;
         # otherwise check that `sequence_length` not too long.
