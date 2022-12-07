@@ -22,6 +22,9 @@ from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.bert.bert_presets import classifier_presets
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
+from keras_nlp.utils.keras_utils import (
+    convert_inputs_to_list_of_tensor_segments,
+)
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -182,16 +185,17 @@ class BertPreprocessor(keras.layers.Layer):
     `keras.Model.fit`.
 
     The call method of this layer accepts three arguments, `x`, `y`, and
-    `sample_weights`. `x` should be either a (possibly batched) string tensor,
-    or a tuple of (possibly batched) string tensors. `y` and `sample_weights`
-    are both optional, can have any format, and will be passed through
-    unaltered.
+    `sample_weight`. `x` can be a python string or tensor representing a single
+    segment, a list of python strings representing a batch of single segments,
+    or a list of tensors representing multiple segments to be packed together.
+    `y` and `sample_weight` are both optional, can have any format, and will be
+    passed through unaltered.
 
     Special care should be taken when using `tf.data` to map over an unlabeled
-    tuple of string segments. `tf.data` will unpack this tuple directly into the
-    call arguments of this layer, rather than forward all argument to `x`. To
-    handle this case, it is recommended to  explicitly call the layer, e.g.
-    `ds.map(lambda seg1, seg2: preprocessor(x=(seg1, seg2)))`.
+    tuple of string segments. `tf.data.Dataset.map` will unpack this tuple
+    directly into the call arguments of this layer, rather than forward all
+    argument to `x`. To handle this case, it is recommended to  explicitly call
+    the layer, e.g. `ds.map(lambda seg1, seg2: preprocessor(x=(seg1, seg2)))`.
 
     Args:
         tokenizer: A `keras_nlp.models.BertTokenizer` instance.
@@ -217,22 +221,43 @@ class BertPreprocessor(keras.layers.Layer):
     tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
     preprocessor = keras_nlp.models.BertPreprocessor(tokenizer)
 
-    # Tokenize and pack a single sentence directly.
+    # Tokenize and pack a single sentence.
+    sentence = tf.constant("The quick brown fox jumped.")
+    preprocessor(sentence)
+    # Same output.
     preprocessor("The quick brown fox jumped.")
 
-    # Tokenize and pack a multiple sentence directly.
-    preprocessor(("The quick brown fox jumped.", "Call me Ishmael."))
+    # Tokenize and a batch of single sentences.
+    sentences = tf.constant(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
+    preprocessor(sentences)
+    # Same output.
+    preprocessor(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
+
+    # Tokenize and pack a sentence pair.
+    first_sentence = tf.constant("The quick brown fox jumped.")
+    second_sentence = tf.constant("The fox tripped.")
+    preprocessor((first_sentence, second_sentence))
 
     # Map a dataset to preprocess a single sentence.
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
-    labels = [0, 1]
+    features = tf.constant(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
+    labels = tf.constant([0, 1])
     ds = tf.data.Dataset.from_tensor_slices((features, labels))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
-    # Map a dataset to preprocess multiple sentence pairs.
-    first_sentences = ["The quick brown fox jumped.", "Call me Ishmael."]
-    second_sentences = ["The fox tripped.", "Oh look, a whale."]
-    labels = [1, 1]
+    # Map a dataset to preprocess sentence pairs.
+    first_sentences = tf.constant(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
+    second_sentences = tf.constant(
+        ["The fox tripped.", "Oh look, a whale."]
+    )
+    labels = tf.constant([1, 1])
     ds = tf.data.Dataset.from_tensor_slices(
         (
             (first_sentences, second_sentences), labels
@@ -241,8 +266,12 @@ class BertPreprocessor(keras.layers.Layer):
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
     # Map a dataset to preprocess unlabeled sentence pairs.
-    first_sentences = ["The quick brown fox jumped.", "Call me Ishmael."]
-    second_sentences = ["The fox tripped.", "Oh look, a whale."]
+    first_sentences = tf.constant(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
+    second_sentences = tf.constant(
+        ["The fox tripped.", "Oh look, a whale."]
+    )
     ds = tf.data.Dataset.from_tensor_slices((first_sentences, second_sentences))
     # Watch out for tf.data's default unpacking of tuples here!
     # Best to invoke the `preprocessor` directly in this case.
@@ -293,9 +322,7 @@ class BertPreprocessor(keras.layers.Layer):
         return cls(**config)
 
     def call(self, x, y=None, sample_weight=None):
-        if not isinstance(x, (list, tuple)):
-            x = [x]
-
+        x = convert_inputs_to_list_of_tensor_segments(x)
         x = [self.tokenizer(segment) for segment in x]
         token_ids, segment_ids = self.packer(x)
         x = {
