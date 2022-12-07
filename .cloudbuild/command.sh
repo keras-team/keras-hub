@@ -1,0 +1,1 @@
+jsonnet unit_test_jobs.jsonnet -J ../../ml-testing-accelerators --string --ext-str image=us-west1-docker.pkg.dev/keras-team-test/keras-nlp-test/keras-nlp-image --ext-str tag_name=test-only --ext-str gcs_bucket=gs://keras-nlp-github-test

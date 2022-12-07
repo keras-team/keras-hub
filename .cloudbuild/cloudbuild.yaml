@@ -2,25 +2,25 @@ substitutions:
   # GCS bucket name. 
   _GCS_BUCKET: 'gs://keras-nlp-github-test'
   # GKE cluster name.
-  _CLUSTER_NAME: 'keras-nlp-test-cluster'
+  _CLUSTER_NAME: 'keras-nlp-tpu-test-cluster'
   # Location of GKE cluster.
-  _CLUSTER_ZONE: 'us-west1-b'
+  _CLUSTER_ZONE: 'us-central1-a'
   # Image name.
   _IMAGE_NAME: 'us-west1-docker.pkg.dev/keras-team-test/keras-nlp-test/keras-nlp-image'
 steps:
-- name: 'docker'
-  id: build-image
-  args: [
-    'build',
-    '.',
-    '-f', '.cloudbuild/Dockerfile',
-    '-t', '$_IMAGE_NAME:$BUILD_ID',
-  ]
-- name: 'docker'
-  id: push-image
-  waitFor:
-  - build-image
-  args: ['push', '$_IMAGE_NAME:$BUILD_ID']
+# - name: 'docker'
+#   id: build-image
+#   args: [
+#     'build',
+#     '.',
+#     '-f', '.cloudbuild/Dockerfile',
+#     '-t', '$_IMAGE_NAME:$BUILD_ID',
+#   ]
+# - name: 'docker'
+#   id: push-image
+#   waitFor:
+#   - build-image
+#   args: ['push', '$_IMAGE_NAME:$BUILD_ID']
 - name: 'golang'
   id: download-jsonnet
   waitFor: ['-']
@@ -55,7 +55,7 @@ steps:
 - name: 'gcr.io/cloud-builders/gcloud'
   id: create-job
   waitFor:
-  - push-image
+  # - push-image
   - build-templates
   entrypoint: bash
   args:

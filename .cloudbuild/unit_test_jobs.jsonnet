@@ -1,5 +1,6 @@
 local base = import 'templates/base.libsonnet';
 local gpus = import 'templates/gpus.libsonnet';
+local tpus = import 'templates/tpus.libsonnet';
 
 local image = std.extVar('image');
 local tagName = std.extVar('tag_name');
@@ -15,8 +16,11 @@ local unittest = base.BaseTest {
   // Set up runtime environment.
   image: image,
   imageTag: tagName,
-  accelerator: gpus.teslaT4,
+  accelerator: tpus.v3_8,
   outputBucket: gcsBucket,
+  tpuSettings+: {
+    softwareVersion: '2.10.0',
+  },
 
   entrypoint: [
     'bash',
@@ -29,8 +33,7 @@ local unittest = base.BaseTest {
   ],
   command: [
     'pytest',
-    'keras_nlp',
-    '--run_large',
+    'keras_nlp/tests/tpu_tests',
   ],
 };
 
