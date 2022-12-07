@@ -17,14 +17,14 @@ import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
-from keras_nlp.models.distilbert.distilbert_models import DistilBert
-from keras_nlp.models.distilbert.distilbert_preprocessing import (
+from keras_nlp.models.distilbert.distil_bert_models import DistilBert
+from keras_nlp.models.distilbert.distil_bert_preprocessing import (
     DistilBertPreprocessor,
 )
-from keras_nlp.models.distilbert.distilbert_preprocessing import (
+from keras_nlp.models.distilbert.distil_bert_preprocessing import (
     DistilBertTokenizer,
 )
-from keras_nlp.models.distilbert.distilbert_tasks import DistilBertClassifier
+from keras_nlp.models.distilbert.distil_bert_tasks import DistilBertClassifier
 
 
 @pytest.mark.large
