@@ -24,7 +24,7 @@ from keras_nlp.models.distil_bert.distil_bert_classifier import (
 from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
     DistilBertPreprocessor,
 )
-from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
+from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
 

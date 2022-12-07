@@ -24,7 +24,7 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_classifier import (
 from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
     XLMRobertaPreprocessor,
 )
-from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
+from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
 )
 
