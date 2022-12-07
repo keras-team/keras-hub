@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Test for DistilBERT backbone models."""
+"""Tests for RoBERTa task specific models and heads."""
 
 import os
 
@@ -19,19 +19,19 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.distilbert.distil_bert_models import DistilBert
+from keras_nlp.models.roberta.roberta_backbone import Roberta
+from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
 
 
-class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
+class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = DistilBert(
+        self.model = Roberta(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
             hidden_dim=64,
             intermediate_dim=128,
             max_sequence_length=128,
-            name="encoder",
         )
         self.batch_size = 8
         self.input_batch = {
@@ -47,46 +47,38 @@ class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
             self.input_batch
         ).batch(2)
 
-    def test_valid_call_distilbert(self):
-        self.model(self.input_batch)
-
-    def test_variable_sequence_length_call_distilbert(self):
-        for seq_length in (25, 50, 75):
-            input_data = {
-                "token_ids": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
-                "padding_mask": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
-            }
-            self.model(input_data)
+    def test_valid_call_classifier(self):
+        classifier = RobertaClassifier(self.model, 4, 128, name="classifier")
+        classifier(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_distilbert_base_compile(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_batch)
+    def test_roberta_classifier_compile(self, jit_compile):
+        model = RobertaClassifier(self.model, 4, 128, name="classifier")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_distilbert_base_compile_batched_ds(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_dataset)
+    def test_roberta_classifier_compile_batched_ds(self, jit_compile):
+        model = RobertaClassifier(self.model, 4, 128, name="classifier")
+        model.compile(jit_compile=jit_compile)
+        model.predict(self.input_dataset)
 
     @parameterized.named_parameters(
         ("save_format_tf", "tf"), ("save_format_h5", "h5")
     )
     def test_saving_model(self, save_format):
-        model_output = self.model(self.input_batch)
+        model = RobertaClassifier(self.model, 4, 128, name="classifier")
+        model_output = model(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), "model")
-        self.model.save(save_path, save_format)
+        model.save(save_path, save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, DistilBert)
+        self.assertIsInstance(restored_model, RobertaClassifier)
 
         # Check that output matches.
         restored_output = restored_model(self.input_batch)

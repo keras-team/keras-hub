@@ -17,14 +17,16 @@ import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
-from keras_nlp.models.xlm_roberta.xlm_roberta_models import XLMRoberta
-from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessing import (
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRoberta
+from keras_nlp.models.xlm_roberta.xlm_roberta_classifier import (
+    XLMRobertaClassifier,
+)
+from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
     XLMRobertaPreprocessor,
 )
-from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessing import (
+from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
     XLMRobertaTokenizer,
 )
-from keras_nlp.models.xlm_roberta.xlm_roberta_tasks import XLMRobertaClassifier
 
 
 @pytest.mark.large

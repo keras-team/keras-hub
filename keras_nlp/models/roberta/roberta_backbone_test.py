@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for XLM-RoBERTa backbone models."""
+"""Test for RoBERTa backbone models."""
 
 import os
 
@@ -20,12 +20,12 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.xlm_roberta.xlm_roberta_models import XLMRoberta
+from keras_nlp.models.roberta.roberta_backbone import Roberta
 
 
-class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
+class RobertaTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = XLMRoberta(
+        self.model = Roberta(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -47,7 +47,7 @@ class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
             self.input_batch
         ).batch(2)
 
-    def test_valid_call_xlm_roberta(self):
+    def test_valid_call_roberta(self):
         self.model(self.input_batch)
 
         # Check default name passed through
@@ -56,18 +56,18 @@ class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_xlm_roberta_compile(self, jit_compile):
+    def test_roberta_compile(self, jit_compile):
         self.model.compile(jit_compile=jit_compile)
         self.model.predict(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_xlm_roberta_compile_batched_ds(self, jit_compile):
+    def test_roberta_compile_batched_ds(self, jit_compile):
         self.model.compile(jit_compile=jit_compile)
         self.model.predict(self.input_dataset)
 
-    def test_variable_sequence_length_call_xlm_roberta(self):
+    def test_variable_sequence_length_call_roberta(self):
         for seq_length in (25, 50, 75):
             input_data = {
                 "token_ids": tf.ones(
@@ -93,7 +93,7 @@ class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, XLMRoberta)
+        self.assertIsInstance(restored_model, Roberta)
 
         # Check that output matches.
         restored_output = restored_model(self.input_batch)

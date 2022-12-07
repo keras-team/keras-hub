@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for RoBERTa task specific models and heads."""
+"""Test for GPT-2 backbone models."""
 
 import os
 
@@ -19,13 +19,12 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.roberta.roberta_models import Roberta
-from keras_nlp.models.roberta.roberta_tasks import RobertaClassifier
+from keras_nlp.models.gpt2.gpt2_backbone import GPT2
 
 
-class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
+class GPT2Test(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = Roberta(
+        self.model = GPT2(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -47,38 +46,49 @@ class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
             self.input_batch
         ).batch(2)
 
-    def test_valid_call_classifier(self):
-        classifier = RobertaClassifier(self.model, 4, 128, name="classifier")
-        classifier(self.input_batch)
+    def test_valid_call_gpt2(self):
+        self.model(self.input_batch)
+
+        # Check default name passed through
+        self.assertEqual(self.model.name, "backbone")
+
+    def test_variable_sequence_length_call_gpt2(self):
+        for seq_length in (25, 50, 75):
+            input_data = {
+                "token_ids": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
+                "padding_mask": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
+            }
+            self.model(input_data)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_roberta_classifier_compile(self, jit_compile):
-        model = RobertaClassifier(self.model, 4, 128, name="classifier")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_batch)
+    def test_gpt2_compile(self, jit_compile):
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_roberta_classifier_compile_batched_ds(self, jit_compile):
-        model = RobertaClassifier(self.model, 4, 128, name="classifier")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_dataset)
+    def test_gpt2_compile_batched_ds(self, jit_compile):
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_dataset)
 
     @parameterized.named_parameters(
         ("save_format_tf", "tf"), ("save_format_h5", "h5")
     )
     def test_saving_model(self, save_format):
-        model = RobertaClassifier(self.model, 4, 128, name="classifier")
-        model_output = model(self.input_batch)
+        model_output = self.model(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), "model")
-        model.save(save_path, save_format)
+        self.model.save(save_path, save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, RobertaClassifier)
+        self.assertIsInstance(restored_model, GPT2)
 
         # Check that output matches.
         restored_output = restored_model(self.input_batch)
