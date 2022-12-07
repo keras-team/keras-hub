@@ -27,9 +27,9 @@ from tools.checkpoint_conversion.checkpoint_conversion_utils import (
 )
 
 PRESET_MAP = {
-    "distilbert_base_uncased_en": "distilbert-base-uncased",
-    "distilbert_base_cased_en": "distilbert-base-cased",
-    "distilbert_base_multi_cased": "distilbert-base-multilingual-cased",
+    "distil_bert_base_en_uncased": "distilbert-base-uncased",
+    "distil_bert_base_en_cased": "distilbert-base-cased",
+    "distil_bert_base_multi_cased": "distilbert-base-multilingual-cased",
 }
 
 EXTRACT_DIR = "./{}"

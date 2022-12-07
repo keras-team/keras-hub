@@ -81,7 +81,7 @@ to the required input of your model. For example, in the current script
 
 ```python
 bert_preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-    "bert_tiny_uncased_en"
+    "bert_tiny_en_uncased"
 )
 def preprocess_fn(feature, label):
     return bert_preprocessor(feature), label

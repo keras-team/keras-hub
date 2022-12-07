@@ -184,13 +184,13 @@ class DistilBertPreprocessor(keras.layers.Layer):
         ```python
         # Load preprocessor from preset
         preprocessor = keras_nlp.models.DistilBertPreprocessor.from_preset(
-            "distilbert_base_uncased_en",
+            "distil_bert_base_en_uncased",
         )
         preprocessor("The quick brown fox jumped.")
 
         # Override sequence_length
         preprocessor = keras_nlp.models.DistilBertPreprocessor.from_preset(
-            "distilbert_base_uncased_en",
+            "distil_bert_base_en_uncased",
             sequence_length=64
         )
         preprocessor("The quick brown fox jumped.")
