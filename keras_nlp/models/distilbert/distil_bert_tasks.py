@@ -17,11 +17,11 @@ import copy
 
 from tensorflow import keras
 
-from keras_nlp.models.distilbert.distilbert_models import DistilBert
-from keras_nlp.models.distilbert.distilbert_models import (
+from keras_nlp.models.distilbert.distil_bert_models import DistilBert
+from keras_nlp.models.distilbert.distil_bert_models import (
     distilbert_kernel_initializer,
 )
-from keras_nlp.models.distilbert.distilbert_presets import backbone_presets
+from keras_nlp.models.distilbert.distil_bert_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 

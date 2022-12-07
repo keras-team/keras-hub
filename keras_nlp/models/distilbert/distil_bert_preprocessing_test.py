@@ -19,10 +19,10 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.distilbert.distilbert_preprocessing import (
+from keras_nlp.models.distilbert.distil_bert_preprocessing import (
     DistilBertPreprocessor,
 )
-from keras_nlp.models.distilbert.distilbert_preprocessing import (
+from keras_nlp.models.distilbert.distil_bert_preprocessing import (
     DistilBertTokenizer,
 )
 
