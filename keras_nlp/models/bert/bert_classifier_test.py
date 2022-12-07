@@ -22,7 +22,7 @@ from tensorflow import keras
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_classifier import BertClassifier
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
-from keras_nlp.models.bert.bert_preprocessor import BertTokenizer
+from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 
 
 class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):

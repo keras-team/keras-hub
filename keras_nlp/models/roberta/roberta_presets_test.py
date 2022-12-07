@@ -20,7 +20,7 @@ from absl.testing import parameterized
 from keras_nlp.models.roberta.roberta_backbone import Roberta
 from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
-from keras_nlp.models.roberta.roberta_preprocessor import RobertaTokenizer
+from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 
 
 @pytest.mark.large
