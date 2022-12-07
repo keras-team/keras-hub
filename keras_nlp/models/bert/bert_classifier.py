@@ -27,7 +27,7 @@ from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
-CLASSIFIER_PRESET_NAMES = ", ".join(
+PRESET_NAMES = ", ".join(
     list(backbone_presets) + list(classifier_presets)
 )
 
@@ -166,7 +166,7 @@ class BertClassifier(PipelineModel):
         return copy.deepcopy({**backbone_presets, **classifier_presets})
 
     @classmethod
-    @format_docstring(names=CLASSIFIER_PRESET_NAMES)
+    @format_docstring(names=PRESET_NAMES)
     def from_preset(
         cls,
         preset,
