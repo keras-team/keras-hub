@@ -78,7 +78,7 @@ def convert_checkpoints(preset, size):
     }
     print("Config:", cfg)
 
-    keras_nlp_model = keras_nlp.models.XLMRoberta.from_preset(
+    keras_nlp_model = keras_nlp.models.XLMRobertaBackbone.from_preset(
         preset, load_weights=False
     )
 

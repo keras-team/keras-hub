@@ -19,13 +19,13 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.roberta.roberta_backbone import Roberta
+from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
 
 
 class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = Roberta(
+        self.model = RobertaBackbone(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,

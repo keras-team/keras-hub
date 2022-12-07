@@ -26,7 +26,7 @@ from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class XLMRoberta(roberta_backbone.Roberta):
+class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
     """XLM-RoBERTa encoder.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -67,7 +67,7 @@ class XLMRoberta(roberta_backbone.Roberta):
     }
 
     # Randomly initialized XLM-R model
-    model = keras_nlp.models.XLMRoberta(
+    model = keras_nlp.models.XLMRobertaBackbone(
         vocabulary_size=250002,
         num_layers=12,
         num_heads=12,
@@ -110,11 +110,11 @@ class XLMRoberta(roberta_backbone.Roberta):
         }
 
         # Load architecture and weights from preset
-        model = keras_nlp.models.XLMRoberta.from_preset("xlm_roberta_base")
+        model = keras_nlp.models.XLMRobertaBackbone.from_preset("xlm_roberta_base")
         output = model(input_data)
 
         # Load randomly initalized model from preset architecture
-        model = keras_nlp.models.XLMRoberta.from_preset(
+        model = keras_nlp.models.XLMRobertaBackbone.from_preset(
             "xlm_roberta_base", load_weights=False
         )
         output = model(input_data)
