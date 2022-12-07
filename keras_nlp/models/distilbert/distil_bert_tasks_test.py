@@ -19,8 +19,8 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.distilbert.distilbert_models import DistilBert
-from keras_nlp.models.distilbert.distilbert_tasks import DistilBertClassifier
+from keras_nlp.models.distilbert.distil_bert_models import DistilBert
+from keras_nlp.models.distilbert.distil_bert_tasks import DistilBertClassifier
 
 
 class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
