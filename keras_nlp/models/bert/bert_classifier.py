@@ -27,9 +27,7 @@ from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
-PRESET_NAMES = ", ".join(
-    list(backbone_presets) + list(classifier_presets)
-)
+PRESET_NAMES = ", ".join(list(backbone_presets) + list(classifier_presets))
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
