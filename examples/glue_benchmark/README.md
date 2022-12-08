@@ -95,7 +95,7 @@ As long as it is a Keras model, you can use it with this script.
 ### Make the Finetuning Model
 
 Users need to make a classification model based on your pretrained model for 
-evaluation purposes. For example, [`BertClassifier`](https://github.com/keras-team/keras-nlp/blob/24c969b7f6eb5074b67d513b504c91122b0b3185/keras_nlp/models/bert.bert_classifier.py#L28) takes a `Bert` model as backbone, 
+evaluation purposes. For example, [`BertClassifier`](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/bert/bert_classifier.py) takes a `Bert` model as backbone,
 and adds a dense layer on top of it. Please pay attention that different model 
 could use different classifier structure, e.g., in [RoBERTa](https://github.com/huggingface/transformers/blob/94b3f544a1f5e04b78d87a2ae32a7ac252e22e31/src/transformers/models/roberta/modeling_roberta.py#L1437-L1456), 
 it has 2 dense layers. If you are using pretrained model from an OSS package, 
