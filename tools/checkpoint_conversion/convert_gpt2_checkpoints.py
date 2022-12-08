@@ -21,7 +21,9 @@ import transformers
 from absl import app
 from absl import flags
 
-import keras_nlp
+# Temporarily directly import gpt2 until we expose it.
+from keras_nlp.models.gpt2.gpt2_backbone import GPT2
+from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from tools.checkpoint_conversion.checkpoint_conversion_utils import (
     get_md5_checksum,
 )
@@ -72,7 +74,8 @@ def convert_checkpoints(preset, num_params):
         weight = tf.train.load_variable(checkpoint_path, name)
         weights[name] = weight
 
-    keras_nlp_model = keras_nlp.models.GPT2.from_preset(
+    # Temporary direct import, as we aren't exposing this quite yet.
+    keras_nlp_model = GPT2.from_preset(
         preset,
         load_weights=False,
     )
@@ -200,7 +203,7 @@ def define_tokenizer(preset, num_params, hf_model_name):
     merges_path = os.path.join(extract_dir, "vocab.bpe")
     vocab_path = os.path.join(extract_dir, "encoder.json")
 
-    keras_nlp_tokenizer = keras_nlp.models.GPT2Tokenizer(
+    keras_nlp_tokenizer = GPT2Tokenizer(
         vocabulary=vocab_path,
         merges=merges_path,
     )
