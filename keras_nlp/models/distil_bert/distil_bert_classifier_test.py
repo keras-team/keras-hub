@@ -19,7 +19,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBert
+from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_classifier import (
     DistilBertClassifier,
 )
@@ -27,7 +27,7 @@ from keras_nlp.models.distil_bert.distil_bert_classifier import (
 
 class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = DistilBert(
+        self.model = DistilBertBackbone(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,

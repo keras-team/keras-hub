@@ -17,7 +17,7 @@ import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
-from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBert
+from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_classifier import (
     DistilBertClassifier,
 )
@@ -63,7 +63,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "token_ids": tf.constant([[101, 1996, 4248, 102]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
-        model = DistilBert.from_preset(
+        model = DistilBertBackbone.from_preset(
             "distil_bert_base_en_uncased", load_weights=load_weights
         )
         outputs = model(input_data)[0, 0, :5]
@@ -87,7 +87,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("distilbert_tokenizer", DistilBertTokenizer),
         ("distilbert_preprocessor", DistilBertPreprocessor),
-        ("distilbert", DistilBert),
+        ("distilbert", DistilBertBackbone),
         ("distilbert_classifier", DistilBertClassifier),
     )
     def test_preset_docstring(self, cls):
@@ -98,7 +98,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("distilbert_tokenizer", DistilBertTokenizer),
         ("distilbert_preprocessor", DistilBertPreprocessor),
-        ("distilbert", DistilBert),
+        ("distilbert", DistilBertBackbone),
         ("distilbert_classifier", DistilBertClassifier),
     )
     def test_unknown_preset_error(self, cls):
@@ -121,8 +121,10 @@ class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         ("preset_weights", True), ("random_weights", False)
     )
     def test_load_distilbert(self, load_weights):
-        for preset in DistilBert.presets:
-            model = DistilBert.from_preset(preset, load_weights=load_weights)
+        for preset in DistilBertBackbone.presets:
+            model = DistilBertBackbone.from_preset(
+                preset, load_weights=load_weights
+            )
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
