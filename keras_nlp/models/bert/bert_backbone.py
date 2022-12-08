@@ -252,12 +252,12 @@ class BertBackbone(keras.Model):
         }
 
         # Load architecture and weights from preset
-        model = BertBackbone.from_preset("bert_base_uncased_en")
+        model = BertBackbone.from_preset("bert_base_en_uncased")
         output = model(input_data)
 
         # Load randomly initalized model from preset architecture
         model = BertBackbone.from_preset(
-            "bert_base_uncased_en",
+            "bert_base_en_uncased",
             load_weights=False
         )
         output = model(input_data)

@@ -211,13 +211,13 @@ class DistilBert(keras.Model):
 
         # Load architecture and weights from preset
         model = keras_nlp.models.DistilBert.from_preset(
-            "distilbert_base_uncased_en"
+            "distil_bert_base_en_uncased"
         )
         output = model(input_data)
 
         # Load randomly initalized model from preset architecture
         model = keras_nlp.models.DistilBert.from_preset(
-            "distilbert_base_uncased_en", load_weights=False
+            "distil_bert_base_en_uncased", load_weights=False
         )
         output = model(input_data)
         ```

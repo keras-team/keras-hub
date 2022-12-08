@@ -126,7 +126,7 @@ class DistilBertTokenizer(WordPieceTokenizer):
         ```python
         # Load a preset tokenizer.
         tokenizer = keras_nlp.models.DistilBertTokenizer.from_preset(
-            "distilbert_base_uncased_en",
+            "distil_bert_base_en_uncased",
         )
 
         # Tokenize some input.
