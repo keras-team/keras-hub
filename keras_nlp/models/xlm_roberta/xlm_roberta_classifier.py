@@ -18,7 +18,7 @@ import copy
 from tensorflow import keras
 
 from keras_nlp.models.roberta.roberta_backbone import roberta_kernel_initializer
-from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRoberta
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -48,7 +48,7 @@ class XLMRobertaClassifier(keras.Model):
     }
 
     # Randomly initialized XLM-RoBERTa encoder
-    model = keras_nlp.models.XLMRoberta(
+    model = keras_nlp.models.XLMRobertaBackbone(
         vocabulary_size=250002,
         num_layers=12,
         num_heads=12,
@@ -171,8 +171,8 @@ class XLMRobertaClassifier(keras.Model):
         ```
         """
         # Check if preset is backbone-only model
-        if preset in XLMRoberta.presets:
-            backbone = XLMRoberta.from_preset(preset, load_weights)
+        if preset in XLMRobertaBackbone.presets:
+            backbone = XLMRobertaBackbone.from_preset(preset, load_weights)
             return cls(backbone, **kwargs)
 
         # Otherwise must be one of class presets

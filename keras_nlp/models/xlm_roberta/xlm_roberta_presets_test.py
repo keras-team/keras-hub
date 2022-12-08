@@ -17,7 +17,7 @@ import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
-from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRoberta
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_classifier import (
     XLMRobertaClassifier,
 )
@@ -63,7 +63,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "token_ids": tf.constant([[0, 581, 63773, 2]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
-        model = XLMRoberta.from_preset(
+        model = XLMRobertaBackbone.from_preset(
             "xlm_roberta_base", load_weights=load_weights
         )
         outputs = model(input_data)
@@ -89,7 +89,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("xlm_roberta_tokenizer", XLMRobertaTokenizer),
         ("xlm_roberta_preprocessor", XLMRobertaPreprocessor),
-        ("xlm_roberta", XLMRoberta),
+        ("xlm_roberta", XLMRobertaBackbone),
         ("xlm_roberta_classifier", XLMRobertaClassifier),
     )
     def test_preset_docstring(self, cls):
@@ -100,7 +100,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("xlm_roberta_tokenizer", XLMRobertaTokenizer),
         ("xlm_roberta_preprocessor", XLMRobertaPreprocessor),
-        ("xlm_roberta", XLMRoberta),
+        ("xlm_roberta", XLMRobertaBackbone),
         ("xlm_roberta_classifier", XLMRobertaClassifier),
     )
     def test_unknown_preset_error(self, cls):
@@ -123,8 +123,10 @@ class XLMRobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         ("preset_weights", True), ("random_weights", False)
     )
     def test_load_xlm_roberta(self, load_weights):
-        for preset in XLMRoberta.presets:
-            model = XLMRoberta.from_preset(preset, load_weights=load_weights)
+        for preset in XLMRobertaBackbone.presets:
+            model = XLMRobertaBackbone.from_preset(
+                preset, load_weights=load_weights
+            )
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
