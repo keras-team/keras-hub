@@ -245,9 +245,10 @@ class ByteTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(tokenizer.get_config(), exp_config)
 
     @parameterized.named_parameters(
-        ("tf_format", "tf"), ("keras_format", "keras_v3")
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
     )
-    def test_saving(self, save_format):
+    def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["this is fun"])
 
         tokenizer = ByteTokenizer(
@@ -260,7 +261,7 @@ class ByteTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), "model")
+        path = os.path.join(self.get_temp_dir(), filename)
         model.save(path, save_format=save_format)
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(

@@ -304,9 +304,10 @@ class PositionEmbeddingLayerTest(tf.test.TestCase, parameterized.TestCase):
         )
 
     @parameterized.named_parameters(
-        ("tf_format", "tf"), ("keras_format", "keras_v3")
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
     )
-    def test_save_model(self, save_format):
+    def test_saved_model(self, save_format, filename):
         max_sequence_length = 4
         feature_size = 6
         test_layer = position_embedding.PositionEmbedding(
@@ -319,7 +320,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase, parameterized.TestCase):
         data = tf.zeros(shape=[2, max_sequence_length, feature_size])
         model(data)
 
-        path = os.path.join(self.get_temp_dir(), "model")
+        path = os.path.join(self.get_temp_dir(), filename)
         model.save(path, save_format=save_format)
         loaded_model = keras.models.load_model(path)
 

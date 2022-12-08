@@ -77,11 +77,12 @@ class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
         self.model.predict(self.input_dataset)
 
     @parameterized.named_parameters(
-        ("save_format_tf", "tf"), ("save_format_keras", "keras_v3")
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
     )
-    def test_saving_model(self, save_format):
+    def test_saved_model(self, save_format, filename):
         model_output = self.model(self.input_batch)
-        save_path = os.path.join(self.get_temp_dir(), "model")
+        save_path = os.path.join(self.get_temp_dir(), filename)
         self.model.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
