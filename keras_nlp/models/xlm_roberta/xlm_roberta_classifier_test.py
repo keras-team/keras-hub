@@ -19,7 +19,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRoberta
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_classifier import (
     XLMRobertaClassifier,
 )
@@ -27,7 +27,7 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_classifier import (
 
 class XLMRobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = XLMRoberta(
+        self.model = XLMRobertaBackbone(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,

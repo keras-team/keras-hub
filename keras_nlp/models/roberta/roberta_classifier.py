@@ -17,7 +17,7 @@ import copy
 
 from tensorflow import keras
 
-from keras_nlp.models.roberta.roberta_backbone import Roberta
+from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_backbone import roberta_kernel_initializer
 from keras_nlp.models.roberta.roberta_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
@@ -47,7 +47,7 @@ class RobertaClassifier(keras.Model):
     }
 
     # Randomly initialized RoBERTa encoder
-    model = keras_nlp.models.Roberta(
+    model = keras_nlp.models.RobertaBackbone(
         vocabulary_size=50265,
         num_layers=12,
         num_heads=12,
@@ -165,8 +165,8 @@ class RobertaClassifier(keras.Model):
         ```
         """
         # Check if preset is backbone-only model
-        if preset in Roberta.presets:
-            backbone = Roberta.from_preset(preset, load_weights)
+        if preset in RobertaBackbone.presets:
+            backbone = RobertaBackbone.from_preset(preset, load_weights)
             return cls(backbone, **kwargs)
 
         # Otherwise must be one of class presets
