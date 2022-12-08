@@ -40,7 +40,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_tokenizer_output(self):
         tokenizer = DistilBertTokenizer.from_preset(
-            "distilbert_base_uncased_en",
+            "distil_bert_base_en_uncased",
         )
         outputs = tokenizer("The quick brown fox.")
         expected_outputs = [1996, 4248, 2829, 4419, 1012]
@@ -48,7 +48,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_preprocessor_output(self):
         tokenizer = DistilBertPreprocessor.from_preset(
-            "distilbert_base_uncased_en",
+            "distil_bert_base_en_uncased",
             sequence_length=4,
         )
         outputs = tokenizer("The quick brown fox.")["token_ids"]
@@ -64,7 +64,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = DistilBert.from_preset(
-            "distilbert_base_uncased_en", load_weights=load_weights
+            "distil_bert_base_en_uncased", load_weights=load_weights
         )
         outputs = model(input_data)[0, 0, :5]
         if load_weights:
@@ -80,7 +80,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = DistilBertClassifier.from_preset(
-            "distilbert_base_uncased_en", load_weights=load_weights
+            "distil_bert_base_en_uncased", load_weights=load_weights
         )
         model(input_data)
 

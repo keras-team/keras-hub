@@ -129,7 +129,7 @@ class BertTokenizer(WordPieceTokenizer):
         ```python
         # Load a preset tokenizer.
         tokenizer = keras_nlp.models.BertTokenizer.from_preset(
-            "bert_base_uncased_en",
+            "bert_base_en_uncased",
         )
 
         # Tokenize some input.

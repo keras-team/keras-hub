@@ -156,14 +156,14 @@ class DistilBertClassifier(keras.Model):
 
         # Load backbone architecture and weights from preset
         classifier = keras_nlp.models.DistilBertClassifier.from_preset(
-            "distilbert_base_uncased_en",
+            "distil_bert_base_en_uncased",
             num_classes=4,
         )
         output = classifier(input_data)
 
         # Load randomly initalized model from preset architecture
         classifier = keras_nlp.models.DistilBertClassifier.from_preset(
-            "distilbert_base_uncased_en",
+            "distil_bert_base_en_uncased",
             load_weights=False,
             num_classes=4,
         )

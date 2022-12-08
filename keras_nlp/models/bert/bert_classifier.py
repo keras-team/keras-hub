@@ -195,7 +195,7 @@ class BertClassifier(PipelineModel):
 
         # Create a BertClassifier and fit your data.
         classifier = keras_nlp.models.BertClassifier.from_preset(
-            "bert_base_uncased_en",
+            "bert_base_en_uncased",
             num_classes=4,
         )
         classifier.compile(
@@ -212,13 +212,13 @@ class BertClassifier(PipelineModel):
 
         # Use a shorter sequence length.
         preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-            "bert_base_uncased_en",
+            "bert_base_en_uncased",
             sequence_length=128,
         )
 
         # Create a BertClassifier and fit your data.
         classifier = keras_nlp.models.BertClassifier.from_preset(
-            "bert_base_uncased_en",
+            "bert_base_en_uncased",
             num_classes=4,
             preprocessor=preprocessor,
         )
@@ -244,7 +244,7 @@ class BertClassifier(PipelineModel):
 
         # Create a BERT classifier and fit your data.
         classifier = keras_nlp.models.BertClassifier.from_preset(
-            "bert_base_uncased_en",
+            "bert_base_en_uncased",
             num_classes=4,
             preprocessor=None,
         )

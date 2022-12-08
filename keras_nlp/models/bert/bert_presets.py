@@ -15,7 +15,7 @@
 # TODO(jbischof): document presets in keras.io and use URL in docstrings
 # Metadata for loading pretrained model weights.
 backbone_presets = {
-    "bert_tiny_uncased_en": {
+    "bert_tiny_en_uncased": {
         "config": {
             "vocabulary_size": 30522,
             "num_layers": 2,
@@ -33,12 +33,12 @@ backbone_presets = {
             "Tiny size of BERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_uncased_en/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_en_uncased/model.h5",
         "weights_hash": "c2b29fcbf8f814a0812e4ab89ef5c068",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_uncased_en/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_en_uncased/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
-    "bert_small_uncased_en": {
+    "bert_small_en_uncased": {
         "config": {
             "vocabulary_size": 30522,
             "num_layers": 4,
@@ -56,12 +56,12 @@ backbone_presets = {
             "Small size of BERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_small_uncased_en/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_small_en_uncased/model.h5",
         "weights_hash": "08632c9479b034f342ba2c2b7afba5f7",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_small_uncased_en/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_small_en_uncased/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
-    "bert_medium_uncased_en": {
+    "bert_medium_en_uncased": {
         "config": {
             "vocabulary_size": 30522,
             "num_layers": 8,
@@ -79,12 +79,12 @@ backbone_presets = {
             "Medium size of BERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_medium_uncased_en/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_medium_en_uncased/model.h5",
         "weights_hash": "bb990e1184ec6b6185450c73833cd661",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_medium_uncased_en/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_medium_en_uncased/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
-    "bert_base_uncased_en": {
+    "bert_base_en_uncased": {
         "config": {
             "vocabulary_size": 30522,
             "num_layers": 12,
@@ -102,12 +102,12 @@ backbone_presets = {
             "Base size of BERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_uncased_en/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_en_uncased/model.h5",
         "weights_hash": "9b2b2139f221988759ac9cdd17050b31",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_uncased_en/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_en_uncased/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
-    "bert_base_cased_en": {
+    "bert_base_en_cased": {
         "config": {
             "vocabulary_size": 28996,
             "num_layers": 12,
@@ -125,9 +125,9 @@ backbone_presets = {
             "Base size of BERT where case is maintained. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_cased_en/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_en_cased/model.h5",
         "weights_hash": "f94a6cb012e18f4fb8ec92abb91864e9",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_cased_en/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_en_cased/vocab.txt",
         "vocabulary_hash": "bb6ca9b42e790e5cd986bbb16444d0e0",
     },
     "bert_base_zh": {
@@ -173,7 +173,7 @@ backbone_presets = {
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_multi_cased/vocab.txt",
         "vocabulary_hash": "d9d865138d17f1958502ed060ecfeeb6",
     },
-    "bert_large_uncased_en": {
+    "bert_large_en_uncased": {
         "config": {
             "vocabulary_size": 30522,
             "num_layers": 24,
@@ -191,12 +191,12 @@ backbone_presets = {
             "Large size of BERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_uncased_en/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_en_uncased/model.h5",
         "weights_hash": "cc5cacc9565ef400ee4376105f40ddae",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_uncased_en/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_en_uncased/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
-    "bert_large_cased_en": {
+    "bert_large_en_cased": {
         "config": {
             "vocabulary_size": 28996,
             "num_layers": 24,
@@ -214,15 +214,15 @@ backbone_presets = {
             "Base size of BERT where case is maintained. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_cased_en/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_en_cased/model.h5",
         "weights_hash": "8b8ab82290bbf4f8db87d4f100648890",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_cased_en/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_en_cased/vocab.txt",
         "vocabulary_hash": "bb6ca9b42e790e5cd986bbb16444d0e0",
     },
 }
 
 classifier_presets = {
-    "bert_tiny_uncased_en_sst2": {
+    "bert_tiny_en_uncased_sst2": {
         "config": {
             "backbone": {
                 "class_name": "keras_nlp>BertBackbone",
@@ -244,11 +244,11 @@ classifier_presets = {
             "lowercase": True,
         },
         "description": (
-            "bert_tiny_uncased_en backbone fine-tuned on the glue/sst2 dataset."
+            "bert_tiny_en_uncased backbone fine-tuned on the glue/sst2 dataset."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_uncased_en_sst2/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_en_uncased_sst2/model.h5",
         "weights_hash": "1f9c2d59f9e229e08f3fbd44239cfb0b",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_uncased_en_sst2/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_en_uncased_sst2/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     }
 }
