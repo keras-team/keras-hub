@@ -20,12 +20,12 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRoberta
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 
 
 class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = XLMRoberta(
+        self.model = XLMRobertaBackbone(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -93,7 +93,7 @@ class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, XLMRoberta)
+        self.assertIsInstance(restored_model, XLMRobertaBackbone)
 
         # Check that output matches.
         restored_output = restored_model(self.input_batch)

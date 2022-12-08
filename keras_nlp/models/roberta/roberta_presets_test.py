@@ -17,7 +17,7 @@ import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
-from keras_nlp.models.roberta.roberta_backbone import Roberta
+from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
@@ -57,7 +57,9 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "token_ids": tf.constant([[0, 133, 2119, 2]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
-        model = Roberta.from_preset("roberta_base", load_weights=load_weights)
+        model = RobertaBackbone.from_preset(
+            "roberta_base", load_weights=load_weights
+        )
         outputs = model(input_data)
         if load_weights:
             outputs = outputs[0, 0, :5]
@@ -81,7 +83,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("roberta_tokenizer", RobertaTokenizer),
         ("roberta_preprocessor", RobertaPreprocessor),
-        ("roberta", Roberta),
+        ("roberta", RobertaBackbone),
         ("roberta_classifier", RobertaClassifier),
     )
     def test_preset_docstring(self, cls):
@@ -92,7 +94,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("roberta_tokenizer", RobertaTokenizer),
         ("roberta_preprocessor", RobertaPreprocessor),
-        ("roberta", Roberta),
+        ("roberta", RobertaBackbone),
         ("roberta_classifier", RobertaClassifier),
     )
     def test_unknown_preset_error(self, cls):
@@ -115,8 +117,10 @@ class RobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         ("preset_weights", True), ("random_weights", False)
     )
     def test_load_roberta(self, load_weights):
-        for preset in Roberta.presets:
-            model = Roberta.from_preset(preset, load_weights=load_weights)
+        for preset in RobertaBackbone.presets:
+            model = RobertaBackbone.from_preset(
+                preset, load_weights=load_weights
+            )
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
