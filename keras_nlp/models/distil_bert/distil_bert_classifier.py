@@ -17,7 +17,7 @@ import copy
 
 from tensorflow import keras
 
-from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBert
+from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_backbone import (
     distilbert_kernel_initializer,
 )
@@ -51,7 +51,7 @@ class DistilBertClassifier(keras.Model):
     }
 
     # Randomly initialized DistilBERT encoder
-    model = keras_nlp.models.DistilBert(
+    model = keras_nlp.models.DistilBertBackbone(
         vocabulary_size=30552,
         num_layers=6,
         num_heads=12,
@@ -171,8 +171,8 @@ class DistilBertClassifier(keras.Model):
         ```
         """
         # Check if preset is backbone-only model
-        if preset in DistilBert.presets:
-            backbone = DistilBert.from_preset(preset, load_weights)
+        if preset in DistilBertBackbone.presets:
+            backbone = DistilBertBackbone.from_preset(preset, load_weights)
             return cls(backbone, **kwargs)
 
         # Otherwise must be one of class presets

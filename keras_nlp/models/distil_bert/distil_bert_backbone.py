@@ -34,7 +34,7 @@ def distilbert_kernel_initializer(stddev=0.02):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class DistilBert(keras.Model):
+class DistilBertBackbone(keras.Model):
     """DistilBERT encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -77,7 +77,7 @@ class DistilBert(keras.Model):
     }
 
     # Randomly initialized DistilBERT encoder
-    model = keras_nlp.models.DistilBert(
+    model = keras_nlp.models.DistilBertBackbone(
         vocabulary_size=30552,
         num_layers=6,
         num_heads=12,
@@ -193,7 +193,7 @@ class DistilBert(keras.Model):
         load_weights=True,
         **kwargs,
     ):
-        """Instantiate DistilBERT model from preset architecture and weights.
+        """Instantiate a DistilBERT model from preset architecture and weights.
 
         Args:
             preset: string. Must be one of {{names}}.
@@ -210,13 +210,13 @@ class DistilBert(keras.Model):
         }
 
         # Load architecture and weights from preset
-        model = keras_nlp.models.DistilBert.from_preset(
+        model = keras_nlp.models.DistilBertBackbone.from_preset(
             "distil_bert_base_en_uncased"
         )
         output = model(input_data)
 
         # Load randomly initalized model from preset architecture
-        model = keras_nlp.models.DistilBert.from_preset(
+        model = keras_nlp.models.DistilBertBackbone.from_preset(
             "distil_bert_base_en_uncased", load_weights=False
         )
         output = model(input_data)
