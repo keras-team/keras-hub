@@ -17,7 +17,7 @@ import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
-from keras_nlp.models.gpt2.gpt2_backbone import GPT2
+from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 
 
@@ -44,7 +44,7 @@ class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "token_ids": tf.constant([[1169, 2068, 7586, 21831, 13]]),
             "padding_mask": tf.constant([[1, 1, 1, 1, 1]]),
         }
-        model = GPT2.from_preset("gpt2_base", load_weights=load_weights)
+        model = GPT2Backbone.from_preset("gpt2_base", load_weights=load_weights)
         outputs = model(input_data)[0, 0, :5]
         if load_weights:
             # The forward pass from a preset should be stable!
@@ -58,7 +58,7 @@ class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     @parameterized.named_parameters(
         ("gpt2_tokenizer", GPT2Tokenizer),
-        ("gpt2", GPT2),
+        ("gpt2", GPT2Backbone),
     )
     def test_preset_docstring(self, cls):
         """Check we did our docstring formatting correctly."""
@@ -67,7 +67,7 @@ class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     @parameterized.named_parameters(
         ("gpt2_tokenizer", GPT2Tokenizer),
-        ("gpt2", GPT2),
+        ("gpt2", GPT2Backbone),
     )
     def test_unknown_preset_error(self, cls):
         # Not a preset name
@@ -89,8 +89,8 @@ class GPT2PresetFullTest(tf.test.TestCase, parameterized.TestCase):
         ("preset_weights", True), ("random_weights", False)
     )
     def test_load_gpt2(self, load_weights):
-        for preset in GPT2.presets:
-            model = GPT2.from_preset(preset, load_weights=load_weights)
+        for preset in GPT2Backbone.presets:
+            model = GPT2Backbone.from_preset(preset, load_weights=load_weights)
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 1024),
