@@ -51,6 +51,7 @@ class BertBackboneTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_valid_call_bert(self):
         self.model(self.input_batch)
+
         # Check default name passed through
         self.assertRegexpMatches(self.model.name, "bert_backbone")
 
