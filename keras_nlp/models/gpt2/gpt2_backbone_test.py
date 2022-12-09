@@ -50,7 +50,7 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
         self.model(self.input_batch)
 
         # Check default name passed through
-        self.assertEqual(self.model.name, "backbone")
+        self.assertRegexpMatches(self.model.name, "gpt2_backbone")
 
     def test_variable_sequence_length_call_gpt2(self):
         for seq_length in (25, 50, 75):

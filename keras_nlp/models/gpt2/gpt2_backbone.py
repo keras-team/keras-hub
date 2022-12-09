@@ -151,10 +151,6 @@ class GPT2Backbone(keras.Model):
             dtype=tf.float32,
         )(x)
 
-        # Set default for `name` if none given
-        if "name" not in kwargs:
-            kwargs["name"] = "backbone"
-
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs={
