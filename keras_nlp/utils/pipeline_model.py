@@ -55,7 +55,22 @@ def _convert_inputs_to_dataset(
         return x
 
     inputs = keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
-    return tf.data.Dataset.from_tensor_slices(inputs).batch(batch_size or 32)
+    try:
+        ds = tf.data.Dataset.from_tensor_slices(inputs)
+    except ValueError as e:
+        # If our inputs are unbatched, re-raise with a more friendly error
+        # message the default from tf.data. We expect this to come up with
+        # some frequency, so it's important to have a good sign post here.
+        if "only supported for rank >= 1" in str(e):
+            raise ValueError(
+                "`x`, `y`, and `sample_weight` must have a batch dimension "
+                "when calling `fit()`, `evaluate()`, and `predict()`. Received "
+                "an input with rank 0. Please add an outer dimension to your "
+                "input, e.g., wrap it in a list."
+            ) from e
+        raise e
+
+    return ds.batch(batch_size or 32)
 
 
 def _train_validation_split(arrays, validation_split):

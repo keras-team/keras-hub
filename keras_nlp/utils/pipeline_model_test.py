@@ -557,3 +557,18 @@ class TestFitArguments(tf.test.TestCase):
             model.fit(ds, y=y)
         with self.assertRaises(ValueError):
             model.fit(ds, sample_weight=sw)
+
+
+class TestInputErrors(tf.test.TestCase):
+    def test_unbatched_input_raises(self):
+        model = FeaturePipeline()
+        with self.assertRaisesRegex(ValueError, "must have a batch dimension"):
+            model.fit(x=tf.constant("test"))
+        with self.assertRaisesRegex(ValueError, "must have a batch dimension"):
+            model.fit(x=tf.constant(["test"]), y=tf.constant(0))
+        with self.assertRaisesRegex(ValueError, "must have a batch dimension"):
+            model.fit(
+                x=tf.constant(["test"]), y=tf.constant([0]), sample_weight=0.0
+            )
+        with self.assertRaisesRegex(ValueError, "must have a batch dimension"):
+            model.fit(x="test")
