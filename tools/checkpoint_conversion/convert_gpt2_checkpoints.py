@@ -22,7 +22,7 @@ from absl import app
 from absl import flags
 
 # Temporarily directly import gpt2 until we expose it.
-from keras_nlp.models.gpt2.gpt2_backbone import GPT2
+from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from tools.checkpoint_conversion.checkpoint_conversion_utils import (
     get_md5_checksum,
@@ -75,7 +75,7 @@ def convert_checkpoints(preset, num_params):
         weights[name] = weight
 
     # Temporary direct import, as we aren't exposing this quite yet.
-    keras_nlp_model = GPT2.from_preset(
+    keras_nlp_model = GPT2Backbone.from_preset(
         preset,
         load_weights=False,
     )
