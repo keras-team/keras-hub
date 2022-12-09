@@ -14,20 +14,26 @@
 """Test for BERT backbone models."""
 
 
+import os
+
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 
 
-class BertBackboneTest(tf.test.TestCase, parameterized.TestCase):
+class BertBackboneTest(tf.test.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        tpu_name = os.getenv("tpu_name")
+        cls.tpu_name = tpu_name
+        resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
+            tpu=tpu_name,
+        )
+        cls.strategy = tf.distribute.TPUStrategy(resolver)
+
     def setUp(self):
         self.batch_size = 8
 
-        resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
-            tpu="local"
-        )
-        self.strategy = tf.distribute.TPUStrategy(resolver)
         with self.strategy.scope():
             self.model = BertBackbone(
                 vocabulary_size=1000,
