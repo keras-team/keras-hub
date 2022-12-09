@@ -52,7 +52,7 @@ class BertBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call_bert(self):
         self.model(self.input_batch)
         # Check default name passed through
-        self.assertEqual(self.model.name, "bert_backbone")
+        self.assertRegexMatch(self.model.name, ["bert_backbone(_[1-9][0-9]*)?"])
 
     def test_variable_sequence_length_call_bert(self):
         for seq_length in (25, 50, 75):
