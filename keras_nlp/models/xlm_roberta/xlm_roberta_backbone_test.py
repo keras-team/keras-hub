@@ -51,7 +51,7 @@ class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
         self.model(self.input_batch)
 
         # Check default name passed through
-        self.assertEqual(self.model.name, "backbone")
+        self.assertRegexpMatches(self.model.name, "xlm_roberta_backbone")
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
