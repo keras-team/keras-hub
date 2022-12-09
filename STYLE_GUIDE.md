@@ -18,6 +18,17 @@ When a specific abbreviation is very common and is pronounceable (acronym),
 consider it as a standalone word, e.g. Bert, Deberta, etc. In this case, "Bert"
 is considered as a common noun and not an abbreviation anymore.
 
+## File names
+
+When possible, keep publicly documented classes in their own files, and make
+the name of the class match the filename. E.g. the `BertClassifer` model should
+be in `bert_classifier.py`, and the `TransformerEncoder` layer
+should be in `transformer_encoder.py`
+
+Small and/or unexported utility classes may live together along with code that
+uses it if convenient, e.g., our `BytePairTokenizerCache` is collocated in the
+same file as our `BytePairTokenizer`.
+
 ## Import keras and keras_nlp as top-level objects
 
 Prefer importing `tf`, `keras` and `keras_nlp` as top-level objects. We want

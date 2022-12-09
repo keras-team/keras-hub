@@ -12,28 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.models.bert.bert_models import Bert
-from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
-from keras_nlp.models.bert.bert_preprocessing import BertTokenizer
-from keras_nlp.models.bert.bert_tasks import BertClassifier
-from keras_nlp.models.distilbert.distilbert_models import DistilBert
-from keras_nlp.models.distilbert.distilbert_preprocessing import (
+from keras_nlp.models.bert.bert_backbone import BertBackbone
+from keras_nlp.models.bert.bert_classifier import BertClassifier
+from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
+from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
+from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
+from keras_nlp.models.distil_bert.distil_bert_classifier import (
+    DistilBertClassifier,
+)
+from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
     DistilBertPreprocessor,
 )
-from keras_nlp.models.distilbert.distilbert_preprocessing import (
+from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
-from keras_nlp.models.distilbert.distilbert_tasks import DistilBertClassifier
-from keras_nlp.models.gpt2.gpt2_models import GPT2
-from keras_nlp.models.gpt2.gpt2_preprocessing import GPT2Tokenizer
-from keras_nlp.models.roberta.roberta_models import Roberta
-from keras_nlp.models.roberta.roberta_preprocessing import RobertaPreprocessor
-from keras_nlp.models.roberta.roberta_preprocessing import RobertaTokenizer
-from keras_nlp.models.roberta.roberta_tasks import RobertaClassifier
-from keras_nlp.models.xlm_roberta.xlm_roberta_models import XLMRoberta
-from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessing import (
+from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
+from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
+from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
+from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
+from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
     XLMRobertaPreprocessor,
 )
-from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessing import (
+from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
 )

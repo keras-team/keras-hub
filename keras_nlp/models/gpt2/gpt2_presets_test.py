@@ -17,8 +17,8 @@ import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
-from keras_nlp.models.gpt2.gpt2_models import GPT2
-from keras_nlp.models.gpt2.gpt2_preprocessing import GPT2Tokenizer
+from keras_nlp.models.gpt2.gpt2_backbone import GPT2
+from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 
 
 @pytest.mark.large

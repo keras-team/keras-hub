@@ -17,10 +17,10 @@ import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
-from keras_nlp.models.bert.bert_models import Bert
-from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
-from keras_nlp.models.bert.bert_preprocessing import BertTokenizer
-from keras_nlp.models.bert.bert_tasks import BertClassifier
+from keras_nlp.models.bert.bert_backbone import BertBackbone
+from keras_nlp.models.bert.bert_classifier import BertClassifier
+from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
+from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 
 
 @pytest.mark.large
@@ -34,7 +34,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_tokenizer_output(self):
         tokenizer = BertTokenizer.from_preset(
-            "bert_tiny_uncased_en",
+            "bert_tiny_en_uncased",
         )
         outputs = tokenizer("The quick brown fox.")
         expected_outputs = [1996, 4248, 2829, 4419, 1012]
@@ -42,7 +42,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_preprocessor_output(self):
         tokenizer = BertPreprocessor.from_preset(
-            "bert_tiny_uncased_en",
+            "bert_tiny_en_uncased",
             sequence_length=4,
         )
         outputs = tokenizer("The quick brown fox.")["token_ids"]
@@ -58,8 +58,8 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "segment_ids": tf.constant([[0, 0, 0, 0]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
-        model = Bert.from_preset(
-            "bert_tiny_uncased_en", load_weights=load_weights
+        model = BertBackbone.from_preset(
+            "bert_tiny_en_uncased", load_weights=load_weights
         )
         outputs = model(input_data)["sequence_output"]
         if load_weights:
@@ -79,7 +79,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_classifier_output(self, load_weights):
         input_data = tf.constant(["The quick brown fox."])
         model = BertClassifier.from_preset(
-            "bert_tiny_uncased_en",
+            "bert_tiny_en_uncased",
             load_weights=load_weights,
         )
         # We don't assert output values, as the head weights are random.
@@ -95,7 +95,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = BertClassifier.from_preset(
-            "bert_tiny_uncased_en",
+            "bert_tiny_en_uncased",
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -105,11 +105,11 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("bert_tokenizer", BertTokenizer),
         ("bert_preprocessor", BertPreprocessor),
-        ("bert", Bert),
+        ("bert", BertBackbone),
         ("bert_classifier", BertClassifier),
     )
     def test_preset_mutability(self, cls):
-        preset = "bert_tiny_uncased_en"
+        preset = "bert_tiny_en_uncased"
         obj = cls.from_preset(preset)
         # Cannot overwrite the presents attribute in an object
         with self.assertRaises(AttributeError):
@@ -120,15 +120,17 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(config["num_layers"], 1)
         self.assertEqual(obj.presets[preset]["config"]["num_layers"], 2)
         # Cannot mutate presets in the class
-        config = Bert.presets[preset]["config"]
+        config = BertBackbone.presets[preset]["config"]
         config["num_layers"] = 1
         self.assertEqual(config["num_layers"], 1)
-        self.assertEqual(Bert.presets[preset]["config"]["num_layers"], 2)
+        self.assertEqual(
+            BertBackbone.presets[preset]["config"]["num_layers"], 2
+        )
 
     @parameterized.named_parameters(
         ("bert_tokenizer", BertTokenizer),
         ("bert_preprocessor", BertPreprocessor),
-        ("bert", Bert),
+        ("bert", BertBackbone),
         ("bert_classifier", BertClassifier),
     )
     def test_preset_docstring(self, cls):
@@ -139,7 +141,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("bert_tokenizer", BertTokenizer),
         ("bert_preprocessor", BertPreprocessor),
-        ("bert", Bert),
+        ("bert", BertBackbone),
         ("bert_classifier", BertClassifier),
     )
     def test_unknown_preset_error(self, cls):
@@ -150,7 +152,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_override_preprocessor_sequence_length(self):
         """Override sequence length longer than model's maximum."""
         preprocessor = BertPreprocessor.from_preset(
-            "bert_base_uncased_en",
+            "bert_base_en_uncased",
             sequence_length=64,
         )
         self.assertEqual(preprocessor.get_config()["sequence_length"], 64)
@@ -160,7 +162,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         """Override sequence length longer than model's maximum."""
         with self.assertRaises(ValueError):
             BertPreprocessor.from_preset(
-                "bert_base_uncased_en",
+                "bert_base_en_uncased",
                 sequence_length=1024,
             )
 
@@ -179,8 +181,8 @@ class BertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         ("load_weights", True), ("no_load_weights", False)
     )
     def test_load_bert(self, load_weights):
-        for preset in Bert.presets:
-            model = Bert.from_preset(preset, load_weights=load_weights)
+        for preset in BertBackbone.presets:
+            model = BertBackbone.from_preset(preset, load_weights=load_weights)
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
