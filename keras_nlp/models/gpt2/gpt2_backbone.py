@@ -32,7 +32,7 @@ def _gpt_2_kernel_initializer(stddev=0.02):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class GPT2(keras.Model):
+class GPT2Backbone(keras.Model):
     """GPT-2 core network with hyperparameters.
 
     This network implements a Transformer-based decoder network,
