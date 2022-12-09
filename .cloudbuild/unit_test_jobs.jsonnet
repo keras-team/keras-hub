@@ -27,7 +27,7 @@ local unittest = base.BaseTest {
     '-c',
     |||
       # Run whatever is in `command` here.
-      cd keras-nlp
+      # cd keras-nlp
       ${@:0}
     |||
   ],

@@ -25,7 +25,7 @@ from keras_nlp.models.bert.bert_backbone import BertBackbone
 class BertBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.batch_size = 8
-    
+
         resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
             tpu="local"
         )
@@ -39,7 +39,7 @@ class BertBackboneTest(tf.test.TestCase, parameterized.TestCase):
                 intermediate_dim=128,
                 max_sequence_length=128,
             )
-        
+
         self.input_batch = {
             "token_ids": tf.ones(
                 (self.batch_size, self.model.max_sequence_length), dtype="int32"
@@ -55,7 +55,6 @@ class BertBackboneTest(tf.test.TestCase, parameterized.TestCase):
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch
         ).batch(2)
-
 
     def test_valid_call_bert(self):
         with self.strategy.scope():
