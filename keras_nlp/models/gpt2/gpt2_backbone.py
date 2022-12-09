@@ -74,7 +74,7 @@ class GPT2Backbone(keras.Model):
     }
 
     # Randomly initialized GPT-2 decoder
-    model = keras_nlp.models.GPT2(
+    model = keras_nlp.models.GPT2Backbone(
         vocabulary_size=50257,
         num_layers=12,
         num_heads=12,
@@ -219,11 +219,11 @@ class GPT2Backbone(keras.Model):
         }
 
         # Load architecture and weights from preset
-        model = GPT2.from_preset("gpt2_base")
+        model = GPT2Backbone.from_preset("gpt2_base")
         output = model(input_data)
 
         # Load randomly initalized model from preset architecture
-        model = GPT2.from_preset("gpt2_base", load_weights=False)
+        model = GPT2Backbone.from_preset("gpt2_base", load_weights=False)
         output = model(input_data)
         ```
         """
