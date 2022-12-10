@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Text Generation Utils."""
+"""Tests for GreedySampler."""
 
 import tensorflow as tf
 from absl.testing import parameterized
@@ -112,3 +112,17 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
         expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
         expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
         self.assertAllEqual(outputs, expected_outputs)
+
+    def test_compare_xla_noxla_results(self):
+        inputs = [[1], [1]]
+        xla_sampler = GreedySampler(jit_compile=True)
+        outputs_xla = xla_sampler(
+            self.token_probability_fn, inputs, max_length=5
+        )
+
+        xla_sampler = GreedySampler(jit_compile=False)
+        outputs_no_xla = xla_sampler(
+            self.token_probability_fn, inputs, max_length=5
+        )
+
+        self.assertAllEqual(outputs_xla, outputs_no_xla)

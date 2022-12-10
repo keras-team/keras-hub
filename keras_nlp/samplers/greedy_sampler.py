@@ -32,6 +32,38 @@ class GreedySampler(Sampler):
 
     Call Args:
         {{call_keyword_args}}
+
+    Examples:
+    ```python
+    BATCH_SIZE = 8
+    VOCAB_SIZE = 10
+    FEATURE_SIZE = 16
+    START_ID = 1
+    END_ID = 2
+
+    # Create a dummy model to predict the next token.
+    model = keras.Sequential(
+        [
+            keras.Input(shape=[None]),
+            keras.layers.Embedding(
+                input_dim=VOCAB_SIZE,
+                output_dim=FEATURE_SIZE,
+            ),
+            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
+        ]
+    )
+
+    # Define a function that outputs the next token's probability for each token
+    # in the input sequence.
+    def token_probability_fn(inputs):
+        return model(inputs)
+
+    prompt = tf.fill((BATCH_SIZE, 1), START_ID)
+
+    sampler = keras_nlp.samplers.GreedySearch(end_token_id=END_ID)
+    # Print the generated sequence (token ids).
+    print(sampler(token_probability_fn, prompt, max_length=10))
+    ```
     """
 
     def __init__(
@@ -43,33 +75,40 @@ class GreedySampler(Sampler):
         super().__init__(end_token_id, pad_token_id, jit_compile)
 
     def sample(self, token_probability_fn, prompt, mask, num_steps):
-        """Sampler's logic implementation.
+        """Sampling logic implementation.
 
         Args:
-            {{call_keyword_docstring}}
+            {{sample_keyword_docstring}}
         """
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         max_length = tf.cast(max_length, num_steps.dtype)
-        length = max_length - num_steps
+        # The index of the last non-padding token in prompt. Since all sequences
+        # are aligned to the right side, the index is the same for all.
+        current_index = max_length - num_steps
 
-        def one_step(length, prompt, mask):
+        def one_step(current_index, prompt, mask):
 
             probs = token_probability_fn(prompt, mask)
             next_token_prob = tf.gather(
-                probs, tf.repeat(length - 1, batch_size), axis=1, batch_dims=1
+                probs,
+                tf.repeat(current_index - 1, batch_size),
+                axis=1,
+                batch_dims=1,
             )
             next_token = tf.cast(
                 tf.argmax(next_token_prob, axis=-1), dtype=prompt.dtype
             )
             next_token = tf.where(
-                mask[:, length], prompt[:, length], next_token
+                mask[:, current_index], prompt[:, current_index], next_token
             )
             mask = tf.tensor_scatter_nd_update(
                 tensor=mask,
                 indices=tf.stack(
                     (
-                        tf.cast(tf.range(batch_size), dtype=length.dtype),
-                        tf.repeat(length, batch_size),
+                        tf.cast(
+                            tf.range(batch_size), dtype=current_index.dtype
+                        ),
+                        tf.repeat(current_index, batch_size),
                     ),
                     axis=1,
                 ),
@@ -81,22 +120,26 @@ class GreedySampler(Sampler):
                 tensor=prompt,
                 indices=tf.stack(
                     (
-                        tf.cast(tf.range(batch_size), dtype=length.dtype),
-                        tf.repeat(length, batch_size),
+                        tf.cast(
+                            tf.range(batch_size), dtype=current_index.dtype
+                        ),
+                        tf.repeat(current_index, batch_size),
                     ),
                     axis=1,
                 ),
                 updates=next_token,
             )
 
-            length = tf.add(length, 1)
-            return (length, prompt, mask)
+            current_index = tf.add(current_index, 1)
+            return (current_index, prompt, mask)
 
-        # Run a while loop till text of length `max_length` has been generated.
-        length, prompt, mask = tf.while_loop(
-            cond=lambda length, prompt, mask: tf.less(length, max_length),
+        # Run a while loop till `max_length` of tokens has been generated.
+        current_index, prompt, mask = tf.while_loop(
+            cond=lambda current_index, prompt, mask: tf.less(
+                current_index, max_length
+            ),
             body=one_step,
-            loop_vars=(length, prompt, mask),
+            loop_vars=(current_index, prompt, mask),
         )
         return prompt
 
