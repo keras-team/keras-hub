@@ -14,18 +14,49 @@
 """Base sampler class."""
 
 import tensorflow as tf
+from tensorflow import keras
 
 
 class Sampler:
     """Base sampler class.
 
-    This class must be implemented by child class for instantiation.
-
     Args:
         {{base_optimizer_keyword_args}}
 
     Call Args:
+        {{call_keyword_docstring}}
 
+    Examples:
+    ```python
+    BATCH_SIZE = 8
+    VOCAB_SIZE = 10
+    FEATURE_SIZE = 16
+    START_ID = 1
+    END_ID = 2
+
+    # Create a dummy model to predict the next token.
+    model = keras.Sequential(
+        [
+            keras.Input(shape=[None]),
+            keras.layers.Embedding(
+                input_dim=VOCAB_SIZE,
+                output_dim=FEATURE_SIZE,
+            ),
+            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
+        ]
+    )
+
+    # Define a function that outputs the next token's probability for each token
+    # in the input sequence.
+    def token_probability_fn(inputs):
+        return model(inputs)
+
+    prompt = tf.fill((BATCH_SIZE, 1), START_ID)
+
+    sampler = keras_nlp.samplers.GreedySearch(end_token_id=END_ID)
+    # Print the generated sequence (token ids).
+    print(sampler(token_probability_fn, prompt, max_length=10))
+    ```
     """
 
     def __init__(
@@ -39,7 +70,7 @@ class Sampler:
         self.jit_compile = jit_compile
 
     def _validate_prompt(self, prompt):
-        """Helper function to validate input to text_generation utils."""
+        """Helper method to validate input prompt."""
         if not isinstance(prompt, (tf.Tensor, tf.RaggedTensor)):
             prompt = tf.convert_to_tensor(prompt)
         return prompt
@@ -47,7 +78,7 @@ class Sampler:
     def _validate_token_probability_fn(
         self, token_probability_fn, prompt, mask
     ):
-        """Helper function to validate `token_probability_fn` output."""
+        """Helper method to validate `token_probability_fn` output."""
         test_pred = token_probability_fn(prompt, mask=mask)
         if len(test_pred.shape) != 3:
             raise ValueError(
@@ -61,7 +92,7 @@ class Sampler:
         longest_prompt_len = tf.reduce_max(prompt.row_lengths())
         pad_length = longest_prompt_len - prompt.row_lengths()
 
-        prompt = tf.keras.utils.pad_sequences(
+        prompt = keras.utils.pad_sequences(
             prompt.to_list(), maxlen=longest_prompt_len, value=pad_token_id
         )
 
@@ -97,12 +128,10 @@ class Sampler:
         )
         # Build a mask including end_token and replace tokens after end_token
         # with `pad_token_id`.
-        valid_indices = tf.sequence_mask(end_indices + 1, maxlen=max_length)
-        return tf.where(valid_indices, prompt, pad_token_id)
+        mask_indices = tf.sequence_mask(end_indices + 1, maxlen=max_length)
+        return tf.where(mask_indices, prompt, pad_token_id)
 
     def __call__(self, token_probability_fn, prompt, max_length):
-        """Sampling method to be called by users."""
-
         prompt = self._validate_prompt(prompt)
 
         input_is_1d = prompt.shape.rank == 1
@@ -113,16 +142,23 @@ class Sampler:
                 prompt, padding=self.pad_token_id
             )
         longest_prompt_len = tf.reduce_max(prompt.row_lengths())
+        # Pad prompt to be a dense Tensor of shape [batch_size, max_length].
+        # This step is required for XLA compatibility because XLA requires a
+        # static shape, which means we cannot concatenate generated token to
+        # current prompt.
         prompt, mask = self._align_and_pad_prompt(
             prompt, max_length, self.pad_token_id
         )
         self._validate_token_probability_fn(token_probability_fn, prompt, mask)
 
+        # Convert `sample` method to a `tf.function`, and turn on
+        # `jit_compile` accordingly.
         sample = tf.function(self.sample, jit_compile=self.jit_compile)
         prompt = sample(
             token_probability_fn, prompt, mask, max_length - longest_prompt_len
         )
 
+        # Mask out tokens after `end_token_id`.
         if self.end_token_id is not None:
             prompt = self._mask_tokens_after_end_token(
                 prompt, max_length, self.end_token_id, self.pad_token_id
@@ -131,7 +167,7 @@ class Sampler:
         return tf.squeeze(prompt) if input_is_1d else prompt
 
     def sample(self, token_probability_fn, prompt, mask, num_steps):
-        """Sampler's logic implementation.
+        """Sampling logic implementation.
 
         Args:
             {{sample_keyword_docstring}}
@@ -149,9 +185,9 @@ base_sampler_keyword_args = """
         sequence. If None, every sequence is generated up to `max_length`.
         If set, all tokens after encountering `end_token_id` will be
         replaced with `pad_token_id`.
-    pad_token_id: int, defaults to 0. The pad token after `end_token_id`
-        is received.
-    jit_compile: bool, defaults to True. If using XLA compilation."""
+    pad_token_id: int, defaults to 0. The padding token.
+    jit_compile: bool, defaults to True. If True, XLA compilation will be used.
+    """
 
 call_keyword_docstring = """
     token_probability_fn: a function that generates the probability of
@@ -163,9 +199,9 @@ call_keyword_docstring = """
 sample_keyword_docstring = """
     token_probability_fn: a function that generates the probability of
         the next token over the whole vocabulary for each input token.
-    prompt: a list of integers or an integer Tensor, can be 1D or 2D. The
-        initial tokens to append generated tokens.
-    num_steps: int. The number of tokens to generate."""
+    prompt: a dense int Tensor of shape [batch_size, max_length]. The
+        placeholder for generated sequence.
+    num_steps: int. The remaining number of tokens to generate."""
 
 Sampler.__doc__ = Sampler.__doc__.replace(
     "{{base_sampler_keyword_args}}", base_sampler_keyword_args
