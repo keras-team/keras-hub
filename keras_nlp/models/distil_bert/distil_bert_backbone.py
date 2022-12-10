@@ -43,7 +43,7 @@ class DistilBertBackbone(keras.Model):
     embedding lookups and transformer layers, but not the masked language model
     or classification task networks.
 
-    The default constructor gives a fully customizable, randomly initalized
+    The default constructor gives a fully customizable, randomly initialized
     DistilBERT encoder with any number of layers, heads, and embedding
     dimensions. To load preset architectures and weights, use the `from_presets`
     constructor.
@@ -211,7 +211,7 @@ class DistilBertBackbone(keras.Model):
         )
         output = model(input_data)
 
-        # Load randomly initalized model from preset architecture
+        # Load randomly initialized model from preset architecture
         model = keras_nlp.models.DistilBertBackbone.from_preset(
             "distil_bert_base_en_uncased", load_weights=False
         )

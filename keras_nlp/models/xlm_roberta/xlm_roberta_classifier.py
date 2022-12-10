@@ -161,7 +161,7 @@ class XLMRobertaClassifier(keras.Model):
         )
         output = classifier(input_data)
 
-        # Load randomly initalized model from preset architecture
+        # Load randomly initialized model from preset architecture
         classifier = keras_nlp.models.XLMRobertaClassifier.from_preset(
             "xlm_roberta_base",
             load_weights=False,
