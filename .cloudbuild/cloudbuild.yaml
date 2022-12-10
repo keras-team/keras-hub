@@ -8,19 +8,19 @@ substitutions:
   # Image name.
   _IMAGE_NAME: 'us-west1-docker.pkg.dev/keras-team-test/keras-nlp-test/keras-nlp-image'
 steps:
-# - name: 'docker'
-#   id: build-image
-#   args: [
-#     'build',
-#     '.',
-#     '-f', '.cloudbuild/Dockerfile',
-#     '-t', '$_IMAGE_NAME:$BUILD_ID',
-#   ]
-# - name: 'docker'
-#   id: push-image
-#   waitFor:
-#   - build-image
-#   args: ['push', '$_IMAGE_NAME:$BUILD_ID']
+- name: 'docker'
+  id: build-image
+  args: [
+    'build',
+    '.',
+    '-f', '.cloudbuild/Dockerfile',
+    '-t', '$_IMAGE_NAME:$BUILD_ID',
+  ]
+- name: 'docker'
+  id: push-image
+  waitFor:
+  - build-image
+  args: ['push', '$_IMAGE_NAME:$BUILD_ID']
 - name: 'golang'
   id: download-jsonnet
   waitFor: ['-']
@@ -55,7 +55,7 @@ steps:
 - name: 'gcr.io/cloud-builders/gcloud'
   id: create-job
   waitFor:
-  # - push-image
+  - push-image
   - build-templates
   entrypoint: bash
   args:
@@ -70,7 +70,7 @@ steps:
     pod_name=$(kubectl wait --for condition=ready --timeout=30m pod -l job-name=${job_name#job.batch/} -o name)
     kubectl logs -f $pod_name --container=train
     sleep 5
-    gcloud artifacts docker images delete $_IMAGE_NAME:$BUILD_ID
+    # gcloud artifacts docker images delete $_IMAGE_NAME:$BUILD_ID
     exit $(kubectl get $pod_name -o jsonpath={.status.containerStatuses[0].state.terminated.exitCode})
 timeout: 3000s  # 50 minutes
 options:

@@ -24,7 +24,8 @@ from keras_nlp.models.bert.bert_backbone import BertBackbone
 class BertBackboneTest(tf.test.TestCase):
     @classmethod
     def setUpClass(cls):
-        tpu_name = os.getenv("tpu_name")
+        tpu_name = os.getenv("KUBE_GOOGLE_CLOUD_TPU_ENDPOINTS")
+
         cls.tpu_name = tpu_name
         resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
             tpu=tpu_name,

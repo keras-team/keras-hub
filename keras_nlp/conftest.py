@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
 import sys
 
 import pytest
@@ -49,7 +48,7 @@ def pytest_configure(config):
         "extra_large: mark test as being too large to run continuously",
     )
 
-    os.environ["tpu_name"] = config.getoption("tpu_name")
+    # os.environ["tpu_name"] = config.getoption("tpu_name")
 
 
 def pytest_collection_modifyitems(config, items):
