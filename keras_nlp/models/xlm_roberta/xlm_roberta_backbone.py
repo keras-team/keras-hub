@@ -35,7 +35,7 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
     It includes the embedding lookups and transformer layers, but does not
     include the masked language modeling head used during pretraining.
 
-    The default constructor gives a fully customizable, randomly initalized
+    The default constructor gives a fully customizable, randomly initialized
     RoBERTa encoder with any number of layers, heads, and embedding
     dimensions. To load preset architectures and weights, use the `from_presets`
     constructor.
@@ -113,7 +113,7 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
         model = keras_nlp.models.XLMRobertaBackbone.from_preset("xlm_roberta_base")
         output = model(input_data)
 
-        # Load randomly initalized model from preset architecture
+        # Load randomly initialized model from preset architecture
         model = keras_nlp.models.XLMRobertaBackbone.from_preset(
             "xlm_roberta_base", load_weights=False
         )

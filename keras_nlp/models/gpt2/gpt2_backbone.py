@@ -40,7 +40,7 @@ class GPT2Backbone(keras.Model):
     ["Language Models are Unsupervised Multitask Learners"](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf).
     It includes the embedding lookups and transformer layers.
 
-    The default constructor gives a fully customizable, randomly initalized
+    The default constructor gives a fully customizable, randomly initialized
     GPT-2 model with any number of layers, heads, and embedding
     dimensions. To load preset architectures and weights, use the `from_presets`
     constructor.
@@ -218,7 +218,7 @@ class GPT2Backbone(keras.Model):
         model = GPT2Backbone.from_preset("gpt2_base")
         output = model(input_data)
 
-        # Load randomly initalized model from preset architecture
+        # Load randomly initialized model from preset architecture
         model = GPT2Backbone.from_preset("gpt2_base", load_weights=False)
         output = model(input_data)
         ```
