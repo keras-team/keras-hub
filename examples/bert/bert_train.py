@@ -253,6 +253,7 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
         peak_lr = tf.cast(self.learning_rate, dtype=tf.float32)
         warmup = tf.cast(self.warmup_steps, dtype=tf.float32)
         training = tf.cast(self.train_steps, dtype=tf.float32)
+        step = tf.cast(step, dtype=tf.float32)
 
         is_warmup = step < warmup
 
