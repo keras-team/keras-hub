@@ -41,7 +41,7 @@ class BertBackbone(keras.Model):
     embedding lookups and transformer layers, but not the masked language model
     or next sentence prediction heads.
 
-    The default constructor gives a fully customizable, randomly initalized BERT
+    The default constructor gives a fully customizable, randomly initialized BERT
     encoder with any number of layers, heads, and embedding dimensions. To load
     preset architectures and weights, use the `from_preset` constructor.
 
@@ -251,7 +251,7 @@ class BertBackbone(keras.Model):
         model = BertBackbone.from_preset("bert_base_en_uncased")
         output = model(input_data)
 
-        # Load randomly initalized model from preset architecture
+        # Load randomly initialized model from preset architecture
         model = BertBackbone.from_preset(
             "bert_base_en_uncased",
             load_weights=False

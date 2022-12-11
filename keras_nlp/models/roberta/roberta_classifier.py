@@ -155,7 +155,7 @@ class RobertaClassifier(keras.Model):
         )
         output = classifier(input_data)
 
-        # Load randomly initalized model from preset architecture
+        # Load randomly initialized model from preset architecture
         classifier = keras_nlp.models.RobertaClassifier.from_preset(
             "roberta_base",
             load_weights=False,
