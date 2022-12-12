@@ -40,7 +40,7 @@ class BertPreprocessor(keras.layers.Layer):
      - Tokenize any number of input segments using the `tokenizer`.
      - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
        with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
-     - Construct a dictionary of with keys `"token_ids"`, `"segment_ids"`,
+     - Construct a dictionary with keys `"token_ids"`, `"segment_ids"`,
        `"padding_mask"`, that can be passed directly to a BERT model.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
