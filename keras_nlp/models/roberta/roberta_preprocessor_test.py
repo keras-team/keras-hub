@@ -54,8 +54,8 @@ class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             sequence_length=12,
         )
 
-    def test_tokenize(self):
-        input_data = [" airplane at airport"]
+    def test_tokenize_strings(self):
+        input_data = " airplane at airport"
 
         output = self.preprocessor(input_data)
         self.assertAllEqual(
@@ -65,15 +65,8 @@ class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
         )
 
-    def test_tokenize_batch(self):
-        input_data = tf.constant(
-            [
-                " airplane at airport",
-                " airplane at airport",
-                " airplane at airport",
-                " airplane at airport",
-            ]
-        )
+    def test_tokenize_list_of_strings(self):
+        input_data = [" airplane at airport"] * 4
 
         output = self.preprocessor(input_data)
         self.assertAllEqual(
@@ -85,9 +78,39 @@ class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
         )
 
+    def test_tokenize_labeled_batch(self):
+        x = tf.constant([" airplane at airport"] * 4)
+        y = tf.constant([1] * 4)
+        sw = tf.constant([1.0] * 4)
+        x_out, y_out, sw_out = self.preprocessor(x, y, sw)
+        self.assertAllEqual(
+            x_out["token_ids"], [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]] * 4
+        )
+        self.assertAllEqual(
+            x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
+        )
+        self.assertAllEqual(y_out, y)
+        self.assertAllEqual(sw_out, sw)
+
+    def test_tokenize_labeled_dataset(self):
+        x = tf.constant([" airplane at airport"] * 4)
+        y = tf.constant([1] * 4)
+        sw = tf.constant([1.0] * 4)
+        ds = tf.data.Dataset.from_tensor_slices((x, y, sw))
+        ds = ds.map(self.preprocessor)
+        x_out, y_out, sw_out = ds.batch(4).take(1).get_single_element()
+        self.assertAllEqual(
+            x_out["token_ids"], [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]] * 4
+        )
+        self.assertAllEqual(
+            x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
+        )
+        self.assertAllEqual(y_out, y)
+        self.assertAllEqual(sw_out, sw)
+
     def test_tokenize_multiple_sentences(self):
-        sentence_one = " airplane at airport"
-        sentence_two = " kohli is the best"
+        sentence_one = tf.constant(" airplane at airport")
+        sentence_two = tf.constant(" kohli is the best")
 
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
@@ -98,22 +121,8 @@ class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         )
 
     def test_tokenize_multiple_batched_sentences(self):
-        sentence_one = tf.constant(
-            [
-                " airplane at airport",
-                " airplane at airport",
-                " airplane at airport",
-                " airplane at airport",
-            ]
-        )
-        sentence_two = tf.constant(
-            [
-                " kohli is the best",
-                " kohli is the best",
-                " kohli is the best",
-                " kohli is the best",
-            ]
-        )
+        sentence_one = tf.constant([" airplane at airport"] * 4)
+        sentence_two = tf.constant([" kohli is the best"] * 4)
 
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
@@ -124,12 +133,10 @@ class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]] * 4
         )
 
-    def test_detokenize(self):
-        input_tokens = [0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]
-        output = self.preprocessor.tokenizer.detokenize(input_tokens)
-        self.assertEqual(
-            output, "<s> airplane at airport</s><pad><pad><pad><pad><pad>"
-        )
+    def test_errors_for_2d_list_input(self):
+        ambiguous_input = [["one", "two"], ["three", "four"]]
+        with self.assertRaises(ValueError):
+            self.preprocessor(ambiguous_input)
 
     @parameterized.named_parameters(
         ("save_format_tf", "tf"), ("save_format_h5", "h5")
