@@ -14,7 +14,6 @@
 """Base sampler class."""
 
 import tensorflow as tf
-from tensorflow import keras
 
 
 class Sampler:
@@ -87,30 +86,13 @@ class Sampler:
                 "[batch_size, sequence_length, vocab_size]."
             )
 
-    def _align_and_pad_prompt(self, prompt, max_length, pad_token_id):
-        """Align prompt to the right side, and pad to `max_length`."""
-        longest_prompt_len = tf.reduce_max(prompt.row_lengths())
-        pad_length = longest_prompt_len - prompt.row_lengths()
-
-        prompt = keras.utils.pad_sequences(
-            prompt.to_list(), maxlen=longest_prompt_len, value=pad_token_id
+    def _pad_prompt(self, prompt, max_length, pad_token_id):
+        """Pad prompt to `max_length`."""
+        mask = tf.ones_like(prompt, dtype=tf.bool)
+        mask = mask.to_tensor(shape=(None, max_length))
+        prompt = prompt.to_tensor(
+            shape=(None, max_length), default_value=pad_token_id
         )
-
-        mask = tf.RaggedTensor.from_row_lengths(
-            tf.zeros(shape=[tf.reduce_sum(pad_length)], dtype=tf.int32),
-            pad_length,
-        )
-        mask = mask.to_tensor(shape=(None, longest_prompt_len), default_value=1)
-
-        shape = prompt.shape
-        extra_space = tf.math.maximum(0, max_length - shape[1])
-        pad_shape = [shape[0], extra_space]
-
-        mask = tf.concat((mask, tf.zeros(pad_shape, tf.int32)), axis=1)
-        prompt = tf.concat(
-            (prompt, tf.zeros(pad_shape, prompt.dtype) + pad_token_id), axis=1
-        )
-        mask = tf.cast(mask, dtype=tf.bool)
         return prompt, mask
 
     def _mask_tokens_after_end_token(
@@ -141,21 +123,19 @@ class Sampler:
             prompt = tf.RaggedTensor.from_tensor(
                 prompt, padding=self.pad_token_id
             )
-        longest_prompt_len = tf.reduce_max(prompt.row_lengths())
+        shortest_prompt_len = tf.reduce_min(prompt.row_lengths())
         # Pad prompt to be a dense Tensor of shape [batch_size, max_length].
         # This step is required for XLA compatibility because XLA requires a
         # static shape, which means we cannot concatenate generated token to
         # current prompt.
-        prompt, mask = self._align_and_pad_prompt(
-            prompt, max_length, self.pad_token_id
-        )
+        prompt, mask = self._pad_prompt(prompt, max_length, self.pad_token_id)
         self._validate_token_probability_fn(token_probability_fn, prompt, mask)
 
         # Convert `sample` method to a `tf.function`, and turn on
         # `jit_compile` accordingly.
         sample = tf.function(self.sample, jit_compile=self.jit_compile)
         prompt = sample(
-            token_probability_fn, prompt, mask, max_length - longest_prompt_len
+            token_probability_fn, prompt, mask, max_length - shortest_prompt_len
         )
 
         # Mask out tokens after `end_token_id`.
@@ -206,7 +186,7 @@ sample_keyword_docstring = """
 Sampler.__doc__ = Sampler.__doc__.replace(
     "{{base_sampler_keyword_args}}", base_sampler_keyword_args
 )
-Sampler.__doc__ = Sampler.__call__.__doc__.replace(
+Sampler.__doc__ = Sampler.__doc__.replace(
     "{{call_keyword_docstring}}", call_keyword_docstring
 )
 Sampler.sample.__doc__ = Sampler.sample.__doc__.replace(
