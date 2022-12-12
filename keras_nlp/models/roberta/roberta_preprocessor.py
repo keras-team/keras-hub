@@ -22,6 +22,10 @@ from tensorflow import keras
 
 from keras_nlp.models.roberta.roberta_presets import backbone_presets
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.utils.keras_utils import (
+    convert_inputs_to_list_of_tensor_segments,
+)
+from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -32,17 +36,30 @@ class RobertaPreprocessor(keras.layers.Layer):
 
     This preprocessing layer will do three things:
 
-    - Tokenize any number of inputs using `tokenizer`.
+    - Tokenize any number of input segments using the `tokenizer`.
     - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
       `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
       entire sequence, `"</s></s>"` at the end of each segment, save the last
       and a `"</s>"` at the end of the entire sequence.
-    - Construct a dictionary with keys `"token_ids"` and `"padding_mask"` that
-      can be passed directly to a RoBERTa model.
+    - Construct a dictionary with keys `"token_ids"`, `"segment_ids"`,
+       `"padding_mask"`, that can be passed directly to a RoBERTa model.
 
-    This layer will accept either a tuple of (possibly batched) inputs, or a
-    single input tensor. If a single tensor is passed, it will be packed
-    equivalently to a tuple with a single element.
+    This layer can be used directly with `tf.data.Dataset.map` to preprocess
+    string data in the `(x, y, sample_weight)` format used by
+    `keras.Model.fit`.
+
+    The call method of this layer accepts three arguments, `x`, `y`, and
+    `sample_weight`. `x` can be a python string or tensor representing a single
+    segment, a list of python strings representing a batch of single segments,
+    or a list of tensors representing multiple segments to be packed together.
+    `y` and `sample_weight` are both optional, can have any format, and will be
+    passed through unaltered.
+
+    Special care should be taken when using `tf.data` to map over an unlabeled
+    tuple of string segments. `tf.data.Dataset.map` will unpack this tuple
+    directly into the call arguments of this layer, rather than forward all
+    argument to `x`. To handle this case, it is recommended to  explicitly call
+    the layer, e.g. `ds.map(lambda seg1, seg2: preprocessor(x=(seg1, seg2)))`.
 
     Args:
         tokenizer: A `keras_nlp.models.RobertaTokenizer` instance.
@@ -87,32 +104,52 @@ class RobertaPreprocessor(keras.layers.Layer):
         sequence_length=20,
     )
 
-    # Tokenize and pack a single sentence directly.
+    # Tokenize and pack a single sentence.
+    sentence = tf.constant(" afternoon sun")
+    preprocessor(sentence)
+    # Same output.
     preprocessor(" afternoon sun")
 
-    # Tokenize and pack multiples sentences directly.
-    preprocessor((" afternoon sun", "refulgent sun"))
-
-    # Map a dataset to preprocess a single sentence at a time.
-    features = [" afternoon sun", "refulgent sun"]
-    labels = [0, 1]
-    ds = tf.data.Dataset.from_tensor_slices((features, labels))
-    ds = ds.map(
-        lambda x, y: (preprocessor(x), y),
-        num_parallel_calls=tf.data.AUTOTUNE,
+    # Tokenize and a batch of single sentences.
+    sentences = tf.constant(
+        [" afternoon sun", " night moon"]
+    )
+    preprocessor(sentences)
+    # Same output.
+    preprocessor(
+        [" afternoon sun", " night moon"]
     )
 
-    # Map a dataset to preprocess multiple sentences.
-    first_sentences = [" afternoon sun", "refulgent sun"]
-    second_sentences = [" night moon", " bright moon"]
-    labels = [1, 1]
+    # Tokenize and pack a sentence pair.
+    first_sentence = tf.constant(" afternoon sun")
+    second_sentence = tf.constant("refulgent sun")
+    preprocessor((first_sentence, second_sentence))
+
+    # Map a dataset to preprocess a single sentence.
+    features = tf.constant(
+        [" afternoon sun", " night moon"]
+    )
+    labels = tf.constant([0, 1])
+    ds = tf.data.Dataset.from_tensor_slices((features, labels))
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map a dataset to preprocess sentence pairs.
+    first_sentences = tf.constant([" afternoon sun", " night moon"])
+    second_sentences = tf.constant(["refulgent sun", " bright moon"])
+    labels = tf.constant([1, 1])
     ds = tf.data.Dataset.from_tensor_slices(
         (
             (first_sentences, second_sentences), labels
         )
     )
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map a dataset to preprocess unlabeled sentence pairs.
+    ds = tf.data.Dataset.from_tensor_slices((first_sentences, second_sentences))
+    # Watch out for tf.data's default unpacking of tuples here!
+    # Best to invoke the `preprocessor` directly in this case.
     ds = ds.map(
-        lambda x, y: (preprocessor(x), y),
+        lambda s1, s2: preprocessor(x=(s1, s2)),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
     ```
@@ -159,16 +196,15 @@ class RobertaPreprocessor(keras.layers.Layer):
             config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
         return cls(**config)
 
-    def call(self, inputs):
-        if not isinstance(inputs, (list, tuple)):
-            inputs = [inputs]
-
-        inputs = [self.tokenizer(x) for x in inputs]
-        token_ids = self.packer(inputs)
-        return {
+    def call(self, x, y=None, sample_weight=None):
+        x = convert_inputs_to_list_of_tensor_segments(x)
+        x = [self.tokenizer(segment) for segment in x]
+        token_ids = self.packer(x)
+        x = {
             "token_ids": token_ids,
             "padding_mask": token_ids != self.tokenizer.pad_token_id,
         }
+        return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty
     def presets(cls):
