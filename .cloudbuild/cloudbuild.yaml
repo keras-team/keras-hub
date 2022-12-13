@@ -67,12 +67,12 @@ steps:
     gcloud container clusters get-credentials $_CLUSTER_NAME --zone $_CLUSTER_ZONE --project keras-team-test
     job_name=$(kubectl create -f output.yaml -o name)
     sleep 5
-    pod_name=$(kubectl wait --for condition=ready --timeout=10m pod -l job-name=${job_name#job.batch/} -o name)
+    pod_name=$(kubectl wait --for condition=ready --timeout=30m pod -l job-name=${job_name#job.batch/} -o name)
     kubectl logs -f $pod_name --container=train
     sleep 5
     gcloud artifacts docker images delete $_IMAGE_NAME:$BUILD_ID
     exit $(kubectl get $pod_name -o jsonpath={.status.containerStatuses[0].state.terminated.exitCode})
-timeout: 1800s  # 30 minutes
+timeout: 3000s  # 50 minutes
 options:
   volumes:
   - name: go-modules
