@@ -199,8 +199,11 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             cloned_tokenizer(input_data),
         )
 
-    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
-    def test_saving(self, format):
+    @parameterized.named_parameters(
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
+    )
+    def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["quick brOWN whale"])
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]
         tokenizer = WordPieceTokenizer(
@@ -213,8 +216,8 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), "model")
-        model.save(path, save_format=format)
+        path = os.path.join(self.get_temp_dir(), filename)
+        model.save(path, save_format=save_format)
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),

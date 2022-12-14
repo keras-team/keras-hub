@@ -59,15 +59,16 @@ class DistilBertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(tokenizer.vocabulary_size(), 13)
 
     @parameterized.named_parameters(
-        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
     )
-    def test_saving_model(self, save_format):
+    def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["THE QUICK BROWN FOX."])
         tokenizer = DistilBertTokenizer(vocabulary=self.vocab)
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), "model")
+        path = os.path.join(self.get_temp_dir(), filename)
         model.save(path, save_format=save_format)
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(

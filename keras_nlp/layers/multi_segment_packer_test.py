@@ -161,8 +161,11 @@ class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
             cloned_packer([seq1, seq2]),
         )
 
-    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
-    def test_saving(self, format):
+    @parameterized.named_parameters(
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
+    )
+    def test_saved_model(self, save_format, filename):
         seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b"]])
         seq2 = tf.ragged.constant([["x", "y", "z"], ["x", "y", "z"]])
         packer = MultiSegmentPacker(
@@ -174,8 +177,8 @@ class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
         )
         outputs = packer(inputs)
         model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), "model")
-        model.save(path, save_format=format)
+        path = os.path.join(self.get_temp_dir(), filename)
+        model.save(path, save_format=save_format)
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model((seq1, seq2)),

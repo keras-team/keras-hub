@@ -185,8 +185,11 @@ class SentencePieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             cloned_tokenizer(input_data),
         )
 
-    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
-    def test_saving(self, format):
+    @parameterized.named_parameters(
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
+    )
+    def test_saved_model(self, save_format, filename):
         filepath = os.path.join(self.get_temp_dir(), "model.txt")
         input_data = tf.constant(["the quick brown whale."])
         with tf.io.gfile.GFile(filepath, "wb") as file:
@@ -197,8 +200,8 @@ class SentencePieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), "model")
-        model.save(path, save_format=format)
+        path = os.path.join(self.get_temp_dir(), filename)
+        model.save(path, save_format=save_format)
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),

@@ -14,6 +14,8 @@
 import sys
 
 import pytest
+import tensorflow as tf
+from packaging import version
 
 
 def pytest_addoption(parser):
@@ -50,6 +52,10 @@ def pytest_collection_modifyitems(config, items):
     skip_xla = pytest.mark.skipif(
         sys.platform == "darwin", reason="XLA unsupported on MacOS."
     )
+    skip_keras_saving_test = pytest.mark.skipif(
+        version.parse(tf.__version__) < version.parse("2.12"),
+        reason="keras_v3 format requires tf > 2.12.",
+    )
     skip_large = pytest.mark.skipif(
         not run_large_tests, reason="need --run_large option to run"
     )
@@ -59,6 +65,8 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "jit_compile_true" in item.name:
             item.add_marker(skip_xla)
+        if "keras_format" in item.name:
+            item.add_marker(skip_keras_saving_test)
         if "large" in item.keywords:
             item.add_marker(skip_large)
         if "extra_large" in item.keywords:
