@@ -55,11 +55,6 @@ class RobertaClassifier(PipelineModel):
 
     Example usage:
     ```python
-    input_data = {
-        "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
-        "padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
-    }
     preprocessed_features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
         "padding_mask": tf.constant(
@@ -258,12 +253,6 @@ class RobertaClassifier(PipelineModel):
         classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
         ```
         """
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-
         if "preprocessor" not in kwargs:
             kwargs["preprocessor"] = RobertaPreprocessor.from_preset(preset)
 
