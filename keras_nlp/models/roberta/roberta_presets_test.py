@@ -70,15 +70,28 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         ("preset_weights", True), ("random_weights", False)
     )
     def test_classifier_output(self, load_weights):
-        input_data = {
-            "token_ids": tf.constant([[0, 133, 2119, 2]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
-        }
+        input_data = ["Let's rock!"]
         model = RobertaClassifier.from_preset(
             "roberta_base", load_weights=load_weights
         )
         # Never assert output values, as the head weights are random.
-        model(input_data)
+        model.predict(input_data)
+
+    @parameterized.named_parameters(
+        ("load_weights", True), ("no_load_weights", False)
+    )
+    def test_classifier_output_without_preprocessing(self, load_weights):
+        input_data = {
+            "token_ids": tf.constant([[101, 1996, 4248, 102]]),
+            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+        }
+        model = RobertaClassifier.from_preset(
+            "roberta_base",
+            load_weights=load_weights,
+            preprocessor=None,
+        )
+        # Never assert output values, as the head weights are random.
+        model.predict(input_data)
 
     @parameterized.named_parameters(
         ("roberta_tokenizer", RobertaTokenizer),
@@ -137,6 +150,19 @@ class RobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
             classifier = RobertaClassifier.from_preset(
                 preset, num_classes=4, load_weights=load_weights
             )
+            input_data = ["The quick brown fox."]
+            classifier(input_data)
+
+    @parameterized.named_parameters(
+        ("load_weights", True), ("no_load_weights", False)
+    )
+    def test_load_roberta_classifier_without_preprocessing(self, load_weights):
+        for preset in RobertaClassifier.presets:
+            classifier = RobertaClassifier.from_preset(
+                preset,
+                preprocessor=None,
+                load_weights=load_weights,
+            )
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512),
@@ -145,7 +171,7 @@ class RobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 ),
                 "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
             }
-            classifier(input_data)
+            classifier.predict(input_data)
 
     def test_load_tokenizers(self):
         for preset in RobertaTokenizer.presets:
