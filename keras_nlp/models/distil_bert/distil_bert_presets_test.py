@@ -75,14 +75,27 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         ("preset_weights", True), ("random_weights", False)
     )
     def test_classifier_output(self, load_weights):
+        input_data = tf.constant(["The quick brown fox."])
+        model = DistilBertClassifier.from_preset(
+            "distil_bert_base_en_uncased",
+            load_weights=load_weights,
+        )
+        model.predict(input_data)
+
+    @parameterized.named_parameters(
+        ("preset_weights", True), ("random_weights", False)
+    )
+    def test_classifier_output_without_preprocessing(self, load_weights):
         input_data = {
             "token_ids": tf.constant([[101, 1996, 4248, 102]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = DistilBertClassifier.from_preset(
-            "distil_bert_base_en_uncased", load_weights=load_weights
+            "distil_bert_base_en_uncased",
+            load_weights=load_weights,
+            preprocessor=None,
         )
-        model(input_data)
+        model.predict(input_data)
 
     @parameterized.named_parameters(
         ("distilbert_tokenizer", DistilBertTokenizer),
@@ -139,7 +152,23 @@ class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
     def test_load_distilbert_classifier(self, load_weights):
         for preset in DistilBertClassifier.presets:
             classifier = DistilBertClassifier.from_preset(
-                preset, num_classes=4, load_weights=load_weights
+                preset,
+                num_classes=4,
+                load_weights=load_weights,
+            )
+            input_data = tf.constant(["This quick brown fox"])
+            classifier.predict(input_data)
+
+    @parameterized.named_parameters(
+        ("preset_weights", True), ("random_weights", False)
+    )
+    def test_load_distilbert_classifier_no_preprocessing(self, load_weights):
+        for preset in DistilBertClassifier.presets:
+            classifier = DistilBertClassifier.from_preset(
+                preset,
+                num_classes=4,
+                load_weights=load_weights,
+                preprocessor=None,
             )
             input_data = {
                 "token_ids": tf.random.uniform(
@@ -149,7 +178,7 @@ class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 ),
                 "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
             }
-            classifier(input_data)
+            classifier.predict(input_data)
 
     def test_load_tokenizers(self):
         for preset in DistilBertTokenizer.presets:
