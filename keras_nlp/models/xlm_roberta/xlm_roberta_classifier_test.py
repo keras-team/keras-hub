@@ -70,13 +70,14 @@ class XLMRobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
         classifier.predict(self.input_dataset)
 
     @parameterized.named_parameters(
-        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
     )
-    def test_saving_model(self, save_format):
+    def test_saved_model(self, save_format, filename):
         classifier = XLMRobertaClassifier(self.model, 4, 128, name="classifier")
         classifier_output = classifier(self.input_batch)
-        save_path = os.path.join(self.get_temp_dir(), "model")
-        classifier.save(save_path, save_format)
+        save_path = os.path.join(self.get_temp_dir(), filename)
+        classifier.save(save_path, save_format=save_format)
         restored_classifier = keras.models.load_model(save_path)
 
         # Check we got the real object back.

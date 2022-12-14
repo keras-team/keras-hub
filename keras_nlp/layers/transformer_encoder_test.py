@@ -158,8 +158,11 @@ class TransformerEncoderTest(tf.test.TestCase, parameterized.TestCase):
         encoder2_output = encoder2(data)
         self.assertAllClose(encoder1_output, encoder2_output)
 
-    @parameterized.named_parameters(("tf_format", "tf"), ("h5_format", "h5"))
-    def test_save_model(self, format):
+    @parameterized.named_parameters(
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
+    )
+    def test_saved_model(self, save_format, filename):
         model = keras.Sequential(
             [
                 keras.Input(shape=(4, 6)),
@@ -172,8 +175,8 @@ class TransformerEncoderTest(tf.test.TestCase, parameterized.TestCase):
         )
         data = tf.random.uniform(shape=[2, 4, 6])
         model_output = model(data)
-        path = os.path.join(self.get_temp_dir(), "model")
-        model.save(path, save_format=format)
+        path = os.path.join(self.get_temp_dir(), filename)
+        model.save(path, save_format=save_format)
 
         loaded_model = keras.models.load_model(path)
         loaded_model_output = loaded_model(data)
