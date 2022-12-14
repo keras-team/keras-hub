@@ -23,11 +23,17 @@ from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_classifier import (
     DistilBertClassifier,
 )
+from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
+    DistilBertPreprocessor,
+)
+from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
+    DistilBertTokenizer,
+)
 
 
 class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = DistilBertBackbone(
+        self.backbone = DistilBertBackbone(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -35,54 +41,87 @@ class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
             intermediate_dim=128,
             max_sequence_length=128,
         )
-        self.batch_size = 8
-        self.input_batch = {
-            "token_ids": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-            "padding_mask": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-        }
+        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab += ["the", "quick", "brown", "fox", "."]
+        self.preprocessor = DistilBertPreprocessor(
+            DistilBertTokenizer(vocabulary=self.vocab),
+            sequence_length=8,
+        )
+        self.classifier = DistilBertClassifier(
+            self.backbone,
+            4,
+            preprocessor=self.preprocessor,
+        )
+        self.classifier_no_preprocessing = DistilBertClassifier(
+            self.backbone,
+            4,
+            preprocessor=None,
+        )
 
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(
-            self.input_batch
+        self.raw_batch = tf.constant(
+            [
+                "the quick brown fox.",
+                "the slow brown fox.",
+                "the smelly brown fox.",
+                "the old brown fox.",
+            ]
+        )
+        self.preprocessed_batch = self.preprocessor(self.raw_batch)
+        self.raw_dataset = tf.data.Dataset.from_tensor_slices(
+            (self.raw_batch, tf.ones((4,)))
         ).batch(2)
+        self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
     def test_valid_call_classifier(self):
-        classifier = DistilBertClassifier(self.model, 4, 128, name="classifier")
-        classifier(self.input_batch)
+        self.classifier(self.preprocessed_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_distilbert_classifier_compile(self, jit_compile):
-        model = DistilBertClassifier(self.model, 4, 128, name="classifier")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_batch)
+    def test_distil_bert_classifier_predict(self, jit_compile):
+        self.classifier.compile(jit_compile=jit_compile)
+        self.classifier.predict(self.raw_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_distilbert_classifier_compile_batched_ds(self, jit_compile):
-        model = DistilBertClassifier(self.model, 4, 128, name="classifier")
-        model.compile(jit_compile=jit_compile)
-        model.predict(self.input_dataset)
+    def test_distil_bert_classifier_predict_no_preprocessing(self, jit_compile):
+        self.classifier_no_preprocessing.compile(jit_compile=jit_compile)
+        self.classifier_no_preprocessing.predict(self.preprocessed_batch)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_bert_classifier_fit(self, jit_compile):
+        self.classifier.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            jit_compile=jit_compile,
+        )
+        self.classifier.fit(self.raw_dataset)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_bert_classifier_fit_no_preprocessing(self, jit_compile):
+        self.classifier_no_preprocessing.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            jit_compile=jit_compile,
+        )
+        self.classifier_no_preprocessing.fit(self.preprocessed_dataset)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
-    def test_saved_model(self, save_format, filename):
-        model = DistilBertClassifier(self.model, 4, 128, name="classifier")
-        model_output = model(self.input_batch)
+    def test_saving_model(self, save_format, filename):
+        model_output = self.classifier.predict(self.raw_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)
-        model.save(save_path, save_format=save_format)
+        self.classifier.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
         self.assertIsInstance(restored_model, DistilBertClassifier)
 
         # Check that output matches.
-        restored_output = restored_model(self.input_batch)
+        restored_output = restored_model.predict(self.raw_batch)
         self.assertAllClose(model_output, restored_output)
