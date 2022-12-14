@@ -27,9 +27,9 @@ backbone_presets = {
             "Base size of XLM-RoBERTa. "
             "Trained on the CommonCrawl dataset (100 languages)."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base/v1/model.h5",
         "weights_hash": "2eb6fcda5a42f0a88056213ba3d93906",
-        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base/vocab.spm",
+        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base/v1/vocab.spm",
         "spm_proto_hash": "bf25eb5120ad92ef5c7d8596b5dc4046",
     },
     "xlm_roberta_large": {
@@ -47,9 +47,9 @@ backbone_presets = {
             "Large size of XLM-RoBERTa. "
             "Trained on the CommonCrawl dataset (100 languages)."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_large/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_large/v1/model.h5",
         "weights_hash": "276211827174b71751f2ce3a89da503a",
-        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_large/vocab.spm",
+        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_large/v1/vocab.spm",
         "spm_proto_hash": "bf25eb5120ad92ef5c7d8596b5dc4046",
     },
 }
