@@ -192,7 +192,7 @@ class RobertaPreprocessor(keras.layers.Layer):
 
     @classmethod
     def from_config(cls, config):
-        if "tokenizer" in config:
+        if "tokenizer" in config and isinstance(config["tokenizer"], dict):
             config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
         return cls(**config)
 
