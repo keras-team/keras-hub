@@ -17,9 +17,9 @@ This library is an extension of the core Keras API; all high level modules are
 you are familiar with Keras, congratulations! You already understand most of 
 KerasNLP.
 
-See our [Quick Tour guide]() for example usage of our modular API tracing the
-user journey from evaluating pretrained models to building a novel transformer
-architecture and training their own tokenizer.  
+See our [Quick Tour guide]() for example usage of our modular API starting with 
+evaluating pretrained models and building up to designing a novel transformer
+architecture and training a tokenizer from scratch.  
 
 We are a new and growing project, and welcome [contributions](CONTRIBUTING.md).
 
@@ -75,7 +75,6 @@ imdb_train, imdb_test = tfds.load(
 )
 classifier = keras_nlp.models.BertClassifier.from_preset(
     "bert_tiny_en_uncased",
-    num_classes=2,
 )
 classifier.compile(
     loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
