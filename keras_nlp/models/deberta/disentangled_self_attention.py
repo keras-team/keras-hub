@@ -148,7 +148,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
                 attention_mask = tf.expand_dims(
                     attention_mask, axis=mask_expansion_axis
                 )
-        tf.print(tf.shape(attention_scores), tf.shape(attention_mask))
         return self._softmax(attention_scores, attention_mask)
 
     def _compute_attention(
