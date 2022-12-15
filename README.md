@@ -60,7 +60,6 @@ Fine-tune BERT on a small sentiment analysis task:
 
 ```python
 import keras_nlp
-import tensorflow as tf
 from tensorflow import keras
 import tensorflow_datasets as tfds
 
