@@ -28,16 +28,16 @@ class DisentangledSelfAttention(keras.layers.Layer):
     This is an implementation of disentangled self-attention as described in the
     paper ["DeBERTaV3: Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing"](https://arxiv.org/abs/2111.09543).
     Effectively, this layer implements Multi-Head Self Attention with relative
-    attention, i.e., we compute the content-to-position and position-to-content
-    attention scores, and add these scores to the vanilla multi-head
-    self-attention scores to get the final attention score.
+    attention, i.e., to get the final attention score, we compute the
+    content-to-position and position-to-content attention scores, and add these
+    scores to the vanilla multi-head self-attention scores.
 
     Args:
         num_heads: int. Number of attention heads.
         hidden_dim: int. Hidden dimension of the input, i.e., `hidden_states`.
         max_position_embeddings: int, defaults to 512. The maximum input
             sequence length.
-        bucket_size: int, defaults to 512. The size of the relative position
+        bucket_size: int, defaults to 256. The size of the relative position
             buckets. Generally equal to `max_sequence_length // 2`.
         dropout: float, defaults to 0.1. Dropout probability.
         kernel_initializer: string or `keras.initializers` initializer,
@@ -135,8 +135,8 @@ class DisentangledSelfAttention(keras.layers.Layer):
         return common_kwargs
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
-        # Normalize the attention scores to probabilities.
-        # `attention_scores` = [B, N, T, S]
+        """Normalizes the attention scores to probabilities using softmax."""
+
         if attention_mask is not None:
             # The expand dim happens starting from the `num_heads` dimension,
             # (<batch_dims>, num_heads, <query_attention_dims,
@@ -160,6 +160,13 @@ class DisentangledSelfAttention(keras.layers.Layer):
         attention_mask=None,
         training=None,
     ):
+        """Computes the attention score and returns the attended outputs.
+
+        This function computes vanilla MHA score, and relative attention scores
+        (p2c and c2p). It then sums them up to get the final attention score,
+        which is used to compute the attended outputs.
+        """
+
         attention_scores = tf.einsum(
             "aecd,abcd->acbe",
             key,
@@ -244,6 +251,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         key,
         rel_embeddings,
     ):
+        """Computes relative attention scores (p2c and c2p)."""
 
         batch_size = tf.shape(query)[0]
         num_positions = tf.shape(query)[1]
@@ -357,6 +365,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
                 "num_heads": self.num_heads,
                 "hidden_dim": self.hidden_dim,
                 "max_position_embeddings": self.max_position_embeddings,
+                "bucket_size": self.bucket_size,
                 "dropout": self.dropout,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer

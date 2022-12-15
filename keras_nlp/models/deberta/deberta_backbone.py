@@ -18,6 +18,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.models.deberta.deberta_encoder import DebertaEncoder
+from keras_nlp.models.utils import classproperty
 
 
 def deberta_kernel_initializer(stddev=0.02):
@@ -96,19 +97,22 @@ class RelativeEmbedding(keras.layers.Layer):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class Deberta(keras.Model):
+class DebertaBackbone(keras.Model):
     """DeBERTa encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
     described in
     ["DeBERTaV3: Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing"](https://arxiv.org/abs/2111.09543).
     It includes the embedding lookups and transformer layers, but does not
-    include the masked language modeling head used during pretraining.
+    include the enhanced masked decoding head used during pretraining.
 
     The default constructor gives a fully customizable, randomly initialized
     DeBERTa encoder with any number of layers, heads, and embedding
     dimensions. To load preset architectures and weights, use the `from_presets`
     constructor.
+
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -123,7 +127,7 @@ class Deberta(keras.Model):
         max_sequence_length: int, defaults to 512. The maximum sequence length
             this encoder can consume. The sequence length of the input must be
             less than `max_sequence_length`.
-        bucket_size: int, defaults to 512. The size of the relative position
+        bucket_size: int, defaults to 256. The size of the relative position
             buckets. Generally equal to `max_sequence_length // 2`.
 
     Example usage:
@@ -136,7 +140,7 @@ class Deberta(keras.Model):
     }
 
     # Randomly initialized DeBERTa model
-    model = keras_nlp.models.Deberta(
+    model = keras_nlp.models.DebertaBackbone(
         vocabulary_size=128100,
         num_layers=12,
         num_heads=6,
@@ -259,6 +263,10 @@ class Deberta(keras.Model):
     @classmethod
     def from_config(cls, config):
         return cls(**config)
+
+    @classproperty
+    def presets(cls):
+        raise NotImplementedError
 
     @classmethod
     def from_preset(

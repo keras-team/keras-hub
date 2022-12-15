@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Test for DeBERTa backbone models."""
 
 import os
@@ -20,12 +19,12 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.deberta.deberta_models import Deberta
+from keras_nlp.models.deberta.deberta_backbone import DebertaBackbone
 
 
-class DebertaTest(tf.test.TestCase, parameterized.TestCase):
+class DebertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = Deberta(
+        self.model = DebertaBackbone(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -52,21 +51,7 @@ class DebertaTest(tf.test.TestCase, parameterized.TestCase):
         self.model(self.input_batch)
 
         # Check default name passed through
-        self.assertEqual(self.model.name, "backbone")
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_deberta_compile(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_deberta_compile_batched_ds(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_dataset)
+        self.assertRegexpMatches(self.model.name, "deberta_backbone")
 
     def test_variable_sequence_length_call_deberta(self):
         for seq_length in (25, 50, 75):
@@ -78,23 +63,34 @@ class DebertaTest(tf.test.TestCase, parameterized.TestCase):
                     (self.batch_size, seq_length), dtype="int32"
                 ),
             }
-            output = self.model(input_data)
-            self.assertAllEqual(
-                tf.shape(output),
-                [self.batch_size, seq_length, self.model.hidden_dim],
-            )
+            self.model(input_data)
 
     @parameterized.named_parameters(
-        ("save_format_tf", "tf"), ("save_format_h5", "h5")
+        ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_saving_model(self, save_format):
+    def test_compile(self, jit_compile):
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_batch)
+
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_compile_batched_ds(self, jit_compile):
+        self.model.compile(jit_compile=jit_compile)
+        self.model.predict(self.input_dataset)
+
+    @parameterized.named_parameters(
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
+    )
+    def test_saved_model(self, save_format, filename):
         model_output = self.model(self.input_batch)
-        save_path = os.path.join(self.get_temp_dir(), "model")
-        self.model.save(save_path, save_format)
+        save_path = os.path.join(self.get_temp_dir(), filename)
+        self.model.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, Deberta)
+        self.assertIsInstance(restored_model, DebertaBackbone)
 
         # Check that output matches.
         restored_output = restored_model(self.input_batch)

@@ -41,14 +41,13 @@ class DebertaEncoder(keras.layers.Layer):
 
     Args:
         intermediate_dim: int, the hidden size of feedforward network.
-        num_heads: int, the number of heads in the
-            `keras.layers.MultiHeadAttention` layer.
+        num_heads: int, the number of heads in the attention layer.
         max_position_embeddings: int, defaults to 512. The maximum input
             sequence length.
-        bucket_size: int, defaults to 512. The size of the relative position
+        bucket_size: int, defaults to 256. The size of the relative position
             buckets. Generally equal to `max_sequence_length // 2`.
-        dropout: float, defaults to 0. the dropout value, shared by
-            `keras.layers.MultiHeadAttention` and feedforward network.
+        dropout: float, defaults to 0.0. The dropout value, shared by
+            the attention layer and feedforward network.
         activation: string or `keras.activations`, defaults to "relu". the
             activation function of feedforward network.
         layer_norm_epsilon: float, defaults to 1e-5. The epsilon value in layer
@@ -65,7 +64,7 @@ class DebertaEncoder(keras.layers.Layer):
     Examples:
 
     ```python
-    # Create a single transformer encoder layer.
+    # Create a single DeBERTa encoder layer.
     encoder = keras_nlp.layers.DebertaEncoder(
         intermediate_dim=64, num_heads=8)
 
@@ -174,7 +173,7 @@ class DebertaEncoder(keras.layers.Layer):
             padding_mask: a boolean Tensor. It indicates if the token should be
                 masked because the token is introduced due to padding.
                 `padding_mask` should have shape [batch_size, sequence_length].
-                False means the certain certain is masked out.
+                False means the certain token is masked out.
             attention_mask: a boolean Tensor. Customized mask used to mask out
                 certain tokens. `attention_mask` should have shape
                 [batch_size, sequence_length, sequence_length].
@@ -186,7 +185,7 @@ class DebertaEncoder(keras.layers.Layer):
         if not self._built:
             self._build(inputs.shape)
 
-        x = inputs  # Intermediate result.
+        x = inputs
 
         # Compute self attention mask.
         self_attention_mask = merge_padding_and_attention_mask(
@@ -220,6 +219,8 @@ class DebertaEncoder(keras.layers.Layer):
             {
                 "intermediate_dim": self.intermediate_dim,
                 "num_heads": self.num_heads,
+                "max_position_embeddings": self.max_position_embeddings,
+                "bucket_size": self.bucket_size,
                 "dropout": self.dropout,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
