@@ -18,6 +18,17 @@ When a specific abbreviation is very common and is pronounceable (acronym),
 consider it as a standalone word, e.g. Bert, Deberta, etc. In this case, "Bert"
 is considered as a common noun and not an abbreviation anymore.
 
+## File names
+
+When possible, keep publicly documented classes in their own files, and make
+the name of the class match the filename. E.g. the `BertClassifer` model should
+be in `bert_classifier.py`, and the `TransformerEncoder` layer
+should be in `transformer_encoder.py`
+
+Small and/or unexported utility classes may live together along with code that
+uses it if convenient, e.g., our `BytePairTokenizerCache` is collocated in the
+same file as our `BytePairTokenizer`.
+
 ## Import keras and keras_nlp as top-level objects
 
 Prefer importing `tf`, `keras` and `keras_nlp` as top-level objects. We want
@@ -57,6 +68,8 @@ do the following:
 - Document the layer behavior thoroughly including call behavior though a
   class level docstring. Generally methods like `build()` and `call()` should
   not have their own docstring.
+- Docstring text should start on the same line as the opening quotes and
+  otherwise follow [PEP 257](https://peps.python.org/pep-0257/).
 - Document the
   [masking](https://keras.io/guides/understanding_masking_and_padding/) behavior
   of the layer in the class level docstring as well.

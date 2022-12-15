@@ -1,6 +1,7 @@
 # Tooling.
 packaging
 black>=22
+black[juypter]
 flake8
 isort
 pytest

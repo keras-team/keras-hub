@@ -168,7 +168,6 @@ class TransformerEncoder(keras.layers.Layer):
             padding_mask: a boolean Tensor. It indicates if the token should be
                 masked because the token is introduced due to padding.
                 `padding_mask` should have shape [batch_size, sequence_length].
-                False means the certain certain is masked out.
             attention_mask: a boolean Tensor. Customized mask used to mask out
                 certain tokens. `attention_mask` should have shape
                 [batch_size, sequence_length, sequence_length].
