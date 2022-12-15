@@ -76,15 +76,28 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         ("preset_weights", True), ("random_weights", False)
     )
     def test_classifier_output(self, load_weights):
+        input_data = tf.constant(["The quick brown fox."])
+        model = XLMRobertaClassifier.from_preset(
+            "xlm_roberta_base", load_weights=load_weights
+        )
+        # Never assert output values, as the head weights are random.
+        model.predict(input_data)
+
+    @parameterized.named_parameters(
+        ("preset_weights", True), ("random_weights", False)
+    )
+    def test_classifier_output_without_preprocessing(self, load_weights):
         input_data = {
             "token_ids": tf.constant([[0, 581, 63773, 2]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = XLMRobertaClassifier.from_preset(
-            "xlm_roberta_base", load_weights=load_weights
+            "xlm_roberta_base",
+            load_weights=load_weights,
+            preprocessor=None,
         )
         # Never assert output values, as the head weights are random.
-        model(input_data)
+        model.predict(input_data)
 
     @parameterized.named_parameters(
         ("xlm_roberta_tokenizer", XLMRobertaTokenizer),
@@ -141,7 +154,25 @@ class XLMRobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
     def test_load_xlm_roberta_classifier(self, load_weights):
         for preset in XLMRobertaClassifier.presets:
             classifier = XLMRobertaClassifier.from_preset(
-                preset, num_classes=4, load_weights=load_weights
+                preset,
+                num_classes=4,
+                load_weights=load_weights,
+            )
+            input_data = tf.constant(["This quick brown fox"])
+            classifier.predict(input_data)
+
+    @parameterized.named_parameters(
+        ("preset_weights", True), ("random_weights", False)
+    )
+    def test_load_xlm_roberta_classifier_without_preprocessing(
+        self, load_weights
+    ):
+        for preset in XLMRobertaClassifier.presets:
+            classifier = XLMRobertaClassifier.from_preset(
+                preset,
+                num_classes=4,
+                load_weights=load_weights,
+                preprocessor=None,
             )
             input_data = {
                 "token_ids": tf.random.uniform(
@@ -151,7 +182,7 @@ class XLMRobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 ),
                 "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
             }
-            classifier(input_data)
+            classifier.predict(input_data)
 
     def test_load_tokenizers(self):
         for preset in XLMRobertaTokenizer.presets:
