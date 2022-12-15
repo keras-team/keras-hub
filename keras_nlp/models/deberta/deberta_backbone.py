@@ -223,10 +223,6 @@ class DebertaBackbone(keras.Model):
                 padding_mask=padding_mask,
             )
 
-        # Set default for `name` if none given
-        if "name" not in kwargs:
-            kwargs["name"] = "backbone"
-
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs={

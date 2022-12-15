@@ -187,7 +187,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
         if rel_attn_scores is not None:
             attention_scores += rel_attn_scores
 
-        tf.print(tf.shape(attention_scores), tf.shape(attention_mask))
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
         )
@@ -367,10 +366,10 @@ class DisentangledSelfAttention(keras.layers.Layer):
                 "bucket_size": self.bucket_size,
                 "dropout": self.dropout,
                 "kernel_initializer": keras.initializers.serialize(
-                    self.kernel_initializer
+                    self._kernel_initializer
                 ),
                 "bias_initializer": keras.initializers.serialize(
-                    self.bias_initializer
+                    self._bias_initializer
                 ),
             }
         )
