@@ -18,7 +18,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.models.deberta.deberta_encoder import DebertaEncoder
-from keras_nlp.models.utils import classproperty
+from keras_nlp.utils.python_utils import classproperty
 
 
 def deberta_kernel_initializer(stddev=0.02):
