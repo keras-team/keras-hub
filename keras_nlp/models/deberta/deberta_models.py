@@ -209,7 +209,7 @@ class Deberta(keras.Model):
                 bucket_size=bucket_size,
                 dropout=dropout,
                 activation=lambda x: keras.activations.gelu(
-                    x, approximate=True
+                    x, approximate=False
                 ),
                 kernel_initializer=deberta_kernel_initializer(),
                 name=f"deberta_encoder_layer_{i}",
