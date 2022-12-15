@@ -78,21 +78,21 @@ class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_distil_bert_classifier_predict(self, jit_compile):
+    def test_classifier_predict(self, jit_compile):
         self.classifier.compile(jit_compile=jit_compile)
         self.classifier.predict(self.raw_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_distil_bert_classifier_predict_no_preprocessing(self, jit_compile):
+    def test_classifier_predict_no_preprocessing(self, jit_compile):
         self.classifier_no_preprocessing.compile(jit_compile=jit_compile)
         self.classifier_no_preprocessing.predict(self.preprocessed_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_bert_classifier_fit(self, jit_compile):
+    def test_classifier_fit(self, jit_compile):
         self.classifier.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             jit_compile=jit_compile,
@@ -102,7 +102,7 @@ class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_bert_classifier_fit_no_preprocessing(self, jit_compile):
+    def test_classifier_fit_no_preprocessing(self, jit_compile):
         self.classifier_no_preprocessing.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             jit_compile=jit_compile,

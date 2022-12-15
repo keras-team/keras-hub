@@ -68,7 +68,7 @@ class DistilBertClassifier(PipelineModel):
     }
     labels = [0, 3]
 
-    # Randomly initialized DistilBERT encoder
+    # Randomly initialized DistilBertBackbone
     backbone = keras_nlp.models.DistilBertBackbone(
         vocabulary_size=30552,
         num_layers=6,
@@ -78,7 +78,7 @@ class DistilBertClassifier(PipelineModel):
         max_sequence_length=512
     )
 
-    # Create a DistilBERT classifier and fit your data.
+    # Create a DistilBertClassifier and fit your data.
     classifier = keras_nlp.models.DistilBertClassifier(
         backbone,
         num_classes=4,
@@ -137,12 +137,12 @@ class DistilBertClassifier(PipelineModel):
 
     @property
     def backbone(self):
-        """A `keras_nlp.models.DistilBert` instance providing the encoder submodel."""
+        """A `keras_nlp.models.DistilBertBackbone` submodel."""
         return self._backbone
 
     @property
     def preprocessor(self):
-        """A `keras_nlp.models.BertPreprocessor` for preprocessing inputs."""
+        """A `keras_nlp.models.DistilBertPreprocessor` preprocessing layer."""
         return self._preprocessor
 
     def get_config(self):
@@ -218,7 +218,7 @@ class DistilBertClassifier(PipelineModel):
         labels = [0, 3]
 
         # Use a shorter sequence length.
-        preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
+        preprocessor = keras_nlp.models.DistilBertBackbone.from_preset(
             "bert_base_en_uncased",
             sequence_length=128,
         )
