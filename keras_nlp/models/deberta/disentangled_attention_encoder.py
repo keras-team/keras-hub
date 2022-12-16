@@ -26,7 +26,7 @@ from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
 )
 
 
-class DebertaEncoder(keras.layers.Layer):
+class DisentangledAttentionEncoder(keras.layers.Layer):
     """DeBERTa encoder.
 
     This class follows the architecture of the DeBERTa encoder layer in the
@@ -35,7 +35,7 @@ class DebertaEncoder(keras.layers.Layer):
     Users can instantiate multiple instances of this class to stack up a
     DeBERTa encoder model.
 
-    `DebertaEncoder` is similar to `keras.layers.TransformerEncoder`, except for
+    `DisentangledAttentionEncoder` is similar to `keras.layers.TransformerEncoder`, except for
     the attention layer - it uses Disentangled Self-Attention instead of
     Multi-Head Attention.
 
@@ -58,14 +58,12 @@ class DebertaEncoder(keras.layers.Layer):
         bias_initializer: string or `keras.initializers` initializer,
             defaults to "zeros". The bias initializer for
             the dense and disentangled self-attention layers.
-        name: string, defaults to None. The name of the layer.
-        **kwargs: other keyword arguments.
 
     Examples:
 
     ```python
     # Create a single DeBERTa encoder layer.
-    encoder = keras_nlp.layers.DebertaEncoder(
+    encoder = keras_nlp.layers.DisentangledAttentionEncoder(
         intermediate_dim=64, num_heads=8)
 
     # Create a simple model containing the encoder.
@@ -90,13 +88,12 @@ class DebertaEncoder(keras.layers.Layer):
         layer_norm_epsilon=1e-05,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
-        name=None,
         **kwargs
     ):
         # Work around for model saving
         self._input_shape = kwargs.pop("build_input_shape", None)
 
-        super().__init__(name=name, **kwargs)
+        super().__init__(**kwargs)
 
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
@@ -163,10 +160,10 @@ class DebertaEncoder(keras.layers.Layer):
         padding_mask=None,
         attention_mask=None,
     ):
-        """Forward pass of `DebertaEncoder`.
+        """Forward pass of `DisentangledAttentionEncoder`.
 
         Args:
-            inputs: a Tensor. The input data to `DebertaEncoder`, should be
+            inputs: a Tensor. The input data to `DisentangledAttentionEncoder`, should be
                 of shape [batch_size, sequence_length, hidden_dim].
             rel_embeddings: a Tensor. The relative position embedding matrix,
                 should be of shape `[batch_size, 2 * bucket_size, hidden_dim]`.

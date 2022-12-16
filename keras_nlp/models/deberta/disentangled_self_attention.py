@@ -56,10 +56,9 @@ class DisentangledSelfAttention(keras.layers.Layer):
         dropout=0.1,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
-        name=None,
         **kwargs,
     ):
-        super().__init__(name=name, **kwargs)
+        super().__init__(**kwargs)
 
         # Passed args.
         self.num_heads = num_heads
@@ -75,6 +74,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         # Derived args.
         self.attn_head_size = hidden_dim // num_heads
 
+        # We have three types of attention - MHA, p2c and c2p.
         num_type_attn = 3
         self.scale_factor = 1.0 / math.sqrt(
             float(num_type_attn * self.attn_head_size)
@@ -135,15 +135,16 @@ class DisentangledSelfAttention(keras.layers.Layer):
         return common_kwargs
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
-        """Normalizes the attention scores to probabilities using softmax."""
+        """Normalizes the attention scores to probabilities using softmax.
+
+        This implementation is the similar to the one present in
+        `keras.layers.MultiHeadAttention`.
+        """
 
         if attention_mask is not None:
-            # The expand dim happens starting from the `num_heads` dimension,
-            # (<batch_dims>, num_heads, <query_attention_dims,
-            # key_attention_dims>)
             mask_expansion_axis = -3
             for _ in range(
-                len(attention_scores.shape) - len(attention_mask.shape)
+                attention_scores.shape.rank - attention_mask.shape.rank
             ):
                 attention_mask = tf.expand_dims(
                     attention_mask, axis=mask_expansion_axis
@@ -233,7 +234,6 @@ class DisentangledSelfAttention(keras.layers.Layer):
     def _get_rel_pos(self, num_positions):
         ids = tf.range(num_positions, dtype=tf.int64)
         query_ids = ids[:, tf.newaxis]
-        # query_ids = tf.repeat(query_ids, repeats=num_positions, axis=1)
         key_ids = ids[tf.newaxis, :]
         key_ids = tf.repeat(key_ids, repeats=num_positions, axis=0)
 
