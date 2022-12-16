@@ -60,6 +60,10 @@ class DebertaTokenizer(SentencePieceTokenizer):
             bos_id=1,
             eos_id=2,
             unk_id=3,
+            pad_piece="[PAD]",
+            bos_piece="[CLS]",
+            eos_piece="[SEP]",
+            unk_piece="[UNK]",
         )
         return bytes_io.getvalue()
 
