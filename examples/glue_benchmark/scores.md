@@ -10,7 +10,8 @@ tasks.
 
 ## BERT
 
-Test target is `keras_nlp.models.BertClassifier()`.
+Test target is `keras_nlp.models.BertClassifier()`. WNLI is skipped because it 
+was not evaluated at the original paper.
 
 ### Hyperparameter Settings
 
@@ -65,6 +66,34 @@ Test target is `keras_nlp.models.RobertaClassifier()`.
 
 ### Hyperparameter Settings
 
+#### WNLI
+
+We choose a special setting for WNLI from other tasks.
+
+- Learning Rate: 
+    We use a `PolynomialDecay` learning rate, with `initial_learning_rate=2e-5`.
+    ```python
+    lr = tf.keras.optimizers.schedules.PolynomialDecay(
+        2e-5,
+        decay_steps={total_training_steps},
+        end_learning_rate=0.0,
+    )
+    ```
+- Optimizer:
+    We use `Adam` optimizer.
+
+    ```python
+    optimizer = tf.keras.optimizers.Adam(lr)
+    ```
+- Others:
+    | Hyperparameter Name | Value |
+    |---------------------|-------|
+    | batch_size          | 32    |
+    | epochs              | 10    |
+    | dropout             | 0.1   |
+
+#### Other GLUE Tasks
+
 - Learning Rate: 
     We use a `PolynomialDecay` learning rate, with `initial_learning_rate=2e-5`.
     ```python
@@ -106,6 +135,7 @@ Test target is `keras_nlp.models.RobertaClassifier()`.
 | MNLI_Mis  | Accuracy              |      87.1 |
 | QNLI      | Accuracy              |      92.8 |
 | RTE       | Accuracy              | 69.2     |
+| WNLI      | Accuracy              | 65.1    |
 | AX        | Matthew's Corr        |      40.6 |
 
-See the actual submission in this [link](https://gluebenchmark.com/submission/gnG9xUQGkjfVq6loRQYKTcM1YjG3/-NJRqWrvTRv2WLHrqUhq). 
+See the actual submission in this [link](https://gluebenchmark.com/submission/gnG9xUQGkjfVq6loRQYKTcM1YjG3/-NJS0XAX1o9p8DJst3wM). 
