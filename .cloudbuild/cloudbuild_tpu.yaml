@@ -2,9 +2,9 @@ substitutions:
   # GCS bucket name. 
   _GCS_BUCKET: 'gs://keras-nlp-github-test'
   # GKE cluster name.
-  _CLUSTER_NAME: 'keras-nlp-test-cluster'
+  _CLUSTER_NAME: 'keras-nlp-tpu-test-cluster'
   # Location of GKE cluster.
-  _CLUSTER_ZONE: 'us-west1-b'
+  _CLUSTER_ZONE: 'us-central1-a'
   # Image name.
   _IMAGE_NAME: 'us-west1-docker.pkg.dev/keras-team-test/keras-nlp-test/keras-nlp-image'
 steps:
@@ -29,7 +29,7 @@ steps:
     'install',
     'github.com/google/go-jsonnet/cmd/jsonnet@latest',
   ]
-- name: 'gcr.io/cloud-builders/gcloud'
+- name: 'google/cloud-sdk'
   id: clone-templates
   waitFor: ['-']
   entrypoint: 'git'
@@ -44,7 +44,7 @@ steps:
   - clone-templates
   entrypoint: 'jsonnet'
   args: [
-    '.cloudbuild/unit_test_jobs.jsonnet',
+    '.cloudbuild/unit_test_jobs_tpu.jsonnet',
     '--string',
     '-J', 'ml-testing-accelerators',
     '--ext-str', 'image=$_IMAGE_NAME',
@@ -52,7 +52,7 @@ steps:
     '--ext-str', 'gcs_bucket=$_GCS_BUCKET',
     '-o', 'output.yaml',
   ]
-- name: 'gcr.io/cloud-builders/gcloud'
+- name: 'google/cloud-sdk'
   id: create-job
   waitFor:
   - push-image
@@ -67,12 +67,12 @@ steps:
     gcloud container clusters get-credentials $_CLUSTER_NAME --zone $_CLUSTER_ZONE --project keras-team-test
     job_name=$(kubectl create -f output.yaml -o name)
     sleep 5
-    pod_name=$(kubectl wait --for condition=ready --timeout=30m pod -l job-name=${job_name#job.batch/} -o name)
+    pod_name=$(kubectl wait --for condition=ready --timeout=10m pod -l job-name=${job_name#job.batch/} -o name)
     kubectl logs -f $pod_name --container=train
     sleep 5
-    gcloud artifacts docker images delete $_IMAGE_NAME:$BUILD_ID
+    # gcloud artifacts docker images delete $_IMAGE_NAME:$BUILD_ID
     exit $(kubectl get $pod_name -o jsonpath={.status.containerStatuses[0].state.terminated.exitCode})
-timeout: 3000s  # 50 minutes
+timeout: 1800s  # 30 minutes
 options:
   volumes:
   - name: go-modules

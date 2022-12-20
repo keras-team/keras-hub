@@ -31,12 +31,6 @@ def pytest_addoption(parser):
         default=False,
         help="run extra_large tests",
     )
-    parser.addoption(
-        "--tpu_name",
-        action="store",
-        default=None,
-        help="tpu name to connect to",
-    )
 
 
 def pytest_configure(config):
@@ -47,8 +41,6 @@ def pytest_configure(config):
         "markers",
         "extra_large: mark test as being too large to run continuously",
     )
-
-    # os.environ["tpu_name"] = config.getoption("tpu_name")
 
 
 def pytest_collection_modifyitems(config, items):
