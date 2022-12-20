@@ -49,30 +49,7 @@ class DebertaTokenizer(SentencePieceTokenizer):
     Examples:
 
     ```python
-    def train_sentencepiece(ds, vocab_size):
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=ds.as_numpy_iterator(),
-            model_writer=bytes_io,
-            vocab_size=vocab_size,
-            model_type="WORD",
-            pad_id=0,
-            bos_id=1,
-            eos_id=2,
-            unk_id=3,
-            pad_piece="[PAD]",
-            bos_piece="[CLS]",
-            eos_piece="[SEP]",
-            unk_piece="[UNK]",
-        )
-        return bytes_io.getvalue()
-
-    ds = tf.data.Dataset.from_tensor_slices(
-        ["the quick brown fox", "the earth is round"]
-    )
-
-    proto = train_sentencepiece(ds, vocab_size=10)
-    tokenizer = keras_nlp.models.DebertaTokenizer(proto=proto)
+    tokenizer = keras_nlp.models.DebertaTokenizer(proto="model.spm")
 
     # Batched inputs.
     tokenizer(["the quick brown fox", "the earth is round"])
