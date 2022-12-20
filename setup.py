@@ -36,7 +36,7 @@ setup(
     license="Apache License 2.0",
     install_requires=[
         "absl-py",
-        "numpy",
+        "numpy~=1.23.2",  # Numpy 1.24 breaks ragged tensors. Pin to keras build
         "packaging",
         # Don't require tensorflow on MacOS; tensorflow-macos will not
         # satisfy the requirement.
