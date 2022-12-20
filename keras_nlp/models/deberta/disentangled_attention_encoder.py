@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""DeBERTa encoder block implementation based on `keras.layers.Layer`."""
+"""Disentangled attention encoder block implementation based on `keras.layers.Layer`."""
 
 from tensorflow import keras
 
@@ -27,17 +27,17 @@ from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
 
 
 class DisentangledAttentionEncoder(keras.layers.Layer):
-    """DeBERTa encoder.
+    """Disentangled attention encoder.
 
-    This class follows the architecture of the DeBERTa encoder layer in the
-    paper
+    This class follows the architecture of the disentangled attention encoder
+    layer in the paper
     ["DeBERTaV3: Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing"](https://arxiv.org/abs/2111.09543).
     Users can instantiate multiple instances of this class to stack up a
-    DeBERTa encoder model.
+    an encoder model which has disentangled self-attention.
 
-    `DisentangledAttentionEncoder` is similar to `keras.layers.TransformerEncoder`, except for
-    the attention layer - it uses Disentangled Self-Attention instead of
-    Multi-Head Attention.
+    `DisentangledAttentionEncoder` is similar to
+    `keras_nlp.layers.TransformerEncoder`, except for the attention layer - it
+    uses disentangled self-attention instead of multi-head attention.
 
     Args:
         intermediate_dim: int, the hidden size of feedforward network.
@@ -62,7 +62,7 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
     Examples:
 
     ```python
-    # Create a single DeBERTa encoder layer.
+    # Create a single disentangled attention encoder layer.
     encoder = keras_nlp.layers.DisentangledAttentionEncoder(
         intermediate_dim=64, num_heads=8)
 
