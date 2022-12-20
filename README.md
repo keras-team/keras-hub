@@ -7,21 +7,22 @@
 
 KerasNLP is a natural language processing library that supports users through
 their entire development cycle. Our workflows are built from modular components 
-that have SoTA preset weights and architectures when used out-of-the-box and are
-easily customizable when more control is needed. We emphasize in-graph 
-computation for all workflows so that developers can expect easy 
-productionization using the Tensorflow ecosystem.
+that have state-of-the-art preset weights and architectures when used 
+out-of-the-box and are easily customizable when more control is needed. We 
+emphasize in-graph computation for all workflows so that developers can expect 
+easy productionization using the Tensorflow ecosystem.
 
-This library is an extension of the core Keras API; all high level modules are 
-`Layers` or `Models` that recieve that same level of polish as core Keras. If 
-you are familiar with Keras, congratulations! You already understand most of 
-KerasNLP.
+This library is an extension of the core Keras API; all high-level modules are 
+[`Layers`](https://keras.io/api/layers/) or 
+[`Models`](https://keras.io/api/models/) that recieve that same level of polish 
+as core Keras. If you are familiar with Keras, congratulations! You already 
+understand most of KerasNLP.
 
-See our [Quick Tour guide]() for example usage of our modular API starting with 
-evaluating pretrained models and building up to designing a novel transformer
-architecture and training a tokenizer from scratch.  
+See our [Getting Started guide](https://keras.io/guides/keras_nlp/getting_started) for example usage of our modular API starting with evaluating pretrained models 
+and building up to designing a novel transformer architecture and training a 
+tokenizer from scratch.  
 
-We are a new and growing project, and welcome [contributions](CONTRIBUTING.md).
+We are a new and growing project and welcome [contributions](CONTRIBUTING.md).
 
 ## Quick Links
 
@@ -30,6 +31,7 @@ We are a new and growing project, and welcome [contributions](CONTRIBUTING.md).
 - [Home Page](https://keras.io/keras_nlp)
 - [Developer Guides](https://keras.io/guides/keras_nlp)
 - [API Reference](https://keras.io/api/keras_nlp)
+- [Getting Started guide](https://keras.io/guides/keras_nlp/getting_started) 
 
 ### For contributors
 
@@ -56,7 +58,7 @@ pip install git+https://github.com/keras-team/keras-nlp.git --upgrade
 
 ## Quickstart
 
-Fine-tune BERT on a small sentiment analysis task:
+Fine-tune BERT on a small sentiment analysis task using the [`keras_nlp.models`](https://keras.io/api/keras_nlp/models/) API:
 
 ```python
 import keras_nlp
@@ -73,7 +75,7 @@ imdb_train, imdb_test = tfds.load(
     batch_size=16,
 )
 classifier = keras_nlp.models.BertClassifier.from_preset(
-    "bert_tiny_en_uncased",
+    "bert_base_en_uncased",
 )
 classifier.compile(
     loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -116,7 +118,8 @@ Here is the BibTeX entry:
 ```bibtex
 @misc{kerasnlp2022,
   title={KerasNLP},
-  author={Watson, Matthew, and Qian, Chen, and Bischof, Jonathan and Chollet, Fran\c{c}ois and others},
+  author={Watson, Matthew, and Qian, Chen, and Bischof, Jonathan and Chollet, 
+  Fran\c{c}ois and others},
   year={2022},
   howpublished={\url{https://github.com/keras-team/keras-nlp}},
 }
