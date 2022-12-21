@@ -119,6 +119,6 @@ backbone_presets = {
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_base_multi/v1/model.h5",
         "weights_hash": "26e5a824b26afd2ee336835bd337bbeb",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_base_multi/v1/vocab.spm",
-        "spm_proto_hash": "1613fcbf3b82999c187b09c9db79b568",
+        "spm_proto_hash": "b4ca07289eac48600b29529119d565e2",
     },
 }
