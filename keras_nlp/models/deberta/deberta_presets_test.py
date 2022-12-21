@@ -37,7 +37,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "deberta_xsmall",
         )
         outputs = tokenizer("The quick brown fox.")
-        expected_outputs = [581, 63773, 119455, 6, 147797, 5]
+        expected_outputs = [279, 1538, 3258, 16123, 260]
         self.assertAllEqual(outputs, expected_outputs)
 
     def test_preprocessor_output(self):
@@ -46,7 +46,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             sequence_length=4,
         )
         outputs = preprocessor("The quick brown fox.")["token_ids"]
-        expected_outputs = [0, 581, 63773, 2]
+        expected_outputs = [1, 279, 1538, 2]
         self.assertAllEqual(outputs, expected_outputs)
 
     @parameterized.named_parameters(
@@ -63,7 +63,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         outputs = model(input_data)
         if load_weights:
             outputs = outputs[0, 0, :5]
-            expected = [0.084763, 0.097018, 0.051329, -0.000805, 0.028415]
+            expected = [0.418, -0.116, -0.122, -1.847, -0.035]
             self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
 
     @parameterized.named_parameters(
