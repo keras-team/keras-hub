@@ -13,8 +13,8 @@
 # limitations under the License.
 
 from keras_nlp.layers.fnet_encoder import FNetEncoder
-from keras_nlp.layers.mlm_head import MLMHead
-from keras_nlp.layers.mlm_mask_generator import MLMMaskGenerator
+from keras_nlp.layers.masked_lm_head import MaskedLMHead
+from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.random_deletion import RandomDeletion

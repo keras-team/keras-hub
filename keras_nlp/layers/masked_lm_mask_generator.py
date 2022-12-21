@@ -24,11 +24,11 @@ except ImportError:
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class MLMMaskGenerator(keras.layers.Layer):
+class MaskedLMMaskGenerator(keras.layers.Layer):
     """Layer that applies language model masking.
 
     This layer is useful for preparing inputs for masked languaged modeling
-    (MLM) tasks. It follows the masking strategy described in the [original BERT
+    (MaskedLM) tasks. It follows the masking strategy described in the [original BERT
     paper](https://arxiv.org/abs/1810.04805). Given tokenized text,
     it randomly selects certain number of tokens for masking. Then for each
     selected token, it has a chance (configurable) to be replaced by
@@ -80,13 +80,13 @@ class MLMMaskGenerator(keras.layers.Layer):
     Examples:
 
     Basic usage.
-    >>> masker = keras_nlp.layers.MLMMaskGenerator(
+    >>> masker = keras_nlp.layers.MaskedLMMaskGenerator(
     ...     vocabulary_size=10, mask_selection_rate=0.2, mask_token_id=0,
     ...     mask_selection_length=5)
     >>> masker(tf.constant([1, 2, 3, 4, 5]))
 
     Ragged Input:
-    >>> masker = keras_nlp.layers.MLMMaskGenerator(
+    >>> masker = keras_nlp.layers.MaskedLMMaskGenerator(
     ...     vocabulary_size=10, mask_selection_rate=0.5, mask_token_id=0,
     ...     mask_selection_length=5)
     >>> masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))

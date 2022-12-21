@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Masked Language Model (MLM) head."""
+"""Masked Language Model (MaskedLM) head."""
 
 import tensorflow as tf
 from tensorflow import keras
 
 
 # TODO(mattdangerw): register this class as serializable.
-class MLMHead(keras.layers.Layer):
-    """Masked Language Model (MLM) head.
+class MaskedLMHead(keras.layers.Layer):
+    """Masked Language Model (MaskedLM) head.
 
     This layer takes two inputs:
 
@@ -31,17 +31,17 @@ class MLMHead(keras.layers.Layer):
 
     The token encodings should usually be the last output of an encoder model,
     and mask positions should be the interger positions you would like to
-    predict for the MLM task.
+    predict for the MaskedLM task.
 
     The layer will first gather the token encodings at the mask positions. These
     gathered tokens will be passed through a dense layer the same size as
     encoding dimension, then transformed to predictions the same size as the
     input vocabulary. This layer will produce a single output with shape
     `(batch_size, masks_per_sequence, vocabulary_size)`, which can be used to
-    compute an MLM loss function.
+    compute an MaskedLM loss function.
 
-    This layer is often be paired with `keras_nlp.layers.MLMMaskGenerator`,
-    which will help prepare inputs for the MLM task.
+    This layer is often be paired with `keras_nlp.layers.MaskedLMMaskGenerator`,
+    which will help prepare inputs for the MaskedLM task.
 
     Args:
         vocabulary_size: The total size of the vocabulary for predictions.
@@ -85,7 +85,7 @@ class MLMHead(keras.layers.Layer):
     )
 
     # Predict an output word for each masked input token.
-    mask_preds = keras_nlp.layers.MLMHead(
+    mask_preds = keras_nlp.layers.MaskedLMHead(
         vocabulary_size=vocab_size,
         activation="softmax",
     )(encoded_tokens, mask_positions=mask_positions)

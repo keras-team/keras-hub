@@ -375,7 +375,7 @@ def create_masked_lm_predictions(
 ):
     """Creates the predictions for the masked LM objective."""
 
-    # TODO(jbischof): replace with keras_nlp.layers.MLMMaskGenerator
+    # TODO(jbischof): replace with keras_nlp.layers.MaskedLMMaskGenerator
     # (Issue #166)
 
     cand_indexes = []

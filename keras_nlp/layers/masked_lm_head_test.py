@@ -18,12 +18,12 @@ import os
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers import mlm_head
+from keras_nlp.layers import masked_lm_head
 
 
-class MLMHeadTest(tf.test.TestCase):
+class MaskedLMHeadTest(tf.test.TestCase):
     def test_valid_call(self):
-        head = mlm_head.MLMHead(
+        head = masked_lm_head.MaskedLMHead(
             vocabulary_size=100,
             activation="softmax",
         )
@@ -41,7 +41,7 @@ class MLMHeadTest(tf.test.TestCase):
     def test_valid_call_with_embedding_weights(self):
         embedding = keras.layers.Embedding(100, 16)
         embedding.build((4, 10))
-        head = mlm_head.MLMHead(
+        head = masked_lm_head.MaskedLMHead(
             vocabulary_size=100,
             embedding_weights=embedding.embeddings,
             activation="softmax",
@@ -57,7 +57,7 @@ class MLMHeadTest(tf.test.TestCase):
         model((token_data, position_data))
 
     def test_get_config_and_from_config(self):
-        head = mlm_head.MLMHead(
+        head = masked_lm_head.MaskedLMHead(
             vocabulary_size=100,
             kernel_initializer="HeNormal",
             bias_initializer="Zeros",
@@ -81,7 +81,7 @@ class MLMHeadTest(tf.test.TestCase):
 
         self.assertEqual(config, {**config, **expected_params})
 
-        restored = mlm_head.MLMHead.from_config(config)
+        restored = masked_lm_head.MaskedLMHead.from_config(config)
         restored_config = restored.get_config()
 
         self.assertEqual(
@@ -91,19 +91,19 @@ class MLMHeadTest(tf.test.TestCase):
 
     def test_value_error_when_neither_embedding_or_vocab_size_set(self):
         with self.assertRaises(ValueError):
-            mlm_head.MLMHead()
+            masked_lm_head.MaskedLMHead()
 
     def test_value_error_when_vocab_size_mismatch(self):
         embedding = keras.layers.Embedding(100, 16)
         embedding.build((4, 10))
         with self.assertRaises(ValueError):
-            mlm_head.MLMHead(
+            masked_lm_head.MaskedLMHead(
                 vocabulary_size=101,
                 embedding_weights=embedding.embeddings,
             )
 
     def test_one_train_step(self):
-        head = mlm_head.MLMHead(
+        head = masked_lm_head.MaskedLMHead(
             vocabulary_size=100,
         )
         encoded_tokens = keras.Input(shape=(10, 16))
@@ -128,11 +128,11 @@ class MLMHeadTest(tf.test.TestCase):
         optimizer.apply_gradients(zip(grad, model.trainable_variables))
 
     def test_checkpointing(self):
-        head1 = mlm_head.MLMHead(
+        head1 = masked_lm_head.MaskedLMHead(
             vocabulary_size=100,
             activation="softmax",
         )
-        head2 = mlm_head.MLMHead(
+        head2 = masked_lm_head.MaskedLMHead(
             vocabulary_size=100,
             activation="softmax",
         )
@@ -155,7 +155,7 @@ class MLMHeadTest(tf.test.TestCase):
         self.assertAllClose(head1_output, head2_output)
 
     def test_saving_model(self):
-        head = mlm_head.MLMHead(
+        head = masked_lm_head.MaskedLMHead(
             vocabulary_size=100,
             activation="softmax",
         )
