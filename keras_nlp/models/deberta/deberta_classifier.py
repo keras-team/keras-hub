@@ -18,9 +18,9 @@ import copy
 from tensorflow import keras
 
 from keras_nlp.models.deberta.deberta_backbone import DebertaBackbone
+from keras_nlp.models.deberta.deberta_backbone import deberta_kernel_initializer
 from keras_nlp.models.deberta.deberta_preprocessor import DebertaPreprocessor
 from keras_nlp.models.deberta.deberta_presets import backbone_presets
-from keras_nlp.models.roberta.roberta_backbone import roberta_kernel_initializer
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -108,7 +108,7 @@ class DebertaClassifier(PipelineModel):
         x = keras.layers.Dropout(dropout, name="classifier_dropout")(x)
         outputs = keras.layers.Dense(
             num_classes,
-            kernel_initializer=roberta_kernel_initializer(),
+            kernel_initializer=deberta_kernel_initializer(),
             name="logits",
         )(x)
 
