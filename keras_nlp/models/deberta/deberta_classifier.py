@@ -49,6 +49,8 @@ class DebertaClassifier(PipelineModel):
         backbone: A `keras_nlp.models.Deberta` instance.
         num_classes: int. Number of classes to predict.
         hidden_dim: int. The size of the pooler layer.
+        dropout: float. Dropout probability applied to the pooled output. For
+            the second dropout layer, `backbone.dropout` is used.
         preprocessor: A `keras_nlp.models.DebertaPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
@@ -57,8 +59,6 @@ class DebertaClassifier(PipelineModel):
     ```python
     preprocessed_features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
-        "token_ids": tf.random.uniform(
-            shape=(2, 12), dtype=tf.int64, maxval=vocabulary_size),
         "padding_mask": tf.constant(
             [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(1, 12)),
     }
@@ -66,12 +66,13 @@ class DebertaClassifier(PipelineModel):
 
     # Randomly initialized DeBERTa encoder
     backbone = keras_nlp.models.DebertaBackbone(
-        vocabulary_size=250002,
+        vocabulary_size=128100,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
-        max_sequence_length=12
+        max_sequence_length=12,
+        bucket_size=6,
     )
 
     # Create a DeBERTa classifier and fit your data.
@@ -103,9 +104,11 @@ class DebertaClassifier(PipelineModel):
         x = backbone(inputs)[:, backbone.start_token_index, :]
         x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
         x = keras.layers.Dense(
-            hidden_dim, activation="tanh", name="pooled_dense"
+            hidden_dim,
+            activation=lambda x: keras.activations.gelu(x, approximate=False),
+            name="pooled_dense",
         )(x)
-        x = keras.layers.Dropout(dropout, name="classifier_dropout")(x)
+        x = keras.layers.Dropout(backbone.dropout, name="classifier_dropout")(x)
         outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=deberta_kernel_initializer(),

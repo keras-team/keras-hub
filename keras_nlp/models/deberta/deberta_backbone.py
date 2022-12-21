@@ -177,6 +177,7 @@ class DebertaBackbone(keras.Model):
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
         self.bucket_size = bucket_size
+        self.start_token_index = 0
 
     def get_config(self):
         return {

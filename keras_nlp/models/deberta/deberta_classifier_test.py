@@ -53,6 +53,7 @@ class DebertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
             hidden_dim=64,
             intermediate_dim=128,
             max_sequence_length=128,
+            bucket_size=64,
         )
         self.classifier = DebertaClassifier(
             self.backbone,
