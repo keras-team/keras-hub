@@ -38,9 +38,14 @@ class DebertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
             model_writer=bytes_io,
             vocab_size=10,
             model_type="WORD",
-            unk_id=0,
+            pad_id=0,
             bos_id=1,
             eos_id=2,
+            unk_id=3,
+            pad_piece="[PAD]",
+            bos_piece="[CLS]",
+            eos_piece="[SEP]",
+            unk_piece="[UNK]",
         )
         self.preprocessor = DebertaPreprocessor(
             tokenizer=DebertaTokenizer(proto=bytes_io.getvalue()),
