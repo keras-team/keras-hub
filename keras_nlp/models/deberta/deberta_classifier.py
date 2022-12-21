@@ -41,9 +41,7 @@ class DebertaClassifier(PipelineModel):
     creating the model with `from_preset()`.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
-    warranties or conditions of any kind. The underlying model is provided by a
-    third party and subject to a separate license, available
-    [here](https://github.com/facebookresearch/fairseq).
+    warranties or conditions of any kind.
 
     Args:
         backbone: A `keras_nlp.models.Deberta` instance.
