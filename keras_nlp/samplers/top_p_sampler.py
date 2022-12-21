@@ -58,8 +58,8 @@ class TopPSampler(Sampler):
         max_length = tf.cast(max_length, num_steps.dtype)
         length = max_length - num_steps
 
-        def one_step(length, prompt):
-            pred = token_probability_fn(prompt[:, :length])
+        def one_step(length, prompt, mask):
+            pred = token_probability_fn(prompt[:, :length], mask)
             if self.from_logits:
                 pred = keras.activations.softmax(pred, axis=-1)
             # Sort preds in descending order.
@@ -91,6 +91,18 @@ class TopPSampler(Sampler):
                 mask[:, length], prompt[:, length], next_token
             )
 
+            mask = tf.tensor_scatter_nd_update(
+                tensor=mask,
+                indices=tf.stack(
+                    (
+                        tf.cast(tf.range(batch_size), dtype=length.dtype),
+                        tf.repeat(length, batch_size),
+                    ),
+                    axis=1,
+                ),
+                updates=tf.repeat(True, batch_size),
+            )
+
             # Append the next token to current sequence.
             prompt = tf.tensor_scatter_nd_update(
                 tensor=prompt,
@@ -105,13 +117,13 @@ class TopPSampler(Sampler):
             )
 
             length = tf.add(length, 1)
-            return (length, prompt)
+            return (length, prompt, mask)
 
         # Run a while loop till text of length `max_length` has been generated.
-        length, prompt = tf.while_loop(
-            cond=lambda length, _: tf.less(length, max_length),
+        length, prompt, mask = tf.while_loop(
+            cond=lambda length, prompt, mask: tf.less(length, max_length),
             body=one_step,
-            loop_vars=(length, prompt),
+            loop_vars=(length, prompt, mask),
         )
 
         return prompt
