@@ -216,9 +216,12 @@ def connect_to_tpu(tpu_name):
 def main(_):
     if FLAGS.tpu_name:
         strategy = connect_to_tpu(FLAGS.tpu_name)
+        policy = keras.mixed_precision.Policy("mixed_bfloat16")
     else:
-        # Use default strategy is not using TPU.
+        # Use default strategy if not using TPU.
         strategy = tf.distribute.get_strategy()
+        policy = keras.mixed_precision.Policy("mixed_float16")
+    keras.mixed_precision.set_global_policy(policy)
 
     train_ds, test_ds, val_ds, idx_order = load_data(FLAGS.task_name)
     # ----- Custom code block starts -----
