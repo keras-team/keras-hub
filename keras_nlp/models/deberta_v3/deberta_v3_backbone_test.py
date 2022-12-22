@@ -51,7 +51,7 @@ class DebertaV3BackboneTest(tf.test.TestCase, parameterized.TestCase):
         self.model(self.input_batch)
 
         # Check default name passed through
-        self.assertRegexpMatches(self.model.name, "deberta_backbone")
+        self.assertRegexpMatches(self.model.name, "deberta_v3_backbone")
 
     def test_variable_sequence_length_call_deberta(self):
         for seq_length in (25, 50, 75):
