@@ -16,7 +16,7 @@
 
 from tensorflow import keras
 
-from keras_nlp.models.deberta.disentangled_self_attention import (
+from keras_nlp.models.deberta_v3.disentangled_self_attention import (
     DisentangledSelfAttention,
 )
 from keras_nlp.utils.keras_utils import clone_initializer

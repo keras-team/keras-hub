@@ -22,11 +22,13 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.deberta.deberta_preprocessor import DebertaPreprocessor
-from keras_nlp.models.deberta.deberta_tokenizer import DebertaTokenizer
+from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
+    DebertaV3Preprocessor,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 
 
-class DebertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class DebertaV3PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
@@ -48,8 +50,8 @@ class DebertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.proto = bytes_io.getvalue()
 
-        self.preprocessor = DebertaPreprocessor(
-            tokenizer=DebertaTokenizer(proto=self.proto),
+        self.preprocessor = DebertaV3Preprocessor(
+            tokenizer=DebertaV3Tokenizer(proto=self.proto),
             sequence_length=12,
         )
 

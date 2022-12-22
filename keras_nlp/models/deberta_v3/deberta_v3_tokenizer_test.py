@@ -22,10 +22,10 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.deberta.deberta_tokenizer import DebertaTokenizer
+from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 
 
-class DebertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class DebertaV3TokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
@@ -47,7 +47,7 @@ class DebertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.proto = bytes_io.getvalue()
 
-        self.tokenizer = DebertaTokenizer(proto=self.proto)
+        self.tokenizer = DebertaV3Tokenizer(proto=self.proto)
 
     def test_tokenize(self):
         input_data = "the quick brown fox"
@@ -65,7 +65,7 @@ class DebertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(output, tf.constant(["the quick brown fox"]))
 
     def test_vocabulary_size(self):
-        tokenizer = DebertaTokenizer(proto=self.proto)
+        tokenizer = DebertaV3Tokenizer(proto=self.proto)
         self.assertEqual(tokenizer.vocabulary_size(), 10)
 
     @parameterized.named_parameters(

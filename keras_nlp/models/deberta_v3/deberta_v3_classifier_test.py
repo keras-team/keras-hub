@@ -21,13 +21,19 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.deberta.deberta_backbone import DebertaBackbone
-from keras_nlp.models.deberta.deberta_classifier import DebertaClassifier
-from keras_nlp.models.deberta.deberta_preprocessor import DebertaPreprocessor
-from keras_nlp.models.deberta.deberta_preprocessor import DebertaTokenizer
+from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
+from keras_nlp.models.deberta_v3.deberta_v3_classifier import (
+    DebertaV3Classifier,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
+    DebertaV3Preprocessor,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
+    DebertaV3Tokenizer,
+)
 
 
-class DebertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
+class DebertaV3ClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
@@ -47,11 +53,11 @@ class DebertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
             eos_piece="[SEP]",
             unk_piece="[UNK]",
         )
-        self.preprocessor = DebertaPreprocessor(
-            tokenizer=DebertaTokenizer(proto=bytes_io.getvalue()),
+        self.preprocessor = DebertaV3Preprocessor(
+            tokenizer=DebertaV3Tokenizer(proto=bytes_io.getvalue()),
             sequence_length=12,
         )
-        self.backbone = DebertaBackbone(
+        self.backbone = DebertaV3Backbone(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -60,12 +66,12 @@ class DebertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
             max_sequence_length=128,
             bucket_size=64,
         )
-        self.classifier = DebertaClassifier(
+        self.classifier = DebertaV3Classifier(
             self.backbone,
             4,
             preprocessor=self.preprocessor,
         )
-        self.classifier_no_preprocessing = DebertaClassifier(
+        self.classifier_no_preprocessing = DebertaV3Classifier(
             self.backbone,
             4,
             preprocessor=None,
@@ -133,7 +139,7 @@ class DebertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, DebertaClassifier)
+        self.assertIsInstance(restored_model, DebertaV3Classifier)
 
         # Check that output matches.
         restored_output = restored_model.predict(self.raw_batch)

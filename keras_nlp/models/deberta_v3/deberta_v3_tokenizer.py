@@ -19,14 +19,14 @@ import os
 
 from tensorflow import keras
 
-from keras_nlp.models.deberta.deberta_presets import backbone_presets
+from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class DebertaTokenizer(SentencePieceTokenizer):
+class DebertaV3Tokenizer(SentencePieceTokenizer):
     """DeBERTa tokenizer layer based on SentencePiece.
 
     This tokenizer class will tokenize raw strings into integer sequences and
@@ -36,7 +36,7 @@ class DebertaTokenizer(SentencePieceTokenizer):
     download a matching vocabulary for a DeBERTa preset.
 
     This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.DebertaPreprocessor` layer for input
+    combined with a `keras_nlp.models.DebertaV3Preprocessor` layer for input
     packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
@@ -54,7 +54,7 @@ class DebertaTokenizer(SentencePieceTokenizer):
     Examples:
 
     ```python
-    tokenizer = keras_nlp.models.DebertaTokenizer(proto="model.spm")
+    tokenizer = keras_nlp.models.DebertaV3Tokenizer(proto="model.spm")
 
     # Batched inputs.
     tokenizer(["the quick brown fox", "the earth is round"])
@@ -105,7 +105,7 @@ class DebertaTokenizer(SentencePieceTokenizer):
         Examples:
         ```python
         # Load a preset tokenizer.
-        tokenizer = keras_nlp.models.DebertaTokenizer.from_preset(
+        tokenizer = keras_nlp.models.DebertaV3Tokenizer.from_preset(
             "deberta_base",
         )
 
