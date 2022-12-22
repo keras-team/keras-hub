@@ -17,10 +17,12 @@ import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
-from keras_nlp.models.deberta.deberta_backbone import DebertaBackbone
-from keras_nlp.models.deberta.deberta_classifier import DebertaClassifier
-from keras_nlp.models.deberta.deberta_preprocessor import DebertaPreprocessor
-from keras_nlp.models.deberta.deberta_tokenizer import DebertaTokenizer
+from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaBackbone
+from keras_nlp.models.deberta_v3.deberta_v3_classifier import DebertaClassifier
+from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
+    DebertaPreprocessor,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaTokenizer
 
 
 @pytest.mark.large

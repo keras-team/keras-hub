@@ -18,8 +18,8 @@ import copy
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
-from keras_nlp.models.deberta.deberta_presets import backbone_presets
-from keras_nlp.models.deberta.deberta_tokenizer import DebertaTokenizer
+from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
+from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaTokenizer
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )

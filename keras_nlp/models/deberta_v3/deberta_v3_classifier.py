@@ -17,10 +17,14 @@ import copy
 
 from tensorflow import keras
 
-from keras_nlp.models.deberta.deberta_backbone import DebertaBackbone
-from keras_nlp.models.deberta.deberta_backbone import deberta_kernel_initializer
-from keras_nlp.models.deberta.deberta_preprocessor import DebertaPreprocessor
-from keras_nlp.models.deberta.deberta_presets import backbone_presets
+from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaBackbone
+from keras_nlp.models.deberta_v3.deberta_v3_backbone import (
+    deberta_kernel_initializer,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
+    DebertaPreprocessor,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -41,7 +45,9 @@ class DebertaClassifier(PipelineModel):
     creating the model with `from_preset()`.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
-    warranties or conditions of any kind.
+    warranties or conditions of any kind. The underlying model is provided by a
+    third party and subject to a separate license, available
+    [here](https://github.com/microsoft/DeBERTa).
 
     Args:
         backbone: A `keras_nlp.models.Deberta` instance.

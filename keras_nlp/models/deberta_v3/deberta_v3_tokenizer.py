@@ -19,7 +19,7 @@ import os
 
 from tensorflow import keras
 
-from keras_nlp.models.deberta.deberta_presets import backbone_presets
+from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring

@@ -20,11 +20,11 @@ import os
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.models.deberta.deberta_presets import backbone_presets
-from keras_nlp.models.deberta.disentangled_attention_encoder import (
+from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
+from keras_nlp.models.deberta_v3.disentangled_attention_encoder import (
     DisentangledAttentionEncoder,
 )
-from keras_nlp.models.deberta.relative_embedding import RelativeEmbedding
+from keras_nlp.models.deberta_v3.relative_embedding import RelativeEmbedding
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -49,7 +49,9 @@ class DebertaBackbone(keras.Model):
     constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
-    warranties or conditions of any kind.
+    warranties or conditions of any kind. The underlying model is provided by a
+    third party and subject to a separate license, available
+    [here](https://github.com/microsoft/DeBERTa).
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.

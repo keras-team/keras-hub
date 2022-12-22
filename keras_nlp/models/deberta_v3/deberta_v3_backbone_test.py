@@ -19,7 +19,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.deberta.deberta_backbone import DebertaBackbone
+from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaBackbone
 
 
 class DebertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
