@@ -34,7 +34,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_tokenizer_output(self):
         tokenizer = DebertaTokenizer.from_preset(
-            "deberta_xsmall",
+            "deberta_v3_extra_small",
         )
         outputs = tokenizer("The quick brown fox.")
         expected_outputs = [279, 1538, 3258, 16123, 260]
@@ -42,7 +42,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_preprocessor_output(self):
         preprocessor = DebertaPreprocessor.from_preset(
-            "deberta_xsmall",
+            "deberta_v3_extra_small",
             sequence_length=4,
         )
         outputs = preprocessor("The quick brown fox.")["token_ids"]
@@ -58,7 +58,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = DebertaBackbone.from_preset(
-            "deberta_xsmall", load_weights=load_weights
+            "deberta_v3_extra_small", load_weights=load_weights
         )
         outputs = model(input_data)
         if load_weights:
@@ -72,7 +72,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_classifier_output(self, load_weights):
         input_data = tf.constant(["The quick brown fox."])
         model = DebertaClassifier.from_preset(
-            "deberta_xsmall", load_weights=load_weights
+            "deberta_v3_extra_small", load_weights=load_weights
         )
         # Never assert output values, as the head weights are random.
         model.predict(input_data)
@@ -86,7 +86,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = DebertaClassifier.from_preset(
-            "deberta_xsmall",
+            "deberta_v3_extra_small",
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -113,7 +113,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_unknown_preset_error(self, cls):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("deberta_xsmall_clowntown")
+            cls.from_preset("deberta_v3_extra_small_clowntown")
 
 
 @pytest.mark.extra_large
