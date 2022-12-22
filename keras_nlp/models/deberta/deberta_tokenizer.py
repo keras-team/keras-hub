@@ -14,10 +14,15 @@
 
 """DeBERTa tokenizer."""
 
+import copy
+import os
+
 from tensorflow import keras
 
+from keras_nlp.models.deberta.deberta_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -83,12 +88,53 @@ class DebertaTokenizer(SentencePieceTokenizer):
 
     @classproperty
     def presets(cls):
-        return {}
+        return copy.deepcopy(backbone_presets)
 
     @classmethod
+    @format_docstring(names=", ".join(backbone_presets))
     def from_preset(
         cls,
         preset,
         **kwargs,
     ):
-        raise NotImplementedError
+        """Instantiate anDeBERTa tokenizer from preset vocabulary.
+
+        Args:
+            preset: string. Must be one of {{names}}.
+
+        Examples:
+        ```python
+        # Load a preset tokenizer.
+        tokenizer = keras_nlp.models.DebertaTokenizer.from_preset(
+            "deberta_base",
+        )
+
+        # Tokenize some input.
+        tokenizer("The quick brown fox tripped.")
+
+        # Detokenize some input.
+        tokenizer.detokenize([5, 6, 7, 8, 9])
+        ```
+        """
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+        metadata = cls.presets[preset]
+
+        spm_proto = keras.utils.get_file(
+            "vocab.spm",
+            metadata["spm_proto_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["spm_proto_hash"],
+        )
+
+        config = metadata["preprocessor_config"]
+        config.update(
+            {
+                "proto": spm_proto,
+            },
+        )
+
+        return cls.from_config({**config, **kwargs})
