@@ -18,8 +18,8 @@ import copy
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
-from keras_nlp.models.deberta.deberta_presets import backbone_presets
-from keras_nlp.models.deberta.deberta_tokenizer import DebertaTokenizer
+from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
+from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
@@ -29,7 +29,7 @@ from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class DebertaPreprocessor(keras.layers.Layer):
+class DebertaV3Preprocessor(keras.layers.Layer):
     """A DeBERTa preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
@@ -58,7 +58,7 @@ class DebertaPreprocessor(keras.layers.Layer):
     the layer, e.g. `ds.map(lambda seg1, seg2: preprocessor(x=(seg1, seg2)))`.
 
     Args:
-        tokenizer: A `keras_nlp.models.DebertaTokenizer` instance.
+        tokenizer: A `keras_nlp.models.DebertaV3Tokenizer` instance.
         sequence_length: The length of the packed inputs.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
@@ -73,8 +73,8 @@ class DebertaPreprocessor(keras.layers.Layer):
 
     Examples:
     ```python
-    tokenizer = keras_nlp.models.DebertaTokenizer(proto="model.spm")
-    preprocessor = keras_nlp.models.DebertaPreprocessor(
+    tokenizer = keras_nlp.models.DebertaV3Tokenizer(proto="model.spm")
+    preprocessor = keras_nlp.models.DebertaV3Preprocessor(
         tokenizer=tokenizer,
         sequence_length=10,
     )
@@ -159,7 +159,7 @@ class DebertaPreprocessor(keras.layers.Layer):
 
     @property
     def tokenizer(self):
-        """The `keras_nlp.models.DebertaTokenizer` used to tokenize strings."""
+        """The `keras_nlp.models.DebertaV3Tokenizer` used to tokenize strings."""
         return self._tokenizer
 
     def get_config(self):
@@ -225,13 +225,13 @@ class DebertaPreprocessor(keras.layers.Layer):
         Examples:
         ```python
         # Load preprocessor from preset
-        preprocessor = keras_nlp.models.DebertaPreprocessor.from_preset(
+        preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset(
             "deberta_base",
         )
         preprocessor("The quick brown fox jumped.")
 
         # Override sequence_length
-        preprocessor = keras_nlp.models.DebertaPreprocessor.from_preset(
+        preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset(
             "deberta_base",
             sequence_length=64
         )
@@ -244,7 +244,7 @@ class DebertaPreprocessor(keras.layers.Layer):
                 f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
 
-        tokenizer = DebertaTokenizer.from_preset(preset)
+        tokenizer = DebertaV3Tokenizer.from_preset(preset)
 
         # Use model's `max_sequence_length` if `sequence_length` unspecified;
         # otherwise check that `sequence_length` not too long.

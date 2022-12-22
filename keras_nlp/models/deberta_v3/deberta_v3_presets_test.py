@@ -17,14 +17,18 @@ import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
-from keras_nlp.models.deberta.deberta_backbone import DebertaBackbone
-from keras_nlp.models.deberta.deberta_classifier import DebertaClassifier
-from keras_nlp.models.deberta.deberta_preprocessor import DebertaPreprocessor
-from keras_nlp.models.deberta.deberta_tokenizer import DebertaTokenizer
+from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
+from keras_nlp.models.deberta_v3.deberta_v3_classifier import (
+    DebertaV3Classifier,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
+    DebertaV3Preprocessor,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 
 
 @pytest.mark.large
-class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     """
     A smoke test for DeBERTa presets we run continuously.
 
@@ -33,7 +37,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     """
 
     def test_tokenizer_output(self):
-        tokenizer = DebertaTokenizer.from_preset(
+        tokenizer = DebertaV3Tokenizer.from_preset(
             "deberta_v3_extra_small",
         )
         outputs = tokenizer("The quick brown fox.")
@@ -41,7 +45,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(outputs, expected_outputs)
 
     def test_preprocessor_output(self):
-        preprocessor = DebertaPreprocessor.from_preset(
+        preprocessor = DebertaV3Preprocessor.from_preset(
             "deberta_v3_extra_small",
             sequence_length=4,
         )
@@ -57,7 +61,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "token_ids": tf.constant([[0, 581, 63773, 2]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
-        model = DebertaBackbone.from_preset(
+        model = DebertaV3Backbone.from_preset(
             "deberta_v3_extra_small", load_weights=load_weights
         )
         outputs = model(input_data)
@@ -71,7 +75,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_classifier_output(self, load_weights):
         input_data = tf.constant(["The quick brown fox."])
-        model = DebertaClassifier.from_preset(
+        model = DebertaV3Classifier.from_preset(
             "deberta_v3_extra_small", load_weights=load_weights
         )
         # Never assert output values, as the head weights are random.
@@ -85,7 +89,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "token_ids": tf.constant([[0, 581, 63773, 2]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
-        model = DebertaClassifier.from_preset(
+        model = DebertaV3Classifier.from_preset(
             "deberta_v3_extra_small",
             load_weights=load_weights,
             preprocessor=None,
@@ -94,10 +98,10 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         model.predict(input_data)
 
     @parameterized.named_parameters(
-        ("deberta_tokenizer", DebertaTokenizer),
-        ("deberta_preprocessor", DebertaPreprocessor),
-        ("deberta", DebertaBackbone),
-        ("deberta_classifier", DebertaClassifier),
+        ("deberta_tokenizer", DebertaV3Tokenizer),
+        ("deberta_preprocessor", DebertaV3Preprocessor),
+        ("deberta", DebertaV3Backbone),
+        ("deberta_classifier", DebertaV3Classifier),
     )
     def test_preset_docstring(self, cls):
         """Check we did our docstring formatting correctly."""
@@ -105,10 +109,10 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("deberta_tokenizer", DebertaTokenizer),
-        ("deberta_preprocessor", DebertaPreprocessor),
-        ("deberta", DebertaBackbone),
-        ("deberta_classifier", DebertaClassifier),
+        ("deberta_tokenizer", DebertaV3Tokenizer),
+        ("deberta_preprocessor", DebertaV3Preprocessor),
+        ("deberta", DebertaV3Backbone),
+        ("deberta_classifier", DebertaV3Classifier),
     )
     def test_unknown_preset_error(self, cls):
         # Not a preset name
@@ -117,7 +121,7 @@ class DebertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class DebertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class DebertaV3PresetFullTest(tf.test.TestCase, parameterized.TestCase):
     """
     Test the full enumeration of our preset.
 
@@ -130,8 +134,8 @@ class DebertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         ("preset_weights", True), ("random_weights", False)
     )
     def test_load_deberta(self, load_weights):
-        for preset in DebertaBackbone.presets:
-            model = DebertaBackbone.from_preset(
+        for preset in DebertaV3Backbone.presets:
+            model = DebertaV3Backbone.from_preset(
                 preset, load_weights=load_weights
             )
             input_data = {
@@ -146,8 +150,8 @@ class DebertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         ("preset_weights", True), ("random_weights", False)
     )
     def test_load_deberta_classifier(self, load_weights):
-        for preset in DebertaClassifier.presets:
-            classifier = DebertaClassifier.from_preset(
+        for preset in DebertaV3Classifier.presets:
+            classifier = DebertaV3Classifier.from_preset(
                 preset,
                 num_classes=4,
                 load_weights=load_weights,
@@ -159,8 +163,8 @@ class DebertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         ("preset_weights", True), ("random_weights", False)
     )
     def test_load_deberta_classifier_without_preprocessing(self, load_weights):
-        for preset in DebertaClassifier.presets:
-            classifier = DebertaClassifier.from_preset(
+        for preset in DebertaV3Classifier.presets:
+            classifier = DebertaV3Classifier.from_preset(
                 preset,
                 num_classes=4,
                 load_weights=load_weights,
@@ -177,11 +181,11 @@ class DebertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
             classifier.predict(input_data)
 
     def test_load_tokenizers(self):
-        for preset in DebertaTokenizer.presets:
-            tokenizer = DebertaTokenizer.from_preset(preset)
+        for preset in DebertaV3Tokenizer.presets:
+            tokenizer = DebertaV3Tokenizer.from_preset(preset)
             tokenizer("The quick brown fox.")
 
     def test_load_preprocessors(self):
-        for preset in DebertaPreprocessor.presets:
-            preprocessor = DebertaPreprocessor.from_preset(preset)
+        for preset in DebertaV3Preprocessor.presets:
+            preprocessor = DebertaV3Preprocessor.from_preset(preset)
             preprocessor("The quick brown fox.")

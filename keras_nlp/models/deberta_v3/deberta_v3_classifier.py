@@ -17,21 +17,25 @@ import copy
 
 from tensorflow import keras
 
-from keras_nlp.models.deberta.deberta_backbone import DebertaBackbone
-from keras_nlp.models.deberta.deberta_backbone import deberta_kernel_initializer
-from keras_nlp.models.deberta.deberta_preprocessor import DebertaPreprocessor
-from keras_nlp.models.deberta.deberta_presets import backbone_presets
+from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
+from keras_nlp.models.deberta_v3.deberta_v3_backbone import (
+    deberta_kernel_initializer,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
+    DebertaV3Preprocessor,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class DebertaClassifier(PipelineModel):
+class DebertaV3Classifier(PipelineModel):
     """An end-to-end DeBERTa model for classification tasks.
 
     This model attaches a classification head to a
-    `keras_nlp.model.DebertaBackbone` model, mapping from the backbone
+    `keras_nlp.model.DebertaV3Backbone` model, mapping from the backbone
     outputs to logit output suitable for a classification task. For usage of
     this model with pre-trained weights, see the `from_preset()` method.
 
@@ -41,15 +45,17 @@ class DebertaClassifier(PipelineModel):
     creating the model with `from_preset()`.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
-    warranties or conditions of any kind.
+    warranties or conditions of any kind. The underlying model is provided by a
+    third party and subject to a separate license, available
+    [here](https://github.com/microsoft/DeBERTa).
 
     Args:
-        backbone: A `keras_nlp.models.Deberta` instance.
+        backbone: A `keras_nlp.models.DebertaV3` instance.
         num_classes: int. Number of classes to predict.
         hidden_dim: int. The size of the pooler layer.
         dropout: float. Dropout probability applied to the pooled output. For
             the second dropout layer, `backbone.dropout` is used.
-        preprocessor: A `keras_nlp.models.DebertaPreprocessor` or `None`. If
+        preprocessor: A `keras_nlp.models.DebertaV3Preprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
 
@@ -63,7 +69,7 @@ class DebertaClassifier(PipelineModel):
     labels = [0, 3]
 
     # Randomly initialized DeBERTa encoder
-    backbone = keras_nlp.models.DebertaBackbone(
+    backbone = keras_nlp.models.DebertaV3Backbone(
         vocabulary_size=128100,
         num_layers=12,
         num_heads=12,
@@ -74,7 +80,7 @@ class DebertaClassifier(PipelineModel):
     )
 
     # Create a DeBERTa classifier and fit your data.
-    classifier = keras_nlp.models.DebertaClassifier(
+    classifier = keras_nlp.models.DebertaV3Classifier(
         backbone,
         num_classes=4,
         preprocessor=None,
@@ -132,12 +138,12 @@ class DebertaClassifier(PipelineModel):
 
     @property
     def backbone(self):
-        """A `keras_nlp.models.DebertaBackbone` submodel."""
+        """A `keras_nlp.models.DebertaV3Backbone` submodel."""
         return self._backbone
 
     @property
     def preprocessor(self):
-        """A `keras_nlp.models.DebertaPreprocessor` preprocessing layer."""
+        """A `keras_nlp.models.DebertaV3Preprocessor` preprocessing layer."""
         return self._preprocessor
 
     def get_config(self):
@@ -195,8 +201,8 @@ class DebertaClassifier(PipelineModel):
         features = ["The quick brown fox jumped.", "I forgot my homework."]
         labels = [0, 3]
 
-        # Create a DebertaClassifier and fit your data.
-        classifier = keras_nlp.models.DebertaClassifier.from_preset(
+        # Create a DebertaV3Classifier and fit your data.
+        classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
             "deberta_base",
             num_classes=4,
         )
@@ -213,13 +219,13 @@ class DebertaClassifier(PipelineModel):
         labels = [0, 3]
 
         # Use a shorter sequence length.
-        preprocessor = keras_nlp.models.DebertaPreprocessor.from_preset(
+        preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset(
             "deberta_base",
             sequence_length=128,
         )
 
-        # Create a DebertaClassifier and fit your data.
-        classifier = keras_nlp.models.DebertaClassifier.from_preset(
+        # Create a DebertaV3Classifier and fit your data.
+        classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
             "deberta_base",
             num_classes=4,
             preprocessor=preprocessor,
@@ -241,8 +247,8 @@ class DebertaClassifier(PipelineModel):
         }
         labels = [0, 3]
 
-        # Create a DebertaClassifier and fit your data.
-        classifier = keras_nlp.models.DebertaClassifier.from_preset(
+        # Create a DebertaV3Classifier and fit your data.
+        classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
             "deberta_base",
             num_classes=4,
             preprocessor=None,
@@ -254,11 +260,11 @@ class DebertaClassifier(PipelineModel):
         ```
         """
         if "preprocessor" not in kwargs:
-            kwargs["preprocessor"] = DebertaPreprocessor.from_preset(preset)
+            kwargs["preprocessor"] = DebertaV3Preprocessor.from_preset(preset)
 
         # Check if preset is backbone-only model
-        if preset in DebertaBackbone.presets:
-            backbone = DebertaBackbone.from_preset(preset, load_weights)
+        if preset in DebertaV3Backbone.presets:
+            backbone = DebertaV3Backbone.from_preset(preset, load_weights)
             return cls(backbone, **kwargs)
 
         # Otherwise must be one of class presets
