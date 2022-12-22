@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""XLM-RoBERTa task specific models and heads."""
+"""XLM-RoBERTa classification model."""
 
 import copy
 
@@ -51,8 +51,8 @@ class XLMRobertaClassifier(PipelineModel):
         backbone: A `keras_nlp.models.XLMRoberta` instance.
         num_classes: int. Number of classes to predict.
         hidden_dim: int. The size of the pooler layer.
-        dropout: float, defaults to 0.0. The dropout probability value, applied
-            to the pooled output, and after the first dense layer.
+        dropout: float. The dropout probability value, applied to the pooled
+            output, and after the first dense layer.
         preprocessor: A `keras_nlp.models.XLMRobertaPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.

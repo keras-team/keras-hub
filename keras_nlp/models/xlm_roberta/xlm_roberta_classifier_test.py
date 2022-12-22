@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for XLM-RoBERTa task specific models and heads."""
+"""Tests for XLM-RoBERTa classification model."""
 
 import io
 import os
