@@ -200,12 +200,12 @@ class MaskedLMHead(keras.layers.Layer):
 
 
 class BertPretrainingModel(keras.Model):
-    """MLM + NSP model with Bert encoder."""
+    """MaskedLM + NSP model with Bert encoder."""
 
     def __init__(self, encoder, **kwargs):
         super().__init__(**kwargs)
         self.encoder = encoder
-        # TODO(jbischof): replace with keras_nlp.layers.MLMHead (Issue #166)
+        # TODO(jbischof): replace with keras_nlp.layers.MaskedLMHead (Issue #166)
         self.masked_lm_head = MaskedLMHead(
             embedding_table=encoder.token_embedding.embeddings,
             initializer=keras.initializers.TruncatedNormal(stddev=0.02),

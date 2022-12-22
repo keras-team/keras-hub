@@ -53,6 +53,8 @@ class DistilBertClassifier(PipelineModel):
         backbone: A `keras_nlp.models.DistilBert` instance.
         num_classes: int. Number of classes to predict.
         hidden_dim: int. The size of the pooler layer.
+        dropout: float, defaults to 0.2. The dropout probability value, applied
+            after the first dense layer.
         preprocessor: A `keras_nlp.models.DistilBertPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
@@ -61,8 +63,6 @@ class DistilBertClassifier(PipelineModel):
     ```python
     preprocessed_features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
-        "token_ids": tf.random.uniform(
-            shape=(2, 12), dtype=tf.int64, maxval=vocabulary_size),
         "padding_mask": tf.constant(
             [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(1, 12)),
     }

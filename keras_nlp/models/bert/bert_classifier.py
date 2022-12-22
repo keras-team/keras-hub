@@ -50,6 +50,8 @@ class BertClassifier(PipelineModel):
     Args:
         backbone: A `keras_nlp.models.BertBackbone` instance.
         num_classes: int. Number of classes to predict.
+        dropout: float, defaults to 0.1. The dropout probability value, applied
+            after the dense layer.
         preprocessor: A `keras_nlp.models.BertPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
