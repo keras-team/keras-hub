@@ -13,14 +13,19 @@
 # limitations under the License.
 """DeBERTa preprocessor layer."""
 
+import copy
+
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
+from keras_nlp.models.deberta.deberta_presets import backbone_presets
+from keras_nlp.models.deberta.deberta_tokenizer import DebertaTokenizer
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -186,9 +191,10 @@ class DebertaPreprocessor(keras.layers.Layer):
 
     @classproperty
     def presets(cls):
-        return {}
+        return copy.deepcopy(backbone_presets)
 
     @classmethod
+    @format_docstring(names=", ".join(backbone_presets))
     def from_preset(
         cls,
         preset,
@@ -196,4 +202,67 @@ class DebertaPreprocessor(keras.layers.Layer):
         truncate="round_robin",
         **kwargs,
     ):
-        raise NotImplementedError
+        """Instantiate DeBERTa preprocessor from preset architecture.
+
+        Args:
+            preset: string. Must be one of {{names}}.
+            sequence_length: int, optional. The length of the packed inputs.
+                Must be equal to or smaller than the `max_sequence_length` of
+                the preset. If left as default, the `max_sequence_length` of
+                the preset will be used.
+            truncate: string. The algorithm to truncate a list of batched
+                segments to fit within `sequence_length`. The value can be
+                either `round_robin` or `waterfall`:
+                    - `"round_robin"`: Available space is assigned one token at
+                        a time in a round-robin fashion to the inputs that still
+                        need some, until the limit is reached.
+                    - `"waterfall"`: The allocation of the budget is done using
+                        a "waterfall" algorithm that allocates quota in a
+                        left-to-right manner and fills up the buckets until we
+                        run out of budget. It supports an arbitrary number of
+                        segments.
+
+        Examples:
+        ```python
+        # Load preprocessor from preset
+        preprocessor = keras_nlp.models.DebertaPreprocessor.from_preset(
+            "deberta_base",
+        )
+        preprocessor("The quick brown fox jumped.")
+
+        # Override sequence_length
+        preprocessor = keras_nlp.models.DebertaPreprocessor.from_preset(
+            "deberta_base",
+            sequence_length=64
+        )
+        preprocessor("The quick brown fox jumped.")
+        ```
+        """
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+
+        tokenizer = DebertaTokenizer.from_preset(preset)
+
+        # Use model's `max_sequence_length` if `sequence_length` unspecified;
+        # otherwise check that `sequence_length` not too long.
+        metadata = cls.presets[preset]
+        max_sequence_length = metadata["config"]["max_sequence_length"]
+        if sequence_length is not None:
+            if sequence_length > max_sequence_length:
+                raise ValueError(
+                    f"`sequence_length` cannot be longer than `{preset}` "
+                    f"preset's `max_sequence_length` of {max_sequence_length}. "
+                    f"Received: {sequence_length}."
+                )
+        else:
+            sequence_length = max_sequence_length
+
+        return cls(
+            tokenizer=tokenizer,
+            sequence_length=sequence_length,
+            truncate=truncate,
+            **kwargs,
+        )

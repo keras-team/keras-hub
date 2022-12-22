@@ -14,14 +14,19 @@
 
 """DeBERTa backbone model."""
 
+import copy
+import os
+
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.models.deberta.deberta_presets import backbone_presets
 from keras_nlp.models.deberta.disentangled_attention_encoder import (
     DisentangledAttentionEncoder,
 )
 from keras_nlp.models.deberta.relative_embedding import RelativeEmbedding
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 def deberta_kernel_initializer(stddev=0.02):
@@ -54,13 +59,12 @@ class DebertaBackbone(keras.Model):
         hidden_dim: int. The size of the transformer encoding layer.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
-        dropout: float, defaults to 0.1. Dropout probability for the
-            DeBERTa model.
-        max_sequence_length: int, defaults to 512. The maximum sequence length
-            this encoder can consume. The sequence length of the input must be
-            less than `max_sequence_length`.
-        bucket_size: int, defaults to 256. The size of the relative position
-            buckets. Generally equal to `max_sequence_length // 2`.
+        dropout: float. Dropout probability for the DeBERTa model.
+        max_sequence_length: int. The maximum sequence length this encoder can
+            consume. The sequence length of the input must be less than
+            `max_sequence_length`.
+        bucket_size: int. The size of the relative position buckets. Generally
+            equal to `max_sequence_length // 2`.
 
     Example usage:
     ```python
@@ -172,6 +176,7 @@ class DebertaBackbone(keras.Model):
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
         self.bucket_size = bucket_size
+        self.start_token_index = 0
 
     def get_config(self):
         return {
@@ -193,13 +198,61 @@ class DebertaBackbone(keras.Model):
 
     @classproperty
     def presets(cls):
-        return {}
+        return copy.deepcopy(backbone_presets)
 
     @classmethod
+    @format_docstring(names=", ".join(backbone_presets))
     def from_preset(
         cls,
         preset,
         load_weights=True,
         **kwargs,
     ):
-        raise NotImplementedError
+        """Instantiate DeBERTa model from preset architecture and weights.
+
+        Args:
+            preset: string. Must be one of {{names}}.
+            load_weights: Whether to load pre-trained weights into model.
+                Defaults to `True`.
+
+        Examples:
+        ```python
+        input_data = {
+            "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
+            "padding_mask": tf.constant(
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+            ),
+        }
+
+        # Load architecture and weights from preset
+        model = keras_nlp.models.DebertaBackbone.from_preset("deberta_base")
+        output = model(input_data)
+
+        # Load randomly initialized model from preset architecture
+        model = keras_nlp.models.DebertaBackbone.from_preset(
+            "deberta_base", load_weights=False
+        )
+        output = model(input_data)
+        ```
+        """
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+        metadata = cls.presets[preset]
+        config = metadata["config"]
+        model = cls.from_config({**config, **kwargs})
+
+        if not load_weights:
+            return model
+
+        weights = keras.utils.get_file(
+            "model.h5",
+            metadata["weights_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["weights_hash"],
+        )
+
+        model.load_weights(weights)
+        return model
