@@ -34,7 +34,7 @@ def deberta_kernel_initializer(stddev=0.02):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class DebertaBackbone(keras.Model):
+class DebertaV3Backbone(keras.Model):
     """DeBERTa encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -77,7 +77,7 @@ class DebertaBackbone(keras.Model):
     }
 
     # Randomly initialized DeBERTa model
-    model = keras_nlp.models.DebertaBackbone(
+    model = keras_nlp.models.DebertaV3Backbone(
         vocabulary_size=128100,
         num_layers=12,
         num_heads=6,
@@ -227,11 +227,11 @@ class DebertaBackbone(keras.Model):
         }
 
         # Load architecture and weights from preset
-        model = keras_nlp.models.DebertaBackbone.from_preset("deberta_base")
+        model = keras_nlp.models.DebertaV3Backbone.from_preset("deberta_base")
         output = model(input_data)
 
         # Load randomly initialized model from preset architecture
-        model = keras_nlp.models.DebertaBackbone.from_preset(
+        model = keras_nlp.models.DebertaV3Backbone.from_preset(
             "deberta_base", load_weights=False
         )
         output = model(input_data)
