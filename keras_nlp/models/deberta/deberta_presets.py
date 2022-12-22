@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+"""DeBERTa model preset configurations."""
+
 backbone_presets = {
     "deberta_xsmall": {
         "config": {
@@ -25,9 +28,8 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "description": (
-            "XSmall size of DeBERTa (v3). "
-            "Trained on a combination of English Wikipedia, BookCorpus, "
-            "OpenWebText, STORIES and CC-News datasets."
+            "Extra small size of DeBERTaV3. "
+            "Trained on English Wikipedia, BookCorpus and OpenWebText."
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_xsmall/v1/model.h5",
         "weights_hash": "d8e10327107e5c5e20b45548a5028619",
@@ -47,9 +49,8 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "description": (
-            "Small size of DeBERTa (v3). "
-            "Trained on a combination of English Wikipedia, BookCorpus, "
-            "OpenWebText, STORIES and CC-News datasets."
+            "Small size of DeBERTaV3. "
+            "Trained on English Wikipedia, BookCorpus and OpenWebText."
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_small/v1/model.h5",
         "weights_hash": "84118eb7c5a735f2061ecccaf71bb888",
@@ -69,9 +70,8 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "description": (
-            "Base size of DeBERTa (v3). "
-            "Trained on a combination of English Wikipedia, BookCorpus, "
-            "OpenWebText, STORIES and CC-News datasets."
+            "Base size of DeBERTaV3. "
+            "Trained on English Wikipedia, BookCorpus and OpenWebText."
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_base/v1/model.h5",
         "weights_hash": "cebce044aeed36aec9b94e3b8a255430",
@@ -91,9 +91,8 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "description": (
-            "Base size of DeBERTa (v3). "
-            "Trained on a combination of English Wikipedia, BookCorpus, "
-            "OpenWebText, STORIES and CC-News datasets."
+            "Base size of DeBERTaV3. "
+            "Trained on English Wikipedia, BookCorpus and OpenWebText."
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_large/v1/model.h5",
         "weights_hash": "bce7690f358a9e39304f8c0ebc71a745",
@@ -113,7 +112,7 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "description": (
-            "Base size of DeBERTa (v3). "
+            "Base size of DeBERTaV3. "
             "Trained on the 2.5TB multilingual CC100 dataset."
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_base_multi/v1/model.h5",
