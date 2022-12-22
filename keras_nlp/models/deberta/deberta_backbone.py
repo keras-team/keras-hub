@@ -59,13 +59,12 @@ class DebertaBackbone(keras.Model):
         hidden_dim: int. The size of the transformer encoding layer.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
-        dropout: float, defaults to 0.1. Dropout probability for the
-            DeBERTa model.
-        max_sequence_length: int, defaults to 512. The maximum sequence length
-            this encoder can consume. The sequence length of the input must be
-            less than `max_sequence_length`.
-        bucket_size: int, defaults to 256. The size of the relative position
-            buckets. Generally equal to `max_sequence_length // 2`.
+        dropout: float. Dropout probability for the DeBERTa model.
+        max_sequence_length: int. The maximum sequence length this encoder can
+            consume. The sequence length of the input must be less than
+            `max_sequence_length`.
+        bucket_size: int. The size of the relative position buckets. Generally
+            equal to `max_sequence_length // 2`.
 
     Example usage:
     ```python
