@@ -40,7 +40,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_tokenizer_output(self):
         tokenizer = XLMRobertaTokenizer.from_preset(
-            "xlm_roberta_base",
+            "xlm_roberta_base_multi",
         )
         outputs = tokenizer("The quick brown fox.")
         expected_outputs = [581, 63773, 119455, 6, 147797, 5]
@@ -48,7 +48,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_preprocessor_output(self):
         preprocessor = XLMRobertaPreprocessor.from_preset(
-            "xlm_roberta_base",
+            "xlm_roberta_base_multi",
             sequence_length=4,
         )
         outputs = preprocessor("The quick brown fox.")["token_ids"]
@@ -64,7 +64,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = XLMRobertaBackbone.from_preset(
-            "xlm_roberta_base", load_weights=load_weights
+            "xlm_roberta_base_multi", load_weights=load_weights
         )
         outputs = model(input_data)
         if load_weights:
@@ -78,7 +78,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_classifier_output(self, load_weights):
         input_data = tf.constant(["The quick brown fox."])
         model = XLMRobertaClassifier.from_preset(
-            "xlm_roberta_base", load_weights=load_weights
+            "xlm_roberta_base_multi", load_weights=load_weights
         )
         # Never assert output values, as the head weights are random.
         model.predict(input_data)
@@ -92,7 +92,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = XLMRobertaClassifier.from_preset(
-            "xlm_roberta_base",
+            "xlm_roberta_base_multi",
             load_weights=load_weights,
             preprocessor=None,
         )

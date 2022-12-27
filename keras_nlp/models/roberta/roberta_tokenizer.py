@@ -143,7 +143,7 @@ class RobertaTokenizer(BytePairTokenizer):
         ```python
         # Load a preset tokenizer.
         tokenizer = keras_nlp.models.RobertaTokenizer.from_preset(
-            "roberta_base",
+            "roberta_base_en",
         )
         # Tokenize some input.
         tokenizer("The quick brown fox tripped.")

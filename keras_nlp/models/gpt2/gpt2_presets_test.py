@@ -31,7 +31,7 @@ class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     """
 
     def test_tokenizer_output(self):
-        tokenizer = GPT2Tokenizer.from_preset("gpt2_base")
+        tokenizer = GPT2Tokenizer.from_preset("gpt2_base_en")
         outputs = tokenizer("The quick brown fox.")
         expected_outputs = [464, 2068, 7586, 21831, 13]
         self.assertAllEqual(outputs, expected_outputs)
@@ -44,7 +44,9 @@ class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "token_ids": tf.constant([[1169, 2068, 7586, 21831, 13]]),
             "padding_mask": tf.constant([[1, 1, 1, 1, 1]]),
         }
-        model = GPT2Backbone.from_preset("gpt2_base", load_weights=load_weights)
+        model = GPT2Backbone.from_preset(
+            "gpt2_base_en", load_weights=load_weights
+        )
         outputs = model(input_data)[0, 0, :5]
         if load_weights:
             # The forward pass from a preset should be stable!
@@ -72,7 +74,7 @@ class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_unknown_preset_error(self, cls):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("gpt2_base_clowntown")
+            cls.from_preset("gpt2_base_en_clowntown")
 
 
 @pytest.mark.extra_large

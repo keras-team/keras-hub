@@ -106,7 +106,7 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         ```python
         # Load a preset tokenizer.
         tokenizer = keras_nlp.models.DebertaV3Tokenizer.from_preset(
-            "deberta_base",
+            "deberta_v3_base_en",
         )
 
         # Tokenize some input.

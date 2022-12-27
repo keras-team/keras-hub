@@ -38,7 +38,7 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_tokenizer_output(self):
         tokenizer = DebertaV3Tokenizer.from_preset(
-            "deberta_v3_extra_small",
+            "deberta_v3_extra_small_en",
         )
         outputs = tokenizer("The quick brown fox.")
         expected_outputs = [279, 1538, 3258, 16123, 260]
@@ -46,7 +46,7 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_preprocessor_output(self):
         preprocessor = DebertaV3Preprocessor.from_preset(
-            "deberta_v3_extra_small",
+            "deberta_v3_extra_small_en",
             sequence_length=4,
         )
         outputs = preprocessor("The quick brown fox.")["token_ids"]
@@ -62,7 +62,7 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = DebertaV3Backbone.from_preset(
-            "deberta_v3_extra_small", load_weights=load_weights
+            "deberta_v3_extra_small_en", load_weights=load_weights
         )
         outputs = model(input_data)
         if load_weights:
@@ -76,7 +76,7 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_classifier_output(self, load_weights):
         input_data = tf.constant(["The quick brown fox."])
         model = DebertaV3Classifier.from_preset(
-            "deberta_v3_extra_small", load_weights=load_weights
+            "deberta_v3_extra_small_en", load_weights=load_weights
         )
         # Never assert output values, as the head weights are random.
         model.predict(input_data)
@@ -90,7 +90,7 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = DebertaV3Classifier.from_preset(
-            "deberta_v3_extra_small",
+            "deberta_v3_extra_small_en",
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -117,7 +117,7 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_unknown_preset_error(self, cls):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("deberta_v3_extra_small_clowntown")
+            cls.from_preset("deberta_v3_extra_small_en_clowntown")
 
 
 @pytest.mark.extra_large

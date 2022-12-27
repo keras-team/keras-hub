@@ -243,13 +243,13 @@ class RobertaPreprocessor(keras.layers.Layer):
         ```python
         # Load preprocessor from preset
         preprocessor = keras_nlp.models.RobertPreprocessor.from_preset(
-            "roberta_base",
+            "roberta_base_en",
         )
         preprocessor("The quick brown fox jumped.")
 
         # Override sequence_length
         preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-            "roberta_base",
+            "roberta_base_en",
             sequence_length=64
         )
         preprocessor("The quick brown fox jumped.")
