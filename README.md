@@ -1,24 +1,29 @@
-# KerasNLP
+# KerasNLP: Modular NLP Workflows for Keras
 [![](https://github.com/keras-team/keras-nlp/workflows/Tests/badge.svg?branch=master)](https://github.com/keras-team/keras-nlp/actions?query=workflow%3ATests+branch%3Amaster)
 ![Python](https://img.shields.io/badge/python-v3.7.0+-success.svg)
 ![Tensorflow](https://img.shields.io/badge/tensorflow-v2.5.0+-success.svg)
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-nlp/issues)
 
-KerasNLP is a simple and powerful API for building Natural Language Processing
-(NLP) models within the Keras ecosystem.
 
-KerasNLP provides modular building blocks following
-standard Keras interfaces (layers, metrics) that allow you to quickly and
-flexibly iterate on your task. Engineers working in applied NLP can leverage the
-library to assemble training and inference pipelines that are both
-state-of-the-art and production-grade.
+KerasNLP is a natural language processing library that supports users through
+their entire development cycle. Our workflows are built from modular components 
+that have state-of-the-art preset weights and architectures when used 
+out-of-the-box and are easily customizable when more control is needed. We 
+emphasize in-graph computation for all workflows so that developers can expect 
+easy productionization using the TensorFlow ecosystem.
 
-KerasNLP can be understood as a horizontal extension of the Keras API —
-components are first-party Keras objects that are too specialized to be
-added to core Keras, but that receive the same level of polish as the rest of
-the Keras API.
+This library is an extension of the core Keras API; all high-level modules are 
+[`Layers`](https://keras.io/api/layers/) or 
+[`Models`](https://keras.io/api/models/) that recieve that same level of polish 
+as core Keras. If you are familiar with Keras, congratulations! You already 
+understand most of KerasNLP.
 
-We are a new and growing project, and welcome [contributions](CONTRIBUTING.md).
+See our [Getting Started guide](https://keras.io/guides/keras_nlp/getting_started) 
+for example usage of our modular API starting with evaluating pretrained models 
+and building up to designing a novel transformer architecture and training a 
+tokenizer from scratch.  
+
+We are a new and growing project and welcome [contributions](CONTRIBUTING.md).
 
 ## Quick Links
 
@@ -27,6 +32,7 @@ We are a new and growing project, and welcome [contributions](CONTRIBUTING.md).
 - [Home Page](https://keras.io/keras_nlp)
 - [Developer Guides](https://keras.io/guides/keras_nlp)
 - [API Reference](https://keras.io/api/keras_nlp)
+- [Getting Started guide](https://keras.io/guides/keras_nlp/getting_started) 
 
 ### For contributors
 
@@ -53,40 +59,37 @@ pip install git+https://github.com/keras-team/keras-nlp.git --upgrade
 
 ## Quickstart
 
-Tokenize text, build a tiny transformer, and train a single batch:
+Fine-tune BERT on a small sentiment analysis task using the 
+[`keras_nlp.models`](https://keras.io/api/keras_nlp/models/) API:
 
 ```python
 import keras_nlp
-import tensorflow as tf
 from tensorflow import keras
+import tensorflow_datasets as tfds
 
-# Tokenize some inputs with a binary label.
-vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
-sentences = ["The quick brown fox jumped.", "The fox slept."]
-tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-    vocabulary=vocab,
-    sequence_length=10,
+imdb_train, imdb_test = tfds.load(
+    "imdb_reviews",
+    split=["train", "test"],
+    as_supervised=True,
+    batch_size=16,
 )
-x, y = tokenizer(sentences), tf.constant([1, 0])
+classifier = keras_nlp.models.BertClassifier.from_preset(
+    "bert_base_en_uncased",
+)
+classifier.compile(
+    loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    optimizer=keras.optimizers.experimental.AdamW(5e-5),
+    metrics=keras.metrics.SparseCategoricalAccuracy(),
+    jit_compile=True,
+)
+classifier.fit(
+    imdb_train,
+    validation_data=imdb_test,
+    epochs=1,
+)
 
-# Create a tiny transformer.
-inputs = keras.Input(shape=(None,), dtype="int32")
-outputs = keras_nlp.layers.TokenAndPositionEmbedding(
-    vocabulary_size=len(vocab),
-    sequence_length=10,
-    embedding_dim=16,
-)(inputs)
-outputs = keras_nlp.layers.TransformerEncoder(
-    num_heads=4,
-    intermediate_dim=32,
-)(outputs)
-outputs = keras.layers.GlobalAveragePooling1D()(outputs)
-outputs = keras.layers.Dense(1, activation="sigmoid")(outputs)
-model = keras.Model(inputs, outputs)
-
-# Run a single batch of gradient descent.
-model.compile(optimizer="adam", loss="binary_crossentropy", jit_compile=True)
-model.train_on_batch(x, y)
+# Predict a new example
+classifier.predict(["What an amazing movie, three hours of pure bliss!"])
 ```
 
 For more in depth guides and examples, visit https://keras.io/keras_nlp/.
@@ -104,7 +107,7 @@ KerasNLP provides access to pre-trained models via the `keras_nlp.models` API.
 These pre-trained models are provided on an "as is" basis, without warranties
 or conditions of any kind. The following underlying models are provided by third
 parties, and subject to separate licenses:
-DistilBERT, RoBERTa, XLM-RoBERTa, GPT-2.
+DistilBERT, RoBERTa, XLM-RoBERTa, DeBERTa, and GPT-2.
 
 ## Citing KerasNLP
 
@@ -114,7 +117,8 @@ Here is the BibTeX entry:
 ```bibtex
 @misc{kerasnlp2022,
   title={KerasNLP},
-  author={Watson, Matthew, and Qian, Chen, and Zhu, Scott and Chollet, Fran\c{c}ois and others},
+  author={Watson, Matthew, and Qian, Chen, and Bischof, Jonathan and Chollet, 
+  Fran\c{c}ois and others},
   year={2022},
   howpublished={\url{https://github.com/keras-team/keras-nlp}},
 }
