@@ -219,12 +219,12 @@ class DistilBertClassifier(PipelineModel):
 
         # Use a shorter sequence length.
         preprocessor = keras_nlp.models.DistilBertBackbone.from_preset(
-            "bert_base_en_uncased",
+            "distil_bert_base_en_uncased",
             sequence_length=128,
         )
         # Create a DistilBertClassifier and fit your data.
         classifier = keras_nlp.models.DistilBertClassifier.from_preset(
-            "bert_base_en_uncased",
+            "distil_bert_base_en_uncased",
             num_classes=4,
             preprocessor=preprocessor,
         )
@@ -250,7 +250,7 @@ class DistilBertClassifier(PipelineModel):
 
         # Create a DistilBERT classifier and fit your data.
         classifier = keras_nlp.models.DistilBertClassifier.from_preset(
-            "bert_base_en_uncased",
+            "distil_bert_base_en_uncased",
             num_classes=4,
             preprocessor=None,
         )

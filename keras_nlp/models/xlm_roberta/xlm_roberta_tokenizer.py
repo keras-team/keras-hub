@@ -179,7 +179,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         ```python
         # Load a preset tokenizer.
         tokenizer = keras_nlp.models.XLMRobertaTokenizer.from_preset(
-            "xlm_roberta_base",
+            "xlm_roberta_base_multi",
         )
 
         # Tokenize some input.

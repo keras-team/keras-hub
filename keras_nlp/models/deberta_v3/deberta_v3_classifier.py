@@ -203,7 +203,7 @@ class DebertaV3Classifier(PipelineModel):
 
         # Create a DebertaV3Classifier and fit your data.
         classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
-            "deberta_base",
+            "deberta_v3_base_en",
             num_classes=4,
         )
         classifier.compile(
@@ -220,13 +220,13 @@ class DebertaV3Classifier(PipelineModel):
 
         # Use a shorter sequence length.
         preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset(
-            "deberta_base",
+            "deberta_v3_base_en",
             sequence_length=128,
         )
 
         # Create a DebertaV3Classifier and fit your data.
         classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
-            "deberta_base",
+            "deberta_v3_base_en",
             num_classes=4,
             preprocessor=preprocessor,
         )
@@ -249,7 +249,7 @@ class DebertaV3Classifier(PipelineModel):
 
         # Create a DebertaV3Classifier and fit your data.
         classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
-            "deberta_base",
+            "deberta_v3_base_en",
             num_classes=4,
             preprocessor=None,
         )

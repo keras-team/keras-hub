@@ -204,12 +204,12 @@ class RobertaBackbone(keras.Model):
         }
 
         # Load architecture and weights from preset
-        model = keras_nlp.models.RobertaBackbone.from_preset("roberta_base")
+        model = keras_nlp.models.RobertaBackbone.from_preset("roberta_base_en")
         output = model(input_data)
 
         # Load randomly initialized model from preset architecture
         model = keras_nlp.models.RobertaBackbone.from_preset(
-            "roberta_base", load_weights=False
+            "roberta_base_en", load_weights=False
         )
         output = model(input_data)
         ```

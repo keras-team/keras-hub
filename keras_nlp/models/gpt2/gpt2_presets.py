@@ -15,7 +15,7 @@
 
 # Metadata for loading pretrained model weights.
 backbone_presets = {
-    "gpt2_base": {
+    "gpt2_base_en": {
         "config": {
             "vocabulary_size": 50257,
             "num_layers": 12,
@@ -29,14 +29,14 @@ backbone_presets = {
         "description": (
             "Base size of GPT-2 with 124M parameters. Trained on WebText."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base/v1/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_en/v1/model.h5",
         "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base/v1/vocab.json",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_en/v1/vocab.json",
         "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
-        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base/v1/merges.txt",
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_en/v1/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
-    "gpt2_medium": {
+    "gpt2_medium_en": {
         "config": {
             "vocabulary_size": 50257,
             "num_layers": 24,
@@ -50,14 +50,14 @@ backbone_presets = {
         "description": (
             "Medium size of GPT-2 with 355M parameters. Trained on WebText."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_medium/v1/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_medium_en/v1/model.h5",
         "weights_hash": "580ff9b79c04fc90e6d6f47e975c5afe",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_medium/v1/vocab.json",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_medium_en/v1/vocab.json",
         "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
-        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_medium/v1/merges.txt",
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_medium_en/v1/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
-    "gpt2_large": {
+    "gpt2_large_en": {
         "config": {
             "vocabulary_size": 50257,
             "num_layers": 36,
@@ -71,14 +71,14 @@ backbone_presets = {
         "description": (
             "Large size of GPT-2 with 774M parameters. Trained on WebText."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_large/v1/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_large_en/v1/model.h5",
         "weights_hash": "67957cb3dfc9e965960dabe068811e1a",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_large/v1/vocab.json",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_large_en/v1/vocab.json",
         "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
-        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_large/v1/merges.txt",
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_large_en/v1/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
-    "gpt2_extra_large": {
+    "gpt2_extra_large_en": {
         "config": {
             "vocabulary_size": 50257,
             "num_layers": 48,
@@ -93,11 +93,11 @@ backbone_presets = {
             "Extra large size of GPT-2 with 1558M parameters. "
             "Trained on WebText."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_extra_large/v1/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_extra_large_en/v1/model.h5",
         "weights_hash": "d093c1ee0d9705d845c0190909aa2917",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_extra_large/v1/vocab.json",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_extra_large_en/v1/vocab.json",
         "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
-        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_extra_large/v1/merges.txt",
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_extra_large_en/v1/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
 }

@@ -37,7 +37,7 @@ backbone_presets = {
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/distil_bert_base_en_uncased/v1/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
-    "distil_bert_base_en_cased": {
+    "distil_bert_base_en": {
         "config": {
             "vocabulary_size": 28996,
             "num_layers": 6,
@@ -55,12 +55,12 @@ backbone_presets = {
             "Trained on English Wikipedia + BooksCorpus using BERT as the "
             "teacher model."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/distil_bert_base_en_cased/v1/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/distil_bert_base_en/v1/model.h5",
         "weights_hash": "fa36aa6865978efbf85a5c8264e5eb57",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/distil_bert_base_en_cased/v1/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/distil_bert_base_en/v1/vocab.txt",
         "vocabulary_hash": "bb6ca9b42e790e5cd986bbb16444d0e0",
     },
-    "distil_bert_base_multi_cased": {
+    "distil_bert_base_multi": {
         "config": {
             "vocabulary_size": 119547,
             "num_layers": 6,
@@ -77,9 +77,9 @@ backbone_presets = {
             "Base size of DistilBERT. Trained on Wikipedias of 104 languages "
             "using BERT the teacher model."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/distil_bert_base_multi_cased/v1/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/distil_bert_base_multi/v1/model.h5",
         "weights_hash": "c0f11095e2a6455bd3b1a6d14800a7fa",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/distil_bert_base_multi_cased/v1/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/distil_bert_base_multi/v1/vocab.txt",
         "vocabulary_hash": "d9d865138d17f1958502ed060ecfeeb6",
     },
 }
