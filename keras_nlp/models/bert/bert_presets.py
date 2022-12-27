@@ -108,7 +108,7 @@ backbone_presets = {
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_en_uncased/v1/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
-    "bert_base_en_cased": {
+    "bert_base_en": {
         "config": {
             "vocabulary_size": 28996,
             "num_layers": 12,
@@ -126,9 +126,9 @@ backbone_presets = {
             "Base size of BERT where case is maintained. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_en_cased/v1/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_en/v1/model.h5",
         "weights_hash": "f94a6cb012e18f4fb8ec92abb91864e9",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_en_cased/v1/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_en/v1/vocab.txt",
         "vocabulary_hash": "bb6ca9b42e790e5cd986bbb16444d0e0",
     },
     "bert_base_zh": {
@@ -151,7 +151,7 @@ backbone_presets = {
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_zh/v1/vocab.txt",
         "vocabulary_hash": "3b5b76c4aef48ecf8cb3abaafe960f09",
     },
-    "bert_base_multi_cased": {
+    "bert_base_multi": {
         "config": {
             "vocabulary_size": 119547,
             "num_layers": 12,
@@ -169,9 +169,9 @@ backbone_presets = {
             "Base size of BERT. Trained on trained on Wikipedias of 104 "
             "languages."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_multi_cased/v1/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_multi/v1/model.h5",
         "weights_hash": "b0631cec0a1f2513c6cfd75ba29c33aa",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_multi_cased/v1/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_multi/v1/vocab.txt",
         "vocabulary_hash": "d9d865138d17f1958502ed060ecfeeb6",
     },
     "bert_large_en_uncased": {
@@ -197,7 +197,7 @@ backbone_presets = {
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_en_uncased/v1/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
-    "bert_large_en_cased": {
+    "bert_large_en": {
         "config": {
             "vocabulary_size": 28996,
             "num_layers": 24,
@@ -215,9 +215,9 @@ backbone_presets = {
             "Base size of BERT where case is maintained. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_en_cased/v1/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_en/v1/model.h5",
         "weights_hash": "8b8ab82290bbf4f8db87d4f100648890",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_en_cased/v1/vocab.txt",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_en/v1/vocab.txt",
         "vocabulary_hash": "bb6ca9b42e790e5cd986bbb16444d0e0",
     },
 }

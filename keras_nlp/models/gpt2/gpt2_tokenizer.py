@@ -135,7 +135,7 @@ class GPT2Tokenizer(BytePairTokenizer):
         ```python
         # Load a preset tokenizer.
         tokenizer = keras_nlp.models.GPT2Tokenizer.from_preset(
-            "gpt2_base",
+            "gpt2_base_en",
         )
         # Tokenize some input.
         tokenizer("The quick brown fox tripped.")

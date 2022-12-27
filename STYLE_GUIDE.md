@@ -18,6 +18,29 @@ When a specific abbreviation is very common and is pronounceable (acronym),
 consider it as a standalone word, e.g. Bert, Deberta, etc. In this case, "Bert"
 is considered as a common noun and not an abbreviation anymore.
 
+## Naming of Models and Presets
+
+Naming of models and presets is a difficult and important element of our
+library usability. In general we try to to follow the branding of "upstream"
+model naming, subject to the consistency constraints laid out here.
+
+- The model and preset names should be recognizable to users familiar with the
+  original release. E.g. the model that goes with the "DeBERTaV3" paper should
+  be called `DebertaV3`. A release of a [toxic-bert](https://huggingface.co/unitary/toxic-bert)
+  checkpoint for `keras_nlp.models.Bert`, should include the string
+  `"toxic_bert"`.
+- All preset names should include the language of the pretraining data. If three
+  or more language are supported, the preset name should include `"multi"` (not
+  the single letter "m").
+- If a preset lowercases input for cased-based languages, the preset name should
+  be marked with `"uncased"`.
+- Don't abbreviate size names. E.g. "xsmall" or "XL" in an original checkpoint
+  releases should map to `"extra_small"` or `"extra_large"` in a preset names.
+- No configuration in names. E.g. use "bert_base" instead of
+  "bert_L-12_H-768_A-12".
+
+When in doubt, readability should win out!
+
 ## File names
 
 When possible, keep publicly documented classes in their own files, and make

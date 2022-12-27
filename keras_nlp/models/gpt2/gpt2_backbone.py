@@ -215,7 +215,7 @@ class GPT2Backbone(keras.Model):
         }
 
         # Load architecture and weights from preset
-        model = GPT2Backbone.from_preset("gpt2_base")
+        model = GPT2Backbone.from_preset("gpt2_base_en")
         output = model(input_data)
 
         # Load randomly initialized model from preset architecture

@@ -34,7 +34,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_tokenizer_output(self):
         tokenizer = RobertaTokenizer.from_preset(
-            "roberta_base",
+            "roberta_base_en",
         )
         outputs = tokenizer("The quick brown fox.")
         expected_outputs = [133, 2119, 6219, 23602, 4]
@@ -42,7 +42,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_preprocessor_output(self):
         preprocessor = RobertaPreprocessor.from_preset(
-            "roberta_base",
+            "roberta_base_en",
             sequence_length=4,
         )
         outputs = preprocessor("The quick brown fox.")["token_ids"]
@@ -58,7 +58,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = RobertaBackbone.from_preset(
-            "roberta_base", load_weights=load_weights
+            "roberta_base_en", load_weights=load_weights
         )
         outputs = model(input_data)
         if load_weights:
@@ -72,7 +72,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_classifier_output(self, load_weights):
         input_data = ["Let's rock!"]
         model = RobertaClassifier.from_preset(
-            "roberta_base", load_weights=load_weights
+            "roberta_base_en", load_weights=load_weights
         )
         # Never assert output values, as the head weights are random.
         model.predict(input_data)
@@ -86,7 +86,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = RobertaClassifier.from_preset(
-            "roberta_base",
+            "roberta_base_en",
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -113,7 +113,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_unknown_preset_error(self, cls):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("roberta_base_clowntown")
+            cls.from_preset("roberta_base_en_clowntown")
 
 
 @pytest.mark.extra_large
@@ -150,8 +150,8 @@ class RobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
             classifier = RobertaClassifier.from_preset(
                 preset, num_classes=4, load_weights=load_weights
             )
-            input_data = ["The quick brown fox."]
-            classifier(input_data)
+            input_data = tf.constant(["The quick brown fox."])
+            classifier.predict(input_data)
 
     @parameterized.named_parameters(
         ("load_weights", True), ("no_load_weights", False)

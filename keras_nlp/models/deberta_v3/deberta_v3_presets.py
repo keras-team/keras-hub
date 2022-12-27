@@ -14,7 +14,7 @@
 """DeBERTa model preset configurations."""
 
 backbone_presets = {
-    "deberta_v3_extra_small": {
+    "deberta_v3_extra_small_en": {
         "config": {
             "vocabulary_size": 128100,
             "num_layers": 12,
@@ -30,12 +30,12 @@ backbone_presets = {
             "Extra small size of DeBERTaV3. "
             "Trained on English Wikipedia, BookCorpus and OpenWebText."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_extra_small/v1/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_extra_small_en/v1/model.h5",
         "weights_hash": "d8e10327107e5c5e20b45548a5028619",
-        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_extra_small/v1/vocab.spm",
+        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_extra_small_en/v1/vocab.spm",
         "spm_proto_hash": "1613fcbf3b82999c187b09c9db79b568",
     },
-    "deberta_v3_small": {
+    "deberta_v3_small_en": {
         "config": {
             "vocabulary_size": 128100,
             "num_layers": 6,
@@ -51,12 +51,12 @@ backbone_presets = {
             "Small size of DeBERTaV3. "
             "Trained on English Wikipedia, BookCorpus and OpenWebText."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_small/v1/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_small_en/v1/model.h5",
         "weights_hash": "84118eb7c5a735f2061ecccaf71bb888",
-        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_small/v1/vocab.spm",
+        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_small_en/v1/vocab.spm",
         "spm_proto_hash": "1613fcbf3b82999c187b09c9db79b568",
     },
-    "deberta_v3_base": {
+    "deberta_v3_base_en": {
         "config": {
             "vocabulary_size": 128100,
             "num_layers": 12,
@@ -72,12 +72,12 @@ backbone_presets = {
             "Base size of DeBERTaV3. "
             "Trained on English Wikipedia, BookCorpus and OpenWebText."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_base/v1/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_base_en/v1/model.h5",
         "weights_hash": "cebce044aeed36aec9b94e3b8a255430",
-        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_base/v1/vocab.spm",
+        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_base_en/v1/vocab.spm",
         "spm_proto_hash": "1613fcbf3b82999c187b09c9db79b568",
     },
-    "deberta_v3_large": {
+    "deberta_v3_large_en": {
         "config": {
             "vocabulary_size": 128100,
             "num_layers": 24,
@@ -93,9 +93,9 @@ backbone_presets = {
             "Base size of DeBERTaV3. "
             "Trained on English Wikipedia, BookCorpus and OpenWebText."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_large/v1/model.h5",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_large_en/v1/model.h5",
         "weights_hash": "bce7690f358a9e39304f8c0ebc71a745",
-        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_large/v1/vocab.spm",
+        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_large_en/v1/vocab.spm",
         "spm_proto_hash": "1613fcbf3b82999c187b09c9db79b568",
     },
     "deberta_v3_base_multi": {

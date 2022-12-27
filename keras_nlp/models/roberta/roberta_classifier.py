@@ -199,7 +199,7 @@ class RobertaClassifier(PipelineModel):
 
         # Create a RobertClassifier and fit your data.
         classifier = keras_nlp.models.RobertClassifier.from_preset(
-            "roberta_base",
+            "roberta_base_en",
             num_classes=4,
         )
         classifier.compile(
@@ -216,13 +216,13 @@ class RobertaClassifier(PipelineModel):
 
         # Use a shorter sequence length.
         preprocessor = keras_nlp.models.RobertPreprocessor.from_preset(
-            "roberta_base",
+            "roberta_base_en",
             sequence_length=128,
         )
 
         # Create a RobertClassifier and fit your data.
         classifier = keras_nlp.models.RobertClassifier.from_preset(
-            "roberta_base",
+            "roberta_base_en",
             num_classes=4,
             preprocessor=preprocessor,
         )
@@ -245,7 +245,7 @@ class RobertaClassifier(PipelineModel):
 
         # Create a RoBERTa classifier and fit your data.
         classifier = keras_nlp.models.RobertClassifier.from_preset(
-            "roberta_base",
+            "roberta_base_en",
             num_classes=4,
             preprocessor=None,
         )

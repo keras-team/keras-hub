@@ -235,13 +235,13 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         ```python
         # Load preprocessor from preset
         preprocessor = keras_nlp.models.XLMRobertaPreprocessor.from_preset(
-            "xlm_roberta_base",
+            "xlm_roberta_base_multi",
         )
         preprocessor("The quick brown fox jumped.")
 
         # Override sequence_length
         preprocessor = keras_nlp.models.XLMRobertaPreprocessor.from_preset(
-            "xlm_roberta_base",
+            "xlm_roberta_base_multi",
             sequence_length=64
         )
         preprocessor("The quick brown fox jumped.")

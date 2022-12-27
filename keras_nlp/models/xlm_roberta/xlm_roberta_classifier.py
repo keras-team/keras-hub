@@ -198,7 +198,7 @@ class XLMRobertaClassifier(PipelineModel):
 
         # Create a XLMRobertaClassifier and fit your data.
         classifier = keras_nlp.models.XLMRobertaClassifier.from_preset(
-            "xlm_roberta_base",
+            "xlm_roberta_base_multi",
             num_classes=4,
         )
         classifier.compile(
@@ -215,13 +215,13 @@ class XLMRobertaClassifier(PipelineModel):
 
         # Use a shorter sequence length.
         preprocessor = keras_nlp.models.XLMRobertaPreprocessor.from_preset(
-            "xlm_roberta_base",
+            "xlm_roberta_base_multi",
             sequence_length=128,
         )
 
         # Create a XLMRobertaClassifier and fit your data.
         classifier = keras_nlp.models.XLMRobertaClassifier.from_preset(
-            "xlm_roberta_base",
+            "xlm_roberta_base_multi",
             num_classes=4,
             preprocessor=preprocessor,
         )
@@ -244,7 +244,7 @@ class XLMRobertaClassifier(PipelineModel):
 
         # Create a XLMRobertaClassifier and fit your data.
         classifier = keras_nlp.models.XLMRobertaClassifier.from_preset(
-            "xlm_roberta_base",
+            "xlm_roberta_base_multi",
             num_classes=4,
             preprocessor=None,
         )

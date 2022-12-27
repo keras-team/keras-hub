@@ -226,13 +226,13 @@ class DebertaV3Preprocessor(keras.layers.Layer):
         ```python
         # Load preprocessor from preset
         preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset(
-            "deberta_base",
+            "deberta_v3_base_en",
         )
         preprocessor("The quick brown fox jumped.")
 
         # Override sequence_length
         preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset(
-            "deberta_base",
+            "deberta_v3_base_en",
             sequence_length=64
         )
         preprocessor("The quick brown fox jumped.")
