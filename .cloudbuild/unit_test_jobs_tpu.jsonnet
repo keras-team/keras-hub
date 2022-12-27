@@ -32,7 +32,10 @@ local unittest = base.BaseTest {
   ],
   command: [
     'pytest',
-    'keras_nlp/tests/tpu_tests',
+    '-m',
+    'tpu',
+    'keras_nlp',
+    '--run_tpu',
   ],
 };
 

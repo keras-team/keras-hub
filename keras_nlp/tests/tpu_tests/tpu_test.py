@@ -11,16 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Test for BERT backbone models."""
+"""TPU testing."""
 
 
 import os
 
+import pytest
 import tensorflow as tf
 
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 
 
+@pytest.mark.tpu
 class BertBackboneTest(tf.test.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -66,4 +68,4 @@ class BertBackboneTest(tf.test.TestCase):
             print(self.strategy)
             self.model(self.input_batch)
         # Check default name passed through
-        self.assertEqual(self.model.name, "backbone")
+        self.assertRegexpMatches(self.model.name, "bert_backbone")
