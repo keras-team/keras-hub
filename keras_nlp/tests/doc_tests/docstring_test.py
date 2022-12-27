@@ -49,9 +49,9 @@ def test_docstrings():
     runner = unittest.TextTestRunner()
     suite = unittest.TestSuite()
     for module in keras_nlp_modules:
-        # Temporarily stop testing gpt2 docstrings until we are exporing the
-        # symbols.
-        if "gpt2" in module.__name__:
+        # Temporarily stop testing gpt2 & deberta docstrings until we are
+        # exporting the symbols.
+        if "gpt2" in module.__name__ or "deberta_v3" in module.__name__:
             continue
         suite.addTest(
             doctest.DocTestSuite(
