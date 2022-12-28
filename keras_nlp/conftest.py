@@ -11,11 +11,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 import sys
 
 import pytest
 import tensorflow as tf
 from packaging import version
+
+
+@pytest.fixture(scope="session")
+def tpu_strategy():
+    tpu_name = os.getenv("KUBE_GOOGLE_CLOUD_TPU_ENDPOINTS")
+    resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
+        tpu=tpu_name,
+    )
+    return tf.distribute.TPUStrategy(resolver)
+
+
+@pytest.fixture(scope="class")
+def tpu_test_class(request, tpu_strategy):
+    # set a class attribute on the invoking test context
+    request.cls.tpu_strategy = tpu_strategy
 
 
 def pytest_addoption(parser):
