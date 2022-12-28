@@ -61,6 +61,11 @@ class Backbone(keras.Model):
         ```
         """
 
+        if not cls.presets:
+            raise NotImplementedError(
+                "No presets have been created for this class."
+            )
+
         if preset not in cls.presets:
             raise ValueError(
                 "`preset` must be one of "
