@@ -47,14 +47,14 @@ We are a new and growing project and welcome [contributions](CONTRIBUTING.md).
 To install the latest official release:
 
 ```
-pip install keras-nlp --upgrade
+pip install keras-nlp tensorflow --upgrade
 ```
 
 To install the latest unreleased changes to the library, we recommend using
 pip to install directly from the master branch on github:
 
 ```
-pip install git+https://github.com/keras-team/keras-nlp.git --upgrade
+pip install git+https://github.com/keras-team/keras-nlp.git tensorflow --upgrade
 ```
 
 ## Quickstart
