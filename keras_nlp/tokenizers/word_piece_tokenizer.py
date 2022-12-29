@@ -281,7 +281,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self,
         vocabulary=None,
         sequence_length: int = None,
-        lowercase: bool = True,
+        lowercase: bool = False,
         strip_accents: bool = False,
         split: bool = True,
         split_on_cjk: bool = True,
