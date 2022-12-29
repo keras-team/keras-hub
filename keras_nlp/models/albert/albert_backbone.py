@@ -33,8 +33,11 @@ class AlbertBackbone(keras.Model):
     This class implements a bi-directional Transformer-based encoder as
     described in
     ["ALBERT: A Lite BERT for Self-supervised Learning of Language Representations"](https://arxiv.org/abs/1909.11942).
-    It includes the embedding lookups and transformer layers, but not the masked
-    language model or next sentence prediction heads.
+    ALBERT is a more efficient variant of BERT, and uses parameter reduction
+    techniques such as cross-layer parameter sharing and factorized embedding
+    parameterization. This model class includes the embedding lookups and
+    transformer layers, but not the masked language model or sentence order
+    prediction heads.
 
     The default constructor gives a fully customizable, randomly initialized
     ALBERT encoder with any number of layers, heads, and embedding dimensions.
@@ -45,9 +48,15 @@ class AlbertBackbone(keras.Model):
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
-        num_layers: int. The number of transformer layers.
+        num_layers: int. The number of "virtual" layers, i.e., the total number
+            of times the input sequence will be fed through the Transformer
+            layers in one forward pass.
         num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
+        num_hidden_groups: int. Number of groups, with each group having a
+            certain number of Transformer layers.
+        num_layers_per_group: int. Number of Transformer layers per group.
+        embedding_dim: int. The size of the embeddings.
         hidden_dim: int. The size of the transformer encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
@@ -73,9 +82,12 @@ class AlbertBackbone(keras.Model):
 
     # Randomly initialized ALBERT encoder
     model = keras_nlp.models.AlbertBackbone(
-        vocabulary_size=30552,
+        vocabulary_size=30000,
         num_layers=12,
         num_heads=12,
+        num_hidden_groups=1,
+        num_layers_per_group=1,
+        embedding_dim=128,
         hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12,
