@@ -57,7 +57,7 @@ class AlbertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_tokenize_batch(self):
         input_data = tf.constant(["the quick brown fox", "the earth is round"])
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[4, 9, 5, 7], [4, 6, 8, 3]])
+        self.assertAllEqual(output, [[4, 9, 5, 7], [4, 6, 8, 1]])
 
     def test_detokenize(self):
         input_data = tf.constant([[4, 9, 5, 7]])
