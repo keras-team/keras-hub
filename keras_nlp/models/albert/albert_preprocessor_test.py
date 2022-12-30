@@ -57,7 +57,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         input_data = "the quick brown fox"
         output = self.preprocessor(input_data)
         self.assertAllEqual(
-            output["token_ids"], [2, 14, 2231, 886, 2385, 3, 0, 0, 0, 0, 0, 0]
+            output["token_ids"], [2, 4, 9, 5, 7, 3, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
             output["segment_ids"], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -72,7 +72,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         output = self.preprocessor(input_data)
         self.assertAllEqual(
             output["token_ids"],
-            [[2, 14, 2231, 886, 2385, 3, 0, 0, 0, 0, 0, 0]] * 4,
+            [[2, 4, 9, 5, 7, 3, 0, 0, 0, 0, 0, 0]] * 4,
         )
         self.assertAllEqual(
             output["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
@@ -88,7 +88,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         x_out, y_out, sw_out = self.preprocessor(x, y, sw)
         self.assertAllEqual(
             x_out["token_ids"],
-            [[2, 14, 2231, 886, 2385, 3, 0, 0, 0, 0, 0, 0]] * 4,
+            [[2, 4, 9, 5, 7, 3, 0, 0, 0, 0, 0, 0]] * 4,
         )
         self.assertAllEqual(
             x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
@@ -108,7 +108,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         x_out, y_out, sw_out = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(
             x_out["token_ids"],
-            [[2, 14, 2231, 886, 2385, 3, 0, 0, 0, 0, 0, 0]] * 4,
+            [[2, 4, 9, 5, 7, 3, 0, 0, 0, 0, 0, 0]] * 4,
         )
         self.assertAllEqual(
             x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
@@ -125,7 +125,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
             output["token_ids"],
-            [2, 14, 2231, 886, 2385, 3, 14, 1073, 3, 0, 0, 0],
+            [2, 4, 9, 5, 7, 3, 4, 6, 3, 0, 0, 0],
         )
         self.assertAllEqual(
             output["segment_ids"], [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0]
@@ -142,7 +142,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
             output["token_ids"],
-            [[2, 14, 2231, 886, 2385, 3, 14, 1073, 3, 0, 0, 0]] * 4,
+            [[2, 4, 9, 5, 7, 3, 4, 6, 3, 0, 0, 0]] * 4,
         )
         self.assertAllEqual(
             output["segment_ids"], [[0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0]] * 4
