@@ -15,7 +15,6 @@
 """RoBERTa backbone models."""
 
 import copy
-import os
 
 import tensorflow as tf
 from tensorflow import keras
@@ -71,7 +70,7 @@ class RobertaBackbone(Backbone):
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
-        
+
     # Pretrained RoBERTa encoder
     model = keras_nlp.models.RobertaBackbone.from_preset("roberta_base_en")
     output = model(input_data)
