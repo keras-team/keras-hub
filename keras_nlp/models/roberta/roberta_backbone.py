@@ -22,6 +22,7 @@ from tensorflow import keras
 
 from keras_nlp.layers import TokenAndPositionEmbedding
 from keras_nlp.layers import TransformerEncoder
+from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.roberta.roberta_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -32,7 +33,7 @@ def roberta_kernel_initializer(stddev=0.02):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class RobertaBackbone(keras.Model):
+class RobertaBackbone(Backbone):
     """RoBERTa encoder.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -70,8 +71,12 @@ class RobertaBackbone(keras.Model):
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
+        
+    # Pretrained RoBERTa encoder
+    model = keras_nlp.models.RobertaBackbone.from_preset("roberta_base_en")
+    output = model(input_data)
 
-    # Randomly initialized RoBERTa model
+    # Randomly initialized RoBERTa model with custom config
     model = keras_nlp.models.RobertaBackbone(
         vocabulary_size=50265,
         num_layers=12,
@@ -80,8 +85,6 @@ class RobertaBackbone(keras.Model):
         intermediate_dim=3072,
         max_sequence_length=12
     )
-
-    # Call the model on the input data.
     output = model(input_data)
     ```
     """
@@ -171,67 +174,13 @@ class RobertaBackbone(keras.Model):
             "trainable": self.trainable,
         }
 
-    @classmethod
-    def from_config(cls, config):
-        return cls(**config)
-
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
 
-    @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
-    def from_preset(
-        cls,
-        preset,
-        load_weights=True,
-        **kwargs,
-    ):
-        """Instantiate RoBERTa model from preset architecture and weights.
 
-        Args:
-            preset: string. Must be one of {{names}}.
-            load_weights: Whether to load pre-trained weights into model.
-                Defaults to `True`.
-
-        Examples:
-        ```python
-        input_data = {
-            "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
-            "padding_mask": tf.constant(
-                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-            ),
-        }
-
-        # Load architecture and weights from preset
-        model = keras_nlp.models.RobertaBackbone.from_preset("roberta_base_en")
-        output = model(input_data)
-
-        # Load randomly initialized model from preset architecture
-        model = keras_nlp.models.RobertaBackbone.from_preset(
-            "roberta_base_en", load_weights=False
-        )
-        output = model(input_data)
-        ```
-        """
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-        config = metadata["config"]
-        model = cls.from_config({**config, **kwargs})
-
-        if not load_weights:
-            return model
-
-        weights = keras.utils.get_file(
-            "model.h5",
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
-        )
-
-        model.load_weights(weights)
-        return model
+format_docstring(
+    model_name=RobertaBackbone.__name__,
+    example_preset_name="roberta_base_en",
+    preset_names=", ".join(RobertaBackbone.presets),
+)(RobertaBackbone.from_preset.__func__)
