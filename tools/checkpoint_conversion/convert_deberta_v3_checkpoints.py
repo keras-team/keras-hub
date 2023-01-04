@@ -80,8 +80,11 @@ def define_preprocessor(preset, hf_model_name):
     # Avoid having padding tokens. This is because the representations of the
     # padding token may be vastly different from the representations computed in
     # the original model. See https://github.com/keras-team/keras/pull/16619#issuecomment-1156338394.
+    sequence_length = 14
+    if preset == "deberta_v3_base_multi":
+        sequence_length = 17
     keras_nlp_preprocessor = DebertaV3Preprocessor(
-        keras_nlp_tokenizer, sequence_length=14
+        keras_nlp_tokenizer, sequence_length=sequence_length
     )
 
     hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_name)
