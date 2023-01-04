@@ -93,7 +93,7 @@ WHITESPACE_PUNCTUATION_AND_CJK_REGEX = r"|".join(
 
 def pretokenize(
     text,
-    lowercase=True,
+    lowercase=False,
     strip_accents=True,
     split=True,
     split_on_cjk=True,
