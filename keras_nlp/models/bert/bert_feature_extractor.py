@@ -19,7 +19,6 @@ import os
 from tensorflow import keras
 
 from keras_nlp.models.bert.bert_backbone import BertBackbone
-from keras_nlp.models.bert.bert_backbone import bert_kernel_initializer
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.utils.pipeline_model import PipelineModel
@@ -31,7 +30,8 @@ PRESET_NAMES = ", ".join(list(backbone_presets))
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class BertFeatureExtractor(PipelineModel):
-    """An end-to-end BERT model for feature extraction
+    """An end-to-end BERT model for feature extraction task. This model
+    can't be compiled or fitted, and should be used as a submodel only.
 
     For usage of this model with pre-trained weights, see
     the `from_preset()` method.
@@ -65,7 +65,6 @@ class BertFeatureExtractor(PipelineModel):
             [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
         ),
     }
-    labels = [0, 3]
 
     # Randomly initialize a BERT backbone.
     backbone = keras_nlp.models.BertBackbone(
@@ -77,18 +76,52 @@ class BertFeatureExtractor(PipelineModel):
         max_sequence_length=12
     )
 
-    # Create a BERT featurizer and fit your data.
+    # Create a BERT featurizer and evaluate on data
     featurizer = keras_nlp.models.BertFeatureExtractor(
         backbone,
         preprocessor=None,
     )
-    featurizer.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    featurizer.fit(x=preprocessed_features, y=labels, batch_size=2)
+
+    y_eval = featurizer(preprocessed)
 
     # Access backbone programatically (e.g., to change `trainable`)
     featurizer.backbone.trainable = False
+    
+    
+    # Using a classifier head    
+        
+    class CustomClassifier(keras.Model):
+        
+        def __init__(self, featurizer: BertFeatureExtractor, num_classes = 2):
+            inputs = featurizer.input
+            pooled = featurizer(inputs)["pooled_output"]
+            pooled = keras.layers.Dropout(dropout)(pooled)
+            outputs = keras.layers.Dense(
+                num_classes,
+                kernel_initializer=bert_kernel_initializer(),
+                name="logits",
+            )(pooled)
+            # Instantiate using Functional API Model constructor
+            super().__init__(
+                inputs=inputs,
+                outputs=outputs,
+                include_preprocessing=None
+                **kwargs,
+            )
+
+    # Create a classifier and fit your data.
+    classifier = CustomClassifier(
+        featurizer,
+        num_classes=4
+    )
+
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    )
+
+    labels = [0, 0, 0 , 3]
+    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
+    
     ```
     """
 
@@ -176,39 +209,32 @@ class BertFeatureExtractor(PipelineModel):
         ```python
         # Create a dataset with raw string features in an `(x, y)` format.
         features = ["The quick brown fox jumped.", "I forgot my homework."]
-        labels = [0, 3]
 
-        # Create a BertFeatureExtractor and fit your data.
+        # Create a BERT featurizer and evaluate on data
         featurizer = keras_nlp.models.BertFeatureExtractor.from_preset(
             "bert_base_en_uncased",
         )
-        featurizer.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        )
-        featurizer.fit(x=features, y=labels, batch_size=2)
+
+        y_eval = featurizer(preprocessed_features)
         ```
 
         Raw string inputs with customized preprocessing.
         ```python
         # Create a dataset with raw string features in an `(x, y)` format.
         features = ["The quick brown fox jumped.", "I forgot my homework."]
-        labels = [0, 3]
-
+        
         # Use a shorter sequence length.
         preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
             "bert_base_en_uncased",
             sequence_length=128,
         )
 
-        # Create a BertFeatureExtractor and fit your data.
+        # Create a BERT featurizer and evaluate on data
         featurizer = keras_nlp.models.BertFeatureExtractor.from_preset(
             "bert_base_en_uncased",
             preprocessor=preprocessor,
         )
-        featurizer.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        )
-        featurizer.fit(x=features, y=labels, batch_size=2)
+        y_eval = featurizer(preprocessed_features)
         ```
 
         Preprocessed inputs.
@@ -223,17 +249,14 @@ class BertFeatureExtractor(PipelineModel):
                 [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
             ),
         }
-        labels = [0, 3]
-
-        # Create a BERT feature extractor and fit your data.
+        
+        # Create a BERT featurizer and evaluate on data
         featurizer = keras_nlp.models.BertFeatureExtractor.from_preset(
             "bert_base_en_uncased",
             preprocessor=None,
         )
-        featurizer.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        )
-        featurizer.fit(x=preprocessed_features, y=labels, batch_size=2)
+
+        y_eval = featurizer(preprocessed_features)
         ```
         """
         if preset not in cls.presets:
