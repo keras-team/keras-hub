@@ -59,12 +59,15 @@ class TopPSampler(Sampler):
         length = max_length - num_steps
 
         def one_step(length, prompt, mask):
-            pred = token_probability_fn(prompt[:, :length], mask)
+            probs = token_probability_fn(prompt, mask)
+            pred = tf.gather(
+                probs, tf.repeat(length - 1, batch_size), axis=1, batch_dims=1
+            )
             if self.from_logits:
                 pred = keras.activations.softmax(pred, axis=-1)
             # Sort preds in descending order.
             sorted_preds, sorted_indices = tf.math.top_k(
-                pred, k=pred.shape[1], sorted=True
+                pred, k=tf.shape(pred)[1], sorted=True
             )
             # Calculate cumulative probability distribution.
             cumulative_probs = tf.math.cumsum(sorted_preds, axis=-1)

@@ -57,10 +57,8 @@ class BeamSampler(Sampler):
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         max_length = tf.cast(max_length, num_steps.dtype)
         length = max_length - num_steps
-        dummy_preds = self._validate_token_probability_fn(
-            token_probability_fn, prompt, mask
-        )
-        vocab_size = dummy_preds.shape[-1]
+        dummy_preds = token_probability_fn(prompt, mask=mask)
+        vocab_size = tf.shape(dummy_preds)[-1]
         pred_dtype = dummy_preds.dtype
 
         num_beams = self.num_beams
@@ -74,24 +72,30 @@ class BeamSampler(Sampler):
             axis=-1,
         )
 
-        def one_step(beams, beams_prob, length):
-            truncated_beams = beams[..., :length]
+        def one_step(beams, beams_prob, length, mask):
 
             flattened_beams = tf.reshape(
-                truncated_beams, shape=[batch_size * num_beams, -1]
+                beams, shape=[batch_size * num_beams, -1]
             )
-            preds = token_probability_fn(flattened_beams)
+            repeated_mask = tf.tile(mask, [num_beams, 1])
+            probs = token_probability_fn(flattened_beams, repeated_mask)
+            preds = tf.gather(
+                probs,
+                tf.repeat(length - 1, batch_size * num_beams),
+                axis=1,
+                batch_dims=1,
+            )
             if self.from_logits:
                 preds = keras.activations.softmax(preds, axis=-1)
             # Reshape `preds` to shape `(batch_size, num_beams * vocab_size)`.
             preds = tf.reshape(preds, shape=[batch_size, -1])
 
-            probs = tf.math.log(preds) + tf.repeat(
+            cum_probs = tf.math.log(preds) + tf.repeat(
                 beams_prob, repeats=vocab_size, axis=1
             )
 
             candidate_prob, candidate_indexes = tf.math.top_k(
-                probs, k=num_beams, sorted=False
+                cum_probs, k=num_beams, sorted=False
             )
             candidate_beam_indexes = candidate_indexes // vocab_size
             next_token = candidate_indexes % vocab_size
@@ -107,6 +111,18 @@ class BeamSampler(Sampler):
                 y=next_token,
             )
             next_token = tf.reshape(next_token, shape=[-1])
+
+            mask = tf.tensor_scatter_nd_update(
+                tensor=mask,
+                indices=tf.stack(
+                    (
+                        tf.cast(tf.range(batch_size), dtype=length.dtype),
+                        tf.repeat(length, batch_size),
+                    ),
+                    axis=1,
+                ),
+                updates=tf.repeat(True, batch_size),
+            )
 
             # Generate `(batch_index, beam_index)` tuples for each beam.
             beam_indices = tf.where(tf.ones((batch_size, num_beams), tf.bool))
@@ -126,13 +142,15 @@ class BeamSampler(Sampler):
             beams_prob = candidate_prob
             length = tf.add(length, 1)
 
-            return beams, beams_prob, length
+            return beams, beams_prob, length, mask
 
         # Run a while loop till text of length `max_length` has been generated.
-        beams, beams_prob, length = tf.while_loop(
-            cond=lambda beams, beams_prob, length: tf.less(length, max_length),
+        beams, beams_prob, length, mask = tf.while_loop(
+            cond=lambda beams, beams_prob, length, mask: tf.less(
+                length, max_length
+            ),
             body=one_step,
-            loop_vars=(beams, beams_prob, length),
+            loop_vars=(beams, beams_prob, length, mask),
         )
 
         # Get the beam with the maximum probability.

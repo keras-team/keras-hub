@@ -49,11 +49,6 @@ class TopKSampler(Sampler):
         super().__init__(end_token_id, pad_token_id, jit_compile)
 
     def sample(self, token_probability_fn, prompt, mask, num_steps):
-        """Sampler's logic implementation.
-
-        Args:
-            {{call_keyword_docstring}}
-        """
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         max_length = tf.cast(max_length, num_steps.dtype)
         length = max_length - num_steps
@@ -65,18 +60,30 @@ class TopKSampler(Sampler):
             )
             if self.from_logits:
                 pred = keras.activations.softmax(pred, axis=-1)
-
-            # Filter out top-k tokens.
-            top_k_pred, top_k_indices = tf.math.top_k(
-                pred, k=self.k, sorted=False
+            # Sort preds in descending order.
+            sorted_preds, sorted_indices = tf.math.top_k(
+                pred, k=tf.shape(pred)[1], sorted=True
             )
-            # Sample the next token from the probability distribution.
-            next_token = tf.random.categorical(
-                tf.math.log(top_k_pred), 1, seed=self.seed
+            # Calculate cumulative probability distribution.
+            cumulative_probs = tf.math.cumsum(sorted_preds, axis=-1)
+            # Create a mask for the tokens to keep.
+            keep_mask = cumulative_probs <= self.p
+            # Shift to include the last token that exceed p.
+            shifted_keep_mask = tf.concat(
+                [tf.ones_like(keep_mask[:, :1]), keep_mask[:, :-1]], axis=-1
             )
-
-            # Rearrange to get the next token idx from the original order.
-            next_token = tf.gather_nd(top_k_indices, next_token, batch_dims=1)
+            # Filter out unmasked tokens and sample from filtered distribution.
+            probs = tf.where(
+                shifted_keep_mask,
+                sorted_preds,
+                tf.zeros(tf.shape(pred), dtype=sorted_preds.dtype),
+            )
+            sorted_next_token = tf.random.categorical(
+                tf.math.log(probs), 1, seed=self.seed
+            )
+            next_token = tf.gather_nd(
+                sorted_indices, sorted_next_token, batch_dims=1
+            )
             next_token = tf.cast(next_token, dtype=prompt.dtype)
             next_token = tf.where(
                 mask[:, length], prompt[:, length], next_token
