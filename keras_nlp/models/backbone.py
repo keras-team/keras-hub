@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Base classes for models API."""
+"""Base class for Backbone models."""
 
 import os
 

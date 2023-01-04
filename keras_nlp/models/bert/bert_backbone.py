@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BERT backbone models."""
+"""BERT backbone model."""
 
 import copy
 
@@ -21,7 +21,7 @@ from tensorflow import keras
 
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
-from keras_nlp.models.base import Backbone
+from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
 
@@ -75,7 +75,11 @@ class BertBackbone(Backbone):
         ),
     }
 
-    # Randomly initialized BERT encoder
+    # Pretrained BERT encoder
+    model = keras_nlp.models.BertBackbone.from_preset("base_base_en_uncased")
+    output = model(input_data)
+
+    # Randomly initialized BERT encoder with a custom config.
     model = keras_nlp.models.BertBackbone(
         vocabulary_size=30552,
         num_layers=12,
@@ -217,7 +221,7 @@ class BertBackbone(Backbone):
 
 
 BertBackbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__.format(
-    model_name="Bert",
+    model_name=BertBackbone.__name__,
     example_preset_name="bert_base_en_uncased",
     preset_names=BertBackbone.presets,
 )
