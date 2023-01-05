@@ -14,7 +14,6 @@
 
 from tensorflow import keras
 
-import keras_nlp
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -48,6 +47,10 @@ class Preprocessor(keras.layers.Layer):
         if "tokenizer" in config and isinstance(config["tokenizer"], dict):
             config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
         return cls(**config)
+
+    @classproperty
+    def tokenizer_cls(cls):
+        return None
 
     @classproperty
     def presets(cls):
@@ -95,10 +98,7 @@ class Preprocessor(keras.layers.Layer):
                 f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
 
-        tokenizer_cls_name = cls.__name__.replace("Preprocessor", "Tokenizer")
-        tokenizer = getattr(keras_nlp.models, tokenizer_cls_name).from_preset(
-            preset
-        )
+        tokenizer = cls.tokenizer_cls.from_preset(preset)
 
         metadata = cls.presets[preset]
         # For task model presets, the backbone config is nested.

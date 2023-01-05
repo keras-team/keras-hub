@@ -22,6 +22,7 @@ from tensorflow import keras
 
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.models.roberta.roberta_presets import backbone_presets
+from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
@@ -165,7 +166,6 @@ class RobertaPreprocessor(Preprocessor):
         super().__init__(**kwargs)
 
         self._tokenizer = tokenizer
-
         self.packer = RobertaMultiSegmentPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
@@ -183,6 +183,10 @@ class RobertaPreprocessor(Preprocessor):
             "padding_mask": token_ids != self.tokenizer.pad_token_id,
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
+
+    @classproperty
+    def tokenizer_cls(cls):
+        return RobertaTokenizer
 
     @classproperty
     def presets(cls):

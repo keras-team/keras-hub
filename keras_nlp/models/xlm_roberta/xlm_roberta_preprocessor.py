@@ -23,6 +23,9 @@ from keras_nlp.models.roberta.roberta_preprocessor import (
     RobertaMultiSegmentPacker,
 )
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
+from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
+    XLMRobertaTokenizer,
+)
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
@@ -173,6 +176,10 @@ class XLMRobertaPreprocessor(Preprocessor):
             "padding_mask": token_ids != self.tokenizer.pad_token_id,
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
+
+    @classproperty
+    def tokenizer_cls(cls):
+        return XLMRobertaTokenizer
 
     @classproperty
     def presets(cls):
