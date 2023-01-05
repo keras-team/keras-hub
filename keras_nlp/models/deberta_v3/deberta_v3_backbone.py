@@ -45,7 +45,7 @@ class DebertaV3Backbone(Backbone):
 
     The default constructor gives a fully customizable, randomly initialized
     DeBERTa encoder with any number of layers, heads, and embedding
-    dimensions. To load preset architectures and weights, use the `from_presets`
+    dimensions. To load preset architectures and weights, use the `from_preset`
     constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
