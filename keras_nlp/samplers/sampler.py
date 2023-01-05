@@ -47,32 +47,45 @@ class Sampler:
 
     # Define a function that outputs the next token's probability for each token
     # in the input sequence.
-    def token_probability_fn(inputs):
+    def token_probability_fn(inputs, mask):
         return model(inputs)
 
     prompt = tf.fill((BATCH_SIZE, 1), START_ID)
 
-    sampler = keras_nlp.samplers.GreedySearch(end_token_id=END_ID)
+    sampler = keras_nlp.samplers.Greedy()
     # Print the generated sequence (token ids).
-    print(sampler(token_probability_fn, prompt, max_length=10))
+    print(sampler(token_probability_fn, prompt, 10, end_token_id=END_ID))
     ```
     """
 
     def __init__(
         self,
-        end_token_id=None,
-        pad_token_id=0,
         jit_compile=True,
     ):
-        self.end_token_id = end_token_id
-        self.pad_token_id = pad_token_id
         self.jit_compile = jit_compile
 
-    def _validate_prompt(self, prompt):
+    def _validate_prompt_and_mask(self, prompt, mask):
         """Helper method to validate input prompt."""
-        if not isinstance(prompt, (tf.Tensor, tf.RaggedTensor)):
+        if not isinstance(prompt, (list, tf.RaggedTensor, tf.Tensor)):
+            raise ValueError(
+                "`prompt` must be one of `list`, `tf.RaggedTensor` or "
+                f"`tf.Tensor`, but received: prompt={type(prompt)}."
+            )
+
+        if isinstance(prompt, tf.RaggedTensor):
+            if mask:
+                raise ValueError(
+                    "`mask` is only valid when `prompt` is a list or dense "
+                    f"tensor, but received type(prompt)={type(prompt)}."
+                )
+            return prompt, mask
+
+        if isinstance(prompt, list):
             prompt = tf.convert_to_tensor(prompt)
-        return prompt
+        if not mask:
+            mask = tf.cast(tf.ones_like(prompt), dtype=tf.bool)
+        prompt = tf.ragged.boolean_mask(prompt, mask)
+        return prompt, mask
 
     def _validate_token_probability_fn(
         self, token_probability_fn, prompt, mask
@@ -86,19 +99,20 @@ class Sampler:
                 "[batch_size, sequence_length, vocab_size]."
             )
 
-    def _pad_prompt(self, prompt, max_length, pad_token_id):
+    def _pad_prompt(self, prompt, max_length):
         """Pad prompt to `max_length`."""
         mask = tf.ones_like(prompt, dtype=tf.bool)
         mask = mask.to_tensor(shape=(None, max_length))
-        prompt = prompt.to_tensor(
-            shape=(None, max_length), default_value=pad_token_id
-        )
+        prompt = prompt.to_tensor(shape=(None, max_length))
         return prompt, mask
 
     def _mask_tokens_after_end_token(
-        self, prompt, max_length, end_token_id, pad_token_id
+        self,
+        prompt,
+        max_length,
+        end_token_id,
     ):
-        """Helper function to mask the tokens after the end token."""
+        """Helper function to truncate the tokens after the end token."""
         # Mask out tokens after `end_token_id` is encountered.
         # Find index of first end_token_id.
         end_indices = tf.math.argmax(prompt == end_token_id, -1)
@@ -108,45 +122,59 @@ class Sampler:
             tf.cast(max_length, dtype=end_indices.dtype),
             end_indices,
         )
-        # Build a mask including end_token and replace tokens after end_token
-        # with `pad_token_id`.
-        mask_indices = tf.sequence_mask(end_indices + 1, maxlen=max_length)
-        return tf.where(mask_indices, prompt, pad_token_id)
+        # Truncate out tokens after (including) the end token.
+        mask_indices = tf.sequence_mask(end_indices, maxlen=max_length)
+        return tf.ragged.boolean_mask(prompt, mask_indices)
 
-    def __call__(self, token_probability_fn, prompt, max_length):
-        prompt = self._validate_prompt(prompt)
+    def __call__(
+        self,
+        token_probability_fn,
+        prompt,
+        max_length,
+        padding_mask=None,
+        end_token_id=None,
+        from_logits=True,
+    ):
+        prompt, padding_mask = self._validate_prompt_and_mask(
+            prompt, padding_mask
+        )
 
         input_is_1d = prompt.shape.rank == 1
         if input_is_1d:
-            prompt = prompt[tf.newaxis, :]
-        if isinstance(prompt, tf.Tensor):
-            prompt = tf.RaggedTensor.from_tensor(
-                prompt, padding=self.pad_token_id
-            )
+            prompt = tf.RaggedTensor.from_tensor(prompt[tf.newaxis, :])
+
         shortest_prompt_len = tf.reduce_min(prompt.row_lengths())
         # Pad prompt to be a dense Tensor of shape [batch_size, max_length].
         # This step is required for XLA compatibility because XLA requires a
         # static shape, which means we cannot concatenate generated token to
         # current prompt.
-        prompt, mask = self._pad_prompt(prompt, max_length, self.pad_token_id)
+        prompt, mask = self._pad_prompt(prompt, max_length)
         self._validate_token_probability_fn(token_probability_fn, prompt, mask)
 
         # Convert `sample` method to a `tf.function`, and turn on
         # `jit_compile` accordingly.
         sample = tf.function(self.sample, jit_compile=self.jit_compile)
         prompt = sample(
-            token_probability_fn, prompt, mask, max_length - shortest_prompt_len
+            token_probability_fn,
+            prompt,
+            mask,
+            max_length - shortest_prompt_len,
+            from_logits,
         )
 
         # Mask out tokens after `end_token_id`.
-        if self.end_token_id is not None:
+        if end_token_id is not None:
             prompt = self._mask_tokens_after_end_token(
-                prompt, max_length, self.end_token_id, self.pad_token_id
+                prompt,
+                max_length,
+                end_token_id,
             )
 
         return tf.squeeze(prompt) if input_is_1d else prompt
 
-    def sample(self, token_probability_fn, prompt, mask, num_steps):
+    def sample(
+        self, token_probability_fn, prompt, mask, num_steps, from_logits=True
+    ):
         """Sampling logic implementation.
 
         Args:
@@ -158,14 +186,13 @@ class Sampler:
         """
         raise NotImplementedError
 
+    def get_config(self):
+        return {
+            "jit_compile": self.jit_compile,
+        }
+
 
 base_sampler_keyword_args = """
-    end_token_id: int, defaults to None. The token marking the end of the
-        sequence, once encountered the generation is finished for the exact
-        sequence. If None, every sequence is generated up to `max_length`.
-        If set, all tokens after encountering `end_token_id` will be
-        replaced with `pad_token_id`.
-    pad_token_id: int, defaults to 0. The padding token.
     jit_compile: bool, defaults to True. If True, XLA compilation will be used.
     """
 
@@ -174,14 +201,30 @@ call_keyword_docstring = """
         the next token over the whole vocabulary for each input token.
     prompt: a list of integers or an integer Tensor, can be 1D or 2D. The
         initial tokens to append generated tokens.
-    max_length: int. The max length of generated sequence."""
+    max_length: int. The max length of generated sequence.
+    padding_mask: a tensor, defaults to None. The padding mask of the prompt.
+    end_token_id: int, defaults to None. The token marking the end of the
+        sequence, once encountered the generation is finished for the exact
+        sequence. If None, every sequence is generated up to `max_length`.
+        If set, all tokens after encountering `end_token_id` will be
+        replaced with `pad_token_id`.
+    from_logits: bool, defaults to True. Indicate if the `token_probability_fn`
+        returns logits. If False, `token_probability_fn` returns probability
+        distributions.
+    """
 
 sample_keyword_docstring = """
     token_probability_fn: a function that generates the probability of
         the next token over the whole vocabulary for each input token.
     prompt: a dense int Tensor of shape [batch_size, max_length]. The
         placeholder for generated sequence.
-    num_steps: int. The remaining number of tokens to generate."""
+    mask: a dense bool Tensor of shape [batch_size, max_length]. The mask of
+        prompt.
+    num_steps: int. The remaining number of tokens to generate.
+    from_logits: bool, defaults to True. Indicate if the `token_probability_fn`
+        returns logits. If False, `token_probability_fn` returns probability
+        distributions.
+    """
 
 Sampler.__doc__ = Sampler.__doc__.replace(
     "{{base_sampler_keyword_args}}", base_sampler_keyword_args

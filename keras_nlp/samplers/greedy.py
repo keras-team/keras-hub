@@ -21,8 +21,8 @@ from keras_nlp.samplers.sampler import call_keyword_docstring
 from keras_nlp.samplers.sampler import sample_keyword_docstring
 
 
-class GreedySampler(Sampler):
-    """Greedy Sampler class.
+class Greedy(Sampler):
+    """Greedy sampler class.
 
     This sampler is implemented on greedy search, i.e., always picking up the
     token of the largest probability as the next token.
@@ -55,26 +55,26 @@ class GreedySampler(Sampler):
 
     # Define a function that outputs the next token's probability for each token
     # in the input sequence.
-    def token_probability_fn(inputs):
+    def token_probability_fn(inputs, mask):
         return model(inputs)
 
     prompt = tf.fill((BATCH_SIZE, 1), START_ID)
 
-    sampler = keras_nlp.samplers.GreedySearch(end_token_id=END_ID)
+    sampler = keras_nlp.samplers.Greedy()
     # Print the generated sequence (token ids).
-    print(sampler(token_probability_fn, prompt, max_length=10))
+    print(sampler(token_probability_fn, prompt, 10, end_token_id=END_ID))
     ```
     """
 
     def __init__(
         self,
-        end_token_id=None,
-        pad_token_id=0,
         jit_compile=True,
     ):
-        super().__init__(end_token_id, pad_token_id, jit_compile)
+        super().__init__(jit_compile)
 
-    def sample(self, token_probability_fn, prompt, mask, num_steps):
+    def sample(
+        self, token_probability_fn, prompt, mask, num_steps, from_logits=True
+    ):
         """Sampling logic implementation.
 
         Args:
@@ -144,12 +144,12 @@ class GreedySampler(Sampler):
         return prompt
 
 
-GreedySampler.__doc__ = GreedySampler.__doc__.replace(
+Greedy.__doc__ = Greedy.__doc__.replace(
     "{{base_sampler_keyword_args}}", base_sampler_keyword_args
 )
-GreedySampler.__doc__ = GreedySampler.__doc__.replace(
+Greedy.__doc__ = Greedy.__doc__.replace(
     "{{call_keyword_docstring}}", call_keyword_docstring
 )
-GreedySampler.sample.__doc__ = GreedySampler.sample.__doc__.replace(
+Greedy.sample.__doc__ = Greedy.sample.__doc__.replace(
     "{{sample_keyword_docstring}}", sample_keyword_docstring
 )

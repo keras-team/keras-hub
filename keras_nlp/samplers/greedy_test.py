@@ -11,16 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for GreedySampler."""
+"""Tests for Greedy sampler."""
 
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.samplers.greedy_sampler import GreedySampler
+from keras_nlp.samplers.greedy import Greedy
 
 
-class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
+class GreedyTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
         self.vocab_size = 10
@@ -44,7 +44,7 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
 
         self.token_probability_fn = token_probability_fn
 
-        self.sampler = GreedySampler()
+        self.sampler = Greedy()
 
     def test_generate_with_1d_prompt(self):
         inputs = tf.constant([1])
@@ -102,25 +102,25 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
                 tf.repeat(prob, batch_size, axis=0), max_length, axis=1
             )
 
-        sampler = GreedySampler(end_token_id=2)
+        sampler = Greedy()
         inputs = tf.constant([[0, 1], [1, 2]])
         outputs = sampler(
             token_probability_fn,
             inputs,
             max_length=max_length,
+            end_token_id=2,
         )
-        expected_outputs = tf.tile([[3], [0]], [1, max_length - 2])
-        expected_outputs = tf.concat([inputs, expected_outputs], axis=1)
+        expected_outputs = tf.ragged.constant([[0, 1, 3, 3, 3], [1]])
         self.assertAllEqual(outputs, expected_outputs)
 
     def test_compare_xla_noxla_results(self):
         inputs = [[1], [1]]
-        xla_sampler = GreedySampler(jit_compile=True)
+        xla_sampler = Greedy(jit_compile=True)
         outputs_xla = xla_sampler(
             self.token_probability_fn, inputs, max_length=5
         )
 
-        xla_sampler = GreedySampler(jit_compile=False)
+        xla_sampler = Greedy(jit_compile=False)
         outputs_no_xla = xla_sampler(
             self.token_probability_fn, inputs, max_length=5
         )
