@@ -25,7 +25,7 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class AlbertPreprocessor(keras.layers.Layer):
-    """A ALBERT preprocessing layer which tokenizes and packs inputs.
+    """An ALBERT preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
 
@@ -33,7 +33,8 @@ class AlbertPreprocessor(keras.layers.Layer):
      - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
        with the appropriate `"[CLS]"`, `"[SEP]"` and `"<pad>"` tokens.
      - Construct a dictionary with keys `"token_ids"`, `"segment_ids"` and
-       `"padding_mask"`, that can be passed directly to a ALBERT model.
+       `"padding_mask"`, that can be passed directly to
+       `keras_nlp.models.AlbertBackbone`.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
