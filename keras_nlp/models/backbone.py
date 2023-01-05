@@ -44,18 +44,18 @@ class Backbone(keras.Model):
         """Instantiate {{model_name}} model from preset architecture and weights.
 
         Args:
-            preset: string. Must be one of {{preset_names}}.
+            preset: string. Must be one of "{{preset_names}}".
             load_weights: Whether to load pre-trained weights into model.
                 Defaults to `True`.
 
         Examples:
         ```python
         # Load architecture and weights from preset
-        model = {{model_name}}Backbone.from_preset({{example_preset_name}})
+        model = {{model_name}}.from_preset("{{example_preset_name}}")
 
         # Load randomly initialized model from preset architecture
-        model = {{model_name}}Backbone.from_preset(
-            {{example_preset_name}},
+        model = {{model_name}}.from_preset(
+            "{{example_preset_name}}",
             load_weights=False
         )
         ```

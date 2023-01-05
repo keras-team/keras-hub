@@ -80,7 +80,7 @@ class BertBackbone(Backbone):
     model = keras_nlp.models.BertBackbone.from_preset("base_base_en_uncased")
     output = model(input_data)
 
-    # Randomly initialized BERT encoder with a custom config.
+    # Randomly initialized BERT encoder with a custom config
     model = keras_nlp.models.BertBackbone(
         vocabulary_size=30552,
         num_layers=12,
@@ -220,9 +220,14 @@ class BertBackbone(Backbone):
     def presets(cls):
         return copy.deepcopy(backbone_presets)
 
+    @classmethod
+    def from_preset(cls, preset, load_weights=True, **kwargs):
+        return super().from_preset(preset, load_weights, **kwargs)
 
+
+BertBackbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
 format_docstring(
     model_name=BertBackbone.__name__,
     example_preset_name="bert_base_en_uncased",
-    preset_names=", ".join(BertBackbone.presets),
+    preset_names="\", \"".join(BertBackbone.presets),
 )(BertBackbone.from_preset.__func__)
