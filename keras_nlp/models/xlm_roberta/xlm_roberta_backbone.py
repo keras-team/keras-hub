@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""XLM-RoBERTa backbone models."""
+"""XLM-RoBERTa backbone model."""
 
 import copy
 
