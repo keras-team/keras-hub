@@ -28,7 +28,7 @@ class AlbertBackboneTest(tf.test.TestCase, parameterized.TestCase):
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
-            num_hidden_groups=1,
+            num_groups=1,
             num_layers_per_group=1,
             embedding_dim=16,
             hidden_dim=64,

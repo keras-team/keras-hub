@@ -18,7 +18,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers.position_embedding import PositionEmbedding
-from keras_nlp.models.albert.albert_group_layer import AlbertGroupLayer
+from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -50,11 +50,12 @@ class AlbertBackbone(keras.Model):
         vocabulary_size: int. The size of the token vocabulary.
         num_layers: int. The number of "virtual" layers, i.e., the total number
             of times the input sequence will be fed through the Transformer
-            layers in one forward pass.
+            layers in one forward pass. The input will be routed to the correct
+            group based on the layer index.
         num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
-        num_hidden_groups: int. Number of groups, with each group having a
-            certain number of Transformer layers.
+        num_groups: int. Number of groups, with each group having a certain
+            number of Transformer layers.
         num_layers_per_group: int. Number of Transformer layers per group.
         embedding_dim: int. The size of the embeddings.
         hidden_dim: int. The size of the transformer encoding and pooler layers.
@@ -85,7 +86,7 @@ class AlbertBackbone(keras.Model):
         vocabulary_size=30000,
         num_layers=12,
         num_heads=12,
-        num_hidden_groups=1,
+        num_groups=1,
         num_layers_per_group=1,
         embedding_dim=128,
         hidden_dim=768,
@@ -101,7 +102,7 @@ class AlbertBackbone(keras.Model):
         vocabulary_size,
         num_layers,
         num_heads,
-        num_hidden_groups,
+        num_groups,
         num_layers_per_group,
         embedding_dim,
         hidden_dim,
@@ -167,26 +168,26 @@ class AlbertBackbone(keras.Model):
             name="embedding_projection",
         )(x)
 
-        albert_group_layers = [
-            AlbertGroupLayer(
-                num_layers=num_layers_per_group,
-                num_heads=num_heads,
-                intermediate_dim=intermediate_dim,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=True
-                ),
-                dropout=dropout,
-                kernel_initializer=albert_kernel_initializer(),
-                name=f"group_layer_{i}",
-            )
-            for i in range(num_hidden_groups)
-        ]
+        layer_idx = 0
+        for i in range(num_groups):
+            transformer_layers = [
+                TransformerEncoder(
+                    num_heads=num_heads,
+                    intermediate_dim=intermediate_dim,
+                    activation=lambda x: keras.activations.gelu(
+                        x, approximate=True
+                    ),
+                    dropout=dropout,
+                    kernel_initializer=albert_kernel_initializer(),
+                    name=f"group_{i}_transformer_layer_{j}",
+                )
+                for j in range(num_layers_per_group)
+            ]
 
-        # Apply successive transformer encoder blocks.
-        for i in range(num_layers):
-            # Index of the hidden group
-            group_idx = int(i / (num_layers / num_hidden_groups))
-            x = albert_group_layers[group_idx](x, padding_mask)
+            while int(layer_idx / (num_layers / num_groups)) == i:
+                for transformer_layer in transformer_layers:
+                    x = transformer_layer(x, padding_mask=padding_mask)
+                layer_idx += 1
 
         # Construct the two ALBERT outputs. The pooled output is a dense layer on
         # top of the [CLS] token.
@@ -215,7 +216,7 @@ class AlbertBackbone(keras.Model):
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads
-        self.num_hidden_groups = num_hidden_groups
+        self.num_groups = num_groups
         self.num_layers_per_group = num_layers_per_group
         self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
@@ -230,7 +231,7 @@ class AlbertBackbone(keras.Model):
             "vocabulary_size": self.vocabulary_size,
             "num_layers": self.num_layers,
             "num_heads": self.num_heads,
-            "num_hidden_groups": self.num_hidden_groups,
+            "num_groups": self.num_groups,
             "num_layers_per_group": self.num_layers_per_group,
             "embedding_dim": self.embedding_dim,
             "hidden_dim": self.hidden_dim,
