@@ -81,7 +81,7 @@ class DistilBertBackbone(Backbone):
         "distil_bert_base_en_uncased"
     )
     output = model(input_data)
-    
+
     # Randomly initialized DistilBERT encoder with custom config
     model = keras_nlp.models.DistilBertBackbone(
         vocabulary_size=30552,
@@ -192,5 +192,5 @@ DistilBertBackbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
 format_docstring(
     model_name=DistilBertBackbone.__name__,
     example_preset_name="distil_bert_base_en_uncased",
-    preset_names="\", \"".join(DistilBertBackbone.presets),
+    preset_names='", "'.join(DistilBertBackbone.presets),
 )(DistilBertBackbone.from_preset.__func__)

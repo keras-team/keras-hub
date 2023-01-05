@@ -199,5 +199,5 @@ GPT2Backbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
 format_docstring(
     model_name=GPT2Backbone.__name__,
     example_preset_name="gpt2_base_en",
-    preset_names="\", \"".join(GPT2Backbone.presets),
+    preset_names='", "'.join(GPT2Backbone.presets),
 )(GPT2Backbone.from_preset.__func__)

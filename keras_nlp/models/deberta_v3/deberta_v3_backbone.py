@@ -212,5 +212,5 @@ DebertaV3Backbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
 format_docstring(
     model_name=DebertaV3Backbone.__name__,
     example_preset_name="deberta_base_en",
-    preset_names="\", \"".join(DebertaV3Backbone.presets),
+    preset_names='", "'.join(DebertaV3Backbone.presets),
 )(DebertaV3Backbone.from_preset.__func__)

@@ -229,5 +229,5 @@ BertBackbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
 format_docstring(
     model_name=BertBackbone.__name__,
     example_preset_name="bert_base_en_uncased",
-    preset_names="\", \"".join(BertBackbone.presets),
+    preset_names='", "'.join(BertBackbone.presets),
 )(BertBackbone.from_preset.__func__)
