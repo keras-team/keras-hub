@@ -132,7 +132,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
     def test_one_training_step_of_transformer_with_cross_attention(self):
         class MyModel(keras.Model):
             def __init__(self):
-                super(MyModel, self).__init__()
+                super().__init__()
                 self._decoder = transformer_decoder.TransformerDecoder(
                     intermediate_dim=4, num_heads=2
                 )
@@ -160,7 +160,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
     def test_one_training_step_of_transformer_without_cross_attention(self):
         class MyModel(keras.Model):
             def __init__(self):
-                super(MyModel, self).__init__()
+                super().__init__()
                 self._decoder = transformer_decoder.TransformerDecoder(
                     intermediate_dim=4,
                     num_heads=2,
