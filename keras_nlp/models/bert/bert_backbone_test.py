@@ -15,6 +15,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -102,3 +103,30 @@ class BertBackboneTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(
             model_output["pooled_output"], restored_output["pooled_output"]
         )
+
+
+@pytest.mark.tpu
+@pytest.mark.usefixtures("tpu_test_class")
+class BertBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+    def setUp(self):
+        with self.tpu_strategy.scope():
+            self.model = BertBackbone(
+                vocabulary_size=1000,
+                num_layers=2,
+                num_heads=2,
+                hidden_dim=64,
+                intermediate_dim=128,
+                max_sequence_length=128,
+            )
+        self.input_batch = {
+            "token_ids": tf.ones((8, 128), dtype="int32"),
+            "segment_ids": tf.ones((8, 128), dtype="int32"),
+            "padding_mask": tf.ones((8, 128), dtype="int32"),
+        }
+        self.input_dataset = tf.data.Dataset.from_tensor_slices(
+            self.input_batch
+        ).batch(2)
+
+    def test_predict(self):
+        self.model.compile()
+        self.model.predict(self.input_dataset)

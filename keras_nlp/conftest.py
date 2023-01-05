@@ -11,11 +11,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 import sys
 
 import pytest
 import tensorflow as tf
 from packaging import version
+
+
+@pytest.fixture(scope="session")
+def tpu_strategy():
+    tpu_name = os.getenv("KUBE_GOOGLE_CLOUD_TPU_ENDPOINTS")
+    resolver = tf.distribute.cluster_resolver.TPUClusterResolver.connect(
+        tpu=tpu_name,
+    )
+    return tf.distribute.TPUStrategy(resolver)
+
+
+@pytest.fixture(scope="class")
+def tpu_test_class(request, tpu_strategy):
+    # set a class attribute on the invoking test context
+    request.cls.tpu_strategy = tpu_strategy
 
 
 def pytest_addoption(parser):
@@ -31,6 +47,12 @@ def pytest_addoption(parser):
         default=False,
         help="run extra_large tests",
     )
+    parser.addoption(
+        "--run_tpu",
+        action="store_true",
+        default=False,
+        help="run tpu tests",
+    )
 
 
 def pytest_configure(config):
@@ -41,12 +63,17 @@ def pytest_configure(config):
         "markers",
         "extra_large: mark test as being too large to run continuously",
     )
+    config.addinivalue_line(
+        "markers",
+        "tpu: mark test as tpu test",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
     run_extra_large_tests = config.getoption("--run_extra_large")
     # Run large tests for --run_extra_large or --run_large.
     run_large_tests = config.getoption("--run_large") or run_extra_large_tests
+    run_tpu = config.getoption("--run_tpu")
 
     # Messages to annotate skipped tests with.
     skip_xla = pytest.mark.skipif(
@@ -62,6 +89,9 @@ def pytest_collection_modifyitems(config, items):
     skip_extra_large = pytest.mark.skipif(
         not run_extra_large_tests, reason="need --run_extra_large option to run"
     )
+    skip_tpu = pytest.mark.skipif(
+        not run_tpu, reason="need --run_tpu option to run"
+    )
     for item in items:
         if "jit_compile_true" in item.name:
             item.add_marker(skip_xla)
@@ -71,3 +101,5 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_large)
         if "extra_large" in item.keywords:
             item.add_marker(skip_extra_large)
+        if "tpu" in item.keywords:
+            item.add_marker(skip_tpu)
