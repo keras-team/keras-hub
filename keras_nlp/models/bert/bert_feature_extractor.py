@@ -82,46 +82,25 @@ class BertFeatureExtractor(PipelineModel):
         preprocessor=None,
     )
 
-    y_eval = featurizer(preprocessed)
+    outputs = featurizer(preprocessed_features)
 
-    # Access backbone programatically (e.g., to change `trainable`)
-    featurizer.backbone.trainable = False
-    
-    
-    # Using a classifier head    
-        
-    class CustomClassifier(keras.Model):
-        
-        def __init__(self, featurizer: BertFeatureExtractor, num_classes = 2):
-            inputs = featurizer.input
-            pooled = featurizer(inputs)["pooled_output"]
-            pooled = keras.layers.Dropout(dropout)(pooled)
-            outputs = keras.layers.Dense(
-                num_classes,
-                kernel_initializer=bert_kernel_initializer(),
-                name="logits",
-            )(pooled)
-            # Instantiate using Functional API Model constructor
-            super().__init__(
-                inputs=inputs,
-                outputs=outputs,
-                include_preprocessing=None
-                **kwargs,
-            )
+    # Using a classifier head (num_classes = 4)
 
-    # Create a classifier and fit your data.
-    classifier = CustomClassifier(
-        featurizer,
-        num_classes=4
-    )
+    features = outputs
+    outputs = keras.layers.Dense(4)(outputs["pooled_output"])
+    classifier = keras.Model(features, outputs)
 
     classifier.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
     )
 
     labels = [0, 0, 0 , 3]
+
     classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
-    
+
+    # Access backbone programatically (e.g., to change `trainable`)
+    featurizer.backbone.trainable = False
+
     ```
     """
 
@@ -222,7 +201,7 @@ class BertFeatureExtractor(PipelineModel):
         ```python
         # Create a dataset with raw string features in an `(x, y)` format.
         features = ["The quick brown fox jumped.", "I forgot my homework."]
-        
+
         # Use a shorter sequence length.
         preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
             "bert_base_en_uncased",
@@ -249,7 +228,7 @@ class BertFeatureExtractor(PipelineModel):
                 [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
             ),
         }
-        
+
         # Create a BERT featurizer and evaluate on data
         featurizer = keras_nlp.models.BertFeatureExtractor.from_preset(
             "bert_base_en_uncased",

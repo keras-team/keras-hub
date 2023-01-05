@@ -20,7 +20,6 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.bert.bert_backbone import BertBackbone
-from keras_nlp.models.bert.bert_classifier import BertClassifier
 from keras_nlp.models.bert.bert_feature_extractor import BertFeatureExtractor
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
@@ -44,20 +43,11 @@ class BertFeatureExtractorTest(tf.test.TestCase, parameterized.TestCase):
             sequence_length=8,
         )
         self.featurizer = BertFeatureExtractor(
-            self.backbone, 
-            preprocessor=self.preprocessor
+            self.backbone, preprocessor=self.preprocessor
         )
- 
-        # self.classifier = CustomClassifier()  ??
-        
-        self.classifier = BertClassifier(
+
+        self.featurizer_no_preprocessing = BertFeatureExtractor(
             self.backbone,
-            4,
-            preprocessor=self.preprocessor,
-        )
-        self.classifier_no_preprocessing = BertClassifier(
-            self.backbone,
-            4,
             preprocessor=None,
         )
 
@@ -75,56 +65,72 @@ class BertFeatureExtractorTest(tf.test.TestCase, parameterized.TestCase):
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
-    def test_valid_call_classifier(self):
-        self.classifier(self.preprocessed_batch)
+    def test_valid_call_featurizer(self):
+        self.featurizer(self.preprocessed_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_bert_classifier_predict(self, jit_compile):
-        self.classifier.compile(jit_compile=jit_compile)
-        self.classifier.predict(self.raw_batch)
+        features = self.featurizer(self.preprocessed_batch)
+        classifier = keras.layers.Dense(4)(features)
+
+        classifier.compile(jit_compile=jit_compile)
+        classifier.predict(self.raw_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_bert_classifier_predict_no_preprocessing(self, jit_compile):
-        self.classifier_no_preprocessing.compile(jit_compile=jit_compile)
-        self.classifier_no_preprocessing.predict(self.preprocessed_batch)
+        features = self.featurizer_no_preprocessing(self.preprocessed_batch)
+        classifier = keras.layers.Dense(4)(features)
+
+        classifier.compile(jit_compile=jit_compile)
+        classifier.predict(self.preprocessed_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_bert_classifier_fit(self, jit_compile):
-        self.classifier.compile(
+        features = self.featurizer(self.preprocessed_batch)
+        classifier = keras.layers.Dense(4)(features)
+
+        classifier.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             jit_compile=jit_compile,
         )
-        self.classifier.fit(self.raw_dataset)
+        classifier.fit(self.raw_dataset)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_bert_classifier_fit_no_preprocessing(self, jit_compile):
-        self.classifier_no_preprocessing.compile(
+        features = self.featurizer_no_preprocessing(self.preprocessed_batch)
+        classifier = keras.layers.Dense(4)(features)
+
+        classifier.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             jit_compile=jit_compile,
         )
-        self.classifier_no_preprocessing.fit(self.preprocessed_dataset)
+        classifier.fit(self.preprocessed_dataset)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
     def test_saved_model(self, save_format, filename):
-        model_output = self.classifier.predict(self.raw_batch)
+
+        features = self.featurizer(self.preprocessed_batch)
+        classifier = keras.layers.Dense(4)(features)
+
+        model_output = classifier.predict(self.raw_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)
-        self.classifier.save(save_path, save_format=save_format)
+        self.featurizer.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, BertClassifier)
+        self.assertIsInstance(restored_model, BertFeatureExtractor)
 
         # Check that output matches.
-        restored_output = restored_model.predict(self.raw_batch)
+        restored_output = classifier(restored_model.predict(self.raw_batch))
         self.assertAllClose(model_output, restored_output)
