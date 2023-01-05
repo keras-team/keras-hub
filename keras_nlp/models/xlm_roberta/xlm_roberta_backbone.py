@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""XLM-RoBERTa backbone models."""
+"""XLM-RoBERTa backbone model."""
 
 import copy
-import os
 
 from tensorflow import keras
 
+from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.roberta import roberta_backbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
@@ -37,7 +37,7 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
 
     The default constructor gives a fully customizable, randomly initialized
     RoBERTa encoder with any number of layers, heads, and embedding
-    dimensions. To load preset architectures and weights, use the `from_presets`
+    dimensions. To load preset architectures and weights, use the `from_preset`
     constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
@@ -66,7 +66,13 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
 
-    # Randomly initialized XLM-R model
+    # Pretrained XLM-R encoder
+    model = keras_nlp.models.XLMRobertaBackbone.from_preset(
+        "xlm_roberta_base_multi",
+    )
+    output = model(input_data)
+
+    # Randomly initialized XLM-R model with custom config
     model = keras_nlp.models.XLMRobertaBackbone(
         vocabulary_size=250002,
         num_layers=12,
@@ -86,60 +92,13 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
         return copy.deepcopy(backbone_presets)
 
     @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
-    def from_preset(
-        cls,
-        preset,
-        load_weights=True,
-        **kwargs,
-    ):
-        """Instantiate XLM-RoBERTa model from preset architecture and weights.
+    def from_preset(cls, preset, load_weights=True, **kwargs):
+        return super().from_preset(preset, load_weights, **kwargs)
 
-        Args:
-            preset: string. Must be one of {{names}}.
-            load_weights: Whether to load pre-trained weights into model.
-                Defaults to `True`.
 
-        Examples:
-        ```python
-        input_data = {
-            "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
-            "padding_mask": tf.constant(
-                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-            ),
-        }
-
-        # Load architecture and weights from preset
-        model = keras_nlp.models.XLMRobertaBackbone.from_preset(
-            "xlm_roberta_base_multi",
-        )
-        output = model(input_data)
-
-        # Load randomly initialized model from preset architecture
-        model = keras_nlp.models.XLMRobertaBackbone.from_preset(
-            "xlm_roberta_base_multi", load_weights=False
-        )
-        output = model(input_data)
-        ```
-        """
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-        config = metadata["config"]
-        model = cls.from_config({**config, **kwargs})
-
-        if not load_weights:
-            return model
-
-        weights = keras.utils.get_file(
-            "model.h5",
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
-        )
-
-        model.load_weights(weights)
-        return model
+XLMRobertaBackbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
+format_docstring(
+    model_name=XLMRobertaBackbone.__name__,
+    example_preset_name="xlm_roberta_base_multi",
+    preset_names=", ".join(XLMRobertaBackbone.presets),
+)(XLMRobertaBackbone.from_preset.__func__)

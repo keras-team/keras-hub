@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BERT backbone models."""
+"""BERT backbone model."""
 
 import copy
-import os
 
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
+from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -32,7 +32,7 @@ def bert_kernel_initializer(stddev=0.02):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class BertBackbone(keras.Model):
+class BertBackbone(Backbone):
     """BERT encoder network.
 
     This class implements a bi-directional Transformer-based encoder as
@@ -76,7 +76,11 @@ class BertBackbone(keras.Model):
         ),
     }
 
-    # Randomly initialized BERT encoder
+    # Pretrained BERT encoder
+    model = keras_nlp.models.BertBackbone.from_preset("base_base_en_uncased")
+    output = model(input_data)
+
+    # Randomly initialized BERT encoder with a custom config
     model = keras_nlp.models.BertBackbone(
         vocabulary_size=30552,
         num_layers=12,
@@ -212,71 +216,18 @@ class BertBackbone(keras.Model):
             "trainable": self.trainable,
         }
 
-    @classmethod
-    def from_config(cls, config):
-        return cls(**config)
-
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
 
     @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
-    def from_preset(
-        cls,
-        preset,
-        load_weights=True,
-        **kwargs,
-    ):
-        """Instantiate BERT model from preset architecture and weights.
+    def from_preset(cls, preset, load_weights=True, **kwargs):
+        return super().from_preset(preset, load_weights, **kwargs)
 
-        Args:
-            preset: string. Must be one of {{names}}.
-            load_weights: Whether to load pre-trained weights into model.
-                Defaults to `True`.
 
-        Examples:
-        ```python
-        input_data = {
-            "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
-            "segment_ids": tf.constant(
-                [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-            ),
-            "padding_mask": tf.constant(
-                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-            ),
-        }
-
-        # Load architecture and weights from preset
-        model = BertBackbone.from_preset("bert_base_en_uncased")
-        output = model(input_data)
-
-        # Load randomly initialized model from preset architecture
-        model = BertBackbone.from_preset(
-            "bert_base_en_uncased",
-            load_weights=False
-        )
-        output = model(input_data)
-        ```
-        """
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-        config = metadata["config"]
-        model = cls.from_config({**config, **kwargs})
-
-        if not load_weights:
-            return model
-
-        weights = keras.utils.get_file(
-            "model.h5",
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
-        )
-
-        model.load_weights(weights)
-        return model
+BertBackbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
+format_docstring(
+    model_name=BertBackbone.__name__,
+    example_preset_name="bert_base_en_uncased",
+    preset_names='", "'.join(BertBackbone.presets),
+)(BertBackbone.from_preset.__func__)
