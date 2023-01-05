@@ -32,7 +32,7 @@ from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class XLMRobertaPreprocessor(keras.layers.Layer):
+class XLMRobertaPreprocessor(Preprocessor):
     """XLM-RoBERTa preprocessing layer.
 
     This preprocessing layer will do three things:
@@ -183,7 +183,6 @@ class XLMRobertaPreprocessor(keras.layers.Layer):
         cls,
         preset,
         sequence_length=None,
-        truncate="round_robin",
         **kwargs,
     ):
         return super().from_preset(

@@ -195,7 +195,9 @@ class RobertaPreprocessor(Preprocessor):
         sequence_length=None,
         **kwargs,
     ):
-        super().from_preset(preset, sequence_length=sequence_length, **kwargs)
+        return super().from_preset(
+            preset, sequence_length=sequence_length, **kwargs
+        )
 
 
 RobertaPreprocessor.from_preset.__func__.__doc__ = (
