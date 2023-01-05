@@ -43,3 +43,12 @@ To add/update dependency for GPU tests:
   ```
   gcloud builds submit --region=us-west1 --tag us-west1-docker.pkg.dev/keras-team-test/keras-nlp-test/keras-nlp-image:deps --timeout=30m
   ```
+
+### Run TPU Testing
+
+Because of the TPU capacity limit, we cannot set automatic TPU testing. To
+trigger the TPU testing, run the following command:
+
+```
+gcloud builds submit --config .cloudbuild/tpu_cloudbuild.yaml . --project=keras-team-test
+```
