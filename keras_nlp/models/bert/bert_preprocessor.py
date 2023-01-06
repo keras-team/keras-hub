@@ -77,13 +77,8 @@ class BertPreprocessor(Preprocessor):
 
     Examples:
     ```python
-    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
-    vocab += ["The", "qu", "##ick", "br", "##own", "fox", "tripped"]
-    vocab += ["Call", "me", "Ish", "##mael", "."]
-    vocab += ["Oh", "look", "a", "whale"]
-    vocab += ["I", "forgot", "my", "home", "##work"]
-    tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
-    preprocessor = keras_nlp.models.BertPreprocessor(tokenizer)
+    # Load the preprocessor from a preset.
+    preprocessor = keras_nlp.models.BertTokenizer.from_preset("bert-base-uncased")
 
     # Tokenize and pack a single sentence.
     sentence = tf.constant("The quick brown fox jumped.")
@@ -143,6 +138,16 @@ class BertPreprocessor(Preprocessor):
         lambda s1, s2: preprocessor(x=(s1, s2)),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
+
+    # Alternatively, you can create a preprocessor from your own vocabulary.
+    # The usage is exactly the same as shown above.
+    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
+    vocab += ["The", "qu", "##ick", "br", "##own", "fox", "tripped"]
+    vocab += ["Call", "me", "Ish", "##mael", "."]
+    vocab += ["Oh", "look", "a", "whale"]
+    vocab += ["I", "forgot", "my", "home", "##work"]
+    tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
+    preprocessor = keras_nlp.models.BertPreprocessor(tokenizer)
     ```
     """
 
@@ -174,6 +179,16 @@ class BertPreprocessor(Preprocessor):
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "sequence_length": self.packer.sequence_length,
+                "truncate": self.packer.truncate,
+            }
+        )
+        return config
+
     @classproperty
     def tokenizer_cls(cls):
         return BertTokenizer
@@ -196,7 +211,7 @@ class BertPreprocessor(Preprocessor):
 
 BertPreprocessor.from_preset.__func__.__doc__ = Preprocessor.from_preset.__doc__
 format_docstring(
-    model_name=BertPreprocessor.__name__,
+    preprocessor_name=BertPreprocessor.__name__,
     example_preset_name="bert_base_en_uncased",
     preset_names='", "'.join(BertPreprocessor.presets),
 )(BertPreprocessor.from_preset.__func__)

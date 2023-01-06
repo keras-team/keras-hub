@@ -74,11 +74,8 @@ class DebertaV3Preprocessor(Preprocessor):
 
     Examples:
     ```python
-    tokenizer = keras_nlp.models.DebertaV3Tokenizer(proto="model.spm")
-    preprocessor = keras_nlp.models.DebertaV3Preprocessor(
-        tokenizer=tokenizer,
-        sequence_length=10,
-    )
+    # Load the preprocessor from a preset.
+    preprocessor = keras_nlp.models.DebertaV3Tokenizer.from_preset("deberta_v3_base_en")
 
     # Tokenize and pack a single sentence.
     sentence = tf.constant("The quick brown fox jumped.")
@@ -138,6 +135,14 @@ class DebertaV3Preprocessor(Preprocessor):
         lambda s1, s2: preprocessor(x=(s1, s2)),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
+
+    # Alternatively, you can create a preprocessor from your own vocabulary.
+    # The usage is the exactly same as above.
+    tokenizer = keras_nlp.models.DebertaV3Tokenizer(proto="model.spm")
+    preprocessor = keras_nlp.models.DebertaV3Preprocessor(
+        tokenizer=tokenizer,
+        sequence_length=10,
+    )
     ```
     """
 
@@ -168,6 +173,16 @@ class DebertaV3Preprocessor(Preprocessor):
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "sequence_length": self.packer.sequence_length,
+                "truncate": self.packer.truncate,
+            }
+        )
+        return config
+
     @classproperty
     def tokenizer_cls(cls):
         return DebertaV3Tokenizer
@@ -192,7 +207,7 @@ DebertaV3Preprocessor.from_preset.__func__.__doc__ = (
     Preprocessor.from_preset.__doc__
 )
 format_docstring(
-    model_name=DebertaV3Preprocessor.__name__,
+    preprocessor_name=DebertaV3Preprocessor.__name__,
     example_preset_name="deberta_v3_base_en",
     preset_names='", "'.join(DebertaV3Preprocessor.presets),
 )(DebertaV3Preprocessor.from_preset.__func__)

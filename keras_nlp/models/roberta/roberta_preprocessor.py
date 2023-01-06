@@ -78,32 +78,8 @@ class RobertaPreprocessor(Preprocessor):
 
     Examples:
     ```python
-    vocab = {
-        "<s>": 0,
-        "<pad>": 1,
-        "</s>": 2,
-        "reful": 3,
-        "gent": 4,
-        "Ġafter": 5,
-        "noon": 6,
-        "Ġsun": 7,
-        "Ġbright": 8,
-        "Ġnight": 9,
-        "Ġmoon": 10,
-    }
-    merges = ["Ġ a", "Ġ m", "Ġ s", "Ġ b", "Ġ n", "r e", "f u", "g e", "n t"]
-    merges += ["e r", "n o", "o n", "i g", "h t"]
-    merges += ["Ġs u", "Ġa f", "Ġm o", "Ġb r","ge nt", "no on", "re fu", "ig ht"]
-    merges += ["Ġn ight", "Ġsu n", "Ġaf t", "Ġmo on", "Ġbr ight", "refu l", "Ġaft er"]
-
-    tokenizer = keras_nlp.models.RobertaTokenizer(
-        vocabulary=vocab,
-        merges=merges,
-    )
-    preprocessor = keras_nlp.models.RobertaPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=20,
-    )
+    # Load the preprocessor from a preset.
+    preprocessor = keras_nlp.models.RobertaTokenizer.from_preset("xlm_roberta_base_multi")
 
     # Tokenize and pack a single sentence.
     sentence = tf.constant(" afternoon sun")
@@ -153,6 +129,35 @@ class RobertaPreprocessor(Preprocessor):
         lambda s1, s2: preprocessor(x=(s1, s2)),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
+
+    # Alternatively, you can create a preprocessor from your own vocabulary.
+    # The usage is exactly the same as above.
+    vocab = {
+        "<s>": 0,
+        "<pad>": 1,
+        "</s>": 2,
+        "reful": 3,
+        "gent": 4,
+        "Ġafter": 5,
+        "noon": 6,
+        "Ġsun": 7,
+        "Ġbright": 8,
+        "Ġnight": 9,
+        "Ġmoon": 10,
+    }
+    merges = ["Ġ a", "Ġ m", "Ġ s", "Ġ b", "Ġ n", "r e", "f u", "g e", "n t"]
+    merges += ["e r", "n o", "o n", "i g", "h t"]
+    merges += ["Ġs u", "Ġa f", "Ġm o", "Ġb r","ge nt", "no on", "re fu", "ig ht"]
+    merges += ["Ġn ight", "Ġsu n", "Ġaf t", "Ġmo on", "Ġbr ight", "refu l", "Ġaft er"]
+
+    tokenizer = keras_nlp.models.RobertaTokenizer(
+        vocabulary=vocab,
+        merges=merges,
+    )
+    preprocessor = keras_nlp.models.RobertaPreprocessor(
+        tokenizer=tokenizer,
+        sequence_length=20,
+    )
     ```
     """
 
@@ -184,6 +189,16 @@ class RobertaPreprocessor(Preprocessor):
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "sequence_length": self.packer.sequence_length,
+                "truncate": self.packer.truncate,
+            }
+        )
+        return config
+
     @classproperty
     def tokenizer_cls(cls):
         return RobertaTokenizer
@@ -208,7 +223,7 @@ RobertaPreprocessor.from_preset.__func__.__doc__ = (
     Preprocessor.from_preset.__doc__
 )
 format_docstring(
-    model_name=RobertaPreprocessor.__name__,
+    preprocessor_name=RobertaPreprocessor.__name__,
     example_preset_name="roberta_base_en",
     preset_names='", "'.join(RobertaPreprocessor.presets),
 )(RobertaPreprocessor.from_preset.__func__)

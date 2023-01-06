@@ -23,7 +23,6 @@ from keras_nlp.utils.keras_utils import (
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -167,32 +166,16 @@ class AlbertPreprocessor(Preprocessor):
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "sequence_length": self.packer.sequence_length,
+                "truncate": self.packer.truncate,
+            }
+        )
+        return config
+
     @classproperty
     def tokenizer_cls(cls):
         return AlbertTokenizer
-
-    @classproperty
-    def presets(cls):
-        return {}
-
-    @classmethod
-    def from_preset(
-        cls,
-        preset,
-        sequence_length=None,
-        truncate="round_robin",
-        **kwargs,
-    ):
-        return super().from_preset(
-            preset, sequence_length=sequence_length, **kwargs
-        )
-
-
-AlbertPreprocessor.from_preset.__func__.__doc__ = (
-    Preprocessor.from_preset.__doc__
-)
-format_docstring(
-    model_name=AlbertPreprocessor.__name__,
-    example_preset_name="",
-    preset_names='", "'.join(AlbertPreprocessor.presets),
-)(AlbertPreprocessor.from_preset.__func__)

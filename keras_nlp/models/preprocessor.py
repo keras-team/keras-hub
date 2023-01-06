@@ -33,13 +33,7 @@ class Preprocessor(keras.layers.Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update(
-            {
-                "tokenizer": keras.layers.serialize(self.tokenizer),
-                "sequence_length": self.packer.sequence_length,
-                "truncate": self.packer.truncate,
-            }
-        )
+        config["tokenizer"] = keras.layers.serialize(self.tokenizer)
         return config
 
     @classmethod
@@ -63,7 +57,7 @@ class Preprocessor(keras.layers.Layer):
         sequence_length=None,
         **kwargs,
     ):
-        """Instantiate {{model_name}} preprocessor from preset architecture.
+        """Instantiate {{preprocessor_name}} from preset architecture.
 
         Args:
             preset: string. Must be one of "{{preset_names}}".
@@ -75,13 +69,13 @@ class Preprocessor(keras.layers.Layer):
         Examples:
         ```python
         # Load preprocessor from preset
-        preprocessor = keras_nlp.models.{{model_name}}Preprocessor.from_preset(
+        preprocessor = keras_nlp.models.{{preprocessor_name}}.from_preset(
             "{{example_preset_name}}",
         )
         preprocessor("The quick brown fox jumped.")
 
         # Override sequence_length
-        preprocessor = keras_nlp.models.{{model_name}}Preprocessor.from_preset(
+        preprocessor = keras_nlp.models.{{preprocessor_name}}.from_preset(
             "{{example_preset_name}}",
             sequence_length=64
         )

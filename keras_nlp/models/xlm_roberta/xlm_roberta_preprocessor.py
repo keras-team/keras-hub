@@ -81,11 +81,8 @@ class XLMRobertaPreprocessor(Preprocessor):
 
     Examples:
     ```python
-    tokenizer = keras_nlp.models.XLMRobertaTokenizer(proto="model.spm")
-    preprocessor = keras_nlp.models.XLMRobertaPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=10,
-    )
+    # Load the preprocessor from a preset.
+    preprocessor = keras_nlp.models.XLMRobertaTokenizer.from_preset("roberta_base_en")
 
     # Tokenize and pack a single sentence.
     sentence = tf.constant("The quick brown fox jumped.")
@@ -145,6 +142,14 @@ class XLMRobertaPreprocessor(Preprocessor):
         lambda s1, s2: preprocessor(x=(s1, s2)),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
+
+    # Alternatively, you can create a preprocessor from your own vocabulary.
+    # The usage is exactly the same as above.
+    tokenizer = keras_nlp.models.XLMRobertaTokenizer(proto="model.spm")
+    preprocessor = keras_nlp.models.XLMRobertaPreprocessor(
+        tokenizer=tokenizer,
+        sequence_length=10,
+    )
     ```
     """
 
@@ -177,6 +182,16 @@ class XLMRobertaPreprocessor(Preprocessor):
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "sequence_length": self.packer.sequence_length,
+                "truncate": self.packer.truncate,
+            }
+        )
+        return config
+
     @classproperty
     def tokenizer_cls(cls):
         return XLMRobertaTokenizer
@@ -201,7 +216,7 @@ XLMRobertaPreprocessor.from_preset.__func__.__doc__ = (
     Preprocessor.from_preset.__doc__
 )
 format_docstring(
-    model_name=XLMRobertaPreprocessor.__name__,
+    preprocessor_name=XLMRobertaPreprocessor.__name__,
     example_preset_name="xlm_roberta_base_multi",
     preset_names='", "'.join(XLMRobertaPreprocessor.presets),
 )(XLMRobertaPreprocessor.from_preset.__func__)
