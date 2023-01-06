@@ -14,6 +14,7 @@
 """Greedy Sampler."""
 
 import tensorflow as tf
+from tensorflow import keras
 
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import base_sampler_keyword_args
@@ -21,6 +22,7 @@ from keras_nlp.samplers.sampler import call_keyword_docstring
 from keras_nlp.samplers.sampler import sample_keyword_docstring
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class Greedy(Sampler):
     """Greedy sampler class.
 
@@ -39,7 +41,6 @@ class Greedy(Sampler):
     VOCAB_SIZE = 10
     FEATURE_SIZE = 16
     START_ID = 1
-    END_ID = 2
 
     # Create a dummy model to predict the next token.
     model = keras.Sequential(
@@ -62,7 +63,7 @@ class Greedy(Sampler):
 
     sampler = keras_nlp.samplers.Greedy()
     # Print the generated sequence (token ids).
-    print(sampler(token_probability_fn, prompt, 10, end_token_id=END_ID))
+    print(sampler(token_probability_fn, prompt, 10))
     ```
     """
 

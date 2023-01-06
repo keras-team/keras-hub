@@ -14,8 +14,10 @@
 """Base sampler class."""
 
 import tensorflow as tf
+from tensorflow import keras
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class Sampler:
     """Base sampler class.
 
