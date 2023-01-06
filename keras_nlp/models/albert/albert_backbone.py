@@ -170,7 +170,9 @@ class AlbertBackbone(Backbone):
         )(x)
 
         def get_group_layer(group_idx):
-            """Defines `num_inner_repetitions` transformer layers and returns the callable."""
+            """Defines a group `num_inner_repetitions` transformer layers and
+            returns the callable.
+            """
             transformer_layers = [
                 TransformerEncoder(
                     num_heads=num_heads,
