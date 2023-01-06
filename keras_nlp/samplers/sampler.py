@@ -25,7 +25,11 @@ class Sampler:
     Call Args:
         {{call_keyword_docstring}}
 
+    The inputs and outputs of Sampler class are both token ids.
+
     Examples:
+
+    Basic usage:
     ```python
     BATCH_SIZE = 8
     VOCAB_SIZE = 10
@@ -55,6 +59,42 @@ class Sampler:
     sampler = keras_nlp.samplers.Greedy()
     # Print the generated sequence (token ids).
     print(sampler(token_probability_fn, prompt, 10, end_token_id=END_ID))
+    ```
+
+    Use with string inputs:
+    ```python
+    vocab = ["[UNK]", "[PAD]", "[END]", "the", "quick", "brown", "fox"]
+    tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+        vocabulary=vocab,
+        lowercase=True,
+    )
+    FEATURE_SIZE = 16
+    VOCAB_SIZE = len(vocab)
+    # Create a dummy model to predict the next token.
+    model = keras.Sequential(
+        [
+            keras.Input(shape=[None]),
+            keras.layers.Embedding(
+                input_dim=VOCAB_SIZE,
+                output_dim=FEATURE_SIZE,
+            ),
+            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
+        ]
+    )
+    # Define a function that outputs the next token's probability for each token
+    # in the input sequence.
+    def token_probability_fn(inputs, mask):
+        return model(inputs)
+
+    prompt = tokenizer("the quick brown fox")
+    sampler = keras_nlp.samplers.Greedy()
+    generated = sampler(
+        token_probability_fn,
+        prompt,
+        10,
+        end_token_id=tokenizer.token_to_id("[END]")
+    )
+    print(tokenizer.detokenize(generated))
     ```
     """
 
@@ -170,7 +210,7 @@ class Sampler:
                 end_token_id,
             )
 
-        return tf.squeeze(prompt) if input_is_1d else prompt
+        return tf.squeeze(prompt, axis=0) if input_is_1d else prompt
 
     def sample(
         self, token_probability_fn, prompt, mask, num_steps, from_logits=True
