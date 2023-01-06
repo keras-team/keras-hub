@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import doctest
+import io
 import os
 import re
 import sys
@@ -20,6 +21,7 @@ import unittest
 
 import numpy as np
 import pytest
+import sentencepiece
 import tensorflow as tf
 from tensorflow import keras
 
@@ -132,6 +134,10 @@ def test_fenced_docstrings():
                 # Unexported symbols
                 "deberta_v3",
                 "gpt2",
+                # Whole string matching
+                "^keras_nlp/models/backbone\\.py$",
+                "^keras_nlp/models/preprocessor\\.py$",
+                "^keras_nlp/models/task\\.py$",
             ]
         )
     )
@@ -151,6 +157,8 @@ def test_fenced_docstrings():
                 "os": os,
                 "keras": keras,
                 "keras_nlp": keras_nlp,
+                "io": io,
+                "sentencepiece": sentencepiece,
             },
             checker=fenced_docstring_lib.FencedCellOutputChecker(),
             optionflags=(

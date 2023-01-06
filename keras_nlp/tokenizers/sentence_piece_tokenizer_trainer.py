@@ -73,10 +73,6 @@ def compute_sentence_piece_proto(
     tokenizer = keras_nlp.tokenizers.SentencePieceTokenizer(proto="model.spm")
     ds = tf.data.Dataset.from_tensor_slices(["the quick brown fox."])
     ds = ds.map(tokenizer)
-    for output in ds:
-         print(output)
-    tf.Tensor([ 4 14  1  4  1  5  1  4  1 12 11  1  6  4  9 11  1],
-    shape=(17,), dtype=int32)
     ```
 
     Usage with lowercase
