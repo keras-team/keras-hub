@@ -90,31 +90,6 @@ def test_docstrings():
                 ),
             )
         )
-        suite.addTest(
-            doctest.DocFileSuite(
-                module,
-                globs={
-                    "_print_if_not_none": fenced_docstring_lib._print_if_not_none
-                },
-                extraglobs={
-                    "tf": tf,
-                    "np": np,
-                    "os": os,
-                    "keras": keras,
-                    "keras_nlp": keras_nlp,
-                },
-                parser=fenced_docstring_lib.FencedCellParser(
-                    fence_label="python"
-                ),
-                checker=fenced_docstring_lib.FencedCellOutputChecker(),
-                optionflags=(
-                    doctest.ELLIPSIS
-                    | doctest.NORMALIZE_WHITESPACE
-                    | doctest.IGNORE_EXCEPTION_DETAIL
-                    | doctest.DONT_ACCEPT_BLANKLINE
-                ),
-            )
-        )
     result = runner.run(suite)
     if not result.wasSuccessful():
         print(result)
