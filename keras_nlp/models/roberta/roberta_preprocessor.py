@@ -248,7 +248,7 @@ class RobertaPreprocessor(keras.layers.Layer):
         preprocessor("The quick brown fox jumped.")
 
         # Override sequence_length
-        preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
+        preprocessor = keras_nlp.models.RobertaPreprocessor.from_preset(
             "roberta_base_en",
             sequence_length=64
         )

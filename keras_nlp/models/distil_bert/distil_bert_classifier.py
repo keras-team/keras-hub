@@ -84,6 +84,9 @@ class DistilBertClassifier(PipelineModel):
         num_classes=4,
         preprocessor=None,
     )
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    )
     classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
 
     # Access backbone programatically (e.g., to change `trainable`)
