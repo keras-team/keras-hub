@@ -72,7 +72,7 @@ class BertFeatureExtractorTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_bert_classifier_predict(self, jit_compile):
-        features = self.featurizer(self.preprocessed_batch)
+        features = self.featurizer(self.preprocessed_batch)["pooled_outputs"]
         classifier = keras.layers.Dense(4)(features)
 
         classifier.compile(jit_compile=jit_compile)
@@ -82,7 +82,7 @@ class BertFeatureExtractorTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_bert_classifier_predict_no_preprocessing(self, jit_compile):
-        features = self.featurizer_no_preprocessing(self.preprocessed_batch)
+        features = self.featurizer_no_preprocessing(self.preprocessed_batch)["pooled_outputs"]
         classifier = keras.layers.Dense(4)(features)
 
         classifier.compile(jit_compile=jit_compile)
@@ -92,7 +92,8 @@ class BertFeatureExtractorTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_bert_classifier_fit(self, jit_compile):
-        features = self.featurizer(self.preprocessed_batch)
+        features = self.featurizer(self.preprocessed_batch)["pooled_outputs"]
+
         classifier = keras.layers.Dense(4)(features)
 
         classifier.compile(
@@ -105,7 +106,8 @@ class BertFeatureExtractorTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_bert_classifier_fit_no_preprocessing(self, jit_compile):
-        features = self.featurizer_no_preprocessing(self.preprocessed_batch)
+        features = self.featurizer_no_preprocessing(self.preprocessed_batch)["pooled_outputs"]
+
         classifier = keras.layers.Dense(4)(features)
 
         classifier.compile(
@@ -117,11 +119,14 @@ class BertFeatureExtractorTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
+        ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self, save_format, filename, jit_compile):
 
-        features = self.featurizer(self.preprocessed_batch)
-        classifier = keras.layers.Dense(4)(features)
+        features = self.featurizer(self.preprocessed_batch)["pooled_outputs"]
+
+        classifier = keras.layers.Dense(4)(features)        
+        classifier.compile(jit_compile=jit_compile)
 
         model_output = classifier.predict(self.raw_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)
@@ -132,5 +137,5 @@ class BertFeatureExtractorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertIsInstance(restored_model, BertFeatureExtractor)
 
         # Check that output matches.
-        restored_output = classifier(restored_model.predict(self.raw_batch))
+        restored_output = classifier.predict(restored_model(self.raw_batch))
         self.assertAllClose(model_output, restored_output)
