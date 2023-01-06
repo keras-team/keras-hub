@@ -155,6 +155,16 @@ class AlbertPreprocessor(Preprocessor):
             sequence_length=sequence_length,
         )
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "sequence_length": self.packer.sequence_length,
+                "truncate": self.packer.truncate,
+            }
+        )
+        return config
+
     def call(self, x, y=None, sample_weight=None):
         x = convert_inputs_to_list_of_tensor_segments(x)
         x = [self.tokenizer(segment) for segment in x]
@@ -165,16 +175,6 @@ class AlbertPreprocessor(Preprocessor):
             "padding_mask": token_ids != self.tokenizer.pad_token_id,
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "sequence_length": self.packer.sequence_length,
-                "truncate": self.packer.truncate,
-            }
-        )
-        return config
 
     @classproperty
     def tokenizer_cls(cls):
