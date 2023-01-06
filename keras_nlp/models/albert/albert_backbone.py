@@ -20,8 +20,6 @@ from tensorflow import keras
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.models.backbone import Backbone
-from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 def albert_kernel_initializer(stddev=0.02):
@@ -244,28 +242,3 @@ class AlbertBackbone(Backbone):
             "name": self.name,
             "trainable": self.trainable,
         }
-
-    @classmethod
-    def from_config(cls, config):
-        return cls(**config)
-
-    @classproperty
-    def presets(cls):
-        return {}
-
-    @classmethod
-    def from_preset(
-        cls,
-        preset,
-        load_weights=True,
-        **kwargs,
-    ):
-        return super().from_preset(preset, load_weights, **kwargs)
-
-
-AlbertBackbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
-format_docstring(
-    model_name=AlbertBackbone.__name__,
-    example_preset_name="",  # TODO: Add example preset name.
-    preset_names='", "'.join(AlbertBackbone.presets),
-)(AlbertBackbone.from_preset.__func__)
