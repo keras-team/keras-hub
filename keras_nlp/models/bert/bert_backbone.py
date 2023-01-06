@@ -77,7 +77,7 @@ class BertBackbone(Backbone):
     }
 
     # Pretrained BERT encoder
-    model = keras_nlp.models.BertBackbone.from_preset("base_base_en_uncased")
+    model = keras_nlp.models.BertBackbone.from_preset("bert_base_en_uncased")
     output = model(input_data)
 
     # Randomly initialized BERT encoder with a custom config

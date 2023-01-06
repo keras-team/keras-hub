@@ -64,7 +64,7 @@ class DistilBertClassifier(PipelineModel):
     preprocessed_features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
         "padding_mask": tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(1, 12)),
+            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)),
     }
     labels = [0, 3]
 
@@ -218,7 +218,7 @@ class DistilBertClassifier(PipelineModel):
         labels = [0, 3]
 
         # Use a shorter sequence length.
-        preprocessor = keras_nlp.models.DistilBertBackbone.from_preset(
+        preprocessor = keras_nlp.models.DistilBertPreprocessor.from_preset(
             "distil_bert_base_en_uncased",
             sequence_length=128,
         )

@@ -131,13 +131,12 @@ def test_fenced_docstrings():
                 # Endswith patterns
                 "test\\.py$",
                 "__init__\\.py$",
+                "keras_nlp/models/backbone\\.py$",
+                "keras_nlp/models/preprocessor\\.py$",
+                "keras_nlp/models/task\\.py$",
                 # Unexported symbols
                 "deberta_v3",
                 "gpt2",
-                # Whole string matching
-                "^keras_nlp/models/backbone\\.py$",
-                "^keras_nlp/models/preprocessor\\.py$",
-                "^keras_nlp/models/task\\.py$",
             ]
         )
     )
