@@ -46,10 +46,11 @@ def find_files(regex_pattern=None):
     py_files = []
     for root, dirs, files in os.walk(DIRECTORY):
         for file in files:
+            file = os.path.join(root, file)
             if file.endswith(".py"):
                 if regex_pattern is not None and regex_pattern.search(file):
                     continue
-                py_files.append(os.path.join(root, file))
+                py_files.append(file)
     return py_files
 
 
@@ -131,9 +132,10 @@ def test_fenced_docstrings():
                 # Endswith patterns
                 "test\\.py$",
                 "__init__\\.py$",
-                "keras_nlp/models/backbone\\.py$",
-                "keras_nlp/models/preprocessor\\.py$",
-                "keras_nlp/models/task\\.py$",
+                # Whole string matching
+                "^keras_nlp/models/backbone\\.py$",
+                "^keras_nlp/models/preprocessor\\.py$",
+                "^keras_nlp/models/task\\.py$",
                 # Unexported symbols
                 "deberta_v3",
                 "gpt2",

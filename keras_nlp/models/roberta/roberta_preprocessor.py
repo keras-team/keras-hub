@@ -242,7 +242,7 @@ class RobertaPreprocessor(keras.layers.Layer):
         Examples:
         ```python
         # Load preprocessor from preset
-        preprocessor = keras_nlp.models.RobertPreprocessor.from_preset(
+        preprocessor = keras_nlp.models.RobertaPreprocessor.from_preset(
             "roberta_base_en",
         )
         preprocessor("The quick brown fox jumped.")
