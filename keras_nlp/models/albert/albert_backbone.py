@@ -49,14 +49,15 @@ class AlbertBackbone(Backbone):
     Args:
         vocabulary_size: int. The size of the token vocabulary.
         num_layers: int. The number of "virtual" layers, i.e., the total number
-            of times the input sequence will be fed through the Transformer
-            layers in one forward pass. The input will be routed to the correct
+            of times the input sequence will be fed through the groups in one
+            forward pass. The input will be routed to the correct
             group based on the layer index.
         num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
-        num_groups: int. Number of groups, with each group having a certain
-            number of Transformer layers.
-        num_layers_per_group: int. Number of Transformer layers per group.
+        num_groups: int. Number of groups, with each group having
+            `num_inner_repetitions` number of `TransformerEncoder` layers.
+        num_inner_repetitions: int. Number of `TransformerEncoder` layers per
+            group.
         embedding_dim: int. The size of the embeddings.
         hidden_dim: int. The size of the transformer encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
@@ -87,7 +88,7 @@ class AlbertBackbone(Backbone):
         num_layers=12,
         num_heads=12,
         num_groups=1,
-        num_layers_per_group=1,
+        num_inner_repetitions=1,
         embedding_dim=128,
         hidden_dim=768,
         intermediate_dim=3072,
@@ -103,7 +104,7 @@ class AlbertBackbone(Backbone):
         num_layers,
         num_heads,
         num_groups,
-        num_layers_per_group,
+        num_inner_repetitions,
         embedding_dim,
         hidden_dim,
         intermediate_dim,
@@ -168,8 +169,8 @@ class AlbertBackbone(Backbone):
             name="embedding_projection",
         )(x)
 
-        layer_idx = 0
-        for i in range(num_groups):
+        def get_group_layer(group_idx):
+            """Defines `num_inner_repetitions` transformer layers and returns the callable."""
             transformer_layers = [
                 TransformerEncoder(
                     num_heads=num_heads,
@@ -179,14 +180,31 @@ class AlbertBackbone(Backbone):
                     ),
                     dropout=dropout,
                     kernel_initializer=albert_kernel_initializer(),
-                    name=f"group_{i}_transformer_layer_{j}",
+                    name=f"group_{group_idx}_transformer_layer_{inner_repetition_idx}",
                 )
-                for j in range(num_layers_per_group)
+                for inner_repetition_idx in range(num_inner_repetitions)
             ]
 
-            while int(layer_idx / (num_layers / num_groups)) == i:
+            def call(x, padding_mask):
                 for transformer_layer in transformer_layers:
                     x = transformer_layer(x, padding_mask=padding_mask)
+                return x
+
+            return call
+
+        layer_idx = 0
+        # Note: `num_calls_per_group` is sort of a misnomer; it is not an
+        # integer, and every group may not be called the same number of times.
+        num_calls_per_group = num_layers / num_groups
+        for group_idx in range(num_groups):
+            # Define the group. A group in ALBERT terminology is any number of
+            # repeated attention and FFN blocks.
+            group_layer = get_group_layer(group_idx)
+
+            # Assume num_layers = 8, num_groups = 5. Then, the order of group
+            # calls will be 0, 0, 1, 1, 2, 3, 3, 4.
+            while int(layer_idx / num_calls_per_group) == group_idx:
+                x = group_layer(x, padding_mask=padding_mask)
                 layer_idx += 1
 
         # Construct the two ALBERT outputs. The pooled output is a dense layer on
@@ -217,7 +235,7 @@ class AlbertBackbone(Backbone):
         self.num_layers = num_layers
         self.num_heads = num_heads
         self.num_groups = num_groups
-        self.num_layers_per_group = num_layers_per_group
+        self.num_inner_repetitions = num_inner_repetitions
         self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
@@ -232,7 +250,7 @@ class AlbertBackbone(Backbone):
             "num_layers": self.num_layers,
             "num_heads": self.num_heads,
             "num_groups": self.num_groups,
-            "num_layers_per_group": self.num_layers_per_group,
+            "num_inner_repetitions": self.num_inner_repetitions,
             "embedding_dim": self.embedding_dim,
             "hidden_dim": self.hidden_dim,
             "intermediate_dim": self.intermediate_dim,

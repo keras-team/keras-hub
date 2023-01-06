@@ -29,7 +29,7 @@ class AlbertBackboneTest(tf.test.TestCase, parameterized.TestCase):
             num_layers=2,
             num_heads=2,
             num_groups=1,
-            num_layers_per_group=1,
+            num_inner_repetitions=1,
             embedding_dim=16,
             hidden_dim=64,
             intermediate_dim=128,
