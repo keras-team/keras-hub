@@ -27,6 +27,7 @@ from keras_nlp.tests.doc_tests import docstring_lib
 from keras_nlp.tests.doc_tests import fenced_docstring_lib
 
 PACKAGE = "keras_nlp."
+DIRECTORY = "keras_nlp"
 
 
 def find_modules():
@@ -36,6 +37,17 @@ def find_modules():
             keras_nlp_modules.append(module)
 
     return keras_nlp_modules
+
+
+def find_files():
+    py_files = []
+    for root, dirs, files in os.walk(DIRECTORY):
+        for file in files:
+            if file.endswith(".py"):
+                if file.endswith("test.py") or file.endswith("__init__.py"):
+                    continue
+                py_files.append(os.path.join(root, file))
+    return py_files
 
 
 @pytest.mark.skipif(
@@ -75,7 +87,7 @@ def test_docstrings():
             )
         )
         suite.addTest(
-            doctest.DocTestSuite(
+            doctest.DocFileSuite(
                 module,
                 globs={
                     "_print_if_not_none": fenced_docstring_lib._print_if_not_none
@@ -99,6 +111,43 @@ def test_docstrings():
                 ),
             )
         )
+    result = runner.run(suite)
+    if not result.wasSuccessful():
+        print(result)
+    assert result.wasSuccessful()
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="Numpy prints differently on windows"
+)
+def test_fenced_docstrings():
+    keras_nlp_files = find_files()
+    runner = unittest.TextTestRunner()
+    suite = unittest.TestSuite()
+
+    suite.addTest(
+        doctest.DocFileSuite(
+            *keras_nlp_files,
+            module_relative=False,
+            parser=fenced_docstring_lib.FencedCellParser(fence_label="python"),
+            globs={
+                "_print_if_not_none": fenced_docstring_lib._print_if_not_none,
+                "tf": tf,
+                "np": np,
+                "os": os,
+                "keras": keras,
+                "keras_nlp": keras_nlp,
+            },
+            checker=fenced_docstring_lib.FencedCellOutputChecker(),
+            optionflags=(
+                doctest.ELLIPSIS
+                | doctest.NORMALIZE_WHITESPACE
+                | doctest.IGNORE_EXCEPTION_DETAIL
+                | doctest.DONT_ACCEPT_BLANKLINE
+            ),
+        )
+    )
+
     result = runner.run(suite)
     if not result.wasSuccessful():
         print(result)

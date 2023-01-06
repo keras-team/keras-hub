@@ -19,7 +19,7 @@ from typing import Iterable
 
 import astor
 
-from keras_nlp.tests.doc_testsdocstring_lib import DoctestOutputChecker
+from keras_nlp.tests.doc_tests.docstring_lib import DoctestOutputChecker
 
 
 class FencedCellOutputChecker(DoctestOutputChecker):
