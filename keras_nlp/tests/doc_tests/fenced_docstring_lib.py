@@ -23,7 +23,7 @@ from keras_nlp.tests.doc_tests.docstring_lib import DoctestOutputChecker
 
 
 class FencedCellOutputChecker(DoctestOutputChecker):
-    """TfDoctestChecker with a different warning message."""
+    """DoctestOutputChecker with a different warning message."""
 
     MESSAGE = textwrap.dedent(
         """\n

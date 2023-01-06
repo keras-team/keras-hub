@@ -14,6 +14,7 @@
 
 import doctest
 import os
+import re
 import sys
 import unittest
 
@@ -39,12 +40,12 @@ def find_modules():
     return keras_nlp_modules
 
 
-def find_files():
+def find_files(regex_pattern=None):
     py_files = []
     for root, dirs, files in os.walk(DIRECTORY):
         for file in files:
             if file.endswith(".py"):
-                if file.endswith("test.py") or file.endswith("__init__.py"):
+                if regex_pattern is not None and regex_pattern.search(file):
                     continue
                 py_files.append(os.path.join(root, file))
     return py_files
@@ -121,7 +122,20 @@ def test_docstrings():
     sys.platform == "win32", reason="Numpy prints differently on windows"
 )
 def test_fenced_docstrings():
-    keras_nlp_files = find_files()
+
+    regex_pattern = re.compile(
+        r"|".join(
+            [
+                # Endswith patterns
+                "test\\.py$",
+                "__init__\\.py$",
+                # Unexported symbols
+                "deberta_v3",
+                "gpt2",
+            ]
+        )
+    )
+    keras_nlp_files = find_files(regex_pattern=regex_pattern)
     runner = unittest.TextTestRunner()
     suite = unittest.TestSuite()
 
