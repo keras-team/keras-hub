@@ -78,7 +78,7 @@ class BertPreprocessor(Preprocessor):
     Examples:
     ```python
     # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.BertTokenizer.from_preset("bert-base-uncased")
+    preprocessor = keras_nlp.models.BertPreprocessor.from_preset("bert_base_en_uncased")
 
     # Tokenize and pack a single sentence.
     sentence = tf.constant("The quick brown fox jumped.")
@@ -168,6 +168,16 @@ class BertPreprocessor(Preprocessor):
             sequence_length=sequence_length,
         )
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "sequence_length": self.packer.sequence_length,
+                "truncate": self.packer.truncate,
+            }
+        )
+        return config
+
     def call(self, x, y=None, sample_weight=None):
         x = convert_inputs_to_list_of_tensor_segments(x)
         x = [self.tokenizer(segment) for segment in x]
@@ -179,16 +189,6 @@ class BertPreprocessor(Preprocessor):
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
 
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "sequence_length": self.packer.sequence_length,
-                "truncate": self.packer.truncate,
-            }
-        )
-        return config
-
     @classproperty
     def tokenizer_cls(cls):
         return BertTokenizer
@@ -198,15 +198,8 @@ class BertPreprocessor(Preprocessor):
         return copy.deepcopy({**backbone_presets, **classifier_presets})
 
     @classmethod
-    def from_preset(
-        cls,
-        preset,
-        sequence_length=None,
-        **kwargs,
-    ):
-        return super().from_preset(
-            preset, sequence_length=sequence_length, **kwargs
-        )
+    def from_preset(cls, preset, **kwargs):
+        return super().from_preset(preset, **kwargs)
 
 
 BertPreprocessor.from_preset.__func__.__doc__ = Preprocessor.from_preset.__doc__

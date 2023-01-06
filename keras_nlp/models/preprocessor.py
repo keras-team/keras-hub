@@ -19,12 +19,7 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class Preprocessor(keras.layers.Layer):
-    def __init__(
-        self,
-        *args,
-        **kwargs,
-    ):
-        super().__init__(*args, **kwargs)
+    """Base class for model preprocessors."""
 
     @property
     def tokenizer(self):
@@ -54,17 +49,12 @@ class Preprocessor(keras.layers.Layer):
     def from_preset(
         cls,
         preset,
-        sequence_length=None,
         **kwargs,
     ):
         """Instantiate {{preprocessor_name}} from preset architecture.
 
         Args:
             preset: string. Must be one of "{{preset_names}}".
-            sequence_length: int, optional. The length of the packed inputs.
-                Must be equal to or smaller than the `max_sequence_length` of
-                the preset. If left as default, the `max_sequence_length` of
-                the preset will be used.
 
         Examples:
         ```python
@@ -91,6 +81,7 @@ class Preprocessor(keras.layers.Layer):
                 "`preset` must be one of "
                 f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
+        sequence_length = kwargs.pop("sequence_length", None)
 
         tokenizer = cls.tokenizer_cls.from_preset(preset)
 

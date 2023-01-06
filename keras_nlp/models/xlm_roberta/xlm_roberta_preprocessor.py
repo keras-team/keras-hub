@@ -82,7 +82,7 @@ class XLMRobertaPreprocessor(Preprocessor):
     Examples:
     ```python
     # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.XLMRobertaTokenizer.from_preset("roberta_base_en")
+    preprocessor = keras_nlp.models.XLMRobertaPreprocessor.from_preset("xlm_roberta_base_multi")
 
     # Tokenize and pack a single sentence.
     sentence = tf.constant("The quick brown fox jumped.")
@@ -172,16 +172,6 @@ class XLMRobertaPreprocessor(Preprocessor):
             sequence_length=sequence_length,
         )
 
-    def call(self, x, y=None, sample_weight=None):
-        x = convert_inputs_to_list_of_tensor_segments(x)
-        x = [self.tokenizer(segment) for segment in x]
-        token_ids = self.packer(x)
-        x = {
-            "token_ids": token_ids,
-            "padding_mask": token_ids != self.tokenizer.pad_token_id,
-        }
-        return pack_x_y_sample_weight(x, y, sample_weight)
-
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -192,6 +182,16 @@ class XLMRobertaPreprocessor(Preprocessor):
         )
         return config
 
+    def call(self, x, y=None, sample_weight=None):
+        x = convert_inputs_to_list_of_tensor_segments(x)
+        x = [self.tokenizer(segment) for segment in x]
+        token_ids = self.packer(x)
+        x = {
+            "token_ids": token_ids,
+            "padding_mask": token_ids != self.tokenizer.pad_token_id,
+        }
+        return pack_x_y_sample_weight(x, y, sample_weight)
+
     @classproperty
     def tokenizer_cls(cls):
         return XLMRobertaTokenizer
@@ -201,15 +201,8 @@ class XLMRobertaPreprocessor(Preprocessor):
         return copy.deepcopy(backbone_presets)
 
     @classmethod
-    def from_preset(
-        cls,
-        preset,
-        sequence_length=None,
-        **kwargs,
-    ):
-        return super().from_preset(
-            preset, sequence_length=sequence_length, **kwargs
-        )
+    def from_preset(cls, preset, **kwargs):
+        return super().from_preset(preset, **kwargs)
 
 
 XLMRobertaPreprocessor.from_preset.__func__.__doc__ = (

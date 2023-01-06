@@ -79,7 +79,7 @@ class RobertaPreprocessor(Preprocessor):
     Examples:
     ```python
     # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.RobertaTokenizer.from_preset("xlm_roberta_base_multi")
+    preprocessor = keras_nlp.models.RobertaPreprocessor.from_preset("roberta_base_en")
 
     # Tokenize and pack a single sentence.
     sentence = tf.constant(" afternoon sun")
@@ -179,16 +179,6 @@ class RobertaPreprocessor(Preprocessor):
             sequence_length=sequence_length,
         )
 
-    def call(self, x, y=None, sample_weight=None):
-        x = convert_inputs_to_list_of_tensor_segments(x)
-        x = [self.tokenizer(segment) for segment in x]
-        token_ids = self.packer(x)
-        x = {
-            "token_ids": token_ids,
-            "padding_mask": token_ids != self.tokenizer.pad_token_id,
-        }
-        return pack_x_y_sample_weight(x, y, sample_weight)
-
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -199,6 +189,16 @@ class RobertaPreprocessor(Preprocessor):
         )
         return config
 
+    def call(self, x, y=None, sample_weight=None):
+        x = convert_inputs_to_list_of_tensor_segments(x)
+        x = [self.tokenizer(segment) for segment in x]
+        token_ids = self.packer(x)
+        x = {
+            "token_ids": token_ids,
+            "padding_mask": token_ids != self.tokenizer.pad_token_id,
+        }
+        return pack_x_y_sample_weight(x, y, sample_weight)
+
     @classproperty
     def tokenizer_cls(cls):
         return RobertaTokenizer
@@ -208,15 +208,8 @@ class RobertaPreprocessor(Preprocessor):
         return copy.deepcopy(backbone_presets)
 
     @classmethod
-    def from_preset(
-        cls,
-        preset,
-        sequence_length=None,
-        **kwargs,
-    ):
-        return super().from_preset(
-            preset, sequence_length=sequence_length, **kwargs
-        )
+    def from_preset(cls, preset, **kwargs):
+        return super().from_preset(preset, **kwargs)
 
 
 RobertaPreprocessor.from_preset.__func__.__doc__ = (
