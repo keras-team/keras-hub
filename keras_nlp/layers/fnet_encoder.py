@@ -95,7 +95,7 @@ class FNetEncoder(keras.layers.Layer):
         self.bias_initializer = keras.initializers.get(bias_initializer)
         if bias_initializer_output_dense is None:
             bias_initializer_output_dense = bias_initializer
-        bias_initializer_output_dense = keras.initializers.get(
+        self.bias_initializer_output_dense = keras.initializers.get(
             bias_initializer_output_dense
         )
 
