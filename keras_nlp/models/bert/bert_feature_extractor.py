@@ -30,8 +30,8 @@ PRESET_NAMES = ", ".join(list(backbone_presets))
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class BertFeatureExtractor(PipelineModel):
-    """An end-to-end BERT model for feature extraction task. This model
-    can't be compiled or fitted, and should be used as a submodel only.
+    """An end-to-end BERT model for feature extraction tasks. 
+    This model cannot be compiled or fitted, and should be used as a submodel only.
 
     For usage of this model with pre-trained weights, see
     the `from_preset()` method.
@@ -65,6 +65,7 @@ class BertFeatureExtractor(PipelineModel):
             [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
         ),
     }
+    labels = [0, 0, 0, 3]
 
     # Randomly initialize a BERT backbone.
     backbone = keras_nlp.models.BertBackbone(
@@ -81,20 +82,15 @@ class BertFeatureExtractor(PipelineModel):
         backbone,
         preprocessor=None,
     )
-
     outputs = featurizer(preprocessed_features)
 
     # Using a classifier head (num_classes = 4)
-
     features = outputs
     outputs = keras.layers.Dense(4)(outputs["pooled_output"])
     classifier = keras.Model(features, outputs)
-
     classifier.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
     )
-
-    labels = [0, 0, 0 , 3]
 
     classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
 
@@ -112,6 +108,7 @@ class BertFeatureExtractor(PipelineModel):
     ):
         inputs = backbone.input
         outputs = backbone(inputs)
+        
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs=inputs,
@@ -194,7 +191,7 @@ class BertFeatureExtractor(PipelineModel):
             "bert_base_en_uncased",
         )
 
-        y_eval = featurizer(preprocessed_features)
+        outputs = featurizer(preprocessed_features)
         ```
 
         Raw string inputs with customized preprocessing.
@@ -213,7 +210,7 @@ class BertFeatureExtractor(PipelineModel):
             "bert_base_en_uncased",
             preprocessor=preprocessor,
         )
-        y_eval = featurizer(preprocessed_features)
+        outputs = featurizer(preprocessed_features)
         ```
 
         Preprocessed inputs.
@@ -234,8 +231,7 @@ class BertFeatureExtractor(PipelineModel):
             "bert_base_en_uncased",
             preprocessor=None,
         )
-
-        y_eval = featurizer(preprocessed_features)
+        outputs = featurizer(preprocessed_features)
         ```
         """
         if preset not in cls.presets:

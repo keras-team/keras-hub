@@ -14,6 +14,7 @@
 
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_classifier import BertClassifier
+from keras_nlp.models.bert.bert_feature_extractor import BertFeatureExtractor
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
