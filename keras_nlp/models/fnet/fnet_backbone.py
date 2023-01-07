@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BERT backbone model."""
+"""FNet backbone model."""
 
 import tensorflow as tf
 from tensorflow import keras
@@ -28,16 +28,15 @@ def fnet_kernel_initializer(stddev=0.02):
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class FNetBackbone(Backbone):
-    """BERT encoder network.
+    """FNet encoder network.
 
-    This class implements a bi-directional Transformer-based encoder as
-    described in ["BERT: Pre-training of Deep Bidirectional Transformers for
-    Language Understanding"](https://arxiv.org/abs/1810.04805). It includes the
-    embedding lookups and transformer layers, but not the masked language model
-    or next sentence prediction heads.
+    This class implements a bi-directional Fourier Transform-based encoder as
+    described in ["FNet: Mixing Tokens with Fourier Transforms"](https://arxiv.org/abs/2105.03824).
+    It includes the embedding lookups and FNet layers, but not the masked
+    language model or next sentence prediction heads.
 
-    The default constructor gives a fully customizable, randomly initialized BERT
-    encoder with any number of layers, heads, and embedding dimensions. To load
+    The default constructor gives a fully customizable, randomly initialized FNet
+    encoder with any number of layers and embedding dimensions. To load
     preset architectures and weights, use the `from_preset` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
@@ -45,11 +44,11 @@ class FNetBackbone(Backbone):
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
-        num_layers: int. The number of transformer layers.
-        hidden_dim: int. The size of the transformer encoding and pooler layers.
+        num_layers: int. The number of FNet layers.
+        hidden_dim: int. The size of the FNet encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
-            a two-layer feedforward network for each transformer.
-        dropout: float. Dropout probability for the Transformer encoder.
+            a two-layer feedforward network for each FNet layer.
+        dropout: float. Dropout probability for the embeddings and FNet encoder.
         max_sequence_length: int. The maximum sequence length that this encoder
             can consume. If None, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
@@ -64,20 +63,12 @@ class FNetBackbone(Backbone):
         "segment_ids": tf.constant(
             [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
-        "padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
     }
 
-    # Pretrained BERT encoder
-    model = keras_nlp.models.FNetBackbone.from_preset("base_base_en_uncased")
-    output = model(input_data)
-
-    # Randomly initialized BERT encoder with a custom config
+    # Randomly initialized FNet encoder with a custom config
     model = keras_nlp.models.FNetBackbone(
-        vocabulary_size=30552,
+        vocabulary_size=32000,
         num_layers=12,
-        num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12,
@@ -94,7 +85,7 @@ class FNetBackbone(Backbone):
         intermediate_dim,
         dropout=0.1,
         max_sequence_length=512,
-        num_segments=2,
+        num_segments=4,
         **kwargs,
     ):
 
@@ -128,7 +119,7 @@ class FNetBackbone(Backbone):
             name="segment_embedding",
         )(segment_id_input)
 
-        # Sum, normailze and apply dropout to embeddings.
+        # Sum, normalize and apply dropout to embeddings.
         x = keras.layers.Add()(
             (token_embedding, position_embedding, segment_embedding)
         )
@@ -150,7 +141,7 @@ class FNetBackbone(Backbone):
             name="embedding_projection",
         )(x)
 
-        # Apply successive transformer encoder blocks.
+        # Apply successive FNet encoder blocks.
         for i in range(num_layers):
             x = FNetEncoder(
                 intermediate_dim=intermediate_dim,
@@ -184,26 +175,26 @@ class FNetBackbone(Backbone):
             },
             **kwargs,
         )
+
         # All references to `self` below this line
         self.vocabulary_size = vocabulary_size
+        self.num_layers = num_layers
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
-        self.num_layers = num_layers
+        self.dropout = dropout
         self.max_sequence_length = max_sequence_length
         self.num_segments = num_segments
-        self.dropout = dropout
         self.cls_token_index = cls_token_index
 
     def get_config(self):
         return {
             "vocabulary_size": self.vocabulary_size,
+            "num_layers": self.num_layers,
             "hidden_dim": self.hidden_dim,
             "intermediate_dim": self.intermediate_dim,
-            "num_layers": self.num_layers,
-            "num_heads": self.num_heads,
+            "dropout": self.dropout,
             "max_sequence_length": self.max_sequence_length,
             "num_segments": self.num_segments,
-            "dropout": self.dropout,
             "name": self.name,
             "trainable": self.trainable,
         }
