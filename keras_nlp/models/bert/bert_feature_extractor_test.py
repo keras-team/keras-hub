@@ -129,7 +129,6 @@ class BertFeatureExtractorTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_saved_model(self, save_format, filename, jit_compile):
         inputs = self.featurizer.input
-        features = self.featurizer(self.preprocessed_batch)["pooled_output"]
         outputs = self.featurizer(inputs)['pooled_output']
         outputs = keras.layers.Dense(4)(outputs)
         classifier = keras.Model(inputs, outputs)
