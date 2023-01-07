@@ -22,8 +22,17 @@ from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.models.backbone import Backbone
 
 
-def fnet_kernel_initializer(stddev=0.02):
-    return keras.initializers.TruncatedNormal(stddev=stddev)
+def fnet_kernel_initializer(mode="fnet_default", **kwargs):
+    if mode == "fnet_default":
+        return keras.initializers.RandomNormal(**kwargs)
+    elif mode == "flax_default":
+        return keras.initializers.VarianceScaling(
+            mode="fan_in", distribution="truncated_normal", **kwargs
+        )
+
+
+def fnet_bias_initializer(stddev=0.02):
+    return keras.initializers.RandomNormal(stddev=stddev)
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -103,19 +112,19 @@ class FNetBackbone(Backbone):
         token_embedding_layer = keras.layers.Embedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            embeddings_initializer=fnet_kernel_initializer(),
+            embeddings_initializer=fnet_kernel_initializer(stddev=0.02),
             name="token_embedding",
         )
         token_embedding = token_embedding_layer(token_id_input)
         position_embedding = PositionEmbedding(
-            initializer=fnet_kernel_initializer(),
+            initializer=fnet_kernel_initializer(stddev=0.02),
             sequence_length=max_sequence_length,
             name="position_embedding",
         )(token_embedding)
         segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
             output_dim=hidden_dim,
-            embeddings_initializer=fnet_kernel_initializer(),
+            embeddings_initializer=fnet_kernel_initializer(stddev=0.02),
             name="segment_embedding",
         )(segment_id_input)
 
@@ -129,16 +138,18 @@ class FNetBackbone(Backbone):
             epsilon=1e-12,
             dtype=tf.float32,
         )(x)
-        x = keras.layers.Dropout(
-            dropout,
-            name="embeddings_dropout",
-        )(x)
 
         # Project the embedding to `hidden_dim`.
         x = keras.layers.Dense(
             hidden_dim,
-            kernel_initializer=fnet_kernel_initializer(),
+            kernel_initializer=fnet_kernel_initializer(
+                "flax_default", scale=1.0
+            ),
             name="embedding_projection",
+        )(x)
+        x = keras.layers.Dropout(
+            dropout,
+            name="embeddings_dropout",
         )(x)
 
         # Apply successive FNet encoder blocks.
@@ -148,8 +159,11 @@ class FNetBackbone(Backbone):
                 activation=lambda x: keras.activations.gelu(
                     x, approximate=True
                 ),
+                layer_norm_epsilon=1e-12,
                 dropout=dropout,
-                kernel_initializer=fnet_kernel_initializer(),
+                kernel_initializer=fnet_kernel_initializer(stddev=0.02),
+                bias_initializer=fnet_bias_initializer(),
+                bias_initializer_output_dense="zeros",
                 name=f"fnet_layer_{i}",
             )(x)
 
@@ -158,7 +172,7 @@ class FNetBackbone(Backbone):
         sequence_output = x
         pooled_output = keras.layers.Dense(
             hidden_dim,
-            kernel_initializer=fnet_kernel_initializer(),
+            kernel_initializer=fnet_kernel_initializer(stddev=0.02),
             activation="tanh",
             name="pooled_dense",
         )(x[:, cls_token_index, :])

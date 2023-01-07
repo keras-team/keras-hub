@@ -47,6 +47,9 @@ class FNetEncoder(keras.layers.Layer):
             layers.
         bias_initializer: "string" or `keras.initializers` initializer,
             defaults to "zeros". The bias initializer for the dense layers.
+        bias_initializer_output_dense: "string" or `keras.initializers` initializer,
+            defaults to None. The bias initializer for the output dense layer.
+            If None, the bias_initializer will be used.
         name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
 
@@ -79,6 +82,7 @@ class FNetEncoder(keras.layers.Layer):
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
+        bias_initializer_output_dense=None,
         name=None,
         **kwargs
     ):
@@ -89,6 +93,11 @@ class FNetEncoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
+        if bias_initializer_output_dense is None:
+            bias_initializer_output_dense = bias_initializer
+        bias_initializer_output_dense = keras.initializers.get(
+            bias_initializer_output_dense
+        )
 
     def build(self, input_shape):
         # Create layers based on input shape.
@@ -112,7 +121,9 @@ class FNetEncoder(keras.layers.Layer):
         self._output_dense = keras.layers.Dense(
             feature_size,
             kernel_initializer=clone_initializer(self.kernel_initializer),
-            bias_initializer=clone_initializer(self.bias_initializer),
+            bias_initializer=clone_initializer(
+                self.bias_initializer_output_dense
+            ),
         )
         self._output_dropout = keras.layers.Dropout(rate=self.dropout)
 
@@ -169,6 +180,9 @@ class FNetEncoder(keras.layers.Layer):
                 ),
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
+                ),
+                "bias_initializer_output_dense": keras.initializers.serialize(
+                    self.bias_initializer_output_dense
                 ),
             }
         )
