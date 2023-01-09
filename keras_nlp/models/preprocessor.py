@@ -81,7 +81,6 @@ class Preprocessor(keras.layers.Layer):
                 "`preset` must be one of "
                 f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
-        sequence_length = kwargs.pop("sequence_length", None)
 
         tokenizer = cls.tokenizer_cls.from_preset(preset)
 
@@ -94,6 +93,7 @@ class Preprocessor(keras.layers.Layer):
 
         # Use model's `max_sequence_length` if `sequence_length` unspecified;
         # otherwise check that `sequence_length` not too long.
+        sequence_length = kwargs.pop("sequence_length", None)
         max_sequence_length = backbone_config["max_sequence_length"]
         if sequence_length is not None:
             if sequence_length > max_sequence_length:

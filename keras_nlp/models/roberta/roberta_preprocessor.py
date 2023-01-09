@@ -136,19 +136,12 @@ class RobertaPreprocessor(Preprocessor):
         "<s>": 0,
         "<pad>": 1,
         "</s>": 2,
-        "reful": 3,
-        "gent": 4,
         "Ġafter": 5,
         "noon": 6,
         "Ġsun": 7,
-        "Ġbright": 8,
-        "Ġnight": 9,
-        "Ġmoon": 10,
     }
-    merges = ["Ġ a", "Ġ m", "Ġ s", "Ġ b", "Ġ n", "r e", "f u", "g e", "n t"]
-    merges += ["e r", "n o", "o n", "i g", "h t"]
-    merges += ["Ġs u", "Ġa f", "Ġm o", "Ġb r","ge nt", "no on", "re fu", "ig ht"]
-    merges += ["Ġn ight", "Ġsu n", "Ġaf t", "Ġmo on", "Ġbr ight", "refu l", "Ġaft er"]
+    merges = ["Ġ a", "Ġ s", "Ġ n", "e r", "n o", "o n", "Ġs u", "Ġa f", "no on"]
+    merges += ["Ġsu n", "Ġaf t", "Ġaft er"]
 
     tokenizer = keras_nlp.models.RobertaTokenizer(
         vocabulary=vocab,
