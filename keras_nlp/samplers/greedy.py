@@ -67,7 +67,7 @@ class Greedy(Sampler):
 
     sampler = keras_nlp.samplers.Greedy()
     # Print the generated sequence (token ids).
-    print(sampler(token_probability_fn, prompt, 10))
+    print(sampler(prompt, token_probability_fn, 10))
     ```
     """
 
@@ -79,7 +79,7 @@ class Greedy(Sampler):
 
     @format_docstring(sample_args=sample_args_docstring)
     def sample(
-        self, token_probability_fn, prompt, mask, num_steps, from_logits=True
+        self, prompt, token_probability_fn, mask, num_steps, from_logits=True
     ):
         """Sampling logic implementation.
 

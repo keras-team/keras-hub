@@ -46,7 +46,7 @@ def get(identifier):
     dict containing `class_name` and `config` as an identifier. Also note that
     the `class_name` must map to a `Sampler` class.
 
-    >>> cfg = {'class_name': 'Greedy', 'config': {}}
+    >>> cfg = {'class_name': 'keras_nlp>Greedy', 'config': {}}
     >>> sampler = keras_nlp.samplers.get(cfg)
 
     In the case that the `identifier` is a class, this method will return a new

@@ -48,17 +48,17 @@ class GreedyTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_generate_with_1d_prompt(self):
         inputs = tf.constant([1])
-        outputs = self.sampler(self.token_probability_fn, inputs, max_length=5)
+        outputs = self.sampler(inputs, self.token_probability_fn, max_length=5)
         self.assertEqual(outputs.shape, [5])
 
     def test_generate_with_2d_prompt(self):
         inputs = tf.constant([[1], [1]])
-        outputs = self.sampler(self.token_probability_fn, inputs, max_length=5)
+        outputs = self.sampler(inputs, self.token_probability_fn, max_length=5)
         self.assertEqual(outputs.shape, [2, 5])
 
     def test_generate_with_list_prompt(self):
         inputs = [[1], [1]]
-        outputs = self.sampler(self.token_probability_fn, inputs, max_length=5)
+        outputs = self.sampler(inputs, self.token_probability_fn, max_length=5)
         self.assertEqual(outputs.shape, [2, 5])
 
     def test_generate_with_ragged_prompt(self):
@@ -71,7 +71,7 @@ class GreedyTest(tf.test.TestCase, parameterized.TestCase):
             return tf.repeat(tf.repeat(prob, 2, axis=0), max_length, axis=1)
 
         inputs = tf.ragged.constant([[1], [2, 1, 2]])
-        outputs = self.sampler(token_probability_fn, inputs, max_length)
+        outputs = self.sampler(inputs, token_probability_fn, max_length)
         self.assertEqual(outputs.shape, [2, 5])
 
     def test_assert_generation_is_correct(self):
@@ -86,7 +86,7 @@ class GreedyTest(tf.test.TestCase, parameterized.TestCase):
 
         inputs = 3 * tf.ones([batch_size, 1], dtype=tf.int32)
         outputs = self.sampler(
-            token_probability_fn, inputs, max_length=max_length
+            inputs, token_probability_fn, max_length=max_length
         )
         self.assertAllEqual(
             outputs, 3 * tf.ones(shape=[batch_size, max_length])
@@ -105,8 +105,8 @@ class GreedyTest(tf.test.TestCase, parameterized.TestCase):
         sampler = Greedy()
         inputs = tf.constant([[0, 1], [1, 2]])
         outputs = sampler(
-            token_probability_fn,
             inputs,
+            token_probability_fn,
             max_length=max_length,
             end_token_id=2,
         )
@@ -117,12 +117,12 @@ class GreedyTest(tf.test.TestCase, parameterized.TestCase):
         inputs = [[1], [1]]
         xla_sampler = Greedy(jit_compile=True)
         outputs_xla = xla_sampler(
-            self.token_probability_fn, inputs, max_length=5
+            inputs, self.token_probability_fn, max_length=5
         )
 
         xla_sampler = Greedy(jit_compile=False)
         outputs_no_xla = xla_sampler(
-            self.token_probability_fn, inputs, max_length=5
+            inputs, self.token_probability_fn, max_length=5
         )
 
         self.assertAllEqual(outputs_xla, outputs_no_xla)

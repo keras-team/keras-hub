@@ -23,12 +23,12 @@ base_sampler_args_docstring = """
     """
 
 call_args_docstring = """
-    token_probability_fn: a function that generates the probability of
-        the next token over the whole vocabulary for each input token.
     prompt: a list of integers or an integer Tensor, can be 1D or 2D. The
         initial tokens to append generated tokens.
+    token_probability_fn: a function that generates the probability of
+        the next token over the whole vocabulary for each input token.
     max_length: int. The max length of generated sequence.
-    padding_mask: a tensor, defaults to None. The padding mask of the prompt.
+    mask: a tensor, defaults to None. The padding mask of the prompt.
     end_token_id: int, defaults to None. The token marking the end of the
         sequence, once encountered the generation is finished for the exact
         sequence. If None, every sequence is generated up to `max_length`.
@@ -40,10 +40,10 @@ call_args_docstring = """
     """
 
 sample_args_docstring = """
-    token_probability_fn: a function that generates the probability of
-        the next token over the whole vocabulary for each input token.
     prompt: a dense int Tensor of shape [batch_size, max_length]. The
         placeholder for generated sequence.
+    token_probability_fn: a function that generates the probability of
+        the next token over the whole vocabulary for each input token.
     mask: a dense bool Tensor of shape [batch_size, max_length]. The mask of
         prompt.
     num_steps: int. The remaining number of tokens to generate.
@@ -100,7 +100,7 @@ class Sampler:
 
     sampler = keras_nlp.samplers.Greedy()
     # Print the generated sequence (token ids).
-    print(sampler(token_probability_fn, prompt, 10, end_token_id=END_ID))
+    print(sampler(prompt, token_probability_fn, 10, end_token_id=END_ID))
     ```
 
     Use with string inputs:
@@ -131,8 +131,8 @@ class Sampler:
     prompt = tokenizer("the quick brown fox")
     sampler = keras_nlp.samplers.Greedy()
     generated = sampler(
-        token_probability_fn,
         prompt,
+        token_probability_fn,
         10,
         end_token_id=tokenizer.token_to_id("[END]")
     )
@@ -210,17 +210,14 @@ class Sampler:
 
     def __call__(
         self,
-        token_probability_fn,
         prompt,
+        token_probability_fn,
         max_length,
-        padding_mask=None,
+        mask=None,
         end_token_id=None,
         from_logits=True,
     ):
-        prompt, padding_mask = self._validate_prompt_and_mask(
-            prompt,
-            padding_mask,
-        )
+        prompt, mask = self._validate_prompt_and_mask(prompt, mask)
 
         input_is_1d = prompt.shape.rank == 1
         if input_is_1d:
@@ -238,8 +235,8 @@ class Sampler:
         # `jit_compile` accordingly.
         sample = tf.function(self.sample, jit_compile=self.jit_compile)
         prompt = sample(
-            token_probability_fn,
             prompt,
+            token_probability_fn,
             mask,
             max_length - shortest_prompt_len,
             from_logits,
@@ -257,7 +254,7 @@ class Sampler:
 
     @format_docstring(sample_args=sample_args_docstring)
     def sample(
-        self, token_probability_fn, prompt, mask, num_steps, from_logits=True
+        self, prompt, token_probability_fn, mask, num_steps, from_logits=True
     ):
         """Sampling logic implementation.
 
