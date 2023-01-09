@@ -17,11 +17,15 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.samplers.sampler import Sampler
-from keras_nlp.samplers.sampler import base_sampler_keyword_args
-from keras_nlp.samplers.sampler import call_keyword_docstring
-from keras_nlp.samplers.sampler import sample_keyword_docstring
+from keras_nlp.samplers.sampler import base_sampler_args_docstring
+from keras_nlp.samplers.sampler import call_args_docstring
+from keras_nlp.samplers.sampler import sample_args_docstring
+from keras_nlp.utils.python_utils import format_docstring
 
 
+@format_docstring(
+    base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
+)
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class Greedy(Sampler):
     """Greedy sampler class.
@@ -30,10 +34,10 @@ class Greedy(Sampler):
     token of the largest probability as the next token.
 
     Args:
-        {{base_sampler_keyword_args}}
+        {{base_sampler_args}}
 
     Call Args:
-        {{call_keyword_args}}
+        {{call_args}}
 
     Examples:
     ```python
@@ -73,13 +77,14 @@ class Greedy(Sampler):
     ):
         super().__init__(jit_compile)
 
+    @format_docstring(sample_args=sample_args_docstring)
     def sample(
         self, token_probability_fn, prompt, mask, num_steps, from_logits=True
     ):
         """Sampling logic implementation.
 
         Args:
-            {{sample_keyword_docstring}}
+            {{sample_args}}
         """
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         max_length = tf.cast(max_length, num_steps.dtype)
@@ -88,7 +93,6 @@ class Greedy(Sampler):
         current_index = max_length - num_steps
 
         def one_step(current_index, prompt, mask):
-
             probs = token_probability_fn(prompt, mask)
             next_token_prob = tf.gather(
                 probs,
@@ -143,14 +147,3 @@ class Greedy(Sampler):
             loop_vars=(current_index, prompt, mask),
         )
         return prompt
-
-
-Greedy.__doc__ = Greedy.__doc__.replace(
-    "{{base_sampler_keyword_args}}", base_sampler_keyword_args
-)
-Greedy.__doc__ = Greedy.__doc__.replace(
-    "{{call_keyword_docstring}}", call_keyword_docstring
-)
-Greedy.sample.__doc__ = Greedy.sample.__doc__.replace(
-    "{{sample_keyword_docstring}}", sample_keyword_docstring
-)

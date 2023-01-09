@@ -24,7 +24,7 @@ class SamplerTest(tf.test.TestCase):
         sampler = keras_nlp.samplers.Greedy()
         config = keras_nlp.samplers.serialize(sampler)
         expected_config = {
-            "class_name": "Greedy",
+            "class_name": "keras_nlp>Greedy",
             "config": {
                 "jit_compile": True,
             },
@@ -34,11 +34,6 @@ class SamplerTest(tf.test.TestCase):
     def test_deserialization(self):
         # Test get from string.
         identifier = "greedy"
-        sampler = keras_nlp.samplers.get(identifier)
-        self.assertIsInstance(sampler, Greedy)
-
-        # Test string is not case-sensitive.
-        identifier = "Greedy"
         sampler = keras_nlp.samplers.get(identifier)
         self.assertIsInstance(sampler, Greedy)
 

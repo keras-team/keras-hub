@@ -26,8 +26,6 @@ def deserialize(config, custom_objects=None):
     all_classes = {
         "greedy": Greedy,
     }
-    if config["class_name"].lower() in all_classes:
-        config["class_name"] = config["class_name"].lower()
     return keras.utils.deserialize_keras_object(
         config,
         module_objects=all_classes,
@@ -55,15 +53,15 @@ def get(identifier):
     instance of the class by its constructor.
 
     Args:
-      identifier: String or dict that contains the sampler name or
-        configurations.
+        identifier: String or dict that contains the sampler name or
+            configurations.
 
     Returns:
-      Sampler instance base on the input identifier.
+        Sampler instance base on the input identifier.
 
     Raises:
-      ValueError: If the input identifier is not a supported type or in a bad
-        format.
+        ValueError: If the input identifier is not a supported type or in a bad
+            format.
     """
 
     if identifier is None:
@@ -71,7 +69,11 @@ def get(identifier):
     if isinstance(identifier, dict):
         return deserialize(identifier)
     elif isinstance(identifier, str):
-        identifier = {"class_name": str(identifier), "config": {}}
+        if not identifier.islower():
+            raise KeyError(
+                "`keras_nlp.samplers.get()` must take a lowercase string "
+                f"identifier, but received: {identifier}."
+            )
         return deserialize(identifier)
     elif callable(identifier):
         return identifier

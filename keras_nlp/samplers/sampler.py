@@ -16,16 +16,55 @@
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.utils.python_utils import format_docstring
 
+base_sampler_args_docstring = """
+    jit_compile: bool, defaults to True. If True, XLA compilation will be used.
+    """
+
+call_args_docstring = """
+    token_probability_fn: a function that generates the probability of
+        the next token over the whole vocabulary for each input token.
+    prompt: a list of integers or an integer Tensor, can be 1D or 2D. The
+        initial tokens to append generated tokens.
+    max_length: int. The max length of generated sequence.
+    padding_mask: a tensor, defaults to None. The padding mask of the prompt.
+    end_token_id: int, defaults to None. The token marking the end of the
+        sequence, once encountered the generation is finished for the exact
+        sequence. If None, every sequence is generated up to `max_length`.
+        If set, all tokens after encountering `end_token_id` will be
+        replaced with `pad_token_id`.
+    from_logits: bool, defaults to True. Indicate if the `token_probability_fn`
+        returns logits. If False, `token_probability_fn` returns probability
+        distributions.
+    """
+
+sample_args_docstring = """
+    token_probability_fn: a function that generates the probability of
+        the next token over the whole vocabulary for each input token.
+    prompt: a dense int Tensor of shape [batch_size, max_length]. The
+        placeholder for generated sequence.
+    mask: a dense bool Tensor of shape [batch_size, max_length]. The mask of
+        prompt.
+    num_steps: int. The remaining number of tokens to generate.
+    from_logits: bool, defaults to True. Indicate if the `token_probability_fn`
+        returns logits. If False, `token_probability_fn` returns probability
+        distributions.
+    """
+
+
+@format_docstring(
+    base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
+)
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class Sampler:
     """Base sampler class.
 
     Args:
-        {{base_optimizer_keyword_args}}
+        {{base_sampler_args}}
 
     Call Args:
-        {{call_keyword_docstring}}
+        {{call_args}}
 
     The inputs and outputs of Sampler class are both token ids.
 
@@ -39,7 +78,8 @@ class Sampler:
     START_ID = 1
     END_ID = 2
 
-    # Create a dummy model to predict the next token.
+    # Create a dummy model to predict the next token. Note that the output is
+    # random without training, here we jsut demo how `samplers` works.
     model = keras.Sequential(
         [
             keras.Input(shape=[None]),
@@ -178,7 +218,8 @@ class Sampler:
         from_logits=True,
     ):
         prompt, padding_mask = self._validate_prompt_and_mask(
-            prompt, padding_mask
+            prompt,
+            padding_mask,
         )
 
         input_is_1d = prompt.shape.rank == 1
@@ -214,13 +255,14 @@ class Sampler:
 
         return tf.squeeze(prompt, axis=0) if input_is_1d else prompt
 
+    @format_docstring(sample_args=sample_args_docstring)
     def sample(
         self, token_probability_fn, prompt, mask, num_steps, from_logits=True
     ):
         """Sampling logic implementation.
 
         Args:
-            {{sample_keyword_docstring}}
+            {{sample_args}}
 
         Returns:
             A dense int Tensor, representing the generated text in token id
@@ -232,48 +274,3 @@ class Sampler:
         return {
             "jit_compile": self.jit_compile,
         }
-
-
-base_sampler_keyword_args = """
-    jit_compile: bool, defaults to True. If True, XLA compilation will be used.
-    """
-
-call_keyword_docstring = """
-    token_probability_fn: a function that generates the probability of
-        the next token over the whole vocabulary for each input token.
-    prompt: a list of integers or an integer Tensor, can be 1D or 2D. The
-        initial tokens to append generated tokens.
-    max_length: int. The max length of generated sequence.
-    padding_mask: a tensor, defaults to None. The padding mask of the prompt.
-    end_token_id: int, defaults to None. The token marking the end of the
-        sequence, once encountered the generation is finished for the exact
-        sequence. If None, every sequence is generated up to `max_length`.
-        If set, all tokens after encountering `end_token_id` will be
-        replaced with `pad_token_id`.
-    from_logits: bool, defaults to True. Indicate if the `token_probability_fn`
-        returns logits. If False, `token_probability_fn` returns probability
-        distributions.
-    """
-
-sample_keyword_docstring = """
-    token_probability_fn: a function that generates the probability of
-        the next token over the whole vocabulary for each input token.
-    prompt: a dense int Tensor of shape [batch_size, max_length]. The
-        placeholder for generated sequence.
-    mask: a dense bool Tensor of shape [batch_size, max_length]. The mask of
-        prompt.
-    num_steps: int. The remaining number of tokens to generate.
-    from_logits: bool, defaults to True. Indicate if the `token_probability_fn`
-        returns logits. If False, `token_probability_fn` returns probability
-        distributions.
-    """
-
-Sampler.__doc__ = Sampler.__doc__.replace(
-    "{{base_sampler_keyword_args}}", base_sampler_keyword_args
-)
-Sampler.__doc__ = Sampler.__doc__.replace(
-    "{{call_keyword_docstring}}", call_keyword_docstring
-)
-Sampler.sample.__doc__ = Sampler.sample.__doc__.replace(
-    "{{sample_keyword_docstring}}", sample_keyword_docstring
-)
