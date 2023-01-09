@@ -20,6 +20,7 @@ import tensorflow as tf
 import tensorflow_text as tf_text
 from tensorflow import keras
 
+from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.models.roberta.roberta_presets import backbone_presets
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.utils.keras_utils import (
@@ -31,7 +32,7 @@ from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class RobertaPreprocessor(keras.layers.Layer):
+class RobertaPreprocessor(Preprocessor):
     """RoBERTa preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
@@ -77,32 +78,8 @@ class RobertaPreprocessor(keras.layers.Layer):
 
     Examples:
     ```python
-    vocab = {
-        "<s>": 0,
-        "<pad>": 1,
-        "</s>": 2,
-        "reful": 3,
-        "gent": 4,
-        "Ġafter": 5,
-        "noon": 6,
-        "Ġsun": 7,
-        "Ġbright": 8,
-        "Ġnight": 9,
-        "Ġmoon": 10,
-    }
-    merges = ["Ġ a", "Ġ m", "Ġ s", "Ġ b", "Ġ n", "r e", "f u", "g e", "n t"]
-    merges += ["e r", "n o", "o n", "i g", "h t"]
-    merges += ["Ġs u", "Ġa f", "Ġm o", "Ġb r","ge nt", "no on", "re fu", "ig ht"]
-    merges += ["Ġn ight", "Ġsu n", "Ġaf t", "Ġmo on", "Ġbr ight", "refu l", "Ġaft er"]
-
-    tokenizer = keras_nlp.models.RobertaTokenizer(
-        vocabulary=vocab,
-        merges=merges,
-    )
-    preprocessor = keras_nlp.models.RobertaPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=20,
-    )
+    # Load the preprocessor from a preset.
+    preprocessor = keras_nlp.models.RobertaPreprocessor.from_preset("roberta_base_en")
 
     # Tokenize and pack a single sentence.
     sentence = tf.constant(" afternoon sun")
@@ -152,6 +129,28 @@ class RobertaPreprocessor(keras.layers.Layer):
         lambda s1, s2: preprocessor(x=(s1, s2)),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
+
+    # Alternatively, you can create a preprocessor from your own vocabulary.
+    # The usage is exactly the same as above.
+    vocab = {
+        "<s>": 0,
+        "<pad>": 1,
+        "</s>": 2,
+        "Ġafter": 5,
+        "noon": 6,
+        "Ġsun": 7,
+    }
+    merges = ["Ġ a", "Ġ s", "Ġ n", "e r", "n o", "o n", "Ġs u", "Ġa f", "no on"]
+    merges += ["Ġsu n", "Ġaf t", "Ġaft er"]
+
+    tokenizer = keras_nlp.models.RobertaTokenizer(
+        vocabulary=vocab,
+        merges=merges,
+    )
+    preprocessor = keras_nlp.models.RobertaPreprocessor(
+        tokenizer=tokenizer,
+        sequence_length=20,
+    )
     ```
     """
 
@@ -165,7 +164,6 @@ class RobertaPreprocessor(keras.layers.Layer):
         super().__init__(**kwargs)
 
         self._tokenizer = tokenizer
-
         self.packer = RobertaMultiSegmentPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
@@ -174,27 +172,15 @@ class RobertaPreprocessor(keras.layers.Layer):
             sequence_length=sequence_length,
         )
 
-    @property
-    def tokenizer(self):
-        """The `keras_nlp.models.RobertaTokenizer` used to tokenize strings."""
-        return self._tokenizer
-
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "tokenizer": keras.layers.serialize(self.tokenizer),
                 "sequence_length": self.packer.sequence_length,
                 "truncate": self.packer.truncate,
             }
         )
         return config
-
-    @classmethod
-    def from_config(cls, config):
-        if "tokenizer" in config and isinstance(config["tokenizer"], dict):
-            config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
-        return cls(**config)
 
     def call(self, x, y=None, sample_weight=None):
         x = convert_inputs_to_list_of_tensor_segments(x)
@@ -207,82 +193,26 @@ class RobertaPreprocessor(keras.layers.Layer):
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty
+    def tokenizer_cls(cls):
+        return RobertaTokenizer
+
+    @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
 
     @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
-    def from_preset(
-        cls,
-        preset,
-        sequence_length=None,
-        truncate="round_robin",
-        **kwargs,
-    ):
-        """Instantiate RoBERTa preprocessor from preset architecture.
+    def from_preset(cls, preset, **kwargs):
+        return super().from_preset(preset, **kwargs)
 
-        Args:
-            preset: string. Must be one of {{names}}.
-            sequence_length: int, optional. The length of the packed inputs.
-                Must be equal to or smaller than the `max_sequence_length` of
-                the preset. If left as default, the `max_sequence_length` of
-                the preset will be used.
-            truncate: string. The algorithm to truncate a list of batched
-                segments to fit within `sequence_length`. The value can be
-                either `round_robin` or `waterfall`:
-                    - `"round_robin"`: Available space is assigned one token at
-                        a time in a round-robin fashion to the inputs that still
-                        need some, until the limit is reached.
-                    - `"waterfall"`: The allocation of the budget is done using
-                        a "waterfall" algorithm that allocates quota in a
-                        left-to-right manner and fills up the buckets until we
-                        run out of budget. It supports an arbitrary number of
-                        segments.
 
-        Examples:
-        ```python
-        # Load preprocessor from preset
-        preprocessor = keras_nlp.models.RobertPreprocessor.from_preset(
-            "roberta_base_en",
-        )
-        preprocessor("The quick brown fox jumped.")
-
-        # Override sequence_length
-        preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-            "roberta_base_en",
-            sequence_length=64
-        )
-        preprocessor("The quick brown fox jumped.")
-        ```
-        """
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-
-        tokenizer = RobertaTokenizer.from_preset(preset)
-
-        # Use model's `max_sequence_length` if `sequence_length` unspecified;
-        # otherwise check that `sequence_length` not too long.
-        metadata = cls.presets[preset]
-        max_sequence_length = metadata["config"]["max_sequence_length"]
-        if sequence_length is not None:
-            if sequence_length > max_sequence_length:
-                raise ValueError(
-                    f"`sequence_length` cannot be longer than `{preset}` "
-                    f"preset's `max_sequence_length` of {max_sequence_length}. "
-                    f"Received: {sequence_length}."
-                )
-        else:
-            sequence_length = max_sequence_length
-
-        return cls(
-            tokenizer=tokenizer,
-            sequence_length=sequence_length,
-            truncate=truncate,
-            **kwargs,
-        )
+RobertaPreprocessor.from_preset.__func__.__doc__ = (
+    Preprocessor.from_preset.__doc__
+)
+format_docstring(
+    preprocessor_name=RobertaPreprocessor.__name__,
+    example_preset_name="roberta_base_en",
+    preset_names='", "'.join(RobertaPreprocessor.presets),
+)(RobertaPreprocessor.from_preset.__func__)
 
 
 # TODO: This is a temporary, unexported layer until we find a way to make the

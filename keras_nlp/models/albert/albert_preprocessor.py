@@ -16,6 +16,8 @@
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
+from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
+from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
@@ -24,7 +26,7 @@ from keras_nlp.utils.python_utils import classproperty
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class AlbertPreprocessor(keras.layers.Layer):
+class AlbertPreprocessor(Preprocessor):
     """An ALBERT preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
@@ -153,27 +155,15 @@ class AlbertPreprocessor(keras.layers.Layer):
             sequence_length=sequence_length,
         )
 
-    @property
-    def tokenizer(self):
-        """The `keras_nlp.models.AlbertTokenizer` used to tokenize strings."""
-        return self._tokenizer
-
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "tokenizer": keras.layers.serialize(self.tokenizer),
                 "sequence_length": self.packer.sequence_length,
                 "truncate": self.packer.truncate,
             }
         )
         return config
-
-    @classmethod
-    def from_config(cls, config):
-        if "tokenizer" in config and isinstance(config["tokenizer"], dict):
-            config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
-        return cls(**config)
 
     def call(self, x, y=None, sample_weight=None):
         x = convert_inputs_to_list_of_tensor_segments(x)
@@ -187,15 +177,5 @@ class AlbertPreprocessor(keras.layers.Layer):
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty
-    def presets(cls):
-        return {}
-
-    @classmethod
-    def from_preset(
-        cls,
-        preset,
-        sequence_length=None,
-        truncate="round_robin",
-        **kwargs,
-    ):
-        raise NotImplementedError
+    def tokenizer_cls(cls):
+        return AlbertTokenizer
