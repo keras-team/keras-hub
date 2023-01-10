@@ -103,11 +103,11 @@ class AlbertBackbone(Backbone):
         vocabulary_size,
         num_layers,
         num_heads,
-        num_groups,
-        num_inner_repetitions,
         embedding_dim,
         hidden_dim,
         intermediate_dim,
+        num_groups=1,
+        num_inner_repetitions=1,
         dropout=0.0,
         max_sequence_length=512,
         num_segments=2,
@@ -116,8 +116,8 @@ class AlbertBackbone(Backbone):
 
         if num_layers % num_groups != 0:
             raise ValueError(
-                "`num_layers` must be divisible by `num_groups`. Received "
-                f"`num_layers` = {num_layers}` and `num_groups` = {num_groups}."
+                "`num_layers` must be divisible by `num_groups`. Received: "
+                f"`num_layers={num_layers}` and `num_groups={num_groups}`."
             )
 
         # Index of classification token in the vocabulary
@@ -188,9 +188,9 @@ class AlbertBackbone(Backbone):
                     ),
                     dropout=dropout,
                     kernel_initializer=albert_kernel_initializer(),
-                    name=f"group_{group_idx}_transformer_layer_{inner_repetition_idx}",
+                    name=f"group_{group_idx}_inner_layer_{inner_idx}",
                 )
-                for inner_repetition_idx in range(num_inner_repetitions)
+                for inner_idx in range(num_inner_repetitions)
             ]
 
             def call(x, padding_mask):
