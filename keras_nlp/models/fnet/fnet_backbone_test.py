@@ -29,7 +29,7 @@ class FNetBackboneTest(tf.test.TestCase, parameterized.TestCase):
             num_layers=2,
             hidden_dim=16,
             intermediate_dim=32,
-            max_sequence_length=32,
+            max_sequence_length=128,
             num_segments=4,
         )
         self.batch_size = 8
@@ -50,7 +50,7 @@ class FNetBackboneTest(tf.test.TestCase, parameterized.TestCase):
         self.model(self.input_batch)
 
         # Check default name passed through
-        self.assertRegexpMatches(self.model.name, "fnet_backbone")
+        self.assertRegexpMatches(self.model.name, "f_net_backbone")
 
     def test_variable_sequence_length_call_fnet(self):
         for seq_length in (25, 50, 75):
