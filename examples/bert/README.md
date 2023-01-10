@@ -35,10 +35,6 @@ python3 examples/bert/ bert_pretrain.py \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --saved_model_output $OUTPUT_DIR/model/ \
     --num_train_steps 100
-# Run finetuning.
-python3 examples/bert/bert_finetune_glue.py \
-    --saved_model_input $OUTPUT_DIR/model/ \
-    --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt
 ```
 
 ## Installing dependencies
