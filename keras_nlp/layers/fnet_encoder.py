@@ -49,7 +49,7 @@ class FNetEncoder(keras.layers.Layer):
             defaults to "zeros". The bias initializer for the dense layers.
         bias_initializer_output_dense: "string" or `keras.initializers` initializer,
             defaults to None. The bias initializer for the output dense layer.
-            If None, the bias_initializer will be used.
+            If None, `bias_initializer` will be used.
         name: string, defaults to None. The name of the layer.
         **kwargs: other keyword arguments.
 
