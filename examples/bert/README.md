@@ -124,7 +124,7 @@ You can also use `examples/tools/train_word_piece_vocab.py` to train your own.
 
 ### Tokenize, mask, and combine sentences into training examples
 
-The `bert_preprocess.py` script will take in a set of sentence split files, and
+The ` bert_create_pretraining_data.py` script will take in a set of sentence split files, and
 set up training examples for the next sentence prediction and masked word tasks.
 
 The output of the script will be TFRecord files with a number of fields per
