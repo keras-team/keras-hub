@@ -30,7 +30,7 @@ python3 examples/bert/bert_create_pretraining_data.py \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --output_file $OUTPUT_DIR/pretraining-data/pretraining.tfrecord
 # Run pretraining for 100 train steps only.
-python3 examples/bert/ bert_pretrain.py \
+python3 examples/bert/bert_pretrain.py \
     --input_directory $OUTPUT_DIR/pretraining-data/ \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --saved_model_output $OUTPUT_DIR/model/ \
