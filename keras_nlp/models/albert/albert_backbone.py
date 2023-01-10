@@ -54,14 +54,14 @@ class AlbertBackbone(Backbone):
             be routed to the correct group based on the layer index.
         num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
-        num_groups: int. Number of groups, with each group having
-            `num_inner_repetitions` number of `TransformerEncoder` layers.
-        num_inner_repetitions: int. Number of `TransformerEncoder` layers per
-            group.
         embedding_dim: int. The size of the embeddings.
         hidden_dim: int. The size of the transformer encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
+        num_groups: int. Number of groups, with each group having
+            `num_inner_repetitions` number of `TransformerEncoder` layers.
+        num_inner_repetitions: int. Number of `TransformerEncoder` layers per
+            group.
         dropout: float. Dropout probability for the Transformer encoder.
         max_sequence_length: int. The maximum sequence length that this encoder
             can consume. If None, `max_sequence_length` uses the value from
