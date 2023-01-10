@@ -87,6 +87,19 @@ class AlbertBackboneTest(tf.test.TestCase, parameterized.TestCase):
         self.model.compile(jit_compile=jit_compile)
         self.model.predict(self.input_dataset)
 
+    def test_error_for_invalid_num_groups(self):
+        with self.assertRaises(ValueError):
+            self.model = AlbertBackbone(
+                vocabulary_size=1000,
+                num_layers=3,
+                num_heads=2,
+                num_groups=2,
+                num_inner_repetitions=1,
+                embedding_dim=16,
+                hidden_dim=64,
+                intermediate_dim=128,
+            )
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),

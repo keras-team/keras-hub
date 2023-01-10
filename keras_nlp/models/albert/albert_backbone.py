@@ -48,10 +48,10 @@ class AlbertBackbone(Backbone):
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
-        num_layers: int. The number of "virtual" layers, i.e., the total number
-            of times the input sequence will be fed through the groups in one
-            forward pass. The input will be routed to the correct
-            group based on the layer index.
+        num_layers: int, must be divisible by `num_groups`. The number of
+            "virtual" layers, i.e., the total number of times the input sequence
+            will be fed through the groups in one forward pass. The input will
+            be routed to the correct group based on the layer index.
         num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
         num_groups: int. Number of groups, with each group having
@@ -113,6 +113,12 @@ class AlbertBackbone(Backbone):
         num_segments=2,
         **kwargs,
     ):
+
+        if num_layers % num_groups != 0:
+            raise ValueError(
+                "`num_layers` must be divisible by `num_groups`. Received "
+                f"`num_layers` = {num_layers}` and `num_groups` = {num_groups}."
+            )
 
         # Index of classification token in the vocabulary
         cls_token_index = 0
@@ -194,20 +200,16 @@ class AlbertBackbone(Backbone):
 
             return call
 
-        layer_idx = 0
-        # Note: `num_calls_per_group` is sort of a misnomer; it is not an
-        # integer, and every group may not be called the same number of times.
-        num_calls_per_group = num_layers / num_groups
+        num_calls_per_group = num_layers // num_groups
         for group_idx in range(num_groups):
             # Define the group. A group in ALBERT terminology is any number of
             # repeated attention and FFN blocks.
             group_layer = get_group_layer(group_idx)
 
-            # Assume num_layers = 8, num_groups = 5. Then, the order of group
-            # calls will be 0, 0, 1, 1, 2, 3, 3, 4.
-            while int(layer_idx / num_calls_per_group) == group_idx:
+            # Assume num_layers = 8, num_groups = 4. Then, the order of group
+            # calls will be 0, 0, 1, 1, 2, 2, 3, 3.
+            for call in range(num_calls_per_group):
                 x = group_layer(x, padding_mask=padding_mask)
-                layer_idx += 1
 
         # Construct the two ALBERT outputs. The pooled output is a dense layer on
         # top of the [CLS] token.
