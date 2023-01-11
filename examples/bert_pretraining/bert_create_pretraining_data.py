@@ -44,7 +44,7 @@ import tensorflow_text as tf_text
 from absl import app
 from absl import flags
 
-from examples.bert.bert_config import PREPROCESSING_CONFIG
+from examples.bert_pretraining.bert_config import PREPROCESSING_CONFIG
 from examples.utils.scripting_utils import list_filenames_for_arg
 
 # Tokenization will happen with tensorflow and can easily OOM a GPU.
