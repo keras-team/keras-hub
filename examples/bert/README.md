@@ -25,20 +25,16 @@ python3 examples/tools/split_sentences.py \
     --input_files $OUTPUT_DIR/wiki_example_data.txt \
     --output_directory $OUTPUT_DIR/sentence-split-data
 # Preprocess input for pretraining.
-python3 examples/bert/bert_preprocess.py \
+python3 examples/bert/bert_create_pretraining_data.py \
     --input_files $OUTPUT_DIR/sentence-split-data/ \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --output_file $OUTPUT_DIR/pretraining-data/pretraining.tfrecord
 # Run pretraining for 100 train steps only.
-python3 examples/bert/bert_train.py \
+python3 examples/bert/bert_pretrain.py \
     --input_directory $OUTPUT_DIR/pretraining-data/ \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --saved_model_output $OUTPUT_DIR/model/ \
     --num_train_steps 100
-# Run finetuning.
-python3 examples/bert/bert_finetune_glue.py \
-    --saved_model_input $OUTPUT_DIR/model/ \
-    --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt
 ```
 
 ## Installing dependencies
@@ -124,7 +120,7 @@ You can also use `examples/tools/train_word_piece_vocab.py` to train your own.
 
 ### Tokenize, mask, and combine sentences into training examples
 
-The `bert_preprocess.py` script will take in a set of sentence split files, and
+The ` bert_create_pretraining_data.py` script will take in a set of sentence split files, and
 set up training examples for the next sentence prediction and masked word tasks.
 
 The output of the script will be TFRecord files with a number of fields per
@@ -160,7 +156,7 @@ with the following:
 ```shell
 for file in path/to/sentence-split-data/*; do
     output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
-    python3 examples/bert/bert_preprocess.py \
+    python3 examples/bert/bert_create_pretraining_data.py \
         --input_files ${file} \
         --vocab_file bert_vocab_uncased.txt \
         --output_file ${output}
@@ -175,7 +171,7 @@ on an 8 core machine.
 NUM_JOBS=5
 for file in path/to/sentence-split-data/*; do
     output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
-    echo python3 examples/bert/bert_preprocess.py \
+    echo python3 examples/bert/bert_create_pretraining_data.py \
         --input_files ${file} \
         --vocab_file bert_vocab_uncased.txt \
         --output_file ${output}
@@ -190,35 +186,15 @@ python3 -c "from examples.utils.data_utils import preview_tfrecord; preview_tfre
 
 ### Running BERT pretraining
 
-After preprocessing, we can run pretraining with the `bert_train.py`
+After preprocessing, we can run pretraining with the `bert_pretrain.py`
 script. This will train a model and save it to the `--saved_model_output`
 directory. If you are willing to train from data stored on google cloud storage bucket (GCS), you can do it by setting the file path to
 the URL of GCS bucket. For example, `--input_directory=gs://your-bucket-name/you-data-path`. You can also save models directly to GCS by the same approach.
 
 ```shell
-python3 examples/bert/bert_train.py \
+python3 examples/bert/bert_pretrain.py \
     --input_directory path/to/data/ \
     --vocab_file path/to/bert_vocab_uncased.txt \
     --model_size tiny \
     --saved_model_output path/to/model/
 ```
-
-## Evaluating BERT with GLUE
-
-After pretraining, we can evaluate the performance of a BERT model with the
-General Language Understanding Evaluation (GLUE) benchmark. This will
-finetune the model and running classification for a number of downstream tasks.
-
-The `bert_finetune_glue.py` script downloads the GLUE data for a specific
-tasks, reloads the pretraining model with appropriate finetuning heads, and runs
-training for a few epochs to finetune the model.
-
-```shell
-python3 examples/bert/bert_finetune_glue.py \
-    --saved_model_input path/to/model/ \
-    --vocab_file path/to/bert_vocab_uncased.txt \
-    --task_name mrpc
-```
-
-The script could be easily adapted to any other text classification finetuning
-tasks, where inputs can be any number of raw text sentences per sample.
