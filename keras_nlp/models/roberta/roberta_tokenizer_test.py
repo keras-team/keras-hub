@@ -38,6 +38,7 @@ class RobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             "Ġis": 9,
             "Ġthe": 10,
             "Ġbest": 11,
+            "<mask>": 12,
         }
 
         merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
@@ -63,7 +64,7 @@ class RobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output, [" airplane at airport"])
 
     def test_vocabulary_size(self):
-        self.assertEqual(self.tokenizer.vocabulary_size(), 12)
+        self.assertEqual(self.tokenizer.vocabulary_size(), 13)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),

@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2022 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""RoBERTa preprocessor layer."""
+"""RoBERTa masked language model preprocessor layer."""
 
 import copy
 
 from tensorflow import keras
 
+from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.models.roberta.roberta_multi_segment_packer import (
     RobertaMultiSegmentPacker,
@@ -32,39 +33,31 @@ from keras_nlp.utils.python_utils import classproperty
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class RobertaPreprocessor(Preprocessor):
-    """RoBERTa preprocessing layer which tokenizes and packs inputs.
+class RobertaMaskedLMPreprocessor(Preprocessor):
+    """RoBERTa preprocessing for the masked language modeling task.
 
-    This preprocessing layer will do three things:
+    This preprocessing layer will prepare inputs for a masked language modeling
+    task. It is primarily intended for use with the
+    `keras_nlp.models.RobertaMaskedLM` task model. Preprocessing will occur in
+    multiple steps.
 
     - Tokenize any number of input segments using the `tokenizer`.
     - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
       `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
-      entire sequence, `"</s></s>"` at the end of each segment, save the last
+      entire sequence, `"</s></s>"` between each segment,
       and a `"</s>"` at the end of the entire sequence.
-    - Construct a dictionary with keys `"token_ids"`, `"segment_ids"`,
-       `"padding_mask"`, that can be passed directly to a RoBERTa model.
-
-    This layer can be used directly with `tf.data.Dataset.map` to preprocess
-    string data in the `(x, y, sample_weight)` format used by
-    `keras.Model.fit`.
-
-    The call method of this layer accepts three arguments, `x`, `y`, and
-    `sample_weight`. `x` can be a python string or tensor representing a single
-    segment, a list of python strings representing a batch of single segments,
-    or a list of tensors representing multiple segments to be packed together.
-    `y` and `sample_weight` are both optional, can have any format, and will be
-    passed through unaltered.
-
-    Special care should be taken when using `tf.data` to map over an unlabeled
-    tuple of string segments. `tf.data.Dataset.map` will unpack this tuple
-    directly into the call arguments of this layer, rather than forward all
-    argument to `x`. To handle this case, it is recommended to  explicitly call
-    the layer, e.g. `ds.map(lambda seg1, seg2: preprocessor(x=(seg1, seg2)))`.
+    - Randomly select non-special tokens to mask, controlled by
+      `mask_selection_rate`.
+    - Construct a `(x, y, sample_weight)` tuple suitable for training with a
+      `keras_nlp.models.RobertaMaskedLM` task model.
 
     Args:
         tokenizer: A `keras_nlp.models.RobertaTokenizer` instance.
         sequence_length: The length of the packed inputs.
+        mask_selection_rate: The probability an input token will be dynamically
+            masked.
+        mask_selection_length: The maximum number of masked tokens supported
+            by the layer.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
             `round_robin` or `waterfall`:
@@ -79,58 +72,26 @@ class RobertaPreprocessor(Preprocessor):
     Examples:
     ```python
     # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.RobertaPreprocessor.from_preset(
-        "roberta_base_en",
+    preprocessor = keras_nlp.models.RobertaMaskedLMPreprocessor.from_preset(
+        "roberta_base_en"
     )
 
-    # Tokenize and pack a single sentence.
-    sentence = tf.constant(" afternoon sun")
+    # Tokenize and mask a single sentence.
+    sentence = tf.constant("The quick brown fox jumped.")
     preprocessor(sentence)
-    # Same output.
-    preprocessor(" afternoon sun")
 
-    # Tokenize and a batch of single sentences.
+    # Tokenize and mask a batch of sentences.
     sentences = tf.constant(
-        [" afternoon sun", " night moon"]
+        ["The quick brown fox jumped.", "Call me Ishmael."]
     )
     preprocessor(sentences)
-    # Same output.
-    preprocessor(
-        [" afternoon sun", " night moon"]
-    )
 
-    # Tokenize and pack a sentence pair.
-    first_sentence = tf.constant(" afternoon sun")
-    second_sentence = tf.constant("refulgent sun")
-    preprocessor((first_sentence, second_sentence))
-
-    # Map a dataset to preprocess a single sentence.
+    # Tokenize and mask a dataset of sentences.
     features = tf.constant(
-        [" afternoon sun", " night moon"]
+        ["The quick brown fox jumped.", "Call me Ishmael."]
     )
-    labels = tf.constant([0, 1])
-    ds = tf.data.Dataset.from_tensor_slices((features, labels))
+    ds = tf.data.Dataset.from_tensor_slices((features))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map a dataset to preprocess sentence pairs.
-    first_sentences = tf.constant([" afternoon sun", " night moon"])
-    second_sentences = tf.constant(["refulgent sun", " bright moon"])
-    labels = tf.constant([1, 1])
-    ds = tf.data.Dataset.from_tensor_slices(
-        (
-            (first_sentences, second_sentences), labels
-        )
-    )
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map a dataset to preprocess unlabeled sentence pairs.
-    ds = tf.data.Dataset.from_tensor_slices((first_sentences, second_sentences))
-    # Watch out for tf.data's default unpacking of tuples here!
-    # Best to invoke the `preprocessor` directly in this case.
-    ds = ds.map(
-        lambda s1, s2: preprocessor(x=(s1, s2)),
-        num_parallel_calls=tf.data.AUTOTUNE,
-    )
 
     # Alternatively, you can create a preprocessor from your own vocabulary.
     # The usage is exactly the same as above.
@@ -141,7 +102,7 @@ class RobertaPreprocessor(Preprocessor):
         vocabulary=vocab,
         merges=merges,
     )
-    preprocessor = keras_nlp.models.RobertaPreprocessor(
+    preprocessor = keras_nlp.models.RobertaMaskedLMPreprocessor(
         tokenizer=tokenizer,
         sequence_length=8,
     )
@@ -153,18 +114,31 @@ class RobertaPreprocessor(Preprocessor):
         self,
         tokenizer,
         sequence_length=512,
+        mask_selection_rate=0.15,
+        mask_selection_length=96,
         truncate="round_robin",
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self.tokenizer = tokenizer
+        self._tokenizer = tokenizer
         self.packer = RobertaMultiSegmentPacker(
-            start_value=self.tokenizer.start_token_id,
-            end_value=self.tokenizer.end_token_id,
-            pad_value=self.tokenizer.pad_token_id,
+            start_value=tokenizer.start_token_id,
+            end_value=tokenizer.end_token_id,
+            pad_value=tokenizer.pad_token_id,
             truncate=truncate,
             sequence_length=sequence_length,
+        )
+        self.masker = MaskedLMMaskGenerator(
+            mask_selection_rate=mask_selection_rate,
+            mask_selection_length=mask_selection_length,
+            vocabulary_size=tokenizer.vocabulary_size(),
+            mask_token_id=tokenizer.mask_token_id,
+            unselectable_token_ids=[
+                tokenizer.start_token_id,
+                tokenizer.end_token_id,
+                tokenizer.pad_token_id,
+            ],
         )
 
     def get_config(self):
@@ -172,19 +146,33 @@ class RobertaPreprocessor(Preprocessor):
         config.update(
             {
                 "sequence_length": self.packer.sequence_length,
+                "mask_selection_rate": self.masker.mask_selection_rate,
+                "mask_selection_length": self.masker.mask_selection_length,
                 "truncate": self.packer.truncate,
             }
         )
         return config
 
     def call(self, x, y=None, sample_weight=None):
+        if y is not None:
+            raise ValueError(
+                "`RobertaMaskedLMPreprocessor` received labeled data (`y` is "
+                "not `None`). No labels should be passed in as "
+                "this layer generates training labels dynamically from raw "
+                "text features passed as `x`. Received: `y={y}`."
+            )
+
         x = convert_inputs_to_list_of_tensor_segments(x)
         x = [self.tokenizer(segment) for segment in x]
         token_ids = self.packer(x)
+        masker_outputs = self.masker(token_ids)
         x = {
-            "token_ids": token_ids,
+            "token_ids": masker_outputs["token_ids"],
             "padding_mask": token_ids != self.tokenizer.pad_token_id,
+            "mask_positions": masker_outputs["mask_positions"],
         }
+        y = masker_outputs["mask_ids"]
+        sample_weight = masker_outputs["mask_weights"]
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty

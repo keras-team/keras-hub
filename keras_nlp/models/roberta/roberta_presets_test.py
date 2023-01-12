@@ -19,6 +19,7 @@ from absl.testing import parameterized
 
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
+from keras_nlp.models.roberta.roberta_masked_lm import RobertaMaskedLM
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 
@@ -94,10 +95,39 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         model.predict(input_data)
 
     @parameterized.named_parameters(
+        ("preset_weights", True), ("random_weights", False)
+    )
+    def test_masked_lm_output(self, load_weights):
+        input_data = ["Let's rock!"]
+        model = RobertaMaskedLM.from_preset(
+            "roberta_base_en", load_weights=load_weights
+        )
+        # Never assert output values, as the head weights are random.
+        model.predict(input_data)
+
+    @parameterized.named_parameters(
+        ("load_weights", True), ("no_load_weights", False)
+    )
+    def test_masked_lm_output_without_preprocessing(self, load_weights):
+        input_data = {
+            "token_ids": tf.constant([[101, 1996, 4248, 102]]),
+            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+            "mask_positions": tf.constant([[0, 0]]),
+        }
+        model = RobertaMaskedLM.from_preset(
+            "roberta_base_en",
+            load_weights=load_weights,
+            preprocessor=None,
+        )
+        # Never assert output values, as the head weights are random.
+        model.predict(input_data)
+
+    @parameterized.named_parameters(
         ("roberta_tokenizer", RobertaTokenizer),
         ("roberta_preprocessor", RobertaPreprocessor),
         ("roberta", RobertaBackbone),
         ("roberta_classifier", RobertaClassifier),
+        ("roberta_masked_lm", RobertaMaskedLM),
     )
     def test_preset_docstring(self, cls):
         """Check we did our docstring formatting correctly."""
@@ -109,6 +139,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         ("roberta_preprocessor", RobertaPreprocessor),
         ("roberta", RobertaBackbone),
         ("roberta_classifier", RobertaClassifier),
+        ("roberta_masked_lm", RobertaMaskedLM),
     )
     def test_unknown_preset_error(self, cls):
         # Not a preset name
@@ -170,6 +201,38 @@ class RobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                     maxval=classifier.backbone.vocabulary_size,
                 ),
                 "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+            }
+            classifier.predict(input_data)
+
+    @parameterized.named_parameters(
+        ("preset_weights", True), ("random_weights", False)
+    )
+    def test_load_roberta_masked_lm(self, load_weights):
+        for preset in RobertaMaskedLM.presets:
+            classifier = RobertaMaskedLM.from_preset(
+                preset, load_weights=load_weights
+            )
+            input_data = tf.constant(["The quick brown fox."])
+            classifier.predict(input_data)
+
+    @parameterized.named_parameters(
+        ("load_weights", True), ("no_load_weights", False)
+    )
+    def test_load_roberta_masked_lm_without_preprocessing(self, load_weights):
+        for preset in RobertaMaskedLM.presets:
+            classifier = RobertaMaskedLM.from_preset(
+                preset,
+                preprocessor=None,
+                load_weights=load_weights,
+            )
+            input_data = {
+                "token_ids": tf.random.uniform(
+                    shape=(1, 512),
+                    dtype=tf.int64,
+                    maxval=classifier.backbone.vocabulary_size,
+                ),
+                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+                "mask_positions": tf.constant([1] * 128, shape=(1, 128)),
             }
             classifier.predict(input_data)
 
