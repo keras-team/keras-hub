@@ -139,7 +139,7 @@ class BertBackbone(Backbone):
             name="segment_embedding",
         )(segment_id_input)
 
-        # Sum, normailze and apply dropout to embeddings.
+        # Sum, normalize and apply dropout to embeddings.
         x = keras.layers.Add()(
             (token_embedding, position_embedding, segment_embedding)
         )
