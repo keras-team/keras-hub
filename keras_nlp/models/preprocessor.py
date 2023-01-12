@@ -15,11 +15,25 @@
 from tensorflow import keras
 
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class Preprocessor(keras.layers.Layer):
     """Base class for model preprocessors."""
+
+    def __init_subclass__(cls, **kwargs):
+        # We use the __init_subclass__ hook to properly format the from_preset
+        # docstring on subclasses.
+        if cls.from_preset.__func__.__doc__ is None:
+            cls.from_preset.__func__.__doc__ = Preprocessor.from_preset.__doc__
+            preset_names = list(cls.presets.keys())
+            format_docstring(
+                preprocessor_name=cls.__name__,
+                example_preset_name=preset_names[0],
+                preset_names='", "'.join(preset_names),
+            )(cls.from_preset.__func__)
+        super().__init_subclass__(**kwargs)
 
     @property
     def tokenizer(self):
