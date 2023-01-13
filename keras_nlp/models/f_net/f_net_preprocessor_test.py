@@ -22,8 +22,8 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.fnet.fnet_preprocessor import FNetPreprocessor
-from keras_nlp.models.fnet.fnet_tokenizer import FNetTokenizer
+from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
+from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 
 
 class FNetPreprocessorTest(tf.test.TestCase, parameterized.TestCase):

@@ -16,7 +16,7 @@
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
-from keras_nlp.models.fnet.fnet_tokenizer import FNetTokenizer
+from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
