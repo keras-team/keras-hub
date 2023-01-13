@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+"""Fenced docstring docstest lib for KerasNLP."""
+
 import ast
 import doctest
 import re
@@ -27,6 +30,8 @@ class FencedCellParser(doctest.DocTestParser):
 
     The `get_examples` method receives a string and returns an
     iterable of `doctest.Example` objects.
+
+    Adapted from https://github.com/tensorflow/tensorflow/blob/master/tensorflow/tools/docs/fenced_doctest_lib.py.
     """
 
     patched = False
