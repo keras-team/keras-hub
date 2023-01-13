@@ -17,7 +17,9 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers.position_embedding import PositionEmbedding
+from keras_nlp.layers.token_and_position_embedding import (
+    TokenAndPositionEmbedding,
+)
 from keras_nlp.layers.transformer_decoder import TransformerDecoder
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.models.backbone import Backbone
@@ -80,21 +82,26 @@ class BartBackbone(Backbone):
             shape=(None,), dtype="int32", name="encoder_padding_mask"
         )
 
-        # Embed tokens and positions.
-        # The token embedding layer is shared by the encoder and decoder.
-        token_embedding_layer = keras.layers.Embedding(
-            input_dim=vocabulary_size,
-            output_dim=hidden_dim,
-            embeddings_initializer=bart_kernel_initializer(),
-            name="token_embedding",
+        # Decoder inputs.
+        decoder_token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="decoder_token_ids"
+        )
+        decoder_padding_mask = keras.Input(
+            shape=(None,), dtype="int32", name="decoder_padding_mask"
         )
 
-        x = token_embedding_layer(encoder_token_id_input)
-        x = PositionEmbedding(
-            initializer=bart_kernel_initializer(),
+        # Encoder
+
+        # Embed tokens and positions.
+        x = TokenAndPositionEmbedding(
+            vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
-            name="encoder_position_embedding",
-        )(x)
+            embedding_dim=hidden_dim,
+            embeddings_initializer=bart_kernel_initializer(),
+            name="encoder_token_and_position_embedding",
+        )(encoder_token_id_input)
+
+        # Normalize and apply dropout to embeddings.
         x = keras.layers.LayerNormalization(
             name="encoder_embeddings_layer_norm",
             axis=-1,
@@ -122,20 +129,18 @@ class BartBackbone(Backbone):
 
         encoder_output = x
 
-        # Decoder inputs.
-        decoder_token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="decoder_token_ids"
-        )
-        decoder_padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="decoder_padding_mask"
-        )
+        # Decoder
 
-        x = token_embedding_layer(decoder_token_id_input)
-        x = PositionEmbedding(
-            initializer=bart_kernel_initializer(),
+        # Embed tokens and positions.
+        x = TokenAndPositionEmbedding(
+            vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
-            name="decoder_position_embedding",
-        )(x)
+            embedding_dim=hidden_dim,
+            embeddings_initializer=bart_kernel_initializer(),
+            name="decoder_token_and_position_embedding",
+        )(decoder_token_id_input)
+
+        # Normalize and apply dropout to embeddings.
         x = keras.layers.LayerNormalization(
             name="decoder_embeddings_layer_norm",
             axis=-1,
