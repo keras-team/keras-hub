@@ -12,125 +12,125 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for RoBERTa preprocessor layer."""
+"""Tests for FNet preprocessor layer."""
 
+import io
 import os
 
+import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
-from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
+from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 
 
-class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class FNetPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        vocab = {
-            "<s>": 0,
-            "<pad>": 1,
-            "</s>": 2,
-            "Ġair": 3,
-            "plane": 4,
-            "Ġat": 5,
-            "port": 6,
-            "Ġkoh": 7,
-            "li": 8,
-            "Ġis": 9,
-            "Ġthe": 10,
-            "Ġbest": 11,
-        }
+        bytes_io = io.BytesIO()
+        vocab_data = tf.data.Dataset.from_tensor_slices(
+            ["the quick brown fox", "the earth is round"]
+        )
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=vocab_data.as_numpy_iterator(),
+            model_writer=bytes_io,
+            vocab_size=10,
+            model_type="WORD",
+            pad_id=3,
+            unk_id=0,
+            bos_id=4,
+            eos_id=5,
+            pad_piece="<pad>",
+            unk_piece="<unk>",
+            bos_piece="[CLS]",
+            eos_piece="[SEP]",
+        )
+        self.proto = bytes_io.getvalue()
 
-        merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
-        merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
-        merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
-        merges += ["pla ne"]
-
-        self.preprocessor = RobertaPreprocessor(
-            tokenizer=RobertaTokenizer(
-                vocabulary=vocab,
-                merges=merges,
-            ),
+        self.preprocessor = FNetPreprocessor(
+            tokenizer=FNetTokenizer(proto=self.proto),
             sequence_length=12,
         )
 
     def test_tokenize_strings(self):
-        input_data = " airplane at airport"
-
+        input_data = "the quick brown fox"
         output = self.preprocessor(input_data)
         self.assertAllEqual(
-            output["token_ids"], [0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]
+            output["token_ids"], [4, 1, 9, 2, 7, 5, 3, 3, 3, 3, 3, 3]
         )
         self.assertAllEqual(
-            output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
+            output["segment_ids"], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         )
 
     def test_tokenize_list_of_strings(self):
-        input_data = [" airplane at airport"] * 4
-
+        # We should handle a list of strings as as batch.
+        input_data = ["the quick brown fox"] * 4
         output = self.preprocessor(input_data)
         self.assertAllEqual(
             output["token_ids"],
-            [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]] * 4,
+            [[4, 1, 9, 2, 7, 5, 3, 3, 3, 3, 3, 3]] * 4,
         )
-
         self.assertAllEqual(
-            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
+            output["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
         )
 
     def test_tokenize_labeled_batch(self):
-        x = tf.constant([" airplane at airport"] * 4)
+        x = tf.constant(["the quick brown fox"] * 4)
         y = tf.constant([1] * 4)
         sw = tf.constant([1.0] * 4)
         x_out, y_out, sw_out = self.preprocessor(x, y, sw)
         self.assertAllEqual(
-            x_out["token_ids"], [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]] * 4
+            x_out["token_ids"],
+            [[4, 1, 9, 2, 7, 5, 3, 3, 3, 3, 3, 3]] * 4,
         )
         self.assertAllEqual(
-            x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
+            x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(y_out, y)
         self.assertAllEqual(sw_out, sw)
 
     def test_tokenize_labeled_dataset(self):
-        x = tf.constant([" airplane at airport"] * 4)
+        x = tf.constant(["the quick brown fox"] * 4)
         y = tf.constant([1] * 4)
         sw = tf.constant([1.0] * 4)
         ds = tf.data.Dataset.from_tensor_slices((x, y, sw))
         ds = ds.map(self.preprocessor)
         x_out, y_out, sw_out = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(
-            x_out["token_ids"], [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]] * 4
+            x_out["token_ids"],
+            [[4, 1, 9, 2, 7, 5, 3, 3, 3, 3, 3, 3]] * 4,
         )
         self.assertAllEqual(
-            x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
+            x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(y_out, y)
         self.assertAllEqual(sw_out, sw)
 
     def test_tokenize_multiple_sentences(self):
-        sentence_one = tf.constant(" airplane at airport")
-        sentence_two = tf.constant(" kohli is the best")
-
-        output = self.preprocessor((sentence_one, sentence_two))
-        self.assertAllEqual(
-            output["token_ids"], [0, 3, 4, 5, 3, 2, 2, 7, 8, 9, 10, 2]
-        )
-        self.assertAllEqual(
-            output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-        )
-
-    def test_tokenize_multiple_batched_sentences(self):
-        sentence_one = tf.constant([" airplane at airport"] * 4)
-        sentence_two = tf.constant([" kohli is the best"] * 4)
-
+        sentence_one = tf.constant("the quick brown fox")
+        sentence_two = tf.constant("the earth")
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
             output["token_ids"],
-            [[0, 3, 4, 5, 3, 2, 2, 7, 8, 9, 10, 2]] * 4,
+            [4, 1, 9, 2, 7, 5, 1, 6, 5, 3, 3, 3],
         )
         self.assertAllEqual(
-            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]] * 4
+            output["segment_ids"], [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0]
+        )
+
+    def test_tokenize_multiple_batched_sentences(self):
+        sentence_one = tf.constant(["the quick brown fox"] * 4)
+        sentence_two = tf.constant(["the earth"] * 4)
+        # The first tuple or list is always interpreted as an enumeration of
+        # separate sequences to concatenate.
+        output = self.preprocessor((sentence_one, sentence_two))
+        self.assertAllEqual(
+            output["token_ids"],
+            [[4, 1, 9, 2, 7, 5, 1, 6, 5, 3, 3, 3]] * 4,
+        )
+        self.assertAllEqual(
+            output["segment_ids"], [[0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0]] * 4
         )
 
     def test_errors_for_2d_list_input(self):
@@ -143,15 +143,12 @@ class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     def test_saved_model(self, save_format, filename):
-        input_data = tf.constant([" airplane at airport"])
-
+        input_data = tf.constant(["the quick brown fox"])
         inputs = keras.Input(dtype="string", shape=())
         outputs = self.preprocessor(inputs)
         model = keras.Model(inputs, outputs)
-
         path = os.path.join(self.get_temp_dir(), filename)
         model.save(path, save_format=save_format)
-
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data)["token_ids"],

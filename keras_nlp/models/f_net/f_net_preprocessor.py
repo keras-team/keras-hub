@@ -11,37 +11,31 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""DistilBERT preprocessor layers."""
-
-import copy
+"""FNet preprocessor layer."""
 
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
-from keras_nlp.models.distil_bert.distil_bert_presets import backbone_presets
-from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
-    DistilBertTokenizer,
-)
+from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class DistilBertPreprocessor(Preprocessor):
-    """A DistilBERT preprocessing layer which tokenizes and packs inputs.
+class FNetPreprocessor(Preprocessor):
+    """An FNet preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
 
      - Tokenize any number of input segments using the `tokenizer`.
      - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
-       with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
-     - Construct a dictionary of with keys `"token_ids"` and `"padding_mask"`,
-       that can be passed directly to a DistilBERT model.
+       with the appropriate `"[CLS]"`, `"[SEP]"` and `"<pad>"` tokens.
+     - Construct a dictionary with keys `"token_ids"`, and `"segment_ids"`  that
+       can be passed directly to `keras_nlp.models.FNetBackbone`.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
@@ -61,7 +55,7 @@ class DistilBertPreprocessor(Preprocessor):
     the layer, e.g. `ds.map(lambda seg1, seg2: preprocessor(x=(seg1, seg2)))`.
 
     Args:
-        tokenizer: A `keras_nlp.models.DistilBertTokenizer` instance.
+        tokenizer: A `keras_nlp.models.FNetTokenizer` instance.
         sequence_length: The length of the packed inputs.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
@@ -76,8 +70,11 @@ class DistilBertPreprocessor(Preprocessor):
 
     Examples:
     ```python
-    # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.DistilBertPreprocessor.from_preset("distil_bert_base_en_uncased")
+    tokenizer = keras_nlp.models.FNetTokenizer(proto="model.spm")
+    preprocessor = keras_nlp.models.FNetPreprocessor(
+        tokenizer=tokenizer,
+        sequence_length=10,
+    )
 
     # Tokenize and pack a single sentence.
     sentence = tf.constant("The quick brown fox jumped.")
@@ -137,16 +134,6 @@ class DistilBertPreprocessor(Preprocessor):
         lambda s1, s2: preprocessor(x=(s1, s2)),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
-
-    # Alternatively, you can create a preprocessor from your own vocabulary.
-    # The usage is exactly the same as above.
-    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
-    vocab += ["The", "qu", "##ick", "br", "##own", "fox", "tripped"]
-    vocab += ["Call", "me", "Ish", "##mael", "."]
-    vocab += ["Oh", "look", "a", "whale"]
-    vocab += ["I", "forgot", "my", "home", "##work"]
-    tokenizer = keras_nlp.models.DistilBertTokenizer(vocabulary=vocab)
-    preprocessor = keras_nlp.models.DistilBertPreprocessor(tokenizer)
     ```
     """
 
@@ -180,31 +167,13 @@ class DistilBertPreprocessor(Preprocessor):
     def call(self, x, y=None, sample_weight=None):
         x = convert_inputs_to_list_of_tensor_segments(x)
         x = [self.tokenizer(segment) for segment in x]
-        token_ids, _ = self.packer(x)
+        token_ids, segment_ids = self.packer(x)
         x = {
             "token_ids": token_ids,
-            "padding_mask": token_ids != self.tokenizer.pad_token_id,
+            "segment_ids": segment_ids,
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty
     def tokenizer_cls(cls):
-        return DistilBertTokenizer
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(cls, preset, **kwargs):
-        return super().from_preset(preset, **kwargs)
-
-
-DistilBertPreprocessor.from_preset.__func__.__doc__ = (
-    Preprocessor.from_preset.__doc__
-)
-format_docstring(
-    preprocessor_name=DistilBertPreprocessor.__name__,
-    example_preset_name="distil_bert_base_en_uncased",
-    preset_names='", "'.join(DistilBertPreprocessor.presets),
-)(DistilBertPreprocessor.from_preset.__func__)
+        return FNetTokenizer

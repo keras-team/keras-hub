@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for XLM-RoBERTa tokenizer."""
+"""Tests for FNet tokenizer."""
 
 import io
 import os
@@ -22,12 +22,10 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
-    XLMRobertaTokenizer,
-)
+from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 
 
-class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class FNetTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
@@ -38,63 +36,37 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             model_writer=bytes_io,
             vocab_size=10,
             model_type="WORD",
+            pad_id=3,
             unk_id=0,
-            bos_id=1,
-            eos_id=2,
+            bos_id=4,
+            eos_id=5,
+            pad_piece="<pad>",
+            unk_piece="<unk>",
+            bos_piece="[CLS]",
+            eos_piece="[SEP]",
         )
         self.proto = bytes_io.getvalue()
 
-        self.tokenizer = XLMRobertaTokenizer(proto=self.proto)
+        self.tokenizer = FNetTokenizer(proto=self.proto)
 
     def test_tokenize(self):
         input_data = "the quick brown fox"
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [4, 9, 5, 7])
+        self.assertAllEqual(output, [1, 9, 2, 7])
 
     def test_tokenize_batch(self):
         input_data = tf.constant(["the quick brown fox", "the earth is round"])
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[4, 9, 5, 7], [4, 6, 8, 10]])
-
-    def test_unk_token(self):
-        input_data = "the quick brown fox running"
-
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [4, 9, 5, 7, 3])
+        self.assertAllEqual(output, [[1, 9, 2, 7], [1, 6, 8, 0]])
 
     def test_detokenize(self):
-        input_data = tf.constant([[4, 9, 5, 7]])
+        input_data = tf.constant([[1, 9, 2, 7]])
         output = self.tokenizer.detokenize(input_data)
         self.assertEqual(output, tf.constant(["the quick brown fox"]))
 
-    def test_vocabulary(self):
-        vocabulary = self.tokenizer.get_vocabulary()
-        self.assertAllEqual(
-            vocabulary,
-            [
-                "<s>",
-                "<pad>",
-                "</s>",
-                "<unk>",
-                "▁the",
-                "▁brown",
-                "▁earth",
-                "▁fox",
-                "▁is",
-                "▁quick",
-                "▁round",
-            ],
-        )
-        self.assertEqual(self.tokenizer.vocabulary_size(), 11)
-
-    def test_id_to_token(self):
-        print(self.tokenizer.id_to_token(9))
-        self.assertEqual(self.tokenizer.id_to_token(9), "▁quick")
-        self.assertEqual(self.tokenizer.id_to_token(5), "▁brown")
-
-    def test_token_to_id(self):
-        self.assertEqual(self.tokenizer.token_to_id("▁the"), 4)
-        self.assertEqual(self.tokenizer.token_to_id("▁round"), 10)
+    def test_vocabulary_size(self):
+        tokenizer = FNetTokenizer(proto=self.proto)
+        self.assertEqual(tokenizer.vocabulary_size(), 10)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
