@@ -77,7 +77,7 @@ class TopPSampler(Sampler):
 
     def __init__(
         self,
-        p,
+        p=0.1,
         seed=None,
         jit_compile=True,
         run_eagerly=False,

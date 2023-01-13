@@ -77,7 +77,7 @@ class BeamSampler(Sampler):
 
     def __init__(
         self,
-        num_beams,
+        num_beams=5,
         jit_compile=True,
         run_eagerly=False,
     ):
