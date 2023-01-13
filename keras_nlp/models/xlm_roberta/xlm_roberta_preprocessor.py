@@ -198,7 +198,3 @@ class XLMRobertaPreprocessor(Preprocessor):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(cls, preset, **kwargs):
-        return super().from_preset(preset, **kwargs)

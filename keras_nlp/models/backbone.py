@@ -27,19 +27,6 @@ class Backbone(keras.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def __init_subclass__(cls, **kwargs):
-        # We use the __init_subclass__ hook to properly format the from_preset
-        # docstring on subclasses.
-        if cls.from_preset.__func__.__doc__ is None:
-            cls.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
-            preset_names = list(cls.presets.keys())
-            format_docstring(
-                model_name=cls.__name__,
-                example_preset_name=preset_names[0],
-                preset_names='", "'.join(preset_names),
-            )(cls.from_preset.__func__)
-        super().__init_subclass__(**kwargs)
-
     @classmethod
     def from_config(cls, config):
         return cls(**config)
@@ -101,3 +88,25 @@ class Backbone(keras.Model):
 
         model.load_weights(weights)
         return model
+
+    def __init_subclass__(cls, **kwargs):
+        # Use __init_subclass__ to setup a correct docstring for from_preset.
+        super().__init_subclass__(**kwargs)
+
+        # If the subclass does not define from_preset, assign a wrapper so that
+        # each class can have an distinct docstring.
+        if "from_preset" not in cls.__dict__:
+
+            def from_preset(calling_cls, *args, **kwargs):
+                return super(cls, calling_cls).from_preset(*args, **kwargs)
+
+            cls.from_preset = classmethod(from_preset)
+
+        # Format and assign the docstring unless the subclass has overridden it.
+        if cls.from_preset.__doc__ is None:
+            cls.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
+            format_docstring(
+                model_name=cls.__name__,
+                example_preset_name=next(iter(cls.presets), ""),
+                preset_names='", "'.join(cls.presets),
+            )(cls.from_preset.__func__)

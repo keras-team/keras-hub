@@ -195,7 +195,3 @@ class BertPreprocessor(Preprocessor):
     @classproperty
     def presets(cls):
         return copy.deepcopy({**backbone_presets, **classifier_presets})
-
-    @classmethod
-    def from_preset(cls, preset, **kwargs):
-        return super().from_preset(preset, **kwargs)

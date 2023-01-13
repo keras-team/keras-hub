@@ -88,7 +88,3 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(cls, preset, load_weights=True, **kwargs):
-        return super().from_preset(preset, load_weights, **kwargs)

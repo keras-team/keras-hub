@@ -199,10 +199,6 @@ class RobertaPreprocessor(Preprocessor):
     def presets(cls):
         return copy.deepcopy(backbone_presets)
 
-    @classmethod
-    def from_preset(cls, preset, **kwargs):
-        return super().from_preset(preset, **kwargs)
-
 
 # TODO: This is a temporary, unexported layer until we find a way to make the
 # `MultiSegmentPacker` layer more generic.
