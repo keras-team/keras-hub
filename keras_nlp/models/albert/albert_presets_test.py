@@ -53,7 +53,8 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_backbone_output(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[0, 581, 63773, 2]]),
+            "token_ids": tf.constant([[2, 13, 1, 3]]),
+            "segment_ids": tf.constant([[0, 0, 0, 0]]),
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = AlbertBackbone.from_preset(
@@ -61,8 +62,8 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         )
         outputs = model(input_data)
         if load_weights:
-            outputs = outputs[0, 0, :5]
-            expected = [0.418, -0.116, -0.122, -1.847, -0.035]
+            outputs = outputs["sequence_output"][0, 0, :5]
+            expected = [1.830863, 1.698645, -1.819195, -0.53382, -0.38114]
             self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
 
     @parameterized.named_parameters(
@@ -107,6 +108,9 @@ class AlbertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
+                ),
+                "segment_ids": tf.constant(
+                    [0] * 200 + [1] * 312, shape=(1, 512)
                 ),
                 "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
             }
