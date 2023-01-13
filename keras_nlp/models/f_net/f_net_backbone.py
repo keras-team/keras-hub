@@ -22,11 +22,11 @@ from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.models.backbone import Backbone
 
 
-def fnet_kernel_initializer(stddev=0.02):
+def f_net_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-def fnet_bias_initializer(stddev=0.02):
+def f_net_bias_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
@@ -111,19 +111,19 @@ class FNetBackbone(Backbone):
         token_embedding_layer = keras.layers.Embedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            embeddings_initializer=fnet_kernel_initializer(),
+            embeddings_initializer=f_net_kernel_initializer(),
             name="token_embedding",
         )
         token_embedding = token_embedding_layer(token_id_input)
         position_embedding = PositionEmbedding(
-            initializer=fnet_kernel_initializer(),
+            initializer=f_net_kernel_initializer(),
             sequence_length=max_sequence_length,
             name="position_embedding",
         )(token_embedding)
         segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
             output_dim=hidden_dim,
-            embeddings_initializer=fnet_kernel_initializer(),
+            embeddings_initializer=f_net_kernel_initializer(),
             name="segment_embedding",
         )(segment_id_input)
 
@@ -141,8 +141,8 @@ class FNetBackbone(Backbone):
         # Project the embedding to `hidden_dim`.
         x = keras.layers.Dense(
             hidden_dim,
-            kernel_initializer=fnet_kernel_initializer(),
-            bias_initializer=fnet_bias_initializer(),
+            kernel_initializer=f_net_kernel_initializer(),
+            bias_initializer=f_net_bias_initializer(),
             name="embedding_projection",
         )(x)
         x = keras.layers.Dropout(
@@ -159,9 +159,9 @@ class FNetBackbone(Backbone):
                 ),
                 layer_norm_epsilon=1e-12,
                 dropout=dropout,
-                kernel_initializer=fnet_kernel_initializer(),
-                bias_initializer=fnet_bias_initializer(),
-                name=f"fnet_layer_{i}",
+                kernel_initializer=f_net_kernel_initializer(),
+                bias_initializer=f_net_bias_initializer(),
+                name=f"f_net_layer_{i}",
             )(x)
 
         # Construct the two FNet outputs. The pooled output is a dense layer on
@@ -169,8 +169,8 @@ class FNetBackbone(Backbone):
         sequence_output = x
         pooled_output = keras.layers.Dense(
             hidden_dim,
-            kernel_initializer=fnet_kernel_initializer(),
-            bias_initializer=fnet_bias_initializer(),
+            kernel_initializer=f_net_kernel_initializer(),
+            bias_initializer=f_net_bias_initializer(),
             activation="tanh",
             name="pooled_dense",
         )(x[:, cls_token_index, :])

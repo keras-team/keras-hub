@@ -19,7 +19,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.fnet.fnet_backbone import FNetBackbone
+from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 
 
 class FNetBackboneTest(tf.test.TestCase, parameterized.TestCase):
@@ -46,13 +46,13 @@ class FNetBackboneTest(tf.test.TestCase, parameterized.TestCase):
             self.input_batch
         ).batch(2)
 
-    def test_valid_call_fnet(self):
+    def test_valid_call_f_net(self):
         self.model(self.input_batch)
 
         # Check default name passed through
         self.assertRegexpMatches(self.model.name, "f_net_backbone")
 
-    def test_variable_sequence_length_call_fnet(self):
+    def test_variable_sequence_length_call_f_net(self):
         for seq_length in (25, 50, 75):
             input_data = {
                 "token_ids": tf.ones(
