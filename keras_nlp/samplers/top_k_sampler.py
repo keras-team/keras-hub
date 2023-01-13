@@ -27,17 +27,51 @@ from keras_nlp.utils.python_utils import format_docstring
     base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
 )
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class TopK(Sampler):
+class TopKSampler(Sampler):
     """Top-K Sampler class.
 
-    This sampler implements top-k search algorithm.
+    This sampler implements top-k search algorithm. Briefly top-k algorithm
+    randomly selects a token from the tokens of top K probability, with
+    selection chance determined by the probability.
 
     Args:
-        k: int, the `k` value in top-k.
+        k: int, the `k` value of top-k.
         seed: int, defaults to None. The random seed.
         {{base_sampler_args}}
+
     Call Args:
         {{call_args}}
+
+    Examples:
+    ```python
+    BATCH_SIZE = 8
+    VOCAB_SIZE = 10
+    FEATURE_SIZE = 16
+    START_ID = 1
+
+    # Create a dummy model to predict the next token.
+    model = keras.Sequential(
+        [
+            keras.Input(shape=[None]),
+            keras.layers.Embedding(
+                input_dim=VOCAB_SIZE,
+                output_dim=FEATURE_SIZE,
+            ),
+            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
+        ]
+    )
+
+    # Define a function that outputs the next token's probability for each token
+    # in the input sequence.
+    def token_probability_fn(inputs, mask):
+        return model(inputs)
+
+    prompt = tf.fill((BATCH_SIZE, 1), START_ID)
+
+    sampler = keras_nlp.samplers.TopKSampler(k=5)
+    # Print the generated sequence (token ids).
+    print(sampler(prompt, token_probability_fn, 10))
+    ```
     """
 
     def __init__(
@@ -45,10 +79,11 @@ class TopK(Sampler):
         k,
         seed=None,
         jit_compile=True,
+        run_eagerly=False,
     ):
         self.k = k
         self.seed = seed
-        super().__init__(jit_compile)
+        super().__init__(jit_compile, run_eagerly)
 
     @format_docstring(sample_args=sample_args_docstring)
     def sample(
@@ -68,32 +103,19 @@ class TopK(Sampler):
             pred = tf.gather(
                 probs, tf.repeat(length - 1, batch_size), axis=1, batch_dims=1
             )
-            if self.from_logits:
+            if from_logits:
                 pred = keras.activations.softmax(pred, axis=-1)
-            # Sort preds in descending order.
-            sorted_preds, sorted_indices = tf.math.top_k(
-                pred, k=tf.shape(pred)[1], sorted=True
+            # Filter out top-k tokens.
+            top_k_pred, top_k_indices = tf.math.top_k(
+                pred, k=self.k, sorted=False
             )
-            # Calculate cumulative probability distribution.
-            cumulative_probs = tf.math.cumsum(sorted_preds, axis=-1)
-            # Create a mask for the tokens to keep.
-            keep_mask = cumulative_probs <= self.p
-            # Shift to include the last token that exceed p.
-            shifted_keep_mask = tf.concat(
-                [tf.ones_like(keep_mask[:, :1]), keep_mask[:, :-1]], axis=-1
+            # Sample the next token from the probability distribution.
+            next_token = tf.random.categorical(
+                tf.math.log(top_k_pred), 1, seed=self.seed
             )
-            # Filter out unmasked tokens and sample from filtered distribution.
-            probs = tf.where(
-                shifted_keep_mask,
-                sorted_preds,
-                tf.zeros(tf.shape(pred), dtype=sorted_preds.dtype),
-            )
-            sorted_next_token = tf.random.categorical(
-                tf.math.log(probs), 1, seed=self.seed
-            )
-            next_token = tf.gather_nd(
-                sorted_indices, sorted_next_token, batch_dims=1
-            )
+
+            # Rearrange to get the next token idx from the original order.
+            next_token = tf.gather_nd(top_k_indices, next_token, batch_dims=1)
             next_token = tf.cast(next_token, dtype=prompt.dtype)
             next_token = tf.where(
                 mask[:, length], prompt[:, length], next_token

@@ -20,6 +20,8 @@ from keras_nlp.utils.python_utils import format_docstring
 
 base_sampler_args_docstring = """
     jit_compile: bool, defaults to True. If True, XLA compilation will be used.
+    run_eagerly: bool, defaults to False. If True, the sampler will run in
+        the eager mode.
     """
 
 call_args_docstring = """
@@ -143,8 +145,16 @@ class Sampler:
     def __init__(
         self,
         jit_compile=True,
+        run_eagerly=False,
     ):
+        if run_eagerly and jit_compile:
+            raise ValueError(
+                "XLA cannot be turned on under eager mode, received "
+                "`jit_compile=True` and `run_eagerly=True`. Please either set "
+                "`jit_compile=False` or set `run_eagerly=False`."
+            )
         self.jit_compile = jit_compile
+        self.run_eagerly = run_eagerly
 
     def _validate_prompt_and_mask(self, prompt, mask):
         """Helper method to validate input prompt."""
@@ -231,9 +241,11 @@ class Sampler:
         prompt, mask = self._pad_prompt(prompt, max_length)
         self._validate_token_probability_fn(token_probability_fn, prompt, mask)
 
-        # Convert `sample` method to a `tf.function`, and turn on
-        # `jit_compile` accordingly.
-        sample = tf.function(self.sample, jit_compile=self.jit_compile)
+        # Convert `sample` method to a `tf.function` if `self.run_eagerly=False`
+        # , and turn on `jit_compile` accordingly.
+        sample = self.sample
+        if not self.run_eagerly:
+            sample = tf.function(self.sample, jit_compile=self.jit_compile)
         prompt = sample(
             prompt,
             token_probability_fn,
