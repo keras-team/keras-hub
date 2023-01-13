@@ -82,8 +82,8 @@ backbone_presets = {
             "Extra Large size of ALBERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://drive.google.com/uc?export=download&id=1cFQuP3QdHZ7JIA62fQxG8f9kKnv4CR-D",
-        "weights_hash": "beff185687874df846fda98386fcab29",
+        "weights_url": "https://drive.google.com/uc?export=download&id=1IS6P97tqU31cztKLTp_xps3hBcUdfU32",
+        "weights_hash": "af966fb03961c9dafa3925f962337552",
         "spm_proto_url": "https://drive.google.com/uc?export=download&id=1-0C5mWLPRxNaY3yuzdqut-Wi7VaKo2gX",
         "spm_proto_hash": "73e62ff8e90f951f24c8b907913039a5",
     },
