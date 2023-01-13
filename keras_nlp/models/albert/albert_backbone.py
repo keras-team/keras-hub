@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BERT backbone model."""
-
-import copy
+"""ALBERT backbone model."""
 
 import tensorflow as tf
 from tensorflow import keras
@@ -22,40 +20,48 @@ from tensorflow import keras
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.models.backbone import Backbone
-from keras_nlp.models.bert.bert_presets import backbone_presets
-from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
-def bert_kernel_initializer(stddev=0.02):
+def albert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class BertBackbone(Backbone):
-    """BERT encoder network.
+class AlbertBackbone(Backbone):
+    """ALBERT encoder network.
 
     This class implements a bi-directional Transformer-based encoder as
-    described in ["BERT: Pre-training of Deep Bidirectional Transformers for
-    Language Understanding"](https://arxiv.org/abs/1810.04805). It includes the
-    embedding lookups and transformer layers, but not the masked language model
-    or next sentence prediction heads.
+    described in
+    ["ALBERT: A Lite BERT for Self-supervised Learning of Language Representations"](https://arxiv.org/abs/1909.11942).
+    ALBERT is a more efficient variant of BERT, and uses parameter reduction
+    techniques such as cross-layer parameter sharing and factorized embedding
+    parameterization. This model class includes the embedding lookups and
+    transformer layers, but not the masked language model or sentence order
+    prediction heads.
 
-    The default constructor gives a fully customizable, randomly initialized BERT
-    encoder with any number of layers, heads, and embedding dimensions. To load
-    preset architectures and weights, use the `from_preset` constructor.
+    The default constructor gives a fully customizable, randomly initialized
+    ALBERT encoder with any number of layers, heads, and embedding dimensions.
+    To load preset architectures and weights, use the `from_preset` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
-        num_layers: int. The number of transformer layers.
+        num_layers: int, must be divisible by `num_groups`. The number of
+            "virtual" layers, i.e., the total number of times the input sequence
+            will be fed through the groups in one forward pass. The input will
+            be routed to the correct group based on the layer index.
         num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
+        embedding_dim: int. The size of the embeddings.
         hidden_dim: int. The size of the transformer encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
+        num_groups: int. Number of groups, with each group having
+            `num_inner_repetitions` number of `TransformerEncoder` layers.
+        num_inner_repetitions: int. Number of `TransformerEncoder` layers per
+            group.
         dropout: float. Dropout probability for the Transformer encoder.
         max_sequence_length: int. The maximum sequence length that this encoder
             can consume. If None, `max_sequence_length` uses the value from
@@ -76,15 +82,14 @@ class BertBackbone(Backbone):
         ),
     }
 
-    # Pretrained BERT encoder
-    model = keras_nlp.models.BertBackbone.from_preset("base_base_en_uncased")
-    output = model(input_data)
-
-    # Randomly initialized BERT encoder with a custom config
-    model = keras_nlp.models.BertBackbone(
-        vocabulary_size=30552,
+    # Randomly initialized ALBERT encoder
+    model = keras_nlp.models.AlbertBackbone(
+        vocabulary_size=30000,
         num_layers=12,
         num_heads=12,
+        num_groups=1,
+        num_inner_repetitions=1,
+        embedding_dim=128,
         hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12,
@@ -98,13 +103,22 @@ class BertBackbone(Backbone):
         vocabulary_size,
         num_layers,
         num_heads,
+        embedding_dim,
         hidden_dim,
         intermediate_dim,
-        dropout=0.1,
+        num_groups=1,
+        num_inner_repetitions=1,
+        dropout=0.0,
         max_sequence_length=512,
         num_segments=2,
         **kwargs,
     ):
+
+        if num_layers % num_groups != 0:
+            raise ValueError(
+                "`num_layers` must be divisible by `num_groups`. Received: "
+                f"`num_layers={num_layers}` and `num_groups={num_groups}`."
+            )
 
         # Index of classification token in the vocabulary
         cls_token_index = 0
@@ -122,24 +136,24 @@ class BertBackbone(Backbone):
         # Embed tokens, positions, and segment ids.
         token_embedding_layer = keras.layers.Embedding(
             input_dim=vocabulary_size,
-            output_dim=hidden_dim,
-            embeddings_initializer=bert_kernel_initializer(),
+            output_dim=embedding_dim,
+            embeddings_initializer=albert_kernel_initializer(),
             name="token_embedding",
         )
         token_embedding = token_embedding_layer(token_id_input)
         position_embedding = PositionEmbedding(
-            initializer=bert_kernel_initializer(),
+            initializer=albert_kernel_initializer(),
             sequence_length=max_sequence_length,
             name="position_embedding",
         )(token_embedding)
         segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
-            output_dim=hidden_dim,
-            embeddings_initializer=bert_kernel_initializer(),
+            output_dim=embedding_dim,
+            embeddings_initializer=albert_kernel_initializer(),
             name="segment_embedding",
         )(segment_id_input)
 
-        # Sum, normailze and apply dropout to embeddings.
+        # Sum, normalize and apply dropout to embeddings.
         x = keras.layers.Add()(
             (token_embedding, position_embedding, segment_embedding)
         )
@@ -154,25 +168,55 @@ class BertBackbone(Backbone):
             name="embeddings_dropout",
         )(x)
 
-        # Apply successive transformer encoder blocks.
-        for i in range(num_layers):
-            x = TransformerEncoder(
-                num_heads=num_heads,
-                intermediate_dim=intermediate_dim,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=True
-                ),
-                dropout=dropout,
-                kernel_initializer=bert_kernel_initializer(),
-                name=f"transformer_layer_{i}",
-            )(x, padding_mask=padding_mask)
+        # Project the embedding to `hidden_dim`.
+        x = keras.layers.Dense(
+            hidden_dim,
+            kernel_initializer=albert_kernel_initializer(),
+            name="embedding_projection",
+        )(x)
 
-        # Construct the two BERT outputs. The pooled output is a dense layer on
+        def get_group_layer(group_idx):
+            """Defines a group `num_inner_repetitions` transformer layers and
+            returns the callable.
+            """
+            transformer_layers = [
+                TransformerEncoder(
+                    num_heads=num_heads,
+                    intermediate_dim=intermediate_dim,
+                    activation=lambda x: keras.activations.gelu(
+                        x, approximate=True
+                    ),
+                    dropout=dropout,
+                    kernel_initializer=albert_kernel_initializer(),
+                    name=f"group_{group_idx}_inner_layer_{inner_idx}",
+                )
+                for inner_idx in range(num_inner_repetitions)
+            ]
+
+            def call(x, padding_mask):
+                for transformer_layer in transformer_layers:
+                    x = transformer_layer(x, padding_mask=padding_mask)
+                return x
+
+            return call
+
+        num_calls_per_group = num_layers // num_groups
+        for group_idx in range(num_groups):
+            # Define the group. A group in ALBERT terminology is any number of
+            # repeated attention and FFN blocks.
+            group_layer = get_group_layer(group_idx)
+
+            # Assume num_layers = 8, num_groups = 4. Then, the order of group
+            # calls will be 0, 0, 1, 1, 2, 2, 3, 3.
+            for call in range(num_calls_per_group):
+                x = group_layer(x, padding_mask=padding_mask)
+
+        # Construct the two ALBERT outputs. The pooled output is a dense layer on
         # top of the [CLS] token.
         sequence_output = x
         pooled_output = keras.layers.Dense(
             hidden_dim,
-            kernel_initializer=bert_kernel_initializer(),
+            kernel_initializer=albert_kernel_initializer(),
             activation="tanh",
             name="pooled_dense",
         )(x[:, cls_token_index, :])
@@ -192,42 +236,31 @@ class BertBackbone(Backbone):
         )
         # All references to `self` below this line
         self.vocabulary_size = vocabulary_size
-        self.hidden_dim = hidden_dim
-        self.intermediate_dim = intermediate_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
+        self.num_groups = num_groups
+        self.num_inner_repetitions = num_inner_repetitions
+        self.embedding_dim = embedding_dim
+        self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
+        self.dropout = dropout
         self.max_sequence_length = max_sequence_length
         self.num_segments = num_segments
-        self.dropout = dropout
-        self.token_embedding = token_embedding_layer
         self.cls_token_index = cls_token_index
 
     def get_config(self):
         return {
             "vocabulary_size": self.vocabulary_size,
-            "hidden_dim": self.hidden_dim,
-            "intermediate_dim": self.intermediate_dim,
             "num_layers": self.num_layers,
             "num_heads": self.num_heads,
+            "num_groups": self.num_groups,
+            "num_inner_repetitions": self.num_inner_repetitions,
+            "embedding_dim": self.embedding_dim,
+            "hidden_dim": self.hidden_dim,
+            "intermediate_dim": self.intermediate_dim,
+            "dropout": self.dropout,
             "max_sequence_length": self.max_sequence_length,
             "num_segments": self.num_segments,
-            "dropout": self.dropout,
             "name": self.name,
             "trainable": self.trainable,
         }
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(cls, preset, load_weights=True, **kwargs):
-        return super().from_preset(preset, load_weights, **kwargs)
-
-
-BertBackbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
-format_docstring(
-    model_name=BertBackbone.__name__,
-    example_preset_name="bert_base_en_uncased",
-    preset_names='", "'.join(BertBackbone.presets),
-)(BertBackbone.from_preset.__func__)

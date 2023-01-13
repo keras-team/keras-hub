@@ -21,6 +21,7 @@ from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.bert.bert_presets import classifier_presets
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
+from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
@@ -32,7 +33,7 @@ PRESET_NAMES = ", ".join(list(backbone_presets) + list(classifier_presets))
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class BertPreprocessor(keras.layers.Layer):
+class BertPreprocessor(Preprocessor):
     """A BERT preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
@@ -76,13 +77,8 @@ class BertPreprocessor(keras.layers.Layer):
 
     Examples:
     ```python
-    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
-    vocab += ["The", "qu", "##ick", "br", "##own", "fox", "tripped"]
-    vocab += ["Call", "me", "Ish", "##mael", "."]
-    vocab += ["Oh", "look", "a", "whale"]
-    vocab += ["I", "forgot", "my", "home", "##work"]
-    tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
-    preprocessor = keras_nlp.models.BertPreprocessor(tokenizer)
+    # Load the preprocessor from a preset.
+    preprocessor = keras_nlp.models.BertPreprocessor.from_preset("bert_base_en_uncased")
 
     # Tokenize and pack a single sentence.
     sentence = tf.constant("The quick brown fox jumped.")
@@ -142,6 +138,16 @@ class BertPreprocessor(keras.layers.Layer):
         lambda s1, s2: preprocessor(x=(s1, s2)),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
+
+    # Alternatively, you can create a preprocessor from your own vocabulary.
+    # The usage is exactly the same as shown above.
+    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
+    vocab += ["The", "qu", "##ick", "br", "##own", "fox", "tripped"]
+    vocab += ["Call", "me", "Ish", "##mael", "."]
+    vocab += ["Oh", "look", "a", "whale"]
+    vocab += ["I", "forgot", "my", "home", "##work"]
+    tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
+    preprocessor = keras_nlp.models.BertPreprocessor(tokenizer)
     ```
     """
 
@@ -162,27 +168,15 @@ class BertPreprocessor(keras.layers.Layer):
             sequence_length=sequence_length,
         )
 
-    @property
-    def tokenizer(self):
-        """The `keras_nlp.models.BertTokenizer` used to tokenize strings."""
-        return self._tokenizer
-
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "tokenizer": keras.layers.serialize(self.tokenizer),
                 "sequence_length": self.packer.sequence_length,
                 "truncate": self.packer.truncate,
             }
         )
         return config
-
-    @classmethod
-    def from_config(cls, config):
-        if "tokenizer" in config and isinstance(config["tokenizer"], dict):
-            config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
-        return cls(**config)
 
     def call(self, x, y=None, sample_weight=None):
         x = convert_inputs_to_list_of_tensor_segments(x)
@@ -196,84 +190,21 @@ class BertPreprocessor(keras.layers.Layer):
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty
+    def tokenizer_cls(cls):
+        return BertTokenizer
+
+    @classproperty
     def presets(cls):
         return copy.deepcopy({**backbone_presets, **classifier_presets})
 
     @classmethod
-    @format_docstring(names=PRESET_NAMES)
-    def from_preset(
-        cls,
-        preset,
-        sequence_length=None,
-        truncate="round_robin",
-        **kwargs,
-    ):
-        """Instantiate BERT preprocessor from preset architecture.
+    def from_preset(cls, preset, **kwargs):
+        return super().from_preset(preset, **kwargs)
 
-        Args:
-            preset: string. Must be one of {{names}}.
-            sequence_length: int, optional. The length of the packed inputs.
-                Must be equal to or smaller than the `max_sequence_length` of
-                the preset. If left as default, the `max_sequence_length` of
-                the preset will be used.
-            truncate: string. The algorithm to truncate a list of batched
-                segments to fit within `sequence_length`. The value can be
-                either `round_robin` or `waterfall`:
-                    - `"round_robin"`: Available space is assigned one token at
-                        a time in a round-robin fashion to the inputs that still
-                        need some, until the limit is reached.
-                    - `"waterfall"`: The allocation of the budget is done using
-                        a "waterfall" algorithm that allocates quota in a
-                        left-to-right manner and fills up the buckets until we
-                        run out of budget. It supports an arbitrary number of
-                        segments.
 
-        Examples:
-        ```python
-        # Load preprocessor from preset
-        preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-            "bert_base_en_uncased",
-        )
-        preprocessor("The quick brown fox jumped.")
-
-        # Override sequence_length
-        preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-            "bert_base_en_uncased",
-            sequence_length=64
-        )
-        preprocessor("The quick brown fox jumped.")
-        ```
-        """
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-
-        tokenizer = BertTokenizer.from_preset(preset)
-
-        # Use model's `max_sequence_length` if `sequence_length` unspecified;
-        # otherwise check that `sequence_length` not too long.
-        metadata = cls.presets[preset]
-        if preset in backbone_presets:
-            backbone_config = metadata["config"]
-        else:
-            # For task model presets, the backbone config is nested.
-            backbone_config = metadata["config"]["backbone"]["config"]
-        max_sequence_length = backbone_config["max_sequence_length"]
-        if sequence_length is not None:
-            if sequence_length > max_sequence_length:
-                raise ValueError(
-                    f"`sequence_length` cannot be longer than `{preset}` "
-                    f"preset's `max_sequence_length` of {max_sequence_length}. "
-                    f"Received: {sequence_length}."
-                )
-        else:
-            sequence_length = max_sequence_length
-
-        return cls(
-            tokenizer=tokenizer,
-            sequence_length=sequence_length,
-            truncate=truncate,
-            **kwargs,
-        )
+BertPreprocessor.from_preset.__func__.__doc__ = Preprocessor.from_preset.__doc__
+format_docstring(
+    preprocessor_name=BertPreprocessor.__name__,
+    example_preset_name="bert_base_en_uncased",
+    preset_names='", "'.join(BertPreprocessor.presets),
+)(BertPreprocessor.from_preset.__func__)

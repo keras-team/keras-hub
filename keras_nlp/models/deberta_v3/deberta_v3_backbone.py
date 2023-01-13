@@ -15,11 +15,11 @@
 """DeBERTa backbone model."""
 
 import copy
-import os
 
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.models.deberta_v3.disentangled_attention_encoder import (
     DisentangledAttentionEncoder,
@@ -34,7 +34,7 @@ def deberta_kernel_initializer(stddev=0.02):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class DebertaV3Backbone(keras.Model):
+class DebertaV3Backbone(Backbone):
     """DeBERTa encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -45,7 +45,7 @@ class DebertaV3Backbone(keras.Model):
 
     The default constructor gives a fully customizable, randomly initialized
     DeBERTa encoder with any number of layers, heads, and embedding
-    dimensions. To load preset architectures and weights, use the `from_presets`
+    dimensions. To load preset architectures and weights, use the `from_preset`
     constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
@@ -76,7 +76,13 @@ class DebertaV3Backbone(keras.Model):
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
 
-    # Randomly initialized DeBERTa model
+    # Pretrained DeBERTa encoder
+    model = keras_nlp.models.DebertaV3Backbone.from_preset(
+        "deberta_base_en",
+    )
+    output = model(input_data)
+
+    # Randomly initialized DeBERTa encoder with custom config
     model = keras_nlp.models.DebertaV3Backbone(
         vocabulary_size=128100,
         num_layers=12,
@@ -86,7 +92,6 @@ class DebertaV3Backbone(keras.Model):
         max_sequence_length=512,
         bucket_size=256,
     )
-
     # Call the model on the input data.
     output = model(input_data)
     ```
@@ -194,69 +199,18 @@ class DebertaV3Backbone(keras.Model):
             "trainable": self.trainable,
         }
 
-    @classmethod
-    def from_config(cls, config):
-        return cls(**config)
-
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
 
     @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
-    def from_preset(
-        cls,
-        preset,
-        load_weights=True,
-        **kwargs,
-    ):
-        """Instantiate DeBERTa model from preset architecture and weights.
+    def from_preset(cls, preset, load_weights=True, **kwargs):
+        return super().from_preset(preset, load_weights, **kwargs)
 
-        Args:
-            preset: string. Must be one of {{names}}.
-            load_weights: Whether to load pre-trained weights into model.
-                Defaults to `True`.
 
-        Examples:
-        ```python
-        input_data = {
-            "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
-            "padding_mask": tf.constant(
-                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-            ),
-        }
-
-        # Load architecture and weights from preset
-        model = keras_nlp.models.DebertaV3Backbone.from_preset(
-            "deberta_base_en",
-        )
-        output = model(input_data)
-
-        # Load randomly initialized model from preset architecture
-        model = keras_nlp.models.DebertaV3Backbone.from_preset(
-            "deberta_base_en", load_weights=False
-        )
-        output = model(input_data)
-        ```
-        """
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-        config = metadata["config"]
-        model = cls.from_config({**config, **kwargs})
-
-        if not load_weights:
-            return model
-
-        weights = keras.utils.get_file(
-            "model.h5",
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
-        )
-
-        model.load_weights(weights)
-        return model
+DebertaV3Backbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
+format_docstring(
+    model_name=DebertaV3Backbone.__name__,
+    example_preset_name="deberta_base_en",
+    preset_names='", "'.join(DebertaV3Backbone.presets),
+)(DebertaV3Backbone.from_preset.__func__)

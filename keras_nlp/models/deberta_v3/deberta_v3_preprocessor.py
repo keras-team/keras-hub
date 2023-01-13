@@ -20,6 +20,7 @@ from tensorflow import keras
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
+from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
@@ -29,7 +30,7 @@ from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class DebertaV3Preprocessor(keras.layers.Layer):
+class DebertaV3Preprocessor(Preprocessor):
     """A DeBERTa preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
@@ -73,11 +74,8 @@ class DebertaV3Preprocessor(keras.layers.Layer):
 
     Examples:
     ```python
-    tokenizer = keras_nlp.models.DebertaV3Tokenizer(proto="model.spm")
-    preprocessor = keras_nlp.models.DebertaV3Preprocessor(
-        tokenizer=tokenizer,
-        sequence_length=10,
-    )
+    # Load the preprocessor from a preset.
+    preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset("deberta_v3_base_en")
 
     # Tokenize and pack a single sentence.
     sentence = tf.constant("The quick brown fox jumped.")
@@ -137,6 +135,14 @@ class DebertaV3Preprocessor(keras.layers.Layer):
         lambda s1, s2: preprocessor(x=(s1, s2)),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
+
+    # Alternatively, you can create a preprocessor from your own vocabulary.
+    # The usage is the exactly same as above.
+    tokenizer = keras_nlp.models.DebertaV3Tokenizer(proto="model.spm")
+    preprocessor = keras_nlp.models.DebertaV3Preprocessor(
+        tokenizer=tokenizer,
+        sequence_length=10,
+    )
     ```
     """
 
@@ -157,27 +163,15 @@ class DebertaV3Preprocessor(keras.layers.Layer):
             sequence_length=sequence_length,
         )
 
-    @property
-    def tokenizer(self):
-        """The `keras_nlp.models.DebertaV3Tokenizer` used to tokenize strings."""
-        return self._tokenizer
-
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "tokenizer": keras.layers.serialize(self.tokenizer),
                 "sequence_length": self.packer.sequence_length,
                 "truncate": self.packer.truncate,
             }
         )
         return config
-
-    @classmethod
-    def from_config(cls, config):
-        if "tokenizer" in config and isinstance(config["tokenizer"], dict):
-            config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
-        return cls(**config)
 
     def call(self, x, y=None, sample_weight=None):
         x = convert_inputs_to_list_of_tensor_segments(x)
@@ -190,79 +184,23 @@ class DebertaV3Preprocessor(keras.layers.Layer):
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty
+    def tokenizer_cls(cls):
+        return DebertaV3Tokenizer
+
+    @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
 
     @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
-    def from_preset(
-        cls,
-        preset,
-        sequence_length=None,
-        truncate="round_robin",
-        **kwargs,
-    ):
-        """Instantiate DeBERTa preprocessor from preset architecture.
+    def from_preset(cls, preset, **kwargs):
+        return super().from_preset(preset, **kwargs)
 
-        Args:
-            preset: string. Must be one of {{names}}.
-            sequence_length: int, optional. The length of the packed inputs.
-                Must be equal to or smaller than the `max_sequence_length` of
-                the preset. If left as default, the `max_sequence_length` of
-                the preset will be used.
-            truncate: string. The algorithm to truncate a list of batched
-                segments to fit within `sequence_length`. The value can be
-                either `round_robin` or `waterfall`:
-                    - `"round_robin"`: Available space is assigned one token at
-                        a time in a round-robin fashion to the inputs that still
-                        need some, until the limit is reached.
-                    - `"waterfall"`: The allocation of the budget is done using
-                        a "waterfall" algorithm that allocates quota in a
-                        left-to-right manner and fills up the buckets until we
-                        run out of budget. It supports an arbitrary number of
-                        segments.
 
-        Examples:
-        ```python
-        # Load preprocessor from preset
-        preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset(
-            "deberta_v3_base_en",
-        )
-        preprocessor("The quick brown fox jumped.")
-
-        # Override sequence_length
-        preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset(
-            "deberta_v3_base_en",
-            sequence_length=64
-        )
-        preprocessor("The quick brown fox jumped.")
-        ```
-        """
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-
-        tokenizer = DebertaV3Tokenizer.from_preset(preset)
-
-        # Use model's `max_sequence_length` if `sequence_length` unspecified;
-        # otherwise check that `sequence_length` not too long.
-        metadata = cls.presets[preset]
-        max_sequence_length = metadata["config"]["max_sequence_length"]
-        if sequence_length is not None:
-            if sequence_length > max_sequence_length:
-                raise ValueError(
-                    f"`sequence_length` cannot be longer than `{preset}` "
-                    f"preset's `max_sequence_length` of {max_sequence_length}. "
-                    f"Received: {sequence_length}."
-                )
-        else:
-            sequence_length = max_sequence_length
-
-        return cls(
-            tokenizer=tokenizer,
-            sequence_length=sequence_length,
-            truncate=truncate,
-            **kwargs,
-        )
+DebertaV3Preprocessor.from_preset.__func__.__doc__ = (
+    Preprocessor.from_preset.__doc__
+)
+format_docstring(
+    preprocessor_name=DebertaV3Preprocessor.__name__,
+    example_preset_name="deberta_v3_base_en",
+    preset_names='", "'.join(DebertaV3Preprocessor.presets),
+)(DebertaV3Preprocessor.from_preset.__func__)

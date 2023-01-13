@@ -14,24 +14,30 @@
 """Greedy Sampler."""
 
 import tensorflow as tf
+from tensorflow import keras
 
 from keras_nlp.samplers.sampler import Sampler
-from keras_nlp.samplers.sampler import base_sampler_keyword_args
-from keras_nlp.samplers.sampler import call_keyword_docstring
-from keras_nlp.samplers.sampler import sample_keyword_docstring
+from keras_nlp.samplers.sampler import base_sampler_args_docstring
+from keras_nlp.samplers.sampler import call_args_docstring
+from keras_nlp.samplers.sampler import sample_args_docstring
+from keras_nlp.utils.python_utils import format_docstring
 
 
+@format_docstring(
+    base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
+)
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class GreedySampler(Sampler):
-    """Greedy Sampler class.
+    """Greedy sampler class.
 
     This sampler is implemented on greedy search, i.e., always picking up the
     token of the largest probability as the next token.
 
     Args:
-        {{base_sampler_keyword_args}}
+        {{base_sampler_args}}
 
     Call Args:
-        {{call_keyword_args}}
+        {{call_args}}
 
     Examples:
     ```python
@@ -39,7 +45,6 @@ class GreedySampler(Sampler):
     VOCAB_SIZE = 10
     FEATURE_SIZE = 16
     START_ID = 1
-    END_ID = 2
 
     # Create a dummy model to predict the next token.
     model = keras.Sequential(
@@ -55,30 +60,32 @@ class GreedySampler(Sampler):
 
     # Define a function that outputs the next token's probability for each token
     # in the input sequence.
-    def token_probability_fn(inputs):
+    def token_probability_fn(inputs, mask):
         return model(inputs)
 
     prompt = tf.fill((BATCH_SIZE, 1), START_ID)
 
-    sampler = keras_nlp.samplers.GreedySearch(end_token_id=END_ID)
+    sampler = keras_nlp.samplers.GreedySampler()
     # Print the generated sequence (token ids).
-    print(sampler(token_probability_fn, prompt, max_length=10))
+    print(sampler(prompt, token_probability_fn, 10))
     ```
     """
 
     def __init__(
         self,
-        end_token_id=None,
-        pad_token_id=0,
         jit_compile=True,
+        run_eagerly=False,
     ):
-        super().__init__(end_token_id, pad_token_id, jit_compile)
+        super().__init__(jit_compile, run_eagerly)
 
-    def sample(self, token_probability_fn, prompt, mask, num_steps):
+    @format_docstring(sample_args=sample_args_docstring)
+    def sample(
+        self, prompt, token_probability_fn, mask, num_steps, from_logits=True
+    ):
         """Sampling logic implementation.
 
         Args:
-            {{sample_keyword_docstring}}
+            {{sample_args}}
         """
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         max_length = tf.cast(max_length, num_steps.dtype)
@@ -87,7 +94,6 @@ class GreedySampler(Sampler):
         current_index = max_length - num_steps
 
         def one_step(current_index, prompt, mask):
-
             probs = token_probability_fn(prompt, mask)
             next_token_prob = tf.gather(
                 probs,
@@ -142,14 +148,3 @@ class GreedySampler(Sampler):
             loop_vars=(current_index, prompt, mask),
         )
         return prompt
-
-
-GreedySampler.__doc__ = GreedySampler.__doc__.replace(
-    "{{base_sampler_keyword_args}}", base_sampler_keyword_args
-)
-GreedySampler.__doc__ = GreedySampler.__doc__.replace(
-    "{{call_keyword_docstring}}", call_keyword_docstring
-)
-GreedySampler.sample.__doc__ = GreedySampler.sample.__doc__.replace(
-    "{{sample_keyword_docstring}}", sample_keyword_docstring
-)

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for XLM-RoBERTa preprocessor layer."""
+"""Tests for ALBERT preprocessor layer."""
 
 import io
 import os
@@ -22,15 +22,11 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
-    XLMRobertaPreprocessor,
-)
-from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
-    XLMRobertaTokenizer,
-)
+from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
+from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 
 
-class XLMRobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
@@ -41,14 +37,19 @@ class XLMRobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             model_writer=bytes_io,
             vocab_size=10,
             model_type="WORD",
-            unk_id=0,
-            bos_id=1,
-            eos_id=2,
+            pad_id=0,
+            unk_id=1,
+            bos_id=2,
+            eos_id=3,
+            pad_piece="<pad>",
+            unk_piece="<unk>",
+            bos_piece="[CLS]",
+            eos_piece="[SEP]",
         )
         self.proto = bytes_io.getvalue()
 
-        self.preprocessor = XLMRobertaPreprocessor(
-            tokenizer=XLMRobertaTokenizer(proto=self.proto),
+        self.preprocessor = AlbertPreprocessor(
+            tokenizer=AlbertTokenizer(proto=self.proto),
             sequence_length=12,
         )
 
@@ -56,7 +57,10 @@ class XLMRobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         input_data = "the quick brown fox"
         output = self.preprocessor(input_data)
         self.assertAllEqual(
-            output["token_ids"], [0, 4, 9, 5, 7, 2, 1, 1, 1, 1, 1, 1]
+            output["token_ids"], [2, 4, 9, 5, 7, 3, 0, 0, 0, 0, 0, 0]
+        )
+        self.assertAllEqual(
+            output["segment_ids"], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
             output["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
@@ -67,7 +71,11 @@ class XLMRobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         input_data = ["the quick brown fox"] * 4
         output = self.preprocessor(input_data)
         self.assertAllEqual(
-            output["token_ids"], [[0, 4, 9, 5, 7, 2, 1, 1, 1, 1, 1, 1]] * 4
+            output["token_ids"],
+            [[2, 4, 9, 5, 7, 3, 0, 0, 0, 0, 0, 0]] * 4,
+        )
+        self.assertAllEqual(
+            output["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
             output["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
@@ -79,7 +87,11 @@ class XLMRobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         sw = tf.constant([1.0] * 4)
         x_out, y_out, sw_out = self.preprocessor(x, y, sw)
         self.assertAllEqual(
-            x_out["token_ids"], [[0, 4, 9, 5, 7, 2, 1, 1, 1, 1, 1, 1]] * 4
+            x_out["token_ids"],
+            [[2, 4, 9, 5, 7, 3, 0, 0, 0, 0, 0, 0]] * 4,
+        )
+        self.assertAllEqual(
+            x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
             x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
@@ -95,7 +107,11 @@ class XLMRobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         ds = ds.map(self.preprocessor)
         x_out, y_out, sw_out = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(
-            x_out["token_ids"], [[0, 4, 9, 5, 7, 2, 1, 1, 1, 1, 1, 1]] * 4
+            x_out["token_ids"],
+            [[2, 4, 9, 5, 7, 3, 0, 0, 0, 0, 0, 0]] * 4,
+        )
+        self.assertAllEqual(
+            x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
             x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
@@ -108,10 +124,14 @@ class XLMRobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         sentence_two = tf.constant("the earth")
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
-            output["token_ids"], [0, 4, 9, 5, 7, 2, 2, 4, 6, 2, 1, 1]
+            output["token_ids"],
+            [2, 4, 9, 5, 7, 3, 4, 6, 3, 0, 0, 0],
         )
         self.assertAllEqual(
-            output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]
+            output["segment_ids"], [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0]
+        )
+        self.assertAllEqual(
+            output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]
         )
 
     def test_tokenize_multiple_batched_sentences(self):
@@ -121,10 +141,14 @@ class XLMRobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         # separate sequences to concatenate.
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
-            output["token_ids"], [[0, 4, 9, 5, 7, 2, 2, 4, 6, 2, 1, 1]] * 4
+            output["token_ids"],
+            [[2, 4, 9, 5, 7, 3, 4, 6, 3, 0, 0, 0]] * 4,
         )
         self.assertAllEqual(
-            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 4
+            output["segment_ids"], [[0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0]] * 4
+        )
+        self.assertAllEqual(
+            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]] * 4
         )
 
     def test_errors_for_2d_list_input(self):
