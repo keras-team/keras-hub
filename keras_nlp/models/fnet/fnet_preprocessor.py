@@ -34,9 +34,8 @@ class FNetPreprocessor(Preprocessor):
      - Tokenize any number of input segments using the `tokenizer`.
      - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
        with the appropriate `"[CLS]"`, `"[SEP]"` and `"<pad>"` tokens.
-     - Construct a dictionary with keys `"token_ids"`, `"segment_ids"` and
-       `"padding_mask"`, that can be passed directly to
-       `keras_nlp.models.FNetBackbone`.
+     - Construct a dictionary with keys `"token_ids"`, and `"segment_ids"`  that
+       can be passed directly to `keras_nlp.models.FNetBackbone`.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
