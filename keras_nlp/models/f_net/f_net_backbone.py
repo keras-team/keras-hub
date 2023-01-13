@@ -43,7 +43,7 @@ class FNetBackbone(Backbone):
     encoder with any number of layers and embedding dimensions. To load
     preset architectures and weights, use the `from_preset` constructor.
 
-    Note: unlike other models, FNet does not take in a `padding_mask` input,
+    Note: unlike other models, FNet does not take in a `"padding_mask"` input,
     the `"<pad>"` token is handled equivalently to all other tokens in the input
     sequence.
 
