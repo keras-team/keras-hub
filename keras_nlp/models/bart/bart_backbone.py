@@ -137,7 +137,7 @@ class BartBackbone(Backbone):
         # Decoder
 
         # Embed tokens and positions.
-        x = token_embedding_layer(encoder_token_id_input)
+        x = token_embedding_layer(decoder_token_id_input)
         x = PositionEmbedding(
             initializer=bart_kernel_initializer(),
             sequence_length=max_sequence_length,
