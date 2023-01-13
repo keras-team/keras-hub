@@ -28,7 +28,7 @@ def bart_kernel_initializer(stddev=0.02):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class BertBackbone(Backbone):
+class BartBackbone(Backbone):
     """BART encoder-decoder network.
 
     This class implements a Transformer-based encoder-decoder model as
@@ -68,7 +68,7 @@ class BertBackbone(Backbone):
         hidden_dim,
         intermediate_dim,
         dropout=0.1,
-        max_sequence_length=512,
+        max_sequence_length=1024,
         **kwargs,
     ):
 

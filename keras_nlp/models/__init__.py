@@ -43,3 +43,4 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
 from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
 )
+from keras_nlp.models.bart.bart_backbone import BartBackbone
