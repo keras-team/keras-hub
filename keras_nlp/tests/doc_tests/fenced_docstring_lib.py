@@ -15,7 +15,7 @@ import ast
 import doctest
 import re
 import textwrap
-from typing import Iterable
+from typing import List
 
 import astor
 
@@ -92,13 +92,8 @@ class FencedCellParser(doctest.DocTestParser):
 
     def get_examples(
         self, string: str, name: str = "<string>"
-    ) -> Iterable[doctest.Example]:
-        # Check for a file-level skip comment.
-        if re.search(
-            "<!--.*?doctest.*?skip.*?all.*?-->", string, re.IGNORECASE
-        ):
-            return
-
+    ) -> List[doctest.Example]:
+        tests = []
         for match in self.fence_cell_re.finditer(string):
             if re.search("doctest.*skip", match.group(0), re.IGNORECASE):
                 continue
@@ -110,11 +105,14 @@ class FencedCellParser(doctest.DocTestParser):
             if want is not None:
                 want = textwrap.dedent(want)
 
-            yield doctest.Example(
-                lineno=string[: match.start()].count("\n") + 1,
-                source=source,
-                want=want,
+            tests.append(
+                doctest.Example(
+                    lineno=string[: match.start()].count("\n") + 1,
+                    source=source,
+                    want=want,
+                )
             )
+        return tests
 
 
 def _print_if_not_none(obj):

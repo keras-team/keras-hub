@@ -15,12 +15,10 @@
 import doctest
 import io
 import os
-import re
 import sys
 import unittest
 
 import numpy as np
-import pytest
 import sentencepiece
 import tensorflow as tf
 from tensorflow import keras
@@ -42,21 +40,6 @@ def find_modules():
     return keras_nlp_modules
 
 
-def find_files(regex_pattern=None):
-    py_files = []
-    for root, dirs, files in os.walk(DIRECTORY):
-        for file in files:
-            file = os.path.join(root, file)
-            if file.endswith(".py"):
-                if regex_pattern is not None and regex_pattern.search(file):
-                    continue
-                py_files.append(file)
-    return py_files
-
-
-@pytest.mark.skipif(
-    sys.platform == "win32", reason="Numpy prints differently on windows"
-)
 def test_docstrings():
     keras_nlp_modules = find_modules()
     # As of this writing, it doesn't seem like pytest support load_tests
@@ -96,56 +79,50 @@ def test_docstrings():
     assert result.wasSuccessful()
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32", reason="Numpy prints differently on windows"
-)
 def test_fenced_docstrings():
-
-    regex_pattern = re.compile(
-        r"|".join(
-            [
-                # Endswith patterns
-                "test\\.py$",
-                "__init__\\.py$",
-                # Whole string matching
-                "^keras_nlp/models/backbone\\.py$",
-                "^keras_nlp/models/preprocessor\\.py$",
-                "^keras_nlp/models/task\\.py$",
-                # Unexported symbols
-                "deberta_v3",
-                "gpt2",
-            ]
-        )
-    )
-    keras_nlp_files = find_files(regex_pattern=regex_pattern)
+    keras_nlp_modules = find_modules()
+    # As of this writing, it doesn't seem like pytest support load_tests
+    # protocol for unittest:
+    #     https://docs.pytest.org/en/7.1.x/how-to/unittest.html
+    # So we run the unittest.TestSuite manually and report the results back.
     runner = unittest.TextTestRunner()
     suite = unittest.TestSuite()
-
-    suite.addTest(
-        doctest.DocFileSuite(
-            *keras_nlp_files,
-            module_relative=False,
-            parser=fenced_docstring_lib.FencedCellParser(fence_label="python"),
-            globs={
-                "_print_if_not_none": fenced_docstring_lib._print_if_not_none,
-                "tf": tf,
-                "np": np,
-                "os": os,
-                "keras": keras,
-                "keras_nlp": keras_nlp,
-                "io": io,
-                "sentencepiece": sentencepiece,
-            },
-            checker=fenced_docstring_lib.FencedCellOutputChecker(),
-            optionflags=(
-                doctest.ELLIPSIS
-                | doctest.NORMALIZE_WHITESPACE
-                | doctest.IGNORE_EXCEPTION_DETAIL
-                | doctest.DONT_ACCEPT_BLANKLINE
-            ),
+    for module in keras_nlp_modules:
+        # Temporarily stop testing gpt2 & deberta docstrings until we are
+        # exporting the symbols.
+        if "gpt2" in module.__name__ or "deberta_v3" in module.__name__:
+            continue
+        print(module)
+        suite.addTest(
+            doctest.DocTestSuite(
+                module,
+                test_finder=doctest.DocTestFinder(
+                    exclude_empty=False,
+                    parser=fenced_docstring_lib.FencedCellParser(
+                        fence_label="python"
+                    ),
+                ),
+                globs={
+                    "_print_if_not_none": fenced_docstring_lib._print_if_not_none
+                },
+                extraglobs={
+                    "tf": tf,
+                    "np": np,
+                    "os": os,
+                    "keras": keras,
+                    "keras_nlp": keras_nlp,
+                    "io": io,
+                    "sentencepiece": sentencepiece,
+                },
+                checker=fenced_docstring_lib.FencedCellOutputChecker(),
+                optionflags=(
+                    doctest.ELLIPSIS
+                    | doctest.NORMALIZE_WHITESPACE
+                    | doctest.IGNORE_EXCEPTION_DETAIL
+                    | doctest.DONT_ACCEPT_BLANKLINE
+                ),
+            )
         )
-    )
-
     result = runner.run(suite)
     if not result.wasSuccessful():
         print(result)
