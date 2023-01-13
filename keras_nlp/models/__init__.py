@@ -31,7 +31,9 @@ from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
 )
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm import GPT2CausalLM
-from keras_nlp.models.gpt2.gpt2_preprocessor import GPT2CausalLMPreprocessor
+from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
+    GPT2CausalLMPreprocessor,
+)
 from keras_nlp.models.gpt2.gpt2_preprocessor import GPT2Preprocessor
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone

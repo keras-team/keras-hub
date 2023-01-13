@@ -18,13 +18,12 @@ import copy
 import tensorflow as tf
 from tensorflow import keras
 
+import keras_nlp
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
-from keras_nlp.models.gpt2.gpt2_preprocessor import GPT2CausalLMPreprocessor
+from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
+    GPT2CausalLMPreprocessor,
+)
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
-from keras_nlp.samplers.beam_sampler import BeamSampler
-from keras_nlp.samplers.greedy_sampler import GreedySampler
-from keras_nlp.samplers.top_k_sampler import TopKSampler
-from keras_nlp.samplers.top_p_sampler import TopPSampler
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 
@@ -84,15 +83,6 @@ class GPT2CausalLM(PipelineModel):
                 f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
 
-    def _get_generator(self, identifier):
-        maps = {
-            "greedy": GreedySampler(),
-            "top_k": TopKSampler(k=5, from_logits=False),
-            "top_p": TopPSampler(p=0.1, from_logits=False),
-            "beam": BeamSampler(num_beams=5),
-        }
-        return maps[identifier]
-
     def _get_token_probability(self, prompt, mask):
         model_inputs = {
             "token_ids": prompt,
@@ -104,7 +94,7 @@ class GPT2CausalLM(PipelineModel):
     def generate(self, prompt, max_length, generator="top_k"):
         """Pick one method as the default generation algo."""
         if isinstance(generator, str):
-            generator = self._get_generator(generator)
+            generator = keras_nlp.samplers.get(generator)
         prompt = self.preprocessor.tokenizer(prompt)
-        generated = generator(self._get_token_probability, prompt, max_length)
+        generated = generator(prompt, self._get_token_probability, max_length)
         return self.preprocessor.tokenizer.detokenize(generated)
