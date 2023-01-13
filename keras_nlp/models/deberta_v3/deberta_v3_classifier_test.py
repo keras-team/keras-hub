@@ -28,9 +28,7 @@ from keras_nlp.models.deberta_v3.deberta_v3_classifier import (
 from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
     DebertaV3Preprocessor,
 )
-from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
-    DebertaV3Tokenizer,
-)
+from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 
 
 class DebertaV3ClassifierTest(tf.test.TestCase, parameterized.TestCase):

@@ -21,7 +21,7 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
-from keras_nlp.models.roberta.roberta_preprocessor import RobertaTokenizer
+from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 
 
 class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
