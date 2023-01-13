@@ -83,20 +83,3 @@ class GPT2Preprocessor(keras.layers.Layer):
             sequence_length=sequence_length,
             **kwargs,
         )
-
-
-class GPT2CausalLMPreprocessor(GPT2Preprocessor):
-    def call(self, x, y=None, sample_weight=None):
-        token_ids = self.tokenizer(x)
-        mask = tf.ones_like(token_ids, dtype=tf.bool)
-        mask = mask.to_tensor(shape=(None, self.sequence_length))
-        token_ids = token_ids.to_tensor(shape=(None, self.sequence_length))
-        x = {
-            "token_ids": token_ids[:, :-1],
-            "padding_mask": mask[:, 1:],
-        }
-
-        y = token_ids[:, 1:]
-        sample_weight = mask[:, 1:]
-
-        return pack_x_y_sample_weight(x, y, sample_weight)
