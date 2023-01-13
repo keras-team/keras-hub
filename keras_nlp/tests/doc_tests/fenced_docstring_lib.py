@@ -19,21 +19,6 @@ from typing import List
 
 import astor
 
-from keras_nlp.tests.doc_tests.docstring_lib import DoctestOutputChecker
-
-
-class FencedCellOutputChecker(DoctestOutputChecker):
-    """DoctestOutputChecker with a different warning message."""
-
-    MESSAGE = textwrap.dedent(
-        """\n
-        ##############################################################
-        # Check the documentation (go/g3doctest) on how to write
-        # testable g3docs.
-        ##############################################################
-        """
-    )
-
 
 class FencedCellParser(doctest.DocTestParser):
     """Implements test parsing for ``` fenced cells.

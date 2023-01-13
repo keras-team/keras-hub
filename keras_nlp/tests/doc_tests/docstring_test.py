@@ -19,6 +19,7 @@ import sys
 import unittest
 
 import numpy as np
+import pytest
 import sentencepiece
 import tensorflow as tf
 from tensorflow import keras
@@ -79,12 +80,15 @@ def test_docstrings():
     assert result.wasSuccessful()
 
 
+@pytest.mark.extra_large
 def test_fenced_docstrings():
+    """Tests fenced code blocks in docstrings.
+
+    This can only be run manually. Run with:
+    `pytest keras_nlp/tests/doc_tests/docstring_test.py --run_extra_large`
+    """
     keras_nlp_modules = find_modules()
-    # As of this writing, it doesn't seem like pytest support load_tests
-    # protocol for unittest:
-    #     https://docs.pytest.org/en/7.1.x/how-to/unittest.html
-    # So we run the unittest.TestSuite manually and report the results back.
+
     runner = unittest.TextTestRunner()
     suite = unittest.TestSuite()
     for module in keras_nlp_modules:
@@ -92,8 +96,16 @@ def test_fenced_docstrings():
         # exporting the symbols.
         if "gpt2" in module.__name__ or "deberta_v3" in module.__name__:
             continue
-        # Do not test for base classes like `Backbone`, `Preprocessor`, etc.
-        if module.__name__ in ["keras_nlp.models.backbone"]:
+        # Do not test certain modules.
+        if module.__name__ in [
+            # Base classes.
+            "keras_nlp.models.backbone",
+            "keras_nlp.models.preprocessor",
+            # Preprocessors and tokenizers which use `model.spm`.
+            "keras_nlp.models.albert.albert_preprocessor",
+            "keras_nlp.models.albert.albert_tokenizer",
+            "keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor",
+        ]:
             continue
 
         suite.addTest(
@@ -117,7 +129,7 @@ def test_fenced_docstrings():
                     "io": io,
                     "sentencepiece": sentencepiece,
                 },
-                checker=fenced_docstring_lib.FencedCellOutputChecker(),
+                checker=docstring_lib.DoctestOutputChecker(),
                 optionflags=(
                     doctest.ELLIPSIS
                     | doctest.NORMALIZE_WHITESPACE
