@@ -15,6 +15,7 @@
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
+from keras_nlp.models.bart.bart_backbone import BartBackbone
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_classifier import BertClassifier
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
@@ -43,4 +44,3 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
 from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
 )
-from keras_nlp.models.bart.bart_backbone import BartBackbone
