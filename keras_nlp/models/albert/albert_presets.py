@@ -34,9 +34,9 @@ backbone_presets = {
             "Base size of ALBERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/albert_base_en_uncased/v1/model.h5",
+        "weights_url": "https://drive.google.com/uc?export=download&id=1RzTTa8nMcBc84nARvJmHal5SndpKbDUa",
         "weights_hash": "b83ccf3418dd84adc569324183176813",
-        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/albert_base_en_uncased/v1/vocab.spm",
+        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1-0C5mWLPRxNaY3yuzdqut-Wi7VaKo2gX",
         "spm_proto_hash": "73e62ff8e90f951f24c8b907913039a5",
     },
     "albert_large_en_uncased": {
@@ -58,9 +58,9 @@ backbone_presets = {
             "Large size of ALBERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/albert_large_en_uncased/v1/model.h5",
+        "weights_url": "https://drive.google.com/uc?export=download&id=1PfMgFPNIb4K9hiLx1Ik5Qcgol_3pOsLE",
         "weights_hash": "c7754804efb245f06dd6e7ced32e082c",
-        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/albert_large_en_uncased/v1/vocab.spm",
+        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1-0C5mWLPRxNaY3yuzdqut-Wi7VaKo2gX",
         "spm_proto_hash": "73e62ff8e90f951f24c8b907913039a5",
     },
     "albert_extra_large_en_uncased": {
@@ -82,9 +82,9 @@ backbone_presets = {
             "Extra Large size of ALBERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/albert_extra_large_en_uncased/v1/model.h5",
+        "weights_url": "https://drive.google.com/uc?export=download&id=1cFQuP3QdHZ7JIA62fQxG8f9kKnv4CR-D",
         "weights_hash": "beff185687874df846fda98386fcab29",
-        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/albert_extra_large_en_uncased/v1/vocab.spm",
+        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1-0C5mWLPRxNaY3yuzdqut-Wi7VaKo2gX",
         "spm_proto_hash": "73e62ff8e90f951f24c8b907913039a5",
     },
     "albert_extra_extra_large_en_uncased": {
@@ -106,9 +106,9 @@ backbone_presets = {
             "Extra Extra Large size of ALBERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/albert_extra_extra_large_en_uncased/v1/model.h5",
+        "weights_url": "https://drive.google.com/uc?export=download&id=1NcmanywBpby6n1uolJw2G4QPp_V0fHlx",
         "weights_hash": "5d44017f3a68b2a7e6f755c1070ad3ed",
-        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/albert_extra_extra_large_en_uncased/v1/vocab.spm",
+        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1-0C5mWLPRxNaY3yuzdqut-Wi7VaKo2gX",
         "spm_proto_hash": "73e62ff8e90f951f24c8b907913039a5",
     },
 }

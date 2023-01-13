@@ -36,7 +36,7 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "albert_base_en_uncased",
         )
         outputs = tokenizer("The quick brown fox.")
-        expected_outputs = [279, 1538, 3258, 16123, 260]
+        expected_outputs = [13, 1, 438, 2231, 886, 2385, 9]
         self.assertAllEqual(outputs, expected_outputs)
 
     def test_preprocessor_output(self):
@@ -45,7 +45,7 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             sequence_length=4,
         )
         outputs = preprocessor("The quick brown fox.")["token_ids"]
-        expected_outputs = [1, 279, 1538, 2]
+        expected_outputs = [2, 13, 1, 3]
         self.assertAllEqual(outputs, expected_outputs)
 
     @parameterized.named_parameters(
