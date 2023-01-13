@@ -76,7 +76,7 @@ class TopKSampler(Sampler):
 
     def __init__(
         self,
-        k,
+        k=5,
         seed=None,
         jit_compile=True,
         run_eagerly=False,
