@@ -49,6 +49,7 @@ class Backbone(keras.Model):
                 Defaults to `True`.
 
         Examples:
+        doctest.skip
         ```python
         # Load architecture and weights from preset
         model = keras_nlp.models.{{model_name}}.from_preset(

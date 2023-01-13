@@ -92,7 +92,10 @@ def test_fenced_docstrings():
         # exporting the symbols.
         if "gpt2" in module.__name__ or "deberta_v3" in module.__name__:
             continue
-        print(module)
+        # Do not test for base classes like `Backbone`, `Preprocessor`, etc.
+        if module.__name__ in ["keras_nlp.models.backbone"]:
+            continue
+
         suite.addTest(
             doctest.DocTestSuite(
                 module,
