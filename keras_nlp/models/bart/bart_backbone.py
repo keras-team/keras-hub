@@ -164,6 +164,7 @@ class BartBackbone(Backbone):
                 layer_norm_epsilon=1e-5,
                 kernel_initializer=bart_kernel_initializer(),
                 name=f"transformer_decoder_layer_{i}",
+                has_cross_attention=True,
             )
             x = transformer_decoder_layer(
                 decoder_sequence=x,
@@ -183,8 +184,8 @@ class BartBackbone(Backbone):
                 "decoder_padding_mask": decoder_padding_mask,
             },
             outputs={
-                "encoder_output": encoder_output,
-                "decoder_output": decoder_output,
+                "encoder_sequence_output": encoder_output,
+                "decoder_sequence_output": decoder_output,
             },
             **kwargs,
         )
