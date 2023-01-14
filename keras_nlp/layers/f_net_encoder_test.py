@@ -19,12 +19,12 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.layers import fnet_encoder
+from keras_nlp.layers import f_net_encoder
 
 
 class FNetEncoderTest(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call(self):
-        encoder = fnet_encoder.FNetEncoder(intermediate_dim=4)
+        encoder = f_net_encoder.FNetEncoder(intermediate_dim=4)
         model = keras.Sequential(
             [
                 keras.Input(shape=(4, 6)),
@@ -35,7 +35,7 @@ class FNetEncoderTest(tf.test.TestCase, parameterized.TestCase):
         model(input)
 
     def test_get_config_and_from_config(self):
-        encoder = fnet_encoder.FNetEncoder(
+        encoder = f_net_encoder.FNetEncoder(
             intermediate_dim=4,
             kernel_initializer="HeNormal",
             bias_initializer="Zeros",
@@ -55,7 +55,7 @@ class FNetEncoderTest(tf.test.TestCase, parameterized.TestCase):
         }
         self.assertEqual(config, {**config, **expected_config_subset})
 
-        restored_encoder = fnet_encoder.FNetEncoder.from_config(
+        restored_encoder = f_net_encoder.FNetEncoder.from_config(
             config,
         )
         self.assertEqual(
@@ -64,14 +64,14 @@ class FNetEncoderTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_value_error_when_invalid_kernel_initializer(self):
         with self.assertRaises(ValueError):
-            fnet_encoder.FNetEncoder(
+            f_net_encoder.FNetEncoder(
                 intermediate_dim=4,
                 dropout=0.5,
                 kernel_initializer="Invalid",
             )
 
-    def test_one_training_step_of_fnet_encoder(self):
-        encoder = fnet_encoder.FNetEncoder(intermediate_dim=4)
+    def test_one_training_step_of_f_net_encoder(self):
+        encoder = f_net_encoder.FNetEncoder(intermediate_dim=4)
         inputs = keras.Input(shape=(4, 6))
         x = encoder(inputs)
         x = keras.layers.Dense(1, activation="sigmoid")(x)
@@ -89,12 +89,12 @@ class FNetEncoderTest(tf.test.TestCase, parameterized.TestCase):
         self.assertGreater(len(grad), 1)
         optimizer.apply_gradients(zip(grad, model.trainable_variables))
 
-    def test_checkpointing_fnet_encoder(self):
-        encoder1 = fnet_encoder.FNetEncoder(
+    def test_checkpointing_f_net_encoder(self):
+        encoder1 = f_net_encoder.FNetEncoder(
             intermediate_dim=4,
         )
 
-        encoder2 = fnet_encoder.FNetEncoder(
+        encoder2 = f_net_encoder.FNetEncoder(
             intermediate_dim=4,
         )
         data = tf.random.uniform(shape=[2, 4, 6])
@@ -125,7 +125,7 @@ class FNetEncoderTest(tf.test.TestCase, parameterized.TestCase):
         model = keras.Sequential(
             [
                 keras.Input(shape=(4, 6)),
-                fnet_encoder.FNetEncoder(
+                f_net_encoder.FNetEncoder(
                     intermediate_dim=4,
                 ),
             ]
