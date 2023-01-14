@@ -58,6 +58,34 @@ class BartBackbone(Backbone):
             can consume. If None, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
+
+    Examples:
+    ```python
+    input_data = {
+        "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
+        "segment_ids": tf.constant(
+            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+        ),
+        "padding_mask": tf.constant(
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+        ),
+    }
+
+    # Pretrained BART encoder-decoder model
+    model = keras_nlp.models.BartBackbone.from_preset("base_base_en_uncased")
+    output = model(input_data)
+
+    # Randomly initialized BART encoder-decoder model with a custom config
+    model = keras_nlp.models.BartBackbone(
+        vocabulary_size=30552,
+        num_layers=12,
+        num_heads=12,
+        hidden_dim=768,
+        intermediate_dim=3072,
+        max_sequence_length=12,
+    )
+    output = model(input_data)
+    ```
     """
 
     def __init__(
@@ -125,7 +153,7 @@ class BartBackbone(Backbone):
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
                 activation=lambda x: keras.activations.gelu(
-                    x, approximate=True
+                    x, approximate=False
                 ),
                 layer_norm_epsilon=1e-5,
                 dropout=dropout,
@@ -165,7 +193,7 @@ class BartBackbone(Backbone):
                 num_heads=num_heads,
                 dropout=dropout,
                 activation=lambda x: keras.activations.gelu(
-                    x, approximate=True
+                    x, approximate=False
                 ),
                 layer_norm_epsilon=1e-5,
                 kernel_initializer=bart_kernel_initializer(),
