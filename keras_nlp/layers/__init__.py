@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.layers.fnet_encoder import FNetEncoder
+from keras_nlp.layers.f_net_encoder import FNetEncoder
 from keras_nlp.layers.masked_lm_head import MaskedLMHead
 from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
