@@ -13,9 +13,12 @@
 # limitations under the License.
 """FNet preprocessor layer."""
 
+import copy
+
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
+from keras_nlp.models.f_net.f_net_presets import backbone_presets
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
@@ -23,6 +26,7 @@ from keras_nlp.utils.keras_utils import (
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -177,3 +181,19 @@ class FNetPreprocessor(Preprocessor):
     @classproperty
     def tokenizer_cls(cls):
         return FNetTokenizer
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
+
+    @classmethod
+    def from_preset(cls, preset, **kwargs):
+        return super().from_preset(preset, **kwargs)
+
+
+FNetPreprocessor.from_preset.__func__.__doc__ = Preprocessor.from_preset.__doc__
+format_docstring(
+    preprocessor_name=FNetPreprocessor.__name__,
+    example_preset_name="f_net_base_en",
+    preset_names='", "'.join(FNetPreprocessor.presets),
+)(FNetPreprocessor.from_preset.__func__)
