@@ -36,7 +36,7 @@ backbone_presets = {
         ),
         "weights_url": "https://drive.google.com/uc?export=download&id=1RzTTa8nMcBc84nARvJmHal5SndpKbDUa",
         "weights_hash": "b83ccf3418dd84adc569324183176813",
-        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1-0C5mWLPRxNaY3yuzdqut-Wi7VaKo2gX",
+        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1AMSRktn0cEUmHUWZNOUsts1Mlw-R74Qu",
         "spm_proto_hash": "73e62ff8e90f951f24c8b907913039a5",
     },
     "albert_large_en_uncased": {
@@ -60,7 +60,7 @@ backbone_presets = {
         ),
         "weights_url": "https://drive.google.com/uc?export=download&id=1PfMgFPNIb4K9hiLx1Ik5Qcgol_3pOsLE",
         "weights_hash": "c7754804efb245f06dd6e7ced32e082c",
-        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1-0C5mWLPRxNaY3yuzdqut-Wi7VaKo2gX",
+        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1AMSRktn0cEUmHUWZNOUsts1Mlw-R74Qu",
         "spm_proto_hash": "73e62ff8e90f951f24c8b907913039a5",
     },
     "albert_extra_large_en_uncased": {
@@ -82,9 +82,9 @@ backbone_presets = {
             "Extra Large size of ALBERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://drive.google.com/uc?export=download&id=1IS6P97tqU31cztKLTp_xps3hBcUdfU32",
-        "weights_hash": "af966fb03961c9dafa3925f962337552",
-        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1-0C5mWLPRxNaY3yuzdqut-Wi7VaKo2gX",
+        "weights_url": "https://drive.google.com/uc?export=download&id=1Zg2q2LmR0MXKygDLvtzk93GiIT0IYmDS",
+        "weights_hash": "713209be8aadfa614fd79f18c9aeb16d",
+        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1AMSRktn0cEUmHUWZNOUsts1Mlw-R74Qu",
         "spm_proto_hash": "73e62ff8e90f951f24c8b907913039a5",
     },
     "albert_extra_extra_large_en_uncased": {
@@ -103,12 +103,12 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "description": (
-            "Extra Extra Large size of ALBERT where all input is lowercased. "
+            "Extra Large size of ALBERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "weights_url": "https://drive.google.com/uc?export=download&id=1NcmanywBpby6n1uolJw2G4QPp_V0fHlx",
-        "weights_hash": "5d44017f3a68b2a7e6f755c1070ad3ed",
-        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1-0C5mWLPRxNaY3yuzdqut-Wi7VaKo2gX",
+        "weights_url": "https://drive.google.com/uc?export=download&id=1OGfi1ObzLIgCR9yYd2mWZa3UK_etvYwQ",
+        "weights_hash": "a835177b692fb6a82139f94c66db2f22",
+        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1AMSRktn0cEUmHUWZNOUsts1Mlw-R74Qu",
         "spm_proto_hash": "73e62ff8e90f951f24c8b907913039a5",
     },
 }
