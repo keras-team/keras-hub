@@ -28,6 +28,11 @@ import keras_nlp
 from keras_nlp.tests.doc_tests import docstring_lib
 from keras_nlp.tests.doc_tests import fenced_docstring_lib
 
+try:
+    import astor
+except:
+    astor = None
+
 PACKAGE = "keras_nlp."
 DIRECTORY = "keras_nlp"
 
@@ -81,6 +86,13 @@ def test_docstrings():
 
 
 @pytest.mark.extra_large
+@pytest.mark.skipif(
+    astor is None,
+    reason=(
+        "`test_fenced_docstrings` requires `astor`. Please run "
+        "`pip install astor`."
+    ),
+)
 def test_fenced_docstrings():
     """Tests fenced code blocks in docstrings.
 
