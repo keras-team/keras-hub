@@ -147,8 +147,6 @@ class BartBackbone(Backbone):
 
         # Sum, normalize and apply dropout to embeddings.
         x = keras.layers.Add()((token_embedding, position_embedding))
-
-        # Normalize and apply dropout to embeddings.
         x = keras.layers.LayerNormalization(
             name="decoder_embeddings_layer_norm",
             axis=-1,
