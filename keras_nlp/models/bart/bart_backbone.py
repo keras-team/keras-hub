@@ -99,14 +99,15 @@ class BartBackbone(Backbone):
         # Encoder
 
         # Embed tokens and positions.
-        x = token_embedding_layer(encoder_token_id_input)
-        x = PositionEmbedding(
+        token_embedding = token_embedding_layer(encoder_token_id_input)
+        position_embedding = PositionEmbedding(
             initializer=bart_kernel_initializer(),
             sequence_length=max_sequence_length,
             name="encoder_position_embedding",
-        )(x)
+        )(token_embedding)
 
-        # Normalize and apply dropout to embeddings.
+        # Sum, normalize and apply dropout to embeddings.
+        x = keras.layers.Add()((token_embedding, position_embedding))
         x = keras.layers.LayerNormalization(
             name="encoder_embeddings_layer_norm",
             axis=-1,
@@ -137,12 +138,15 @@ class BartBackbone(Backbone):
         # Decoder
 
         # Embed tokens and positions.
-        x = token_embedding_layer(decoder_token_id_input)
-        x = PositionEmbedding(
+        token_embedding = token_embedding_layer(decoder_token_id_input)
+        position_embedding = PositionEmbedding(
             initializer=bart_kernel_initializer(),
             sequence_length=max_sequence_length,
             name="decoder_position_embedding",
-        )(x)
+        )(token_embedding)
+
+        # Sum, normalize and apply dropout to embeddings.
+        x = keras.layers.Add()((token_embedding, position_embedding))
 
         # Normalize and apply dropout to embeddings.
         x = keras.layers.LayerNormalization(
