@@ -25,9 +25,11 @@ import tensorflow as tf
 from tensorflow import keras
 
 import keras_nlp
-from keras_nlp.tests.doc_tests import astor  # For checking conditional import.
 from keras_nlp.tests.doc_tests import docstring_lib
 from keras_nlp.tests.doc_tests import fenced_docstring_lib
+from keras_nlp.tests.doc_tests.fenced_docstring_lib import (
+    astor,  # For checking conditional import.
+)
 
 ASTOR_WARNING = (
     "`test_fenced_docstrings` requires `astor`. Please run `pip install astor`."
