@@ -20,7 +20,10 @@ import re
 import textwrap
 from typing import List
 
-import astor
+try:
+    import astor
+except:
+    astor = None
 
 
 class FencedCellParser(doctest.DocTestParser):
