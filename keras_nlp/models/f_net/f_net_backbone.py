@@ -138,7 +138,6 @@ class FNetBackbone(Backbone):
             dtype=tf.float32,
         )(x)
 
-        # Project the embedding to `hidden_dim`.
         x = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=f_net_kernel_initializer(),
