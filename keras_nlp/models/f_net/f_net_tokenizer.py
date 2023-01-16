@@ -97,7 +97,7 @@ class FNetTokenizer(SentencePieceTokenizer):
         preset,
         **kwargs,
     ):
-        """Instantiate anDeBERTa tokenizer from preset vocabulary.
+        """Instantiate an FNet tokenizer from preset vocabulary.
 
         Args:
             preset: string. Must be one of {{names}}.
@@ -105,7 +105,7 @@ class FNetTokenizer(SentencePieceTokenizer):
         Examples:
         ```python
         # Load a preset tokenizer.
-        tokenizer = keras_nlp.models.DebertaV3Tokenizer.from_preset(
+        tokenizer = keras_nlp.models.FNetTokenizer.from_preset(
             "f_net_base_en",
         )
 
