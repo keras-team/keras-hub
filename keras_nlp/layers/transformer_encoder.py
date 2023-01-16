@@ -87,7 +87,7 @@ class TransformerEncoder(keras.layers.Layer):
         num_heads,
         dropout=0,
         activation="relu",
-        layer_norm_epsilon=1e-12,
+        layer_norm_epsilon=1e-05,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         normalize_first=False,

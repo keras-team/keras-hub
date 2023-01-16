@@ -68,7 +68,7 @@ class TransformerEncoderTest(tf.test.TestCase, parameterized.TestCase):
             "num_heads": 2,
             "dropout": 0,
             "activation": "relu",
-            "layer_norm_epsilon": 1e-12,
+            "layer_norm_epsilon": 1e-05,
             "kernel_initializer": keras.initializers.serialize(
                 keras.initializers.HeNormal()
             ),
