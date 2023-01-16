@@ -47,7 +47,8 @@ class BartBackbone(Backbone):
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
-        num_layers: int. The number of transformer layers.
+        num_layers: int. The number of transformer encoder layers and
+            transformer decoder layers.
         num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
         hidden_dim: int. The size of the transformer encoding and pooler layers.
@@ -62,23 +63,20 @@ class BartBackbone(Backbone):
     Examples:
     ```python
     input_data = {
-        "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
-        "segment_ids": tf.constant(
-            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+        "encoder_token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
+        "encoder_padding_mask": tf.constant(
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
-        "padding_mask": tf.constant(
+        "decoder_token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
+        "decoder_padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
     }
 
-    # Pretrained BART encoder-decoder model
-    model = keras_nlp.models.BartBackbone.from_preset("base_base_en_uncased")
-    output = model(input_data)
-
     # Randomly initialized BART encoder-decoder model with a custom config
     model = keras_nlp.models.BartBackbone(
-        vocabulary_size=30552,
-        num_layers=12,
+        vocabulary_size=50265,
+        num_layers=6,
         num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
