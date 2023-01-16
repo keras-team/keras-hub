@@ -36,7 +36,6 @@ ASTOR_WARNING = (
 )
 
 PACKAGE = "keras_nlp."
-DIRECTORY = "keras_nlp"
 
 
 def find_modules():
