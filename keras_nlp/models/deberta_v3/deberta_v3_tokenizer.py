@@ -97,7 +97,7 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         preset,
         **kwargs,
     ):
-        """Instantiate anDeBERTa tokenizer from preset vocabulary.
+        """Instantiate DeBERTa tokenizer from preset vocabulary.
 
         Args:
             preset: string. Must be one of {{names}}.
