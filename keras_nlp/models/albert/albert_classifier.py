@@ -15,9 +15,7 @@
 
 from tensorflow import keras
 
-from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.models.albert.albert_backbone import albert_kernel_initializer
-from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 

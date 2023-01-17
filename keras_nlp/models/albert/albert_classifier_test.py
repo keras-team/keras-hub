@@ -39,7 +39,7 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
             max_sequence_length=128,
             name="encoder",
         )
-        
+
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
             ["the quick brown fox", "the earth is round"]
@@ -73,7 +73,7 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.classifier_no_preprocessing = AlbertClassifier(
             self.backbone,
-            4,  
+            4,
             preprocessor=None,
         )
 
