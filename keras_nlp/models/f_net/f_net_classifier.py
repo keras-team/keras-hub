@@ -30,7 +30,6 @@ from keras_nlp.utils.python_utils import format_docstring
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class FnetClassifier(PipelineModel):
-
     """An end-to-end f_net model for classification tasks.
 
     This model attaches a classification head to a
