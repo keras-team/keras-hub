@@ -206,3 +206,51 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     def detokenize(self, inputs):
         return self._sentence_piece.detokenize(inputs)
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        """Instantiate a DeBERTa tokenizer from preset vocabulary.
+
+        Args:
+            preset: string. Must be one of {{names}}.
+
+        Examples:
+        ```python
+        # Load a preset tokenizer.
+        tokenizer = keras_nlp.models.DebertaV3Tokenizer.from_preset(
+            "deberta_v3_base_en",
+        )
+
+        # Tokenize some input.
+        tokenizer("The quick brown fox tripped.")
+
+        # Detokenize some input.
+        tokenizer.detokenize([5, 6, 7, 8, 9])
+        ```
+        """
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+        metadata = cls.presets[preset]
+
+        spm_proto = keras.utils.get_file(
+            "vocab.spm",
+            metadata["spm_proto_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["spm_proto_hash"],
+        )
+
+        config = metadata["preprocessor_config"]
+        config.update(
+            {
+                "proto": spm_proto,
+            },
+        )
+
+        return cls.from_config({**config, **kwargs})

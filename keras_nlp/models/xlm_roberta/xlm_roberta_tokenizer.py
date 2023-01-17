@@ -170,44 +170,4 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         preset,
         **kwargs,
     ):
-        """Instantiate an XLM-RoBERTa tokenizer from preset vocabulary.
-
-        Args:
-            preset: string. Must be one of {{names}}.
-
-        Examples:
-        ```python
-        # Load a preset tokenizer.
-        tokenizer = keras_nlp.models.XLMRobertaTokenizer.from_preset(
-            "xlm_roberta_base_multi",
-        )
-
-        # Tokenize some input.
-        tokenizer("The quick brown fox tripped.")
-
-        # Detokenize some input.
-        tokenizer.detokenize([5, 6, 7, 8, 9])
-        ```
-        """
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-
-        spm_proto = keras.utils.get_file(
-            "vocab.spm",
-            metadata["spm_proto_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["spm_proto_hash"],
-        )
-
-        config = metadata["preprocessor_config"]
-        config.update(
-            {
-                "proto": spm_proto,
-            },
-        )
-
-        return cls.from_config({**config, **kwargs})
+        return super().from_preset(cls, preset, **kwargs)

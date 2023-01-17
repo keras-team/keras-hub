@@ -416,3 +416,51 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def detokenize(self, inputs):
         return self._fast_word_piece.detokenize(inputs)
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        """Instantiate a BERT tokenizer from preset vocabulary.
+
+        Args:
+            preset: string. Must be one of {{names}}.
+
+        Examples:
+        ```python
+        # Load a preset tokenizer.
+        tokenizer = keras_nlp.models.BertTokenizer.from_preset(
+            "bert_base_en_uncased",
+        )
+
+        # Tokenize some input.
+        tokenizer("The quick brown fox tripped.")
+
+        # Detokenize some input.
+        tokenizer.detokenize([5, 6, 7, 8, 9])
+        ```
+        """
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+        metadata = cls.presets[preset]
+
+        vocabulary = keras.utils.get_file(
+            "vocab.txt",
+            metadata["vocabulary_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["vocabulary_hash"],
+        )
+
+        config = metadata["preprocessor_config"]
+        config.update(
+            {
+                "vocabulary": vocabulary,
+            },
+        )
+
+        return cls.from_config({**config, **kwargs})

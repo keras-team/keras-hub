@@ -128,56 +128,9 @@ class RobertaTokenizer(BytePairTokenizer):
         return copy.deepcopy(backbone_presets)
 
     @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
     def from_preset(
         cls,
         preset,
         **kwargs,
     ):
-        """Instantiate a RoBERTa tokenizer from preset vocabulary and merge rules.
-
-        Args:
-            preset: string. Must be one of {{names}}.
-
-        Examples:
-        ```python
-        # Load a preset tokenizer.
-        tokenizer = keras_nlp.models.RobertaTokenizer.from_preset(
-            "roberta_base_en",
-        )
-        # Tokenize some input.
-        tokenizer("The quick brown fox tripped.")
-        # Detokenize some input.
-        tokenizer.detokenize([5, 6, 7, 8, 9])
-        ```
-        """
-
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-
-        vocabulary = keras.utils.get_file(
-            "vocab.json",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["vocabulary_hash"],
-        )
-        merges = keras.utils.get_file(
-            "merges.txt",
-            metadata["merges_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["merges_hash"],
-        )
-
-        config = metadata["preprocessor_config"]
-        config.update(
-            {
-                "vocabulary": vocabulary,
-                "merges": merges,
-            },
-        )
-
-        return cls.from_config({**config, **kwargs})
+        return super().from_preset(cls, preset, **kwargs)
