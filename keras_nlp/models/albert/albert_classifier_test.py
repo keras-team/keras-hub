@@ -13,43 +13,67 @@
 # limitations under the License.
 """Tests for BERT classification model."""
 
+import io
 import os
 
+import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_backbone import BertBackbone
-from keras_nlp.models.bert.bert_classifier import BertClassifier
-from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
-from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
+from keras_nlp.models.albert.albert_backbone import AlbertBackbone
+from keras_nlp.models.albert.albert_classifier import AlbertClassifier
+from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
+from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 
 
-class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
+class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.backbone = BertBackbone(
+        self.backbone = AlbertBackbone(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
+            embedding_dim=8,
             hidden_dim=64,
             intermediate_dim=128,
             max_sequence_length=128,
             name="encoder",
         )
-        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
-        self.vocab += ["the", "quick", "brown", "fox", "."]
-        self.preprocessor = BertPreprocessor(
-            BertTokenizer(vocabulary=self.vocab),
+        
+        bytes_io = io.BytesIO()
+        vocab_data = tf.data.Dataset.from_tensor_slices(
+            ["the quick brown fox", "the earth is round"]
+        )
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=vocab_data.as_numpy_iterator(),
+            model_writer=bytes_io,
+            vocab_size=10,
+            model_type="WORD",
+            pad_id=0,
+            unk_id=1,
+            bos_id=2,
+            eos_id=3,
+            pad_piece="<pad>",
+            unk_piece="<unk>",
+            bos_piece="[CLS]",
+            eos_piece="[SEP]",
+        )
+        self.proto = bytes_io.getvalue()
+
+        tokenizer = AlbertTokenizer(proto=self.proto)
+
+        self.preprocessor = AlbertPreprocessor(
+            tokenizer=tokenizer,
             sequence_length=8,
         )
-        self.classifier = BertClassifier(
+        self.classifier = AlbertClassifier(
             self.backbone,
             4,
             preprocessor=self.preprocessor,
         )
-        self.classifier_no_preprocessing = BertClassifier(
+        self.classifier_no_preprocessing = AlbertClassifier(
             self.backbone,
-            4,
+            4,  
             preprocessor=None,
         )
 
@@ -115,7 +139,7 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, BertClassifier)
+        self.assertIsInstance(restored_model, AlbertClassifier)
 
         # Check that output matches.
         restored_output = restored_model.predict(self.raw_batch)
