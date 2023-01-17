@@ -129,10 +129,10 @@ class DistilBertClassifier(Task):
         )
         # All references to `self` below this line
         self._backbone = backbone
+        self._preprocessor = preprocessor
         self.num_classes = num_classes
         self.hidden_dim = hidden_dim
         self.dropout = dropout
-        self._preprocessor = preprocessor
 
     def get_config(self):
         config = super().get_config()

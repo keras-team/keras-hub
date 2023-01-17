@@ -125,10 +125,10 @@ class XLMRobertaClassifier(Task):
         )
         # All references to `self` below this line
         self._backbone = backbone
+        self._preprocessor = preprocessor
         self.num_classes = num_classes
         self.hidden_dim = hidden_dim
         self.dropout = dropout
-        self._preprocessor = preprocessor
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
         return self.preprocessor(x, y=y, sample_weight=sample_weight)
