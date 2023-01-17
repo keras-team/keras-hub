@@ -163,6 +163,7 @@ class BertBackbone(Backbone):
                     x, approximate=True
                 ),
                 dropout=dropout,
+                layer_norm_epsilon=1e-12,
                 kernel_initializer=bert_kernel_initializer(),
                 name=f"transformer_layer_{i}",
             )(x, padding_mask=padding_mask)
