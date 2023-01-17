@@ -159,7 +159,6 @@ class XLMRobertaClassifier(Task):
         return copy.deepcopy(backbone_presets)
 
     @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
     def from_preset(
         cls,
         preset,
