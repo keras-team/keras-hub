@@ -62,7 +62,7 @@ class XLMRobertaClassifier(PipelineModel):
     preprocessed_features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
         "padding_mask": tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(1, 12)),
+            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)),
     }
     labels = [0, 3]
 
@@ -81,6 +81,9 @@ class XLMRobertaClassifier(PipelineModel):
         backbone,
         num_classes=4,
         preprocessor=None,
+    )
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
     )
     classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
 

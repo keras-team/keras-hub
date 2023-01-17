@@ -51,10 +51,12 @@ class Backbone(keras.Model):
         Examples:
         ```python
         # Load architecture and weights from preset
-        model = {{model_name}}.from_preset("{{example_preset_name}}")
+        model = keras_nlp.models.{{model_name}}.from_preset(
+            "{{example_preset_name}}"
+        )
 
         # Load randomly initialized model from preset architecture
-        model = {{model_name}}.from_preset(
+        model = keras_nlp.models.{{model_name}}.from_preset(
             "{{example_preset_name}}",
             load_weights=False
         )

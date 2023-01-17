@@ -1,4 +1,5 @@
 # Tooling.
+astor
 numpy~=1.23.2  # Numpy 1.24 breaks tests on ragged tensors
 packaging
 black>=22
