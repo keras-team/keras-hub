@@ -68,6 +68,7 @@ class Task(PipelineModel):
     def presets(cls):
         return {}
 
+    @classmethod
     def from_preset(
         cls,
         preset,
