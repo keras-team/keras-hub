@@ -283,25 +283,3 @@ class FnetClassifier(PipelineModel):
 
         model.load_weights(weights)
         return model
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
