@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """FNet classification model."""
 
 import copy
@@ -25,7 +24,6 @@ from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
-
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -93,8 +91,7 @@ class FnetClassifier(PipelineModel):
     classifier.backbone.trainable = False
     ```
     """
-
-
+    
     def __init__(
         self,
         backbone,
