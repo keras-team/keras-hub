@@ -29,9 +29,10 @@ from keras_nlp.utils.python_utils import format_docstring
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class TopPSampler(Sampler):
     """Top-P Sampler class.
-    This sampler implements top-p search algorithm. Top-p search selects tokens
-    from the smallest subset of output probabilities that sum to greater than
-    `p`. Put in another way, top-p will first order token predictions by
+
+    This sampler implements the top-p search algorithm. Top-p search selects
+    tokens from the smallest subset of output probabilities that sum to greater
+    than `p`. Put in another way, top-p will first order token predictions by
     likelihood, and ignore all tokens after the cumulative probability of
     selected tokens exceeds `p`, then select a token from the remaining tokens.
 

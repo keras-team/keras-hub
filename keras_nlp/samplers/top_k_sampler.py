@@ -30,7 +30,7 @@ from keras_nlp.utils.python_utils import format_docstring
 class TopKSampler(Sampler):
     """Top-K Sampler class.
 
-    This sampler implements top-k search algorithm. Briefly top-k algorithm
+    This sampler implements the top-k search algorithm. Briefly top-k algorithm
     randomly selects a token from the tokens of top K probability, with
     selection chance determined by the probability.
 

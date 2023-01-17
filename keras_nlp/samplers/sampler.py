@@ -70,6 +70,10 @@ class Sampler:
 
     The inputs and outputs of Sampler class are both token ids.
 
+    Subclassers should always implement the `sample()` method, which implements
+    the sampling algorithm body. Please check available subclass samplers for
+    example.
+
     Examples:
 
     Basic usage:

@@ -30,7 +30,7 @@ from keras_nlp.utils.python_utils import format_docstring
 class BeamSampler(Sampler):
     """Beam Sampler class.
 
-    This sampler implements beam search algorithm. At each time-step, beam
+    This sampler implements the beam search algorithm. At each time-step, beam
     search keeps the beams (sequences) of the top `num_beams` highest
     accumulated probabilities, and uses each one of the beams to predict
     candidate next tokens.

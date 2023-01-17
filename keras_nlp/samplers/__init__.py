@@ -16,7 +16,7 @@ from tensorflow import keras
 
 from keras_nlp.samplers.beam_sampler import BeamSampler
 from keras_nlp.samplers.greedy_sampler import GreedySampler
-from keras_nlp.samplers.greedy_sampler import Sampler
+from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.top_k_sampler import TopKSampler
 from keras_nlp.samplers.top_p_sampler import TopPSampler
 
