@@ -19,8 +19,8 @@ https://github.com/openai/gpt-2/blob/master/src/encoder.py,
 but is TF graph compatible.
 """
 
-import os
 import json
+import os
 from typing import Iterable
 from typing import List
 
@@ -591,4 +591,3 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         )
 
         return cls.from_config({**config, **kwargs})
-    

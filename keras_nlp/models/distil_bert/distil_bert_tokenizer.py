@@ -14,14 +14,12 @@
 """DistilBERT tokenizer."""
 
 import copy
-import os
 
 from tensorflow import keras
 
 from keras_nlp.models.distil_bert.distil_bert_presets import backbone_presets
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")

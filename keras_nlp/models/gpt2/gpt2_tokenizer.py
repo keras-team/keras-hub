@@ -14,14 +14,12 @@
 """GPT-2 preprocessing layers."""
 
 import copy
-import os
 
 from tensorflow import keras
 
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
