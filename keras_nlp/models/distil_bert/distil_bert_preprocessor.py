@@ -28,7 +28,6 @@ from keras_nlp.utils.keras_utils import (
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -194,17 +193,3 @@ class DistilBertPreprocessor(Preprocessor):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(cls, preset, **kwargs):
-        return super().from_preset(preset, **kwargs)
-
-
-DistilBertPreprocessor.from_preset.__func__.__doc__ = (
-    Preprocessor.from_preset.__doc__
-)
-format_docstring(
-    preprocessor_name=DistilBertPreprocessor.__name__,
-    example_preset_name="distil_bert_base_en_uncased",
-    preset_names='", "'.join(DistilBertPreprocessor.presets),
-)(DistilBertPreprocessor.from_preset.__func__)
