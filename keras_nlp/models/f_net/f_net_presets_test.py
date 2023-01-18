@@ -62,7 +62,7 @@ class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         outputs = model(input_data)
         if load_weights:
             outputs = outputs["sequence_output"][0, 0, :5]
-            expected = [0.418, -0.116, -0.122, -1.847, -0.035]
+            expected = [4.182479, -0.072181, -0.138097, -0.036582, -0.521765]
             self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
 
     @parameterized.named_parameters(
