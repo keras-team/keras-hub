@@ -42,7 +42,7 @@ class BartBackbone(Backbone):
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
     third party and subject to a separate license, available
-    [here](https://github.com/facebookresearch/fairseq/tree/main/examples/bart).
+    [here](https://github.com/facebookresearch/fairseq/).
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -68,7 +68,7 @@ class BartBackbone(Backbone):
         ),
         "decoder_token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
         "decoder_padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+            [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0], shape=(1, 12)
         ),
     }
 
@@ -121,10 +121,11 @@ class BartBackbone(Backbone):
             name="token_embedding",
         )
 
-        # Encoder
+        # ===== Encoder =====
 
         # Embed tokens and positions.
         token_embedding = token_embedding_layer(encoder_token_id_input)
+        # Position embedding parameters are not shared by encode and decoder.
         position_embedding = PositionEmbedding(
             initializer=bart_kernel_initializer(),
             sequence_length=max_sequence_length,
@@ -160,10 +161,11 @@ class BartBackbone(Backbone):
 
         encoder_output = x
 
-        # Decoder
+        # ===== Decoder =====
 
         # Embed tokens and positions.
         token_embedding = token_embedding_layer(decoder_token_id_input)
+        # Position embedding parameters are not shared by encode and decoder.
         position_embedding = PositionEmbedding(
             initializer=bart_kernel_initializer(),
             sequence_length=max_sequence_length,
