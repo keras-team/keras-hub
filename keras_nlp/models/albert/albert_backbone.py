@@ -24,7 +24,6 @@ from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.models.albert.albert_presets import backbone_presets
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 def albert_kernel_initializer(stddev=0.02):
@@ -273,15 +272,3 @@ class AlbertBackbone(Backbone):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(cls, preset, load_weights=True, **kwargs):
-        return super().from_preset(preset, load_weights, **kwargs)
-
-
-AlbertBackbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
-format_docstring(
-    model_name=AlbertBackbone.__name__,
-    example_preset_name="albert_base_en_uncased",
-    preset_names='", "'.join(AlbertBackbone.presets),
-)(AlbertBackbone.from_preset.__func__)
