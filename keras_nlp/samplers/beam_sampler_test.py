@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,16 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Greedy sampler."""
+"""Tests for Beam sampler."""
+
+import random
 
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.samplers.greedy import Greedy
+from keras_nlp.samplers.beam_sampler import BeamSampler
+from keras_nlp.samplers.greedy_sampler import GreedySampler
 
 
-class GreedyTest(tf.test.TestCase, parameterized.TestCase):
+class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
         self.vocab_size = 10
@@ -43,8 +46,7 @@ class GreedyTest(tf.test.TestCase, parameterized.TestCase):
             return model(inputs)
 
         self.token_probability_fn = token_probability_fn
-
-        self.sampler = Greedy()
+        self.sampler = BeamSampler(num_beams=2)
 
     def test_generate_with_1d_prompt(self):
         inputs = tf.constant([1])
@@ -62,49 +64,70 @@ class GreedyTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(outputs.shape, [2, 5])
 
     def test_generate_with_ragged_prompt(self):
-        max_length = 5
-
         def token_probability_fn(inputs, mask):
-            # Assert that user function is passed only dense tensors.
-            self.assertIsInstance(inputs, tf.Tensor)
+            batch_size, seq_length = tf.shape(inputs)[0], tf.shape(inputs)[1]
             prob = tf.constant([[[0.0, 0.0, 0.0, 1.0]]])
-            return tf.repeat(tf.repeat(prob, 2, axis=0), max_length, axis=1)
+            return tf.tile(prob, [batch_size, seq_length, 1])
 
         inputs = tf.ragged.constant([[1], [2, 1, 2]])
-        outputs = self.sampler(inputs, token_probability_fn, max_length)
+        outputs = self.sampler(inputs, token_probability_fn, max_length=5)
         self.assertEqual(outputs.shape, [2, 5])
 
-    def test_assert_generation_is_correct(self):
-        batch_size = 10
-        max_length = 3
-
-        def token_probability_fn(inputs, mask):
-            prob = tf.constant([[[0.0, 0.0, 0.0, 1.0]]])
-            return tf.repeat(
-                tf.repeat(prob, batch_size, axis=0), max_length, axis=1
+    def test_one_beam_generation(self):
+        for _ in range(5):
+            inputs = tf.constant([random.randint(0, 9)])
+            beam_sampler = BeamSampler(num_beams=1)
+            greedy_sampler = GreedySampler()
+            beam_output = beam_sampler(
+                inputs,
+                self.token_probability_fn,
+                max_length=5,
             )
+            greedy_output = greedy_sampler(
+                inputs,
+                self.token_probability_fn,
+                max_length=5,
+            )
+            self.assertAllEqual(beam_output, greedy_output)
 
+    @parameterized.named_parameters(
+        ("xla_graph", True, False),
+        ("non_xla_graph", False, False),
+        ("eager", False, True),
+    )
+    def test_assert_generation_is_correct(self, jit_compile, run_eagerly):
+        def token_probability_fn(inputs, mask):
+            batch_size, seq_length = tf.shape(inputs)[0], tf.shape(inputs)[1]
+            prob = tf.constant([[[0.0, 0.0, 0.0, 1.0]]])
+            return tf.tile(prob, [batch_size, seq_length, 1])
+
+        batch_size = 10
         inputs = 3 * tf.ones([batch_size, 1], dtype=tf.int32)
-        outputs = self.sampler(
-            inputs, token_probability_fn, max_length=max_length
-        )
-        self.assertAllEqual(
-            outputs, 3 * tf.ones(shape=[batch_size, max_length])
-        )
+        max_length = 3
+        for i in range(1, 5):
+            sampler = BeamSampler(
+                num_beams=i,
+                jit_compile=jit_compile,
+                run_eagerly=run_eagerly,
+            )
+            outputs = sampler(
+                inputs,
+                token_probability_fn,
+                max_length=max_length,
+            )
+            self.assertAllEqual(
+                outputs, 3 * tf.ones(shape=[batch_size, max_length])
+            )
 
     def test_end_token_id(self):
-        max_length = 5
-
         def token_probability_fn(inputs, mask):
-            batch_size = inputs.shape[0]
+            batch_size, seq_length = tf.shape(inputs)[0], tf.shape(inputs)[1]
             prob = tf.constant([[[0.0, 0.0, 0.0, 1.0]]])
-            return tf.repeat(
-                tf.repeat(prob, batch_size, axis=0), max_length, axis=1
-            )
+            return tf.tile(prob, [batch_size, seq_length, 1])
 
-        sampler = Greedy()
+        max_length = 5
         inputs = tf.constant([[0, 1], [1, 2]])
-        outputs = sampler(
+        outputs = self.sampler(
             inputs,
             token_probability_fn,
             max_length=max_length,
@@ -112,17 +135,3 @@ class GreedyTest(tf.test.TestCase, parameterized.TestCase):
         )
         expected_outputs = tf.ragged.constant([[0, 1, 3, 3, 3], [1]])
         self.assertAllEqual(outputs, expected_outputs)
-
-    def test_compare_xla_noxla_results(self):
-        inputs = [[1], [1]]
-        xla_sampler = Greedy(jit_compile=True)
-        outputs_xla = xla_sampler(
-            inputs, self.token_probability_fn, max_length=5
-        )
-
-        xla_sampler = Greedy(jit_compile=False)
-        outputs_no_xla = xla_sampler(
-            inputs, self.token_probability_fn, max_length=5
-        )
-
-        self.assertAllEqual(outputs_xla, outputs_no_xla)

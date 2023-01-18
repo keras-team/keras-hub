@@ -14,7 +14,11 @@
 
 from tensorflow import keras
 
-from keras_nlp.samplers.greedy import Greedy
+from keras_nlp.samplers.beam_sampler import BeamSampler
+from keras_nlp.samplers.greedy_sampler import GreedySampler
+from keras_nlp.samplers.sampler import Sampler
+from keras_nlp.samplers.top_k_sampler import TopKSampler
+from keras_nlp.samplers.top_p_sampler import TopPSampler
 
 
 def serialize(sampler):
@@ -24,7 +28,10 @@ def serialize(sampler):
 def deserialize(config, custom_objects=None):
     """Return a `Sampler` object from its config."""
     all_classes = {
-        "greedy": Greedy,
+        "beam": BeamSampler,
+        "greedy": GreedySampler,
+        "top_k": TopKSampler,
+        "top_p": TopPSampler,
     }
     return keras.utils.deserialize_keras_object(
         config,
@@ -46,7 +53,7 @@ def get(identifier):
     dict containing `class_name` and `config` as an identifier. Also note that
     the `class_name` must map to a `Sampler` class.
 
-    >>> cfg = {'class_name': 'keras_nlp>Greedy', 'config': {}}
+    >>> cfg = {'class_name': 'keras_nlp>GreedySampler', 'config': {}}
     >>> sampler = keras_nlp.samplers.get(cfg)
 
     In the case that the `identifier` is a class, this method will return a new
