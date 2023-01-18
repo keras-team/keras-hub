@@ -27,9 +27,6 @@ from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
 from keras_nlp.models.distil_bert.distil_bert_presets import backbone_presets
 from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
-
-PRESET_NAMES = ", ".join(list(backbone_presets))
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -61,7 +58,9 @@ class DistilBertClassifier(Task):
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
 
-    Example usage:
+    Examples:
+
+    Example usage.
     ```python
     preprocessed_features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
@@ -90,6 +89,72 @@ class DistilBertClassifier(Task):
 
     # Access backbone programatically (e.g., to change `trainable`)
     classifier.backbone.trainable = False
+    ```
+
+    Raw string inputs.
+    ```python
+    # Create a dataset with raw string features in an `(x, y)` format.
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    labels = [0, 3]
+
+    # Create a DistilBertClassifier and fit your data.
+    classifier = keras_nlp.models.DistilBertClassifier.from_preset(
+        "distil_bert_base_en_uncased",
+        num_classes=4,
+    )
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    )
+    classifier.fit(x=features, y=labels, batch_size=2)
+    ```
+
+    Raw string inputs with customized preprocessing.
+    ```python
+    # Create a dataset with raw string features in an `(x, y)` format.
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    labels = [0, 3]
+
+    # Use a shorter sequence length.
+    preprocessor = keras_nlp.models.DistilBertPreprocessor.from_preset(
+        "distil_bert_base_en_uncased",
+        sequence_length=128,
+    )
+    # Create a DistilBertClassifier and fit your data.
+    classifier = keras_nlp.models.DistilBertClassifier.from_preset(
+        "distil_bert_base_en_uncased",
+        num_classes=4,
+        preprocessor=preprocessor,
+    )
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    )
+    classifier.fit(x=features, y=labels, batch_size=2)
+    ```
+
+    Preprocessed inputs.
+    ```python
+    # Create a dataset with preprocessed features in an `(x, y)` format.
+    preprocessed_features = {
+        "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
+        "segment_ids": tf.constant(
+            [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
+        ),
+        "padding_mask": tf.constant(
+            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
+        ),
+    }
+    labels = [0, 3]
+
+    # Create a DistilBERT classifier and fit your data.
+    classifier = keras_nlp.models.DistilBertClassifier.from_preset(
+        "distil_bert_base_en_uncased",
+        num_classes=4,
+        preprocessor=None,
+    )
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    )
+    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
     ```
     """
 
@@ -141,8 +206,6 @@ class DistilBertClassifier(Task):
                 "num_classes": self.num_classes,
                 "hidden_dim": self.hidden_dim,
                 "dropout": self.dropout,
-                "name": self.name,
-                "trainable": self.trainable,
             }
         )
         return config
@@ -158,22 +221,3 @@ class DistilBertClassifier(Task):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(
-        cls,
-        preset,
-        load_weights=True,
-        **kwargs,
-    ):
-        return super().from_preset(
-            preset=preset, load_weights=load_weights, **kwargs
-        )
-
-
-DistilBertClassifier.from_preset.__func__.__doc__ = Task.from_preset.__doc__
-format_docstring(
-    model_task_name=DistilBertClassifier.__name__,
-    example_preset_name="distil_bert_base_en_uncased",
-    preset_names=PRESET_NAMES,
-)(DistilBertClassifier.from_preset.__func__)

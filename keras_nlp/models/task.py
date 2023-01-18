@@ -19,6 +19,7 @@ from tensorflow import keras
 
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -30,18 +31,20 @@ class Task(PipelineModel):
 
     @property
     def backbone(self):
-        """A `keras_nlp.models.backbone.Backbone` instance providing the encoder submodel."""
+        """A `keras.Model` instance providing the backbone submodel."""
         return self._backbone
 
     @property
     def preprocessor(self):
-        """A `keras_nlp.models.preprocessor.Preprocessor` instance for preprocessing inputs."""
+        """A `keras.layers.Layer` instance used to preprocess inputs."""
         return self._preprocessor
 
     def get_config(self):
         return {
             "backbone": keras.layers.serialize(self.backbone),
             "preprocessor": keras.layers.serialize(self.preprocessor),
+            "name": self.name,
+            "trainable": self.trainable,
         }
 
     @classmethod
@@ -130,3 +133,25 @@ class Task(PipelineModel):
 
         model.load_weights(weights)
         return model
+
+    def __init_subclass__(cls, **kwargs):
+        # Use __init_subclass__ to setup a correct docstring for from_preset.
+        super().__init_subclass__(**kwargs)
+
+        # If the subclass does not define `from_preset`, assign a wrapper so that
+        # each class can have a distinct docstring.
+        if "from_preset" not in cls.__dict__:
+
+            def from_preset(calling_cls, *args, **kwargs):
+                return super(cls, calling_cls).from_preset(*args, **kwargs)
+
+            cls.from_preset = classmethod(from_preset)
+
+        # Format and assign the docstring unless the subclass has overridden it.
+        if cls.from_preset.__doc__ is None:
+            cls.from_preset.__func__.__doc__ = Task.from_preset.__doc__
+            format_docstring(
+                model_task_name=cls.__name__,
+                example_preset_name=next(iter(cls.presets), ""),
+                preset_names='", "'.join(cls.presets),
+            )(cls.from_preset.__func__)
