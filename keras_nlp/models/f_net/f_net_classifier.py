@@ -13,7 +13,7 @@
 # limitations under the License.
 """FNet classification model."""
 
-import copy
+
 import os
 
 from tensorflow import keras
@@ -23,8 +23,6 @@ from keras_nlp.models.f_net.f_net_backbone import f_net_kernel_initializer
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
-
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class FnetClassifier(PipelineModel):
@@ -91,7 +89,6 @@ class FnetClassifier(PipelineModel):
     classifier.backbone.trainable = False
     ```
     """
-    
     def __init__(
         self,
         backbone,
@@ -158,7 +155,7 @@ class FnetClassifier(PipelineModel):
 
     @classproperty
     def presets(cls):
-        return error
+        raise NotImplementedError
 
     @classmethod
     def from_preset(
@@ -167,115 +164,4 @@ class FnetClassifier(PipelineModel):
         load_weights=True,
         **kwargs,
     ):
-        """Create a classification model from a preset architecture and weights.
-
-        By default, this method will automatically create a `preprocessor`
-        layer to preprocess raw inputs during `fit()`, `predict()`, and
-        `evaluate()`. If you would like to disable this behavior, pass
-        `preprocessor=None`.
-
-        Args:
-            preset: string. Must be one of {{names}}.
-            load_weights: Whether to load pre-trained weights into model.
-                Defaults to `True`.
-
-        Examples:
-
-        Raw string inputs.
-        ```python
-        # Create a dataset with raw string features in an `(x, y)` format.
-        features = ["The quick brown fox jumped.", "I forgot my homework."]
-        labels = [0, 3]
-
-        # Create a FnetClassifier and fit your data.
-        classifier = keras_nlp.models.FnetClassifier.from_preset(
-            "f_net_base_en_uncased",
-            num_classes=4,
-        )
-        classifier.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        )
-        classifier.fit(x=features, y=labels, batch_size=2)
-        ```
-
-        Raw string inputs with customized preprocessing.
-        ```python
-        # Create a dataset with raw string features in an `(x, y)` format.
-        features = ["The quick brown fox jumped.", "I forgot my homework."]
-        labels = [0, 3]
-
-        # Use a shorter sequence length.
-        preprocessor = keras_nlp.models.FNetPreprocessor.from_preset(
-            "f_net_base_en_uncased",
-            sequence_length=128,
-        )
-
-        # Create a FnetClassifier and fit your data.
-        classifier = keras_nlp.models.FnetClassifier.from_preset(
-            "f_net_base_en_uncased",
-            num_classes=4,
-            preprocessor=preprocessor,
-        )
-        classifier.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        )
-        classifier.fit(x=features, y=labels, batch_size=2)
-        ```
-
-        Preprocessed inputs.
-        ```python
-        # Create a dataset with preprocessed features in an `(x, y)` format.
-        preprocessed_features = {
-            "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
-            "segment_ids": tf.constant(
-                [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-            ),
-            "padding_mask": tf.constant(
-                [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-            ),
-        }
-        labels = [0, 3]
-
-        # Create a Fnet classifier and fit your data.
-        classifier = keras_nlp.models.FnetClassifier.from_preset(
-            "f_net_base_en_uncased",
-            num_classes=4,
-            preprocessor=None,
-        )
-        classifier.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        )
-        classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
-        ```
-        """
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-
-        if "preprocessor" not in kwargs:
-            kwargs["preprocessor"] = FNetPreprocessor.from_preset(preset)
-
-        # Check if preset is backbone-only model
-        if preset in FNetBackbone.presets:
-            backbone = FNetBackbone.from_preset(preset, load_weights)
-            return cls(backbone, **kwargs)
-
-        # Otherwise must be one of class presets
-        metadata = cls.presets[preset]
-        config = metadata["config"]
-        model = cls.from_config({**config, **kwargs})
-
-        if not load_weights:
-            return model
-
-        weights = keras.utils.get_file(
-            "model.h5",
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
-        )
-
-        model.load_weights(weights)
-        return model
+        raise NotImplementedError
