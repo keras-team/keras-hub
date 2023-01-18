@@ -13,9 +13,12 @@
 # limitations under the License.
 """ALBERT preprocessor layer."""
 
+import copy
+
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
+from keras_nlp.models.albert.albert_presets import backbone_presets
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
@@ -179,3 +182,7 @@ class AlbertPreprocessor(Preprocessor):
     @classproperty
     def tokenizer_cls(cls):
         return AlbertTokenizer
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
