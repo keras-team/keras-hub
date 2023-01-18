@@ -28,9 +28,9 @@ backbone_presets = {
         "description": (
             "Base size of FNet. Trained on the C4 dataset (English)."
         ),
-        "weights_url": "https://drive.google.com/uc?export=download&id=1WdEkxGkgWgo7nZMubwqE3A5N0rQDSiGt",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/f_net_base_en/v1/model.h5",
         "weights_hash": "35db90842b85a985a0e54c86c00746fe",
-        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1-2Qo9kNkV0ZRuGnK-n4a3m_ZAO_k-9rk",
+        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/f_net_base_en/v1/vocab.spm",
         "spm_proto_hash": "71c5f4610bef1daf116998a113a01f3d",
     },
     "f_net_large_en": {
@@ -47,9 +47,9 @@ backbone_presets = {
         "description": (
             "Large size of FNet. Trained on the C4 dataset (English)."
         ),
-        "weights_url": "https://drive.google.com/uc?export=download&id=1c2rnxtikHqovK4TqQt4G1yt1QF_69AkF",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/f_net_large_en/v1/model.h5",
         "weights_hash": "7ae4a3faa67ff054f8cecffb5619f779",
-        "spm_proto_url": "https://drive.google.com/uc?export=download&id=1U3BxKgxmRxp-66DyPyBTQVuPCp4oHTwH",
+        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/f_net_large_en/v1/vocab.spm",
         "spm_proto_hash": "71c5f4610bef1daf116998a113a01f3d",
     },
 }
