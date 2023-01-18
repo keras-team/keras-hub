@@ -13,8 +13,10 @@
 # limitations under the License.
 """Tests for Fnet classification model."""
 
+import io
 import os
 
+import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -57,7 +59,7 @@ class FnetClassifierTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.proto = bytes_io.getvalue()
 
-        self.tokenizer = FNetTokenizer(proto=self.proto)
+        tokenizer = FNetTokenizer(proto=self.proto)
 
         self.preprocessor = FNetPreprocessor(
             tokenizer=tokenizer,
