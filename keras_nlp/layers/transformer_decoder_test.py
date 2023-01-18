@@ -134,9 +134,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
             def __init__(self):
                 super().__init__()
                 self._decoder = transformer_decoder.TransformerDecoder(
-                    intermediate_dim=4,
-                    num_heads=2,
-                    has_cross_attention=True,
+                    intermediate_dim=4, num_heads=2
                 )
                 self._dense = keras.layers.Dense(1, activation="sigmoid")
 
