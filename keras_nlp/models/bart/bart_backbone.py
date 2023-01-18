@@ -34,7 +34,6 @@ class BartBackbone(Backbone):
     This class implements a Transformer-based encoder-decoder model as
     described in
     ["BART: Denoising Sequence-to-Sequence Pre-training for Natural Language Generation, Translation, and Comprehension"](https://arxiv.org/abs/1910.13461).
-    It includes the embedding lookups and transformer layers.
 
     The default constructor gives a fully customizable, randomly initialized BART
     model with any number of layers, heads, and embedding dimensions. To load
