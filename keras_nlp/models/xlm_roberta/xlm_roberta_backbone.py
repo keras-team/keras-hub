@@ -18,11 +18,9 @@ import copy
 
 from tensorflow import keras
 
-from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.roberta import roberta_backbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -90,15 +88,3 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(cls, preset, load_weights=True, **kwargs):
-        return super().from_preset(preset, load_weights, **kwargs)
-
-
-XLMRobertaBackbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
-format_docstring(
-    model_name=XLMRobertaBackbone.__name__,
-    example_preset_name="xlm_roberta_base_multi",
-    preset_names=", ".join(XLMRobertaBackbone.presets),
-)(XLMRobertaBackbone.from_preset.__func__)

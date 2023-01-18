@@ -59,7 +59,7 @@ class FNetTokenizer(SentencePieceTokenizer):
     tokenizer("the quick brown fox")
 
     # Detokenization.
-    tokenizer.detokenize(tf.constant([[[2, 14, 2231, 886, 2385, 3]]))
+    tokenizer.detokenize(tf.constant([[2, 14, 2231, 886, 2385, 3]]))
     ```
     """
 

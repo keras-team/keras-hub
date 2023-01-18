@@ -24,7 +24,6 @@ from keras_nlp.layers import TransformerEncoder
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.roberta.roberta_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 def roberta_kernel_initializer(stddev=0.02):
@@ -176,15 +175,3 @@ class RobertaBackbone(Backbone):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(cls, preset, load_weights=True, **kwargs):
-        return super().from_preset(preset, load_weights, **kwargs)
-
-
-RobertaBackbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
-format_docstring(
-    model_name=RobertaBackbone.__name__,
-    example_preset_name="roberta_base_en",
-    preset_names='", "'.join(RobertaBackbone.presets),
-)(RobertaBackbone.from_preset.__func__)
