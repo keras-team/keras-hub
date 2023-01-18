@@ -24,7 +24,6 @@ from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.f_net.f_net_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 def f_net_kernel_initializer(stddev=0.02):
@@ -218,15 +217,3 @@ class FNetBackbone(Backbone):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(cls, preset, load_weights=True, **kwargs):
-        return super().from_preset(preset, load_weights, **kwargs)
-
-
-FNetBackbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
-format_docstring(
-    model_name=FNetBackbone.__name__,
-    example_preset_name="f_net_base_en",
-    preset_names='", "'.join(FNetBackbone.presets),
-)(FNetBackbone.from_preset.__func__)
