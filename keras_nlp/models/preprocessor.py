@@ -15,6 +15,7 @@
 from tensorflow import keras
 
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -110,3 +111,25 @@ class Preprocessor(keras.layers.Layer):
             sequence_length=sequence_length,
             **kwargs,
         )
+
+    def __init_subclass__(cls, **kwargs):
+        # Use __init_subclass__ to setup a correct docstring for from_preset.
+        super().__init_subclass__(**kwargs)
+
+        # If the subclass does not define from_preset, assign a wrapper so that
+        # each class can have an distinct docstring.
+        if "from_preset" not in cls.__dict__:
+
+            def from_preset(calling_cls, *args, **kwargs):
+                return super(cls, calling_cls).from_preset(*args, **kwargs)
+
+            cls.from_preset = classmethod(from_preset)
+
+        # Format and assign the docstring unless the subclass has overridden it.
+        if cls.from_preset.__doc__ is None:
+            cls.from_preset.__func__.__doc__ = Preprocessor.from_preset.__doc__
+            format_docstring(
+                preprocessor_name=cls.__name__,
+                example_preset_name=next(iter(cls.presets), ""),
+                preset_names='", "'.join(cls.presets),
+            )(cls.from_preset.__func__)
