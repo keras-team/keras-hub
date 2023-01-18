@@ -107,7 +107,12 @@ class BartBackboneTest(tf.test.TestCase, parameterized.TestCase):
         # Check that output matches.
         restored_output = restored_model(self.input_batch)
         self.assertAllClose(
-            model_output["pooled_output"], restored_output["pooled_output"]
+            model_output["encoder_sequence_output"],
+            restored_output["encoder_sequence_output"],
+        )
+        self.assertAllClose(
+            model_output["decoder_sequence_output"],
+            restored_output["decoder_sequence_output"],
         )
 
 
