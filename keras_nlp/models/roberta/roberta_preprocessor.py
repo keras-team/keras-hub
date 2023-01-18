@@ -28,7 +28,6 @@ from keras_nlp.utils.keras_utils import (
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -199,20 +198,6 @@ class RobertaPreprocessor(Preprocessor):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(cls, preset, **kwargs):
-        return super().from_preset(preset, **kwargs)
-
-
-RobertaPreprocessor.from_preset.__func__.__doc__ = (
-    Preprocessor.from_preset.__doc__
-)
-format_docstring(
-    preprocessor_name=RobertaPreprocessor.__name__,
-    example_preset_name="roberta_base_en",
-    preset_names='", "'.join(RobertaPreprocessor.presets),
-)(RobertaPreprocessor.from_preset.__func__)
 
 
 # TODO: This is a temporary, unexported layer until we find a way to make the

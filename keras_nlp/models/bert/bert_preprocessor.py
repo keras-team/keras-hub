@@ -27,7 +27,6 @@ from keras_nlp.utils.keras_utils import (
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 PRESET_NAMES = ", ".join(list(backbone_presets) + list(classifier_presets))
 
@@ -196,15 +195,3 @@ class BertPreprocessor(Preprocessor):
     @classproperty
     def presets(cls):
         return copy.deepcopy({**backbone_presets, **classifier_presets})
-
-    @classmethod
-    def from_preset(cls, preset, **kwargs):
-        return super().from_preset(preset, **kwargs)
-
-
-BertPreprocessor.from_preset.__func__.__doc__ = Preprocessor.from_preset.__doc__
-format_docstring(
-    preprocessor_name=BertPreprocessor.__name__,
-    example_preset_name="bert_base_en_uncased",
-    preset_names='", "'.join(BertPreprocessor.presets),
-)(BertPreprocessor.from_preset.__func__)
