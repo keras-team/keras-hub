@@ -165,7 +165,7 @@ class TransformerDecoder(keras.layers.Layer):
             self._cross_attention_layer = keras.layers.MultiHeadAttention(
                 num_heads=self.num_heads,
                 key_dim=head_dim,
-                value_dim=hidden_dim,
+                value_dim=head_dim,
                 dropout=self.dropout,
                 kernel_initializer=clone_initializer(self.kernel_initializer),
                 bias_initializer=clone_initializer(self.bias_initializer),
