@@ -12,50 +12,51 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BERT backbone model."""
-
-import copy
+"""FNet backbone model."""
 
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.layers.f_net_encoder import FNetEncoder
 from keras_nlp.layers.position_embedding import PositionEmbedding
-from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.models.backbone import Backbone
-from keras_nlp.models.bert.bert_presets import backbone_presets
-from keras_nlp.utils.python_utils import classproperty
 
 
-def bert_kernel_initializer(stddev=0.02):
-    return keras.initializers.TruncatedNormal(stddev=stddev)
+def f_net_kernel_initializer(stddev=0.02):
+    return keras.initializers.RandomNormal(stddev=stddev)
+
+
+def f_net_bias_initializer(stddev=0.02):
+    return keras.initializers.RandomNormal(stddev=stddev)
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class BertBackbone(Backbone):
-    """BERT encoder network.
+class FNetBackbone(Backbone):
+    """FNet encoder network.
 
-    This class implements a bi-directional Transformer-based encoder as
-    described in ["BERT: Pre-training of Deep Bidirectional Transformers for
-    Language Understanding"](https://arxiv.org/abs/1810.04805). It includes the
-    embedding lookups and transformer layers, but not the masked language model
-    or next sentence prediction heads.
+    This class implements a bi-directional Fourier Transform-based encoder as
+    described in ["FNet: Mixing Tokens with Fourier Transforms"](https://arxiv.org/abs/2105.03824).
+    It includes the embedding lookups and `keras_nlp.layers.FNetEncoder` layers,
+    but not the masked language model or next sentence prediction heads.
 
-    The default constructor gives a fully customizable, randomly initialized BERT
-    encoder with any number of layers, heads, and embedding dimensions. To load
+    The default constructor gives a fully customizable, randomly initialized FNet
+    encoder with any number of layers and embedding dimensions. To load
     preset architectures and weights, use the `from_preset` constructor.
+
+    Note: unlike other models, FNet does not take in a `"padding_mask"` input,
+    the `"<pad>"` token is handled equivalently to all other tokens in the input
+    sequence.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
-        num_layers: int. The number of transformer layers.
-        num_heads: int. The number of attention heads for each transformer.
-            The hidden size must be divisible by the number of attention heads.
-        hidden_dim: int. The size of the transformer encoding and pooler layers.
+        num_layers: int. The number of FNet layers.
+        hidden_dim: int. The size of the FNet encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
-            a two-layer feedforward network for each transformer.
-        dropout: float. Dropout probability for the Transformer encoder.
+            a two-layer feedforward network for each FNet layer.
+        dropout: float. Dropout probability for the embeddings and FNet encoder.
         max_sequence_length: int. The maximum sequence length that this encoder
             can consume. If None, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
@@ -70,20 +71,12 @@ class BertBackbone(Backbone):
         "segment_ids": tf.constant(
             [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
-        "padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
     }
 
-    # Pretrained BERT encoder
-    model = keras_nlp.models.BertBackbone.from_preset("bert_base_en_uncased")
-    output = model(input_data)
-
-    # Randomly initialized BERT encoder with a custom config
-    model = keras_nlp.models.BertBackbone(
-        vocabulary_size=30552,
+    # Randomly initialized FNet encoder with a custom config
+    model = keras_nlp.models.FNetBackbone(
+        vocabulary_size=32000,
         num_layers=12,
-        num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12,
@@ -96,12 +89,11 @@ class BertBackbone(Backbone):
         self,
         vocabulary_size,
         num_layers,
-        num_heads,
         hidden_dim,
         intermediate_dim,
         dropout=0.1,
         max_sequence_length=512,
-        num_segments=2,
+        num_segments=4,
         **kwargs,
     ):
 
@@ -114,27 +106,24 @@ class BertBackbone(Backbone):
         segment_id_input = keras.Input(
             shape=(None,), dtype="int32", name="segment_ids"
         )
-        padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
 
         # Embed tokens, positions, and segment ids.
         token_embedding_layer = keras.layers.Embedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            embeddings_initializer=bert_kernel_initializer(),
+            embeddings_initializer=f_net_kernel_initializer(),
             name="token_embedding",
         )
         token_embedding = token_embedding_layer(token_id_input)
         position_embedding = PositionEmbedding(
-            initializer=bert_kernel_initializer(),
+            initializer=f_net_kernel_initializer(),
             sequence_length=max_sequence_length,
             name="position_embedding",
         )(token_embedding)
         segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
             output_dim=hidden_dim,
-            embeddings_initializer=bert_kernel_initializer(),
+            embeddings_initializer=f_net_kernel_initializer(),
             name="segment_embedding",
         )(segment_id_input)
 
@@ -148,31 +137,39 @@ class BertBackbone(Backbone):
             epsilon=1e-12,
             dtype=tf.float32,
         )(x)
+
+        x = keras.layers.Dense(
+            hidden_dim,
+            kernel_initializer=f_net_kernel_initializer(),
+            bias_initializer=f_net_bias_initializer(),
+            name="embedding_projection",
+        )(x)
         x = keras.layers.Dropout(
             dropout,
             name="embeddings_dropout",
         )(x)
 
-        # Apply successive transformer encoder blocks.
+        # Apply successive FNet encoder blocks.
         for i in range(num_layers):
-            x = TransformerEncoder(
-                num_heads=num_heads,
+            x = FNetEncoder(
                 intermediate_dim=intermediate_dim,
                 activation=lambda x: keras.activations.gelu(
                     x, approximate=True
                 ),
-                dropout=dropout,
                 layer_norm_epsilon=1e-12,
-                kernel_initializer=bert_kernel_initializer(),
-                name=f"transformer_layer_{i}",
-            )(x, padding_mask=padding_mask)
+                dropout=dropout,
+                kernel_initializer=f_net_kernel_initializer(),
+                bias_initializer=f_net_bias_initializer(),
+                name=f"f_net_layer_{i}",
+            )(x)
 
-        # Construct the two BERT outputs. The pooled output is a dense layer on
+        # Construct the two FNet outputs. The pooled output is a dense layer on
         # top of the [CLS] token.
         sequence_output = x
         pooled_output = keras.layers.Dense(
             hidden_dim,
-            kernel_initializer=bert_kernel_initializer(),
+            kernel_initializer=f_net_kernel_initializer(),
+            bias_initializer=f_net_bias_initializer(),
             activation="tanh",
             name="pooled_dense",
         )(x[:, cls_token_index, :])
@@ -182,7 +179,6 @@ class BertBackbone(Backbone):
             inputs={
                 "token_ids": token_id_input,
                 "segment_ids": segment_id_input,
-                "padding_mask": padding_mask,
             },
             outputs={
                 "sequence_output": sequence_output,
@@ -190,32 +186,26 @@ class BertBackbone(Backbone):
             },
             **kwargs,
         )
+
         # All references to `self` below this line
         self.vocabulary_size = vocabulary_size
+        self.num_layers = num_layers
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
-        self.num_layers = num_layers
-        self.num_heads = num_heads
+        self.dropout = dropout
         self.max_sequence_length = max_sequence_length
         self.num_segments = num_segments
-        self.dropout = dropout
-        self.token_embedding = token_embedding_layer
         self.cls_token_index = cls_token_index
 
     def get_config(self):
         return {
             "vocabulary_size": self.vocabulary_size,
+            "num_layers": self.num_layers,
             "hidden_dim": self.hidden_dim,
             "intermediate_dim": self.intermediate_dim,
-            "num_layers": self.num_layers,
-            "num_heads": self.num_heads,
+            "dropout": self.dropout,
             "max_sequence_length": self.max_sequence_length,
             "num_segments": self.num_segments,
-            "dropout": self.dropout,
             "name": self.name,
             "trainable": self.trainable,
         }
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

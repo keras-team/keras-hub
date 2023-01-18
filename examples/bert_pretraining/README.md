@@ -25,12 +25,12 @@ python3 examples/tools/split_sentences.py \
     --input_files $OUTPUT_DIR/wiki_example_data.txt \
     --output_directory $OUTPUT_DIR/sentence-split-data
 # Preprocess input for pretraining.
-python3 examples/bert/bert_create_pretraining_data.py \
+python3 examples/bert_pretraining/bert_create_pretraining_data.py \
     --input_files $OUTPUT_DIR/sentence-split-data/ \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --output_file $OUTPUT_DIR/pretraining-data/pretraining.tfrecord
 # Run pretraining for 100 train steps only.
-python3 examples/bert/bert_pretrain.py \
+python3 examples/bert_pretraining/bert_pretrain.py \
     --input_directory $OUTPUT_DIR/pretraining-data/ \
     --vocab_file $OUTPUT_DIR/bert_vocab_uncased.txt \
     --saved_model_output $OUTPUT_DIR/model/ \
@@ -156,7 +156,7 @@ with the following:
 ```shell
 for file in path/to/sentence-split-data/*; do
     output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
-    python3 examples/bert/bert_create_pretraining_data.py \
+    python3 examples/bert_pretraining/bert_create_pretraining_data.py \
         --input_files ${file} \
         --vocab_file bert_vocab_uncased.txt \
         --output_file ${output}
@@ -171,7 +171,7 @@ on an 8 core machine.
 NUM_JOBS=5
 for file in path/to/sentence-split-data/*; do
     output="path/to/pretraining-data/$(basename -- "$file" .txt).tfrecord"
-    echo python3 examples/bert/bert_create_pretraining_data.py \
+    echo python3 examples/bert_pretraining/bert_create_pretraining_data.py \
         --input_files ${file} \
         --vocab_file bert_vocab_uncased.txt \
         --output_file ${output}
@@ -192,7 +192,7 @@ directory. If you are willing to train from data stored on google cloud storage 
 the URL of GCS bucket. For example, `--input_directory=gs://your-bucket-name/you-data-path`. You can also save models directly to GCS by the same approach.
 
 ```shell
-python3 examples/bert/bert_pretrain.py \
+python3 examples/bert_pretraining/bert_pretrain.py \
     --input_directory path/to/data/ \
     --vocab_file path/to/bert_vocab_uncased.txt \
     --model_size tiny \

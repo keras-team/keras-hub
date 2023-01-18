@@ -91,7 +91,7 @@ def compute_word_piece_vocabulary(
     with open("test.txt", "w+") as f:
         f.write("bat sat pat mat rat\n")
     inputs = ["test.txt"]
-    vocab = compute_word_piece_vocabulary(inputs, 13)
+    vocab = keras_nlp.tokenizers.compute_word_piece_vocabulary(inputs, 13)
     ```
 
     Custom Split Usage (from Dataset).
@@ -119,7 +119,9 @@ def compute_word_piece_vocabulary(
         f.write("bat sat: pat mat rat.\n")
     inputs = tf.data.TextLineDataset(["test.txt"])
     split_inputs = inputs.map(normalize_and_split)
-    vocab = compute_word_piece_vocabulary(split_inputs, 13, split=False)
+    vocab = keras_nlp.tokenizers.compute_word_piece_vocabulary(
+        split_inputs, 13, split=False
+    )
     tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary=vocab)
     inputs.map(tokenizer.tokenize)
     ```
