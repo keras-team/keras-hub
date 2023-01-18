@@ -19,7 +19,6 @@ from tensorflow import keras
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import base_sampler_args_docstring
 from keras_nlp.samplers.sampler import call_args_docstring
-from keras_nlp.samplers.sampler import sample_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
 
 
@@ -45,10 +44,7 @@ class BeamSampler(Sampler):
 
     Examples:
     ```python
-    BATCH_SIZE = 8
     VOCAB_SIZE = 10
-    FEATURE_SIZE = 16
-    START_ID = 1
 
     # Create a dummy model to predict the next token.
     model = keras.Sequential(
@@ -56,7 +52,7 @@ class BeamSampler(Sampler):
             keras.Input(shape=[None]),
             keras.layers.Embedding(
                 input_dim=VOCAB_SIZE,
-                output_dim=FEATURE_SIZE,
+                output_dim=16,
             ),
             keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
         ]
@@ -67,7 +63,7 @@ class BeamSampler(Sampler):
     def token_probability_fn(inputs, mask):
         return model(inputs)
 
-    prompt = tf.fill((BATCH_SIZE, 1), START_ID)
+    prompt = tf.fill((8, 1), 1)
 
     sampler = keras_nlp.samplers.BeamSampler(num_beams=3)
     # Print the generated sequence (token ids).
@@ -82,16 +78,19 @@ class BeamSampler(Sampler):
         run_eagerly=False,
     ):
         self.num_beams = num_beams
-        super().__init__(jit_compile, run_eagerly)
+        super().__init__(jit_compile=jit_compile, run_eagerly=run_eagerly)
 
-    @format_docstring(sample_args=sample_args_docstring)
+    def get_next_token(self, next_token_probs):
+        # Beam search overrides the whole `sample` method.
+        pass
+
     def sample(
         self, prompt, token_probability_fn, mask, num_steps, from_logits=True
     ):
         """Sampling logic implementation.
 
-        Args:
-            {{sample_args}}
+        Because beam search uses a different loop body, we have to override the
+        whole `sample` method instead of just the `get_next_token` method.
         """
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         max_length = tf.cast(max_length, num_steps.dtype)
@@ -210,6 +209,4 @@ class BeamSampler(Sampler):
             beams, max_indexes[:, tf.newaxis], axis=1, batch_dims=1
         )
 
-        prompt = tf.squeeze(max_beams, axis=1)
-
-        return prompt
+        return tf.squeeze(max_beams, axis=1)
