@@ -14,7 +14,9 @@
 """Tests for Fnet classification model."""
 
 import os
+import io
 
+import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -31,6 +33,7 @@ class FnetClassifierTest(tf.test.TestCase, parameterized.TestCase):
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
+            embedding_dim=8,
             hidden_dim=64,
             intermediate_dim=128,
             max_sequence_length=128,
@@ -57,7 +60,7 @@ class FnetClassifierTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.proto = bytes_io.getvalue()
 
-        self.tokenizer = FNetTokenizer(proto=self.proto)
+        tokenizer = FNetTokenizer(proto=self.proto)
 
         self.preprocessor = FNetPreprocessor(
             tokenizer=tokenizer,
