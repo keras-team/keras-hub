@@ -93,3 +93,14 @@ class TopKSampler(Sampler):
 
         # Rearrange to get the next token idx from the original order.
         return tf.gather_nd(top_k_indices, next_token, batch_dims=1)
+
+    def get_config(self):
+        config = super().get_config()
+
+        config.update(
+            {
+                "k": self.k,
+                "seed": self.seed,
+            }
+        )
+        return config

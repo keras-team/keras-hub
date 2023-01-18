@@ -106,3 +106,14 @@ class TopPSampler(Sampler):
             tf.math.log(probs), 1, seed=self.seed
         )
         return tf.gather_nd(sorted_indices, sorted_next_token, batch_dims=1)
+
+    def get_config(self):
+        config = super().get_config()
+
+        config.update(
+            {
+                "p": self.p,
+                "seed": self.seed,
+            }
+        )
+        return config

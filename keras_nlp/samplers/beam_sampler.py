@@ -67,7 +67,7 @@ class BeamSampler(Sampler):
 
     sampler = keras_nlp.samplers.BeamSampler(num_beams=3)
     # Print the generated sequence (token ids).
-    print(sampler(prompt, token_probability_fn, 10))
+    print(sampler(prompt, token_probability_fn, max_length=10))
     ```
     """
 
@@ -210,3 +210,9 @@ class BeamSampler(Sampler):
         )
 
         return tf.squeeze(max_beams, axis=1)
+
+    def get_config(self):
+        config = super().get_config()
+
+        config.update({"num_beams": self.num_beams})
+        return config
