@@ -20,6 +20,8 @@ from keras_nlp.utils.python_utils import format_docstring
 
 base_sampler_args_docstring = """
     jit_compile: bool, defaults to True. If True, XLA compilation will be used.
+    run_eagerly: bool, defaults to False. If True, the sampler will run in
+        the eager mode.
     """
 
 call_args_docstring = """
@@ -34,19 +36,6 @@ call_args_docstring = """
         sequence. If None, every sequence is generated up to `max_length`.
         If set, all tokens after encountering `end_token_id` will be
         replaced with `pad_token_id`.
-    from_logits: bool, defaults to True. Indicate if the `token_probability_fn`
-        returns logits. If False, `token_probability_fn` returns probability
-        distributions.
-    """
-
-sample_args_docstring = """
-    prompt: a dense int Tensor of shape [batch_size, max_length]. The
-        placeholder for generated sequence.
-    token_probability_fn: a function that generates the probability of
-        the next token over the whole vocabulary for each input token.
-    mask: a dense bool Tensor of shape [batch_size, max_length]. The mask of
-        prompt.
-    num_steps: int. The remaining number of tokens to generate.
     from_logits: bool, defaults to True. Indicate if the `token_probability_fn`
         returns logits. If False, `token_probability_fn` returns probability
         distributions.
@@ -72,11 +61,7 @@ class Sampler:
 
     Basic usage:
     ```python
-    BATCH_SIZE = 8
     VOCAB_SIZE = 10
-    FEATURE_SIZE = 16
-    START_ID = 1
-    END_ID = 2
 
     # Create a dummy model to predict the next token. Note that the output is
     # random without training, here we jsut demo how `samplers` works.
@@ -85,7 +70,7 @@ class Sampler:
             keras.Input(shape=[None]),
             keras.layers.Embedding(
                 input_dim=VOCAB_SIZE,
-                output_dim=FEATURE_SIZE,
+                output_dim=16,
             ),
             keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
         ]
@@ -96,11 +81,11 @@ class Sampler:
     def token_probability_fn(inputs, mask):
         return model(inputs)
 
-    prompt = tf.fill((BATCH_SIZE, 1), START_ID)
+    prompt = tf.fill((8, 1), 1)
 
     sampler = keras_nlp.samplers.Greedy()
     # Print the generated sequence (token ids).
-    print(sampler(prompt, token_probability_fn, 10, end_token_id=END_ID))
+    print(sampler(prompt, token_probability_fn, max_length=10, end_token_id=2))
     ```
 
     Use with string inputs:
@@ -133,7 +118,7 @@ class Sampler:
     generated = sampler(
         prompt,
         token_probability_fn,
-        10,
+        max_length=10,
         end_token_id=tokenizer.token_to_id("[END]")
     )
     print(tokenizer.detokenize(generated))
@@ -143,8 +128,16 @@ class Sampler:
     def __init__(
         self,
         jit_compile=True,
+        run_eagerly=False,
     ):
+        if run_eagerly and jit_compile:
+            raise ValueError(
+                "XLA cannot be turned on under eager mode, received "
+                "`jit_compile=True` and `run_eagerly=True`. Please either set "
+                "`jit_compile=False` or set `run_eagerly=False`."
+            )
         self.jit_compile = jit_compile
+        self.run_eagerly = run_eagerly
 
     def _validate_prompt_and_mask(self, prompt, mask):
         """Helper method to validate input prompt."""
@@ -231,9 +224,11 @@ class Sampler:
         prompt, mask = self._pad_prompt(prompt, max_length)
         self._validate_token_probability_fn(token_probability_fn, prompt, mask)
 
-        # Convert `sample` method to a `tf.function`, and turn on
-        # `jit_compile` accordingly.
-        sample = tf.function(self.sample, jit_compile=self.jit_compile)
+        # Convert `sample` method to a `tf.function` if `self.run_eagerly=False`
+        # , and turn on `jit_compile` accordingly.
+        sample = self.sample
+        if not self.run_eagerly:
+            sample = tf.function(self.sample, jit_compile=self.jit_compile)
         prompt = sample(
             prompt,
             token_probability_fn,
@@ -252,20 +247,103 @@ class Sampler:
 
         return tf.squeeze(prompt, axis=0) if input_is_1d else prompt
 
-    @format_docstring(sample_args=sample_args_docstring)
+    def get_next_token(self, next_token_probs):
+        """Get the next token.
+
+        Args:
+            next_token_probs: a Tensor, the probability distribution for next
+                token over all vocab tokens.
+
+        Get the next token based on given probability distribution over tokens.
+        Subclasses must implement this method.
+        """
+        raise NotImplementedError
+
     def sample(
         self, prompt, token_probability_fn, mask, num_steps, from_logits=True
     ):
         """Sampling logic implementation.
 
         Args:
-            {{sample_args}}
+            prompt: a dense int Tensor of shape [batch_size, max_length]. The
+                placeholder for generated sequence.
+            token_probability_fn: a function that generates the probability of
+                the next token over the whole vocabulary for each input token.
+            mask: a dense bool Tensor of shape [batch_size, max_length]. The
+                mask of prompt.
+            num_steps: int. The remaining number of tokens to generate.
+            from_logits: bool, defaults to True. Indicate if the
+                `token_probability_fn` returns logits. If False,
+                `token_probability_fn` returns probability distributions.
 
         Returns:
             A dense int Tensor, representing the generated text in token id
             space.
         """
-        raise NotImplementedError
+        batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
+        max_length = tf.cast(max_length, num_steps.dtype)
+        # The index of the last non-padding token in prompt. Since all sequences
+        # are aligned to the right side, the index is the same for all.
+        current_index = max_length - num_steps
+
+        def one_step(current_index, prompt, mask):
+            probs = token_probability_fn(prompt, mask)
+            next_token_probs = tf.gather(
+                probs,
+                tf.repeat(current_index - 1, batch_size),
+                axis=1,
+                batch_dims=1,
+            )
+            if from_logits:
+                next_token_probs = keras.activations.softmax(
+                    next_token_probs, axis=-1
+                )
+            next_token = self.get_next_token(next_token_probs)
+            next_token = tf.cast(next_token, prompt.dtype)
+            next_token = tf.where(
+                mask[:, current_index], prompt[:, current_index], next_token
+            )
+            mask = tf.tensor_scatter_nd_update(
+                tensor=mask,
+                indices=tf.stack(
+                    (
+                        tf.cast(
+                            tf.range(batch_size), dtype=current_index.dtype
+                        ),
+                        tf.repeat(current_index, batch_size),
+                    ),
+                    axis=1,
+                ),
+                updates=tf.repeat(True, batch_size),
+            )
+
+            # Append the next token to current sequence.
+            prompt = tf.tensor_scatter_nd_update(
+                tensor=prompt,
+                indices=tf.stack(
+                    (
+                        tf.cast(
+                            tf.range(batch_size), dtype=current_index.dtype
+                        ),
+                        tf.repeat(current_index, batch_size),
+                    ),
+                    axis=1,
+                ),
+                updates=next_token,
+            )
+
+            current_index = tf.add(current_index, 1)
+            return (current_index, prompt, mask)
+
+        # Run a while loop till `max_length` of tokens has been generated.
+        current_index, prompt, mask = tf.while_loop(
+            cond=lambda current_index, prompt, mask: tf.less(
+                current_index, max_length
+            ),
+            body=one_step,
+            loop_vars=(current_index, prompt, mask),
+        )
+        return prompt
 
     def get_config(self):
         return {

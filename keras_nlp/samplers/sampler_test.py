@@ -16,15 +16,15 @@
 import tensorflow as tf
 
 import keras_nlp
-from keras_nlp.samplers.greedy import Greedy
+from keras_nlp.samplers.greedy_sampler import GreedySampler
 
 
 class SamplerTest(tf.test.TestCase):
     def test_serialization(self):
-        sampler = keras_nlp.samplers.Greedy()
+        sampler = keras_nlp.samplers.GreedySampler()
         config = keras_nlp.samplers.serialize(sampler)
         expected_config = {
-            "class_name": "keras_nlp>Greedy",
+            "class_name": "keras_nlp>GreedySampler",
             "config": {
                 "jit_compile": True,
             },
@@ -35,10 +35,10 @@ class SamplerTest(tf.test.TestCase):
         # Test get from string.
         identifier = "greedy"
         sampler = keras_nlp.samplers.get(identifier)
-        self.assertIsInstance(sampler, Greedy)
+        self.assertIsInstance(sampler, GreedySampler)
 
         # Test dict identifier.
-        original_sampler = keras_nlp.samplers.Greedy(jit_compile=False)
+        original_sampler = keras_nlp.samplers.GreedySampler(jit_compile=False)
         config = keras_nlp.samplers.serialize(original_sampler)
         restored_sampler = keras_nlp.samplers.get(config)
         self.assertDictEqual(
@@ -47,6 +47,6 @@ class SamplerTest(tf.test.TestCase):
         )
 
         # Test identifier is already a sampler instance.
-        original_sampler = keras_nlp.samplers.Greedy(jit_compile=False)
+        original_sampler = keras_nlp.samplers.GreedySampler(jit_compile=False)
         restored_sampler = keras_nlp.samplers.get(original_sampler)
         self.assertEqual(original_sampler, restored_sampler)
