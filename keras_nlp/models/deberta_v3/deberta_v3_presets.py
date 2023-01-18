@@ -90,7 +90,7 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "description": (
-            "Base size of DeBERTaV3. "
+            "Large size of DeBERTaV3. "
             "Trained on English Wikipedia, BookCorpus and OpenWebText."
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_large_en/v1/model.h5",

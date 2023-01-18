@@ -19,7 +19,6 @@ from tensorflow import keras
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import base_sampler_args_docstring
 from keras_nlp.samplers.sampler import call_args_docstring
-from keras_nlp.samplers.sampler import sample_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
 
 
@@ -41,10 +40,7 @@ class GreedySampler(Sampler):
 
     Examples:
     ```python
-    BATCH_SIZE = 8
     VOCAB_SIZE = 10
-    FEATURE_SIZE = 16
-    START_ID = 1
 
     # Create a dummy model to predict the next token.
     model = keras.Sequential(
@@ -52,7 +48,7 @@ class GreedySampler(Sampler):
             keras.Input(shape=[None]),
             keras.layers.Embedding(
                 input_dim=VOCAB_SIZE,
-                output_dim=FEATURE_SIZE,
+                output_dim=16,
             ),
             keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
         ]
@@ -63,11 +59,11 @@ class GreedySampler(Sampler):
     def token_probability_fn(inputs, mask):
         return model(inputs)
 
-    prompt = tf.fill((BATCH_SIZE, 1), START_ID)
+    prompt = tf.fill((8, 1), 1)
 
     sampler = keras_nlp.samplers.GreedySampler()
     # Print the generated sequence (token ids).
-    print(sampler(prompt, token_probability_fn, 10))
+    print(sampler(prompt, token_probability_fn, max_length=10))
     ```
     """
 
@@ -76,75 +72,7 @@ class GreedySampler(Sampler):
         jit_compile=True,
         run_eagerly=False,
     ):
-        super().__init__(jit_compile, run_eagerly)
+        super().__init__(jit_compile=jit_compile, run_eagerly=run_eagerly)
 
-    @format_docstring(sample_args=sample_args_docstring)
-    def sample(
-        self, prompt, token_probability_fn, mask, num_steps, from_logits=True
-    ):
-        """Sampling logic implementation.
-
-        Args:
-            {{sample_args}}
-        """
-        batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
-        max_length = tf.cast(max_length, num_steps.dtype)
-        # The index of the last non-padding token in prompt. Since all sequences
-        # are aligned to the right side, the index is the same for all.
-        current_index = max_length - num_steps
-
-        def one_step(current_index, prompt, mask):
-            probs = token_probability_fn(prompt, mask)
-            next_token_prob = tf.gather(
-                probs,
-                tf.repeat(current_index - 1, batch_size),
-                axis=1,
-                batch_dims=1,
-            )
-            next_token = tf.cast(
-                tf.argmax(next_token_prob, axis=-1), dtype=prompt.dtype
-            )
-            next_token = tf.where(
-                mask[:, current_index], prompt[:, current_index], next_token
-            )
-            mask = tf.tensor_scatter_nd_update(
-                tensor=mask,
-                indices=tf.stack(
-                    (
-                        tf.cast(
-                            tf.range(batch_size), dtype=current_index.dtype
-                        ),
-                        tf.repeat(current_index, batch_size),
-                    ),
-                    axis=1,
-                ),
-                updates=tf.repeat(True, batch_size),
-            )
-
-            # Append the next token to current sequence.
-            prompt = tf.tensor_scatter_nd_update(
-                tensor=prompt,
-                indices=tf.stack(
-                    (
-                        tf.cast(
-                            tf.range(batch_size), dtype=current_index.dtype
-                        ),
-                        tf.repeat(current_index, batch_size),
-                    ),
-                    axis=1,
-                ),
-                updates=next_token,
-            )
-
-            current_index = tf.add(current_index, 1)
-            return (current_index, prompt, mask)
-
-        # Run a while loop till `max_length` of tokens has been generated.
-        current_index, prompt, mask = tf.while_loop(
-            cond=lambda current_index, prompt, mask: tf.less(
-                current_index, max_length
-            ),
-            body=one_step,
-            loop_vars=(current_index, prompt, mask),
-        )
-        return prompt
+    def get_next_token(self, next_token_probs):
+        return tf.argmax(next_token_probs, axis=-1)

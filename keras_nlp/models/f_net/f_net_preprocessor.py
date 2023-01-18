@@ -11,15 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""DeBERTa preprocessor layer."""
-
-import copy
+"""FNet preprocessor layer."""
 
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
-from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
-from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
+from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
@@ -29,16 +26,16 @@ from keras_nlp.utils.python_utils import classproperty
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class DebertaV3Preprocessor(Preprocessor):
-    """A DeBERTa preprocessing layer which tokenizes and packs inputs.
+class FNetPreprocessor(Preprocessor):
+    """An FNet preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
 
      - Tokenize any number of input segments using the `tokenizer`.
      - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
-       with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
-     - Construct a dictionary with keys `"token_ids"` and `"padding_mask"`, that
-       can be passed directly to a DeBERTa model.
+       with the appropriate `"[CLS]"`, `"[SEP]"` and `"<pad>"` tokens.
+     - Construct a dictionary with keys `"token_ids"`, and `"segment_ids"`  that
+       can be passed directly to `keras_nlp.models.FNetBackbone`.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
@@ -58,7 +55,7 @@ class DebertaV3Preprocessor(Preprocessor):
     the layer, e.g. `ds.map(lambda seg1, seg2: preprocessor(x=(seg1, seg2)))`.
 
     Args:
-        tokenizer: A `keras_nlp.models.DebertaV3Tokenizer` instance.
+        tokenizer: A `keras_nlp.models.FNetTokenizer` instance.
         sequence_length: The length of the packed inputs.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
@@ -73,8 +70,11 @@ class DebertaV3Preprocessor(Preprocessor):
 
     Examples:
     ```python
-    # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset("deberta_v3_base_en")
+    tokenizer = keras_nlp.models.FNetTokenizer(proto="model.spm")
+    preprocessor = keras_nlp.models.FNetPreprocessor(
+        tokenizer=tokenizer,
+        sequence_length=10,
+    )
 
     # Tokenize and pack a single sentence.
     sentence = tf.constant("The quick brown fox jumped.")
@@ -134,14 +134,6 @@ class DebertaV3Preprocessor(Preprocessor):
         lambda s1, s2: preprocessor(x=(s1, s2)),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
-
-    # Alternatively, you can create a preprocessor from your own vocabulary.
-    # The usage is the exactly same as above.
-    tokenizer = keras_nlp.models.DebertaV3Tokenizer(proto="model.spm")
-    preprocessor = keras_nlp.models.DebertaV3Preprocessor(
-        tokenizer=tokenizer,
-        sequence_length=10,
-    )
     ```
     """
 
@@ -175,17 +167,13 @@ class DebertaV3Preprocessor(Preprocessor):
     def call(self, x, y=None, sample_weight=None):
         x = convert_inputs_to_list_of_tensor_segments(x)
         x = [self.tokenizer(segment) for segment in x]
-        token_ids, _ = self.packer(x)
+        token_ids, segment_ids = self.packer(x)
         x = {
             "token_ids": token_ids,
-            "padding_mask": token_ids != self.tokenizer.pad_token_id,
+            "segment_ids": segment_ids,
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty
     def tokenizer_cls(cls):
-        return DebertaV3Tokenizer
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
+        return FNetTokenizer

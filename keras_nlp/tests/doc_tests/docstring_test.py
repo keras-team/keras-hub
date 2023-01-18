@@ -13,17 +13,23 @@
 # limitations under the License.
 
 import doctest
+import io
 import os
 import sys
 import unittest
 
 import numpy as np
 import pytest
+import sentencepiece
 import tensorflow as tf
 from tensorflow import keras
 
 import keras_nlp
 from keras_nlp.tests.doc_tests import docstring_lib
+from keras_nlp.tests.doc_tests import fenced_docstring_lib
+from keras_nlp.tests.doc_tests.fenced_docstring_lib import (
+    astor,  # For checking conditional import.
+)
 
 PACKAGE = "keras_nlp."
 
@@ -37,9 +43,6 @@ def find_modules():
     return keras_nlp_modules
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32", reason="Numpy prints differently on windows"
-)
 def test_docstrings():
     keras_nlp_modules = find_modules()
     # As of this writing, it doesn't seem like pytest support load_tests
@@ -63,6 +66,76 @@ def test_docstrings():
                     "os": os,
                     "keras": keras,
                     "keras_nlp": keras_nlp,
+                },
+                checker=docstring_lib.DoctestOutputChecker(),
+                optionflags=(
+                    doctest.ELLIPSIS
+                    | doctest.NORMALIZE_WHITESPACE
+                    | doctest.IGNORE_EXCEPTION_DETAIL
+                    | doctest.DONT_ACCEPT_BLANKLINE
+                ),
+            )
+        )
+    result = runner.run(suite)
+    if not result.wasSuccessful():
+        print(result)
+    assert result.wasSuccessful()
+
+
+@pytest.mark.extra_large
+@pytest.mark.skipif(
+    astor is None,
+    reason="This test requires `astor`. Please `pip install astor` to run.",
+)
+def test_fenced_docstrings():
+    """Tests fenced code blocks in docstrings.
+
+    This can only be run manually. Run with:
+    `pytest keras_nlp/tests/doc_tests/docstring_test.py --run_extra_large`
+    """
+    keras_nlp_modules = find_modules()
+
+    runner = unittest.TextTestRunner()
+    suite = unittest.TestSuite()
+    for module in keras_nlp_modules:
+        # Temporarily stop testing gpt2 & deberta docstrings until we are
+        # exporting the symbols.
+        if "gpt2" in module.__name__ or "deberta_v3" in module.__name__:
+            continue
+        # Do not test certain modules.
+        if module.__name__ in [
+            # Base classes.
+            "keras_nlp.models.backbone",
+            "keras_nlp.models.preprocessor",
+            # Preprocessors and tokenizers which use `model.spm`.
+            "keras_nlp.models.albert.albert_preprocessor",
+            "keras_nlp.models.albert.albert_tokenizer",
+            "keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor",
+            "keras_nlp.models.f_net.f_net_preprocessor",
+            "keras_nlp.models.f_net.f_net_tokenizer",
+        ]:
+            continue
+
+        suite.addTest(
+            doctest.DocTestSuite(
+                module,
+                test_finder=doctest.DocTestFinder(
+                    exclude_empty=False,
+                    parser=fenced_docstring_lib.FencedCellParser(
+                        fence_label="python"
+                    ),
+                ),
+                globs={
+                    "_print_if_not_none": fenced_docstring_lib._print_if_not_none
+                },
+                extraglobs={
+                    "tf": tf,
+                    "np": np,
+                    "os": os,
+                    "keras": keras,
+                    "keras_nlp": keras_nlp,
+                    "io": io,
+                    "sentencepiece": sentencepiece,
                 },
                 checker=docstring_lib.DoctestOutputChecker(),
                 optionflags=(

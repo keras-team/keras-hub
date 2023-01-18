@@ -14,12 +14,16 @@
 
 """ALBERT backbone model."""
 
+import copy
+
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
+from keras_nlp.models.albert.albert_presets import backbone_presets
 from keras_nlp.models.backbone import Backbone
+from keras_nlp.utils.python_utils import classproperty
 
 
 def albert_kernel_initializer(stddev=0.02):
@@ -264,3 +268,7 @@ class AlbertBackbone(Backbone):
             "name": self.name,
             "trainable": self.trainable,
         }
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)

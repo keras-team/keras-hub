@@ -22,9 +22,9 @@ from absl import logging
 from tensorflow import keras
 
 import keras_nlp
-from examples.bert.bert_config import MODEL_CONFIGS
-from examples.bert.bert_config import PREPROCESSING_CONFIG
-from examples.bert.bert_config import TRAINING_CONFIG
+from examples.bert_pretraining.bert_config import MODEL_CONFIGS
+from examples.bert_pretraining.bert_config import PREPROCESSING_CONFIG
+from examples.bert_pretraining.bert_config import TRAINING_CONFIG
 
 FLAGS = flags.FLAGS
 

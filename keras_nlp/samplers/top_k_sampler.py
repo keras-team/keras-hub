@@ -19,7 +19,6 @@ from tensorflow import keras
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import base_sampler_args_docstring
 from keras_nlp.samplers.sampler import call_args_docstring
-from keras_nlp.samplers.sampler import sample_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
 
 
@@ -30,7 +29,7 @@ from keras_nlp.utils.python_utils import format_docstring
 class TopKSampler(Sampler):
     """Top-K Sampler class.
 
-    This sampler implements the top-k search algorithm. Briefly top-k algorithm
+    This sampler implements top-k search algorithm. Briefly top-k algorithm
     randomly selects a token from the tokens of top K probability, with
     selection chance determined by the probability.
 
@@ -44,10 +43,7 @@ class TopKSampler(Sampler):
 
     Examples:
     ```python
-    BATCH_SIZE = 8
     VOCAB_SIZE = 10
-    FEATURE_SIZE = 16
-    START_ID = 1
 
     # Create a dummy model to predict the next token.
     model = keras.Sequential(
@@ -55,7 +51,7 @@ class TopKSampler(Sampler):
             keras.Input(shape=[None]),
             keras.layers.Embedding(
                 input_dim=VOCAB_SIZE,
-                output_dim=FEATURE_SIZE,
+                output_dim=16,
             ),
             keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
         ]
@@ -66,11 +62,11 @@ class TopKSampler(Sampler):
     def token_probability_fn(inputs, mask):
         return model(inputs)
 
-    prompt = tf.fill((BATCH_SIZE, 1), START_ID)
+    prompt = tf.fill((8, 1), 1)
 
     sampler = keras_nlp.samplers.TopKSampler(k=5)
     # Print the generated sequence (token ids).
-    print(sampler(prompt, token_probability_fn, 10))
+    print(sampler(prompt, token_probability_fn, max_length=10))
     ```
     """
 
@@ -83,77 +79,28 @@ class TopKSampler(Sampler):
     ):
         self.k = k
         self.seed = seed
-        super().__init__(jit_compile, run_eagerly)
+        super().__init__(jit_compile=jit_compile, run_eagerly=run_eagerly)
 
-    @format_docstring(sample_args=sample_args_docstring)
-    def sample(
-        self, prompt, token_probability_fn, mask, num_steps, from_logits=True
-    ):
-        """Sampling logic implementation.
-
-        Args:
-            {{sample_args}}
-        """
-        batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
-        max_length = tf.cast(max_length, num_steps.dtype)
-        length = max_length - num_steps
-
-        def one_step(length, prompt, mask):
-            probs = token_probability_fn(prompt, mask)
-            pred = tf.gather(
-                probs, tf.repeat(length - 1, batch_size), axis=1, batch_dims=1
-            )
-            if from_logits:
-                pred = keras.activations.softmax(pred, axis=-1)
-            # Filter out top-k tokens.
-            top_k_pred, top_k_indices = tf.math.top_k(
-                pred, k=self.k, sorted=False
-            )
-            # Sample the next token from the probability distribution.
-            next_token = tf.random.categorical(
-                tf.math.log(top_k_pred), 1, seed=self.seed
-            )
-
-            # Rearrange to get the next token idx from the original order.
-            next_token = tf.gather_nd(top_k_indices, next_token, batch_dims=1)
-            next_token = tf.cast(next_token, dtype=prompt.dtype)
-            next_token = tf.where(
-                mask[:, length], prompt[:, length], next_token
-            )
-
-            mask = tf.tensor_scatter_nd_update(
-                tensor=mask,
-                indices=tf.stack(
-                    (
-                        tf.cast(tf.range(batch_size), dtype=length.dtype),
-                        tf.repeat(length, batch_size),
-                    ),
-                    axis=1,
-                ),
-                updates=tf.repeat(True, batch_size),
-            )
-
-            # Append the next token to current sequence.
-            prompt = tf.tensor_scatter_nd_update(
-                tensor=prompt,
-                indices=tf.stack(
-                    (
-                        tf.cast(tf.range(batch_size), dtype=length.dtype),
-                        tf.repeat(length, batch_size),
-                    ),
-                    axis=1,
-                ),
-                updates=next_token,
-            )
-
-            length = tf.add(length, 1)
-            return (length, prompt, mask)
-
-        # Run a while loop till text of length `max_length` has been generated.
-        length, prompt, mask = tf.while_loop(
-            cond=lambda length, prompt, mask: tf.less(length, max_length),
-            body=one_step,
-            loop_vars=(length, prompt, mask),
+    def get_next_token(self, next_token_probs):
+        # Filter out top-k tokens.
+        top_k_pred, top_k_indices = tf.math.top_k(
+            next_token_probs, k=self.k, sorted=False
+        )
+        # Sample the next token from the probability distribution.
+        next_token = tf.random.categorical(
+            tf.math.log(top_k_pred), 1, seed=self.seed
         )
 
-        return prompt
+        # Rearrange to get the next token idx from the original order.
+        return tf.gather_nd(top_k_indices, next_token, batch_dims=1)
+
+    def get_config(self):
+        config = super().get_config()
+
+        config.update(
+            {
+                "k": self.k,
+                "seed": self.seed,
+            }
+        )
+        return config

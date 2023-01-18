@@ -24,7 +24,6 @@ from keras_nlp.layers import TransformerDecoder
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 def _gpt_2_kernel_initializer(stddev=0.02):
@@ -189,15 +188,3 @@ class GPT2Backbone(Backbone):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(cls, preset, load_weights=True, **kwargs):
-        return super().from_preset(preset, load_weights, **kwargs)
-
-
-GPT2Backbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
-format_docstring(
-    model_name=GPT2Backbone.__name__,
-    example_preset_name="gpt2_base_en",
-    preset_names='", "'.join(GPT2Backbone.presets),
-)(GPT2Backbone.from_preset.__func__)

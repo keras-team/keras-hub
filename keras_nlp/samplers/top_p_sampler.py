@@ -19,7 +19,6 @@ from tensorflow import keras
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import base_sampler_args_docstring
 from keras_nlp.samplers.sampler import call_args_docstring
-from keras_nlp.samplers.sampler import sample_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
 
 
@@ -30,9 +29,9 @@ from keras_nlp.utils.python_utils import format_docstring
 class TopPSampler(Sampler):
     """Top-P Sampler class.
 
-    This sampler implements the top-p search algorithm. Top-p search selects
-    tokens from the smallest subset of output probabilities that sum to greater
-    than `p`. Put in another way, top-p will first order token predictions by
+    This sampler implements top-p search algorithm. Top-p search selects tokens
+    from the smallest subset of output probabilities that sum to greater than
+    `p`. Put in another way, top-p will first order token predictions by
     likelihood, and ignore all tokens after the cumulative probability of
     selected tokens exceeds `p`, then select a token from the remaining tokens.
 
@@ -46,10 +45,7 @@ class TopPSampler(Sampler):
 
     Examples:
     ```python
-    BATCH_SIZE = 8
     VOCAB_SIZE = 10
-    FEATURE_SIZE = 16
-    START_ID = 1
 
     # Create a dummy model to predict the next token.
     model = keras.Sequential(
@@ -57,7 +53,7 @@ class TopPSampler(Sampler):
             keras.Input(shape=[None]),
             keras.layers.Embedding(
                 input_dim=VOCAB_SIZE,
-                output_dim=FEATURE_SIZE,
+                output_dim=16,
             ),
             keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
         ]
@@ -68,11 +64,11 @@ class TopPSampler(Sampler):
     def token_probability_fn(inputs, mask):
         return model(inputs)
 
-    prompt = tf.fill((BATCH_SIZE, 1), START_ID)
+    prompt = tf.fill((8, 1), 1)
 
     sampler = keras_nlp.samplers.TopPSampler(p=0.1)
     # Print the generated sequence (token ids).
-    print(sampler(prompt, token_probability_fn, 10))
+    print(sampler(prompt, token_probability_fn, max_length=10))
     ```
     """
 
@@ -85,90 +81,39 @@ class TopPSampler(Sampler):
     ):
         self.p = p
         self.seed = seed
-        super().__init__(jit_compile, run_eagerly)
+        super().__init__(jit_compile=jit_compile, run_eagerly=run_eagerly)
 
-    @format_docstring(sample_args=sample_args_docstring)
-    def sample(
-        self, prompt, token_probability_fn, mask, num_steps, from_logits=True
-    ):
-        """Sampling logic implementation.
-
-        Args:
-            {{sample_args}}
-        """
-        batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
-        max_length = tf.cast(max_length, num_steps.dtype)
-        length = max_length - num_steps
-
-        def one_step(length, prompt, mask):
-            probs = token_probability_fn(prompt, mask)
-            pred = tf.gather(
-                probs, tf.repeat(length - 1, batch_size), axis=1, batch_dims=1
-            )
-            if from_logits:
-                pred = keras.activations.softmax(pred, axis=-1)
-            # Sort preds in descending order.
-            sorted_preds, sorted_indices = tf.math.top_k(
-                pred, k=tf.shape(pred)[1], sorted=True
-            )
-            # Calculate cumulative probability distribution.
-            cumulative_probs = tf.math.cumsum(sorted_preds, axis=-1)
-            # Create a mask for the tokens to keep.
-            keep_mask = cumulative_probs <= self.p
-            # Shift to include the last token that exceed p.
-            shifted_keep_mask = tf.concat(
-                [tf.ones_like(keep_mask[:, :1]), keep_mask[:, :-1]], axis=-1
-            )
-            # Filter out unmasked tokens and sample from filtered distribution.
-            probs = tf.where(
-                shifted_keep_mask,
-                sorted_preds,
-                tf.zeros(tf.shape(pred), dtype=sorted_preds.dtype),
-            )
-            sorted_next_token = tf.random.categorical(
-                tf.math.log(probs), 1, seed=self.seed
-            )
-            next_token = tf.gather_nd(
-                sorted_indices, sorted_next_token, batch_dims=1
-            )
-            next_token = tf.cast(next_token, dtype=prompt.dtype)
-            next_token = tf.where(
-                mask[:, length], prompt[:, length], next_token
-            )
-
-            mask = tf.tensor_scatter_nd_update(
-                tensor=mask,
-                indices=tf.stack(
-                    (
-                        tf.cast(tf.range(batch_size), dtype=length.dtype),
-                        tf.repeat(length, batch_size),
-                    ),
-                    axis=1,
-                ),
-                updates=tf.repeat(True, batch_size),
-            )
-
-            # Append the next token to current sequence.
-            prompt = tf.tensor_scatter_nd_update(
-                tensor=prompt,
-                indices=tf.stack(
-                    (
-                        tf.cast(tf.range(batch_size), dtype=length.dtype),
-                        tf.repeat(length, batch_size),
-                    ),
-                    axis=1,
-                ),
-                updates=next_token,
-            )
-
-            length = tf.add(length, 1)
-            return (length, prompt, mask)
-
-        # Run a while loop till text of length `max_length` has been generated.
-        length, prompt, mask = tf.while_loop(
-            cond=lambda length, prompt, mask: tf.less(length, max_length),
-            body=one_step,
-            loop_vars=(length, prompt, mask),
+    def get_next_token(self, next_token_probs):
+        # Sort preds in descending order.
+        sorted_preds, sorted_indices = tf.math.top_k(
+            next_token_probs, k=tf.shape(next_token_probs)[1], sorted=True
         )
+        # Calculate cumulative probability distribution.
+        cumulative_probs = tf.math.cumsum(sorted_preds, axis=-1)
+        # Create a mask for the tokens to keep.
+        keep_mask = cumulative_probs <= self.p
+        # Shift to include the last token that exceed p.
+        shifted_keep_mask = tf.concat(
+            [tf.ones_like(keep_mask[:, :1]), keep_mask[:, :-1]], axis=-1
+        )
+        # Filter out unmasked tokens and sample from filtered distribution.
+        probs = tf.where(
+            shifted_keep_mask,
+            sorted_preds,
+            tf.zeros(tf.shape(next_token_probs), dtype=sorted_preds.dtype),
+        )
+        sorted_next_token = tf.random.categorical(
+            tf.math.log(probs), 1, seed=self.seed
+        )
+        return tf.gather_nd(sorted_indices, sorted_next_token, batch_dims=1)
 
-        return prompt
+    def get_config(self):
+        config = super().get_config()
+
+        config.update(
+            {
+                "p": self.p,
+                "seed": self.seed,
+            }
+        )
+        return config
