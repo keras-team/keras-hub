@@ -14,12 +14,16 @@
 
 """FNet backbone model."""
 
+import copy
+
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers.f_net_encoder import FNetEncoder
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.models.backbone import Backbone
+from keras_nlp.models.f_net.f_net_presets import backbone_presets
+from keras_nlp.utils.python_utils import classproperty
 
 
 def f_net_kernel_initializer(stddev=0.02):
@@ -209,3 +213,7 @@ class FNetBackbone(Backbone):
             "name": self.name,
             "trainable": self.trainable,
         }
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
