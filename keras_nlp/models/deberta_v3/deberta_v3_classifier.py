@@ -25,13 +25,12 @@ from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
     DebertaV3Preprocessor,
 )
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
-from keras_nlp.utils.pipeline_model import PipelineModel
+from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class DebertaV3Classifier(PipelineModel):
+class DebertaV3Classifier(Task):
     """An end-to-end DeBERTa model for classification tasks.
 
     This model attaches a classification head to a
@@ -59,8 +58,11 @@ class DebertaV3Classifier(PipelineModel):
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
 
-    Example usage:
+    Examples:
+
+    Example usage.
     ```python
+    # Define the preprocessed inputs.
     preprocessed_features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
         "padding_mask": tf.constant(
@@ -89,6 +91,70 @@ class DebertaV3Classifier(PipelineModel):
 
     # Access backbone programatically (e.g., to change `trainable`)
     classifier.backbone.trainable = False
+    ```
+
+    Raw string inputs.
+    ```python
+    # Create a dataset with raw string features in an `(x, y)` format.
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    labels = [0, 3]
+
+    # Create a DebertaV3Classifier and fit your data.
+    classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
+        "deberta_v3_base_en",
+        num_classes=4,
+    )
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    )
+    classifier.fit(x=features, y=labels, batch_size=2)
+    ```
+
+    Raw string inputs with customized preprocessing.
+    ```python
+    # Create a dataset with raw string features in an `(x, y)` format.
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    labels = [0, 3]
+
+    # Use a shorter sequence length.
+    preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset(
+        "deberta_v3_base_en",
+        sequence_length=128,
+    )
+
+    # Create a DebertaV3Classifier and fit your data.
+    classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
+        "deberta_v3_base_en",
+        num_classes=4,
+        preprocessor=preprocessor,
+    )
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    )
+    classifier.fit(x=features, y=labels, batch_size=2)
+    ```
+
+    Preprocessed inputs.
+    ```python
+    # Create a dataset with preprocessed features in an `(x, y)` format.
+    preprocessed_features = {
+        "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
+        "padding_mask": tf.constant(
+            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
+        ),
+    }
+    labels = [0, 3]
+
+    # Create a DebertaV3Classifier and fit your data.
+    classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
+        "deberta_v3_base_en",
+        num_classes=4,
+        preprocessor=None,
+    )
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    )
+    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
     ```
     """
 
@@ -133,144 +199,25 @@ class DebertaV3Classifier(PipelineModel):
         self.hidden_dim = hidden_dim
         self.dropout = dropout
 
-    def preprocess_samples(self, x, y=None, sample_weight=None):
-        return self.preprocessor(x, y=y, sample_weight=sample_weight)
-
-    @property
-    def backbone(self):
-        """A `keras_nlp.models.DebertaV3Backbone` submodel."""
-        return self._backbone
-
-    @property
-    def preprocessor(self):
-        """A `keras_nlp.models.DebertaV3Preprocessor` preprocessing layer."""
-        return self._preprocessor
-
     def get_config(self):
-        return {
-            "backbone": keras.layers.serialize(self.backbone),
-            "preprocessor": keras.layers.serialize(self.preprocessor),
-            "num_classes": self.num_classes,
-            "hidden_dim": self.hidden_dim,
-            "dropout": self.dropout,
-            "name": self.name,
-            "trainable": self.trainable,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "num_classes": self.num_classes,
+                "hidden_dim": self.hidden_dim,
+                "dropout": self.dropout,
+            }
+        )
+        return config
 
-    @classmethod
-    def from_config(cls, config):
-        if "backbone" in config and isinstance(config["backbone"], dict):
-            config["backbone"] = keras.layers.deserialize(config["backbone"])
-        if "preprocessor" in config and isinstance(
-            config["preprocessor"], dict
-        ):
-            config["preprocessor"] = keras.layers.deserialize(
-                config["preprocessor"]
-            )
-        return cls(**config)
+    @classproperty
+    def backbone_cls(cls):
+        return DebertaV3Backbone
+
+    @classproperty
+    def preprocessor_cls(cls):
+        return DebertaV3Preprocessor
 
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
-    def from_preset(
-        cls,
-        preset,
-        load_weights=True,
-        **kwargs,
-    ):
-        """Create a classification model from a preset architecture and weights.
-
-        By default, this method will automatically create a `preprocessor`
-        layer to preprocess raw inputs during `fit()`, `predict()`, and
-        `evaluate()`. If you would like to disable this behavior, pass
-        `preprocessor=None`.
-
-        Args:
-            preset: string. Must be one of {{names}}.
-            load_weights: Whether to load pre-trained weights into model.
-                Defaults to `True`.
-
-        Examples:
-
-        Raw string inputs.
-        ```python
-        # Create a dataset with raw string features in an `(x, y)` format.
-        features = ["The quick brown fox jumped.", "I forgot my homework."]
-        labels = [0, 3]
-
-        # Create a DebertaV3Classifier and fit your data.
-        classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
-            "deberta_v3_base_en",
-            num_classes=4,
-        )
-        classifier.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        )
-        classifier.fit(x=features, y=labels, batch_size=2)
-        ```
-
-        Raw string inputs with customized preprocessing.
-        ```python
-        # Create a dataset with raw string features in an `(x, y)` format.
-        features = ["The quick brown fox jumped.", "I forgot my homework."]
-        labels = [0, 3]
-
-        # Use a shorter sequence length.
-        preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset(
-            "deberta_v3_base_en",
-            sequence_length=128,
-        )
-
-        # Create a DebertaV3Classifier and fit your data.
-        classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
-            "deberta_v3_base_en",
-            num_classes=4,
-            preprocessor=preprocessor,
-        )
-        classifier.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        )
-        classifier.fit(x=features, y=labels, batch_size=2)
-        ```
-
-        Preprocessed inputs.
-        ```python
-        # Create a dataset with preprocessed features in an `(x, y)` format.
-        preprocessed_features = {
-            "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
-            "padding_mask": tf.constant(
-                [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-            ),
-        }
-        labels = [0, 3]
-
-        # Create a DebertaV3Classifier and fit your data.
-        classifier = keras_nlp.models.DebertaV3Classifier.from_preset(
-            "deberta_v3_base_en",
-            num_classes=4,
-            preprocessor=None,
-        )
-        classifier.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        )
-        classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
-        ```
-        """
-        if "preprocessor" not in kwargs:
-            kwargs["preprocessor"] = DebertaV3Preprocessor.from_preset(preset)
-
-        # Check if preset is backbone-only model
-        if preset in DebertaV3Backbone.presets:
-            backbone = DebertaV3Backbone.from_preset(preset, load_weights)
-            return cls(backbone, **kwargs)
-
-        # Otherwise must be one of class presets
-        # Currently no classifier-level presets, so must throw.
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
