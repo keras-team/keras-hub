@@ -27,6 +27,12 @@ class Backbone(keras.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    def get_config(self):
+        return {
+            "name": self.name,
+            "trainable": self.trainable,
+        }
+
     @classmethod
     def from_config(cls, config):
         return cls(**config)

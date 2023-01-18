@@ -185,18 +185,20 @@ class DebertaV3Backbone(Backbone):
         self.start_token_index = 0
 
     def get_config(self):
-        return {
-            "vocabulary_size": self.vocabulary_size,
-            "num_layers": self.num_layers,
-            "num_heads": self.num_heads,
-            "hidden_dim": self.hidden_dim,
-            "intermediate_dim": self.intermediate_dim,
-            "dropout": self.dropout,
-            "max_sequence_length": self.max_sequence_length,
-            "bucket_size": self.bucket_size,
-            "name": self.name,
-            "trainable": self.trainable,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "vocabulary_size": self.vocabulary_size,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "dropout": self.dropout,
+                "max_sequence_length": self.max_sequence_length,
+                "bucket_size": self.bucket_size,
+            }
+        )
+        return config
 
     @classproperty
     def presets(cls):

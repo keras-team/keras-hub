@@ -203,18 +203,20 @@ class BertBackbone(Backbone):
         self.cls_token_index = cls_token_index
 
     def get_config(self):
-        return {
-            "vocabulary_size": self.vocabulary_size,
-            "hidden_dim": self.hidden_dim,
-            "intermediate_dim": self.intermediate_dim,
-            "num_layers": self.num_layers,
-            "num_heads": self.num_heads,
-            "max_sequence_length": self.max_sequence_length,
-            "num_segments": self.num_segments,
-            "dropout": self.dropout,
-            "name": self.name,
-            "trainable": self.trainable,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "vocabulary_size": self.vocabulary_size,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "max_sequence_length": self.max_sequence_length,
+                "num_segments": self.num_segments,
+                "dropout": self.dropout,
+            }
+        )
+        return config
 
     @classproperty
     def presets(cls):
