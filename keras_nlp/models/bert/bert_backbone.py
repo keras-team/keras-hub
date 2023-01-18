@@ -190,28 +190,28 @@ class BertBackbone(Backbone):
             },
             **kwargs,
         )
+
         # All references to `self` below this line
         self.vocabulary_size = vocabulary_size
-        self.hidden_dim = hidden_dim
-        self.intermediate_dim = intermediate_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
+        self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
+        self.dropout = dropout
         self.max_sequence_length = max_sequence_length
         self.num_segments = num_segments
-        self.dropout = dropout
-        self.token_embedding = token_embedding_layer
         self.cls_token_index = cls_token_index
 
     def get_config(self):
         return {
             "vocabulary_size": self.vocabulary_size,
-            "hidden_dim": self.hidden_dim,
-            "intermediate_dim": self.intermediate_dim,
             "num_layers": self.num_layers,
             "num_heads": self.num_heads,
+            "hidden_dim": self.hidden_dim,
+            "intermediate_dim": self.intermediate_dim,
+            "dropout": self.dropout,
             "max_sequence_length": self.max_sequence_length,
             "num_segments": self.num_segments,
-            "dropout": self.dropout,
             "name": self.name,
             "trainable": self.trainable,
         }
