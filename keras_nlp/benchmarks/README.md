@@ -26,16 +26,14 @@ To change the configuration, say, for example, number of layers in the transform
 model used for inference, the user can modify the config dictionaries given at
 the top of the script.
 
-
 ## Sentiment Analysis
-
 
 For benchmarking classification models, the following command can be run
 from the root of the repository:
 
 ```sh
-python3 .keras_nlp/benchmarks/sentiment_analysis.py \
-    --model="bert" \
+python3 keras_nlp/benchmarks/sentiment_analysis.py \
+    --model="BertClassifier" \
     --preset="bert_small_en_uncased" \
     --learning_rate=5e-5 \
     --num_epochs=5 \

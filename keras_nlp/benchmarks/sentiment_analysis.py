@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,7 +27,9 @@ keras.mixed_precision.set_global_policy("mixed_float16")
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
-    "model", None, "The name of the classifier such as BertClassifier."
+    "model",
+    None,
+    "The name of the classifier such as BertClassifier.",
 )
 flags.DEFINE_string(
     "preset",
@@ -50,7 +52,9 @@ def check_flags():
 
 
 def create_imdb_dataset():
-    dataset = tfds.load("imdb_reviews", as_supervised=True)
+    dataset, info = tfds.load(
+        "imdb_reviews", as_supervised=True, with_info=True
+    )
     train_dataset, test_dataset = dataset["train"], dataset["test"]
 
     train_dataset = (
@@ -58,13 +62,16 @@ def create_imdb_dataset():
         .batch(FLAGS.batch_size)
         .prefetch(tf.data.AUTOTUNE)
     )
+
+    test_dataset_size = info.splits['test'].num_examples // 2
+
     val_dataset = (
-        test_dataset.take(10000)
+        test_dataset.take(test_dataset_size)
         .batch(FLAGS.batch_size)
         .prefetch(tf.data.AUTOTUNE)
     )
     test_dataset = (
-        test_dataset.skip(10000)
+        test_dataset.skip(test_dataset_size)
         .batch(FLAGS.batch_size)
         .prefetch(tf.data.AUTOTUNE)
     )
@@ -75,7 +82,7 @@ def create_imdb_dataset():
 def create_model():
     for name, symbol in keras_nlp.models.__dict__.items():
         if inspect.isclass(symbol) and issubclass(symbol, keras.Model):
-            if FLAGS.model and name != f"{FLAGS.model.capitalize()}Classifier":
+            if FLAGS.model and name != FLAGS.model:
                 continue
             if not hasattr(symbol, "from_preset"):
                 continue
@@ -129,7 +136,7 @@ def main(_):
 
     # End time
     end_time = time.time()
-    print(f"Total time: {end_time - start_time}")
+    print(f"Total wall time: {end_time - start_time}")
 
 
 if __name__ == "__main__":
