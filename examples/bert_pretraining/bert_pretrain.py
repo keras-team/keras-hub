@@ -207,7 +207,7 @@ class BertPretrainingModel(keras.Model):
         self.encoder = encoder
         # TODO(jbischof): replace with keras_nlp.layers.MaskedLMHead (Issue #166)
         self.masked_lm_head = MaskedLMHead(
-            embedding_table=encoder.token_embedding.embeddings,
+            embedding_table=encoder.get_layer("token_embedding").embeddings,
             initializer=keras.initializers.TruncatedNormal(stddev=0.02),
             name="mlm_layer",
         )
