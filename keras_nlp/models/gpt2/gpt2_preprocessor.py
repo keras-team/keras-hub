@@ -17,24 +17,134 @@
 import copy
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
+from keras_nlp.models.preprocessor import Preprocessor
+from keras_nlp.utils.keras_utils import (
+    convert_inputs_to_list_of_tensor_segments,
+)
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 
 
-class GPT2Preprocessor(keras.layers.Layer):
+class GPT2Preprocessor(Preprocessor):
+    """GPT2 preprocessing layer which tokenizes and packs inputs.
+
+    This preprocessing layer will do three things:
+
+    - Tokenize the input using the `tokenizer`.
+    - Add the id of '<|endoftext|>' to the start and end of the tokenized input.
+    - Construct a dictionary with keys `"token_ids"`, `"padding_mask"`, that can
+        be passed directly to a `keras_nlp.models.GPT2Backbone`.
+
+    This layer can be used directly with `tf.data.Dataset.map` to preprocess
+    string data in the `(x, y, sample_weight)` format used by
+    `keras.Model.fit`.
+
+    The call method of this layer accepts three arguments, `x`, `y`, and
+    `sample_weight`. `x` can be a python string or tensor representing a single
+    segment, a list of python strings representing a batch of single segments,
+    or a list of tensors representing multiple segments to be packed together.
+    `y` and `sample_weight` are both optional, can have any format, and will be
+    passed through unaltered.
+
+    `GPT2Preprocessor` forces the input to have only one segment, as GPT2 is
+    mainly used for generation tasks.for tasks having multi-segment inputs
+    like "glue/mnli", please use a model designed for classification purposes
+    such as BERT or RoBERTa.
+
+    Args:
+        tokenizer: A `keras_nlp.models.GPT2Tokenizer` instance.
+        sequence_length: The length of the packed inputs.
+
+    Examples:
+    ```python
+    # Load the preprocessor from a preset.
+    preprocessor = keras_nlp.models.GPT2Preprocessor.from_preset("gpt2_base_en")
+
+    # Tokenize and pack a single sentence.
+    sentence = tf.constant("league of legends")
+    preprocessor(sentence)
+    # Same output.
+    preprocessor("league of legends")
+
+    # Tokenize a batch of sentences.
+    sentences = tf.constant(["taco tuesday", "gi gi gi gi"])
+    preprocessor(sentences)
+    # Same output.
+    preprocessor(["taco tuesday", "gi gi gi gi"])
+
+    # Map a dataset to preprocess a single sentence.
+    features = tf.constant(
+        [
+            "Avatar 2 is amazing!",
+            "Well, I am not sure.",
+        ]
+    )
+    labels = tf.constant([1, 0])
+    ds = tf.data.Dataset.from_tensor_slices((features, labels))
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map a dataset to preprocess unlabled sentences.
+    ds = tf.data.Dataset.from_tensor_slices(features)
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Alternatively, you can create a preprocessor from your own vocabulary.
+    # The usage is exactly the same as above.
+    vocab = {
+        "<s>": 0,
+        "<pad>": 1,
+        "</s>": 2,
+        "Ġafter": 5,
+        "noon": 6,
+        "Ġsun": 7,
+    }
+    merges = ["Ġ a", "Ġ s", "Ġ n", "e r", "n o", "o n", "Ġs u", "Ġa f", "no on"]
+    merges += ["Ġsu n", "Ġaf t", "Ġaft er"]
+
+    tokenizer = keras_nlp.models.GPT2Tokenizer(
+        vocabulary=vocab,
+        merges=merges,
+    )
+    preprocessor = keras_nlp.models.GPT2Preprocessor(
+        tokenizer=tokenizer,
+        sequence_length=20,
+    )
+    ```
+    """
+
     def __init__(self, tokenizer, sequence_length, **kwargs):
 
         super().__init__(**kwargs)
 
-        self.tokenizer = tokenizer
+        self._tokenizer = tokenizer
         self.sequence_length = sequence_length
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "sequence_length": self.packer.sequence_length,
+            }
+        )
+        return config
+
     def call(self, x, y=None, sample_weight=None):
-        token_ids = self.tokenizer(x)
+        x = convert_inputs_to_list_of_tensor_segments(x)
+        if len(x) > 1:
+            raise ValueError(
+                "GPT2 requires each input feature to contain only "
+                f"one segment, but received: {len(x)}. If you are using GPT2 "
+                "for a multi-segment classification task, please refer to "
+                "classification models like BERT or RoBERTa."
+            )
+        token_ids = self._tokenizer(x[0])
+        # batch_size = token_ids.nrows()
+        # start_column = tf.fill((batch_size, 1), self._tokenizer.end_token_id)
+        # end_column = tf.fill((batch_size, 1), self._tokenizer.end_token_id)
+        # token_ids = tf.concat([start_column, token_ids, end_column], axis=1)
+
         mask = tf.ones_like(token_ids, dtype=tf.bool)
         mask = mask.to_tensor(shape=(None, self.sequence_length))
         token_ids = token_ids.to_tensor(shape=(None, self.sequence_length))
@@ -49,37 +159,6 @@ class GPT2Preprocessor(keras.layers.Layer):
     def presets(cls):
         return copy.deepcopy(backbone_presets)
 
-    @classmethod
-    def from_preset(
-        cls,
-        preset,
-        sequence_length=None,
-        **kwargs,
-    ):
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-
-        tokenizer = GPT2Tokenizer.from_preset(preset)
-
-        # Use model's `max_sequence_length` if `sequence_length` unspecified;
-        # otherwise check that `sequence_length` not too long.
-        metadata = cls.presets[preset]
-        max_sequence_length = metadata["config"]["max_sequence_length"]
-        if sequence_length is not None:
-            if sequence_length > max_sequence_length:
-                raise ValueError(
-                    f"`sequence_length` cannot be longer than `{preset}` "
-                    f"preset's `max_sequence_length` of {max_sequence_length}. "
-                    f"Received: {sequence_length}."
-                )
-        else:
-            sequence_length = max_sequence_length
-
-        return cls(
-            tokenizer=tokenizer,
-            sequence_length=sequence_length,
-            **kwargs,
-        )
+    @classproperty
+    def tokenizer_cls(cls):
+        return GPT2Tokenizer

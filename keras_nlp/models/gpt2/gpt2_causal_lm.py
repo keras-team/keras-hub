@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""BERT task specific models and heads."""
+"""GPT2 Causal LM (Language Model)."""
 
 import copy
 
@@ -30,16 +30,40 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class GPT2CausalLM(PipelineModel):
-    def __init__(self, backbone, preprocessor=None, **kwargs):
+    """GPT2 Causal LM task model.
 
+    Causal LM is predicting the next token based on previous tokens, which is
+    the way GPT2 gets pretrained. Users can finetune `GPT2CausalLM` to generate
+    text similar to the custom dataset. `GPT2CausalLM` also has a public method
+    `generate()`, which generates text based on given prompt.
+
+    This model can optionally be configured with a `preprocessor` layer, in
+    which case it will automatically apply preprocessing to raw inputs during
+    `fit()`, `predict()`, and `evaluate()`. This is done by default when
+    creating the model with `from_preset()`.
+
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind. The underlying model is provided by a
+    third party and subject to a separate license, available
+    [here](https://github.com/openai/gpt-2).
+
+    Args:
+        backbone: A `keras_nlp.models.GPT2Backbone` instance.
+        preprocessor: A `keras_nlp.models.GPT2CausalLMPreprocessor` or `None`.
+            If `None`, this model will not apply preprocessing, and inputs
+            should be preprocessed before calling the model.
+
+
+    """
+
+    def __init__(self, backbone, preprocessor=None, **kwargs):
         inputs = backbone.input
         x = backbone(inputs)
-        x = tf.matmul(
+        outputs = tf.matmul(
             x,
             backbone.get_layer("token_embedding").embeddings,
             transpose_b=True,
         )
-        outputs = tf.keras.layers.Softmax()(x)
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs=inputs,
@@ -88,13 +112,38 @@ class GPT2CausalLM(PipelineModel):
             "token_ids": prompt,
             "padding_mask": mask,
         }
-        probs = self(model_inputs)
-        return probs
+        return self(model_inputs)
 
-    def generate(self, prompt, max_length, generator="top_k"):
-        """Pick one method as the default generation algo."""
-        if isinstance(generator, str):
-            generator = keras_nlp.samplers.get(generator)
+    def generate(
+        self,
+        prompt,
+        max_length,
+        end_token="<|endoftext|>",
+        sampler="top_k",
+    ):
+        """Generate text.
+
+        This method generates text based on given `prompt`. Generation will
+        continue until `max_length` is met, and all generated tokens after
+        `end_token` will be truncated.
+
+        Args:
+            prompt: a string, string Tensor or string RaggedTensor. The prompt
+                text for generation.
+            max_length: int. The max length of generated sequence.
+            end_token: string, defaults to "<|endoftext|>", which is the default
+                end token of GPT2. The token marking the end of the sequence,
+                tokens generated after the end token will be truncated.
+        """
+        end_token_id = self.preprocessor.tokenizer.token_to_id(end_token)
+
+        if isinstance(sampler, str):
+            sampler = keras_nlp.samplers.get(sampler)
         prompt = self.preprocessor.tokenizer(prompt)
-        generated = generator(prompt, self._get_token_probability, max_length)
+        generated = sampler(
+            prompt,
+            self._get_token_probability,
+            max_length=max_length,
+            end_token_id=end_token_id,
+        )
         return self.preprocessor.tokenizer.detokenize(generated)
