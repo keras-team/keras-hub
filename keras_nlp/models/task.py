@@ -40,6 +40,8 @@ class Task(PipelineModel):
         return self._preprocessor
 
     def get_config(self):
+        # Don't chain to super here. The default `get_config()` for functional
+        # models is nested and cannot be passed to our Task constructors.
         return {
             "backbone": keras.layers.serialize(self.backbone),
             "preprocessor": keras.layers.serialize(self.preprocessor),
@@ -49,6 +51,8 @@ class Task(PipelineModel):
 
     @classmethod
     def from_config(cls, config):
+        # The default `from_config()` for functional models will return a
+        # vanilla `keras.Model`. We override it to get a subclass instance back.
         if "backbone" in config and isinstance(config["backbone"], dict):
             config["backbone"] = keras.layers.deserialize(config["backbone"])
         if "preprocessor" in config and isinstance(
