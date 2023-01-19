@@ -22,9 +22,6 @@ from tensorflow import keras
 
 import keras_nlp
 
-# Use mixed precision for optimal performance
-keras.mixed_precision.set_global_policy("mixed_float16")
-
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "model",
@@ -37,6 +34,12 @@ flags.DEFINE_string(
     "The name of a preset, e.g. bert_base_multi.",
 )
 
+flags.DEFINE_string(
+    "mixed_precision_policy",
+    "mixed_float16",
+    "The global mixed precision policy to use. E.g. 'mixed_float16' or 'float32'.",
+)
+
 flags.DEFINE_float("learning_rate", 5e-5, "The learning rate.")
 flags.DEFINE_integer("num_epochs", 1, "The number of epochs.")
 flags.DEFINE_integer("batch_size", 16, "The batch size.")
@@ -45,10 +48,7 @@ tfds.disable_progress_bar()
 
 BUFFER_SIZE = 10000
 
-
-def check_flags():
-    if not FLAGS.model:
-        raise ValueError("Please specify a model name.")
+keras.mixed_precision.set_global_policy(FLAGS.mixed_precision_policy)
 
 
 def create_imdb_dataset():
@@ -63,7 +63,8 @@ def create_imdb_dataset():
         .prefetch(tf.data.AUTOTUNE)
     )
 
-    test_dataset_size = info.splits['test'].num_examples // 2
+    # We split the test data evenly into validation and test sets.
+    test_dataset_size = info.splits["test"].num_examples // 2
 
     val_dataset = (
         test_dataset.take(test_dataset_size)
@@ -128,7 +129,6 @@ def main(_):
     # Start time
     start_time = time.time()
 
-    check_flags()
     train_dataset, validation_dataset, test_dataset = create_imdb_dataset()
     model = create_model()
     model = train_model(model, train_dataset, validation_dataset)
@@ -140,4 +140,5 @@ def main(_):
 
 
 if __name__ == "__main__":
+    flags.mark_flag_as_required("model")
     app.run(main)

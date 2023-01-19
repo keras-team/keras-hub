@@ -38,6 +38,7 @@ python3 keras_nlp/benchmarks/sentiment_analysis.py \
     --learning_rate=5e-5 \
     --num_epochs=5 \
     --batch_size=32
+    --mixed_precision_policy="mixed_float16"
 ```
 
 flag `--model` specifies the model name, and `--preset` specifies the preset under testing. `--preset` could be None, 
