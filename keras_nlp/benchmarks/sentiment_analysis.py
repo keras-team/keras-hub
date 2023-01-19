@@ -37,7 +37,7 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     "mixed_precision_policy",
     "mixed_float16",
-    "The global mixed precision policy to use. E.g. 'mixed_float16' or 'float32'.",
+    "The global precision policy to use. E.g. 'mixed_float16' or 'float32'.",
 )
 
 flags.DEFINE_float("learning_rate", 5e-5, "The learning rate.")
@@ -47,8 +47,6 @@ flags.DEFINE_integer("batch_size", 16, "The batch size.")
 tfds.disable_progress_bar()
 
 BUFFER_SIZE = 10000
-
-keras.mixed_precision.set_global_policy(FLAGS.mixed_precision_policy)
 
 
 def create_imdb_dataset():
@@ -126,6 +124,8 @@ def evaluate_model(model: keras.Model, test_dataset: tf.data.Dataset):
 
 
 def main(_):
+    keras.mixed_precision.set_global_policy(FLAGS.mixed_precision_policy)
+
     # Start time
     start_time = time.time()
 
