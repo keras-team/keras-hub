@@ -218,7 +218,6 @@ class BertBackbone(Backbone):
         )
         return config
 
-
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
