@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -203,18 +203,21 @@ class BertBackbone(Backbone):
         self.cls_token_index = cls_token_index
 
     def get_config(self):
-        return {
-            "vocabulary_size": self.vocabulary_size,
-            "num_layers": self.num_layers,
-            "num_heads": self.num_heads,
-            "hidden_dim": self.hidden_dim,
-            "intermediate_dim": self.intermediate_dim,
-            "dropout": self.dropout,
-            "max_sequence_length": self.max_sequence_length,
-            "num_segments": self.num_segments,
-            "name": self.name,
-            "trainable": self.trainable,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "vocabulary_size": self.vocabulary_size,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "dropout": self.dropout,
+                "max_sequence_length": self.max_sequence_length,
+                "num_segments": self.num_segments,
+            }
+        )
+        return config
+
 
     @classproperty
     def presets(cls):
