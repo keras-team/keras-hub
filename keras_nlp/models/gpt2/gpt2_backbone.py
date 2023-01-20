@@ -110,12 +110,13 @@ class GPT2Backbone(Backbone):
         )
 
         # Embed tokens, positions.
-        token_embedding = keras.layers.Embedding(
+        token_embedding_layer = keras.layers.Embedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=_gpt_2_kernel_initializer(stddev=0.01),
             name="token_embedding",
-        )(token_ids)
+        )
+        token_embedding = token_embedding_layer(token_ids)
 
         # Can't use `TokenAndPositionEmbedding` layer here because of different
         # initializers.
@@ -164,6 +165,7 @@ class GPT2Backbone(Backbone):
             **kwargs,
         )
         # All references to `self` below this line
+        self._token_embedding = token_embedding_layer
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads

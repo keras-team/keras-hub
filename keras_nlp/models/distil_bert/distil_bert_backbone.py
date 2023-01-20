@@ -115,13 +115,14 @@ class DistilBertBackbone(Backbone):
         )
 
         # Embed tokens and positions.
-        x = TokenAndPositionEmbedding(
+        token_and_position_embedding_layer = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
             embedding_dim=hidden_dim,
             embeddings_initializer=distilbert_kernel_initializer(),
             name="token_and_position_embedding",
-        )(token_id_input)
+        )
+        x = token_and_position_embedding_layer(token_id_input)
 
         # Normalize and apply dropout to embeddings.
         x = keras.layers.LayerNormalization(
@@ -156,6 +157,9 @@ class DistilBertBackbone(Backbone):
             **kwargs,
         )
         # All references to `self` below this line
+        self._token_embedding = (
+            token_and_position_embedding_layer.token_embedding
+        )
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads

@@ -192,6 +192,7 @@ class FNetBackbone(Backbone):
         )
 
         # All references to `self` below this line
+        self._token_embedding = token_embedding_layer
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
