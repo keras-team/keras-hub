@@ -125,7 +125,7 @@ class GPT2Preprocessor(Preprocessor):
         config = super().get_config()
         config.update(
             {
-                "sequence_length": self.packer.sequence_length,
+                "sequence_length": self.sequence_length,
             }
         )
         return config
@@ -144,10 +144,16 @@ class GPT2Preprocessor(Preprocessor):
         # start_column = tf.fill((batch_size, 1), self._tokenizer.end_token_id)
         # end_column = tf.fill((batch_size, 1), self._tokenizer.end_token_id)
         # token_ids = tf.concat([start_column, token_ids, end_column], axis=1)
-
+        input_is_1d = False
+        if len(token_ids.shape) == 1:
+            input_is_1d = True
+            token_ids = tf.RaggedTensor.from_tensor([token_ids])
         mask = tf.ones_like(token_ids, dtype=tf.bool)
         mask = mask.to_tensor(shape=(None, self.sequence_length))
         token_ids = token_ids.to_tensor(shape=(None, self.sequence_length))
+        if input_is_1d:
+            token_ids = tf.squeeze(token_ids, axis=0)
+            mask = tf.squeeze(mask, axis=0)
         x = {
             "token_ids": token_ids,
             "padding_mask": mask,
