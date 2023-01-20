@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import os
 from tensorflow import keras
 
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -26,8 +27,18 @@ class Backbone(keras.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    def get_config(self):
+        # Don't chain to super here. The default `get_config()` for functional
+        # models is nested and cannot be passed to our Backbone constructors.
+        return {
+            "name": self.name,
+            "trainable": self.trainable,
+        }
+
     @classmethod
     def from_config(cls, config):
+        # The default `from_config()` for functional models will return a
+        # vanilla `keras.Model`. We override it to get a subclass instance back.
         return cls(**config)
 
     @classproperty
@@ -51,10 +62,12 @@ class Backbone(keras.Model):
         Examples:
         ```python
         # Load architecture and weights from preset
-        model = {{model_name}}.from_preset("{{example_preset_name}}")
+        model = keras_nlp.models.{{model_name}}.from_preset(
+            "{{example_preset_name}}"
+        )
 
         # Load randomly initialized model from preset architecture
-        model = {{model_name}}.from_preset(
+        model = keras_nlp.models.{{model_name}}.from_preset(
             "{{example_preset_name}}",
             load_weights=False
         )
@@ -87,3 +100,25 @@ class Backbone(keras.Model):
 
         model.load_weights(weights)
         return model
+
+    def __init_subclass__(cls, **kwargs):
+        # Use __init_subclass__ to setup a correct docstring for from_preset.
+        super().__init_subclass__(**kwargs)
+
+        # If the subclass does not define from_preset, assign a wrapper so that
+        # each class can have an distinct docstring.
+        if "from_preset" not in cls.__dict__:
+
+            def from_preset(calling_cls, *args, **kwargs):
+                return super(cls, calling_cls).from_preset(*args, **kwargs)
+
+            cls.from_preset = classmethod(from_preset)
+
+        # Format and assign the docstring unless the subclass has overridden it.
+        if cls.from_preset.__doc__ is None:
+            cls.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
+            format_docstring(
+                model_name=cls.__name__,
+                example_preset_name=next(iter(cls.presets), ""),
+                preset_names='", "'.join(cls.presets),
+            )(cls.from_preset.__func__)

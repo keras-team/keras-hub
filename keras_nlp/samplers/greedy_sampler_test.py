@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.samplers.greedy import Greedy
+from keras_nlp.samplers.greedy_sampler import GreedySampler
 
 
-class GreedyTest(tf.test.TestCase, parameterized.TestCase):
+class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
         self.vocab_size = 10
@@ -44,7 +44,7 @@ class GreedyTest(tf.test.TestCase, parameterized.TestCase):
 
         self.token_probability_fn = token_probability_fn
 
-        self.sampler = Greedy()
+        self.sampler = GreedySampler()
 
     def test_generate_with_1d_prompt(self):
         inputs = tf.constant([1])
@@ -102,7 +102,7 @@ class GreedyTest(tf.test.TestCase, parameterized.TestCase):
                 tf.repeat(prob, batch_size, axis=0), max_length, axis=1
             )
 
-        sampler = Greedy()
+        sampler = GreedySampler()
         inputs = tf.constant([[0, 1], [1, 2]])
         outputs = sampler(
             inputs,
@@ -115,12 +115,12 @@ class GreedyTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_compare_xla_noxla_results(self):
         inputs = [[1], [1]]
-        xla_sampler = Greedy(jit_compile=True)
+        xla_sampler = GreedySampler(jit_compile=True)
         outputs_xla = xla_sampler(
             inputs, self.token_probability_fn, max_length=5
         )
 
-        xla_sampler = Greedy(jit_compile=False)
+        xla_sampler = GreedySampler(jit_compile=False)
         outputs_no_xla = xla_sampler(
             inputs, self.token_probability_fn, max_length=5
         )
