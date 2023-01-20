@@ -107,7 +107,8 @@ def test_fenced_docstrings():
             # Base classes.
             "keras_nlp.models.backbone",
             "keras_nlp.models.preprocessor",
-            # Preprocessors and tokenizers which use `model.spm`.
+            "keras_nlp.models.task",
+            # Preprocessors and tokenizers which use `model.spm` (temporary).
             "keras_nlp.models.albert.albert_preprocessor",
             "keras_nlp.models.albert.albert_tokenizer",
             "keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor",
