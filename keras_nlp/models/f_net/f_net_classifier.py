@@ -16,13 +16,12 @@
 
 import os
 
-from tensorflow import keras
-
-from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
-from keras_nlp.models.f_net.f_net_backbone import f_net_kernel_initializer
+from keras_nlp.models.f_net.f_net_backbone import (FNetBackbone,
+                                                   f_net_kernel_initializer)
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
+from tensorflow import keras
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class FnetClassifier(PipelineModel):
