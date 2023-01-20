@@ -98,9 +98,6 @@ class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         sw = tf.constant([1.0] * 4)
         ds = tf.data.Dataset.from_tensor_slices((x, y, sw))
         ds = ds.map(self.preprocessor)
-        import pdb
-
-        pdb.set_trace()
         x_out, y_out, sw_out = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(
             x_out["token_ids"], [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]] * 4

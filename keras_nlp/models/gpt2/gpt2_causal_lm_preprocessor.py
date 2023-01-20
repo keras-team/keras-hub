@@ -14,11 +14,13 @@
 
 """GPT2 Causal LM preprocessor layer."""
 
+from tensorflow import keras
 
 from keras_nlp.models.gpt2.gpt2_preprocessor import GPT2Preprocessor
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     """GPT2 Causal LM preprocessor.
 

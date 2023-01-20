@@ -77,7 +77,6 @@ def remove_strings_from_inputs(tensor, string_to_remove):
     flatten_indexes = tf.where(non_empty_mask)
     flatten_result = tf.gather_nd(tensor, flatten_indexes)
     row_lengths = tf.reduce_sum(tf.cast(non_empty_mask, tf.int64), axis=1)
-
     result = tf.RaggedTensor.from_row_lengths(
         values=flatten_result,
         row_lengths=row_lengths,

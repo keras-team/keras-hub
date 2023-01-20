@@ -17,6 +17,7 @@
 import copy
 
 import tensorflow as tf
+from tensorflow import keras
 
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
@@ -28,13 +29,13 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class GPT2Preprocessor(Preprocessor):
     """GPT2 preprocessing layer which tokenizes and packs inputs.
 
-    This preprocessing layer will do three things:
+    This preprocessing layer will do 2 things:
 
     - Tokenize the input using the `tokenizer`.
-    - Add the id of '<|endoftext|>' to the start and end of the tokenized input.
     - Construct a dictionary with keys `"token_ids"`, `"padding_mask"`, that can
         be passed directly to a `keras_nlp.models.GPT2Backbone`.
 
@@ -135,23 +136,19 @@ class GPT2Preprocessor(Preprocessor):
         if len(x) > 1:
             raise ValueError(
                 "GPT2 requires each input feature to contain only "
-                f"one segment, but received: {len(x)}. If you are using GPT2 "
+                f"one segment, but received {len(x)}. If you are using GPT2 "
                 "for a multi-segment classification task, please refer to "
                 "classification models like BERT or RoBERTa."
             )
         token_ids = self._tokenizer(x[0])
-        # batch_size = token_ids.nrows()
-        # start_column = tf.fill((batch_size, 1), self._tokenizer.end_token_id)
-        # end_column = tf.fill((batch_size, 1), self._tokenizer.end_token_id)
-        # token_ids = tf.concat([start_column, token_ids, end_column], axis=1)
-        input_is_1d = False
-        if len(token_ids.shape) == 1:
-            input_is_1d = True
+        input_is_1d = len(token_ids.shape) == 1
+        if input_is_1d:
             token_ids = tf.RaggedTensor.from_tensor([token_ids])
         mask = tf.ones_like(token_ids, dtype=tf.bool)
         mask = mask.to_tensor(shape=(None, self.sequence_length))
         token_ids = token_ids.to_tensor(shape=(None, self.sequence_length))
         if input_is_1d:
+            # If the input is a single string, we let the output be a 1D tensor.
             token_ids = tf.squeeze(token_ids, axis=0)
             mask = tf.squeeze(mask, axis=0)
         x = {

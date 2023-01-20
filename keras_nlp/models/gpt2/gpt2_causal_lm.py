@@ -28,8 +28,18 @@ from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 
 
-# @keras.utils.register_keras_serializable(package="keras_nlp")
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class EmbeddingMapping(keras.layers.Layer):
+    """A layer multiplying model outputs by the token embedding.
+
+    This layer is used to map model outputs to logits over all vocab tokens.
+    It's used in `GPT2CausalLM` to calculate next token's probability.
+
+    Args:
+        embedding_layer: a `tf.keras.layers.Embedding` instance, the token
+            embedding layer.
+    """
+
     def __init__(self, embedding_layer, name="embedding_mapping", **kwargs):
         super().__init__(name=name, **kwargs)
         self.embedding_layer = embedding_layer
@@ -198,10 +208,9 @@ class GPT2CausalLM(PipelineModel):
     def __init__(self, backbone, preprocessor=None, **kwargs):
         inputs = backbone.input
         x = backbone(inputs)
-        # embedding_layer = backbone.get_layer("token_embedding")
-        # embedding_map_layer = EmbeddingMapping(embedding_layer)
-        # outputs = embedding_map_layer(x)
-        outputs = x
+        embedding_layer = backbone.get_layer("token_embedding")
+        embedding_map_layer = EmbeddingMapping(embedding_layer)
+        outputs = embedding_map_layer(x)
 
         # Instantiate using Functional API Model constructor
         super().__init__(
@@ -219,12 +228,12 @@ class GPT2CausalLM(PipelineModel):
 
     @property
     def backbone(self):
-        """The associated `keras_nlp.models.RobertaBackbone`."""
+        """The associated `keras_nlp.models.GPT2Backbone`."""
         return self._backbone
 
     @property
     def preprocessor(self):
-        """A `keras_nlp.models.RobertaMaskedLMPreprocessor` for preprocessing inputs."""
+        """A `keras_nlp.models.GPT2CausalLMPreprocessor` for preprocessing."""
         return self._preprocessor
 
     @classproperty
