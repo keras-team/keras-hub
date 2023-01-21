@@ -14,11 +14,14 @@
 
 """FNet classification model."""
 
+import copy
+
 from tensorflow import keras
 
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_backbone import f_net_kernel_initializer
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
+from keras_nlp.models.f_net.f_net_presets import backbone_presets
 from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
@@ -139,13 +142,4 @@ class FnetClassifier(Task):
 
     @classproperty
     def presets(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def from_preset(
-        cls,
-        preset,
-        load_weights=True,
-        **kwargs,
-    ):
-        raise NotImplementedError
+        return copy.deepcopy(backbone_presets)
