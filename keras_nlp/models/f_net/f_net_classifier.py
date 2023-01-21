@@ -17,13 +17,15 @@
 
 from tensorflow import keras
 
+from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_backbone import f_net_kernel_initializer
-from keras_nlp.utils.pipeline_model import PipelineModel
+from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
+from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class FnetClassifier(PipelineModel):
+class FnetClassifier(Task):
 
     """An end-to-end f_net model for classification tasks.
 
@@ -116,52 +118,26 @@ class FnetClassifier(PipelineModel):
         self._backbone = backbone
         self._preprocessor = preprocessor
         self.num_classes = num_classes
-
-    def preprocess_samples(self, x, y=None, sample_weight=None):
-        return self.preprocessor(x, y=y, sample_weight=sample_weight)
-
-    @property
-    def backbone(self):
-        """A `keras_nlp.models.FNetBackbone` instance providing the encoder
-        submodel.
-        """
-        return self._backbone
-
-    @property
-    def preprocessor(self):
-        """A `keras_nlp.models.FNetPreprocessor` for preprocessing inputs."""
-        return self._preprocessor
-
+        self.dropout = dropout
+        
     def get_config(self):
-        return {
-            "backbone": keras.layers.serialize(self.backbone),
-            "preprocessor": keras.layers.serialize(self.preprocessor),
-            "num_classes": self.num_classes,
-            "name": self.name,
-            "trainable": self.trainable,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "num_classes": self.num_classes,
+                "dropout": self.dropout,
+            }
+        )
+        return config
 
-    @classmethod
-    def from_config(cls, config):
-        if "backbone" in config and isinstance(config["backbone"], dict):
-            config["backbone"] = keras.layers.deserialize(config["backbone"])
-        if "preprocessor" in config and isinstance(
-            config["preprocessor"], dict
-        ):
-            config["preprocessor"] = keras.layers.deserialize(
-                config["preprocessor"]
-            )
-        return cls(**config)
+    @classproperty
+    def backbone_cls(cls):
+        return FNetBackbone
+
+    @classproperty
+    def preprocessor_cls(cls):
+        return FNetPreprocessor
 
     @classproperty
     def presets(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def from_preset(
-        cls,
-        preset,
-        load_weights=True,
-        **kwargs,
-    ):
         raise NotImplementedError
