@@ -136,11 +136,11 @@ class FnetClassifier(Task):
     @classproperty
     def preprocessor_cls(cls):
         return FNetPreprocessor
-        
+
     @classproperty
     def presets(cls):
         raise NotImplementedError
-        
+
     @classmethod
     def from_preset(
         cls,
