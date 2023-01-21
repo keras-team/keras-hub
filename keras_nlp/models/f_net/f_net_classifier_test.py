@@ -16,7 +16,6 @@
 import io
 import os
 
-import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -38,31 +37,10 @@ class FnetClassifierTest(tf.test.TestCase, parameterized.TestCase):
             max_sequence_length=128,
             name="encoder",
         )
-
-        bytes_io = io.BytesIO()
-        vocab_data = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox", "the earth is round"]
-        )
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=vocab_data.as_numpy_iterator(),
-            model_writer=bytes_io,
-            vocab_size=10,
-            model_type="WORD",
-            pad_id=3,
-            unk_id=0,
-            bos_id=4,
-            eos_id=5,
-            pad_piece="<pad>",
-            unk_piece="<unk>",
-            bos_piece="[CLS]",
-            eos_piece="[SEP]",
-        )
-        self.proto = bytes_io.getvalue()
-
-        tokenizer = FNetTokenizer(proto=self.proto)
-
+        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab += ["the", "quick", "brown", "fox", "."]
         self.preprocessor = FNetPreprocessor(
-            tokenizer=tokenizer,
+            FNetTokenizer(vocabulary=self.vocab),
             sequence_length=8,
         )
         self.classifier = FnetClassifier(
