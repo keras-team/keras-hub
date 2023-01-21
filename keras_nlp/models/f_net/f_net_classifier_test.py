@@ -13,7 +13,6 @@
 # limitations under the License.
 """Tests for Fnet classification model."""
 
-import io
 import os
 
 import tensorflow as tf
