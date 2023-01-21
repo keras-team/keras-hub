@@ -14,6 +14,7 @@
 
 """FNet classification model."""
 
+import copy
 
 from tensorflow import keras
 
@@ -140,4 +141,4 @@ class FnetClassifier(Task):
 
     @classproperty
     def presets(cls):
-        raise NotImplementedError
+        return copy.deepcopy({**backbone_presets})
