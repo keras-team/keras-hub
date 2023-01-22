@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -186,7 +186,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         tokenizer("The quick brown fox tripped.")
 
         # Detokenize some input.
-        tokenizer.detokenize([5, 6, 7, 8, 9])
+        tokenizer.detokenize(tf.constant([581, 63773, 119455, 6, 147797]))
         ```
         """
         if preset not in cls.presets:
