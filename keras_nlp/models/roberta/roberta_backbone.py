@@ -176,9 +176,7 @@ class RobertaBackbone(Backbone):
 
     @property
     def token_embedding(self):
-        return self.get_layer(
-            "token_and_position_embedding"
-        ).token_embedding.embeddings
+        return self.get_layer("embeddings").token_embedding.embeddings
 
     @classproperty
     def presets(cls):
