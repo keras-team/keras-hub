@@ -88,4 +88,4 @@ class AlbertTokenizer(SentencePieceTokenizer):
 
     @classproperty
     def presets(cls):
-        return {}
+        return copy.deepcopy(backbone_presets)
