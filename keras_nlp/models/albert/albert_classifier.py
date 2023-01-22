@@ -12,16 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ALBERT classification model."""
+import copy
 
 from tensorflow import keras
 
 from keras_nlp.models.albert.albert_backbone import albert_kernel_initializer
-from keras_nlp.utils.pipeline_model import PipelineModel
+from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.models.albert.albert_presets import backbone_presets
+from keras_nlp.models.albert.albert_backbone import AlbertBackbone
+from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class AlbertClassifier(PipelineModel):
+class AlbertClassifier(Task):
     """An end-to-end ALBERT model for classification tasks
 
     This model attaches a classification head to a `keras_nlp.model.AlbertBackbone`
@@ -62,13 +66,15 @@ class AlbertClassifier(PipelineModel):
     labels = [0, 3]
 
     # Randomly initialize a ALBERT backbone.
-    backbone = keras_nlp.models.AlbertBackbone(
-        vocabulary_size=30552,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
+    backbone = AlbertBackbone(
+        vocabulary_size=1000,
+        num_layers=2,
+        num_heads=2,
+        embedding_dim=8,
+        hidden_dim=64,
+        intermediate_dim=128,
+        max_sequence_length=128,
+        name="encoder",
     )
 
     # Create a ALBERT classifier and fit your data.
@@ -114,52 +120,27 @@ class AlbertClassifier(PipelineModel):
         self._backbone = backbone
         self._preprocessor = preprocessor
         self.num_classes = num_classes
-
-    def preprocess_samples(self, x, y=None, sample_weight=None):
-        return self.preprocessor(x, y=y, sample_weight=sample_weight)
-
-    @property
-    def backbone(self):
-        """A `keras_nlp.models.AlbertBackbone` instance providing the encoder
-        submodel.
-        """
-        return self._backbone
-
-    @property
-    def preprocessor(self):
-        """A `keras_nlp.models.AlbertPreprocessor` for preprocessing inputs."""
-        return self._preprocessor
+        self.dropout = dropout
 
     def get_config(self):
-        return {
-            "backbone": keras.layers.serialize(self.backbone),
-            "preprocessor": keras.layers.serialize(self.preprocessor),
-            "num_classes": self.num_classes,
-            "name": self.name,
-            "trainable": self.trainable,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "num_classes": self.num_classes,
+                "dropout": self.dropout,
+            }
+        )
+        return config
 
-    @classmethod
-    def from_config(cls, config):
-        if "backbone" in config and isinstance(config["backbone"], dict):
-            config["backbone"] = keras.layers.deserialize(config["backbone"])
-        if "preprocessor" in config and isinstance(
-            config["preprocessor"], dict
-        ):
-            config["preprocessor"] = keras.layers.deserialize(
-                config["preprocessor"]
-            )
-        return cls(**config)
+
+    @classproperty
+    def backbone_cls(cls):
+        return AlbertBackbone
+
+    @classproperty
+    def preprocessor_cls(cls):
+        return AlbertPreprocessor
 
     @classproperty
     def presets(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def from_preset(
-        cls,
-        preset,
-        load_weights=True,
-        **kwargs,
-    ):
-        raise NotImplementedError
+        return copy.deepcopy({**backbone_presets})

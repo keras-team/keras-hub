@@ -18,6 +18,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
+from keras_nlp.models.albert.albert_classifier import AlbertClassifier
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 
@@ -49,6 +50,59 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(outputs, expected_outputs)
 
     @parameterized.named_parameters(
+        ("load_weights", True), ("no_load_weights", False)
+    )
+    def test_backbone_output(self, load_weights):
+        input_data = {
+            "token_ids": tf.constant([[101, 1996, 4248, 102]]),
+            "segment_ids": tf.constant([[0, 0, 0, 0]]),
+            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+        }
+        model = AlbertBackbone.from_preset(
+            "bert_tiny_en_uncased", load_weights=load_weights
+        )
+        outputs = model(input_data)["sequence_output"]
+        if load_weights:
+            # The forward pass from a preset should be stable!
+            # This test should catch cases where we unintentionally change our
+            # network code in a way that would invalidate our preset weights.
+            # We should only update these numbers if we are updating a weights
+            # file, or have found a discrepancy with the upstream source.
+            outputs = outputs[0, 0, :5]
+            expected = [-1.38173, 0.16598, -2.92788, -2.66958, -0.61556]
+            # Keep a high tolerance, so we are robust to different hardware.
+            self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
+
+    @parameterized.named_parameters(
+        ("load_weights", True), ("no_load_weights", False)
+    )
+    def test_classifier_output(self, load_weights):
+        input_data = tf.constant(["The quick brown fox."])
+        model = AlbertClassifier.from_preset(
+            "albert_base_en_uncased",
+            load_weights=load_weights,
+        )
+        # We don't assert output values, as the head weights are random.
+        model.predict(input_data)
+
+    @parameterized.named_parameters(
+        ("load_weights", True), ("no_load_weights", False)
+    )
+    def test_classifier_output_without_preprocessing(self, load_weights):
+        input_data = {
+            "token_ids": tf.constant([[101, 1996, 4248, 102]]),
+            "segment_ids": tf.constant([[0, 0, 0, 0]]),
+            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+        }
+        model = AlbertClassifier.from_preset(
+            "albert_base_en_uncased",
+            load_weights=load_weights,
+            preprocessor=None,
+        )
+        # Never assert output values, as the head weights are random.
+        model.predict(input_data)
+
+    @parameterized.named_parameters(
         ("preset_weights", True), ("random_weights", False)
     )
     def test_backbone_output(self, load_weights):
@@ -70,6 +124,7 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         ("albert_tokenizer", AlbertTokenizer),
         ("albert_preprocessor", AlbertPreprocessor),
         ("albert", AlbertBackbone),
+        ("albert_classifier", AlbertClassifier)
     )
     def test_preset_docstring(self, cls):
         """Check we did our docstring formatting correctly."""
@@ -80,6 +135,7 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         ("albert_tokenizer", AlbertTokenizer),
         ("albert_preprocessor", AlbertPreprocessor),
         ("albert", AlbertBackbone),
+        ("albert_classifier", AlbertClassifier)
     )
     def test_unknown_preset_error(self, cls):
         # Not a preset name
@@ -115,6 +171,41 @@ class AlbertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
             }
             model(input_data)
+
+    @parameterized.named_parameters(
+        ("load_weights", True), ("no_load_weights", False)
+    )
+    def test_load_albert_classifier(self, load_weights):
+        for preset in AlbertClassifier.presets:
+            classifier = AlbertClassifier.from_preset(
+                preset,
+                load_weights=load_weights,
+            )
+            input_data = tf.constant(["This quick brown fox"])
+            classifier.predict(input_data)
+
+    @parameterized.named_parameters(
+        ("load_weights", True), ("no_load_weights", False)
+    )
+    def test_load_albert_classifier_without_preprocessing(self, load_weights):
+        for preset in AlbertClassifier.presets:
+            classifier = AlbertClassifier.from_preset(
+                preset,
+                preprocessor=None,
+                load_weights=load_weights,
+            )
+            input_data = {
+                "token_ids": tf.random.uniform(
+                    shape=(1, 512),
+                    dtype=tf.int64,
+                    maxval=classifier.backbone.vocabulary_size,
+                ),
+                "segment_ids": tf.constant(
+                    [0] * 200 + [1] * 312, shape=(1, 512)
+                ),
+                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+            }
+            classifier.predict(input_data)
 
     def test_load_tokenizers(self):
         for preset in AlbertTokenizer.presets:
