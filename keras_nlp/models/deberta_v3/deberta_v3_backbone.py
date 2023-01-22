@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ from keras_nlp.models.deberta_v3.disentangled_attention_encoder import (
 )
 from keras_nlp.models.deberta_v3.relative_embedding import RelativeEmbedding
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 def deberta_kernel_initializer(stddev=0.02):
@@ -186,31 +185,21 @@ class DebertaV3Backbone(Backbone):
         self.start_token_index = 0
 
     def get_config(self):
-        return {
-            "vocabulary_size": self.vocabulary_size,
-            "num_layers": self.num_layers,
-            "num_heads": self.num_heads,
-            "hidden_dim": self.hidden_dim,
-            "intermediate_dim": self.intermediate_dim,
-            "dropout": self.dropout,
-            "max_sequence_length": self.max_sequence_length,
-            "bucket_size": self.bucket_size,
-            "name": self.name,
-            "trainable": self.trainable,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "vocabulary_size": self.vocabulary_size,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "dropout": self.dropout,
+                "max_sequence_length": self.max_sequence_length,
+                "bucket_size": self.bucket_size,
+            }
+        )
+        return config
 
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(cls, preset, load_weights=True, **kwargs):
-        return super().from_preset(preset, load_weights, **kwargs)
-
-
-DebertaV3Backbone.from_preset.__func__.__doc__ = Backbone.from_preset.__doc__
-format_docstring(
-    model_name=DebertaV3Backbone.__name__,
-    example_preset_name="deberta_base_en",
-    preset_names='", "'.join(DebertaV3Backbone.presets),
-)(DebertaV3Backbone.from_preset.__func__)

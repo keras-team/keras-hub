@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,15 @@
 
 """ALBERT tokenizer."""
 
+import copy
+import os
 
 from tensorflow import keras
 
+from keras_nlp.models.albert.albert_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -59,7 +63,7 @@ class AlbertTokenizer(SentencePieceTokenizer):
     tokenizer("the quick brown fox")
 
     # Detokenization.
-    tokenizer.detokenize(tf.constant([[[2, 14, 2231, 886, 2385, 3]]))
+    tokenizer.detokenize(tf.constant([[2, 14, 2231, 886, 2385, 3]]))
     ```
     """
 
