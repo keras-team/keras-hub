@@ -150,7 +150,6 @@ class RobertaBackbone(Backbone):
             **kwargs,
         )
         # All references to `self` below this line
-        self._token_embedding = embedding_layer.token_embedding
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -174,6 +173,12 @@ class RobertaBackbone(Backbone):
             }
         )
         return config
+
+    @property
+    def token_embedding(self):
+        return self.get_layer(
+            "token_and_position_embedding"
+        ).token_embedding.embeddings
 
     @classproperty
     def presets(cls):

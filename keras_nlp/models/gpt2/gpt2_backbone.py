@@ -165,7 +165,6 @@ class GPT2Backbone(Backbone):
             **kwargs,
         )
         # All references to `self` below this line
-        self._token_embedding = token_embedding_layer
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -188,6 +187,10 @@ class GPT2Backbone(Backbone):
             }
         )
         return config
+
+    @property
+    def token_embedding(self):
+        return self.get_layer("token_embedding").embeddings
 
     @classproperty
     def presets(cls):

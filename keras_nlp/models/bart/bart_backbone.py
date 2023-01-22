@@ -224,7 +224,6 @@ class BartBackbone(Backbone):
         )
 
         # All references to `self` below this line
-        self._token_embedding = token_embedding_layer
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -245,3 +244,7 @@ class BartBackbone(Backbone):
             "name": self.name,
             "trainable": self.trainable,
         }
+
+    @property
+    def token_embedding(self):
+        return self.get_layer("token_embedding").embeddings

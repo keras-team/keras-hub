@@ -30,7 +30,7 @@ class Backbone(keras.Model):
     @property
     def token_embedding(self):
         """A `keras.layers.Embedding` instance for embedding token ids."""
-        return self._token_embedding
+        raise NotImplementedError
 
     def get_config(self):
         # Don't chain to super here. The default `get_config()` for functional
