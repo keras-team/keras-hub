@@ -161,12 +161,3 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
-    def from_preset(
-        cls,
-        preset,
-        **kwargs,
-    ):
-        return super().from_preset(cls, preset, **kwargs)
