@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import base64
 import binascii
+import os
 from typing import List
 
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.tokenizers import tokenizer
+from keras_nlp.utils.python_utils import format_docstring
 from keras_nlp.utils.tf_utils import assert_tf_text_installed
 from keras_nlp.utils.tf_utils import tensor_to_string_list
-from keras_nlp.utils.python_utils import format_docstring
+from keras_nlp.utils.python_utils import classproperty
 
 try:
     import tensorflow_text as tf_text
@@ -280,7 +281,9 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
         # Format and assign the docstring unless the subclass has overridden it.
         if cls.from_preset.__doc__ is None:
-            cls.from_preset.__func__.__doc__ = SentencePieceTokenizer.from_preset.__doc__
+            cls.from_preset.__func__.__doc__ = (
+                SentencePieceTokenizer.from_preset.__doc__
+            )
             format_docstring(
                 model_name=cls.__name__,
                 example_preset_name=next(iter(cls.presets), ""),

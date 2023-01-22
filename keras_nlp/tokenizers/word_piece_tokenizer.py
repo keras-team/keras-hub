@@ -20,9 +20,9 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.tokenizers import tokenizer
-from keras_nlp.utils.tf_utils import assert_tf_text_installed
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
+from keras_nlp.utils.tf_utils import assert_tf_text_installed
 
 try:
     import tensorflow_text as tf_text
@@ -475,7 +475,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         )
 
         return cls.from_config({**config, **kwargs})
-        
+
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.
         super().__init_subclass__(**kwargs)
@@ -491,7 +491,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         # Format and assign the docstring unless the subclass has overridden it.
         if cls.from_preset.__doc__ is None:
-            cls.from_preset.__func__.__doc__ = WordPieceTokenizer.from_preset.__doc__
+            cls.from_preset.__func__.__doc__ = (
+                WordPieceTokenizer.from_preset.__doc__
+            )
             format_docstring(
                 model_name=cls.__name__,
                 example_preset_name=next(iter(cls.presets), ""),

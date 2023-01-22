@@ -15,14 +15,12 @@
 """ALBERT tokenizer."""
 
 import copy
-import os
 
 from tensorflow import keras
 
 from keras_nlp.models.albert.albert_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
