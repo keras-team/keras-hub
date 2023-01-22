@@ -118,13 +118,12 @@ class DebertaV3Backbone(Backbone):
         )
 
         # Embed tokens.
-        token_embedding_layer = keras.layers.Embedding(
+        x = keras.layers.Embedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=deberta_kernel_initializer(),
             name="token_embedding",
-        )
-        x = token_embedding_layer(token_id_input)
+        )(token_id_input)
 
         # Normalize and apply dropout to embeddings.
         x = keras.layers.LayerNormalization(
