@@ -24,12 +24,12 @@ from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
     GPT2CausalLMPreprocessor,
 )
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
-from keras_nlp.utils.pipeline_model import PipelineModel
+from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class EmbeddingMapping(keras.layers.Layer):
+class ReverseEmbedding(keras.layers.Layer):
     """A layer multiplying model outputs by the token embedding.
 
     This layer is used to map model outputs to logits over all vocab tokens.
@@ -69,7 +69,7 @@ class EmbeddingMapping(keras.layers.Layer):
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class GPT2CausalLM(PipelineModel):
+class GPT2CausalLM(Task):
     """GPT2 Causal LM task model.
 
     Causal LM is predicting the next token based on previous tokens, which is
@@ -95,8 +95,75 @@ class GPT2CausalLM(PipelineModel):
 
     Examples:
 
-    Example usage.
+    Use `generate()` method to do text generation.
     ```python
+    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
+    gpt2_lm.generate("I want to say", max_length=30)
+
+    # Generate with batched prompts.
+    gpt2_lm.generate(["This is a", "Where are you"], max_length=30)
+    ```
+
+    Use a custom sampler for text generation.
+    ```python
+    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
+
+    # Use string identifier to set sampler.
+    gpt2_lm.generate("I want to say", max_length=30, sampler="top_p")
+
+    # Construct a sampler instance.
+    sampler = keras_nlp.samplers.BeamSampler(num_beams=2)
+    gpt2_lm.generate("I want to say", max_length=30, sampler=sampler)
+    ```
+
+    Load a pretrained `GPT2CausalLM` and get outputs on raw string inputs.
+    ```python
+    str_inputs = "You know this is just a test string"
+    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
+    gpt2_lm.predict([str_inputs])
+    ```
+
+    Load a pretrained GPT2 and fit on a string dataset.
+    ```python
+    features = [
+        "I don't listen to music while coding.",
+        "But I watch youtube while coding!",
+    ]
+    ds = tf.data.Dataset.from_tensor_slices(features)
+
+    # Create a `GPT2CausalLM` and fit your data.
+    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset(
+        "gpt2_base_en",
+    )
+    gpt2_lm.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    )
+    gpt2_lm.fit(x=features, batch_size=2)
+    ```
+
+    Load a pretrain `GPT2CausalLM` with custom preprocessor, and predict on
+    string inputs.
+    ```python
+    str_inputs = "You know this is still a test string"
+
+    # Use a shorter sequence length.
+    preprocessor = keras_nlp.models.GPT2CausalLMPreprocessor.from_preset(
+        "gpt2_base_en",
+        sequence_length=128,
+    )
+
+    # Create a `GPT2CausalLM`, using pretrained GPT2 and custom preprocessor.
+    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset(
+        "gpt2_base_en",
+        preprocessor=preprocessor,
+    )
+    gpt2_lm.predict([str_inputs])
+    ```
+
+    Fit your preprocessed data with randomly initialized GPT2. This is useful
+    when you want to do data preprocessing inside `tf.data` pipeline.
+    ```python
+    # Define preprocessed input.
     features = {
         "token_ids": tf.constant(
             [[1, 2, 3, 4, 0, 0]] * 2, shape=(2, 6)
@@ -108,7 +175,7 @@ class GPT2CausalLM(PipelineModel):
     labels = tf.constant(
         [[2, 3, 4, 0, 0, 0]] * 2, shape=(2, 6)
     )
-    sample_weights = tf.constant(
+    sample_weight = tf.constant(
         [[1, 1, 1, 0, 0, 0]] * 2, shape=(2, 6)
     )
 
@@ -121,7 +188,7 @@ class GPT2CausalLM(PipelineModel):
         intermediate_dim=256,
         max_sequence_length=128,
     )
-    # Create a `GPT2CausalLM` and fit the data.
+    # Create a `GPT2CausalLM` without preprocessor and fit the data.
     gpt2_lm = keras_nlp.models.GPT2CausalLM(backbone, preprocessor=None)
     gpt2_lm.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -129,78 +196,9 @@ class GPT2CausalLM(PipelineModel):
     gpt2_lm.fit(
         x=features,
         y=labels,
-        sample_weights=sample_weights,
+        sample_weight=sample_weight,
         batch_size=2,
     )
-    ```
-
-    Raw string inputs.
-    ```python
-    # Create a dataset with raw string features in an `(x, y)` format.
-    features = [
-        "I don't listen to music while coding.",
-        "But I watch youtube while coding!",
-    ]
-
-    # Create a `GPT2CausalLM` and fit your data.
-    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
-    gpt2_lm.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    gpt2_lm.fit(x=features, batch_size=2)
-    ```
-
-    Raw string inputs with customized preprocessing.
-    ```python
-    # Create a dataset with raw string features in an `(x, y)` format.
-    features = [
-        "I don't listen to music while coding.",
-        "But I watch youtube while coding!",
-    ]
-
-    # Use a shorter sequence length.
-    preprocessor = keras_nlp.models.GPT2CausalLMPreprocessor.from_preset(
-        "gpt2_base_en",
-        sequence_length=128,
-    )
-
-    # Create a `GPT2CausalLM` and fit your data.
-    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset(
-        "gpt2_base_en",
-        preprocessor=preprocessor,
-    )
-    gpt2_lm.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    gpt2_lm.fit(x=features, batch_size=2)
-    ```
-
-    # Use tf dataset.
-    ```python
-    features = [
-        "I don't listen to music while coding.",
-        "But I watch youtube while coding!",
-    ]
-    ds = tf.data.Dataset.from_tensor_slices(features)
-
-    # Create a `GPT2CausalLM` and fit your data.
-    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset(
-        "gpt2_base_en",
-        preprocessor=preprocessor,
-    )
-    gpt2_lm.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    gpt2_lm.fit(x=features, batch_size=2)
-    ```
-
-    # Use `generate()` method to generate text.
-    ```python
-    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
-    gpt2_lm.generate("I want to say", max_length=30)
-
-    # Generate with batched prompts.
-    gpt2_lm.generate(["This is a", "Where are you"], max_length=30)
     ```
 
     """
@@ -209,7 +207,7 @@ class GPT2CausalLM(PipelineModel):
         inputs = backbone.input
         x = backbone(inputs)
         embedding_layer = backbone.get_layer("token_embedding")
-        embedding_map_layer = EmbeddingMapping(embedding_layer)
+        embedding_map_layer = ReverseEmbedding(embedding_layer)
         outputs = embedding_map_layer(x)
 
         # Instantiate using Functional API Model constructor
@@ -223,47 +221,17 @@ class GPT2CausalLM(PipelineModel):
         self._backbone = backbone
         self._preprocessor = preprocessor
 
-    def preprocess_samples(self, x, y=None, sample_weight=None):
-        return self.preprocessor(x, y=y, sample_weight=sample_weight)
-
-    @property
-    def backbone(self):
-        """The associated `keras_nlp.models.GPT2Backbone`."""
-        return self._backbone
-
-    @property
-    def preprocessor(self):
-        """A `keras_nlp.models.GPT2CausalLMPreprocessor` for preprocessing."""
-        return self._preprocessor
-
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
 
-    @classmethod
-    def from_preset(
-        cls,
-        preset,
-        load_weights=True,
-        **kwargs,
-    ):
-        if "preprocessor" not in kwargs:
-            kwargs["preprocessor"] = GPT2CausalLMPreprocessor.from_preset(
-                preset
-            )
+    @classproperty
+    def backbone_cls(cls):
+        return GPT2Backbone
 
-        # Check if preset is backbone-only model.
-        if preset in GPT2Backbone.presets:
-            backbone = GPT2Backbone.from_preset(preset, load_weights)
-            return cls(backbone, **kwargs)
-
-        # Otherwise must be one of class presets.
-        # Currently no classifier-level presets, so we raise ValueError.
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
+    @classproperty
+    def preprocessor_cls(cls):
+        return GPT2CausalLMPreprocessor
 
     def _get_token_probability(self, prompt, mask):
         model_inputs = {
@@ -301,8 +269,7 @@ class GPT2CausalLM(PipelineModel):
             sampler = keras_nlp.samplers.get(sampler)
         if hasattr(self, "jit_compile"):
             sampler.jit_compile = self.jit_compile
-        if hasattr(self, "run_eagerly"):
-            sampler.run_eagerly = self.run_eagerly
+        sampler.run_eagerly = self.run_eagerly
         prompt = self.preprocessor.tokenizer(prompt)
         generated = sampler(
             prompt,
@@ -311,23 +278,3 @@ class GPT2CausalLM(PipelineModel):
             end_token_id=end_token_id,
         )
         return self.preprocessor.tokenizer.detokenize(generated)
-
-    def get_config(self):
-        return {
-            "backbone": keras.layers.serialize(self.backbone),
-            "preprocessor": keras.layers.serialize(self.preprocessor),
-            "name": self.name,
-            "trainable": self.trainable,
-        }
-
-    @classmethod
-    def from_config(cls, config):
-        if "backbone" in config and isinstance(config["backbone"], dict):
-            config["backbone"] = keras.layers.deserialize(config["backbone"])
-        if "preprocessor" in config and isinstance(
-            config["preprocessor"], dict
-        ):
-            config["preprocessor"] = keras.layers.deserialize(
-                config["preprocessor"]
-            )
-        return cls(**config)

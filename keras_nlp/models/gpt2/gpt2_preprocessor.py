@@ -115,7 +115,12 @@ class GPT2Preprocessor(Preprocessor):
     ```
     """
 
-    def __init__(self, tokenizer, sequence_length, **kwargs):
+    def __init__(
+        self,
+        tokenizer,
+        sequence_length,
+        **kwargs,
+    ):
 
         super().__init__(**kwargs)
 

@@ -51,10 +51,10 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     preprocessor("league of legends")
 
     # Tokenize a batch of sentences.
-    sentences = tf.constant(["taco tuesday", "gi gi gi gi"])
+    sentences = tf.constant(["taco tuesday", "fish taco please!"])
     preprocessor(sentences)
     # Same output.
-    preprocessor(["taco tuesday", "gi gi gi gi"])
+    preprocessor(["taco tuesday", "fish taco please!"])
 
     # Map a dataset to preprocess a single sentence.
     features = tf.constant(
@@ -76,20 +76,10 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
 
         x = super().call(x)
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
-        if len(token_ids.shape) == 1:
-            x = {
-                "token_ids": token_ids[:-1],
-                "padding_mask": padding_mask[:-1],
-            }
-            y = token_ids[1:]
-            sample_weight = padding_mask[1:]
-        else:
-            x = {
-                "token_ids": token_ids[:, :-1],
-                "padding_mask": padding_mask[:, :-1],
-            }
-
-            y = token_ids[:, 1:]
-            sample_weight = padding_mask[:, 1:]
-
+        x = {
+            "token_ids": token_ids[..., :-1],
+            "padding_mask": padding_mask[..., :-1],
+        }
+        y = token_ids[..., 1:]
+        sample_weight = padding_mask[..., 1:]
         return pack_x_y_sample_weight(x, y, sample_weight)
