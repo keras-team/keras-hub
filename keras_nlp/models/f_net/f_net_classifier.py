@@ -28,7 +28,6 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class FNetClassifier(Task):
-
     """An end-to-end f_net model for classification tasks.
 
     This model attaches a classification head to a
