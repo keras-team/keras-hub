@@ -73,13 +73,14 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     """
 
     def call(self, x, y=None, sample_weight=None):
-
         x = super().call(x)
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
+        # The last token does not have a next token, so we truncate it out.
         x = {
             "token_ids": token_ids[..., :-1],
             "padding_mask": padding_mask[..., :-1],
         }
+        # Target `y` will be the next token.
         y = token_ids[..., 1:]
         sample_weight = padding_mask[..., 1:]
         return pack_x_y_sample_weight(x, y, sample_weight)

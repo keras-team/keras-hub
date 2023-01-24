@@ -118,9 +118,8 @@ class GPT2CausalLM(Task):
 
     Load a pretrained `GPT2CausalLM` and get outputs on raw string inputs.
     ```python
-    str_inputs = "You know this is just a test string"
     gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
-    gpt2_lm.predict([str_inputs])
+    gpt2_lm.predict(["You know this is just a test string"])
     ```
 
     Load a pretrained GPT2 and fit on a string dataset.
@@ -141,11 +140,9 @@ class GPT2CausalLM(Task):
     gpt2_lm.fit(x=features, batch_size=2)
     ```
 
-    Load a pretrain `GPT2CausalLM` with custom preprocessor, and predict on
+    Load a pretrained `GPT2CausalLM` with custom preprocessor, and predict on
     string inputs.
     ```python
-    str_inputs = "You know this is still a test string"
-
     # Use a shorter sequence length.
     preprocessor = keras_nlp.models.GPT2CausalLMPreprocessor.from_preset(
         "gpt2_base_en",
@@ -157,7 +154,7 @@ class GPT2CausalLM(Task):
         "gpt2_base_en",
         preprocessor=preprocessor,
     )
-    gpt2_lm.predict([str_inputs])
+    gpt2_lm.predict(["You know this is still a test string"])
     ```
 
     Fit your preprocessed data with randomly initialized GPT2. This is useful
@@ -244,7 +241,6 @@ class GPT2CausalLM(Task):
         self,
         prompt,
         max_length,
-        end_token="<|endoftext|>",
         sampler="top_k",
     ):
         """Generate text.
@@ -263,16 +259,15 @@ class GPT2CausalLM(Task):
             sampler: a string or `keras_nlp.samplers.Sampler` instance. The
                 sampler to be used for text generation.
         """
-        end_token_id = self.preprocessor.tokenizer.token_to_id(end_token)
+        end_token_id = self.preprocessor.tokenizer.end_token_id
 
         if isinstance(sampler, str):
             sampler = keras_nlp.samplers.get(sampler)
         if hasattr(self, "jit_compile"):
             sampler.jit_compile = self.jit_compile
         sampler.run_eagerly = self.run_eagerly
-        prompt = self.preprocessor.tokenizer(prompt)
         generated = sampler(
-            prompt,
+            self.preprocessor.tokenizer(prompt),
             self._get_token_probability,
             max_length=max_length,
             end_token_id=end_token_id,
