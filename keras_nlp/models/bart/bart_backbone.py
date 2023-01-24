@@ -244,3 +244,7 @@ class BartBackbone(Backbone):
             "name": self.name,
             "trainable": self.trainable,
         }
+
+    @property
+    def token_embedding(self):
+        return self.get_layer("token_embedding")
