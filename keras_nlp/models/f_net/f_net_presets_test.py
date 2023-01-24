@@ -86,6 +86,23 @@ class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         model.predict(input_data)
 
     @parameterized.named_parameters(
+        ("preset_weights", True), ("random_weights", False)
+    )
+    def test_backbone_output(self, load_weights):
+        input_data = {
+            "token_ids": tf.constant([[4, 97, 1467, 5]]),
+            "segment_ids": tf.constant([[0, 0, 0, 0]]),
+        }
+        model = FNetBackbone.from_preset(
+            "f_net_base_en", load_weights=load_weights
+        )
+        outputs = model(input_data)
+        if load_weights:
+            outputs = outputs["sequence_output"][0, 0, :5]
+            expected = [4.182479, -0.072181, -0.138097, -0.036582, -0.521765]
+            self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
+
+    @parameterized.named_parameters(
         ("f_net_tokenizer", FNetTokenizer),
         ("f_net_preprocessor", FNetPreprocessor),
         ("f_net", FNetBackbone),
