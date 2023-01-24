@@ -433,7 +433,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         """Instantiate {{model_name}} tokenizer from preset vocabulary.
 
         Args:
-            preset: string. Must be one of {{preset_names}}.
+            preset: string. Must be one of "{{preset_names}}".
 
         Examples:
         ```python
