@@ -59,7 +59,7 @@ class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             "padding_mask": tf.constant([[1, 1, 1, 1]]),
         }
         model = FNetBackbone.from_preset(
-            "bert_tiny_en_uncased", load_weights=load_weights
+            "f_net_base_en", load_weights=load_weights
         )
         outputs = model(input_data)["sequence_output"]
         if load_weights:
@@ -69,7 +69,7 @@ class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             # We should only update these numbers if we are updating a weights
             # file, or have found a discrepancy with the upstream source.
             outputs = outputs[0, 0, :5]
-            expected = [-1.38173, 0.16598, -2.92788, -2.66958, -0.61556]
+            expected = [4.157282, -0.096616, -0.244943, -0.068104, -0.559592]
             # Keep a high tolerance, so we are robust to different hardware.
             self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
 
@@ -79,7 +79,7 @@ class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_classifier_output(self, load_weights):
         input_data = tf.constant(["The quick brown fox."])
         model = FNetClassifier.from_preset(
-            "bert_tiny_en_uncased",
+            "f_net_base_en",
             load_weights=load_weights,
         )
         # We don't assert output values, as the head weights are random.
