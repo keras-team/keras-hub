@@ -182,9 +182,7 @@ class DistilBertBackbone(Backbone):
 
     @property
     def token_embedding(self):
-        return self.get_layer(
-            "token_and_position_embedding"
-        ).token_embedding.embeddings
+        return self.get_layer("token_and_position_embedding").token_embedding
 
     @classproperty
     def presets(cls):
