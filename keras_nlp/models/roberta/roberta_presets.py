@@ -29,6 +29,14 @@ backbone_presets = {
             "Base size of RoBERTa where case is maintained."
             "Trained on a 160 GB English dataset."
         ),
+        "metadata":{
+            "description": (
+                "Base size of RoBERTa where case is maintained."
+                "Trained on a 160 GB English dataset."
+            ),
+            "params": "125M",
+            "models": "[RoBERTa](roberta)"
+        },         
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_en/v1/model.h5",
         "weights_hash": "958eede1c7edaa9308e027be18fde7a8",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_en/v1/vocab.json",
@@ -51,6 +59,14 @@ backbone_presets = {
             "Large size of RoBERTa where case is maintained."
             "Trained on a 160 GB English dataset."
         ),
+        "metadata":{
+            "description": (
+                "Large size of RoBERTa where case is maintained."
+                "Trained on a 160 GB English dataset."
+            ),
+            "params": "355M",
+            "models": "[RoBERTa](roberta)"
+        },        
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_en/v1/model.h5",
         "weights_hash": "1978b864c317a697fe62a894d3664f14",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_en/v1/vocab.json",
