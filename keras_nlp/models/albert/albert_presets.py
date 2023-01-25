@@ -34,7 +34,7 @@ backbone_presets = {
             "Base size of ALBERT where all input is lowercased. "
             "Trained on English Wikipedia + BooksCorpus."
         ),
-        "metadata" : {
+        "metadata": {
             "description": (
                 "Base size of ALBERT where all input is lowercased. "
                 "Trained on English Wikipedia + BooksCorpus."

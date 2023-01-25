@@ -25,10 +25,12 @@ backbone_presets = {
             "max_sequence_length": 512,
         },
         "preprocessor_config": {},
-        "description": (
-            "Base size of XLM-RoBERTa. "
-            "Trained on the CommonCrawl dataset (100 languages)."
-        ),
+        "metadata": {
+            "description": (
+                "12-layer XLM-RoBERTa model where case is maintained. Trained on CommonCrawl in 100 languages."
+            ),
+            "params": 278042882,
+        },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base_multi/v1/model.h5",
         "weights_hash": "2eb6fcda5a42f0a88056213ba3d93906",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base_multi/v1/vocab.spm",
@@ -45,10 +47,12 @@ backbone_presets = {
             "max_sequence_length": 512,
         },
         "preprocessor_config": {},
-        "description": (
-            "Large size of XLM-RoBERTa. "
-            "Trained on the CommonCrawl dataset (100 languages)."
-        ),
+        "metadata": {
+            "description": (
+                "24-layer XLM-RoBERTa model where case is maintained. Trained on CommonCrawl in 100 languages."
+            ),
+            "params": 559889410,
+        },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_large_multi/v1/model.h5",
         "weights_hash": "276211827174b71751f2ce3a89da503a",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_large_multi/v1/vocab.spm",
