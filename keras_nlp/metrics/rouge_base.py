@@ -23,10 +23,9 @@ from tensorflow import keras
 from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 try:
-    import rouge_score
     from rouge_score import rouge_scorer
 except ImportError:
-    rouge_score = None
+    rouge_scorer = None
 
 
 class RougeBase(keras.metrics.Metric):
@@ -63,7 +62,7 @@ class RougeBase(keras.metrics.Metric):
     ):
         super().__init__(name=name, dtype=dtype, **kwargs)
 
-        if rouge_score is None:
+        if rouge_scorer is None:
             raise ImportError(
                 f"{self.__class__.__name__} requires the `rouge_score` "
                 "package. Please install it with `pip install rouge-score`."
