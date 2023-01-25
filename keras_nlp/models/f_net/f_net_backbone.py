@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,12 +14,16 @@
 
 """FNet backbone model."""
 
+import copy
+
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers.f_net_encoder import FNetEncoder
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.models.backbone import Backbone
+from keras_nlp.models.f_net.f_net_presets import backbone_presets
+from keras_nlp.utils.python_utils import classproperty
 
 
 def f_net_kernel_initializer(stddev=0.02):
@@ -198,14 +202,24 @@ class FNetBackbone(Backbone):
         self.cls_token_index = cls_token_index
 
     def get_config(self):
-        return {
-            "vocabulary_size": self.vocabulary_size,
-            "num_layers": self.num_layers,
-            "hidden_dim": self.hidden_dim,
-            "intermediate_dim": self.intermediate_dim,
-            "dropout": self.dropout,
-            "max_sequence_length": self.max_sequence_length,
-            "num_segments": self.num_segments,
-            "name": self.name,
-            "trainable": self.trainable,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "vocabulary_size": self.vocabulary_size,
+                "num_layers": self.num_layers,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "dropout": self.dropout,
+                "max_sequence_length": self.max_sequence_length,
+                "num_segments": self.num_segments,
+            }
+        )
+        return config
+
+    @property
+    def token_embedding(self):
+        return self.get_layer("token_embedding")
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
