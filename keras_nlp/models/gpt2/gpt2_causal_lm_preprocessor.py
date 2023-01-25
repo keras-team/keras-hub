@@ -14,6 +14,7 @@
 
 """GPT2 Causal LM preprocessor layer."""
 
+from absl import logging
 from tensorflow import keras
 
 from keras_nlp.models.gpt2.gpt2_preprocessor import GPT2Preprocessor
@@ -73,6 +74,14 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     """
 
     def call(self, x, y=None, sample_weight=None):
+        if y is not None or sample_weight is not None:
+            logging.warning(
+                "`GPT2CausalLMPreprocessor` generates `y` and `sample_weight` "
+                "based on your input data, but your data already contain `y` "
+                "or `sample_weight`. Your `y` and `sample_weight` will be "
+                "overrided."
+            )
+
         x = super().call(x)
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
         # The last token does not have a next token, so we truncate it out.

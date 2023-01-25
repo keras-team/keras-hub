@@ -57,9 +57,11 @@ class Sampler:
 
     The inputs and outputs of Sampler class are both token ids.
 
-    Subclassers should always implement the `sample()` method, which implements
-    the sampling algorithm body. Please check available subclass samplers for
-    example.
+    Subclassers should always implement the `get_next_token()` method, which
+    gets the next token based on probability distribution over vocab tokens.
+    Please check available subclass samplers for examples. If you need more
+    control over the sampling process, please implement `sample()` method
+    instead, see `BeamSampler` for example.
 
     Examples:
 

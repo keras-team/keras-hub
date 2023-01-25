@@ -29,46 +29,6 @@ from keras_nlp.utils.python_utils import classproperty
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class ReverseEmbedding(keras.layers.Layer):
-    """A layer multiplying model outputs by the token embedding.
-
-    This layer is used to map model outputs to logits over all vocab tokens.
-    It's used in `GPT2CausalLM` to calculate next token's probability.
-
-    Args:
-        embedding_layer: a `tf.keras.layers.Embedding` instance, the token
-            embedding layer.
-    """
-
-    def __init__(self, embedding_layer, name="embedding_mapping", **kwargs):
-        super().__init__(name=name, **kwargs)
-        self.embedding_layer = embedding_layer
-
-    def call(self, inputs):
-        return tf.matmul(
-            inputs,
-            self.embedding_layer.embeddings,
-            transpose_b=True,
-        )
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "embedding_layer": keras.layers.serialize(self.embedding_layer),
-            }
-        )
-        return config
-
-    @classmethod
-    def from_config(cls, config):
-        config["embedding_layer"] = keras.layers.deserialize(
-            config["embedding_layer"],
-        )
-        return cls(**config)
-
-
-@keras.utils.register_keras_serializable(package="keras_nlp")
 class GPT2CausalLM(Task):
     """GPT2 Causal LM task model.
 
@@ -116,7 +76,7 @@ class GPT2CausalLM(Task):
     gpt2_lm.generate("I want to say", max_length=30, sampler=sampler)
     ```
 
-    Load a pretrained `GPT2CausalLM` and get outputs on raw string inputs.
+    Map raw string to languages model logit predictions.
     ```python
     gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
     gpt2_lm.predict(["You know this is just a test string"])
@@ -137,7 +97,7 @@ class GPT2CausalLM(Task):
     gpt2_lm.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
     )
-    gpt2_lm.fit(x=features, batch_size=2)
+    gpt2_lm.fit(ds, batch_size=2)
     ```
 
     Load a pretrained `GPT2CausalLM` with custom preprocessor, and predict on
@@ -203,11 +163,13 @@ class GPT2CausalLM(Task):
     def __init__(self, backbone, preprocessor=None, **kwargs):
         inputs = backbone.input
         x = backbone(inputs)
-        embedding_layer = backbone.get_layer("token_embedding")
-        embedding_map_layer = ReverseEmbedding(embedding_layer)
-        outputs = embedding_map_layer(x)
+        outputs = tf.matmul(
+            x,
+            backbone.token_embedding.embeddings,
+            transpose_b=True,
+        )
 
-        # Instantiate using Functional API Model constructor
+        # Instantiate using Functional API Model constructor.
         super().__init__(
             inputs=inputs,
             outputs=outputs,
@@ -253,9 +215,6 @@ class GPT2CausalLM(Task):
             prompt: a string, string Tensor or string RaggedTensor. The prompt
                 text for generation.
             max_length: int. The max length of generated sequence.
-            end_token: string, defaults to "<|endoftext|>", which is the default
-                end token of GPT2. The token marking the end of the sequence,
-                tokens generated after the end token will be truncated.
             sampler: a string or `keras_nlp.samplers.Sampler` instance. The
                 sampler to be used for text generation.
         """

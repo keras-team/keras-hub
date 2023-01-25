@@ -145,7 +145,7 @@ class GPT2Preprocessor(Preprocessor):
                 "for a multi-segment classification task, please refer to "
                 "classification models like BERT or RoBERTa."
             )
-        token_ids = self._tokenizer(x[0])
+        token_ids = self.tokenizer(x[0])
         input_is_1d = len(token_ids.shape) == 1
         if input_is_1d:
             token_ids = tf.RaggedTensor.from_tensor([token_ids])
