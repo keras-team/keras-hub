@@ -194,6 +194,14 @@ class RobertaClassifier(Task):
         self.hidden_dim = hidden_dim
         self.dropout = dropout
 
+        # Default compilation
+        self.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            optimizer=keras.optimizers.Adam(2e-5),
+            metrics=keras.metrics.SparseCategoricalAccuracy(),
+            jit_compile=True,
+        )
+
     def get_config(self):
         config = super().get_config()
         config.update(
