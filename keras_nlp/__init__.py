@@ -12,6 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# sentencepiece is segfaulting on tf-nightly if tensorflow is imported first.
+# This is a temporary fix to restore our nightly testing to green, while we look
+# for a longer term solution.
+try:
+    import sentencepiece
+except ImportError:
+    pass
+
 from keras_nlp import layers
 from keras_nlp import metrics
 from keras_nlp import models
