@@ -188,8 +188,8 @@ class RobertaClassifier(Task):
             **kwargs,
         )
         # All references to `self` below this line
-        self._backbone = backbone
-        self._preprocessor = preprocessor
+        self.backbone = backbone
+        self.preprocessor = preprocessor
         self.num_classes = num_classes
         self.hidden_dim = hidden_dim
         self.dropout = dropout
