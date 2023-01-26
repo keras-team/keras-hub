@@ -216,6 +216,10 @@ class FNetBackbone(Backbone):
         )
         return config
 
+    @property
+    def token_embedding(self):
+        return self.get_layer("token_embedding")
+
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)

@@ -15,7 +15,6 @@
 """XLM-RoBERTa tokenizer."""
 
 import copy
-import os
 
 import tensorflow as tf
 from tensorflow import keras
@@ -23,7 +22,6 @@ from tensorflow import keras
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 
@@ -162,52 +160,3 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
-    def from_preset(
-        cls,
-        preset,
-        **kwargs,
-    ):
-        """Instantiate an XLM-RoBERTa tokenizer from preset vocabulary.
-
-        Args:
-            preset: string. Must be one of {{names}}.
-
-        Examples:
-        ```python
-        # Load a preset tokenizer.
-        tokenizer = keras_nlp.models.XLMRobertaTokenizer.from_preset(
-            "xlm_roberta_base_multi",
-        )
-
-        # Tokenize some input.
-        tokenizer("The quick brown fox tripped.")
-
-        # Detokenize some input.
-        tokenizer.detokenize(tf.constant([581, 63773, 119455, 6, 147797]))
-        ```
-        """
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-
-        spm_proto = keras.utils.get_file(
-            "vocab.spm",
-            metadata["spm_proto_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["spm_proto_hash"],
-        )
-
-        config = metadata["preprocessor_config"]
-        config.update(
-            {
-                "proto": spm_proto,
-            },
-        )
-
-        return cls.from_config({**config, **kwargs})
