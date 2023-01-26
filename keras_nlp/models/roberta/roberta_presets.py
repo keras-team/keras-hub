@@ -30,7 +30,7 @@ backbone_presets = {
                 "12-layer RoBERTa model where case is maintained."
                 "Trained on English Wikipedia, BooksCorpus, CommonCraw, and OpenWebText."
             ),
-            "params": 124644866
+            "params": 124644866,
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_en/v1/model.h5",
         "weights_hash": "958eede1c7edaa9308e027be18fde7a8",

@@ -161,7 +161,9 @@ backbone_presets = {
             "lowercase": False,
         },
         "metadata": {
-            "description": ("12-layer BERT model. Trained on Chinese Wikipedia."),
+            "description": (
+                "12-layer BERT model. Trained on Chinese Wikipedia."
+            ),
             "params": 102269186,
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_zh/v1/model.h5",
