@@ -61,7 +61,7 @@ class Sampler:
     gets the next token based on probability distribution over vocab tokens.
     Please check available subclass samplers for examples. If you need more
     control over the sampling process, please implement `sample()` method
-    instead, see `BeamSampler` for example.
+    instead, see `keras_nlp.samplers.BeamSampler` for example.
 
     Examples:
 

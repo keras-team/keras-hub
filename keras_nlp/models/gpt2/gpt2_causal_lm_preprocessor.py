@@ -25,14 +25,15 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     """GPT2 Causal LM preprocessor.
 
+    This preprocessor is majorly used as the preprocesor for `GPT2CausalLM`.
     This class subclasses `keras_nlp.models.GPT2Preprocessor` and keeps most of
     its functionality. The only change is `GPT2CausalLMPreprocessor` sets
     `y` (label) and `sample_weights` field by shifting the input sequence one
     step towards left, and drop the last token as it does not have a successor,
     e.g., if the tokenized input is `[1, 2, 3, 0, 0]` with
-    `padding_mask=[1, 1, 1, 0, 0]`, then after preprocessing, we
-    will have `x=[1, 2, 3, 0]` and `y=[2, 3, 0, 0]`, with
-    `padding_mask=[1, 1, 1, 0]` and `sample_weights=[1, 1, 0, 0]`.
+    `padding_mask = [1, 1, 1, 0, 0]`, then after preprocessing, we
+    will have `x = [1, 2, 3, 0]` and `y = [2, 3, 0, 0]`, with
+    `padding_mask = [1, 1, 1, 0]` and `sample_weights = [1, 1, 0, 0]`.
 
     Args:
         tokenizer: A `keras_nlp.models.GPT2Tokenizer` instance.
@@ -46,16 +47,16 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     )
 
     # Tokenize and pack a single sentence.
-    sentence = tf.constant("league of legends")
+    sentence = tf.constant("League of legends")
     preprocessor(sentence)
     # Same output.
-    preprocessor("league of legends")
+    preprocessor("League of legends")
 
     # Tokenize a batch of sentences.
-    sentences = tf.constant(["taco tuesday", "fish taco please!"])
+    sentences = tf.constant(["Taco tuesday", "Fish taco please!"])
     preprocessor(sentences)
     # Same output.
-    preprocessor(["taco tuesday", "fish taco please!"])
+    preprocessor(["Taco tuesday", "Fish taco please!"])
 
     # Map a dataset to preprocess a single sentence.
     features = tf.constant(
@@ -77,9 +78,9 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
         if y is not None or sample_weight is not None:
             logging.warning(
                 "`GPT2CausalLMPreprocessor` generates `y` and `sample_weight` "
-                "based on your input data, but your data already contain `y` "
+                "based on your input data, but your data already contains `y` "
                 "or `sample_weight`. Your `y` and `sample_weight` will be "
-                "overrided."
+                "ignored."
             )
 
         x = super().call(x)

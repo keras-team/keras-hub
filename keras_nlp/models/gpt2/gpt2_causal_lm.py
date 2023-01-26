@@ -30,12 +30,13 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class GPT2CausalLM(Task):
-    """GPT2 Causal LM task model.
+    """An end-to-end GPT2 model for causal langauge modeling.
 
-    Causal LM is predicting the next token based on previous tokens, which is
-    the way GPT2 gets pretrained. Users can finetune `GPT2CausalLM` to generate
-    text similar to the custom dataset. `GPT2CausalLM` also has a public method
-    `generate()`, which generates text based on given prompt.
+    A causal language model (LM) predicts the next token based on previous
+    tokens the next token based on previous tokens, which is the way GPT2 gets
+    pretrained. You can finetune `GPT2CausalLM` to generate text similar to
+    the custom dataset. `GPT2CausalLM` also has a method `generate()`, which
+    generates text based on given prompt.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -163,6 +164,8 @@ class GPT2CausalLM(Task):
     def __init__(self, backbone, preprocessor=None, **kwargs):
         inputs = backbone.input
         x = backbone(inputs)
+        # Use token embedding weights to project from the token representation
+        # to vocabulary logits.
         outputs = tf.matmul(
             x,
             backbone.token_embedding.embeddings,
@@ -209,7 +212,8 @@ class GPT2CausalLM(Task):
 
         This method generates text based on given `prompt`. Generation will
         continue until `max_length` is met, and all tokens generated after
-        `end_token` will be truncated.
+        `end_token` will be truncated. The sampling approach used can be
+        controlled via the sampler argument.
 
         Args:
             prompt: a string, string Tensor or string RaggedTensor. The prompt
@@ -220,9 +224,10 @@ class GPT2CausalLM(Task):
         """
         end_token_id = self.preprocessor.tokenizer.end_token_id
 
-        if isinstance(sampler, str):
-            sampler = keras_nlp.samplers.get(sampler)
+        sampler = keras_nlp.samplers.get(sampler)
         if hasattr(self, "jit_compile"):
+            # `jit_compile` is a public property as of tf 2.12. hasattr is for
+            # backward compat.
             sampler.jit_compile = self.jit_compile
         sampler.run_eagerly = self.run_eagerly
         generated = sampler(

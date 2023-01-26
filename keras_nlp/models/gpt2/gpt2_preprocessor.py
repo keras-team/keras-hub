@@ -51,7 +51,7 @@ class GPT2Preprocessor(Preprocessor):
     passed through unaltered.
 
     `GPT2Preprocessor` forces the input to have only one segment, as GPT2 is
-    mainly used for generation tasks.for tasks having multi-segment inputs
+    mainly used for generation tasks. For tasks having multi-segment inputs
     like "glue/mnli", please use a model designed for classification purposes
     such as BERT or RoBERTa.
 
