@@ -38,26 +38,16 @@ setup(
         "absl-py",
         "numpy",
         "packaging",
-        # Don't require tensorflow on MacOS; tensorflow-macos will not
-        # satisfy the requirement.
-        "tensorflow; platform_system != 'Darwin'",
+        # Don't require tensorflow-text on MacOS, there are no binaries for ARM.
+        # Also, we rely on tensorflow *transitively* through tensorflow-text.
+        # This avoid a slowdown during `pip install keras-nlp` where pip would
+        # download many version of both libraries to find compatible versions.
         "tensorflow-text; platform_system != 'Darwin'",
     ],
     extras_require={
-        "tests": [
-            "black",
-            "flake8",
-            "isort",
-            "pytest",
-            "pytest-cov",
+        "extras": [
             "rouge-score",
             "sentencepiece",
-        ],
-        "examples": [
-            "tensorflow_datasets",  # For GLUE in BERT example.
-            "nltk",
-            "wikiextractor",
-            "keras-tuner",
         ],
     },
     # Supported Python versions
