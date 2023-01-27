@@ -33,6 +33,13 @@ from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
+from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
+from keras_nlp.models.gpt2.gpt2_causal_lm import GPT2CausalLM
+from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
+    GPT2CausalLMPreprocessor,
+)
+from keras_nlp.models.gpt2.gpt2_preprocessor import GPT2Preprocessor
+from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
