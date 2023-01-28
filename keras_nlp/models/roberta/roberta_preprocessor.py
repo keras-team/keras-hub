@@ -17,7 +17,6 @@
 import copy
 
 import tensorflow as tf
-import tensorflow_text as tf_text
 from tensorflow import keras
 
 from keras_nlp.models.preprocessor import Preprocessor
@@ -28,6 +27,12 @@ from keras_nlp.utils.keras_utils import (
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.tf_utils import assert_tf_text_installed
+
+try:
+    import tensorflow_text as tf_text
+except ImportError:
+    tf_text = None
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -236,6 +241,8 @@ class RobertaMultiSegmentPacker(keras.layers.Layer):
         truncate="round_robin",
         **kwargs,
     ):
+        assert_tf_text_installed(self.__class__.__name__)
+
         super().__init__(**kwargs)
         self.sequence_length = sequence_length
         if truncate not in ("round_robin", "waterfall"):

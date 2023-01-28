@@ -27,6 +27,11 @@ class Backbone(keras.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    @property
+    def token_embedding(self):
+        """A `keras.layers.Embedding` instance for embedding token ids."""
+        raise NotImplementedError
+
     def get_config(self):
         # Don't chain to super here. The default `get_config()` for functional
         # models is nested and cannot be passed to our Backbone constructors.
