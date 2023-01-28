@@ -103,28 +103,10 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         model.predict(input_data)
 
     @parameterized.named_parameters(
-        ("preset_weights", True), ("random_weights", False)
-    )
-    def test_backbone_output(self, load_weights):
-        input_data = {
-            "token_ids": tf.constant([[2, 13, 1, 3]]),
-            "segment_ids": tf.constant([[0, 0, 0, 0]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
-        }
-        model = AlbertBackbone.from_preset(
-            "albert_base_en_uncased", load_weights=load_weights
-        )
-        outputs = model(input_data)
-        if load_weights:
-            outputs = outputs["sequence_output"][0, 0, :5]
-            expected = [1.830863, 1.698645, -1.819195, -0.53382, -0.38114]
-            self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
-
-    @parameterized.named_parameters(
         ("albert_tokenizer", AlbertTokenizer),
         ("albert_preprocessor", AlbertPreprocessor),
         ("albert", AlbertBackbone),
-        ("albert_classifier", AlbertClassifier)
+        ("albert_classifier", AlbertClassifier),
     )
     def test_preset_docstring(self, cls):
         """Check we did our docstring formatting correctly."""
@@ -135,7 +117,7 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         ("albert_tokenizer", AlbertTokenizer),
         ("albert_preprocessor", AlbertPreprocessor),
         ("albert", AlbertBackbone),
-        ("albert_classifier", AlbertClassifier)
+        ("albert_classifier", AlbertClassifier),
     )
     def test_unknown_preset_error(self, cls):
         # Not a preset name

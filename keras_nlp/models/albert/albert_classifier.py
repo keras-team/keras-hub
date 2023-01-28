@@ -16,12 +16,12 @@ import copy
 
 from tensorflow import keras
 
+from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.models.albert.albert_backbone import albert_kernel_initializer
+from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
+from keras_nlp.models.albert.albert_presets import backbone_presets
 from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.models.albert.albert_presets import backbone_presets
-from keras_nlp.models.albert.albert_backbone import AlbertBackbone
-from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -131,7 +131,6 @@ class AlbertClassifier(Task):
             }
         )
         return config
-
 
     @classproperty
     def backbone_cls(cls):
