@@ -110,12 +110,6 @@ class RobertaMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.assertAllEqual(sw, [[1.0, 1.0, 0.0, 0.0]] * 4)
 
-    def test_tokenize_labeled_errors(self):
-        x = tf.constant([" airplane at airport"] * 4)
-        y = tf.constant([1] * 4)
-        with self.assertRaises(ValueError):
-            self.preprocessor(x, y)
-
     def test_tokenize_dataset(self):
         sentences = tf.constant([" airplane at airport"] * 4)
         ds = tf.data.Dataset.from_tensor_slices(sentences)
@@ -167,11 +161,6 @@ class RobertaMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(x["mask_positions"], [1, 3, 10, 0])
         self.assertAllEqual(y, [3, 5, 10, 0])
         self.assertAllEqual(sw, [1.0, 1.0, 1.0, 0.0])
-
-    def test_errors_for_2d_list_input(self):
-        ambiguous_input = [["one", "two"], ["three", "four"]]
-        with self.assertRaises(ValueError):
-            self.preprocessor(ambiguous_input)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),

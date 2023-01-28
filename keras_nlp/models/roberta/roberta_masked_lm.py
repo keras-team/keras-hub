@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""RoBERTa classification model."""
+"""RoBERTa masked lm model."""
 
 import copy
 
@@ -63,13 +63,13 @@ class RobertaMaskedLM(Task):
 
     # Create a RobertaMaskedLM with a pretrained backbone and further train
     # on an MLM task.
-    classifier = keras_nlp.models.RobertaMaskedLM.from_preset(
+    masked_lm = keras_nlp.models.RobertaMaskedLM.from_preset(
         "roberta_base_en",
     )
-    classifier.compile(
+    masked_lm.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
     )
-    classifier.fit(x=features, batch_size=2)
+    masked_lm.fit(x=features, batch_size=2)
     ```
 
     Preprocessed inputs and custom backbone.
