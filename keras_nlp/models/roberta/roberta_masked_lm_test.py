@@ -135,10 +135,7 @@ class RobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         # Check we got the real object back.
         self.assertIsInstance(restored_model, RobertaMaskedLM)
 
-        keras.utils.set_random_seed(42)
-        model_output = self.masked_lm.predict(self.raw_batch)
-        # Check that output matches.
-        keras.utils.set_random_seed(42)
-        restored_output = restored_model.predict(self.raw_batch)
+        model_output = self.masked_lm(self.preprocessed_batch)
+        restored_output = restored_model(self.preprocessed_batch)
 
         self.assertAllClose(model_output, restored_output)
