@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ALBERT classification model."""
+
 import copy
 
 from tensorflow import keras
@@ -52,8 +53,9 @@ class AlbertClassifier(Task):
 
     Examples:
 
+    Example usage.
     ```python
-    # Call classifier on the inputs.
+    # Define the preprocessed inputs.
     preprocessed_features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
         "segment_ids": tf.constant(
@@ -90,6 +92,55 @@ class AlbertClassifier(Task):
 
     # Access backbone programatically (e.g., to change `trainable`)
     classifier.backbone.trainable = False
+
+    Raw string inputs with customized preprocessing.
+    ```python
+    # Create a dataset with raw string features in an `(x, y)` format.
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    labels = [0, 3]
+
+    # Use a shorter sequence length.
+    preprocessor = keras_nlp.models.AlbertPreprocessor.from_preset(
+        "albert_base_en_uncased",
+        sequence_length=128,
+    )
+
+    # Create a AlbertClassifier and fit your data.
+    classifier = keras_nlp.models.AlbertClassifier.from_preset(
+        "albert_base_en_uncased",
+        num_classes=4,
+        preprocessor=preprocessor,
+    )
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    )
+    classifier.fit(x=features, y=labels, batch_size=2)
+    ```
+
+    Preprocessed inputs.
+    ```python
+    # Create a dataset with preprocessed features in an `(x, y)` format.
+    preprocessed_features = {
+        "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
+        "segment_ids": tf.constant(
+            [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
+        ),
+        "padding_mask": tf.constant(
+            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
+        ),
+    }
+    labels = [0, 3]
+
+    # Create a ALBERT classifier and fit your data.
+    classifier = keras_nlp.models.AlbertClassifier.from_preset(
+        "albert_base_en_uncased",
+        num_classes=4,
+        preprocessor=None,
+    )
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    )
+    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
     ```
     """
 
@@ -130,6 +181,7 @@ class AlbertClassifier(Task):
                 "dropout": self.dropout,
             }
         )
+
         return config
 
     @classproperty
