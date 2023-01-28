@@ -99,7 +99,7 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         ("albert_tokenizer", AlbertTokenizer),
         ("albert_preprocessor", AlbertPreprocessor),
         ("albert", AlbertBackbone),
-        ("albert_classifier", AlbertClassifier)
+        ("albert_classifier", AlbertClassifier),
     )
     def test_preset_docstring(self, cls):
         """Check we did our docstring formatting correctly."""
@@ -110,7 +110,7 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         ("albert_tokenizer", AlbertTokenizer),
         ("albert_preprocessor", AlbertPreprocessor),
         ("albert", AlbertBackbone),
-        ("albert_classifier", AlbertClassifier)
+        ("albert_classifier", AlbertClassifier),
     )
     def test_unknown_preset_error(self, cls):
         # Not a preset name
@@ -190,4 +190,3 @@ class AlbertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in AlbertPreprocessor.presets:
             preprocessor = AlbertPreprocessor.from_preset(preset)
             preprocessor("The quick brown fox.")
-Footer
