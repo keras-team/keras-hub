@@ -79,8 +79,9 @@ def pytest_collection_modifyitems(config, items):
     skip_xla = pytest.mark.skipif(
         sys.platform == "darwin", reason="XLA unsupported on MacOS."
     )
+    # Run Keras saving tests on 2.12 stable, nightlies and later releases.
     skip_keras_saving_test = pytest.mark.skipif(
-        version.parse(tf.__version__) < version.parse("2.12"),
+        version.parse(tf.__version__) < version.parse("2.12.0-dev0"),
         reason="keras_v3 format requires tf > 2.12.",
     )
     skip_large = pytest.mark.skipif(
