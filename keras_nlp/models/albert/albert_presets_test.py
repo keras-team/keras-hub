@@ -27,7 +27,6 @@ from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     """
     A smoke test for ALBERT presets we run continuously.
-
     This only tests the smallest weights we have available. Run with:
     `pytest keras_nlp/models/albert/albert_presets_test.py --run_large`
     """
@@ -48,30 +47,6 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         outputs = preprocessor("The quick brown fox.")["token_ids"]
         expected_outputs = [2, 13, 1, 3]
         self.assertAllEqual(outputs, expected_outputs)
-
-    @parameterized.named_parameters(
-        ("load_weights", True), ("no_load_weights", False)
-    )
-    def test_backbone_output(self, load_weights):
-        input_data = {
-            "token_ids": tf.constant([[101, 1996, 4248, 102]]),
-            "segment_ids": tf.constant([[0, 0, 0, 0]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
-        }
-        model = AlbertBackbone.from_preset(
-            "bert_tiny_en_uncased", load_weights=load_weights
-        )
-        outputs = model(input_data)["sequence_output"]
-        if load_weights:
-            # The forward pass from a preset should be stable!
-            # This test should catch cases where we unintentionally change our
-            # network code in a way that would invalidate our preset weights.
-            # We should only update these numbers if we are updating a weights
-            # file, or have found a discrepancy with the upstream source.
-            outputs = outputs[0, 0, :5]
-            expected = [-1.38173, 0.16598, -2.92788, -2.66958, -0.61556]
-            # Keep a high tolerance, so we are robust to different hardware.
-            self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
 
     @parameterized.named_parameters(
         ("load_weights", True), ("no_load_weights", False)
@@ -103,10 +78,28 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         model.predict(input_data)
 
     @parameterized.named_parameters(
+        ("preset_weights", True), ("random_weights", False)
+    )
+    def test_backbone_output(self, load_weights):
+        input_data = {
+            "token_ids": tf.constant([[2, 13, 1, 3]]),
+            "segment_ids": tf.constant([[0, 0, 0, 0]]),
+            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+        }
+        model = AlbertBackbone.from_preset(
+            "albert_base_en_uncased", load_weights=load_weights
+        )
+        outputs = model(input_data)
+        if load_weights:
+            outputs = outputs["sequence_output"][0, 0, :5]
+            expected = [1.830863, 1.698645, -1.819195, -0.53382, -0.38114]
+            self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
+
+    @parameterized.named_parameters(
         ("albert_tokenizer", AlbertTokenizer),
         ("albert_preprocessor", AlbertPreprocessor),
         ("albert", AlbertBackbone),
-        ("albert_classifier", AlbertClassifier),
+        ("albert_classifier", AlbertClassifier)
     )
     def test_preset_docstring(self, cls):
         """Check we did our docstring formatting correctly."""
@@ -117,7 +110,7 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         ("albert_tokenizer", AlbertTokenizer),
         ("albert_preprocessor", AlbertPreprocessor),
         ("albert", AlbertBackbone),
-        ("albert_classifier", AlbertClassifier),
+        ("albert_classifier", AlbertClassifier)
     )
     def test_unknown_preset_error(self, cls):
         # Not a preset name
@@ -129,7 +122,6 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 class AlbertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
     """
     Test the full enumeration of our preset.
-
     This tests every ALBERT preset and is only run manually.
     Run with:
     `pytest keras_nlp/models/albert/albert_presets_test.py --run_extra_large`
@@ -198,3 +190,4 @@ class AlbertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in AlbertPreprocessor.presets:
             preprocessor = AlbertPreprocessor.from_preset(preset)
             preprocessor("The quick brown fox.")
+Footer
