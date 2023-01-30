@@ -127,9 +127,9 @@ class RobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
-    def test_saving_model(self, save_format, filename):
+    def test_saved_model(self, save_format, filename):
         save_path = os.path.join(self.get_temp_dir(), filename)
-        self.masked_lm.save(save_path, save_format)
+        self.masked_lm.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
