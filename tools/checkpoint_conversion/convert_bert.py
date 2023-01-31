@@ -1,27 +1,40 @@
 import os
-import shutil
-
-import numpy as np
 import tensorflow as tf
-import torch
 import transformers
 from absl import app
 from absl import flags
 from tensorflow import keras
-import sys
+import tensorflow_models as tfm
 import keras_nlp
+import json
 
 FLAGS = flags.FLAGS
+
 PRESET_MAP = {
-    "bert_tiny_uncased_en": "bert_tiny_uncased_en"
+    "bert_tiny_uncased_en": ("roberta.base", "bert_tiny_uncased_en")
 }
 
 flags.DEFINE_string(
     "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
 )
+VOCAB_SIZE = 30522
+NUM_LAYERS = 24
+NUM_ATTN_HEADS = 16
+EMBEDDING_SIZE = 1024
+
 MODEL_SUFFIX = "uncased"
 # MODEL_SPEC_STR = "L-24_H-1024_A-16"
 MODEL_SPEC_STR = "L-2_H-128_A-2"
+model_source = {
+    'bert_tiny_en_uncased': 'https://github.com/keras-team/keras-nlp/blob/master/tools/checkpoint_conversion/bert_tiny_uncased_en.ipynb',
+    'bert_small_en_uncased': 'https://github.com/keras-team/keras-nlp/blob/master/tools/checkpoint_conversion/bert_small_uncased_en.ipynb',
+    'bert_medium_en_uncased': 'https://github.com/keras-team/keras-nlp/blob/master/tools/checkpoint_conversion/bert_medium_uncased_en.ipynb',
+    'bert_base_en_uncased': 'https://github.com/keras-team/keras-nlp/blob/master/tools/checkpoint_conversion/bert_base_uncased.ipynb',
+    'bert_base_en': 'https://github.com/keras-team/keras-nlp/blob/master/tools/checkpoint_conversion/bert_base_cased.ipynb',
+    'bert_base_zh': 'https://github.com/keras-team/keras-nlp/blob/master/tools/checkpoint_conversion/bert_base_zh.ipynb',
+    'bert_base_multi': 'https://github.com/keras-team/keras-nlp/blob/master/tools/checkpoint_conversion/bert_base_multi_cased.ipynb',
+    'bert_large_en_uncased': 'https://github.com/keras-team/keras-nlp/blob/master/tools/checkpoint_conversion/bert_large_uncased_en.ipynb',
+    'bert_large_en': 'https://github.com/keras-team/keras-nlp/blob/master/tools/checkpoint_conversion/bert_large_cased_en.ipynb'}
 
 
 def download_model(preset, TOKEN_TYPE, hf_model_name):
@@ -57,7 +70,174 @@ def convert_checkpoints(preset, weights, model):
     print("\n-> Convert original weights to KerasNLP format.")
 
     # Transformer layers.
-    if preset == 'bert_base_cased':
+    if preset in ['bert_base_en_uncased', 'bert_base_en']:
+        model.get_layer("token_embedding").embeddings.assign(
+            weights[
+                "encoder/layer_with_weights-0/embeddings/.ATTRIBUTES/VARIABLE_VALUE"
+            ]
+        )
+        model.get_layer("position_embedding").position_embeddings.assign(
+            weights[
+                "encoder/layer_with_weights-1/embeddings/.ATTRIBUTES/VARIABLE_VALUE"
+            ]
+        )
+        model.get_layer("segment_embedding").embeddings.assign(
+            weights[
+                "encoder/layer_with_weights-2/embeddings/.ATTRIBUTES/VARIABLE_VALUE"
+            ]
+        )
+        model.get_layer("embeddings_layer_norm").gamma.assign(
+            weights["encoder/layer_with_weights-3/gamma/.ATTRIBUTES/VARIABLE_VALUE"]
+        )
+        model.get_layer("embeddings_layer_norm").beta.assign(
+            weights["encoder/layer_with_weights-3/beta/.ATTRIBUTES/VARIABLE_VALUE"]
+        )
+
+        for i in range(model.num_layers):
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._self_attention_layer._key_dense.kernel.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_key_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._self_attention_layer._key_dense.bias.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_key_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._self_attention_layer._query_dense.kernel.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_query_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._self_attention_layer._query_dense.bias.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_query_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._self_attention_layer._value_dense.kernel.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_value_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._self_attention_layer._value_dense.bias.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_value_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+            if preset == 'bert_base_en_uncased':
+                model.get_layer(
+                    f"transformer_layer_{i}"
+                )._self_attention_layer._output_dense.kernel.assign(
+                    weights[
+                        f"encoder/layer_with_weights-{i + 4}/_attention_output_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
+                    ]
+                )
+                model.get_layer(
+                    f"transformer_layer_{i}"
+                )._self_attention_layer._output_dense.bias.assign(
+                    weights[
+                        f"encoder/layer_with_weights-{i + 4}/_attention_output_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
+                    ]
+                )
+            else:
+                model.get_layer(
+                    f"transformer_layer_{i}"
+                )._self_attention_layer._output_dense.kernel.assign(
+                    weights[
+                        f"encoder/layer_with_weights-{i + 4}/_attention_layer/_output_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
+                    ]
+                )
+                model.get_layer(
+                    f"transformer_layer_{i}"
+                )._self_attention_layer._output_dense.bias.assign(
+                    weights[
+                        f"encoder/layer_with_weights-{i + 4}/_attention_layer/_output_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
+                    ]
+                )
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._self_attention_layernorm.gamma.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_attention_layer_norm/gamma/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._self_attention_layernorm.beta.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_attention_layer_norm/beta/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._feedforward_intermediate_dense.kernel.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_intermediate_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._feedforward_intermediate_dense.bias.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_intermediate_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._feedforward_output_dense.kernel.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_output_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._feedforward_output_dense.bias.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_output_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._feedforward_layernorm.gamma.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_output_layer_norm/gamma/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+            model.get_layer(
+                f"transformer_layer_{i}"
+            )._feedforward_layernorm.beta.assign(
+                weights[
+                    f"encoder/layer_with_weights-{i + 4}/_output_layer_norm/beta/.ATTRIBUTES/VARIABLE_VALUE"
+                ]
+            )
+        if preset == 'bert_base_en_uncased':
+            model.get_layer("pooled_dense").kernel.assign(
+                weights["next_sentence..pooler_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"]
+            )
+            model.get_layer("pooled_dense").bias.assign(
+                weights["next_sentence..pooler_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"]
+            )
+        else:
+            model.get_layer("pooled_dense").kernel.assign(
+                weights["encoder/layer_with_weights-16/kernel/.ATTRIBUTES/VARIABLE_VALUE"]
+            )
+            model.get_layer("pooled_dense").bias.assign(
+                weights["encoder/layer_with_weights-16/bias/.ATTRIBUTES/VARIABLE_VALUE"]
+            )
+        pass
+    elif preset in ['bert_base_zh', 'bert_base_multi']:
         model.get_layer("token_embedding").embeddings.assign(
             weights[
                 "encoder/layer_with_weights-0/embeddings/.ATTRIBUTES/VARIABLE_VALUE"
@@ -193,454 +373,27 @@ def convert_checkpoints(preset, weights, model):
                     f"encoder/layer_with_weights-{i + 4}/_output_layer_norm/beta/.ATTRIBUTES/VARIABLE_VALUE"
                 ]
             )
-
-        model.get_layer("pooled_dense").kernel.assign(
-            weights["encoder/layer_with_weights-16/kernel/.ATTRIBUTES/VARIABLE_VALUE"]
-        )
-        model.get_layer("pooled_dense").bias.assign(
-            weights["encoder/layer_with_weights-16/bias/.ATTRIBUTES/VARIABLE_VALUE"]
-        )
-    elif preset == 'bert_base_multi_cased':
-        model.get_layer("token_embedding").embeddings.assign(
-            weights[
-                "encoder/layer_with_weights-0/embeddings/.ATTRIBUTES/VARIABLE_VALUE"
-            ]
-        )
-        model.get_layer("position_embedding").position_embeddings.assign(
-            weights[
-                "encoder/layer_with_weights-1/embeddings/.ATTRIBUTES/VARIABLE_VALUE"
-            ]
-        )
-        model.get_layer("segment_embedding").embeddings.assign(
-            weights[
-                "encoder/layer_with_weights-2/embeddings/.ATTRIBUTES/VARIABLE_VALUE"
-            ]
-        )
-        model.get_layer("embeddings_layer_norm").gamma.assign(
-            weights["encoder/layer_with_weights-3/gamma/.ATTRIBUTES/VARIABLE_VALUE"]
-        )
-        model.get_layer("embeddings_layer_norm").beta.assign(
-            weights["encoder/layer_with_weights-3/beta/.ATTRIBUTES/VARIABLE_VALUE"]
-        )
-
-        for i in range(model.num_layers):
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.kernel.assign(
+        if preset == 'bert_base_zh':
+            model.get_layer("pooled_dense").kernel.assign(
+                weights["encoder/layer_with_weights-16/kernel/.ATTRIBUTES/VARIABLE_VALUE"]
+            )
+            model.get_layer("pooled_dense").bias.assign(
+                weights["encoder/layer_with_weights-16/bias/.ATTRIBUTES/VARIABLE_VALUE"]
+            )
+        else:
+            model.get_layer("pooled_dense").kernel.assign(
                 weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_key_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
+                    f"encoder/layer_with_weights-{model.num_layers + 4}/kernel/.ATTRIBUTES/VARIABLE_VALUE"
                 ]
             )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.bias.assign(
+            model.get_layer("pooled_dense").bias.assign(
                 weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_key_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
+                    f"encoder/layer_with_weights-{model.num_layers + 4}/bias/.ATTRIBUTES/VARIABLE_VALUE"
                 ]
             )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_query_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_query_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_value_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_value_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_output_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_output_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.gamma.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer_norm/gamma/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.beta.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer_norm/beta/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_intermediate_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_intermediate_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_output_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_output_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.gamma.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_output_layer_norm/gamma/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.beta.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_output_layer_norm/beta/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-
-        model.get_layer("pooled_dense").kernel.assign(
-            weights[
-                f"encoder/layer_with_weights-{model.num_layers + 4}/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-            ]
-        )
-        model.get_layer("pooled_dense").bias.assign(
-            weights[
-                f"encoder/layer_with_weights-{model.num_layers + 4}/bias/.ATTRIBUTES/VARIABLE_VALUE"
-            ]
-        )
         pass
-    elif preset == 'bert_base_uncased':
-        model.get_layer("token_embedding").embeddings.assign(
-            weights[
-                "encoder/layer_with_weights-0/embeddings/.ATTRIBUTES/VARIABLE_VALUE"
-            ]
-        )
-        model.get_layer("position_embedding").position_embeddings.assign(
-            weights[
-                "encoder/layer_with_weights-1/embeddings/.ATTRIBUTES/VARIABLE_VALUE"
-            ]
-        )
-        model.get_layer("segment_embedding").embeddings.assign(
-            weights[
-                "encoder/layer_with_weights-2/embeddings/.ATTRIBUTES/VARIABLE_VALUE"
-            ]
-        )
-        model.get_layer("embeddings_layer_norm").gamma.assign(
-            weights["encoder/layer_with_weights-3/gamma/.ATTRIBUTES/VARIABLE_VALUE"]
-        )
-        model.get_layer("embeddings_layer_norm").beta.assign(
-            weights["encoder/layer_with_weights-3/beta/.ATTRIBUTES/VARIABLE_VALUE"]
-        )
-
-        for i in range(model.num_layers):
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_key_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_key_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_query_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_query_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_value_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_value_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_output_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_output_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.gamma.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer_norm/gamma/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.beta.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer_norm/beta/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_intermediate_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_intermediate_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_output_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_output_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.gamma.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_output_layer_norm/gamma/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.beta.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_output_layer_norm/beta/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-
-        model.get_layer("pooled_dense").kernel.assign(
-            weights["next_sentence..pooler_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"]
-        )
-        model.get_layer("pooled_dense").bias.assign(
-            weights["next_sentence..pooler_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"]
-        )
-        pass
-    elif preset == 'bert_base_zh':
-        model.get_layer("token_embedding").embeddings.assign(
-            weights[
-                "encoder/layer_with_weights-0/embeddings/.ATTRIBUTES/VARIABLE_VALUE"
-            ]
-        )
-        model.get_layer("position_embedding").position_embeddings.assign(
-            weights[
-                "encoder/layer_with_weights-1/embeddings/.ATTRIBUTES/VARIABLE_VALUE"
-            ]
-        )
-        model.get_layer("segment_embedding").embeddings.assign(
-            weights[
-                "encoder/layer_with_weights-2/embeddings/.ATTRIBUTES/VARIABLE_VALUE"
-            ]
-        )
-        model.get_layer("embeddings_layer_norm").gamma.assign(
-            weights["encoder/layer_with_weights-3/gamma/.ATTRIBUTES/VARIABLE_VALUE"]
-        )
-        model.get_layer("embeddings_layer_norm").beta.assign(
-            weights["encoder/layer_with_weights-3/beta/.ATTRIBUTES/VARIABLE_VALUE"]
-        )
-
-        for i in range(model.num_layers):
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_key_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_key_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_query_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_query_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_value_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_value_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_output_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer/_output_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.gamma.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer_norm/gamma/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.beta.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_attention_layer_norm/beta/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_intermediate_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_intermediate_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.kernel.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_output_dense/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.bias.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_output_dense/bias/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.gamma.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_output_layer_norm/gamma/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.beta.assign(
-                weights[
-                    f"encoder/layer_with_weights-{i + 4}/_output_layer_norm/beta/.ATTRIBUTES/VARIABLE_VALUE"
-                ]
-            )
-
-        model.get_layer("pooled_dense").kernel.assign(
-            weights[
-                f"encoder/layer_with_weights-{model.num_layers + 4}/kernel/.ATTRIBUTES/VARIABLE_VALUE"
-            ]
-        )
-        model.get_layer("pooled_dense").bias.assign(
-            weights[
-                f"encoder/layer_with_weights-{model.num_layers + 4}/bias/.ATTRIBUTES/VARIABLE_VALUE"
-            ]
-        )
-        pass
-    elif preset == 'bert_large_cased_en':
+    elif preset in ['bert_large_en_uncased', 'bert_large_en', 'bert_medium_en_uncased', 'bert_small_en_uncased',
+                    'bert_tiny_en_uncased']:
         model.get_layer("token_embedding").embeddings.assign(
             weights["bert/embeddings/word_embeddings"]
         )
@@ -758,478 +511,7 @@ def convert_checkpoints(preset, weights, model):
         )
         model.get_layer("pooled_dense").bias.assign(weights["bert/pooler/dense/bias"])
         pass
-    elif preset == 'bert_large_uncased_en':
-        model.get_layer("token_embedding").embeddings.assign(
-            weights["bert/embeddings/word_embeddings"]
-        )
-        model.get_layer("position_embedding").position_embeddings.assign(
-            weights["bert/embeddings/position_embeddings"]
-        )
-        model.get_layer("segment_embedding").embeddings.assign(
-            weights["bert/embeddings/token_type_embeddings"]
-        )
-        model.get_layer("embeddings_layer_norm").gamma.assign(
-            weights["bert/embeddings/LayerNorm/gamma"]
-        )
-        model.get_layer("embeddings_layer_norm").beta.assign(
-            weights["bert/embeddings/LayerNorm/beta"]
-        )
 
-        for i in range(model.num_layers):
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/key/kernel"].reshape(
-                    (EMBEDDING_SIZE, NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/key/bias"].reshape(
-                    (NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/query/kernel"].reshape(
-                    (EMBEDDING_SIZE, NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/query/bias"].reshape(
-                    (NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/value/kernel"].reshape(
-                    (EMBEDDING_SIZE, NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/value/bias"].reshape(
-                    (NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.kernel.assign(
-                weights[
-                    f"bert/encoder/layer_{i}/attention/output/dense/kernel"
-                ].reshape((NUM_ATTN_HEADS, -1, EMBEDDING_SIZE))
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/output/dense/bias"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.gamma.assign(
-                weights[f"bert/encoder/layer_{i}/attention/output/LayerNorm/gamma"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.beta.assign(
-                weights[f"bert/encoder/layer_{i}/attention/output/LayerNorm/beta"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/intermediate/dense/kernel"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/intermediate/dense/bias"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/output/dense/kernel"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/output/dense/bias"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.gamma.assign(
-                weights[f"bert/encoder/layer_{i}/output/LayerNorm/gamma"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.beta.assign(
-                weights[f"bert/encoder/layer_{i}/output/LayerNorm/beta"]
-            )
-
-        model.get_layer("pooled_dense").kernel.assign(
-            weights["bert/pooler/dense/kernel"]
-        )
-        model.get_layer("pooled_dense").bias.assign(weights["bert/pooler/dense/bias"])
-        pass
-    elif preset == 'bert_medium_uncased_en':
-        model.get_layer("token_embedding").embeddings.assign(
-            weights["bert/embeddings/word_embeddings"]
-        )
-        model.get_layer("position_embedding").position_embeddings.assign(
-            weights["bert/embeddings/position_embeddings"]
-        )
-        model.get_layer("segment_embedding").embeddings.assign(
-            weights["bert/embeddings/token_type_embeddings"]
-        )
-        model.get_layer("embeddings_layer_norm").gamma.assign(
-            weights["bert/embeddings/LayerNorm/gamma"]
-        )
-        model.get_layer("embeddings_layer_norm").beta.assign(
-            weights["bert/embeddings/LayerNorm/beta"]
-        )
-
-        for i in range(model.num_layers):
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/key/kernel"].reshape(
-                    (EMBEDDING_SIZE, NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/key/bias"].reshape(
-                    (NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/query/kernel"].reshape(
-                    (EMBEDDING_SIZE, NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/query/bias"].reshape(
-                    (NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/value/kernel"].reshape(
-                    (EMBEDDING_SIZE, NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/value/bias"].reshape(
-                    (NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.kernel.assign(
-                weights[
-                    f"bert/encoder/layer_{i}/attention/output/dense/kernel"
-                ].reshape((NUM_ATTN_HEADS, -1, EMBEDDING_SIZE))
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/output/dense/bias"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.gamma.assign(
-                weights[f"bert/encoder/layer_{i}/attention/output/LayerNorm/gamma"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.beta.assign(
-                weights[f"bert/encoder/layer_{i}/attention/output/LayerNorm/beta"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/intermediate/dense/kernel"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/intermediate/dense/bias"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/output/dense/kernel"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/output/dense/bias"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.gamma.assign(
-                weights[f"bert/encoder/layer_{i}/output/LayerNorm/gamma"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.beta.assign(
-                weights[f"bert/encoder/layer_{i}/output/LayerNorm/beta"]
-            )
-
-        model.get_layer("pooled_dense").kernel.assign(
-            weights["bert/pooler/dense/kernel"]
-        )
-        model.get_layer("pooled_dense").bias.assign(weights["bert/pooler/dense/bias"])
-        pass
-    elif preset == 'bert_small_uncased_en':
-        model.get_layer("token_embedding").embeddings.assign(
-            weights["bert/embeddings/word_embeddings"]
-        )
-        model.get_layer("position_embedding").position_embeddings.assign(
-            weights["bert/embeddings/position_embeddings"]
-        )
-        model.get_layer("segment_embedding").embeddings.assign(
-            weights["bert/embeddings/token_type_embeddings"]
-        )
-        model.get_layer("embeddings_layer_norm").gamma.assign(
-            weights["bert/embeddings/LayerNorm/gamma"]
-        )
-        model.get_layer("embeddings_layer_norm").beta.assign(
-            weights["bert/embeddings/LayerNorm/beta"]
-        )
-
-        for i in range(model.num_layers):
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/key/kernel"].reshape(
-                    (EMBEDDING_SIZE, NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/key/bias"].reshape(
-                    (NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/query/kernel"].reshape(
-                    (EMBEDDING_SIZE, NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/query/bias"].reshape(
-                    (NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/value/kernel"].reshape(
-                    (EMBEDDING_SIZE, NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/value/bias"].reshape(
-                    (NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.kernel.assign(
-                weights[
-                    f"bert/encoder/layer_{i}/attention/output/dense/kernel"
-                ].reshape((NUM_ATTN_HEADS, -1, EMBEDDING_SIZE))
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/output/dense/bias"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.gamma.assign(
-                weights[f"bert/encoder/layer_{i}/attention/output/LayerNorm/gamma"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.beta.assign(
-                weights[f"bert/encoder/layer_{i}/attention/output/LayerNorm/beta"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/intermediate/dense/kernel"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/intermediate/dense/bias"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/output/dense/kernel"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/output/dense/bias"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.gamma.assign(
-                weights[f"bert/encoder/layer_{i}/output/LayerNorm/gamma"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.beta.assign(
-                weights[f"bert/encoder/layer_{i}/output/LayerNorm/beta"]
-            )
-
-        model.get_layer("pooled_dense").kernel.assign(
-            weights["bert/pooler/dense/kernel"]
-        )
-        model.get_layer("pooled_dense").bias.assign(weights["bert/pooler/dense/bias"])
-        pass
-    elif preset == 'bert_tiny_uncased_en':
-        model.get_layer("token_embedding").embeddings.assign(
-            weights["bert/embeddings/word_embeddings"]
-        )
-        model.get_layer("position_embedding").position_embeddings.assign(
-            weights["bert/embeddings/position_embeddings"]
-        )
-        model.get_layer("segment_embedding").embeddings.assign(
-            weights["bert/embeddings/token_type_embeddings"]
-        )
-        model.get_layer("embeddings_layer_norm").gamma.assign(
-            weights["bert/embeddings/LayerNorm/gamma"]
-        )
-        model.get_layer("embeddings_layer_norm").beta.assign(
-            weights["bert/embeddings/LayerNorm/beta"]
-        )
-
-        for i in range(model.num_layers):
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/key/kernel"].reshape(
-                    (EMBEDDING_SIZE, NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._key_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/key/bias"].reshape(
-                    (NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/query/kernel"].reshape(
-                    (EMBEDDING_SIZE, NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._query_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/query/bias"].reshape(
-                    (NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/value/kernel"].reshape(
-                    (EMBEDDING_SIZE, NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._value_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/self/value/bias"].reshape(
-                    (NUM_ATTN_HEADS, -1)
-                )
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.kernel.assign(
-                weights[
-                    f"bert/encoder/layer_{i}/attention/output/dense/kernel"
-                ].reshape((NUM_ATTN_HEADS, -1, EMBEDDING_SIZE))
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layer._output_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/attention/output/dense/bias"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.gamma.assign(
-                weights[f"bert/encoder/layer_{i}/attention/output/LayerNorm/gamma"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._self_attention_layernorm.beta.assign(
-                weights[f"bert/encoder/layer_{i}/attention/output/LayerNorm/beta"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/intermediate/dense/kernel"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_intermediate_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/intermediate/dense/bias"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.kernel.assign(
-                weights[f"bert/encoder/layer_{i}/output/dense/kernel"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_output_dense.bias.assign(
-                weights[f"bert/encoder/layer_{i}/output/dense/bias"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.gamma.assign(
-                weights[f"bert/encoder/layer_{i}/output/LayerNorm/gamma"]
-            )
-            model.get_layer(
-                f"transformer_layer_{i}"
-            )._feedforward_layernorm.beta.assign(
-                weights[f"bert/encoder/layer_{i}/output/LayerNorm/beta"]
-            )
-
-        model.get_layer("pooled_dense").kernel.assign(
-            weights["bert/pooler/dense/kernel"]
-        )
-        model.get_layer("pooled_dense").bias.assign(weights["bert/pooler/dense/bias"])
-        pass
     # Save the model.
     print(f"\n-> Save KerasNLP model weights to `{preset}.h5`.")
     model.save_weights(f"{preset}.h5")
@@ -1283,7 +565,7 @@ def check_output(
         }
     )["pooled_output"]
     tf.reduce_mean(keras_nlp_output - mg_output)
-    model.save_weights(f"""{preset}.h5""")
+    keras_nlp_model.save_weights(f"""{preset}.h5""")
     return keras_nlp_output
 
 
@@ -1298,22 +580,7 @@ def main(_):
 
     keras_nlp_model = convert_checkpoints(FLAGS.preset, weights, model)
 
-    print("\n-> Load HF model.")
-    hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
-    hf_model.eval()
-
-    mg_model, token_ids, segment_ids = define_preprocessor(
-        vocab_path, checkpoint_path, config_path, model
-    )
-
-    check_output(
-        FLAGS.preset,
-        keras_nlp_model,
-        mg_model,
-        token_ids,
-        segment_ids
-    )
-
-
 if __name__ == "__main__":
+
+
     app.run(main)
