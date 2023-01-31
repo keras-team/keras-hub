@@ -48,6 +48,15 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
             masked.
         mask_selection_length: The maximum number of masked tokens supported
             by the layer.
+        mask_token_rate: float, defaults to 0.8. `mask_token_rate` must be
+            between 0 and 1 which indicates how often the mask_token is
+            substituted for tokens selected for masking.
+        random_token_rate: float, defaults to 0.1. `random_token_rate` must be
+            between 0 and 1 which indicates how often a random token is
+            substituted for tokens selected for masking. Default is 0.1.
+            Note: mask_token_rate + random_token_rate <= 1,  and for
+            (1 - mask_token_rate - random_token_rate), the token will not be
+            changed.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
             `round_robin` or `waterfall`:
@@ -107,6 +116,8 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
         truncate="round_robin",
         mask_selection_rate=0.15,
         mask_selection_length=96,
+        mask_token_rate=0.8,
+        random_token_rate=0.1,
         **kwargs,
     ):
         super().__init__(
@@ -119,6 +130,8 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
         self.masker = MaskedLMMaskGenerator(
             mask_selection_rate=mask_selection_rate,
             mask_selection_length=mask_selection_length,
+            mask_token_rate=mask_token_rate,
+            random_token_rate=random_token_rate,
             vocabulary_size=tokenizer.vocabulary_size(),
             mask_token_id=tokenizer.mask_token_id,
             unselectable_token_ids=[
@@ -134,6 +147,8 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
             {
                 "mask_selection_rate": self.masker.mask_selection_rate,
                 "mask_selection_length": self.masker.mask_selection_length,
+                "mask_token_rate": self.masker.mask_token_rate,
+                "random_token_rate": self.masker.random_token_rate,
             }
         )
         return config

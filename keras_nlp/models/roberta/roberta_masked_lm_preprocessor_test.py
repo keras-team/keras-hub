@@ -54,113 +54,91 @@ class RobertaMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
                 vocabulary=vocab,
                 merges=merges,
             ),
-            mask_selection_rate=0.3,
-            mask_selection_length=4,
+            # Simplify out testing by masking every available token.
+            mask_selection_rate=1.0,
+            mask_token_rate=1.0,
+            random_token_rate=0.0,
+            mask_selection_length=5,
             sequence_length=12,
         )
-        keras.utils.set_random_seed(42)
 
-    def test_tokenize_strings(self):
+    def test_preprocess_strings(self):
         input_data = " airplane at airport"
 
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [0, 12, 4, 12, 3, 6, 2, 1, 1, 1, 1, 1]
+            x["token_ids"], [0, 12, 12, 12, 12, 12, 2, 1, 1, 1, 1, 1]
         )
         self.assertAllEqual(
             x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
         )
-        self.assertAllEqual(x["mask_positions"], [1, 3, 0, 0])
-        self.assertAllEqual(y, [3, 5, 0, 0])
-        self.assertAllEqual(sw, [1.0, 1.0, 0.0, 0.0])
+        self.assertAllEqual(x["mask_positions"], [1, 2, 3, 4, 5])
+        self.assertAllEqual(y, [3, 4, 5, 3, 6])
+        self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0, 1.0])
 
-    def test_tokenize_list_of_strings(self):
+    def test_preprocess_list_of_strings(self):
         input_data = [" airplane at airport"] * 4
 
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"],
-            [
-                [0, 12, 4, 12, 3, 6, 2, 1, 1, 1, 1, 1],
-                [0, 3, 4, 5, 12, 6, 2, 1, 1, 1, 1, 1],
-                [0, 3, 12, 5, 3, 12, 2, 1, 1, 1, 1, 1],
-                [0, 3, 4, 5, 12, 12, 2, 1, 1, 1, 1, 1],
-            ],
+            x["token_ids"], [[0, 12, 12, 12, 12, 12, 2, 1, 1, 1, 1, 1]] * 4
         )
         self.assertAllEqual(
             x["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
         )
-        self.assertAllEqual(
-            x["mask_positions"],
-            [
-                [1, 3, 0, 0],
-                [4, 5, 0, 0],
-                [2, 5, 0, 0],
-                [4, 5, 0, 0],
-            ],
-        )
-        self.assertAllEqual(
-            y,
-            [
-                [3, 5, 0, 0],
-                [3, 6, 0, 0],
-                [4, 6, 0, 0],
-                [3, 6, 0, 0],
-            ],
-        )
-        self.assertAllEqual(sw, [[1.0, 1.0, 0.0, 0.0]] * 4)
+        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4, 5]] * 4)
+        self.assertAllEqual(y, [[3, 4, 5, 3, 6]] * 4)
+        self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0, 1.0]] * 4)
 
-    def test_tokenize_dataset(self):
+    def test_preprocess_dataset(self):
         sentences = tf.constant([" airplane at airport"] * 4)
         ds = tf.data.Dataset.from_tensor_slices(sentences)
         ds = ds.map(self.preprocessor)
         x, y, sw = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(
-            x["token_ids"],
-            [
-                [0, 3, 4, 5, 1, 6, 2, 1, 1, 1, 1, 1],
-                [0, 3, 4, 5, 12, 6, 2, 1, 1, 1, 1, 1],
-                [0, 3, 4, 5, 12, 12, 2, 1, 1, 1, 1, 1],
-                [0, 3, 12, 5, 3, 12, 2, 1, 1, 1, 1, 1],
-            ],
+            x["token_ids"], [[0, 12, 12, 12, 12, 12, 2, 1, 1, 1, 1, 1]] * 4
         )
         self.assertAllEqual(
             x["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
         )
-        self.assertAllEqual(
-            x["mask_positions"],
-            [
-                [4, 5, 0, 0],
-                [3, 4, 0, 0],
-                [4, 5, 0, 0],
-                [2, 5, 0, 0],
-            ],
-        )
-        self.assertAllEqual(
-            y,
-            [
-                [3, 6, 0, 0],
-                [5, 3, 0, 0],
-                [3, 6, 0, 0],
-                [4, 6, 0, 0],
-            ],
-        )
-        self.assertAllEqual(sw, [[1.0, 1.0, 0.0, 0.0]] * 4)
+        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4, 5]] * 4)
+        self.assertAllEqual(y, [[3, 4, 5, 3, 6]] * 4)
+        self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0, 1.0]] * 4)
 
     def test_mask_multiple_sentences(self):
-        sentence_one = tf.constant(" airplane at airport")
-        sentence_two = tf.constant(" kohli is the best")
+        sentence_one = tf.constant(" airplane")
+        sentence_two = tf.constant(" kohli")
 
         x, y, sw = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
-            x["token_ids"], [0, 12, 4, 12, 3, 2, 2, 7, 8, 9, 10, 2]
+            x["token_ids"], [0, 12, 12, 2, 2, 12, 12, 2, 1, 1, 1, 1]
         )
         self.assertAllEqual(
-            x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0]
         )
-        self.assertAllEqual(x["mask_positions"], [1, 3, 10, 0])
-        self.assertAllEqual(y, [3, 5, 10, 0])
-        self.assertAllEqual(sw, [1.0, 1.0, 1.0, 0.0])
+        self.assertAllEqual(x["mask_positions"], [1, 2, 5, 6, 0])
+        self.assertAllEqual(y, [3, 4, 7, 8, 0])
+        self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0, 0.0])
+
+    def test_no_masking_zero_rate(self):
+        no_mask_preprocessor = RobertaMaskedLMPreprocessor(
+            self.preprocessor.tokenizer,
+            mask_selection_rate=0.0,
+            mask_selection_length=5,
+            sequence_length=12,
+        )
+        input_data = " airplane at airport"
+
+        x, y, sw = no_mask_preprocessor(input_data)
+        self.assertAllEqual(
+            x["token_ids"], [0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]
+        )
+        self.assertAllEqual(
+            x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
+        )
+        self.assertAllEqual(x["mask_positions"], [0, 0, 0, 0, 0])
+        self.assertAllEqual(y, [0, 0, 0, 0, 0])
+        self.assertAllEqual(sw, [0.0, 0.0, 0.0, 0.0, 0.0])
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
@@ -177,8 +155,6 @@ class RobertaMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         model.save(path, save_format=save_format)
 
         restored_model = keras.models.load_model(path)
-        keras.utils.set_random_seed(42)
         outputs = model(input_data)[0]["token_ids"]
-        keras.utils.set_random_seed(42)
         restored_outputs = restored_model(input_data)[0]["token_ids"]
         self.assertAllEqual(outputs, restored_outputs)
