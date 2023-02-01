@@ -39,6 +39,7 @@ class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             "Ġis": 9,
             "Ġthe": 10,
             "Ġbest": 11,
+            "<mask>": 12,
         }
 
         merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]

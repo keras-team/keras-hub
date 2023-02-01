@@ -42,6 +42,10 @@ from keras_nlp.models.gpt2.gpt2_preprocessor import GPT2Preprocessor
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
+from keras_nlp.models.roberta.roberta_masked_lm import RobertaMaskedLM
+from keras_nlp.models.roberta.roberta_masked_lm_preprocessor import (
+    RobertaMaskedLMPreprocessor,
+)
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone

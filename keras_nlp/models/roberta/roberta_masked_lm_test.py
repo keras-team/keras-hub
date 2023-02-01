@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2022 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for RoBERTa classification model."""
+"""Tests for RoBERTa masked language model."""
 
 import os
 
@@ -20,12 +20,14 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
-from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
-from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
+from keras_nlp.models.roberta.roberta_masked_lm import RobertaMaskedLM
+from keras_nlp.models.roberta.roberta_masked_lm_preprocessor import (
+    RobertaMaskedLMPreprocessor,
+)
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 
 
-class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
+class RobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.backbone = RobertaBackbone(
             vocabulary_size=1000,
@@ -56,18 +58,17 @@ class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
         merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
         merges += ["pla ne"]
         self.merges = merges
-        self.preprocessor = RobertaPreprocessor(
+        self.preprocessor = RobertaMaskedLMPreprocessor(
             RobertaTokenizer(vocabulary=self.vocab, merges=self.merges),
             sequence_length=8,
+            mask_selection_length=2,
         )
-        self.classifier = RobertaClassifier(
+        self.masked_lm = RobertaMaskedLM(
             self.backbone,
-            4,
             preprocessor=self.preprocessor,
         )
-        self.classifier_no_preprocessing = RobertaClassifier(
+        self.masked_lm_no_preprocessing = RobertaMaskedLM(
             self.backbone,
-            4,
             preprocessor=None,
         )
 
@@ -79,62 +80,62 @@ class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
                 " kohli is the best",
             ]
         )
-        self.preprocessed_batch = self.preprocessor(self.raw_batch)
+        self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, tf.ones((4,)))
+            self.raw_batch
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
-    def test_valid_call_classifier(self):
-        self.classifier(self.preprocessed_batch)
+    def test_valid_call_masked_lm(self):
+        self.masked_lm(self.preprocessed_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_roberta_classifier_predict(self, jit_compile):
-        self.classifier.compile(jit_compile=jit_compile)
-        self.classifier.predict(self.raw_batch)
+    def test_roberta_masked_lm_predict(self, jit_compile):
+        self.masked_lm.compile(jit_compile=jit_compile)
+        self.masked_lm.predict(self.raw_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_roberta_classifier_predict_no_preprocessing(self, jit_compile):
-        self.classifier_no_preprocessing.compile(jit_compile=jit_compile)
-        self.classifier_no_preprocessing.predict(self.preprocessed_batch)
+    def test_roberta_masked_lm_predict_no_preprocessing(self, jit_compile):
+        self.masked_lm_no_preprocessing.compile(jit_compile=jit_compile)
+        self.masked_lm_no_preprocessing.predict(self.preprocessed_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_roberta_classifier_fit(self, jit_compile):
-        self.classifier.compile(
+    def test_roberta_masked_lm_fit(self, jit_compile):
+        self.masked_lm.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             jit_compile=jit_compile,
         )
-        self.classifier.fit(self.raw_dataset)
+        self.masked_lm.fit(self.raw_dataset)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_roberta_classifier_fit_no_preprocessing(self, jit_compile):
-        self.classifier_no_preprocessing.compile(
+    def test_roberta_masked_lm_fit_no_preprocessing(self, jit_compile):
+        self.masked_lm_no_preprocessing.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             jit_compile=jit_compile,
         )
-        self.classifier_no_preprocessing.fit(self.preprocessed_dataset)
+        self.masked_lm_no_preprocessing.fit(self.preprocessed_dataset)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
     def test_saved_model(self, save_format, filename):
-        model_output = self.classifier.predict(self.raw_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)
-        self.classifier.save(save_path, save_format=save_format)
+        self.masked_lm.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, RobertaClassifier)
+        self.assertIsInstance(restored_model, RobertaMaskedLM)
 
-        # Check that output matches.
-        restored_output = restored_model.predict(self.raw_batch)
+        model_output = self.masked_lm(self.preprocessed_batch)
+        restored_output = restored_model(self.preprocessed_batch)
+
         self.assertAllClose(model_output, restored_output)
