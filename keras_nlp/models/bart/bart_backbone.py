@@ -96,7 +96,6 @@ class BartBackbone(Backbone):
         max_sequence_length=1024,
         **kwargs,
     ):
-
         # Encoder inputs
         encoder_token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="encoder_token_ids"

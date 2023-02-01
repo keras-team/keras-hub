@@ -121,7 +121,6 @@ class GPT2Preprocessor(Preprocessor):
         sequence_length,
         **kwargs,
     ):
-
         super().__init__(**kwargs)
 
         self.tokenizer = tokenizer

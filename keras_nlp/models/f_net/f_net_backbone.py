@@ -100,7 +100,6 @@ class FNetBackbone(Backbone):
         num_segments=4,
         **kwargs,
     ):
-
         # Index of classification token in the vocabulary
         cls_token_index = 0
         # Inputs

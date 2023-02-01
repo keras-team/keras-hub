@@ -98,7 +98,6 @@ class RobertaBackbone(Backbone):
         max_sequence_length=512,
         **kwargs,
     ):
-
         # Inputs
         token_id_input = keras.Input(
             shape=(None,), dtype=tf.int32, name="token_ids"
