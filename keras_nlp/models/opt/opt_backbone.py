@@ -14,6 +14,8 @@
 
 """OPT backbone model."""
 
+import copy
+
 import tensorflow as tf
 from tensorflow import keras
 
@@ -22,6 +24,8 @@ from keras_nlp.layers.token_and_position_embedding import (
 )
 from keras_nlp.layers.transformer_decoder import TransformerDecoder
 from keras_nlp.models.backbone import Backbone
+from keras_nlp.models.opt.opt_presets import backbone_presets
+from keras_nlp.utils.python_utils import classproperty
 
 
 def opt_kernel_initializer(stddev=0.02):
@@ -159,3 +163,7 @@ class OPTBackbone(Backbone):
     @property
     def token_embedding(self):
         return self.get_layer("embeddings").token_embedding
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
