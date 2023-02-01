@@ -167,7 +167,7 @@ class RobertaPreprocessor(Preprocessor):
     ):
         super().__init__(**kwargs)
 
-        self._tokenizer = tokenizer
+        self.tokenizer = tokenizer
         self.packer = RobertaMultiSegmentPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,

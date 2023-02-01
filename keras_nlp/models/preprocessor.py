@@ -27,6 +27,10 @@ class Preprocessor(keras.layers.Layer):
         """The tokenizer used to tokenize strings."""
         return self._tokenizer
 
+    @tokenizer.setter
+    def tokenizer(self, value):
+        self._tokenizer = value
+
     def get_config(self):
         config = super().get_config()
         config["tokenizer"] = keras.layers.serialize(self.tokenizer)
