@@ -11,8 +11,3 @@ pytest-cov
 # Optional deps.
 rouge-score
 sentencepiece
-# Examples deps.
-nltk
-tensorflow_datasets
-wikiextractor
-keras-tuner
