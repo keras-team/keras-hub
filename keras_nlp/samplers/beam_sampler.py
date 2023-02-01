@@ -111,7 +111,6 @@ class BeamSampler(Sampler):
         )
 
         def one_step(beams, beams_prob, length, mask):
-
             flattened_beams = tf.reshape(
                 beams, shape=[batch_size * num_beams, -1]
             )

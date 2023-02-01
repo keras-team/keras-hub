@@ -124,7 +124,7 @@ def write_instance_to_example_files(
     writer = tf.io.TFRecordWriter(output_filename)
     total_written = 0
     lookup = dict(zip(vocab, range(len(vocab))))
-    for (inst_index, instance) in enumerate(instances):
+    for inst_index, instance in enumerate(instances):
         token_ids = [lookup[x] for x in instance.tokens]
         padding_mask = [1] * len(token_ids)
         segment_ids = list(instance.segment_ids)
@@ -379,7 +379,7 @@ def create_masked_lm_predictions(
     # (Issue #166)
 
     cand_indexes = []
-    for (i, token) in enumerate(tokens):
+    for i, token in enumerate(tokens):
         if token == "[CLS]" or token == "[SEP]":
             continue
         cand_indexes.append([i])

@@ -108,7 +108,6 @@ class DebertaV3Backbone(Backbone):
         bucket_size=256,
         **kwargs,
     ):
-
         # Inputs
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
