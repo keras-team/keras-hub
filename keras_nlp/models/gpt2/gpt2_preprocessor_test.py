@@ -26,7 +26,7 @@ from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 
 class GPT2PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        vocab = {
+        self.vocab = {
             "<|endoftext|>": 0,
             "!": 1,
             "air": 2,
@@ -45,11 +45,12 @@ class GPT2PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
         merges += ["Ġt h", "ai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
         merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.merges = merges
 
         self.preprocessor = GPT2Preprocessor(
             tokenizer=GPT2Tokenizer(
-                vocabulary=vocab,
-                merges=merges,
+                vocabulary=self.vocab,
+                merges=self.merges,
             ),
             sequence_length=8,
         )
@@ -72,6 +73,28 @@ class GPT2PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
 
         self.assertAllEqual(
             output["padding_mask"], [[1, 1, 1, 1, 1, 0, 0, 0]] * 4
+        )
+
+    def test_pad_start_end_token(self):
+        input_data = ["airplane at airport"] * 4
+
+        preprocessor = GPT2Preprocessor(
+            tokenizer=GPT2Tokenizer(
+                vocabulary=self.vocab,
+                merges=self.merges,
+            ),
+            sequence_length=8,
+            add_start_token=True,
+            add_end_token=True,
+        )
+        output = preprocessor(input_data)
+        self.assertAllEqual(
+            output["token_ids"],
+            [[0, 2, 4, 5, 3, 6, 0, 0]] * 4,
+        )
+
+        self.assertAllEqual(
+            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
         )
 
     def test_tokenize_labeled_batch(self):

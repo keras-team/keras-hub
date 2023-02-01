@@ -58,6 +58,10 @@ class GPT2Preprocessor(Preprocessor):
     Args:
         tokenizer: A `keras_nlp.models.GPT2Tokenizer` instance.
         sequence_length: The length of the packed inputs.
+        add_start_token: If true, the preprocessor will append the tokenizer
+            start token to each input sequence.
+        add_end_token: If true, the preprocessor will append the tokenizer
+            end token to each input sequence.
 
     Examples:
     ```python
@@ -65,16 +69,16 @@ class GPT2Preprocessor(Preprocessor):
     preprocessor = keras_nlp.models.GPT2Preprocessor.from_preset("gpt2_base_en")
 
     # Tokenize and pack a single sentence.
-    sentence = tf.constant("league of legends")
+    sentence = tf.constant("League of legends")
     preprocessor(sentence)
     # Same output.
-    preprocessor("league of legends")
+    preprocessor("League of legends")
 
     # Tokenize a batch of sentences.
-    sentences = tf.constant(["taco tuesday", "gi gi gi gi"])
+    sentences = tf.constant(["Taco tuesday", "Fish taco!"])
     preprocessor(sentences)
     # Same output.
-    preprocessor(["taco tuesday", "gi gi gi gi"])
+    preprocessor(["Taco tuesday", "Fish taco!"])
 
     # Map a dataset to preprocess a single sentence.
     features = tf.constant(
@@ -119,12 +123,16 @@ class GPT2Preprocessor(Preprocessor):
         self,
         tokenizer,
         sequence_length,
+        add_start_token=False,
+        add_end_token=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
         self.tokenizer = tokenizer
         self.sequence_length = sequence_length
+        self.add_start_token = add_start_token
+        self.add_end_token = add_end_token
 
     def get_config(self):
         config = super().get_config()
@@ -148,9 +156,28 @@ class GPT2Preprocessor(Preprocessor):
         input_is_1d = len(token_ids.shape) == 1
         if input_is_1d:
             token_ids = tf.RaggedTensor.from_tensor([token_ids])
+        if self.add_start_token:
+            start_tokens = tf.fill(
+                [tf.shape(token_ids)[0], 1],
+                self.tokenizer.start_token_id,
+            )
+            token_ids = tf.concat([start_tokens, token_ids], axis=1)
+        if self.add_end_token:
+            end_tokens = tf.fill(
+                [tf.shape(token_ids)[0], 1],
+                self.tokenizer.end_token_id,
+            )
+            token_ids = tf.concat([token_ids, end_tokens], axis=1)
         mask = tf.ones_like(token_ids, dtype=tf.bool)
-        mask = mask.to_tensor(shape=(None, self.sequence_length))
-        token_ids = token_ids.to_tensor(shape=(None, self.sequence_length))
+        shape_after_padding = tf.stack(
+            [tf.constant(-1), self.sequence_length],
+            axis=0,
+        )
+        mask = mask.to_tensor(shape=shape_after_padding)
+        token_ids = token_ids.to_tensor(
+            shape=shape_after_padding,
+            default_value=self.tokenizer.pad_token_id,
+        )
         if input_is_1d:
             # If the input is a single string, we let the output be a 1D tensor.
             token_ids = tf.squeeze(token_ids, axis=0)
