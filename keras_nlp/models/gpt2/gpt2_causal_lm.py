@@ -161,7 +161,12 @@ class GPT2CausalLM(Task):
 
     """
 
-    def __init__(self, backbone, preprocessor=None, **kwargs):
+    def __init__(
+        self,
+        backbone,
+        preprocessor=None,
+        **kwargs,
+    ):
         inputs = backbone.input
         x = backbone(inputs)
         # Use token embedding weights to project from the token representation
