@@ -104,7 +104,6 @@ class BertBackbone(Backbone):
         num_segments=2,
         **kwargs,
     ):
-
         # Index of classification token in the vocabulary
         cls_token_index = 0
         # Inputs
