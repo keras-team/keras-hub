@@ -137,8 +137,8 @@ class RobertaMaskedLM(Task):
             **kwargs,
         )
         # All references to `self` below this line
-        self._backbone = backbone
-        self._preprocessor = preprocessor
+        self.backbone = backbone
+        self.preprocessor = preprocessor
 
     @classproperty
     def backbone_cls(cls):
