@@ -112,8 +112,10 @@ class GPT2Tokenizer(BytePairTokenizer):
             )
 
         self.end_token_id = self.token_to_id(end_token)
-        # GPT2 uses the same start token as end token, i.e., "<|endoftext|>".
+        # GPT2 uses the same start and pad token as end token, i.e.,
+        # "<|endoftext|>".
         self.start_token_id = self.end_token_id
+        self.pad_token_id = self.end_token_id
 
     @classproperty
     def presets(cls):

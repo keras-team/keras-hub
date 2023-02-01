@@ -175,7 +175,10 @@ class GPT2Preprocessor(Preprocessor):
             axis=0,
         )
         mask = mask.to_tensor(shape=shape_after_padding)
-        token_ids = token_ids.to_tensor(shape=shape_after_padding)
+        token_ids = token_ids.to_tensor(
+            shape=shape_after_padding,
+            default_value=self.tokenizer.pad_token_id,
+        )
         if input_is_1d:
             # If the input is a single string, we let the output be a 1D tensor.
             token_ids = tf.squeeze(token_ids, axis=0)
