@@ -149,7 +149,7 @@ class AlbertPreprocessor(Preprocessor):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self._tokenizer = tokenizer
+        self.tokenizer = tokenizer
         self.packer = MultiSegmentPacker(
             start_value=self.tokenizer.cls_token_id,
             end_value=self.tokenizer.sep_token_id,

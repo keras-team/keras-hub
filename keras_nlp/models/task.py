@@ -34,10 +34,19 @@ class Task(PipelineModel):
         """A `keras.Model` instance providing the backbone submodel."""
         return self._backbone
 
+    @backbone.setter
+    def backbone(self, value):
+        self._backbone = value
+
     @property
     def preprocessor(self):
         """A `keras.layers.Layer` instance used to preprocess inputs."""
         return self._preprocessor
+
+    @preprocessor.setter
+    def preprocessor(self, value):
+        self.include_preprocessing = value is not None
+        self._preprocessor = value
 
     def get_config(self):
         # Don't chain to super here. The default `get_config()` for functional

@@ -180,8 +180,8 @@ class GPT2CausalLM(Task):
             **kwargs,
         )
 
-        self._backbone = backbone
-        self._preprocessor = preprocessor
+        self.backbone = backbone
+        self.preprocessor = preprocessor
 
     @classproperty
     def presets(cls):
