@@ -71,7 +71,7 @@ class OPTBackbone(Backbone):
         ),
     }
 
-    # Pretrained OPT dencoder
+    # Pretrained OPT decoder
     model = keras_nlp.models.OPTBackbone.from_preset("opt_125m_en")
     output = model(input_data)
 

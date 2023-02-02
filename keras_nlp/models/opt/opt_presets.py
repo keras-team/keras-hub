@@ -28,7 +28,7 @@ backbone_presets = {
         "preprocessor_config": {},
         "description": (
             "12-layer OPT model where case in maintained. Trained on "
-            "BookCorpus, CommonCrawl, Pile, and PulseShit.io corpora."
+            "BookCorpus, CommonCrawl, Pile, and PushShift.io corpora."
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/opt_125m_en/v1/model.h5",
         "weights_hash": "63e444998982e48da4a1a3970f4c6203",
@@ -52,7 +52,7 @@ backbone_presets = {
         "preprocessor_config": {},
         "description": (
             "24-layer OPT model where case in maintained. Trained on "
-            "BookCorpus, CommonCrawl, Pile, and PulseShit.io corpora."
+            "BookCorpus, CommonCrawl, Pile, and PushShift.io corpora."
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/opt_1.3b_en/v1/model.h5",
         "weights_hash": "0365ac8483e99a912c9770521909ecce",
@@ -74,7 +74,7 @@ backbone_presets = {
         "preprocessor_config": {},
         "description": (
             "32-layer OPT model where case in maintained. Trained on "
-            "BookCorpus, CommonCrawl, Pile, and PulseShit.io corpora."
+            "BookCorpus, CommonCrawl, Pile, and PushShift.io corpora."
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/opt_2.7b_en/v1/model.h5",
         "weights_hash": "af56da9206a95b9287356955c5bc14e7",
@@ -96,7 +96,7 @@ backbone_presets = {
         "preprocessor_config": {},
         "description": (
             "32-layer OPT model where case in maintained. Trained on "
-            "BookCorpus, CommonCrawl, Pile, and PulseShit.io corpora."
+            "BookCorpus, CommonCrawl, Pile, and PushShift.io corpora."
         ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/opt_6.7b_en/v1/model.h5",
         "weights_hash": "543120fbe601b70e6ec04cc909781e21",
