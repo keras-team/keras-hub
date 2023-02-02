@@ -196,6 +196,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             should have one merge rule per line.
         sequence_length: int, defaults to None. If set, the output will be
             padded or truncated to the `sequence_length`.
+        add_prefix_space: bool, defaults to False. Whether or not to add an initial space
+            to the input. This allows to treat the leading word just as any other word.
 
     Examples:
 
@@ -451,11 +453,11 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
     def tokenize(self, inputs):
 
-        if self.add_prefix_space:
-            inputs = " " + inputs
-
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
+
+        if self.add_prefix_space:
+            inputs = tf.strings.join([" ", inputs])
 
         scalar_input = inputs.shape.rank == 0
         if scalar_input:
