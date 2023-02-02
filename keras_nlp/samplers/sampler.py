@@ -189,14 +189,27 @@ class Sampler:
 
     def _mask_tokens_after_end_token(
         self,
-        prompt,
+        generated_result,
+        original_prompt,
         max_length,
         end_token_id,
     ):
         """Helper function to truncate the tokens after the end token."""
+        # Exclude original prompts from being truncated.
+        # Add a big int to tokens in original prompt to move token ids over
+        # the vocab size. Vocab size should not be large as 1e9.
+        increment_value = int(1e9)
+        increment = tf.cast(
+            tf.zeros_like(original_prompt) + increment_value,
+            dtype=tf.int32,
+        )
+        if not isinstance(increment, tf.RaggedTensor):
+            increment = tf.RaggedTensor.from_tensor(increment)
+        increment = increment.to_tensor(shape=tf.shape(generated_result))
+        generated_result += increment
         # Mask out tokens after `end_token_id` is encountered.
         # Find index of first end_token_id.
-        end_indices = tf.math.argmax(prompt == end_token_id, -1)
+        end_indices = tf.math.argmax(generated_result == end_token_id, -1)
         # Use max_length if no `end_token_id` is found.
         end_indices = tf.where(
             end_indices == 0,
@@ -205,7 +218,9 @@ class Sampler:
         )
         # Truncate out tokens after (including) the end token.
         mask_indices = tf.sequence_mask(end_indices, maxlen=max_length)
-        return tf.ragged.boolean_mask(prompt, mask_indices)
+        # Revert the increment added earlier.
+        generated_result -= increment
+        return tf.ragged.boolean_mask(generated_result, mask_indices)
 
     def __call__(
         self,
@@ -217,10 +232,10 @@ class Sampler:
         from_logits=True,
     ):
         prompt, mask = self._validate_prompt_and_mask(prompt, mask)
-
         input_is_1d = prompt.shape.rank == 1
         if input_is_1d:
             prompt = tf.RaggedTensor.from_tensor(prompt[tf.newaxis, :])
+        original_prompt = tf.identity(prompt)
 
         shortest_prompt_len = tf.reduce_min(prompt.row_lengths())
         # Pad prompt to be a dense Tensor of shape [batch_size, max_length].
@@ -247,6 +262,7 @@ class Sampler:
         if end_token_id is not None:
             prompt = self._mask_tokens_after_end_token(
                 prompt,
+                original_prompt,
                 max_length,
                 end_token_id,
             )
