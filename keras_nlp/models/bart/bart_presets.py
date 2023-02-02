@@ -30,11 +30,11 @@ backbone_presets = {
             "Trained on a 160GB English dataset comprising BookCorpus, "
             "English Wikipedia and CommonCrawl."
         ),
-        "weights_url": "https://drive.google.com/uc?export=download&id=1ryHd3TbyfFl0co6DYHPjEZmco5Ho9wYS",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bart_base_en/v1/model.h5",
         "weights_hash": "5b59403f0cafafbd89680e0785791163",
-        "vocabulary_url": "https://drive.google.com/uc?export=download&id=11sSNAfS9Y7r2hxMVzKrirW41erIF9K9e",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bart_base_en/v1/vocab.json",
         "vocabulary_hash": "be4d3c6f3f5495426b2c03b334334354",
-        "merges_url": "https://drive.google.com/uc?export=download&id=1P16aun59tPAWYHZ4bmPmDgLfGrmbhZcV",
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/bart_base_en/v1/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
     "bart_large_en": {
@@ -53,11 +53,11 @@ backbone_presets = {
             "Trained on a 160GB English dataset comprising BookCorpus, "
             "English Wikipedia and CommonCrawl."
         ),
-        "weights_url": "https://drive.google.com/uc?export=download&id=1fBhiRbw4llTMIgW3vHz1MCf3GkKJ7NL8",
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bart_large_en/v1/model.h5",
         "weights_hash": "6bfe7e591af8c5699ce6f9f18753af9a",
-        "vocabulary_url": "https://drive.google.com/uc?export=download&id=1jMC2Ug2Tk43Od_yrnHb-J7XjNuEG2lcw",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bart_large_en/v1/vocab.json",
         "vocabulary_hash": "cf410ee085c5c69c957bb1f6d8456596",
-        "merges_url": "https://drive.google.com/uc?export=download&id=1u75mmkL8nJEeIrHZ-FaTiazQqJH6TICn",
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/bart_large_en/v1/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
 }

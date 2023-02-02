@@ -15,14 +15,12 @@
 """BART tokenizer."""
 
 import copy
-import os
 
 from tensorflow import keras
 
 from keras_nlp.models.bart.bart_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -56,43 +54,37 @@ class BartTokenizer(BytePairTokenizer):
     Examples:
 
     Batched inputs.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "reful": 3, "gent": 4}
-    >>> vocab = {**vocab, **{"Ġafter": 5, "noon": 6, "Ġsun": 7}}
-    >>> merges = ["Ġ a", "Ġ s", "r e", "f u", "g e", "n t"]
-    >>> merges += ["e r", "n o", "o n", "i g", "h t"]
-    >>> merges += ["Ġs u", "Ġa f", "ge nt", "no on", "re fu"]
-    >>> merges += ["Ġsu n", "Ġaf t", "refu l", "Ġaft er"]
-    >>> inputs = [" afternoon sun", "refulgent sun"]
-    >>> tokenizer = keras_nlp.models.BartTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    >>> merges += ["Ġ f", "o x", "Ġf ox"]
+    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
+    ...     vocabulary=vocab, merges=merges
     ... )
-    >>> tokenizer(inputs)
-    <tf.RaggedTensor [[5, 6, 7], [3, 4, 7]]>
+    >>> tokenizer(["a quick fox", "a fox quick"])
+    <tf.RaggedTensor [[4, 5, 6], [4, 6, 5]]>
 
     Unbatched input.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "Ġafter": 3, "noon": 4, "Ġsun": 5}
-    >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
-    >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
-    >>> inputs = " afternoon sun"
-    >>> tokenizer = keras_nlp.models.BartTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    >>> merges += ["Ġ f", "o x", "Ġf ox"]
+    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
+    ...     vocabulary=vocab, merges=merges
     ... )
-    >>> tokenizer(inputs)
-    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([3, 4, 5], dtype=int32)>
+    >>> tokenizer("a quick fox")
+    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([4, 5, 6], dtype=int32)>
 
     Detokenization.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "Ġafter": 3, "noon": 4, "Ġsun": 5}
-    >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
-    >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
-    >>> inputs = " afternoon sun"
-    >>> tokenizer = keras_nlp.models.BartTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    >>> merges += ["Ġ f", "o x", "Ġf ox"]
+    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
+    ...     vocabulary=vocab, merges=merges
     ... )
-    >>> tokenizer.detokenize(tokenizer.tokenize(inputs)).numpy().decode('utf-8')
-    ' afternoon sun'
+    >>> tokenizer.detokenize(tokenizer("a quick fox")).numpy().decode('utf-8')
+    'a quick fox'
     """
 
     def __init__(
@@ -126,58 +118,3 @@ class BartTokenizer(BytePairTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    @format_docstring(names=", ".join(backbone_presets))
-    def from_preset(
-        cls,
-        preset,
-        **kwargs,
-    ):
-        """Instantiate a BART tokenizer from preset vocabulary and merge rules.
-
-        Args:
-            preset: string. Must be one of {{names}}.
-
-        Examples:
-        ```python
-        # Load a preset tokenizer.
-        tokenizer = keras_nlp.models.BartTokenizer.from_preset(
-            "bart_base_en",
-        )
-        # Tokenize some input.
-        tokenizer("The quick brown fox tripped.")
-        # Detokenize some input.
-        tokenizer.detokenize([5, 6, 7, 8, 9])
-        ```
-        """
-
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-
-        vocabulary = keras.utils.get_file(
-            "vocab.json",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["vocabulary_hash"],
-        )
-        merges = keras.utils.get_file(
-            "merges.txt",
-            metadata["merges_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["merges_hash"],
-        )
-
-        config = metadata["preprocessor_config"]
-        config.update(
-            {
-                "vocabulary": vocabulary,
-                "merges": merges,
-            },
-        )
-
-        return cls.from_config({**config, **kwargs})
