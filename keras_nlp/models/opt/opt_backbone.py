@@ -30,7 +30,7 @@ def opt_kernel_initializer(stddev=0.02):
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class OPTBackbone(Backbone):
-    """OPT encoder-decoder network.
+    """OPT decoder network.
 
     This class implements a Transformer-based decoder model as described in
     ["OPT: Open Pre-trained Transformer Language Models"](https://arxiv.org/abs/2205.01068).
@@ -45,15 +45,14 @@ class OPTBackbone(Backbone):
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
-        num_layers: int. The number of transformer encoder layers and
-            transformer decoder layers.
+        num_layers: int. The number of transformer decoder layers.
         num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
         hidden_dim: int. The hidden size of the transformer decoder layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer decoder layer.
-        dropout: float. Dropout probability for the Transformer encoder.
-        max_sequence_length: int. The maximum sequence length that this encoder
+        dropout: float. Dropout probability for the Transformer decoder.
+        max_sequence_length: int. The maximum sequence length that this decoder
             can consume. If None, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
