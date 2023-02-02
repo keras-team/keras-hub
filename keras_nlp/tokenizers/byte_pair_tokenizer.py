@@ -452,7 +452,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         return merged_words
 
     def tokenize(self, inputs):
-
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
 
