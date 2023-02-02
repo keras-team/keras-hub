@@ -87,7 +87,7 @@ def remove_strings_from_inputs(tensor, string_to_remove):
     return result
 
 
-def split_strings_for_bpe(inputs):
+def split_strings_for_bpe(inputs, add_prefix_space):
     # We need to recreate the exact behavior of token presplitting in the
     # original gpt2 tokenizer which uses a lookahead. As re2 does not
     # support lookahead match, we are using an alternative insert a special
@@ -230,6 +230,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         vocabulary,
         merges,
         sequence_length=None,
+        add_prefix_space=False,
         **kwargs,
     ) -> None:
         assert_tf_text_installed(self.__class__.__name__)
@@ -268,6 +269,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 f"Received: `type(merges)={type(merges)}`"
             )
         self.sequence_length = sequence_length
+        self.add_prefix_space = add_prefix_space
 
         # Create byte <=> unicode mapping. This is useful for handling
         # whitespace tokens.
@@ -455,7 +457,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
 
-        raw_tokens = split_strings_for_bpe(inputs)
+        raw_tokens = split_strings_for_bpe(inputs, self.add_prefix_space)
         token_row_splits = raw_tokens.row_splits
         flat_tokens = raw_tokens.flat_values
 
