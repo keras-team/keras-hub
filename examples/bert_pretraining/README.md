@@ -39,13 +39,12 @@ python3 examples/bert_pretraining/bert_pretrain.py \
 
 ## Installing dependencies
 
-Pip dependencies for all KerasNLP examples are listed in `setup.py`. The
-following command will create a virtual environment, install all dependencies,
-and install KerasNLP from source.
+This example needs a few extra dependencies to run (e.g. wikiextractor for
+using wikipedia downloads). You can install these into a KerasNLP development
+environment with:
 
 ```shell
-python3 -m venv path/to/venv && source path/to/venv/bin/activate
-pip install -e ".[examples]"
+pip install -r "examples/bert_pretraining/requirements.txt"
 ```
 
 ## Pretraining BERT

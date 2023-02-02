@@ -100,7 +100,6 @@ class BartBackbone(Backbone):
         max_sequence_length=1024,
         **kwargs,
     ):
-
         # Encoder inputs
         encoder_token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="encoder_token_ids"
@@ -248,6 +247,10 @@ class BartBackbone(Backbone):
             "name": self.name,
             "trainable": self.trainable,
         }
+
+    @property
+    def token_embedding(self):
+        return self.get_layer("token_embedding")
 
     @classproperty
     def presets(cls):

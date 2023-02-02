@@ -223,7 +223,7 @@ class Bleu(keras.metrics.Metric):
             smooth: boolean. Whether or not to apply Lin et al. 2004
                 smoothing.
         """
-        for (references, translation) in zip(
+        for references, translation in zip(
             reference_corpus, translation_corpus
         ):
             reference_length += min(len(r) for r in references)

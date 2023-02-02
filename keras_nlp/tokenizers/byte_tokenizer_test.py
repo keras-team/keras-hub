@@ -223,7 +223,6 @@ class ByteTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         )
 
     def test_config(self):
-
         tokenizer = ByteTokenizer(
             name="byte_tokenizer_config_test",
             lowercase=False,
