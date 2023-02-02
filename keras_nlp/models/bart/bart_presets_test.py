@@ -66,9 +66,17 @@ class BartPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         )
         outputs = model(input_data)
         if load_weights:
-            outputs = outputs[0, 0, :5]
-            expected = [-0.051, 0.100, -0.010, -0.097, 0.059]
-            self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
+            encoder_output = outputs["encoder_sequence_output"][0, 0, :5]
+            expected_encoder_output = [-0.033, 0.013, -0.003, -0.012, -0.002]
+            decoder_output = outputs["decoder_sequence_output"][0, 0, :5]
+            expected_decoder_output = [2.516, 2.489, 0.695, 8.057, 1.245]
+
+            self.assertAllClose(
+                encoder_output, expected_encoder_output, atol=0.01, rtol=0.01
+            )
+            self.assertAllClose(
+                decoder_output, expected_decoder_output, atol=0.01, rtol=0.01
+            )
 
     @parameterized.named_parameters(
         ("bart_tokenizer", BartTokenizer),
