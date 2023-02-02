@@ -14,6 +14,8 @@
 
 """BART backbone model."""
 
+import copy
+
 import tensorflow as tf
 from tensorflow import keras
 
@@ -21,6 +23,8 @@ from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_decoder import TransformerDecoder
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.models.backbone import Backbone
+from keras_nlp.models.bart.bart_presets import backbone_presets
+from keras_nlp.utils.python_utils import classproperty
 
 
 def bart_kernel_initializer(stddev=0.02):
@@ -247,3 +251,7 @@ class BartBackbone(Backbone):
     @property
     def token_embedding(self):
         return self.get_layer("token_embedding")
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
