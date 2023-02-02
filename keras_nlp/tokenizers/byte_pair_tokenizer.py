@@ -196,8 +196,11 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             should have one merge rule per line.
         sequence_length: int, defaults to None. If set, the output will be
             padded or truncated to the `sequence_length`.
-        add_prefix_space: bool, defaults to False. Whether or not to add an initial space
-            to the input. This allows to treat the leading word just as any other word.
+        add_prefix_space: bool, defaults to False. Whether or not to add an
+            initial space to the input. This tokenizer is whitespace aware,
+            and will tokenize a word with a leading space differently. Adding
+            a prefix space to the first word will cause it to be tokenized
+            equivalently to all subsequent words in the sequence.
 
     Examples:
 
