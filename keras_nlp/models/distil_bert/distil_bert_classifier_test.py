@@ -109,6 +109,9 @@ class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.classifier_no_preprocessing.fit(self.preprocessed_dataset)
 
+    def test_distilbert_classifier_fit_default_compile(self):
+        self.classifier.fit(self.raw_dataset)
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
