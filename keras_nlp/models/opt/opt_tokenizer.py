@@ -14,9 +14,13 @@
 
 """OPT tokenizer."""
 
+import copy
+
 from tensorflow import keras
 
+from keras_nlp.models.opt.opt_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+from keras_nlp.utils.python_utils import classproperty
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -108,3 +112,7 @@ class OPTTokenizer(BytePairTokenizer):
         self.start_token_id = self.token_to_id(start_token)
         self.pad_token_id = self.token_to_id(pad_token)
         self.end_token_id = self.token_to_id(end_token)
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
