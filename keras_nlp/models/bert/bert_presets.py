@@ -171,7 +171,9 @@ backbone_presets = {
             "lowercase": False,
         },
         "metadata": {
-            "description": ("12-layer BERT model. Trained on Chinese Wikipedia."),
+            "description": (
+                "12-layer BERT model. Trained on Chinese Wikipedia."
+            ),
             "params": 102269186,
             "official_name": "BERT",
             "path": "bert",
