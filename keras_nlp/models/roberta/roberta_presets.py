@@ -31,6 +31,8 @@ backbone_presets = {
                 "Trained on English Wikipedia, BooksCorpus, CommonCraw, and OpenWebText."
             ),
             "params": 124644866,
+            "official_name": "RoBERTa",
+            "path": "roberta",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_en/v1/model.h5",
         "weights_hash": "958eede1c7edaa9308e027be18fde7a8",
@@ -56,6 +58,8 @@ backbone_presets = {
                 "Trained on English Wikipedia, BooksCorpus, CommonCraw, and OpenWebText."
             ),
             "params": 355358722,
+            "official_name": "RoBERTa",
+            "path": "roberta",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_en/v1/model.h5",
         "weights_hash": "1978b864c317a697fe62a894d3664f14",

@@ -36,6 +36,8 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 4386178,
+            "official_name": "BERT",
+            "path": "bert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_en_uncased/v1/model.h5",
         "weights_hash": "c2b29fcbf8f814a0812e4ab89ef5c068",
@@ -62,6 +64,8 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 28764674,
+            "official_name": "BERT",
+            "path": "bert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_small_en_uncased/v1/model.h5",
         "weights_hash": "08632c9479b034f342ba2c2b7afba5f7",
@@ -88,6 +92,8 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 41374210,
+            "official_name": "BERT",
+            "path": "bert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_medium_en_uncased/v1/model.h5",
         "weights_hash": "bb990e1184ec6b6185450c73833cd661",
@@ -114,6 +120,8 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 109483778,
+            "official_name": "BERT",
+            "path": "bert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_en_uncased/v1/model.h5",
         "weights_hash": "9b2b2139f221988759ac9cdd17050b31",
@@ -140,6 +148,8 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 109483778,
+            "official_name": "BERT",
+            "path": "bert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_en/v1/model.h5",
         "weights_hash": "f94a6cb012e18f4fb8ec92abb91864e9",
@@ -161,10 +171,10 @@ backbone_presets = {
             "lowercase": False,
         },
         "metadata": {
-            "description": (
-                "12-layer BERT model. Trained on Chinese Wikipedia."
-            ),
+            "description": ("12-layer BERT model. Trained on Chinese Wikipedia."),
             "params": 102269186,
+            "official_name": "BERT",
+            "path": "bert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_zh/v1/model.h5",
         "weights_hash": "79afa421e386076e62ab42dad555ab0c",
@@ -190,6 +200,8 @@ backbone_presets = {
                 "12-layer BERT model where case is maintained. Trained on trained on Wikipedias of 104 languages"
             ),
             "params": 177854978,
+            "official_name": "BERT",
+            "path": "bert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_base_multi/v1/model.h5",
         "weights_hash": "b0631cec0a1f2513c6cfd75ba29c33aa",
@@ -242,6 +254,8 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 333581314,
+            "official_name": "BERT",
+            "path": "bert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_large_en/v1/model.h5",
         "weights_hash": "8b8ab82290bbf4f8db87d4f100648890",
@@ -277,6 +291,8 @@ classifier_presets = {
                 "The bert_tiny_en_uncased backbone model fine-tuned on the SST-2 sentiment analysis dataset."
             ),
             "params": 4386178,
+            "official_name": "BERT",
+            "path": "bert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bert_tiny_en_uncased_sst2/v1/model.h5",
         "weights_hash": "1f9c2d59f9e229e08f3fbd44239cfb0b",

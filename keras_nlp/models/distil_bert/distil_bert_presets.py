@@ -34,6 +34,8 @@ backbone_presets = {
                 "teacher model."
             ),
             "params": 66955010,
+            "official_name": "DistilBert",
+            "path": "distil_bert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/distil_bert_base_en_uncased/v1/model.h5",
         "weights_hash": "6625a649572e74086d74c46b8d0b0da3",
@@ -60,6 +62,8 @@ backbone_presets = {
                 "teacher model."
             ),
             "params": 65783042,
+            "official_name": "DistilBert",
+            "path": "distil_bert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/distil_bert_base_en/v1/model.h5",
         "weights_hash": "fa36aa6865978efbf85a5c8264e5eb57",
@@ -84,6 +88,8 @@ backbone_presets = {
                 "6-layer DistilBERT model where case is maintained. Trained on Wikipedias of 104 languages"
             ),
             "params": 135326210,
+            "official_name": "DistilBert",
+            "path": "distil_bert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/distil_bert_base_multi/v1/model.h5",
         "weights_hash": "c0f11095e2a6455bd3b1a6d14800a7fa",
