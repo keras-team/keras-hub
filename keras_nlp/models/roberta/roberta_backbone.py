@@ -98,7 +98,6 @@ class RobertaBackbone(Backbone):
         max_sequence_length=512,
         **kwargs,
     ):
-
         # Inputs
         token_id_input = keras.Input(
             shape=(None,), dtype=tf.int32, name="token_ids"
@@ -173,6 +172,10 @@ class RobertaBackbone(Backbone):
             }
         )
         return config
+
+    @property
+    def token_embedding(self):
+        return self.get_layer("embeddings").token_embedding
 
     @classproperty
     def presets(cls):

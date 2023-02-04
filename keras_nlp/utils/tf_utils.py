@@ -21,9 +21,9 @@ except ImportError:
     pd = None
 
 try:
-    import tensorflow_text
+    import tensorflow_text as tf_text
 except ImportError:
-    tensorflow_text = None
+    tf_text = None
 
 
 def _decode_strings_to_utf8(inputs):
@@ -68,7 +68,7 @@ def tensor_to_string_list(inputs):
 
 def assert_tf_text_installed(symbol_name):
     """Detokenize and convert tensor to nested lists of python strings."""
-    if tensorflow_text is None:
+    if tf_text is None:
         raise ImportError(
             f"{symbol_name} requires the `tensorflow-text` package. "
             "Please install with `pip install tensorflow-text`."

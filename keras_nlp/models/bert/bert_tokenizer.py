@@ -14,7 +14,6 @@
 """BERT tokenizer."""
 
 import copy
-import os
 
 from tensorflow import keras
 
@@ -22,7 +21,6 @@ from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.bert.bert_presets import classifier_presets
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.python_utils import format_docstring
 
 PRESET_NAMES = ", ".join(list(backbone_presets) + list(classifier_presets))
 
@@ -112,52 +110,3 @@ class BertTokenizer(WordPieceTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy({**backbone_presets, **classifier_presets})
-
-    @classmethod
-    @format_docstring(names=PRESET_NAMES)
-    def from_preset(
-        cls,
-        preset,
-        **kwargs,
-    ):
-        """Instantiate a BERT tokenizer from preset vocabulary.
-
-        Args:
-            preset: string. Must be one of {{names}}.
-
-        Examples:
-        ```python
-        # Load a preset tokenizer.
-        tokenizer = keras_nlp.models.BertTokenizer.from_preset(
-            "bert_base_en_uncased",
-        )
-
-        # Tokenize some input.
-        tokenizer("The quick brown fox tripped.")
-
-        # Detokenize some input.
-        tokenizer.detokenize([5, 6, 7, 8, 9])
-        ```
-        """
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-
-        vocabulary = keras.utils.get_file(
-            "vocab.txt",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["vocabulary_hash"],
-        )
-
-        config = metadata["preprocessor_config"]
-        config.update(
-            {
-                "vocabulary": vocabulary,
-            },
-        )
-
-        return cls.from_config({**config, **kwargs})

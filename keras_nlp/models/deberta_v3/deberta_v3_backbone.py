@@ -108,7 +108,6 @@ class DebertaV3Backbone(Backbone):
         bucket_size=256,
         **kwargs,
     ):
-
         # Inputs
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
@@ -199,6 +198,10 @@ class DebertaV3Backbone(Backbone):
             }
         )
         return config
+
+    @property
+    def token_embedding(self):
+        return self.get_layer("token_embedding")
 
     @classproperty
     def presets(cls):

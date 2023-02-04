@@ -147,7 +147,11 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
             # convert dense to ragged.
             inputs = tf.RaggedTensor.from_tensor(inputs)
 
-        (token_ids, mask_positions, mask_ids,) = tf_text.mask_language_model(
+        (
+            token_ids,
+            mask_positions,
+            mask_ids,
+        ) = tf_text.mask_language_model(
             inputs,
             item_selector=self._random_selector,
             mask_values_chooser=self._mask_values_chooser,

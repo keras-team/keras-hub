@@ -117,7 +117,6 @@ class AlbertBackbone(Backbone):
         num_segments=2,
         **kwargs,
     ):
-
         if num_layers % num_groups != 0:
             raise ValueError(
                 "`num_layers` must be divisible by `num_groups`. Received: "
@@ -270,6 +269,10 @@ class AlbertBackbone(Backbone):
             }
         )
         return config
+
+    @property
+    def token_embedding(self):
+        return self.get_layer("token_embedding")
 
     @classproperty
     def presets(cls):

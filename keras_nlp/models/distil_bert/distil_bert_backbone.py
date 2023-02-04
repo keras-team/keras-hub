@@ -105,7 +105,6 @@ class DistilBertBackbone(Backbone):
         max_sequence_length=512,
         **kwargs,
     ):
-
         # Inputs
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
@@ -179,6 +178,10 @@ class DistilBertBackbone(Backbone):
             }
         )
         return config
+
+    @property
+    def token_embedding(self):
+        return self.get_layer("token_and_position_embedding").token_embedding
 
     @classproperty
     def presets(cls):

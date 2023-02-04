@@ -1,6 +1,7 @@
 # Core deps.
 tensorflow~=2.11.0
 tensorflow-text~=2.11.0
+tensorflow-datasets
 
 # Common deps.
 -r requirements-common.txt

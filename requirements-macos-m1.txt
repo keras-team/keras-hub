@@ -6,10 +6,11 @@
 # before proceeding.
 
 # Core deps.
-tensorflow-macos==2.9
+tensorflow-macos~=2.9
 https://github.com/sun1638650145/Libraries-and-Extensions-for-TensorFlow-for-Apple-Silicon/releases/download/v2.9/tensorflow_text-2.9.0-cp39-cp39-macosx_11_0_arm64.whl
+tensorflow-datasets
 # The metal plugin breaks many tests, so is not enabled by default.
-# tensorflow-metal==0.5.1
+# tensorflow-metal~=0.5
 
 # Common deps.
 -r requirements-common.txt

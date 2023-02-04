@@ -13,6 +13,8 @@
 # limitations under the License.
 
 
+import platform
+
 import tensorflow as tf
 from tensorflow import keras
 
@@ -96,3 +98,16 @@ def convert_inputs_to_list_of_tensor_segments(x):
             f"list of tensors. Received `x={x}`"
         )
     return x
+
+
+def is_xla_compatible(model):
+    """Determine if model and platform xla-compatible."""
+    return not (
+        platform.system() == "Darwin" and "arm" in platform.processor().lower()
+    ) and not isinstance(
+        model.distribute_strategy,
+        (
+            tf.compat.v1.distribute.experimental.TPUStrategy,
+            tf.distribute.TPUStrategy,
+        ),
+    )

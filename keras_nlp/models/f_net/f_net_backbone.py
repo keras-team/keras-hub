@@ -100,7 +100,6 @@ class FNetBackbone(Backbone):
         num_segments=4,
         **kwargs,
     ):
-
         # Index of classification token in the vocabulary
         cls_token_index = 0
         # Inputs
@@ -215,6 +214,10 @@ class FNetBackbone(Backbone):
             }
         )
         return config
+
+    @property
+    def token_embedding(self):
+        return self.get_layer("token_embedding")
 
     @classproperty
     def presets(cls):

@@ -57,6 +57,12 @@ class Sampler:
 
     The inputs and outputs of Sampler class are both token ids.
 
+    Subclassers should always implement the `get_next_token()` method, which
+    gets the next token based on probability distribution over vocab tokens.
+    Please check available subclass samplers for examples. If you need more
+    control over the sampling process, please implement `sample()` method
+    instead, see `keras_nlp.samplers.BeamSampler` for examples.
+
     Examples:
 
     Basic usage:
@@ -83,7 +89,7 @@ class Sampler:
 
     prompt = tf.fill((8, 1), 1)
 
-    sampler = keras_nlp.samplers.Greedy()
+    sampler = keras_nlp.samplers.GreedySampler()
     # Print the generated sequence (token ids).
     print(sampler(prompt, token_probability_fn, max_length=10, end_token_id=2))
     ```
@@ -114,7 +120,7 @@ class Sampler:
         return model(inputs)
 
     prompt = tokenizer("the quick brown fox")
-    sampler = keras_nlp.samplers.Greedy()
+    sampler = keras_nlp.samplers.GreedySampler()
     generated = sampler(
         prompt,
         token_probability_fn,

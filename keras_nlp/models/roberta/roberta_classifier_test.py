@@ -48,6 +48,7 @@ class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
             "Ġis": 9,
             "Ġthe": 10,
             "Ġbest": 11,
+            "<mask>": 12,
         }
 
         merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
@@ -101,6 +102,9 @@ class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.classifier_no_preprocessing.compile(jit_compile=jit_compile)
         self.classifier_no_preprocessing.predict(self.preprocessed_batch)
 
+    def test_roberta_classifier_fit_default_compile(self):
+        self.classifier.fit(self.raw_dataset)
+
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
@@ -125,10 +129,10 @@ class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
-    def test_saving_model(self, save_format, filename):
+    def test_saved_model(self, save_format, filename):
         model_output = self.classifier.predict(self.raw_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)
-        self.classifier.save(save_path, save_format)
+        self.classifier.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.

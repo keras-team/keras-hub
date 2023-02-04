@@ -20,6 +20,7 @@ but is TF graph compatible.
 """
 
 import json
+import os
 from typing import Iterable
 from typing import List
 
@@ -27,6 +28,8 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.tokenizers import tokenizer
+from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 from keras_nlp.utils.tf_utils import assert_tf_text_installed
 
 try:
@@ -193,6 +196,11 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             should have one merge rule per line.
         sequence_length: int, defaults to None. If set, the output will be
             padded or truncated to the `sequence_length`.
+        add_prefix_space: bool, defaults to False. Whether or not to add an
+            initial space to the input. This tokenizer is whitespace aware,
+            and will tokenize a word with a leading space differently. Adding
+            a prefix space to the first word will cause it to be tokenized
+            equivalently to all subsequent words in the sequence.
 
     Examples:
 
@@ -227,6 +235,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         vocabulary,
         merges,
         sequence_length=None,
+        add_prefix_space=False,
         **kwargs,
     ) -> None:
         assert_tf_text_installed(self.__class__.__name__)
@@ -265,6 +274,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 f"Received: `type(merges)={type(merges)}`"
             )
         self.sequence_length = sequence_length
+        self.add_prefix_space = add_prefix_space
 
         # Create byte <=> unicode mapping. This is useful for handling
         # whitespace tokens.
@@ -448,6 +458,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
 
+        if self.add_prefix_space:
+            inputs = tf.strings.join([" ", inputs])
+
         scalar_input = inputs.shape.rank == 0
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
@@ -536,3 +549,90 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             tokenized_words, axis=1, separator=" "
         )
         self.cache.insert(tokens, tokenized_words)
+
+    @classproperty
+    def presets(cls):
+        return {}
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        """Instantiate {{model_name}} tokenizer from preset vocabulary.
+
+        Args:
+            preset: string. Must be one of "{{preset_names}}".
+
+        Examples:
+        ```python
+        # Load a preset tokenizer.
+        tokenizer = {{model_name}}.from_preset("{{example_preset_name}}")
+
+        # Tokenize some input.
+        tokenizer("The quick brown fox tripped.")
+
+        # Detokenize some input.
+        tokenizer.detokenize([5, 6, 7, 8, 9])
+        ```
+        """
+
+        if not cls.presets:
+            raise NotImplementedError(
+                "No presets have been created for this class"
+            )
+
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+        metadata = cls.presets[preset]
+
+        vocabulary = keras.utils.get_file(
+            "vocab.json",
+            metadata["vocabulary_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["vocabulary_hash"],
+        )
+        merges = keras.utils.get_file(
+            "merges.txt",
+            metadata["merges_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["merges_hash"],
+        )
+
+        config = metadata["preprocessor_config"]
+        config.update(
+            {
+                "vocabulary": vocabulary,
+                "merges": merges,
+            },
+        )
+
+        return cls.from_config({**config, **kwargs})
+
+    def __init_subclass__(cls, **kwargs):
+        # Use __init_subclass__ to setup a correct docstring for from_preset.
+        super().__init_subclass__(**kwargs)
+
+        # If the subclass does not define from_preset, assign a wrapper so that
+        # each class can have an distinct docstring.
+        if "from_preset" not in cls.__dict__:
+
+            def from_preset(calling_cls, *args, **kwargs):
+                return super(cls, calling_cls).from_preset(*args, **kwargs)
+
+            cls.from_preset = classmethod(from_preset)
+
+        # Format and assign the docstring unless the subclass has overridden it.
+        if cls.from_preset.__doc__ is None:
+            cls.from_preset.__func__.__doc__ = (
+                BytePairTokenizer.from_preset.__doc__
+            )
+            format_docstring(
+                model_name=cls.__name__,
+                example_preset_name=next(iter(cls.presets), ""),
+                preset_names='", "'.join(cls.presets),
+            )(cls.from_preset.__func__)
