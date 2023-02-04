@@ -102,7 +102,6 @@ class GPT2Backbone(Backbone):
         max_sequence_length=1024,
         **kwargs,
     ):
-
         # Inputs
         token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
         padding_mask = keras.Input(

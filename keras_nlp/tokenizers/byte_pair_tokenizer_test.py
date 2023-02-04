@@ -66,6 +66,24 @@ class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.assertAllEqual(call_output, expected)
 
+    def test_tokenize_prefix_space(self):
+        input_data = ["brown.", "black."]
+        tokenizer = BytePairTokenizer(
+            vocabulary=VOCAB_PATH,
+            merges=MERGE_PATH,
+            dtype=tf.string,
+            add_prefix_space=True,
+        )
+        call_output = tokenizer(input_data)
+
+        expected = tf.ragged.constant(
+            [
+                ["Ġbrown", "."],
+                ["Ġblack", "."],
+            ]
+        )
+        self.assertAllEqual(call_output, expected)
+
     def test_tokenize_scalar_input(self):
         input_data = "brown."
         encoded = self.tokenizer.tokenize(input_data)

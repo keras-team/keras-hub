@@ -12,10 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Python 3.8
+      - name: Set up Python 3.9
         uses: actions/setup-python@v1
+        # TODO: we probably want 3.8 here, but are facing an issue with core
+        # keras.
         with:
-          python-version: 3.8
+          python-version: 3.9
       - name: Get pip cache dir
         id: pip-cache
         run: |

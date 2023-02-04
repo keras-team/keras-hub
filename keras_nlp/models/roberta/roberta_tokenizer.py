@@ -54,43 +54,38 @@ class RobertaTokenizer(BytePairTokenizer):
     Examples:
 
     Batched inputs.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "reful": 3, "gent": 4}
-    >>> vocab = {**vocab, **{"Ġafter": 5, "noon": 6, "Ġsun": 7}}
-    >>> merges = ["Ġ a", "Ġ s", "r e", "f u", "g e", "n t"]
-    >>> merges += ["e r", "n o", "o n", "i g", "h t"]
-    >>> merges += ["Ġs u", "Ġa f", "ge nt", "no on", "re fu"]
-    >>> merges += ["Ġsu n", "Ġaf t", "refu l", "Ġaft er"]
-    >>> inputs = [" afternoon sun", "refulgent sun"]
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    >>> merges += ["Ġ f", "o x", "Ġf ox"]
     >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
+    ...     vocabulary=vocab, merges=merges
     ... )
-    >>> tokenizer(inputs)
-    <tf.RaggedTensor [[5, 6, 7], [3, 4, 7]]>
+    >>> tokenizer(["a quick fox", "a fox quick"])
+    <tf.RaggedTensor [[4, 5, 6], [4, 6, 5]]>
+
 
     Unbatched input.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "Ġafter": 3, "noon": 4, "Ġsun": 5}
-    >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
-    >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
-    >>> inputs = " afternoon sun"
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    >>> merges += ["Ġ f", "o x", "Ġf ox"]
     >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
+    ...     vocabulary=vocab, merges=merges
     ... )
-    >>> tokenizer(inputs)
-    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([3, 4, 5], dtype=int32)>
+    >>> tokenizer("a quick fox")
+    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([4, 5, 6], dtype=int32)>
 
     Detokenization.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "Ġafter": 3, "noon": 4, "Ġsun": 5}
-    >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
-    >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
-    >>> inputs = " afternoon sun"
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    >>> merges += ["Ġ f", "o x", "Ġf ox"]
     >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
+    ...     vocabulary=vocab, merges=merges
     ... )
-    >>> tokenizer.detokenize(tokenizer.tokenize(inputs)).numpy().decode('utf-8')
-    ' afternoon sun'
+    >>> tokenizer.detokenize(tokenizer("a quick fox")).numpy().decode('utf-8')
+    'a quick fox'
     """
 
     def __init__(
@@ -109,6 +104,7 @@ class RobertaTokenizer(BytePairTokenizer):
         start_token = "<s>"
         pad_token = "<pad>"
         end_token = "</s>"
+        mask_token = "<mask>"
         for token in [start_token, pad_token, end_token]:
             if token not in self.get_vocabulary():
                 raise ValueError(
@@ -120,6 +116,7 @@ class RobertaTokenizer(BytePairTokenizer):
         self.start_token_id = self.token_to_id(start_token)
         self.pad_token_id = self.token_to_id(pad_token)
         self.end_token_id = self.token_to_id(end_token)
+        self.mask_token_id = self.token_to_id(mask_token)
 
     @classproperty
     def presets(cls):

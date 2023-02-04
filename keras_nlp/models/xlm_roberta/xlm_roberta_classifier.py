@@ -24,6 +24,7 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
     XLMRobertaPreprocessor,
 )
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
+from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -190,11 +191,18 @@ class XLMRobertaClassifier(Task):
             **kwargs,
         )
         # All references to `self` below this line
-        self._backbone = backbone
-        self._preprocessor = preprocessor
+        self.backbone = backbone
+        self.preprocessor = preprocessor
         self.num_classes = num_classes
         self.hidden_dim = hidden_dim
         self.dropout = dropout
+
+        self.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            optimizer=keras.optimizers.Adam(5e-5),
+            metrics=keras.metrics.SparseCategoricalAccuracy(),
+            jit_compile=is_xla_compatible(self),
+        )
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
         return self.preprocessor(x, y=y, sample_weight=sample_weight)

@@ -117,7 +117,6 @@ class AlbertBackbone(Backbone):
         num_segments=2,
         **kwargs,
     ):
-
         if num_layers % num_groups != 0:
             raise ValueError(
                 "`num_layers` must be divisible by `num_groups`. Received: "
