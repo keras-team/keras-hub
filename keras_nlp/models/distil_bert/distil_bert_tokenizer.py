@@ -92,6 +92,7 @@ class DistilBertTokenizer(WordPieceTokenizer):
         cls_token = "[CLS]"
         sep_token = "[SEP]"
         pad_token = "[PAD]"
+        mask_token = "[MASK]"
         for token in [cls_token, pad_token, sep_token]:
             if token not in self.get_vocabulary():
                 raise ValueError(
@@ -103,6 +104,7 @@ class DistilBertTokenizer(WordPieceTokenizer):
         self.cls_token_id = self.token_to_id(cls_token)
         self.sep_token_id = self.token_to_id(sep_token)
         self.pad_token_id = self.token_to_id(pad_token)
+        self.mask_token_id = self.token_to_id(mask_token)
 
     @classproperty
     def presets(cls):
