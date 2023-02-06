@@ -190,26 +190,17 @@ class Sampler:
     def _mask_tokens_after_end_token(
         self,
         generated_result,
-        original_prompt,
+        original_padding_mask,
         max_length,
         end_token_id,
     ):
         """Helper function to truncate the tokens after the end token."""
-        # Exclude original prompts from being truncated.
-        # Add a big int to tokens in original prompt to move token ids over
-        # the vocab size. Vocab size should not be large as 1e9.
-        increment_value = int(1e9)
-        increment = tf.cast(
-            tf.zeros_like(original_prompt) + increment_value,
-            dtype=tf.int32,
-        )
-        if not isinstance(increment, tf.RaggedTensor):
-            increment = tf.RaggedTensor.from_tensor(increment)
-        increment = increment.to_tensor(shape=tf.shape(generated_result))
-        generated_result += increment
-        # Mask out tokens after `end_token_id` is encountered.
+        # Create a tensor with True for each end_token_id.
+        end_tokens = generated_result == end_token_id
+        # Remove all end_token_ids in the original input.
+        end_tokens = end_tokens & (original_padding_mask == tf.constant(False))
         # Find index of first end_token_id.
-        end_indices = tf.math.argmax(generated_result == end_token_id, -1)
+        end_indices = tf.math.argmax(end_tokens, -1)
         # Use max_length if no `end_token_id` is found.
         end_indices = tf.where(
             end_indices == 0,
@@ -218,8 +209,6 @@ class Sampler:
         )
         # Truncate out tokens after (including) the end token.
         mask_indices = tf.sequence_mask(end_indices, maxlen=max_length)
-        # Revert the increment added earlier.
-        generated_result -= increment
         return tf.ragged.boolean_mask(generated_result, mask_indices)
 
     def __call__(
@@ -235,7 +224,6 @@ class Sampler:
         input_is_1d = prompt.shape.rank == 1
         if input_is_1d:
             prompt = tf.RaggedTensor.from_tensor(prompt[tf.newaxis, :])
-        original_prompt = tf.identity(prompt)
 
         shortest_prompt_len = tf.reduce_min(prompt.row_lengths())
         # Pad prompt to be a dense Tensor of shape [batch_size, max_length].
@@ -243,6 +231,7 @@ class Sampler:
         # static shape, which means we cannot concatenate generated token to
         # current prompt.
         prompt, mask = self._pad_prompt(prompt, max_length)
+        original_padding_prompt = tf.identity(mask)
         self._validate_token_probability_fn(token_probability_fn, prompt, mask)
 
         # Convert `sample` method to a `tf.function` if `self.run_eagerly=False`
@@ -262,7 +251,7 @@ class Sampler:
         if end_token_id is not None:
             prompt = self._mask_tokens_after_end_token(
                 prompt,
-                original_prompt,
+                original_padding_prompt,
                 max_length,
                 end_token_id,
             )
