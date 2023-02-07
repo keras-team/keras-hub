@@ -120,7 +120,7 @@ class RobertaBackbone(Backbone):
         x = keras.layers.LayerNormalization(
             name="embeddings_layer_norm",
             axis=-1,
-            epsilon=1e-5,  # Original paper uses this epsilon value
+            epsilon=1e-12,  # Original paper uses this epsilon value
             dtype=tf.float32,
         )(embedding)
         x = keras.layers.Dropout(
