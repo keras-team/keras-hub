@@ -140,7 +140,7 @@ class GPT2Backbone(Backbone):
                 activation=lambda x: keras.activations.gelu(
                     x, approximate=True
                 ),
-                layer_norm_epsilon=1e-05,
+                layer_norm_epsilon=1e-12,
                 kernel_initializer=_gpt_2_kernel_initializer(stddev=0.02),
                 normalize_first=True,
                 name=f"transformer_layer_{i}",
@@ -149,7 +149,7 @@ class GPT2Backbone(Backbone):
         sequence_output = keras.layers.LayerNormalization(
             name="layer_norm",
             axis=-1,
-            epsilon=1e-05,
+            epsilon=1e-12,
             dtype=tf.float32,
         )(x)
 

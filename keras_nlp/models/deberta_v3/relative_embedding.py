@@ -42,7 +42,7 @@ class RelativeEmbedding(keras.layers.Layer):
         self,
         hidden_dim,
         bucket_size,
-        layer_norm_epsilon=1e-05,
+        layer_norm_epsilon=1e-12,
         kernel_initializer="glorot_uniform",
         **kwargs,
     ):

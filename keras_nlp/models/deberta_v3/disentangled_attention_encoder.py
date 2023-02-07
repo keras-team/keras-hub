@@ -50,7 +50,7 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
             the attention layer and feedforward network.
         activation: string or `keras.activations`, defaults to "relu". the
             activation function of feedforward network.
-        layer_norm_epsilon: float, defaults to 1e-5. The epsilon value in layer
+        layer_norm_epsilon: float, defaults to 1e-12. The epsilon value in layer
             normalization components.
         kernel_initializer: string or `keras.initializers` initializer,
             defaults to "glorot_uniform". The kernel initializer for
@@ -85,7 +85,7 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
         bucket_size=256,
         dropout=0,
         activation="relu",
-        layer_norm_epsilon=1e-05,
+        layer_norm_epsilon=1e-12,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         **kwargs

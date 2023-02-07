@@ -126,7 +126,7 @@ class DebertaV3Backbone(Backbone):
 
         # Normalize and apply dropout to embeddings.
         x = keras.layers.LayerNormalization(
-            epsilon=1e-7,
+            epsilon=1e-12,
             dtype=tf.float32,
             name="embeddings_layer_norm",
         )(x)
@@ -139,7 +139,7 @@ class DebertaV3Backbone(Backbone):
         rel_embeddings = RelativeEmbedding(
             hidden_dim=hidden_dim,
             bucket_size=bucket_size,
-            layer_norm_epsilon=1e-7,
+            layer_norm_epsilon=1e-12,
             kernel_initializer=deberta_kernel_initializer(),
             name="rel_embedding",
         )(x)

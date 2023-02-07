@@ -120,7 +120,7 @@ class OPTBackbone(Backbone):
                 num_heads=num_heads,
                 dropout=dropout,
                 activation="relu",
-                layer_norm_epsilon=1e-5,
+                layer_norm_epsilon=1e-12,
                 normalize_first=True,
                 kernel_initializer=opt_kernel_initializer(),
                 name=f"transformer_layer_{i}",
@@ -130,7 +130,7 @@ class OPTBackbone(Backbone):
         x = keras.layers.LayerNormalization(
             name="layer_norm",
             axis=-1,
-            epsilon=1e-5,
+            epsilon=1e-12,
             dtype=tf.float32,
         )(x)
 
