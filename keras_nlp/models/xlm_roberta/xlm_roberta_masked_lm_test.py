@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for DistilBERT masked language model preprocessor layer."""
+"""Tests for RobertaXlm masked language model preprocessor layer."""
 
 import os
 
@@ -20,7 +20,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.distil_bert.distil_bert_masked_lm_preprocessor import (
+from keras_nlp.models.roberta_xlm_masked_lm_preprocessor import (
     RobertaXlmMaskedLMPreprocessor,
 )
 from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
@@ -125,7 +125,7 @@ class RobertaXlmMaskedLMPreprocessorTest(
         self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0, 0.0])
 
     def test_no_masking_zero_rate(self):
-        no_mask_preprocessor = DistilBertMaskedLMPreprocessor(
+        no_mask_preprocessor = RobertaXlmMaskedLMPreprocessor(
             self.preprocessor.tokenizer,
             mask_selection_rate=0.0,
             mask_selection_length=5,
