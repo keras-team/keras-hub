@@ -20,11 +20,11 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.roberta_xlm_masked_lm_preprocessor import (
-    RobertaXlmMaskedLMPreprocessor,
-)
 from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
     RobertaXlmTokenizer,
+)
+from keras_nlp.models.roberta_xlm_masked_lm_preprocessor import (
+    RobertaXlmMaskedLMPreprocessor,
 )
 
 

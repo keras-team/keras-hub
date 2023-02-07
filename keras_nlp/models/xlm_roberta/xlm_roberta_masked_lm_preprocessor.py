@@ -19,14 +19,14 @@ from tensorflow import keras
 
 from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
 from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
-   RobertaXlmLPreprocessor,
+    RobertaXlmLPreprocessor,
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class RobertaXlmMaskedLMPreprocessor(RobertaXlmLPreprocessor):
-    """ RobertaXlmL preprocessing for the masked language modeling task.
+    """RobertaXlmL preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling
     task. It is primarily intended for use with the
