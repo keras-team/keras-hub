@@ -68,28 +68,28 @@ class AlbertaMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
 
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [0, 12, 12, 12, 12, 12, 2, 1, 1, 1, 1, 1]
+            x["token_ids"], [2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
-            x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
+            x["padding_mask"], [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         )
-        self.assertAllEqual(x["mask_positions"], [1, 2, 3, 4, 5])
-        self.assertAllEqual(y, [3, 4, 5, 3, 6])
-        self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0, 1.0])
+        self.assertAllEqual(x["mask_positions"], [1, 0, 0, 0, 0])
+        self.assertAllEqual(y, [1, 0, 0, 0, 0])
+        self.assertAllEqual(sw, [1.0, 0.0, 0.0, 0.0, 0.0])
 
     def test_preprocess_list_of_strings(self):
         input_data = [" airplane at airport"] * 4
 
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [[0, 12, 12, 12, 12, 12, 2, 1, 1, 1, 1, 1]] * 4
+            x["token_ids"], [[2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
-            x["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
+            x["padding_mask"], [[1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
         )
-        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4, 5]] * 4)
-        self.assertAllEqual(y, [[3, 4, 5, 3, 6]] * 4)
-        self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0, 1.0]] * 4)
+        self.assertAllEqual(x["mask_positions"], [[1, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(y, [[1, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(sw, [[1.0, 0.0, 0.0, 0.0, 0.0]] * 4)
 
     def test_preprocess_dataset(self):
         sentences = tf.constant([" airplane at airport"] * 4)
@@ -97,14 +97,14 @@ class AlbertaMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         ds = ds.map(self.preprocessor)
         x, y, sw = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(
-            x["token_ids"], [[0, 12, 12, 12, 12, 12, 2, 1, 1, 1, 1, 1]] * 4
+            x["token_ids"], [[2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
-            x["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
+            x["padding_mask"], [[1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
         )
-        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4, 5]] * 4)
-        self.assertAllEqual(y, [[3, 4, 5, 3, 6]] * 4)
-        self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0, 1.0]] * 4)
+        self.assertAllEqual(x["mask_positions"], [[1, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(y, [[1, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(sw, [[1.0, 0.0, 0.0, 0.0, 0.0]] * 4)
 
     def test_mask_multiple_sentences(self):
         sentence_one = tf.constant(" airplane")
@@ -112,14 +112,14 @@ class AlbertaMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
 
         x, y, sw = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
-            x["token_ids"], [0, 12, 12, 2, 2, 12, 12, 2, 1, 1, 1, 1]
+            x["token_ids"], [2, 1, 3, 1, 3, 0, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
-            x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0]
+            x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
         )
-        self.assertAllEqual(x["mask_positions"], [1, 2, 5, 6, 0])
-        self.assertAllEqual(y, [3, 4, 7, 8, 0])
-        self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0, 0.0])
+        self.assertAllEqual(x["mask_positions"], [1, 3, 0, 0, 0])
+        self.assertAllEqual(y, [1, 1, 0, 0, 0])
+        self.assertAllEqual(sw, [1.0, 1.0, 0.0, 0.0, 0.0])
 
     def test_no_masking_zero_rate(self):
         no_mask_preprocessor = AlbertMaskedLMPreprocessor(
@@ -132,10 +132,10 @@ class AlbertaMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
 
         x, y, sw = no_mask_preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]
+            x["token_ids"], [2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
-            x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
+            x["padding_mask"], [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(x["mask_positions"], [0, 0, 0, 0, 0])
         self.assertAllEqual(y, [0, 0, 0, 0, 0])
