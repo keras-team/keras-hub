@@ -92,6 +92,7 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         self.cls_token_id = self.token_to_id(cls_token)
         self.sep_token_id = self.token_to_id(sep_token)
         self.pad_token_id = self.token_to_id(pad_token)
+        self.mask_token_id = self.token_to_id(mask_token)
 
         # If the mask token is not in the vocabulary, add it to the end of the
         # vocabulary.
