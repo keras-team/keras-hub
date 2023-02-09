@@ -34,41 +34,12 @@ class DistilBertMaskedLMPreprocessor(DistilBertPreprocessor):
     multiple steps.
 
     - Tokenize any number of input segments using the `tokenizer`.
-    - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
-      `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
-      entire sequence, `"</s></s>"` between each segment,
-      and a `"</s>"` at the end of the entire sequence.
+    - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
+       with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
     - Randomly select non-special tokens to mask, controlled by
       `mask_selection_rate`.
     - Construct a `(x, y, sample_weight)` tuple suitable for training with a
       `keras_nlp.models.DistilBertMaskedLM` task model.
-
-    Args:
-        tokenizer: A `keras_nlp.models.DistilBertTokenizer` instance.
-        sequence_length: The length of the packed inputs.
-        mask_selection_rate: The probability an input token will be dynamically
-            masked.
-        mask_selection_length: The maximum number of masked tokens supported
-            by the layer.
-        mask_token_rate: float, defaults to 0.8. `mask_token_rate` must be
-            between 0 and 1 which indicates how often the mask_token is
-            substituted for tokens selected for masking.
-        random_token_rate: float, defaults to 0.1. `random_token_rate` must be
-            between 0 and 1 which indicates how often a random token is
-            substituted for tokens selected for masking. Default is 0.1.
-            Note: mask_token_rate + random_token_rate <= 1,  and for
-            (1 - mask_token_rate - random_token_rate), the token will not be
-            changed.
-        truncate: string. The algorithm to truncate a list of batched segments
-            to fit within `sequence_length`. The value can be either
-            `round_robin` or `waterfall`:
-                - `"round_robin"`: Available space is assigned one token at a
-                    time in a round-robin fashion to the inputs that still need
-                    some, until the limit is reached.
-                - `"waterfall"`: The allocation of the budget is done using a
-                    "waterfall" algorithm that allocates quota in a
-                    left-to-right manner and fills up the buckets until we run
-                    out of budget. It supports an arbitrary number of segments.
 
     Examples:
     ```python
@@ -96,18 +67,13 @@ class DistilBertMaskedLMPreprocessor(DistilBertPreprocessor):
 
     # Alternatively, you can create a preprocessor from your own vocabulary.
     # The usage is exactly the same as above.
-    vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick", "Ġ f", "o x", "Ġf ox"]
-    tokenizer = keras_nlp.models.DistilBertTokenizer(
-        vocabulary=vocab,
-        merges=merges,
-    )
-    preprocessor = keras_nlp.models.DistilBertMaskedLMPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=8,
-    )
-    preprocessor("a quick fox")
+    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
+    vocab += ["The", "qu", "##ick", "br", "##own", "fox", "tripped"]
+    vocab += ["Call", "me", "Ish", "##mael", "."]
+    vocab += ["Oh", "look", "a", "whale"]
+    vocab += ["I", "forgot", "my", "home", "##work"]
+    tokenizer = keras_nlp.models.DistilBertTokenizer(vocabulary=vocab)
+    preprocessor = keras_nlp.models.DistilBertMaskedLMPreprocessor(tokenizer)
     ```
     """
 
