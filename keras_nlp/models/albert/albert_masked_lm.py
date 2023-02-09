@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Albert masked lm model."""
+"""ALBERT masked LM model."""
 
 import copy
 
@@ -31,9 +31,9 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class AlbertMaskedLM(Task):
-    """An end-to-end Albert model for the masked language modeling task.
+    """An end-to-end ALBERT model for the masked language modeling task.
 
-    This model will train Albert on a masked language modeling task.
+    This model will train ALBERT on a masked language modeling task.
     The model will predict labels for a number of masked tokens in the
     input data. For usage of this model with pre-trained weights, see the
     `from_preset()` method.
@@ -45,9 +45,7 @@ class AlbertMaskedLM(Task):
     with `from_preset()`.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
-    warranties or conditions of any kind. The underlying model is provided by a
-    third party and subject to a separate license, available
-    [here](https://github.com/facebookresearch/fairseq).
+    warranties or conditions of any kind.
 
     Args:
         backbone: A `keras_nlp.models.AlbertBackbone` instance.
@@ -62,7 +60,7 @@ class AlbertMaskedLM(Task):
     # Create a dataset with raw string features. Labels are inferred.
     features = ["The quick brown fox jumped.", "I forgot my homework."]
 
-    # Create a AlbertaskedLM with a pretrained backbone and further train
+    # Create a AlbertMaskedLM with a pretrained backbone and further train
     # on an MLM task.
     masked_lm = keras_nlp.models.AlbertMaskedLM.from_preset(
         "albert_base_en_uncased",
@@ -77,6 +75,9 @@ class AlbertMaskedLM(Task):
     ```python
     # Create a preprocessed dataset where 0 is the mask token.
     preprocessed_features = {
+        "segment_ids": tf.constant(
+            [[1, 0, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
+        ),
         "token_ids": tf.constant(
             [[1, 2, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
         ),
@@ -88,22 +89,24 @@ class AlbertMaskedLM(Task):
     # Labels are the original masked values.
     labels = [[3, 5]] * 2
 
-    # Randomly initialize a Albert encoder
+    # Randomly initialize a ALBERT encoder
     backbone = keras_nlp.models.AlbertBackbone(
-        vocabulary_size=50265,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
+        vocabulary_size=1000,
+        num_layers=2,
+        num_heads=2,
+        embedding_dim=64,
+        hidden_dim=64,
+        intermediate_dim=128,
+        max_sequence_length=128,
     )
-    # Create a Albert masked_lm and fit the data.
+    # Create a ALBERT masked LM and fit the data.
     masked_lm = keras_nlp.models.AlbertMaskedLM(
         backbone,
         preprocessor=None,
     )
     masked_lm.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        jit_compile=True
     )
     masked_lm.fit(x=preprocessed_features, y=labels, batch_size=2)
     ```

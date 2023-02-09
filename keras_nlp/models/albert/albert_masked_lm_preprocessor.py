@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Albert masked language model preprocessor layer"""
+"""ALBERT masked language model preprocessor layer."""
 
 from absl import logging
 from tensorflow import keras
@@ -24,7 +24,7 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
-    """Albert preprocessing for the masked language modeling task.
+    """ALBERT preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling
     task. It is primarily intended for use with the
@@ -93,7 +93,7 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
     # Alternatively, you can create a preprocessor from your own vocabulary.
-    tf.data.Dataset.from_tensor_slices(
+    vocab_data = tf.data.Dataset.from_tensor_slices(
         ["the quick brown fox", "the earth is round"]
     )
 

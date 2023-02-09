@@ -35,7 +35,7 @@ class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
-            embedding_dim=64,
+            embedding_dim=128,
             hidden_dim=64,
             intermediate_dim=128,
             max_sequence_length=128,
