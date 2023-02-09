@@ -46,11 +46,11 @@ class MaskedLMHeadTest(tf.test.TestCase):
             embedding_weights=embedding.embeddings,
             activation="softmax",
         )
-        encoded_tokens = keras.Input(shape=(10, 16))
+        encoded_tokens = keras.Input(shape=(32, 16))
         positions = keras.Input(shape=(5,), dtype="int32")
         outputs = head(encoded_tokens, mask_positions=positions)
         model = keras.Model((encoded_tokens, positions), outputs)
-        token_data = tf.random.uniform(shape=(4, 10, 16))
+        token_data = tf.random.uniform(shape=(4, 32, 16))
         position_data = tf.random.uniform(
             shape=(4, 5), maxval=10, dtype="int32"
         )
