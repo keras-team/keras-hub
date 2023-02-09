@@ -140,10 +140,13 @@ class MaskedLMHead(keras.layers.Layer):
             self.vocabulary_size = shape[0]
 
     def build(self, input_shapes):
-        embedding_dim = self.embedding_weights.shape[-1]
+        feature_size = input_shapes[-1]
+        
+        if self.embedding_weights is not None:
+            feature_size = self.embedding_weights.shape[-1]
 
         self._dense = keras.layers.Dense(
-            embedding_dim,
+            feature_size,
             activation=self.intermediate_activation,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
@@ -154,7 +157,7 @@ class MaskedLMHead(keras.layers.Layer):
         if self.embedding_weights is None:
             self._kernel = self.add_weight(
                 name="output_kernel",
-                shape=[embedding_dim, self.vocabulary_size],
+                shape=[feature_size, self.vocabulary_size],
                 initializer=self.kernel_initializer,
                 dtype=self.dtype,
             )
