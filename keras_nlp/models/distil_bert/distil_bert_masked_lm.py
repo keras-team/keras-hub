@@ -48,7 +48,7 @@ class DistilBertMaskedLM(Task):
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
     third party and subject to a separate license, available
-    [here](https://github.com/facebookresearch/fairseq).
+    [here](https://github.com/huggingface/transformers).
 
     Args:
         backbone: A `keras_nlp.models.DistilBertBackbone` instance.
