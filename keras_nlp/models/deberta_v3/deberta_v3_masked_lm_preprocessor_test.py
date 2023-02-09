@@ -47,7 +47,7 @@ class DebertaV3PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             bos_piece="[CLS]",
             eos_piece="[SEP]",
             unk_piece="[UNK]",
-            user_defined_symbols="[MASK]"
+            user_defined_symbols="[MASK]",
         )
         self.proto = bytes_io.getvalue()
         self.tokenizer = DebertaV3Tokenizer(proto=self.proto)
@@ -60,7 +60,7 @@ class DebertaV3PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             mask_selection_length=4,
             sequence_length=12,
         )
-        
+
     def test_preprocess_strings(self):
         input_data = "the quick brown fox"
 

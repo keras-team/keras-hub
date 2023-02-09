@@ -19,7 +19,9 @@ from tensorflow import keras
 
 from keras_nlp.layers.masked_lm_head import MaskedLMHead
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
-from keras_nlp.models.deberta_v3.deberta_v3_backbone import deberta_kernel_initializer
+from keras_nlp.models.deberta_v3.deberta_v3_backbone import (
+    deberta_kernel_initializer,
+)
 from keras_nlp.models.deberta_v3.deberta_v3_masked_lm_preprocessor import (
     DebertaV3MaskedLMPreprocessor,
 )

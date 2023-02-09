@@ -13,8 +13,9 @@
 # limitations under the License.
 """Tests for DeBERTa masked language model."""
 
-import os
 import io
+import os
+
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
@@ -55,7 +56,7 @@ class DebertaV3MaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             bos_piece="[CLS]",
             eos_piece="[SEP]",
             unk_piece="[UNK]",
-            user_defined_symbols="[MASK]"
+            user_defined_symbols="[MASK]",
         )
         proto = bytes_io.getvalue()
         self.preprocessor = DebertaV3MaskedLMPreprocessor(
@@ -78,7 +79,7 @@ class DebertaV3MaskedLMTest(tf.test.TestCase, parameterized.TestCase):
                 "quick brown fox",
                 "eagle flew over fox",
                 "the eagle flew quick",
-                "a brown eagle"
+                "a brown eagle",
             ]
         )
         self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
