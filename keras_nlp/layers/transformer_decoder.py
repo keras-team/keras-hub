@@ -17,6 +17,9 @@
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.layers.cached_multi_head_attention import (
+    CachedMultiHeadAttention,
+)
 from keras_nlp.utils.keras_utils import clone_initializer
 
 from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
@@ -141,7 +144,7 @@ class TransformerDecoder(keras.layers.Layer):
         head_dim = int(hidden_dim // self.num_heads)
 
         # Self attention layers.
-        self._self_attention_layer = keras.layers.MultiHeadAttention(
+        self._self_attention_layer = CachedMultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=head_dim,
             dropout=self.dropout,
@@ -208,6 +211,8 @@ class TransformerDecoder(keras.layers.Layer):
         decoder_attention_mask=None,
         encoder_padding_mask=None,
         encoder_attention_mask=None,
+        current_index=None,
+        cache=None,
     ):
         """Forward pass of the TransformerDecoder.
 
@@ -271,11 +276,20 @@ class TransformerDecoder(keras.layers.Layer):
         residual = x
         if self.normalize_first:
             x = self._self_attention_layernorm(x)
-        x = self._self_attention_layer(
-            query=x,
-            value=x,
-            attention_mask=self_attention_mask,
-        )
+        if cache is None:
+            x = self._self_attention_layer(
+                query=x,
+                value=x,
+                attention_mask=self_attention_mask,
+            )
+        else:
+            x, cache = self._self_attention_layer(
+                query=x,
+                value=x,
+                current_index=current_index,
+                cache=cache,
+                attention_mask=self_attention_mask,
+            )
         x = self._self_attention_dropout(x)
         x = x + residual
         if not self.normalize_first:
@@ -313,7 +327,9 @@ class TransformerDecoder(keras.layers.Layer):
         if not self.normalize_first:
             x = self._feedforward_layernorm(x)
 
-        return x
+        if cache is None:
+            return x
+        return x, cache
 
     def get_config(self):
         config = super().get_config()

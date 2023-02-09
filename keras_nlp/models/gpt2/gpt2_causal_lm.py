@@ -17,6 +17,7 @@ import copy
 
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 import keras_nlp
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
@@ -200,7 +201,52 @@ class GPT2CausalLM(Task):
     def preprocessor_cls(cls):
         return GPT2CausalLMPreprocessor
 
-    def _get_token_probability(self, prompt, mask):
+    def call_with_cache(self, inputs, cache, current_index=None):
+        output, cache = self.backbone.call_with_cache(
+            inputs, cache, current_index
+        )
+        output = tf.matmul(
+            output,
+            self.backbone.token_embedding.embeddings,
+            transpose_b=True,
+        )
+        return output, cache
+
+    def build_initial_cache(self, x, max_length):
+        output, cache = self.backbone.build_initial_cache(x, max_length)
+        output = tf.matmul(
+            output,
+            self.backbone.token_embedding.embeddings,
+            transpose_b=True,
+        )
+        return output, cache
+
+    class _NextTokenProbability:
+        def __init__(self, model, cache, existing_outputs):
+            self.model = model
+            self.cache = cache
+            self.existing_outputs = existing_outputs
+
+        def __call__(self, prompt, mask, current_index=None):
+            model_inputs = {
+                "token_ids": prompt,
+                "padding_mask": mask,
+            }
+            if current_index is None:
+                return self.model(model_inputs)
+            output, self.cache = self.model.call_with_cache(
+                model_inputs,
+                self.cache,
+                current_index,
+            )
+            self.existing_outputs = dynamic_update_slice(
+                self.existing_outputs,
+                output,
+                [0, current_index, 0],
+            )
+            return self.existing_outputs
+
+    def _get_token_probability(self, prompt, mask, current_index=None):
         model_inputs = {
             "token_ids": prompt,
             "padding_mask": mask,
@@ -211,6 +257,7 @@ class GPT2CausalLM(Task):
         self,
         prompt,
         max_length,
+        use_cache=True,
         sampler="top_k",
     ):
         """Generate text.
@@ -235,10 +282,21 @@ class GPT2CausalLM(Task):
             # backward compat.
             sampler.jit_compile = self.jit_compile
         sampler.run_eagerly = self.run_eagerly
+        if use_cache:
+            x, y, sw = self.preprocessor(prompt)
+            initial_output, cache = self.build_initial_cache(x, max_length)
+            next_token_probability = self._NextTokenProbability(
+                self,
+                cache,
+                initial_output,
+            )
+        else:
+            next_token_probability = self._get_token_probability
         generated = sampler(
             self.preprocessor.tokenizer(prompt),
-            self._get_token_probability,
+            next_token_probability,
             max_length=max_length,
             end_token_id=end_token_id,
         )
+        # import pdb; pdb.set_trace()
         return self.preprocessor.tokenizer.detokenize(generated)

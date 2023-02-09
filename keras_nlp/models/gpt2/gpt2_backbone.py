@@ -18,6 +18,7 @@ import copy
 
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.layers import PositionEmbedding
 from keras_nlp.layers import TransformerDecoder
@@ -144,7 +145,10 @@ class GPT2Backbone(Backbone):
                 kernel_initializer=_gpt_2_kernel_initializer(stddev=0.02),
                 normalize_first=True,
                 name=f"transformer_layer_{i}",
-            )(x, decoder_padding_mask=padding_mask)
+            )(
+                x,
+                decoder_padding_mask=padding_mask,
+            )
 
         sequence_output = keras.layers.LayerNormalization(
             name="layer_norm",
@@ -170,6 +174,68 @@ class GPT2Backbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
+        self.transformer_layers = []
+        for i in range(self.num_layers):
+            self.transformer_layers.append(
+                self.get_layer(f"transformer_layer_{i}")
+            )
+        self.layer_norm = self.get_layer("layer_norm")
+
+    def call_with_cache(self, inputs, cache, current_index=None):
+        padding_mask = inputs["padding_mask"]
+        inputs_to_embedding = tf.keras.models.Model(
+            inputs=self.input,
+            outputs=self.get_layer("embeddings_dropout").output,
+        )
+        x = inputs_to_embedding(inputs)
+        if current_index is not None:
+            x = x[:, current_index : current_index + 1, :]
+            padding_mask = padding_mask[:, : current_index + 1]
+        for i, transformer_layer in enumerate(self.transformer_layers):
+            current_cache = cache[:, i, ...]
+            x, current_cache = transformer_layer(
+                x,
+                decoder_padding_mask=padding_mask,
+                cache=current_cache,
+                current_index=current_index,
+            )
+            cache = dynamic_update_slice(
+                cache, current_cache[:, tf.newaxis, ...], [0, i, 0, 0, 0, 0]
+            )
+        return self.layer_norm(x), cache
+
+    def build_initial_cache(self, x, max_length):
+        token_ids = x["token_ids"]
+        padding_mask = x["padding_mask"]
+        if len(token_ids.shape) == 1:
+            token_ids = token_ids[tf.newaxis, :]
+            padding_mask = padding_mask[tf.newaxis, :]
+
+        if max_length < self.max_sequence_length:
+            token_ids = token_ids[:, :max_length]
+            padding_mask = padding_mask[:, :max_length]
+
+        x = {
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+        }
+
+        batch_size = tf.shape(token_ids)[0]
+        outputs = tf.zeros([batch_size, max_length, self.hidden_dim])
+        cache = tf.zeros(
+            [
+                2,
+                self.num_layers,
+                batch_size,
+                max_length,
+                self.num_heads,
+                self.hidden_dim // self.num_heads,
+            ],
+        )
+
+        output, cache = self.call_with_cache(x, cache)
+        outputs = dynamic_update_slice(outputs, output, [0, 0, 0])
+        return outputs, cache
 
     def get_config(self):
         config = super().get_config()

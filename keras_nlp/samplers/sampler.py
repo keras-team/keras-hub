@@ -298,7 +298,7 @@ class Sampler:
         current_index = max_length - num_steps
 
         def one_step(current_index, prompt, mask):
-            probs = token_probability_fn(prompt, mask)
+            probs = token_probability_fn(prompt, mask, current_index - 1)
             next_token_probs = tf.gather(
                 probs,
                 tf.repeat(current_index - 1, batch_size),
