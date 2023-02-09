@@ -141,7 +141,7 @@ class MaskedLMHead(keras.layers.Layer):
 
     def build(self, input_shapes):
         feature_size = input_shapes[-1]
-        
+
         if self.embedding_weights is not None:
             feature_size = self.embedding_weights.shape[-1]
 

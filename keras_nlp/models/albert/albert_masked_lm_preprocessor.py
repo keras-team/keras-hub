@@ -118,13 +118,7 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
     tokenizer = AlbertTokenizer(proto=proto)
 
     preprocessor = AlbertMaskedLMPreprocessor(
-        tokenizer=tokenizer,
-        # Simplify out testing by masking every available token.
-        mask_selection_rate=1.0,
-        mask_token_rate=1.0,
-        random_token_rate=0.0,
-        mask_selection_length=5,
-        sequence_length=12,
+        tokenizer=tokenizer
     )
 
     ```
