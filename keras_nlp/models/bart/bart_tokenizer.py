@@ -12,31 +12,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""OPT tokenizer."""
+"""BART tokenizer."""
 
 import copy
 
 from tensorflow import keras
 
-from keras_nlp.models.opt.opt_presets import backbone_presets
+from keras_nlp.models.bart.bart_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class OPTTokenizer(BytePairTokenizer):
-    """An OPT tokenizer using Byte-Pair Encoding subword segmentation.
+class BartTokenizer(BytePairTokenizer):
+    """A BART tokenizer using Byte-Pair Encoding subword segmentation.
 
     This tokenizer class will tokenize raw strings into integer sequences and
     is based on `keras_nlp.tokenizers.BytePairTokenizer`. Unlike the
-    underlying tokenizer, it will check for all special tokens needed by OPT
+    underlying tokenizer, it will check for all special tokens needed by BART
     models and provides a `from_preset()` method to automatically download
-    a matching vocabulary for a OPT preset.
+    a matching vocabulary for a BART preset.
 
-    This tokenizer does not provide truncation or padding of inputs.
+    This tokenizer does not provide truncation or padding of inputs. It can be
+    combined with a `keras_nlp.models.BartPreprocessor` layer for input
+    packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
+
     If input is a scalar string (rank == 0), the layer will output a dense
     `tf.Tensor` with static shape `[None]`.
 
@@ -51,37 +54,37 @@ class OPTTokenizer(BytePairTokenizer):
     Examples:
 
     Batched inputs.
-    >>> vocab = {"<pad>": 1, "</s>": 2, "a": 3, "Ġquick": 4, "Ġfox": 5}
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
     >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
     >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.OPTTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
+    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
+    ...     vocabulary=vocab, merges=merges
     ... )
     >>> tokenizer(["a quick fox", "a fox quick"])
-    <tf.RaggedTensor [[3, 4, 5], [3, 5, 4]]>
+    <tf.RaggedTensor [[4, 5, 6], [4, 6, 5]]>
 
     Unbatched input.
-    >>> vocab = {"<pad>": 1, "</s>": 2, "a": 3, "Ġquick": 4, "Ġfox": 5}
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
     >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
     >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.OPTTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
+    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
+    ...     vocabulary=vocab, merges=merges
     ... )
     >>> tokenizer("a quick fox")
-    <tf.Tensor: shape=(4,), dtype=int32, numpy=array([3, 4, 5], dtype=int32)>
+    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([4, 5, 6], dtype=int32)>
 
     Detokenization.
-    >>> vocab = {"<pad>": 1, "</s>": 2, "Ġquick": 4, "Ġfox": 5}
+    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
     >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
     >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.OPTTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
+    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
+    ...     vocabulary=vocab, merges=merges
     ... )
-    >>> tokenizer.detokenize(tokenizer(" quick fox")).numpy().decode('utf-8')
-    ' quick fox'
+    >>> tokenizer.detokenize(tokenizer("a quick fox")).numpy().decode('utf-8')
+    'a quick fox'
     """
 
     def __init__(
@@ -96,9 +99,8 @@ class OPTTokenizer(BytePairTokenizer):
             **kwargs,
         )
 
-        # We use `"</s>"` as both a start and end token, as OPT was only
-        # pre-trained with `"</s>"` marking document boundaries.
-        start_token = "</s>"
+        # Check for necessary special tokens.
+        start_token = "<s>"
         pad_token = "<pad>"
         end_token = "</s>"
         for token in [start_token, pad_token, end_token]:
