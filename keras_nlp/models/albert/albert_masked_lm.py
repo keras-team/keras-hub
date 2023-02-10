@@ -97,8 +97,8 @@ class AlbertMaskedLM(Task):
         embedding_dim=64,
         hidden_dim=64,
         intermediate_dim=128,
-        max_sequence_length=128,
-    )
+        max_sequence_length=128)
+
     # Create a ALBERT masked LM and fit the data.
     masked_lm = keras_nlp.models.AlbertMaskedLM(
         backbone,

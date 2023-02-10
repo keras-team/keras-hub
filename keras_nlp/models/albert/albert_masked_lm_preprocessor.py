@@ -97,7 +97,9 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
         ["the quick brown fox", "the earth is round"]
     )
 
+    # Creating sentencepiece tokenizer for ALBERT LM preprocessor
     bytes_io = io.BytesIO()
+
     sentencepiece.SentencePieceTrainer.train(
         sentence_iterator=vocab_data.as_numpy_iterator(),
         model_writer=bytes_io,
