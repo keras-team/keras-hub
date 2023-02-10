@@ -71,7 +71,7 @@ def download_files(preset, hf_model_name):
     print(f"`{merges_path}`")
 
 
-def define_preprocessor(preset, hf_model_name):
+def define_tokenizer(preset, hf_model_name):
     print("\n-> Define the tokenizers.")
     extract_dir = EXTRACT_DIR.format(preset)
     vocab_path = os.path.join(extract_dir, "vocab.json")
@@ -458,13 +458,35 @@ def check_output(
     ]
 
     # KerasNLP
-    keras_nlp_enc_token_ids = keras_nlp_tokenizer(tf.constant(enc_sample_text))
-    keras_nlp_dec_token_ids = keras_nlp_tokenizer(tf.constant(dec_sample_text))
+    keras_nlp_enc_token_ids = keras_nlp_tokenizer(
+        tf.constant(enc_sample_text)
+    ).to_tensor()
+    keras_nlp_enc_token_ids = tf.concat(
+        [
+            tf.constant([[keras_nlp_tokenizer.start_token_id]]),
+            keras_nlp_enc_token_ids,
+            tf.constant([[keras_nlp_tokenizer.end_token_id]]),
+        ],
+        axis=-1,
+    )
+    keras_nlp_dec_token_ids = keras_nlp_tokenizer(
+        tf.constant(dec_sample_text)
+    ).to_tensor()
+    keras_nlp_dec_token_ids = tf.concat(
+        [
+            tf.constant([[keras_nlp_tokenizer.start_token_id]]),
+            keras_nlp_dec_token_ids,
+            tf.constant([[keras_nlp_tokenizer.end_token_id]]),
+        ],
+        axis=-1,
+    )
     keras_nlp_inputs = {
         "encoder_token_ids": keras_nlp_enc_token_ids,
-        "encoder_padding_mask": keras_nlp_enc_token_ids != 1,
+        "encoder_padding_mask": keras_nlp_enc_token_ids
+        != keras_nlp_tokenizer.pad_token_id,
         "decoder_token_ids": keras_nlp_dec_token_ids,
-        "decoder_padding_mask": keras_nlp_dec_token_ids != 1,
+        "decoder_padding_mask": keras_nlp_dec_token_ids
+        != keras_nlp_tokenizer.pad_token_id,
     }
     keras_nlp_output = keras_nlp_model.predict(keras_nlp_inputs)
 
@@ -515,7 +537,7 @@ def main(_):
 
     download_files(FLAGS.preset, hf_model_name)
 
-    keras_nlp_tokenizer, hf_tokenizer = define_preprocessor(
+    keras_nlp_tokenizer, hf_tokenizer = define_tokenizer(
         FLAGS.preset, hf_model_name
     )
 
