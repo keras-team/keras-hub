@@ -196,6 +196,11 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             should have one merge rule per line.
         sequence_length: int, defaults to None. If set, the output will be
             padded or truncated to the `sequence_length`.
+        add_prefix_space: bool, defaults to False. Whether or not to add an
+            initial space to the input. This tokenizer is whitespace aware,
+            and will tokenize a word with a leading space differently. Adding
+            a prefix space to the first word will cause it to be tokenized
+            equivalently to all subsequent words in the sequence.
 
     Examples:
 
@@ -230,6 +235,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         vocabulary,
         merges,
         sequence_length=None,
+        add_prefix_space=False,
         **kwargs,
     ) -> None:
         assert_tf_text_installed(self.__class__.__name__)
@@ -268,6 +274,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 f"Received: `type(merges)={type(merges)}`"
             )
         self.sequence_length = sequence_length
+        self.add_prefix_space = add_prefix_space
 
         # Create byte <=> unicode mapping. This is useful for handling
         # whitespace tokens.
@@ -450,6 +457,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     def tokenize(self, inputs):
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
+
+        if self.add_prefix_space:
+            inputs = tf.strings.join([" ", inputs])
 
         scalar_input = inputs.shape.rank == 0
         if scalar_input:
