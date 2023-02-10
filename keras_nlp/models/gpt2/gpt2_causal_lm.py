@@ -227,24 +227,59 @@ class GPT2CausalLM(Task):
             self.cache = cache
             self.existing_outputs = existing_outputs
 
-        def __call__(self, prompt, mask, current_index=None):
+        def __call__(
+            self,
+            prompt,
+            mask,
+            current_index=None,
+            cache=None,
+            existing_outputs=None,
+        ):
             model_inputs = {
                 "token_ids": prompt,
                 "padding_mask": mask,
             }
-            if current_index is None:
+            if current_index is None and cache is None:
                 return self.model(model_inputs)
-            output, self.cache = self.model.call_with_cache(
+            # tf.print(self.cache[0, 0, 0, 3:5, ...])
+            output, cache = self.model.call_with_cache(
                 model_inputs,
-                self.cache,
+                cache,
                 current_index,
             )
-            self.existing_outputs = dynamic_update_slice(
+            # tf.print(output)
+            existing_outputs = dynamic_update_slice(
                 self.existing_outputs,
                 output,
                 [0, current_index, 0],
             )
-            return self.existing_outputs
+            return existing_outputs, cache
+
+    def _get_token_probability_with_cache(
+        self,
+        prompt,
+        mask,
+        current_index=None,
+        cache=None,
+        existing_outputs=None,
+    ):
+        model_inputs = {
+            "token_ids": prompt,
+            "padding_mask": mask,
+        }
+        if current_index is None and cache is None:
+            return self(model_inputs)
+        output, cache = self.call_with_cache(
+            model_inputs,
+            cache,
+            current_index,
+        )
+        existing_outputs = dynamic_update_slice(
+            existing_outputs,
+            output,
+            [0, current_index, 0],
+        )
+        return existing_outputs, cache
 
     def _get_token_probability(self, prompt, mask, current_index=None):
         model_inputs = {
@@ -282,21 +317,30 @@ class GPT2CausalLM(Task):
             # backward compat.
             sampler.jit_compile = self.jit_compile
         sampler.run_eagerly = self.run_eagerly
+        initial_output, cache = None, None
         if use_cache:
             x, y, sw = self.preprocessor(prompt)
+            token_ids = x["token_ids"]
+            padding_mask = x["padding_mask"]
+            if len(token_ids.shape) == 1:
+                token_ids = token_ids[tf.newaxis, :]
+                padding_mask = padding_mask[tf.newaxis, :]
+
+            x = {
+                "token_ids": token_ids,
+                "padding_mask": padding_mask,
+            }
             initial_output, cache = self.build_initial_cache(x, max_length)
-            next_token_probability = self._NextTokenProbability(
-                self,
-                cache,
-                initial_output,
-            )
+            next_token_probability = self._get_token_probability_with_cache
         else:
             next_token_probability = self._get_token_probability
+        # import pdb; pdb.set_trace()
         generated = sampler(
             self.preprocessor.tokenizer(prompt),
             next_token_probability,
             max_length=max_length,
             end_token_id=end_token_id,
+            cache=cache,
+            existing_outputs=initial_output,
         )
-        # import pdb; pdb.set_trace()
         return self.preprocessor.tokenizer.detokenize(generated)

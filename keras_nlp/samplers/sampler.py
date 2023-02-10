@@ -216,6 +216,8 @@ class Sampler:
         prompt,
         token_probability_fn,
         max_length,
+        cache=None,
+        existing_outputs=None,
         mask=None,
         end_token_id=None,
         from_logits=True,
@@ -239,14 +241,15 @@ class Sampler:
         sample = self.sample
         if not self.run_eagerly:
             sample = tf.function(self.sample, jit_compile=self.jit_compile)
-        prompt = sample(
+        prompt, cache, existing_outputs = sample(
             prompt,
             token_probability_fn,
             mask,
             max_length - shortest_prompt_len,
-            from_logits,
+            cache=cache,
+            existing_outputs=existing_outputs,
+            from_logits=from_logits,
         )
-
         # Mask out tokens after `end_token_id`.
         if end_token_id is not None:
             prompt = self._mask_tokens_after_end_token(
@@ -271,7 +274,14 @@ class Sampler:
         raise NotImplementedError
 
     def sample(
-        self, prompt, token_probability_fn, mask, num_steps, from_logits=True
+        self,
+        prompt,
+        token_probability_fn,
+        mask,
+        num_steps,
+        cache=None,
+        existing_outputs=None,
+        from_logits=True,
     ):
         """Sampling logic implementation.
 
@@ -292,13 +302,21 @@ class Sampler:
             space.
         """
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
-        max_length = tf.cast(max_length, num_steps.dtype)
+        num_steps = tf.cast(num_steps, tf.int32)
+        max_length = tf.cast(max_length, tf.int32)
         # The index of the last non-padding token in prompt. Since all sequences
         # are aligned to the right side, the index is the same for all.
         current_index = max_length - num_steps
 
-        def one_step(current_index, prompt, mask):
-            probs = token_probability_fn(prompt, mask, current_index - 1)
+        def one_step(current_index, prompt, mask, cache, existing_outputs):
+            last_index = current_index - 1
+            if cache is not None:
+                probs, cache = token_probability_fn(
+                    prompt, mask, last_index, cache, existing_outputs
+                )
+            else:
+                probs = token_probability_fn(prompt, mask, last_index)
+
             next_token_probs = tf.gather(
                 probs,
                 tf.repeat(current_index - 1, batch_size),
@@ -342,19 +360,20 @@ class Sampler:
                 ),
                 updates=next_token,
             )
-
+            # tf.print(cache)
             current_index = tf.add(current_index, 1)
-            return (current_index, prompt, mask)
+
+            return (current_index, prompt, mask, cache, probs)
 
         # Run a while loop till `max_length` of tokens has been generated.
-        current_index, prompt, mask = tf.while_loop(
-            cond=lambda current_index, prompt, mask: tf.less(
+        current_index, prompt, mask, cache, existing_outputs = tf.while_loop(
+            cond=lambda current_index, prompt, mask, cache, existing_outputs: tf.less(
                 current_index, max_length
             ),
             body=one_step,
-            loop_vars=(current_index, prompt, mask),
+            loop_vars=(current_index, prompt, mask, cache, existing_outputs),
         )
-        return prompt
+        return prompt, cache, existing_outputs
 
     def get_config(self):
         return {

@@ -95,8 +95,12 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         else:
             k_update_indices = [0, 0, current_index, 0, 0]
             v_update_indices = [1, 0, current_index, 0, 0]
-        cache = dynamic_update_slice(cache, [key], k_update_indices)
-        cache = dynamic_update_slice(cache, [value], v_update_indices)
+        cache = dynamic_update_slice(
+            cache, key[tf.newaxis, ...], k_update_indices
+        )
+        cache = dynamic_update_slice(
+            cache, value[tf.newaxis, ...], v_update_indices
+        )
         keys = cache[0, :, : current_index + 1, :, :]
         values = cache[1, :, : current_index + 1, :, :]
         query = tf.multiply(query, 1.0 / tf.math.sqrt(float(self._key_dim)))

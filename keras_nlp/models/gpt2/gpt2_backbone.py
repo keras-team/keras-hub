@@ -180,14 +180,17 @@ class GPT2Backbone(Backbone):
                 self.get_layer(f"transformer_layer_{i}")
             )
         self.layer_norm = self.get_layer("layer_norm")
+        self.token_embeddings = self.get_layer("token_embedding")
+        self.position_embeddings = self.get_layer("position_embedding")
+        self.embeddings_dropout = self.get_layer("embeddings_dropout")
 
     def call_with_cache(self, inputs, cache, current_index=None):
+        token_ids = inputs["token_ids"]
         padding_mask = inputs["padding_mask"]
-        inputs_to_embedding = tf.keras.models.Model(
-            inputs=self.input,
-            outputs=self.get_layer("embeddings_dropout").output,
-        )
-        x = inputs_to_embedding(inputs)
+        token_embedding = self.token_embeddings(token_ids)
+        position_embedding = self.position_embeddings(token_embedding)
+        x = keras.layers.Add()((token_embedding, position_embedding))
+        x = self.embeddings_dropout(x)
         if current_index is not None:
             x = x[:, current_index : current_index + 1, :]
             padding_mask = padding_mask[:, : current_index + 1]
@@ -199,17 +202,22 @@ class GPT2Backbone(Backbone):
                 cache=current_cache,
                 current_index=current_index,
             )
-            cache = dynamic_update_slice(
-                cache, current_cache[:, tf.newaxis, ...], [0, i, 0, 0, 0, 0]
-            )
+            if current_index is None:
+                cache = dynamic_update_slice(
+                    cache, current_cache[:, tf.newaxis, ...], [0, i, 0, 0, 0, 0]
+                )
+            else:
+                cache = dynamic_update_slice(
+                    cache, current_cache[:, tf.newaxis, ...], [0, i, 0, 0, 0, 0]
+                )
         return self.layer_norm(x), cache
 
     def build_initial_cache(self, x, max_length):
         token_ids = x["token_ids"]
         padding_mask = x["padding_mask"]
-        if len(token_ids.shape) == 1:
-            token_ids = token_ids[tf.newaxis, :]
-            padding_mask = padding_mask[tf.newaxis, :]
+        # if len(token_ids.shape) == 1:
+        #     token_ids = token_ids[tf.newaxis, :]
+        #     padding_mask = padding_mask[tf.newaxis, :]
 
         if max_length < self.max_sequence_length:
             token_ids = token_ids[:, :max_length]
