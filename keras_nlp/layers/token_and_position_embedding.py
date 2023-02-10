@@ -22,7 +22,9 @@ from keras_nlp.utils.keras_utils import clone_initializer
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class TokenAndPositionEmbedding(keras.layers.Layer):
-    """A layer which sums a token and position embedding.
+    """Token and position embeddings are ways of representing words and their order in a sentence
+       so that a machine learning model like a neural network can understand them.
+       This layer sums a token and position embedding.
 
     This layer assumes that the last dimension in the input corresponds
     to the sequence dimension.
