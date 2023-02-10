@@ -515,12 +515,12 @@ def main(_):
 
     download_files(FLAGS.preset, hf_model_name)
 
-    keras_nlp_preprocessor, hf_tokenizer = define_preprocessor(
+    keras_nlp_tokenizer, hf_tokenizer = define_preprocessor(
         FLAGS.preset, hf_model_name
     )
 
     print("\n-> Load KerasNLP model.")
-    keras_nlp_model = keras_nlp.models.FNetBackbone.from_preset(
+    keras_nlp_model = keras_nlp.models.BartBackbone.from_preset(
         FLAGS.preset, load_weights=False
     )
 
@@ -534,7 +534,7 @@ def main(_):
 
     check_output(
         FLAGS.preset,
-        keras_nlp_preprocessor,
+        keras_nlp_tokenizer,
         keras_nlp_model,
         hf_tokenizer,
         hf_model,
