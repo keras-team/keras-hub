@@ -334,7 +334,7 @@ def main(_):
     )
 
     print("\n-> Load KerasNLP model.")
-    keras_nlp_model = keras_nlp.models.DistilBertBackbone.from_preset(
+    keras_nlp_model = keras_nlp.models.AlbertBackbone.from_preset(
         FLAGS.preset, load_weights=False
     )
 
