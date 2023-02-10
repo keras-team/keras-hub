@@ -174,6 +174,7 @@ class FNetPreprocessor(Preprocessor):
         x = {
             "token_ids": token_ids,
             "segment_ids": segment_ids,
+            "padding_mask": token_ids != self.tokenizer.pad_token_id,
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
 

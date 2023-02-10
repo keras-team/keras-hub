@@ -64,7 +64,7 @@ class FNetPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         )
 
     def test_tokenize_list_of_strings(self):
-        # We should handle a list of strings as as batch.
+        # We should handle a list of strings as batch.
         input_data = ["the quick brown fox"] * 4
         output = self.preprocessor(input_data)
         self.assertAllEqual(

@@ -9,7 +9,7 @@ from keras_nlp.models.f_net.f_net_masked_lm_preprocessor import (
     FNetMaskedLMPreprocessor,
 )
 
-from keras_nlp.models.roberta.roberta_presets import backbone_presets
+from keras_nlp.models.f_net.f_net_presets import backbone_presets
 from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
@@ -35,7 +35,7 @@ class FNetMaskedLM(Task):
             intermediate_activation="gelu",
             kernel_initializer=f_net_kernel_initializer(),
             name="mlm_head",
-        )(backbone_outputs, inputs["mask_positions"])
+        )(backbone_outputs["sequence_output"], inputs["mask_positions"])
 
         # Instantiate using Functional API Model constructor
         super().__init__(
