@@ -39,6 +39,17 @@ call_args_docstring = """
     from_logits: bool, defaults to True. Indicate if the `token_probability_fn`
         returns logits. If False, `token_probability_fn` returns probability
         distributions.
+    cache: a dense int tensor, the cache used in decoding. The cache
+        stores the K and V of each
+        `keras_nlp.layers.CachedMultiHeadAttention` layer to make the
+        decoding faster by avoiding duplicated computation. See more
+        details in the docstring of
+        `keras_nlp.layers.CachedMultiHeadAttention`.
+    token_probs: a dense float tensor of shape
+        `[batch_size, max_length, vocab_size]`. The next token
+        probability (or logits) of tokens in the prompt. If the
+        prompt is batched, then `token_probs` only has valid values for
+        `[batch_size, shortest_prompt_length, vocab_size]`.
     """
 
 
@@ -216,11 +227,11 @@ class Sampler:
         prompt,
         token_probability_fn,
         max_length,
-        cache=None,
-        existing_outputs=None,
         mask=None,
         end_token_id=None,
         from_logits=True,
+        cache=None,
+        token_probs=None,
     ):
         prompt, mask = self._validate_prompt_and_mask(prompt, mask)
         input_is_1d = prompt.shape.rank == 1
@@ -241,13 +252,13 @@ class Sampler:
         sample = self.sample
         if not self.run_eagerly:
             sample = tf.function(self.sample, jit_compile=self.jit_compile)
-        prompt, cache, existing_outputs = sample(
+        prompt = sample(
             prompt,
             token_probability_fn,
             mask,
             max_length - shortest_prompt_len,
             cache=cache,
-            existing_outputs=existing_outputs,
+            token_probs=token_probs,
             from_logits=from_logits,
         )
         # Mask out tokens after `end_token_id`.
@@ -279,9 +290,9 @@ class Sampler:
         token_probability_fn,
         mask,
         num_steps,
-        cache=None,
-        existing_outputs=None,
         from_logits=True,
+        cache=None,
+        token_probs=None,
     ):
         """Sampling logic implementation.
 
@@ -296,6 +307,17 @@ class Sampler:
             from_logits: bool, defaults to True. Indicate if the
                 `token_probability_fn` returns logits. If False,
                 `token_probability_fn` returns probability distributions.
+            cache: a dense int tensor, the cache used in decoding. The cache
+                stores the K and V of each
+                `keras_nlp.layers.CachedMultiHeadAttention` layer to make the
+                decoding faster by avoiding duplicated computation. See more
+                details in the docstring of
+                `keras_nlp.layers.CachedMultiHeadAttention`.
+            token_probs: a dense float tensor of shape
+                `[batch_size, max_length, vocab_size]`. The next token
+                probability (or logits) of tokens in the prompt. If the
+                prompt is batched, then `token_probs` only has valid values for
+                `[batch_size, shortest_prompt_length, vocab_size]`.
 
         Returns:
             A dense int Tensor, representing the generated text in token id
@@ -308,11 +330,17 @@ class Sampler:
         # are aligned to the right side, the index is the same for all.
         current_index = max_length - num_steps
 
-        def one_step(current_index, prompt, mask, cache, existing_outputs):
+        def one_step(
+            current_index,
+            prompt,
+            mask,
+            cache=None,
+            token_probs=None,
+        ):
             last_index = current_index - 1
             if cache is not None:
                 probs, cache = token_probability_fn(
-                    prompt, mask, last_index, cache, existing_outputs
+                    prompt, mask, last_index, cache, token_probs
                 )
             else:
                 probs = token_probability_fn(prompt, mask, last_index)
@@ -360,20 +388,29 @@ class Sampler:
                 ),
                 updates=next_token,
             )
-            # tf.print(cache)
             current_index = tf.add(current_index, 1)
+            if cache is None:
+                return current_index, prompt, mask
+            return [current_index, prompt, mask, cache, probs]
 
-            return (current_index, prompt, mask, cache, probs)
-
+        if cache is None:
+            current_index, prompt, mask = tf.while_loop(
+                cond=lambda current_index, prompt, mask: tf.less(
+                    current_index, max_length
+                ),
+                body=one_step,
+                loop_vars=[current_index, prompt, mask],
+            )
+            return prompt, None, None
         # Run a while loop till `max_length` of tokens has been generated.
-        current_index, prompt, mask, cache, existing_outputs = tf.while_loop(
-            cond=lambda current_index, prompt, mask, cache, existing_outputs: tf.less(
+        current_index, prompt, mask, cache, token_probs = tf.while_loop(
+            cond=lambda current_index, prompt, mask, cache, token_probs: tf.less(
                 current_index, max_length
             ),
             body=one_step,
-            loop_vars=(current_index, prompt, mask, cache, existing_outputs),
+            loop_vars=[current_index, prompt, mask, cache, token_probs],
         )
-        return prompt, cache, existing_outputs
+        return prompt
 
     def get_config(self):
         return {

@@ -221,40 +221,6 @@ class GPT2CausalLM(Task):
         )
         return output, cache
 
-    class _NextTokenProbability:
-        def __init__(self, model, cache, existing_outputs):
-            self.model = model
-            self.cache = cache
-            self.existing_outputs = existing_outputs
-
-        def __call__(
-            self,
-            prompt,
-            mask,
-            current_index=None,
-            cache=None,
-            existing_outputs=None,
-        ):
-            model_inputs = {
-                "token_ids": prompt,
-                "padding_mask": mask,
-            }
-            if current_index is None and cache is None:
-                return self.model(model_inputs)
-            # tf.print(self.cache[0, 0, 0, 3:5, ...])
-            output, cache = self.model.call_with_cache(
-                model_inputs,
-                cache,
-                current_index,
-            )
-            # tf.print(output)
-            existing_outputs = dynamic_update_slice(
-                self.existing_outputs,
-                output,
-                [0, current_index, 0],
-            )
-            return existing_outputs, cache
-
     def _get_token_probability_with_cache(
         self,
         prompt,
@@ -334,13 +300,12 @@ class GPT2CausalLM(Task):
             next_token_probability = self._get_token_probability_with_cache
         else:
             next_token_probability = self._get_token_probability
-        # import pdb; pdb.set_trace()
         generated = sampler(
             self.preprocessor.tokenizer(prompt),
             next_token_probability,
             max_length=max_length,
             end_token_id=end_token_id,
             cache=cache,
-            existing_outputs=initial_output,
+            token_probs=initial_output,
         )
         return self.preprocessor.tokenizer.detokenize(generated)

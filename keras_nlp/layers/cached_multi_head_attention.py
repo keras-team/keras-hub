@@ -25,36 +25,56 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
     needing to recompute the forward pass for previously seen tokens. This
     caching method is only useful during decoding, and should not be used
     during training.
+
+    Call arguments:
+        query: Query `Tensor` of shape `(B, T, dim)`.
+        value: Value `Tensor` of shape `(B, S, dim)`.
+        key: Optional key `Tensor` of shape `(B, S, dim)`. If not given, will
+            use `value` for both `key` and `value`, which is the most common
+            case.
+        attention_mask: a boolean mask of shape `(B, T, S)`, that prevents
+            attention to certain positions. The boolean mask specifies which
+            query elements can attend to which key elements, 1 indicates
+            attention and 0 indicates no attention. Broadcasting can happen for
+            the missing batch dimensions and the head dimension.
+        return_attention_scores: A boolean to indicate whether the output should
+            be `(attention_output, attention_scores)` if `True`, or
+            `attention_output` if `False`. Defaults to `False`.
+        training: Python boolean indicating whether the layer should behave in
+            training mode (adding dropout) or in inference mode (no dropout).
+            Defaults to either using the training mode of the parent
+            layer/model, or False (inference) if there is no parent layer.
+        use_causal_mask: A boolean to indicate whether to apply a causal mask to
+            prevent tokens from attending to future tokens (e.g., used in a
+            decoder Transformer).
+        current_index: a int or int Tensor, defaults to None, the index of the
+            current token being processed.
+        cache: a dense float Tensor, defaults to None. The cache of key/value of
+            leading tokens. `cache` is of shape [2, B, max_seq_len, num_heads,
+            key_dims].
+
+    Returns:
+        attention_output: The result of the computation, of shape `(B, T, E)`,
+            where `T` is for target sequence shapes and `E` is the query input
+            last dimension if `output_shape` is `None`. Otherwise, the
+            multi-head outputs are projected to the shape specified by
+            `output_shape`.
+        cache: the updated cache.
+        attention_scores: [Optional] multi-head attention coefficients over
+            attention axes.
     """
-
-    def _update_cache(self, key, value, cache):
-        """Updates cache states and gets full-length key/value tensors."""
-        if "keys" not in cache:
-            keys = key
-            values = value
-        else:
-            keys = tf.concat([tf.cast(cache["keys"], key.dtype), key], axis=1)
-            values = tf.concat(
-                [tf.cast(cache["values"], value.dtype), value], axis=1
-            )
-
-        # Update cache
-        cache["keys"] = keys
-        cache["values"] = values
-
-        return keys, values
 
     def call(
         self,
         query,
         value,
         key=None,
-        current_index=None,
         attention_mask=None,
-        cache=None,
         return_attention_scores=False,
         training=None,
         use_causal_mask=True,
+        current_index=None,
+        cache=None,
     ):
         if cache is None:
             # When `cache` is None, it's the same as
@@ -90,7 +110,6 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             seq_len = tf.shape(query)[1]
             k_update_indices = [0, 0, 0, 0, 0]
             v_update_indices = [1, 0, 0, 0, 0]
-
             current_index = seq_len - 1
         else:
             k_update_indices = [0, 0, current_index, 0, 0]
@@ -114,4 +133,6 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             self._combine_equation, attention_scores, values
         )
         attention_output = self._output_dense(attention_output)
+        if return_attention_scores:
+            return attention_output, cache, attention_scores
         return attention_output, cache

@@ -185,11 +185,34 @@ class GPT2Backbone(Backbone):
         self.embeddings_dropout = self.get_layer("embeddings_dropout")
 
     def call_with_cache(self, inputs, cache, current_index=None):
+        """Forward pass of `GPT2Backbone` with cache.
+
+        The difference between `call_with_cache` and normal `__call__` is in
+        this method, a `cache` arg is set, and the inputs is of
+        `sequence_length=1`. By cachine the previous key/value in multi-head
+        attention, we avoid recomputing the outputs of seen tokens.
+
+        Args:
+            inputs: a dict of key `token_ids` and `padding_mask`, the same
+                format as `GPT2Backbone` inputs.
+            cache: a dense float Tensor, the cache of key and value.
+            current_index: int, or int Tensor, defaults to None. If set, it
+                represents the index of current inputs in the whole sequence.
+
+        Returns:
+            x: a dense float Tensor, the predicted next token logits of `inputs`.
+            cache: a dense float Tensor, the updated cache.
+        """
         token_ids = inputs["token_ids"]
         padding_mask = inputs["padding_mask"]
         token_embedding = self.token_embeddings(token_ids)
-        position_embedding = self.position_embeddings(token_embedding)
-        x = keras.layers.Add()((token_embedding, position_embedding))
+        if current_index is None:
+            position_embedding = self.position_embeddings(token_embedding)
+        else:
+            position_embedding = self.position_embeddings.position_embeddings[
+                current_index, :
+            ]
+        x = token_embedding + position_embedding
         x = self.embeddings_dropout(x)
         if current_index is not None:
             x = x[:, current_index : current_index + 1, :]
@@ -207,17 +230,32 @@ class GPT2Backbone(Backbone):
                     cache, current_cache[:, tf.newaxis, ...], [0, i, 0, 0, 0, 0]
                 )
             else:
+                update = current_cache[:, :, current_index, :, :]
+                update = update[:, tf.newaxis, :, tf.newaxis, ...]
                 cache = dynamic_update_slice(
-                    cache, current_cache[:, tf.newaxis, ...], [0, i, 0, 0, 0, 0]
+                    cache, update, [0, i, 0, current_index, 0, 0]
                 )
         return self.layer_norm(x), cache
 
-    def build_initial_cache(self, x, max_length):
-        token_ids = x["token_ids"]
-        padding_mask = x["padding_mask"]
-        # if len(token_ids.shape) == 1:
-        #     token_ids = token_ids[tf.newaxis, :]
-        #     padding_mask = padding_mask[tf.newaxis, :]
+    def build_initial_cache(self, initial_inputs, max_length):
+        """Build initial cache based on the prompt.
+
+        This method should be called before the decoding loop to build the
+        initial cache. The cache is of shape [2, `self.num_layers`, batch_size,
+        max_length, `self.num_heads`, `self.hidden_dim // self.num_heads`].
+        The first dim represents it's a key or value in multi-head attention.
+
+        Args:
+            initial_inputs: a dense Tensor, the initial inputs to the decoding
+                loop.
+            max_length: int, the max length of the generated sequence.
+
+        Returns:
+            cache: a dense float Tensor, the cache of key and value.
+            max_length: int, the max length of generated sequence.
+        """
+        token_ids = initial_inputs["token_ids"]
+        padding_mask = initial_inputs["padding_mask"]
 
         if max_length < self.max_sequence_length:
             token_ids = token_ids[:, :max_length]
