@@ -65,8 +65,20 @@ class DebertaV3TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(output, tf.constant(["the quick brown fox"]))
 
     def test_vocabulary_size(self):
-        tokenizer = DebertaV3Tokenizer(proto=self.proto)
-        self.assertEqual(tokenizer.vocabulary_size(), 10)
+        self.assertEqual(self.tokenizer.vocabulary_size(), 10)
+
+    def test_errors_missing_special_tokens(self):
+        bytes_io = io.BytesIO()
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=iter(["abc"]),
+            model_writer=bytes_io,
+            vocab_size=5,
+            pad_id=-1,
+            eos_id=-1,
+            bos_id=-1,
+        )
+        with self.assertRaises(ValueError):
+            DebertaV3Tokenizer(proto=bytes_io.getvalue())
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
