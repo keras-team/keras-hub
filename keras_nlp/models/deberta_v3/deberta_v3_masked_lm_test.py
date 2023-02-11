@@ -61,7 +61,6 @@ class DebertaV3MaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         proto = bytes_io.getvalue()
         self.preprocessor = DebertaV3MaskedLMPreprocessor(
             tokenizer=DebertaV3Tokenizer(proto=proto),
-            # Simplify out testing by masking every available token.
             mask_selection_length=4,
             sequence_length=10,
         )

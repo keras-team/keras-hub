@@ -48,7 +48,7 @@ class DebertaV3MaskedLM(Task):
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
     third party and subject to a separate license, available
-    [here](https://github.com/facebookresearch/fairseq).
+    [here](https://github.com/microsoft/DeBERTa).
 
     Args:
         backbone: A `keras_nlp.models.DebertaV3Backbone` instance.
@@ -126,7 +126,9 @@ class DebertaV3MaskedLM(Task):
         outputs = MaskedLMHead(
             vocabulary_size=backbone.vocabulary_size,
             embedding_weights=backbone.token_embedding.embeddings,
-            intermediate_activation="gelu",
+            intermediate_activation=lambda x: keras.activations.gelu(
+                x, approximate=False
+            ),
             kernel_initializer=deberta_kernel_initializer(),
             name="mlm_head",
         )(backbone_outputs, inputs["mask_positions"])

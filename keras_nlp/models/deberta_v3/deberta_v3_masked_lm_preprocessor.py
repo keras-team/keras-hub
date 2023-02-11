@@ -73,7 +73,9 @@ class DebertaV3MaskedLMPreprocessor(DebertaV3Preprocessor):
     Examples:
     ```python
     # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.DebertaV3MaskedLMPreprocessor.from_preset("deberta_v3_base_en")
+    preprocessor = keras_nlp.models.DebertaV3MaskedLMPreprocessor.from_preset(
+        "deberta_v3_base_en"
+    )
 
     # Tokenize and pack a single sentence.
     sentence = tf.constant("The quick brown fox jumped.")
