@@ -66,6 +66,10 @@ class OPTTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_vocabulary_size(self):
         self.assertEqual(self.tokenizer.vocabulary_size(), 12)
 
+    def test_errors_missing_special_tokens(self):
+        with self.assertRaises(ValueError):
+            OPTTokenizer(vocabulary=["a", "b", "c"], merges=[])
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
