@@ -45,6 +45,7 @@ setup(
         "tensorflow-text; platform_system != 'Darwin'",
     ],
     extras_require={
+        "build": ["namex"],
         "extras": [
             "rouge-score",
             "sentencepiece",
