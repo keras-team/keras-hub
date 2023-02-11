@@ -105,7 +105,7 @@ class RobertaTokenizer(BytePairTokenizer):
         pad_token = "<pad>"
         end_token = "</s>"
         mask_token = "<mask>"
-        for token in [start_token, pad_token, end_token]:
+        for token in [start_token, pad_token, end_token, mask_token]:
             if token not in self.get_vocabulary():
                 raise ValueError(
                     f"Cannot find token `'{token}'` in the provided "
