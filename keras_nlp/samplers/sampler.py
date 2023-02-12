@@ -189,14 +189,18 @@ class Sampler:
 
     def _mask_tokens_after_end_token(
         self,
-        prompt,
+        generated_result,
+        original_padding_mask,
         max_length,
         end_token_id,
     ):
         """Helper function to truncate the tokens after the end token."""
-        # Mask out tokens after `end_token_id` is encountered.
+        # Create a tensor with True for each end_token_id.
+        end_tokens = generated_result == end_token_id
+        # Remove all end_token_ids in the original input.
+        end_tokens = end_tokens & (original_padding_mask == tf.constant(False))
         # Find index of first end_token_id.
-        end_indices = tf.math.argmax(prompt == end_token_id, -1)
+        end_indices = tf.math.argmax(end_tokens, -1)
         # Use max_length if no `end_token_id` is found.
         end_indices = tf.where(
             end_indices == 0,
@@ -205,7 +209,7 @@ class Sampler:
         )
         # Truncate out tokens after (including) the end token.
         mask_indices = tf.sequence_mask(end_indices, maxlen=max_length)
-        return tf.ragged.boolean_mask(prompt, mask_indices)
+        return tf.ragged.boolean_mask(generated_result, mask_indices)
 
     def __call__(
         self,
@@ -217,7 +221,6 @@ class Sampler:
         from_logits=True,
     ):
         prompt, mask = self._validate_prompt_and_mask(prompt, mask)
-
         input_is_1d = prompt.shape.rank == 1
         if input_is_1d:
             prompt = tf.RaggedTensor.from_tensor(prompt[tf.newaxis, :])
@@ -228,6 +231,7 @@ class Sampler:
         # static shape, which means we cannot concatenate generated token to
         # current prompt.
         prompt, mask = self._pad_prompt(prompt, max_length)
+        original_padding_mask = tf.identity(mask)
         self._validate_token_probability_fn(token_probability_fn, prompt, mask)
 
         # Convert `sample` method to a `tf.function` if `self.run_eagerly=False`
@@ -247,6 +251,7 @@ class Sampler:
         if end_token_id is not None:
             prompt = self._mask_tokens_after_end_token(
                 prompt,
+                original_padding_mask,
                 max_length,
                 end_token_id,
             )
