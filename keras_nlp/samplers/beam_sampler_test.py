@@ -125,7 +125,7 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
             prob = tf.constant([[[0.0, 0.0, 0.0, 1.0]]])
             return tf.tile(prob, [batch_size, seq_length, 1])
 
-        max_length = 5
+        max_length = 4
         inputs = tf.constant([[0, 1], [1, 2]])
         outputs = self.sampler(
             inputs,
@@ -133,5 +133,17 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
             max_length=max_length,
             end_token_id=2,
         )
-        expected_outputs = tf.ragged.constant([[0, 1, 3, 3, 3], [1]])
+        # end_token in prompt does not trigger truncation.
+        expected_outputs = tf.ragged.constant([[0, 1, 3, 3], [1, 2, 3, 3]])
+        self.assertAllEqual(outputs, expected_outputs)
+
+        max_length = 4
+        inputs = tf.constant([[0, 1], [1, 3]])
+        outputs = self.sampler(
+            inputs,
+            token_probability_fn,
+            max_length=max_length,
+            end_token_id=3,
+        )
+        expected_outputs = tf.ragged.constant([[0, 1], [1, 3]])
         self.assertAllEqual(outputs, expected_outputs)

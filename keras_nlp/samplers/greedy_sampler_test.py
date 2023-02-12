@@ -93,8 +93,6 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
         )
 
     def test_end_token_id(self):
-        max_length = 5
-
         def token_probability_fn(inputs, mask):
             batch_size = inputs.shape[0]
             prob = tf.constant([[[0.0, 0.0, 0.0, 1.0]]])
@@ -102,6 +100,7 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
                 tf.repeat(prob, batch_size, axis=0), max_length, axis=1
             )
 
+        max_length = 4
         sampler = GreedySampler()
         inputs = tf.constant([[0, 1], [1, 2]])
         outputs = sampler(
@@ -110,7 +109,18 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
             max_length=max_length,
             end_token_id=2,
         )
-        expected_outputs = tf.ragged.constant([[0, 1, 3, 3, 3], [1]])
+        # end_token in prompt does not trigger truncation.
+        expected_outputs = tf.ragged.constant([[0, 1, 3, 3], [1, 2, 3, 3]])
+        self.assertAllEqual(outputs, expected_outputs)
+
+        outputs = sampler(
+            inputs,
+            token_probability_fn,
+            max_length=max_length,
+            end_token_id=3,
+        )
+        # Generated end_token will be truncated.
+        expected_outputs = tf.ragged.constant([[0, 1], [1, 2]])
         self.assertAllEqual(outputs, expected_outputs)
 
     def test_compare_xla_noxla_results(self):
