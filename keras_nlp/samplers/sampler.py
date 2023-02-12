@@ -231,7 +231,7 @@ class Sampler:
         # static shape, which means we cannot concatenate generated token to
         # current prompt.
         prompt, mask = self._pad_prompt(prompt, max_length)
-        original_padding_prompt = tf.identity(mask)
+        original_padding_mask = tf.identity(mask)
         self._validate_token_probability_fn(token_probability_fn, prompt, mask)
 
         # Convert `sample` method to a `tf.function` if `self.run_eagerly=False`
@@ -251,7 +251,7 @@ class Sampler:
         if end_token_id is not None:
             prompt = self._mask_tokens_after_end_token(
                 prompt,
-                original_padding_prompt,
+                original_padding_mask,
                 max_length,
                 end_token_id,
             )
