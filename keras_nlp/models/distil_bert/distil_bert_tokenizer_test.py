@@ -39,7 +39,7 @@ class DistilBertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_tokenize_batch(self):
         input_data = tf.constant(["THE QUICK BROWN FOX.", "THE FOX."])
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[[5, 6, 7], [ 8, 1]], [5, 8, 1]])
+        self.assertAllEqual(output, [[5, 6, 7, 8, 1], [5, 8, 1]])
 
     def test_lowercase(self):
         input_data = "THE QUICK BROWN FOX."
