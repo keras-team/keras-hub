@@ -52,7 +52,7 @@ class DistilBertTokenizer(WordPieceTokenizer):
     Examples:
 
     Batched input.
-    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]"]
+    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
     >>> inputs = ["The quick brown fox.", "The fox."]
     >>> tokenizer = keras_nlp.models.DistilBertTokenizer(vocabulary=vocab)
@@ -60,7 +60,7 @@ class DistilBertTokenizer(WordPieceTokenizer):
     <tf.RaggedTensor [[4, 5, 6, 7, 8, 9], [4, 8, 9]]>
 
     Unbatched input.
-    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]"]
+    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
     >>> inputs = "The fox."
     >>> tokenizer = keras_nlp.models.DistilBertTokenizer(vocabulary=vocab)
@@ -68,7 +68,7 @@ class DistilBertTokenizer(WordPieceTokenizer):
     <tf.Tensor: shape=(3,), dtype=int32, numpy=array([4, 8, 9], dtype=int32)>
 
     Detokenization.
-    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]"]
+    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
     >>> inputs = "The quick brown fox."
     >>> tokenizer = keras_nlp.models.DistilBertTokenizer(vocabulary=vocab)
