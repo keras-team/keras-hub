@@ -28,16 +28,16 @@ to_copy = [
 if os.path.exists(build_directory):
     raise ValueError(f"Directory already exists: {build_directory}")
 
-# Copy sources (`keras_tuner/` directory and setup files) to build directory
+# Copy sources (`keras_nlp/` directory and setup files) to build directory
 os.mkdir(build_directory)
 shutil.copytree(package, os.path.join(build_directory, package))
 for fname in to_copy:
     shutil.copy(fname, os.path.join(f"{build_directory}", fname))
 os.chdir(build_directory)
 
-# Restructure the codebase so that source files live in `keras_tuner/src`
+# Restructure the codebase so that source files live in `keras_nlp/src`
 namex.convert_codebase(package, code_directory="src")
-# Generate API __init__.py files in `keras_tuner/`
+# Generate API __init__.py files in `keras_nlp/`
 namex.generate_api_files(package, code_directory="src", verbose=True)
 
 # Make sure to export the __version__ string
