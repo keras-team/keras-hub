@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Albert masked language model preprocessor layer."""
+"""Tests for ALBERT masked language model preprocessor layer."""
 
 import io
 import os
@@ -47,6 +47,7 @@ class AlbertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             unk_piece="<unk>",
             bos_piece="[CLS]",
             eos_piece="[SEP]",
+            user_defined_symbols="[MASK]",
         )
 
         proto = bytes_io.getvalue()
@@ -59,94 +60,94 @@ class AlbertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             mask_selection_rate=1.0,
             mask_token_rate=1.0,
             random_token_rate=0.0,
-            mask_selection_length=5,
+            mask_selection_length=4,
             sequence_length=12,
         )
 
     def test_preprocess_strings(self):
-        input_data = " airplane at airport"
+        input_data = "the quick brown fox"
 
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            x["token_ids"], [1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
-            x["padding_mask"], [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
         )
-        self.assertAllEqual(x["mask_positions"], [1, 0, 0, 0, 0])
-        self.assertAllEqual(y, [1, 0, 0, 0, 0])
-        self.assertAllEqual(sw, [1.0, 0.0, 0.0, 0.0, 0.0])
+        self.assertAllEqual(x["mask_positions"], [1, 2, 3, 4])
+        self.assertAllEqual(y, [5, 10, 6, 8])
+        self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0])
 
     def test_preprocess_list_of_strings(self):
-        input_data = [" airplane at airport"] * 4
+        input_data = ["the quick brown fox"] * 4
 
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [[2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
+            x["token_ids"], [[1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
-            x["padding_mask"], [[1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
+            x["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
         )
-        self.assertAllEqual(x["mask_positions"], [[1, 0, 0, 0, 0]] * 4)
-        self.assertAllEqual(y, [[1, 0, 0, 0, 0]] * 4)
-        self.assertAllEqual(sw, [[1.0, 0.0, 0.0, 0.0, 0.0]] * 4)
+        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4]] * 4)
+        self.assertAllEqual(y, [[5, 10, 6, 8]] * 4)
+        self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0]] * 4)
 
     def test_preprocess_dataset(self):
-        sentences = tf.constant([" airplane at airport"] * 4)
+        sentences = tf.constant(["the quick brown fox"] * 4)
         ds = tf.data.Dataset.from_tensor_slices(sentences)
         ds = ds.map(self.preprocessor)
         x, y, sw = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(
-            x["token_ids"], [[2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
+            x["token_ids"], [[1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
-            x["padding_mask"], [[1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
+            x["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
         )
-        self.assertAllEqual(x["mask_positions"], [[1, 0, 0, 0, 0]] * 4)
-        self.assertAllEqual(y, [[1, 0, 0, 0, 0]] * 4)
-        self.assertAllEqual(sw, [[1.0, 0.0, 0.0, 0.0, 0.0]] * 4)
+        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4]] * 4)
+        self.assertAllEqual(y, [[5, 10, 6, 8]] * 4)
+        self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0]] * 4)
 
     def test_mask_multiple_sentences(self):
-        sentence_one = tf.constant(" airplane")
-        sentence_two = tf.constant(" kohli")
+        sentence_one = tf.constant("the quick")
+        sentence_two = tf.constant("brown fox")
 
         x, y, sw = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
-            x["token_ids"], [2, 1, 3, 1, 3, 0, 0, 0, 0, 0, 0, 0]
+            x["token_ids"], [1, 4, 4, 2, 4, 4, 2, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
-            x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
+            x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
         )
-        self.assertAllEqual(x["mask_positions"], [1, 3, 0, 0, 0])
-        self.assertAllEqual(y, [1, 1, 0, 0, 0])
-        self.assertAllEqual(sw, [1.0, 1.0, 0.0, 0.0, 0.0])
+        self.assertAllEqual(x["mask_positions"], [1, 2, 4, 5])
+        self.assertAllEqual(y, [5, 10, 6, 8])
+        self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0])
 
     def test_no_masking_zero_rate(self):
         no_mask_preprocessor = AlbertMaskedLMPreprocessor(
             self.preprocessor.tokenizer,
             mask_selection_rate=0.0,
-            mask_selection_length=5,
+            mask_selection_length=4,
             sequence_length=12,
         )
-        input_data = " airplane at airport"
+        input_data = "the quick brown fox"
 
         x, y, sw = no_mask_preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            x["token_ids"], [1, 5, 10, 6, 8, 2, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
-            x["padding_mask"], [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
         )
-        self.assertAllEqual(x["mask_positions"], [0, 0, 0, 0, 0])
-        self.assertAllEqual(y, [0, 0, 0, 0, 0])
-        self.assertAllEqual(sw, [0.0, 0.0, 0.0, 0.0, 0.0])
+        self.assertAllEqual(x["mask_positions"], [0, 0, 0, 0])
+        self.assertAllEqual(y, [0, 0, 0, 0])
+        self.assertAllEqual(sw, [0.0, 0.0, 0.0, 0.0])
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
     def test_saved_model(self, save_format, filename):
-        input_data = tf.constant([" airplane at airport"])
+        input_data = tf.constant(["the quick brown fox"])
 
         inputs = keras.Input(dtype="string", shape=())
         outputs = self.preprocessor(inputs)
