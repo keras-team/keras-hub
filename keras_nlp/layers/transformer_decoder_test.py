@@ -282,8 +282,8 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
             [2, batch_size, seq_len, num_heads, hidden_dim // num_heads]
         )
         # Build the intial cache.
-        intial_seq_len = 2
-        initial_inputs = x[:, :intial_seq_len, :]
+        initial_seq_len = 2
+        initial_inputs = x[:, :initial_seq_len, :]
         outputs = tf.zeros_like(x)
         output, cache = layer(
             decoder_sequence=initial_inputs,
@@ -311,22 +311,12 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
             )
             return cached_outputs
 
-        cached_outputs = foo(intial_seq_len, cache, outputs)
+        cached_outputs = foo(initial_seq_len, cache, outputs)
         graph_foo = tf.function(foo)
-        graph_cached_outputs = graph_foo(intial_seq_len, cache, outputs)
+        graph_cached_outputs = graph_foo(initial_seq_len, cache, outputs)
         normal_outputs = layer(decoder_sequence=x)
-        self.assertAllClose(
-            cached_outputs,
-            normal_outputs,
-            rtol=1e-5,
-            atol=1e-5,
-        )
-        self.assertAllClose(
-            graph_cached_outputs,
-            normal_outputs,
-            rtol=1e-5,
-            atol=1e-5,
-        )
+        self.assertAllClose(cached_outputs, normal_outputs)
+        self.assertAllClose(graph_cached_outputs, normal_outputs)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),

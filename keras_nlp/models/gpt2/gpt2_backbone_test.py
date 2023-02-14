@@ -18,6 +18,7 @@ import os
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
+from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 
@@ -63,6 +64,49 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
                 ),
             }
             self.model(input_data)
+
+    def test_cache_call_is_correct(self):
+        initial_seq_len = 64
+        max_seq_len = 80
+        initial_inputs = {
+            "token_ids": tf.ones(
+                (self.batch_size, initial_seq_len), dtype="int32"
+            ),
+            "padding_mask": tf.ones(
+                (self.batch_size, initial_seq_len), dtype="int32"
+            ),
+        }
+        outputs, cache = self.model.build_initial_cache(
+            initial_inputs,
+            max_seq_len,
+        )
+
+        def foo(i, cache, outputs):
+            def loop_body(i, cache, outputs):
+                # Compute the rest tokens.
+                output, cache = self.model.call_with_cache(
+                    inputs=self.input_batch,
+                    cache=cache,
+                    current_index=i,
+                )
+                outputs = dynamic_update_slice(outputs, output, [0, i, 0])
+                return i + 1, cache, outputs
+
+            i, cache, cached_outputs = tf.while_loop(
+                cond=lambda i, cache, outputs: i < max_seq_len,
+                body=loop_body,
+                loop_vars=[i, cache, outputs],
+            )
+            return cached_outputs
+
+        cached_outputs = foo(initial_seq_len, cache, outputs)
+        graph_foo = tf.function(foo)
+        graph_cached_outputs = graph_foo(initial_seq_len, cache, outputs)
+        normal_outputs = self.model(self.input_batch)
+        normal_outputs = normal_outputs[:, :max_seq_len, :]
+
+        self.assertAllClose(cached_outputs, normal_outputs)
+        self.assertAllClose(graph_cached_outputs, normal_outputs)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)

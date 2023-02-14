@@ -272,6 +272,8 @@ class GPT2CausalLM(Task):
             prompt: a string, string Tensor or string RaggedTensor. The prompt
                 text for generation.
             max_length: int. The max length of generated sequence.
+            use_cache: bool, defaults to True. If True, cache will be used
+                during decoding, which increases the decoding speed.
             sampler: a string or `keras_nlp.samplers.Sampler` instance. The
                 sampler to be used for text generation.
         """

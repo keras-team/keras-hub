@@ -61,9 +61,7 @@ class CachedMultiHeadAttentionTest(tf.test.TestCase, parameterized.TestCase):
         cached_outputs = tf.concat(outputs, axis=1)
 
         normal_outputs = layer(query=x, value=x)
-        self.assertAllClose(
-            cached_outputs, normal_outputs, rtol=1e-5, atol=1e-5
-        )
+        self.assertAllClose(cached_outputs, normal_outputs)
 
     def test_cache_call_with_tf_while(self):
         batch_size = 2
@@ -111,15 +109,5 @@ class CachedMultiHeadAttentionTest(tf.test.TestCase, parameterized.TestCase):
         graph_foo = tf.function(foo)
         graph_cached_outputs = graph_foo(intial_seq_len, cache, outputs)
         normal_outputs = layer(query=x, value=x)
-        self.assertAllClose(
-            cached_outputs,
-            normal_outputs,
-            rtol=1e-5,
-            atol=1e-5,
-        )
-        self.assertAllClose(
-            graph_cached_outputs,
-            normal_outputs,
-            rtol=1e-5,
-            atol=1e-5,
-        )
+        self.assertAllClose(cached_outputs, normal_outputs)
+        self.assertAllClose(graph_cached_outputs, normal_outputs)
