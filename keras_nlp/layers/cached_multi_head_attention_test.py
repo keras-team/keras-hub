@@ -85,7 +85,7 @@ class CachedMultiHeadAttentionTest(tf.test.TestCase, parameterized.TestCase):
         # Update the outputs in place.
         outputs = dynamic_update_slice(outputs, output, [0, 0, 0])
 
-        def foo(i, cache, outputs):
+        def call(i, cache, outputs):
             def loop_body(i, cache, outputs):
                 # Compute the rest tokens.
                 current_input = x[:, i : i + 1, :]
@@ -105,9 +105,9 @@ class CachedMultiHeadAttentionTest(tf.test.TestCase, parameterized.TestCase):
             )
             return cached_outputs
 
-        cached_outputs = foo(intial_seq_len, cache, outputs)
-        graph_foo = tf.function(foo)
-        graph_cached_outputs = graph_foo(intial_seq_len, cache, outputs)
+        cached_outputs = call(intial_seq_len, cache, outputs)
+        graph_call = tf.function(call)
+        graph_cached_outputs = graph_call(intial_seq_len, cache, outputs)
         normal_outputs = layer(query=x, value=x)
         self.assertAllClose(cached_outputs, normal_outputs)
         self.assertAllClose(graph_cached_outputs, normal_outputs)

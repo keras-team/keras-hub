@@ -343,7 +343,7 @@ class Sampler:
                     prompt, mask, last_index, cache, token_probs
                 )
             else:
-                probs = token_probability_fn(prompt, mask, last_index)
+                probs = token_probability_fn(prompt, mask)
 
             next_token_probs = tf.gather(
                 probs,

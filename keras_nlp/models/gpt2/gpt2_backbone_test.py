@@ -81,7 +81,7 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
             max_seq_len,
         )
 
-        def foo(i, cache, outputs):
+        def call(i, cache, outputs):
             def loop_body(i, cache, outputs):
                 # Compute the rest tokens.
                 output, cache = self.model.call_with_cache(
@@ -99,9 +99,9 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
             )
             return cached_outputs
 
-        cached_outputs = foo(initial_seq_len, cache, outputs)
-        graph_foo = tf.function(foo)
-        graph_cached_outputs = graph_foo(initial_seq_len, cache, outputs)
+        cached_outputs = call(initial_seq_len, cache, outputs)
+        graph_call = tf.function(call)
+        graph_cached_outputs = graph_call(initial_seq_len, cache, outputs)
         normal_outputs = self.model(self.input_batch)
         normal_outputs = normal_outputs[:, :max_seq_len, :]
 

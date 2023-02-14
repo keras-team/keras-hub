@@ -93,7 +93,7 @@ class BeamSampler(Sampler):
         num_steps,
         from_logits=True,
         cache=None,
-        existing_outputs=None,
+        token_probs=None,
     ):
         """Sampling logic implementation.
 

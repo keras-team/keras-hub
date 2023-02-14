@@ -247,7 +247,7 @@ class GPT2CausalLM(Task):
         )
         return existing_outputs, cache
 
-    def _get_token_probability(self, prompt, mask, current_index=None):
+    def _get_token_probability(self, prompt, mask):
         model_inputs = {
             "token_ids": prompt,
             "padding_mask": mask,
