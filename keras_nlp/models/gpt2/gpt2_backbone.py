@@ -200,7 +200,7 @@ class GPT2Backbone(Backbone):
                 represents the index of current inputs in the whole sequence.
 
         Returns:
-            x: a dense float Tensor, the predicted next token logits of `inputs`.
+            x: a dense float Tensor, the next token logits of `inputs`.
             cache: a dense float Tensor, the updated cache.
         """
         token_ids = inputs["token_ids"]

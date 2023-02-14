@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Cached MHA layer based on `keras.layers.MultiHeadAttention`."""
+
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
@@ -19,27 +21,29 @@ from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
     """MutliHeadAttention layer with cache support.
 
-    In autoregressive decoding, it's a common practice to cache the K and V for
-    previously seen tokens in order to make the computation faster. With cached
-    K and V, we can compute the attention output of the last token without
-    needing to recompute the forward pass for previously seen tokens. This
-    caching method is only useful during decoding, and should not be used
-    during training.
+    In autoregressive decoding, it's a common practice to cache the key/value in
+    multi-head attention of previously seen tokens in order to make the
+    computation faster. With cached K and V, we can compute the attention output
+    of the last token without recomputing the forward pass for previously seen
+    tokens. This caching method is only useful during decoding, and should not
+    be used during training.
 
     Call arguments:
-        query: Query `Tensor` of shape `(B, T, dim)`.
-        value: Value `Tensor` of shape `(B, S, dim)`.
-        key: Optional key `Tensor` of shape `(B, S, dim)`. If not given, will
-            use `value` for both `key` and `value`, which is the most common
-            case.
-        attention_mask: a boolean mask of shape `(B, T, S)`, that prevents
+        query: Query `Tensor` of shape `(B, T, dim)` if `cache=None`,
+            otherwise `(B, 1, dim)`.
+        value: Value `Tensor` of shape `(B, S, dim)` if `cache=None`,
+            otherwise `(B, 1, dim)`.
+        key: Optional key `Tensor` of shape `(B, S, dim)` if `cache=None`,
+            otherwise `(B, 1, dim)`. If not given, will use `value` for both
+            `key` and `value`, which is the most common case.
+        attention_mask: a boolean mask of shape `(B, T, S)` if `cache=None`,
+            otherwise `(B, 1, S)`. `attention_mask` prevents
             attention to certain positions. The boolean mask specifies which
             query elements can attend to which key elements, 1 indicates
             attention and 0 indicates no attention. Broadcasting can happen for
             the missing batch dimensions and the head dimension.
         return_attention_scores: A boolean to indicate whether the output should
-            be `(attention_output, attention_scores)` if `True`, or
-            `attention_output` if `False`. Defaults to `False`.
+            contain attention scores.
         training: Python boolean indicating whether the layer should behave in
             training mode (adding dropout) or in inference mode (no dropout).
             Defaults to either using the training mode of the parent
@@ -47,11 +51,11 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         use_causal_mask: A boolean to indicate whether to apply a causal mask to
             prevent tokens from attending to future tokens (e.g., used in a
             decoder Transformer).
-        current_index: a int or int Tensor, defaults to None, the index of the
-            current token being processed.
-        cache: a dense float Tensor, defaults to None. The cache of key/value of
-            leading tokens. `cache` is of shape [2, B, max_seq_len, num_heads,
-            key_dims].
+        current_index: a int or int Tensor, the index of the current token being
+            processed. If `current_index=None` while `cache` is set, it means
+            it's the first pass to build the cache.
+        cache: a dense float Tensor. The cache of key/value of leading tokens.
+            `cache` is of shape [2, B, max_seq_len, num_heads, key_dims].
 
     Returns:
         attention_output: The result of the computation, of shape `(B, T, E)`,

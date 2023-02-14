@@ -401,7 +401,7 @@ class Sampler:
                 body=one_step,
                 loop_vars=[current_index, prompt, mask],
             )
-            return prompt, None, None
+            return prompt
         # Run a while loop till `max_length` of tokens has been generated.
         current_index, prompt, mask, cache, token_probs = tf.while_loop(
             cond=lambda current_index, prompt, mask, cache, token_probs: tf.less(
