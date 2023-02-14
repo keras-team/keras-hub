@@ -215,7 +215,9 @@ class GPT2Backbone(Backbone):
         x = token_embedding + position_embedding
         x = self.embeddings_dropout(x)
         if current_index is not None:
-            x = x[:, current_index : current_index + 1, :]
+            batch_size = tf.shape(x)[0]
+            hidden_dim = tf.shape(x)[2]
+            x = tf.slice(x, [0, current_index, 0], [batch_size, 1, hidden_dim])
             padding_mask = padding_mask[:, : current_index + 1]
         for i, transformer_layer in enumerate(self.transformer_layers):
             current_cache = cache[:, i, ...]
