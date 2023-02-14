@@ -211,8 +211,8 @@ class TransformerDecoder(keras.layers.Layer):
         decoder_attention_mask=None,
         encoder_padding_mask=None,
         encoder_attention_mask=None,
-        current_index=None,
         cache=None,
+        cache_index=None,
     ):
         """Forward pass of the TransformerDecoder.
 
@@ -276,20 +276,13 @@ class TransformerDecoder(keras.layers.Layer):
         residual = x
         if self.normalize_first:
             x = self._self_attention_layernorm(x)
-        if cache is None:
-            x = self._self_attention_layer(
-                query=x,
-                value=x,
-                attention_mask=self_attention_mask,
-            )
-        else:
-            x, cache = self._self_attention_layer(
-                query=x,
-                value=x,
-                current_index=current_index,
-                cache=cache,
-                attention_mask=self_attention_mask,
-            )
+        x, cache = self._self_attention_layer(
+            query=x,
+            value=x,
+            cache=cache,
+            cache_index=cache_index,
+            attention_mask=self_attention_mask,
+        )
         x = self._self_attention_dropout(x)
         x = x + residual
         if not self.normalize_first:

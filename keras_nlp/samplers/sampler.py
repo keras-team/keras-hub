@@ -15,6 +15,7 @@
 
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -356,38 +357,14 @@ class Sampler:
                     next_token_probs, axis=-1
                 )
             next_token = self.get_next_token(next_token_probs)
-            next_token = tf.cast(next_token, prompt.dtype)
+            next_token = tf.cast(next_token, prompt.dtype)[:, tf.newaxis]
             next_token = tf.where(
                 mask[:, current_index], prompt[:, current_index], next_token
             )
-            mask = tf.tensor_scatter_nd_update(
-                tensor=mask,
-                indices=tf.stack(
-                    (
-                        tf.cast(
-                            tf.range(batch_size), dtype=current_index.dtype
-                        ),
-                        tf.repeat(current_index, batch_size),
-                    ),
-                    axis=1,
-                ),
-                updates=tf.repeat(True, batch_size),
-            )
-
-            # Append the next token to current sequence.
-            prompt = tf.tensor_scatter_nd_update(
-                tensor=prompt,
-                indices=tf.stack(
-                    (
-                        tf.cast(
-                            tf.range(batch_size), dtype=current_index.dtype
-                        ),
-                        tf.repeat(current_index, batch_size),
-                    ),
-                    axis=1,
-                ),
-                updates=next_token,
-            )
+            next_mask = tf.fill([batch_size, 1], True)
+            slice_start = [0, current_index]
+            mask = dynamic_update_slice(mask, next_mask, slice_start)
+            prompt = dynamic_update_slice(prompt, next_token, slice_start)
             current_index = tf.add(current_index, 1)
             if cache is None:
                 return current_index, prompt, mask

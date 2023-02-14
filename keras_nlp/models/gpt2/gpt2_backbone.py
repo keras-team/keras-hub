@@ -184,7 +184,7 @@ class GPT2Backbone(Backbone):
         self.position_embeddings = self.get_layer("position_embedding")
         self.embeddings_dropout = self.get_layer("embeddings_dropout")
 
-    def call_with_cache(self, inputs, cache, current_index=None):
+    def call_with_cache(self, inputs, cache, cache_index=None):
         """Forward pass of `GPT2Backbone` with cache.
 
         The difference between `call_with_cache` and normal `__call__` is in
@@ -196,7 +196,7 @@ class GPT2Backbone(Backbone):
             inputs: a dict of key `token_ids` and `padding_mask`, the same
                 format as `GPT2Backbone` inputs.
             cache: a dense float Tensor, the cache of key and value.
-            current_index: int, or int Tensor, defaults to None. If set, it
+            cache_index: int, or int Tensor, defaults to None. If set, it
                 represents the index of current inputs in the whole sequence.
 
         Returns:
@@ -206,36 +206,36 @@ class GPT2Backbone(Backbone):
         token_ids = inputs["token_ids"]
         padding_mask = inputs["padding_mask"]
         token_embedding = self.token_embeddings(token_ids)
-        if current_index is None:
+        if cache_index is None:
             position_embedding = self.position_embeddings(token_embedding)
         else:
             position_embedding = self.position_embeddings.position_embeddings[
-                current_index, :
+                cache_index, :
             ]
         x = token_embedding + position_embedding
         x = self.embeddings_dropout(x)
-        if current_index is not None:
+        if cache_index is not None:
             batch_size = tf.shape(x)[0]
             hidden_dim = tf.shape(x)[2]
-            x = tf.slice(x, [0, current_index, 0], [batch_size, 1, hidden_dim])
-            padding_mask = padding_mask[:, : current_index + 1]
+            x = tf.slice(x, [0, cache_index, 0], [batch_size, 1, hidden_dim])
+            padding_mask = padding_mask[:, : cache_index + 1]
         for i, transformer_layer in enumerate(self.transformer_layers):
             current_cache = cache[:, i, ...]
             x, current_cache = transformer_layer(
                 x,
                 decoder_padding_mask=padding_mask,
                 cache=current_cache,
-                current_index=current_index,
+                cache_index=cache_index,
             )
-            if current_index is None:
+            if cache_index is None:
                 cache = dynamic_update_slice(
                     cache, current_cache[:, tf.newaxis, ...], [0, i, 0, 0, 0, 0]
                 )
             else:
-                update = current_cache[:, :, current_index, :, :]
+                update = current_cache[:, :, cache_index, :, :]
                 update = update[:, tf.newaxis, :, tf.newaxis, ...]
                 cache = dynamic_update_slice(
-                    cache, update, [0, i, 0, current_index, 0, 0]
+                    cache, update, [0, i, 0, cache_index, 0, 0]
                 )
         return self.layer_norm(x), cache
 

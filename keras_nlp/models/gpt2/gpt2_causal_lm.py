@@ -201,9 +201,9 @@ class GPT2CausalLM(Task):
     def preprocessor_cls(cls):
         return GPT2CausalLMPreprocessor
 
-    def call_with_cache(self, inputs, cache, current_index=None):
+    def call_with_cache(self, inputs, cache, cache_index=None):
         output, cache = self.backbone.call_with_cache(
-            inputs, cache, current_index
+            inputs, cache, cache_index
         )
         output = tf.matmul(
             output,
@@ -221,11 +221,11 @@ class GPT2CausalLM(Task):
         )
         return output, cache
 
-    def _get_token_probability_with_cache(
+    def _get_token_probability(
         self,
         prompt,
         mask,
-        current_index=None,
+        cache_index=None,
         cache=None,
         existing_outputs=None,
     ):
@@ -233,26 +233,19 @@ class GPT2CausalLM(Task):
             "token_ids": prompt,
             "padding_mask": mask,
         }
-        if current_index is None and cache is None:
+        if cache_index is None and cache is None:
             return self(model_inputs)
         output, cache = self.call_with_cache(
             model_inputs,
             cache,
-            current_index,
+            cache_index,
         )
         existing_outputs = dynamic_update_slice(
             existing_outputs,
             output,
-            [0, current_index, 0],
+            [0, cache_index, 0],
         )
         return existing_outputs, cache
-
-    def _get_token_probability(self, prompt, mask):
-        model_inputs = {
-            "token_ids": prompt,
-            "padding_mask": mask,
-        }
-        return self(model_inputs)
 
     def generate(
         self,
@@ -286,22 +279,19 @@ class GPT2CausalLM(Task):
             sampler.jit_compile = self.jit_compile
         sampler.run_eagerly = self.run_eagerly
         initial_output, cache = None, None
-        if use_cache:
-            x, y, sw = self.preprocessor(prompt)
-            token_ids = x["token_ids"]
-            padding_mask = x["padding_mask"]
-            if len(token_ids.shape) == 1:
-                token_ids = token_ids[tf.newaxis, :]
-                padding_mask = padding_mask[tf.newaxis, :]
+        x, _, _ = self.preprocessor(prompt)
+        token_ids = x["token_ids"]
+        padding_mask = x["padding_mask"]
+        if len(token_ids.shape) == 1:
+            token_ids = token_ids[tf.newaxis, :]
+            padding_mask = padding_mask[tf.newaxis, :]
 
-            x = {
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
-            }
-            initial_output, cache = self.build_initial_cache(x, max_length)
-            next_token_probability = self._get_token_probability_with_cache
-        else:
-            next_token_probability = self._get_token_probability
+        x = {
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+        }
+        initial_output, cache = self.build_initial_cache(x, max_length)
+        next_token_probability = self._get_token_probability
         generated = sampler(
             self.preprocessor.tokenizer(prompt),
             next_token_probability,

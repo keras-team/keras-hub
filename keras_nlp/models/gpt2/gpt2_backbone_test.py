@@ -87,7 +87,7 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
                 output, cache = self.model.call_with_cache(
                     inputs=self.input_batch,
                     cache=cache,
-                    current_index=i,
+                    cache_index=i,
                 )
                 outputs = dynamic_update_slice(outputs, output, [0, i, 0])
                 return i + 1, cache, outputs

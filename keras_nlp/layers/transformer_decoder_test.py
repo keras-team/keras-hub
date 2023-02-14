@@ -299,7 +299,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
                 output, cache = layer(
                     decoder_sequence=current_input,
                     cache=cache,
-                    current_index=i,
+                    cache_index=i,
                 )
                 outputs = dynamic_update_slice(outputs, output, [0, i, 0])
                 return i + 1, cache, outputs
