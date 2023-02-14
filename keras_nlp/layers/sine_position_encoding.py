@@ -72,8 +72,10 @@ class SinePositionEncoding(keras.layers.Layer):
         # with other layers.
         if isinstance(inputs, tf.RaggedTensor):
             bounding_shape = inputs.bounding_shape()
-            position_embeddings = self._compute_trim_and_broadcast_position_embeddings(
-                bounding_shape,
+            position_embeddings = (
+                self._compute_trim_and_broadcast_position_embeddings(
+                    bounding_shape,
+                )
             )
             # then apply row lengths to recreate the same ragged shape as inputs
             return tf.RaggedTensor.from_tensor(
@@ -84,7 +86,6 @@ class SinePositionEncoding(keras.layers.Layer):
             return self._compute_trim_and_broadcast_position_embeddings(
                 tf.shape(inputs),
             )
-
 
     def _compute_trim_and_broadcast_position_embeddings(self, shape):
         seq_length = shape[-2]
@@ -102,7 +103,7 @@ class SinePositionEncoding(keras.layers.Layer):
         sin_mask = 1 - cos_mask
         # embedding shape is [seq_length, hidden_size]
         positional_encodings = (
-                tf.sin(angles) * sin_mask + tf.cos(angles) * cos_mask
+            tf.sin(angles) * sin_mask + tf.cos(angles) * cos_mask
         )
 
         return tf.broadcast_to(positional_encodings, shape)
