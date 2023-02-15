@@ -88,7 +88,8 @@ class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
                 "quick brown fox",
                 "eagle flew over fox",
                 "the eagle flew quick",
-                "a brown eagle",            ]
+                "a brown eagle",
+            ]
         )
         self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
