@@ -232,6 +232,12 @@ class TransformerDecoder(keras.layers.Layer):
             encoder_attention_mask: a boolean Tensor. Customized encoder
                 sequence mask, must of shape
                 [batch_size, encoder_sequence_length, encoder_sequence_length].
+            cache: a dense float Tensor. The cache of key/value of leading
+                tokens. `cache` is of shape [2, B, max_seq_len, num_heads,
+                key_dims].
+            cache_index: a int or int Tensor, the index of the current token
+                being processed. If `cache_index=None` while `cache` is set, it
+                means it's the first pass to build the cache.
         Returns:
             A Tensor of the same shape as the `decoder_sequence`.
         """

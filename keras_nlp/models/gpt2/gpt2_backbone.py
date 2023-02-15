@@ -18,7 +18,6 @@ import copy
 
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.layers import PositionEmbedding
 from keras_nlp.layers import TransformerDecoder
@@ -174,116 +173,6 @@ class GPT2Backbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
-        self.transformer_layers = []
-        for i in range(self.num_layers):
-            self.transformer_layers.append(
-                self.get_layer(f"transformer_layer_{i}")
-            )
-        self.layer_norm = self.get_layer("layer_norm")
-        self.token_embeddings = self.get_layer("token_embedding")
-        self.position_embeddings = self.get_layer("position_embedding")
-        self.embeddings_dropout = self.get_layer("embeddings_dropout")
-
-    def call_with_cache(self, inputs, cache, cache_index=None):
-        """Forward pass of `GPT2Backbone` with cache.
-
-        The difference between `call_with_cache` and normal `__call__` is in
-        this method, a `cache` arg is set, and the inputs is of
-        `sequence_length=1`. By cachine the previous key/value in multi-head
-        attention, we avoid recomputing the outputs of seen tokens.
-
-        Args:
-            inputs: a dict of key `token_ids` and `padding_mask`, the same
-                format as `GPT2Backbone` inputs.
-            cache: a dense float Tensor, the cache of key and value.
-            cache_index: int, or int Tensor, defaults to None. If set, it
-                represents the index of current inputs in the whole sequence.
-
-        Returns:
-            x: a dense float Tensor, the next token logits of `inputs`.
-            cache: a dense float Tensor, the updated cache.
-        """
-        token_ids = inputs["token_ids"]
-        padding_mask = inputs["padding_mask"]
-        token_embedding = self.token_embeddings(token_ids)
-        if cache_index is None:
-            position_embedding = self.position_embeddings(token_embedding)
-        else:
-            position_embedding = self.position_embeddings.position_embeddings[
-                cache_index, :
-            ]
-        x = token_embedding + position_embedding
-        x = self.embeddings_dropout(x)
-        if cache_index is not None:
-            batch_size = tf.shape(x)[0]
-            hidden_dim = tf.shape(x)[2]
-            x = tf.slice(x, [0, cache_index, 0], [batch_size, 1, hidden_dim])
-            padding_mask = padding_mask[:, : cache_index + 1]
-        for i, transformer_layer in enumerate(self.transformer_layers):
-            current_cache = cache[:, i, ...]
-            x, current_cache = transformer_layer(
-                x,
-                decoder_padding_mask=padding_mask,
-                cache=current_cache,
-                cache_index=cache_index,
-            )
-            if cache_index is None:
-                cache = dynamic_update_slice(
-                    cache, current_cache[:, tf.newaxis, ...], [0, i, 0, 0, 0, 0]
-                )
-            else:
-                update = current_cache[:, :, cache_index, :, :]
-                update = update[:, tf.newaxis, :, tf.newaxis, ...]
-                cache = dynamic_update_slice(
-                    cache, update, [0, i, 0, cache_index, 0, 0]
-                )
-        return self.layer_norm(x), cache
-
-    def build_initial_cache(self, initial_inputs, max_length):
-        """Build initial cache based on the prompt.
-
-        This method should be called before the decoding loop to build the
-        initial cache. The cache is of shape [2, `self.num_layers`, batch_size,
-        max_length, `self.num_heads`, `self.hidden_dim // self.num_heads`].
-        The first dim represents it's a key or value in multi-head attention.
-
-        Args:
-            initial_inputs: a dense Tensor, the initial inputs to the decoding
-                loop.
-            max_length: int, the max length of the generated sequence.
-
-        Returns:
-            cache: a dense float Tensor, the cache of key and value.
-            max_length: int, the max length of generated sequence.
-        """
-        token_ids = initial_inputs["token_ids"]
-        padding_mask = initial_inputs["padding_mask"]
-
-        if max_length < self.max_sequence_length:
-            token_ids = token_ids[:, :max_length]
-            padding_mask = padding_mask[:, :max_length]
-
-        x = {
-            "token_ids": token_ids,
-            "padding_mask": padding_mask,
-        }
-
-        batch_size = tf.shape(token_ids)[0]
-        outputs = tf.zeros([batch_size, max_length, self.hidden_dim])
-        cache = tf.zeros(
-            [
-                2,
-                self.num_layers,
-                batch_size,
-                max_length,
-                self.num_heads,
-                self.hidden_dim // self.num_heads,
-            ],
-        )
-
-        output, cache = self.call_with_cache(x, cache)
-        outputs = dynamic_update_slice(outputs, output, [0, 0, 0])
-        return outputs, cache
 
     def get_config(self):
         config = super().get_config()

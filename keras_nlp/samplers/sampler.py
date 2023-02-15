@@ -341,17 +341,28 @@ class Sampler:
             last_index = current_index - 1
             if cache is not None:
                 probs, cache = token_probability_fn(
-                    prompt, mask, last_index, cache, token_probs
+                    prompt,
+                    mask,
+                    last_index,
+                    cache,
                 )
+                # Write the last token's logits to `token_probs`.
+                token_probs = dynamic_update_slice(
+                    token_probs,
+                    probs,
+                    [0, last_index, 0],
+                )
+                next_token_probs = tf.squeeze(probs, axis=1)
             else:
                 probs = token_probability_fn(prompt, mask)
+                token_probs = probs
+                next_token_probs = tf.gather(
+                    probs,
+                    tf.repeat(current_index - 1, batch_size),
+                    axis=1,
+                    batch_dims=1,
+                )
 
-            next_token_probs = tf.gather(
-                probs,
-                tf.repeat(current_index - 1, batch_size),
-                axis=1,
-                batch_dims=1,
-            )
             if from_logits:
                 next_token_probs = keras.activations.softmax(
                     next_token_probs, axis=-1
@@ -368,7 +379,7 @@ class Sampler:
             current_index = tf.add(current_index, 1)
             if cache is None:
                 return current_index, prompt, mask
-            return [current_index, prompt, mask, cache, probs]
+            return [current_index, prompt, mask, cache, token_probs]
 
         if cache is None:
             current_index, prompt, mask = tf.while_loop(
