@@ -57,6 +57,7 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
             unk_piece="<unk>",
             bos_piece="[CLS]",
             eos_piece="[SEP]",
+            user_defined_symbols="[MASK]"
         )
         self.proto = bytes_io.getvalue()
 
