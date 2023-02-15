@@ -11,7 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for BERT tokenizer."""
+
+"""Tests for BART tokenizer."""
 
 import os
 
@@ -19,56 +20,69 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
+from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
 
 
-class BertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class BartTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
-        self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
-        self.vocab += ["the", "quick", "brown", "fox"]
-        self.tokenizer = BertTokenizer(vocabulary=self.vocab)
+        vocab = {
+            "<s>": 0,
+            "<pad>": 1,
+            "</s>": 2,
+            "Ġair": 3,
+            "plane": 4,
+            "Ġat": 5,
+            "port": 6,
+            "Ġkoh": 7,
+            "li": 8,
+            "Ġis": 9,
+            "Ġthe": 10,
+            "Ġbest": 11,
+        }
+
+        merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
+        merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
+        merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
+        merges += ["pla ne"]
+
+        self.tokenizer = BartTokenizer(vocabulary=vocab, merges=merges)
 
     def test_tokenize(self):
-        input_data = "THE QUICK BROWN FOX."
+        input_data = " airplane at airport"
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [5, 6, 7, 8, 1])
+        self.assertAllEqual(output, [3, 4, 5, 3, 6])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant(["THE QUICK BROWN FOX.", "THE FOX."])
+        input_data = tf.constant([" airplane at airport", " kohli is the best"])
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[5, 6, 7, 8, 1], [5, 8, 1]])
-
-    def test_lowercase(self):
-        input_data = "THE QUICK BROWN FOX."
-        tokenizer = BertTokenizer(vocabulary=self.vocab, lowercase=True)
-        output = tokenizer(input_data)
-        self.assertAllEqual(output, [9, 10, 11, 12, 1])
+        self.assertAllEqual(output, [[3, 4, 5, 3, 6], [7, 8, 9, 10, 11]])
 
     def test_detokenize(self):
-        input_tokens = [[5, 6, 7, 8]]
+        input_tokens = [[3, 4, 5, 3, 6]]
         output = self.tokenizer.detokenize(input_tokens)
-        self.assertAllEqual(output, ["THE QUICK BROWN FOX"])
+        self.assertAllEqual(output, [" airplane at airport"])
 
     def test_vocabulary_size(self):
-        self.assertEqual(self.tokenizer.vocabulary_size(), 13)
+        self.assertEqual(self.tokenizer.vocabulary_size(), 12)
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
-            BertTokenizer(vocabulary=["a", "b", "c"])
+            BartTokenizer(vocabulary=["a", "b", "c"], merges=[])
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
     def test_saved_model(self, save_format, filename):
-        input_data = tf.constant(["THE QUICK BROWN FOX."])
-        tokenizer = BertTokenizer(vocabulary=self.vocab)
+        input_data = tf.constant([" airplane at airport"])
+
         inputs = keras.Input(dtype="string", shape=())
-        outputs = tokenizer(inputs)
+        outputs = self.tokenizer(inputs)
         model = keras.Model(inputs, outputs)
+
         path = os.path.join(self.get_temp_dir(), filename)
         model.save(path, save_format=save_format)
+
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),

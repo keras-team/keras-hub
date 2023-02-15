@@ -331,7 +331,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.oov_token = oov_token
 
         if oov_token not in self.vocabulary:
-            raise RuntimeError(
+            raise ValueError(
                 f'Cannot find `oov_token="{self.oov_token}"` in the '
                 "vocabulary.\n"
                 "You can either update the vocabulary to include "

@@ -108,6 +108,9 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.classifier_no_preprocessing.compile(jit_compile=jit_compile)
         self.classifier_no_preprocessing.predict(self.preprocessed_batch)
 
+    def test_albert_classifier_fit_default_compile(self):
+        self.classifier.fit(self.raw_dataset)
+
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )

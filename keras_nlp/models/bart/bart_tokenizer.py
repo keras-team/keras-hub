@@ -12,29 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""RoBERTa tokenizer."""
+"""BART tokenizer."""
 
 import copy
 
 from tensorflow import keras
 
-from keras_nlp.models.roberta.roberta_presets import backbone_presets
+from keras_nlp.models.bart.bart_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class RobertaTokenizer(BytePairTokenizer):
-    """A RoBERTa tokenizer using Byte-Pair Encoding subword segmentation.
+class BartTokenizer(BytePairTokenizer):
+    """A BART tokenizer using Byte-Pair Encoding subword segmentation.
 
     This tokenizer class will tokenize raw strings into integer sequences and
     is based on `keras_nlp.tokenizers.BytePairTokenizer`. Unlike the
-    underlying tokenizer, it will check for all special tokens needed by RoBERTa
+    underlying tokenizer, it will check for all special tokens needed by BART
     models and provides a `from_preset()` method to automatically download
-    a matching vocabulary for a RoBERTa preset.
+    a matching vocabulary for a BART preset.
 
     This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.RobertaPreprocessor` layer for input
+    combined with a `keras_nlp.models.BartPreprocessor` layer for input
     packing.
 
     If input is a batch of strings (rank > 0), the layer will output a
@@ -63,7 +63,6 @@ class RobertaTokenizer(BytePairTokenizer):
     ... )
     >>> tokenizer(["a quick fox", "a fox quick"])
     <tf.RaggedTensor [[4, 5, 6], [4, 6, 5]]>
-
 
     Unbatched input.
     >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
@@ -104,8 +103,7 @@ class RobertaTokenizer(BytePairTokenizer):
         start_token = "<s>"
         pad_token = "<pad>"
         end_token = "</s>"
-        mask_token = "<mask>"
-        for token in [start_token, pad_token, end_token, mask_token]:
+        for token in [start_token, pad_token, end_token]:
             if token not in self.get_vocabulary():
                 raise ValueError(
                     f"Cannot find token `'{token}'` in the provided "
@@ -116,7 +114,6 @@ class RobertaTokenizer(BytePairTokenizer):
         self.start_token_id = self.token_to_id(start_token)
         self.pad_token_id = self.token_to_id(pad_token)
         self.end_token_id = self.token_to_id(end_token)
-        self.mask_token_id = self.token_to_id(mask_token)
 
     @classproperty
     def presets(cls):
