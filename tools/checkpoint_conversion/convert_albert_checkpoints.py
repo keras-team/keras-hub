@@ -292,6 +292,8 @@ def check_output(
 
 
 def main(_):
+    os.makedirs(FLAGS.preset)
+
     hf_model_name = PRESET_MAP[FLAGS.preset]
 
     print("\n-> Load HF model and HF tokenizer.")
