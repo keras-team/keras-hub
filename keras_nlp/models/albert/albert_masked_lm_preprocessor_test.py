@@ -37,7 +37,7 @@ class AlbertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=vocab_data.as_numpy_iterator(),
             model_writer=bytes_io,
-            vocab_size=10,
+            vocab_size=12,
             model_type="WORD",
             pad_id=0,
             unk_id=1,
@@ -75,7 +75,7 @@ class AlbertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(x["mask_positions"], [1, 2, 3, 4])
-        self.assertAllEqual(y, [5, 1, 6, 8])
+        self.assertAllEqual(y, [5, 10, 6, 8])
         self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0])
 
     def test_preprocess_list_of_strings(self):
@@ -89,7 +89,7 @@ class AlbertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             x["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4]] * 4)
-        self.assertAllEqual(y, [[5, 1, 6, 8]] * 4)
+        self.assertAllEqual(y, [[5, 10, 6, 8]] * 4)
         self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0]] * 4)
 
     def test_preprocess_dataset(self):
@@ -104,7 +104,7 @@ class AlbertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             x["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4]] * 4)
-        self.assertAllEqual(y, [[5, 1, 6, 8]] * 4)
+        self.assertAllEqual(y, [[5, 10, 6, 8]] * 4)
         self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0]] * 4)
 
     def test_mask_multiple_sentences(self):
@@ -119,7 +119,7 @@ class AlbertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(x["mask_positions"], [1, 2, 4, 5])
-        self.assertAllEqual(y, [5, 1, 6, 8])
+        self.assertAllEqual(y, [5, 10, 6, 8])
         self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0])
 
     def test_no_masking_zero_rate(self):
@@ -133,7 +133,7 @@ class AlbertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
 
         x, y, sw = no_mask_preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [2, 5, 1, 6, 8, 3, 0, 0, 0, 0, 0, 0]
+            x["token_ids"], [2, 5, 10, 6, 8, 3, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
             x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]

@@ -41,14 +41,14 @@ class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             max_sequence_length=128,
         )
         vocab_data = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox", "the earth is round"]
+            ["the quick brown fox", "the earth is round", "an eagle flew"]
         )
 
         bytes_io = io.BytesIO()
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=vocab_data.as_numpy_iterator(),
             model_writer=bytes_io,
-            vocab_size=10,
+            vocab_size=15,
             model_type="WORD",
             pad_id=0,
             unk_id=1,
@@ -85,11 +85,10 @@ class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
 
         self.raw_batch = tf.constant(
             [
-                " airplane at airport",
-                " the airplane is the best",
-                " the best airport",
-                " kohli is the best",
-            ]
+                "quick brown fox",
+                "eagle flew over fox",
+                "the eagle flew quick",
+                "a brown eagle",            ]
         )
         self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(

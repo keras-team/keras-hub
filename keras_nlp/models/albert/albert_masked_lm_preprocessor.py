@@ -103,7 +103,7 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
     sentencepiece.SentencePieceTrainer.train(
         sentence_iterator=vocab_data.as_numpy_iterator(),
         model_writer=bytes_io,
-        vocab_size=10,
+        vocab_size=12,
         model_type="WORD",
         pad_id=0,
         unk_id=1,
