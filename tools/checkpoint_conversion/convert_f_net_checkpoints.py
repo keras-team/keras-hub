@@ -199,7 +199,6 @@ def main(_):
     hf_model.eval()
     hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_name)
 
-    print("\n-> Load KerasNLP model and convert checkpoints.")
     keras_nlp_model = convert_checkpoints(hf_model)
     print("\n -> Load KerasNLP preprocessor.")
     keras_nlp_preprocessor = extract_vocab(hf_tokenizer)
