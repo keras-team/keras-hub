@@ -68,6 +68,19 @@ class FNetTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         tokenizer = FNetTokenizer(proto=self.proto)
         self.assertEqual(tokenizer.vocabulary_size(), 10)
 
+    def test_errors_missing_special_tokens(self):
+        bytes_io = io.BytesIO()
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=iter(["abc"]),
+            model_writer=bytes_io,
+            vocab_size=5,
+            pad_id=-1,
+            eos_id=-1,
+            bos_id=-1,
+        )
+        with self.assertRaises(ValueError):
+            FNetTokenizer(proto=bytes_io.getvalue())
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
