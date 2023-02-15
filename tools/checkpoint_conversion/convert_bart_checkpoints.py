@@ -401,7 +401,7 @@ def extract_vocab(hf_tokenizer):
         merges_path,
     )
 
-    keras_nlp_tokenizer = keras_nlp.models.OPTTokenizer(
+    keras_nlp_tokenizer = keras_nlp.models.BartTokenizer(
         vocabulary=vocabulary_path, merges=merges_path
     )
 
