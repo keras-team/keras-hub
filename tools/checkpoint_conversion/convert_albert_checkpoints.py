@@ -42,6 +42,7 @@ flags.DEFINE_string(
 def convert_checkpoints(hf_model):
     print("\n-> Convert original weights to KerasNLP format.")
 
+    print("\n-> Load KerasNLP model.")
     keras_nlp_model = keras_nlp.models.AlbertBackbone.from_preset(
         FLAGS.preset, load_weights=False
     )
@@ -301,7 +302,6 @@ def main(_):
     hf_model.eval()
     hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_name)
 
-    print("\n-> Load KerasNLP model and convert checkpoints.")
     keras_nlp_model = convert_checkpoints(hf_model)
     print("\n -> Load KerasNLP preprocessor.")
     keras_nlp_preprocessor = extract_vocab(hf_tokenizer)
