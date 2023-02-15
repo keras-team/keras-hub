@@ -11,11 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import json
 import os
+import shutil
 
 import numpy as np
-import requests
 import tensorflow as tf
 import transformers
 from absl import app
@@ -31,87 +30,26 @@ PRESET_MAP = {
     "bart_large_en": "facebook/bart-large",
 }
 
-EXTRACT_DIR = "./{}"
-
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
 )
 
 
-def download_files(preset, hf_model_name):
-    print("-> Download original vocabulary and config.")
-
-    extract_dir = EXTRACT_DIR.format(preset)
-    if not os.path.exists(extract_dir):
-        os.makedirs(extract_dir)
-
-    # Config.
-    config_path = os.path.join(extract_dir, "config.json")
-    response = requests.get(
-        f"https://huggingface.co/{hf_model_name}/raw/main/config.json"
-    )
-    open(config_path, "wb").write(response.content)
-    print(f"`{config_path}`")
-
-    # Vocab.
-    vocab_path = os.path.join(extract_dir, "vocab.json")
-    response = requests.get(
-        f"https://huggingface.co/{hf_model_name}/raw/main/vocab.json"
-    )
-    open(vocab_path, "wb").write(response.content)
-    print(f"`{vocab_path}`")
-
-    # Merges file.
-    merges_path = os.path.join(extract_dir, "merges.txt")
-    response = requests.get(
-        f"https://huggingface.co/{hf_model_name}/raw/main/merges.txt"
-    )
-    open(merges_path, "wb").write(response.content)
-    print(f"`{merges_path}`")
-
-
-def define_tokenizer(preset, hf_model_name):
-    print("\n-> Define the tokenizers.")
-    extract_dir = EXTRACT_DIR.format(preset)
-    vocab_path = os.path.join(extract_dir, "vocab.json")
-    merges_path = os.path.join(extract_dir, "merges.txt")
-
-    keras_nlp_tokenizer = keras_nlp.models.BartTokenizer(
-        vocabulary=vocab_path, merges=merges_path
-    )
-
-    hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_name)
-
-    print("\n-> Print MD5 checksum of the vocab files.")
-    print(f"`{vocab_path}` md5sum: ", get_md5_checksum(vocab_path))
-    print(f"`{merges_path}` md5sum: ", get_md5_checksum(merges_path))
-
-    return keras_nlp_tokenizer, hf_tokenizer
-
-
-def convert_checkpoints(preset, keras_nlp_model, hf_model):
+def convert_checkpoints(hf_model):
     print("\n-> Convert original weights to KerasNLP format.")
 
-    extract_dir = EXTRACT_DIR.format(preset)
-    config_path = os.path.join(extract_dir, "config.json")
-
-    # Build config.
-    cfg = {}
-    with open(config_path, "r") as hf_cfg_handler:
-        hf_cfg = json.load(hf_cfg_handler)
-    cfg["vocabulary_size"] = hf_cfg["vocab_size"]
-    cfg["num_layers"] = hf_cfg["num_hidden_layers"]
-    cfg["num_heads"] = hf_cfg["encoder_attention_heads"]
-    cfg["hidden_dim"] = hf_cfg["d_model"]
-    cfg["intermediate_dim"] = hf_cfg["encoder_ffn_dim"]
-    cfg["dropout"] = hf_cfg["dropout"]
-    cfg["max_sequence_length"] = hf_cfg["max_position_embeddings"]
-    print("Config:", cfg)
+    print("\n-> Load KerasNLP model.")
+    keras_nlp_model = keras_nlp.models.BartBackbone.from_preset(
+        FLAGS.preset, load_weights=False
+    )
 
     hf_wts = hf_model.state_dict()
     print("Original weights:")
     print(list(hf_wts.keys()))
+
+    hidden_dim = keras_nlp_model.hidden_dim
+    num_heads = keras_nlp_model.num_heads
 
     # Token embedding weights shared by encoder and decoder.
     keras_nlp_model.get_layer("token_embedding").embeddings.assign(
@@ -137,14 +75,14 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )._self_attention_layer._query_dense.kernel.assign(
             hf_wts[f"encoder.layers.{i}.self_attn.q_proj.weight"]
             .transpose(1, 0)
-            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .reshape((hidden_dim, num_heads, -1))
             .numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_encoder_layer_{i}"
         )._self_attention_layer._query_dense.bias.assign(
             hf_wts[f"encoder.layers.{i}.self_attn.q_proj.bias"]
-            .reshape((cfg["num_heads"], -1))
+            .reshape((num_heads, -1))
             .numpy()
         )
 
@@ -153,14 +91,14 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )._self_attention_layer._key_dense.kernel.assign(
             hf_wts[f"encoder.layers.{i}.self_attn.k_proj.weight"]
             .transpose(1, 0)
-            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .reshape((hidden_dim, num_heads, -1))
             .numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_encoder_layer_{i}"
         )._self_attention_layer._key_dense.bias.assign(
             hf_wts[f"encoder.layers.{i}.self_attn.k_proj.bias"]
-            .reshape((cfg["num_heads"], -1))
+            .reshape((num_heads, -1))
             .numpy()
         )
 
@@ -169,14 +107,14 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )._self_attention_layer._value_dense.kernel.assign(
             hf_wts[f"encoder.layers.{i}.self_attn.v_proj.weight"]
             .transpose(1, 0)
-            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .reshape((hidden_dim, num_heads, -1))
             .numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_encoder_layer_{i}"
         )._self_attention_layer._value_dense.bias.assign(
             hf_wts[f"encoder.layers.{i}.self_attn.v_proj.bias"]
-            .reshape((cfg["num_heads"], -1))
+            .reshape((num_heads, -1))
             .numpy()
         )
 
@@ -185,7 +123,7 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )._self_attention_layer._output_dense.kernel.assign(
             hf_wts[f"encoder.layers.{i}.self_attn.out_proj.weight"]
             .transpose(1, 0)
-            .reshape((cfg["num_heads"], -1, cfg["hidden_dim"]))
+            .reshape((num_heads, -1, hidden_dim))
             .numpy()
         )
         keras_nlp_model.get_layer(
@@ -259,14 +197,14 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )._self_attention_layer._query_dense.kernel.assign(
             hf_wts[f"decoder.layers.{i}.self_attn.q_proj.weight"]
             .transpose(1, 0)
-            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .reshape((hidden_dim, num_heads, -1))
             .numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_decoder_layer_{i}"
         )._self_attention_layer._query_dense.bias.assign(
             hf_wts[f"decoder.layers.{i}.self_attn.q_proj.bias"]
-            .reshape((cfg["num_heads"], -1))
+            .reshape((num_heads, -1))
             .numpy()
         )
 
@@ -275,14 +213,14 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )._self_attention_layer._key_dense.kernel.assign(
             hf_wts[f"decoder.layers.{i}.self_attn.k_proj.weight"]
             .transpose(1, 0)
-            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .reshape((hidden_dim, num_heads, -1))
             .numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_decoder_layer_{i}"
         )._self_attention_layer._key_dense.bias.assign(
             hf_wts[f"decoder.layers.{i}.self_attn.k_proj.bias"]
-            .reshape((cfg["num_heads"], -1))
+            .reshape((num_heads, -1))
             .numpy()
         )
 
@@ -291,14 +229,14 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )._self_attention_layer._value_dense.kernel.assign(
             hf_wts[f"decoder.layers.{i}.self_attn.v_proj.weight"]
             .transpose(1, 0)
-            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .reshape((hidden_dim, num_heads, -1))
             .numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_decoder_layer_{i}"
         )._self_attention_layer._value_dense.bias.assign(
             hf_wts[f"decoder.layers.{i}.self_attn.v_proj.bias"]
-            .reshape((cfg["num_heads"], -1))
+            .reshape((num_heads, -1))
             .numpy()
         )
 
@@ -307,7 +245,7 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )._self_attention_layer._output_dense.kernel.assign(
             hf_wts[f"decoder.layers.{i}.self_attn.out_proj.weight"]
             .transpose(1, 0)
-            .reshape((cfg["num_heads"], -1, cfg["hidden_dim"]))
+            .reshape((num_heads, -1, hidden_dim))
             .numpy()
         )
         keras_nlp_model.get_layer(
@@ -333,14 +271,14 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )._cross_attention_layer._query_dense.kernel.assign(
             hf_wts[f"decoder.layers.{i}.encoder_attn.q_proj.weight"]
             .transpose(1, 0)
-            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .reshape((hidden_dim, num_heads, -1))
             .numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_decoder_layer_{i}"
         )._cross_attention_layer._query_dense.bias.assign(
             hf_wts[f"decoder.layers.{i}.encoder_attn.q_proj.bias"]
-            .reshape((cfg["num_heads"], -1))
+            .reshape((num_heads, -1))
             .numpy()
         )
 
@@ -349,14 +287,14 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )._cross_attention_layer._key_dense.kernel.assign(
             hf_wts[f"decoder.layers.{i}.encoder_attn.k_proj.weight"]
             .transpose(1, 0)
-            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .reshape((hidden_dim, num_heads, -1))
             .numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_decoder_layer_{i}"
         )._cross_attention_layer._key_dense.bias.assign(
             hf_wts[f"decoder.layers.{i}.encoder_attn.k_proj.bias"]
-            .reshape((cfg["num_heads"], -1))
+            .reshape((num_heads, -1))
             .numpy()
         )
 
@@ -365,14 +303,14 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )._cross_attention_layer._value_dense.kernel.assign(
             hf_wts[f"decoder.layers.{i}.encoder_attn.v_proj.weight"]
             .transpose(1, 0)
-            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .reshape((hidden_dim, num_heads, -1))
             .numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_decoder_layer_{i}"
         )._cross_attention_layer._value_dense.bias.assign(
             hf_wts[f"decoder.layers.{i}.encoder_attn.v_proj.bias"]
-            .reshape((cfg["num_heads"], -1))
+            .reshape((num_heads, -1))
             .numpy()
         )
 
@@ -381,7 +319,7 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )._cross_attention_layer._output_dense.kernel.assign(
             hf_wts[f"decoder.layers.{i}.encoder_attn.out_proj.weight"]
             .transpose(1, 0)
-            .reshape((cfg["num_heads"], -1, cfg["hidden_dim"]))
+            .reshape((num_heads, -1, hidden_dim))
             .numpy()
         )
         keras_nlp_model.get_layer(
@@ -436,14 +374,45 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )
 
     # Save the model.
-    print(f"\n-> Save KerasNLP model weights to `{preset}.h5`.")
-    keras_nlp_model.save_weights(f"{preset}.h5")
+    print("\n-> Save KerasNLP model weights.")
+    keras_nlp_model.save_weights(os.path.join(FLAGS.preset, "model.h5"))
 
     return keras_nlp_model
 
 
+def extract_vocab(hf_tokenizer):
+    vocabulary_path = os.path.join(FLAGS.preset, "vocab.json")
+    merges_path = os.path.join(FLAGS.preset, "merges.txt")
+    print(f"\n-> Save KerasNLP vocab to `{vocabulary_path}`.")
+    print(f"-> Save KerasNLP merges to `{merges_path}`.")
+
+    # Huggingface has a save_vocabulary function but it's not byte-for-byte
+    # with the source. Instead copy the original downloaded file directly.
+    shutil.copyfile(
+        transformers.utils.hub.get_file_from_repo(
+            hf_tokenizer.name_or_path, "vocab.json"
+        ),
+        vocabulary_path,
+    )
+    shutil.copyfile(
+        transformers.utils.hub.get_file_from_repo(
+            hf_tokenizer.name_or_path, "merges.txt"
+        ),
+        merges_path,
+    )
+
+    keras_nlp_tokenizer = keras_nlp.models.OPTTokenizer(
+        vocabulary=vocabulary_path, merges=merges_path
+    )
+
+    print("-> Print MD5 checksum of the vocab files.")
+    print(f"`{vocabulary_path}` md5sum: ", get_md5_checksum(vocabulary_path))
+    print(f"`{merges_path}` md5sum: ", get_md5_checksum(merges_path))
+
+    return keras_nlp_tokenizer
+
+
 def check_output(
-    preset,
     keras_nlp_tokenizer,
     keras_nlp_model,
     hf_tokenizer,
@@ -529,33 +498,25 @@ def check_output(
     )
 
     # Show the MD5 checksum of the model weights.
-    print("Model md5sum: ", get_md5_checksum(f"./{preset}.h5"))
+    print(
+        "Model md5sum: ",
+        get_md5_checksum(os.path.join(FLAGS.preset, "model.h5")),
+    )
 
 
 def main(_):
     hf_model_name = PRESET_MAP[FLAGS.preset]
 
-    download_files(FLAGS.preset, hf_model_name)
-
-    keras_nlp_tokenizer, hf_tokenizer = define_tokenizer(
-        FLAGS.preset, hf_model_name
-    )
-
-    print("\n-> Load KerasNLP model.")
-    keras_nlp_model = keras_nlp.models.BartBackbone.from_preset(
-        FLAGS.preset, load_weights=False
-    )
-
-    print("\n-> Load HF model.")
+    print("\n-> Load HF model and HF tokenizer.")
     hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
     hf_model.eval()
+    hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_name)
 
-    keras_nlp_model = convert_checkpoints(
-        FLAGS.preset, keras_nlp_model, hf_model
-    )
+    keras_nlp_model = convert_checkpoints(hf_model)
+    print("\n -> Load KerasNLP tokenizer.")
+    keras_nlp_tokenizer = extract_vocab(hf_tokenizer)
 
     check_output(
-        FLAGS.preset,
         keras_nlp_tokenizer,
         keras_nlp_model,
         hf_tokenizer,
