@@ -17,7 +17,6 @@ import copy
 
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 import keras_nlp
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
@@ -201,7 +200,7 @@ class GPT2CausalLM(Task):
     def preprocessor_cls(cls):
         return GPT2CausalLMPreprocessor
 
-    def call_with_cache(self, token_ids, padding_mask, cache, cache_index=None):
+    def call_with_cache(self, token_ids, padding_mask, cache, cache_index):
         """Forward pass of `GPT2CausalLM` with cache.
 
         `call_with_cache` adds an additional forward pass for the model for
@@ -213,101 +212,49 @@ class GPT2CausalLM(Task):
             token_ids: a dense int Tensor, input token ids.
             padding_mask: a dense bool Tensor, input padding mask.
             cache: a dense float Tensor, the cache of key and value.
-            cache_index: int, or int Tensor, defaults to None. If set, it
-                represents the index of current inputs in the whole sequence.
+            cache_index: int, or int Tensor. The index of current inputs in the
+                whole sequence.
 
         Returns:
             A (logits, cache) tuple. Where the first output is the language
             model logits for the input token_ids and the second output is the
             cache.
         """
-        transformer_layers = []
-        for i in range(self.backbone.num_layers):
-            transformer_layers.append(
-                self.backbone.get_layer(f"transformer_layer_{i}")
-            )
-        layer_norm = self.backbone.get_layer("layer_norm")
-        token_embeddings = self.backbone.get_layer("token_embedding")
-        position_embeddings = self.backbone.get_layer("position_embedding")
-        embeddings_add = self.backbone.get_layer("embeddings_add")
-        embeddings_dropout = self.backbone.get_layer("embeddings_dropout")
-
-        token_embedding = token_embeddings(token_ids)
-        if cache_index is None:
-            position_embedding = position_embeddings(token_embedding)
-        else:
-            position_embedding = position_embeddings.position_embeddings[
-                cache_index, :
-            ]
-        x = embeddings_add((token_embedding, position_embedding))
-        x = embeddings_dropout(x)
-        # Each `TransformerDecoder` layer has a cache, we update separately.
+        token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
+        position_embedding = self.backbone.get_layer("position_embedding")(
+            token_embedding, start_index=cache_index
+        )
+        x = self.backbone.get_layer("embeddings_add")(
+            (token_embedding, position_embedding)
+        )
+        x = self.backbone.get_layer("embeddings_dropout")(x)
+        # Each decoder layer has a cache; we update them separately.
         caches = tf.unstack(cache, axis=1)
-        for i, transformer_layer in enumerate(transformer_layers):
+        for i in range(self.backbone.num_layers):
             current_cache = caches[i]
-            x, current_cache = transformer_layer(
+            x, next_cache = self.backbone.get_layer(f"transformer_layer_{i}")(
                 x,
                 decoder_padding_mask=padding_mask,
                 cache=current_cache,
                 cache_index=cache_index,
             )
-            caches[i] = current_cache
+            caches[i] = next_cache
         cache = tf.stack(caches, axis=1)
-        x = layer_norm(x)
+        x = self.backbone.get_layer("layer_norm")(x)
         x = tf.matmul(
             x,
-            self.backbone.token_embedding.embeddings,
+            self.backbone.get_layer("token_embedding").embeddings,
             transpose_b=True,
         )
         return x, cache
 
-    def build_initial_cache(self, initial_inputs, max_length):
-        """Build initial cache based on the prompt.
-
-        This method should be called before the decoding loop to build the
-        initial cache. The cache is of shape [batch_size, `self.num_layers`, 2
-        max_length, `self.num_heads`, `self.hidden_dim // self.num_heads`].
-        The first dim represents it's a key or value in multi-head attention.
-
-        Args:
-            initial_inputs: a dense Tensor, the initial inputs to the decoding
-                loop.
-            max_length: int, the max length of the generated sequence.
-
-        Returns:
-            A (logits, cache) tuple. The first output is the language
-            model logits for the input token_ids and the second output is the
-            cache.
-        """
-        token_ids = initial_inputs["token_ids"]
-        padding_mask = initial_inputs["padding_mask"]
-
-        if max_length < self.backbone.max_sequence_length:
-            token_ids = token_ids[:, :max_length]
-            padding_mask = padding_mask[:, :max_length]
-
-        batch_size = tf.shape(token_ids)[0]
-        outputs = tf.zeros(
-            [batch_size, max_length, self.backbone.vocabulary_size]
-        )
-        cache = tf.zeros(
-            [
-                batch_size,
-                self.backbone.num_layers,
-                2,
-                max_length,
-                self.backbone.num_heads,
-                self.backbone.hidden_dim // self.backbone.num_heads,
-            ],
-        )
-
-        output, cache = self.call_with_cache(
-            token_ids,
-            padding_mask,
-            cache=cache,
-        )
-        outputs = dynamic_update_slice(outputs, output, [0, 0, 0])
-        return outputs, cache
+    def build_empty_cache(self, batch_size, max_length):
+        """Build an empty cache for use with `call_with_cache()`."""
+        num_layers = self.backbone.num_layers
+        num_heads = self.backbone.num_heads
+        head_dim = self.backbone.hidden_dim // self.backbone.num_heads
+        shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
+        return tf.zeros(shape)
 
     def _get_token_probability(
         self,
@@ -316,23 +263,9 @@ class GPT2CausalLM(Task):
         cache=None,
         cache_index=None,
     ):
-        model_inputs = {
-            "token_ids": prompt,
-            "padding_mask": mask,
-        }
-        if cache_index is None and cache is None:
-            return self(model_inputs)
-        if cache_index is not None:
-            batch_size = tf.shape(prompt)[0]
-            prompt = tf.slice(prompt, [0, cache_index], [batch_size, 1])
-            mask = mask[:, : cache_index + 1]
-        output, cache = self.call_with_cache(
-            prompt,
-            mask,
-            cache,
-            cache_index,
-        )
-        return output, cache
+        batch_size = tf.shape(prompt)[0]
+        prompt = tf.slice(prompt, [0, cache_index], [batch_size, 1])
+        return self.call_with_cache(prompt, mask, cache, cache_index)
 
     def generate(
         self,
@@ -356,28 +289,38 @@ class GPT2CausalLM(Task):
         """
         if self.preprocessor is None:
             raise ValueError(
-                "`self.preprocessor` is None, please make sure `preprocessor` "
-                "is set before calling `generate`."
+                "`self.preprocessor` is `None`, please make sure "
+                "`preprocessor` is set before calling `generate`."
             )
-        end_token_id = self.preprocessor.tokenizer.end_token_id
-
         sampler = keras_nlp.samplers.get(sampler)
-        if hasattr(self, "jit_compile"):
-            # `jit_compile` is a public property as of tf 2.12. hasattr is for
-            # backward compat.
-            sampler.jit_compile = self.jit_compile
+        # `jit_compile` is a property of keras.Model after tf 2.12.
+        # Use `getattr()` for backwards compatibility.
+        sampler.jit_compile = getattr(self, "jit_compile", True)
         sampler.run_eagerly = self.run_eagerly
-        x, _, _ = self.preprocessor(prompt)
-        if len(x["token_ids"].shape) == 1:
-            x["token_ids"] = x["token_ids"][tf.newaxis, :]
-            x["padding_mask"] = x["padding_mask"][tf.newaxis, :]
-        _, cache = self.build_initial_cache(x, max_length)
-        next_token_probability = self._get_token_probability
+
+        # Tokenize.
+        prompt = self.preprocessor.tokenizer(prompt)
+
+        # Create and seed the cache before generation.
+        token_ids = prompt
+        if prompt.shape.rank == 1:
+            token_ids = tf.RaggedTensor.from_tensor(prompt[tf.newaxis, :])
+        token_ids = token_ids.to_tensor(shape=(None, max_length))
+        # Pass a padding mask of all ones when seeing the cache. The mask will
+        # not affect cached key/values for input tokens we care about.
+        padding_mask = tf.ones_like(token_ids, dtype=tf.bool)
+        batch_size = tf.shape(token_ids)[0]
+        cache = self.build_empty_cache(batch_size, max_length)
+        _, cache = self.call_with_cache(token_ids, padding_mask, cache, 0)
+
+        # Run generation.
         generated = sampler(
-            self.preprocessor.tokenizer(prompt),
-            next_token_probability,
+            prompt,
+            self._get_token_probability,
             max_length=max_length,
-            end_token_id=end_token_id,
+            end_token_id=self.preprocessor.tokenizer.end_token_id,
             cache=cache,
         )
+
+        # Detokenize.
         return self.preprocessor.tokenizer.detokenize(generated)

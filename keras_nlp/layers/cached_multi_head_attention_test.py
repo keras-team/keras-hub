@@ -28,7 +28,11 @@ class CachedMultiHeadAttentionTest(tf.test.TestCase, parameterized.TestCase):
         x = tf.random.uniform(shape=[2, 2, 8])
         layer(query=x, value=x)
 
-    def test_cache_call_is_correct(self):
+    @parameterized.named_parameters(
+        ("graph", False),
+        ("eager", True),
+    )
+    def test_cache_call_is_correct(self, eager):
         batch_size = 2
         seq_len = 5
         num_heads = 2
@@ -37,43 +41,36 @@ class CachedMultiHeadAttentionTest(tf.test.TestCase, parameterized.TestCase):
         layer = CachedMultiHeadAttention(num_heads=num_heads, key_dim=key_dim)
         x = tf.random.uniform(shape=[batch_size, seq_len, num_heads * key_dim])
         cache = tf.zeros([batch_size, 2, seq_len, num_heads, key_dim])
-        # Build the intial cache.
-        intial_seq_len = 2
-        initial_inputs = x[:, :intial_seq_len, :]
+        # Use a causal mask.
+        mask = tf.linalg.band_part(tf.ones((seq_len, seq_len)), -1, 0)
         outputs = tf.zeros_like(x)
-        output, cache = layer(
-            query=initial_inputs,
-            value=initial_inputs,
-            use_causal_mask=True,
-            cache=cache,
-        )
-        # Update the outputs in place.
-        outputs = dynamic_update_slice(outputs, output, [0, 0, 0])
 
-        def call(i, cache, outputs):
-            def loop_body(i, cache, outputs):
+        def call(outputs, cache):
+            def loop_body(i, outputs, cache):
                 # Compute the rest tokens.
-                current_input = x[:, i : i + 1, :]
-                output, cache = layer(
-                    query=current_input,
-                    value=current_input,
-                    use_causal_mask=True,
+                next_input = x[:, i : i + 1, :]
+                next_mask = mask[i : i + 1, :]
+                next_output, cache = layer(
+                    query=next_input,
+                    value=next_input,
                     cache=cache,
                     cache_index=i,
+                    attention_mask=next_mask,
                 )
-                outputs = dynamic_update_slice(outputs, output, [0, i, 0])
-                return i + 1, cache, outputs
+                outputs = dynamic_update_slice(outputs, next_output, [0, i, 0])
+                return i + 1, outputs, cache
 
-            i, cache, cached_outputs = tf.while_loop(
-                cond=lambda i, cache, outputs: i < seq_len,
+            _, outputs, cache = tf.while_loop(
+                cond=lambda i, outputs, cache: i < seq_len,
                 body=loop_body,
-                loop_vars=[i, cache, outputs],
+                loop_vars=[0, outputs, cache],
             )
-            return cached_outputs
+            return outputs, cache
 
-        cached_outputs = call(intial_seq_len, cache, outputs)
-        graph_call = tf.function(call)
-        graph_cached_outputs = graph_call(intial_seq_len, cache, outputs)
-        normal_outputs, _ = layer(query=x, value=x, use_causal_mask=True)
-        self.assertAllClose(cached_outputs, normal_outputs)
-        self.assertAllClose(graph_cached_outputs, normal_outputs)
+        call = call if eager else tf.function(call)
+        output, cache = call(outputs, cache)
+
+        no_loop_outputs, _ = layer(x, x, attention_mask=mask)
+        _, no_loop_cache = layer(x, x, cache=cache, attention_mask=mask)
+        self.assertAllClose(output, no_loop_outputs)
+        self.assertAllClose(cache, no_loop_cache)
