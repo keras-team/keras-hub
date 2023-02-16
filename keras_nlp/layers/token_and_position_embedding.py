@@ -25,7 +25,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
     """A layer which sums a token and position embedding.
     
     Token and position embeddings are ways of representing words and their order 
-    in a sentence. This layer create a `keras.layers.Embedding` token embedding 
+    in a sentence. This layer creates a `keras.layers.Embedding` token embedding 
     and a `keras_nlp.layers.PositionEmbedding` position embedding and sums their 
     output when called. This layer assumes that the last dimension in the input 
     corresponds to the sequence dimension.
