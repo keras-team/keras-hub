@@ -13,6 +13,10 @@
 # limitations under the License.
 
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
+from keras_nlp.models.albert.albert_masked_lm import AlbertMaskedLM
+from keras_nlp.models.albert.albert_masked_lm_preprocessor import (
+    AlbertMaskedLMPreprocessor,
+)
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_nlp.models.bart.bart_backbone import BartBackbone
