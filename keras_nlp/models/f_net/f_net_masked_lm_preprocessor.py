@@ -22,10 +22,12 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class FNetMaskedLMPreprocessor(FNetPreprocessor):
     """FNet preprocessing for the masked language modeling task.
+
     This preprocessing layer will prepare inputs for a masked language modeling
     task. It is primarily intended for use with the
     `keras_nlp.models.FNetMaskedLM` task model. Preprocessing will occur in
     multiple steps.
+
     - Tokenize any number of input segments using the `tokenizer`.
     - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
       `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
@@ -35,6 +37,7 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
       `mask_selection_rate`.
     - Construct a `(x, y, sample_weight)` tuple suitable for training with a
       `keras_nlp.models.FNetMaskedLM` task model.
+
     Args:
         tokenizer: A `keras_nlp.models.FNetTokenizer` instance.
         sequence_length: The length of the packed inputs.
@@ -61,70 +64,64 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
                     "waterfall" algorithm that allocates quota in a
                     left-to-right manner and fills up the buckets until we run
                     out of budget. It supports an arbitrary number of segments.
+
     Examples:
     ```python
     # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.FNetMaskedLMPreprocessor.from_preset("f_net_base_en")
-    # Tokenize and pack a single sentence.
+    preprocessor = keras_nlp.models.FNetMaskedLMPreprocessor.from_preset(
+        "f_net_base_en"
+    )
+
+    # Tokenize and mask a single sentence.
     sentence = tf.constant("The quick brown fox jumped.")
     preprocessor(sentence)
-    # Same output.
-    preprocessor("The quick brown fox jumped.")
-    # Tokenize and a batch of single sentences.
+
+    # Tokenize and mask a batch of sentences.
     sentences = tf.constant(
         ["The quick brown fox jumped.", "Call me Ishmael."]
     )
     preprocessor(sentences)
-    # Same output.
-    preprocessor(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    # Tokenize and pack a sentence pair.
-    first_sentence = tf.constant("The quick brown fox jumped.")
-    second_sentence = tf.constant("The fox tripped.")
-    preprocessor((first_sentence, second_sentence))
-    # Map a dataset to preprocess a single sentence.
+
+    # Tokenize and mask a dataset of sentences.
     features = tf.constant(
         ["The quick brown fox jumped.", "Call me Ishmael."]
     )
-    labels = tf.constant([0, 1])
-    ds = tf.data.Dataset.from_tensor_slices((features, labels))
+    ds = tf.data.Dataset.from_tensor_slices((features))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-    # Map a dataset to preprocess sentence pairs.
-    first_sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    second_sentences = tf.constant(
-        ["The fox tripped.", "Oh look, a whale."]
-    )
-    labels = tf.constant([1, 1])
-    ds = tf.data.Dataset.from_tensor_slices(
-        (
-            (first_sentences, second_sentences), labels
-        )
-    )
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-    # Map a dataset to preprocess unlabeled sentence pairs.
-    first_sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    second_sentences = tf.constant(
-        ["The fox tripped.", "Oh look, a whale."]
-    )
-    ds = tf.data.Dataset.from_tensor_slices((first_sentences, second_sentences))
-    # Watch out for tf.data's default unpacking of tuples here!
-    # Best to invoke the `preprocessor` directly in this case.
-    ds = ds.map(
-        lambda s1, s2: preprocessor(x=(s1, s2)),
-        num_parallel_calls=tf.data.AUTOTUNE,
-    )
+
     # Alternatively, you can create a preprocessor from your own vocabulary.
-    # The usage is the exactly same as above.
-    tokenizer = keras_nlp.models.FNetMaskedLMTokenizer(proto="model.spm")
-    preprocessor = keras_nlp.models.FNetMaskedLMPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=10,
+    vocab_data = tf.data.Dataset.from_tensor_slices(
+        ["the quick brown fox", "the earth is round"]
     )
+
+    # Creating sentencepiece tokenizer for FNet LM preprocessor
+    bytes_io = io.BytesIO()
+
+    sentencepiece.SentencePieceTrainer.train(
+        sentence_iterator=vocab_data.as_numpy_iterator(),
+        model_writer=bytes_io,
+        vocab_size=12,
+        model_type="WORD",
+        pad_id=0,
+        bos_id=1,
+        eos_id=2,
+        unk_id=3,
+        pad_piece="<pad>",
+        unk_piece="<unk>",
+        bos_piece="[CLS]",
+        eos_piece="[SEP]",
+        user_defined_symbols="<mask>",
+    )
+
+    proto = bytes_io.getvalue()
+
+    tokenizer = FNetTokenizer(proto=proto)
+
+    preprocessor = FNetMaskedLMPreprocessor(
+        tokenizer=tokenizer
+    )
+
+    ```
     """
 
     def __init__(
@@ -180,16 +177,14 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
                 "ignored."
             )
         x = super().call(x)
-        token_ids, segment_ids, padding_mask = (
+        token_ids, segment_ids = (
             x["token_ids"],
             x["segment_ids"],
-            x["padding_mask"],
         )
         masker_outputs = self.masker(token_ids)
         x = {
             "token_ids": masker_outputs["token_ids"],
             "segment_ids": segment_ids,
-            "padding_mask": padding_mask,
             "mask_positions": masker_outputs["mask_positions"],
         }
         y = masker_outputs["mask_ids"]

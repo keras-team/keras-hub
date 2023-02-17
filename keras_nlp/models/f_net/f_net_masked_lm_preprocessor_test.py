@@ -44,7 +44,7 @@ class FNetMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             unk_piece="<unk>",
             bos_piece="[CLS]",
             eos_piece="[SEP]",
-            user_defined_symbols="[MASK]",
+            user_defined_symbols="<mask>",
         )
         self.proto = bytes_io.getvalue()
 
@@ -62,10 +62,7 @@ class FNetMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
 
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [1, 3, 3, 3, 3, 2, 0, 0, 0, 0, 0, 0]
-        )
-        self.assertAllEqual(
-            x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
+            x["token_ids"], [1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(x["mask_positions"], [1, 2, 3, 4])
         self.assertAllEqual(y, [5, 10, 6, 8])
@@ -76,10 +73,7 @@ class FNetMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
 
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [[1, 3, 3, 3, 3, 2, 0, 0, 0, 0, 0, 0]] * 4
-        )
-        self.assertAllEqual(
-            x["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
+            x["token_ids"], [[1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4]] * 4)
         self.assertAllEqual(y, [[5, 10, 6, 8]] * 4)
@@ -91,10 +85,7 @@ class FNetMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         ds = ds.map(self.preprocessor)
         x, y, sw = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(
-            x["token_ids"], [[1, 3, 3, 3, 3, 2, 0, 0, 0, 0, 0, 0]] * 4
-        )
-        self.assertAllEqual(
-            x["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
+            x["token_ids"], [[1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4]] * 4)
         self.assertAllEqual(y, [[5, 10, 6, 8]] * 4)
@@ -106,10 +97,7 @@ class FNetMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
 
         x, y, sw = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
-            x["token_ids"], [1, 3, 3, 2, 3, 3, 2, 0, 0, 0, 0, 0]
-        )
-        self.assertAllEqual(
-            x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
+            x["token_ids"], [1, 4, 4, 2, 4, 4, 2, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(x["mask_positions"], [1, 2, 4, 5])
         self.assertAllEqual(y, [5, 10, 6, 8])
@@ -127,9 +115,6 @@ class FNetMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         x, y, sw = no_mask_preprocessor(input_data)
         self.assertAllEqual(
             x["token_ids"], [1, 5, 10, 6, 8, 2, 0, 0, 0, 0, 0, 0]
-        )
-        self.assertAllEqual(
-            x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(x["mask_positions"], [0, 0, 0, 0])
         self.assertAllEqual(y, [0, 0, 0, 0])

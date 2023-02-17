@@ -29,29 +29,36 @@ from keras_nlp.utils.python_utils import classproperty
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class FNetMaskedLM(Task):
     """An end-to-end FNet model for the masked language modeling task.
+
     This model will train FNet on a masked language modeling task.
     The model will predict labels for a number of masked tokens in the
     input data. For usage of this model with pre-trained weights, see the
     `from_preset()` method.
+
     This model can optionally be configured with a `preprocessor` layer, in
     which case inputs can be raw string features during `fit()`, `predict()`,
     and `evaluate()`. Inputs will be tokenized and dynamically masked during
     training and evaluation. This is done by default when creating the model
     with `from_preset()`.
+
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
     third party and subject to a separate license, available
     [here](https://github.com/facebookresearch/fairseq).
+
     Args:
         backbone: A `keras_nlp.models.FNetBackbone` instance.
         preprocessor: A `keras_nlp.models.FNetMaskedLMPreprocessor` or
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
+
     Example usage:
+
     Raw string inputs and pretrained backbone.
     ```python
     # Create a dataset with raw string features. Labels are inferred.
     features = ["The quick brown fox jumped.", "I forgot my homework."]
+
     # Create a FNetMaskedLM with a pretrained backbone and further train
     # on an MLM task.
     masked_lm = keras_nlp.models.FNetMaskedLM.from_preset(
@@ -62,6 +69,7 @@ class FNetMaskedLM(Task):
     )
     masked_lm.fit(x=features, batch_size=2)
     ```
+
     Preprocessed inputs and custom backbone.
     ```python
     # Create a preprocessed dataset where 0 is the mask token.
@@ -70,19 +78,18 @@ class FNetMaskedLM(Task):
             [[1, 2, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
         ),
         "segment_ids": tf.constant(
-            [[0, 0, 0, 0, 0, 0, 0, 0]] * 2, shape=(2, 8)
-        ),
-        "padding_mask": tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1]] * 2, shape=(2, 8)
+            [[1, 0, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
         ),
         "mask_positions": tf.constant([[2, 4]] * 2, shape=(2, 2))
     }
     # Labels are the original masked values.
     labels = [[3, 5]] * 2
+
     # Randomly initialize a FNet encoder
     backbone = keras_nlp.models.FNetBackbone(
         vocabulary_size=50265,
         num_layers=12,
+        num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12
