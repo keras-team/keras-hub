@@ -26,7 +26,7 @@ backbone_presets = {
             "bucket_size": 256,
         },
         "preprocessor_config": {
-            "mask_token_id": 128100,
+            "mask_token_id": 128000,
         },
         "description": (
             "Extra small size of DeBERTaV3. "
@@ -49,7 +49,7 @@ backbone_presets = {
             "bucket_size": 256,
         },
         "preprocessor_config": {
-            "mask_token_id": 128100,
+            "mask_token_id": 128000,
         },
         "description": (
             "Small size of DeBERTaV3. "
@@ -72,7 +72,7 @@ backbone_presets = {
             "bucket_size": 256,
         },
         "preprocessor_config": {
-            "mask_token_id": 128100,
+            "mask_token_id": 128000,
         },
         "description": (
             "Base size of DeBERTaV3. "
@@ -95,7 +95,7 @@ backbone_presets = {
             "bucket_size": 256,
         },
         "preprocessor_config": {
-            "mask_token_id": 128100,
+            "mask_token_id": 128000,
         },
         "description": (
             "Large size of DeBERTaV3. "
