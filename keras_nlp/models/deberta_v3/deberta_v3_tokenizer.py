@@ -68,6 +68,14 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     def __init__(self, proto, mask_token_id=None, **kwargs):
         super().__init__(proto=proto, **kwargs)
 
+        # Maintain a private copy of `mask_token_id` for config purposes.
+        self._mask_token_id = mask_token_id
+
+        # Maintain a private copy of the original vocabulary; the parent class's
+        # `get_vocabulary()` function calls `self.vocabulary_size()`, which
+        # throws up a segmentation fault.
+        self._original_vocabulary = super().get_vocabulary()
+
         # Check for necessary special tokens.
         cls_token = "[CLS]"
         sep_token = "[SEP]"
@@ -79,7 +87,7 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
             in_vocab_special_tokens = in_vocab_special_tokens + [mask_token]
 
         for token in in_vocab_special_tokens:
-            if token not in self.get_vocabulary():
+            if token not in self._original_vocabulary:
                 raise ValueError(
                     f"Cannot find token `'{token}'` in the provided "
                     f"`vocabulary`. Please provide `'{token}'` in your "
@@ -94,14 +102,19 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
             self.mask_token_id = self.token_to_id(mask_token)
 
     def vocabulary_size(self):
-        """Get the size of the tokenizer vocabulary."""
         vocabulary_size = super().vocabulary_size()
+
+        # This is to avoid an error when `super.get_vocabulary()` is called
+        # in `__init__()`.
+        if not hasattr(self, "mask_token_id"):
+            return vocabulary_size
+
         if self.mask_token_id >= vocabulary_size:
             return self.mask_token_id + 1
         return vocabulary_size
 
     def get_vocabulary(self):
-        vocabulary = super().get_vocabulary()
+        vocabulary = self._original_vocabulary
         if self.mask_token_id >= len(vocabulary):
             vocabulary = vocabulary + [None] * (
                 self.mask_token_id - len(vocabulary) + 1
@@ -123,7 +136,7 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         config = super().get_config()
         config.update(
             {
-                "mask_token_id": self.mask_token_id,
+                "mask_token_id": self._mask_token_id,
             }
         )
         return config
