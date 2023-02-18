@@ -65,14 +65,20 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     ```
     """
 
-    def __init__(self, proto, **kwargs):
+    def __init__(self, proto, mask_token_id=None, **kwargs):
         super().__init__(proto=proto, **kwargs)
 
         # Check for necessary special tokens.
         cls_token = "[CLS]"
         sep_token = "[SEP]"
         pad_token = "[PAD]"
-        for token in [cls_token, pad_token, sep_token]:
+        mask_token = "[MASK]"
+
+        in_vocab_special_tokens = [cls_token, pad_token, sep_token]
+        if mask_token_id is None:
+            in_vocab_special_tokens = in_vocab_special_tokens + [mask_token]
+
+        for token in in_vocab_special_tokens:
             if token not in self.get_vocabulary():
                 raise ValueError(
                     f"Cannot find token `'{token}'` in the provided "
@@ -83,6 +89,44 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         self.cls_token_id = self.token_to_id(cls_token)
         self.sep_token_id = self.token_to_id(sep_token)
         self.pad_token_id = self.token_to_id(pad_token)
+        self.mask_token_id = mask_token_id
+        if mask_token_id is None:
+            self.mask_token_id = self.token_to_id(mask_token)
+
+    def vocabulary_size(self):
+        """Get the size of the tokenizer vocabulary."""
+        vocabulary_size = super().vocabulary_size()
+        if self.mask_token_id >= vocabulary_size:
+            return self.mask_token_id + 1
+        return vocabulary_size
+
+    def get_vocabulary(self):
+        vocabulary = super().get_vocabulary()
+        if self.mask_token_id >= len(vocabulary):
+            vocabulary = vocabulary + [None] * (
+                self.mask_token_id - len(vocabulary) + 1
+            )
+        vocabulary[self.mask_token_id] = "[MASK]"
+        return vocabulary
+
+    def id_to_token(self, id):
+        if id == self.mask_token_id:
+            return "[MASK]"
+        return super().id_to_token(id)
+
+    def token_to_id(self, token):
+        if token == "[MASK]":
+            return self.mask_token_id
+        return int(self._sentence_piece.string_to_id(token).numpy())
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "mask_token_id": self.mask_token_id,
+            }
+        )
+        return config
 
     @classproperty
     def presets(cls):

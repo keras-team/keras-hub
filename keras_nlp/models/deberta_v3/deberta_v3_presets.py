@@ -25,7 +25,9 @@ backbone_presets = {
             "max_sequence_length": 512,
             "bucket_size": 256,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": {
+            "mask_token_id": 128100,
+        },
         "description": (
             "Extra small size of DeBERTaV3. "
             "Trained on English Wikipedia, BookCorpus and OpenWebText."
@@ -46,7 +48,9 @@ backbone_presets = {
             "max_sequence_length": 512,
             "bucket_size": 256,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": {
+            "mask_token_id": 128100,
+        },
         "description": (
             "Small size of DeBERTaV3. "
             "Trained on English Wikipedia, BookCorpus and OpenWebText."
@@ -67,7 +71,9 @@ backbone_presets = {
             "max_sequence_length": 512,
             "bucket_size": 256,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": {
+            "mask_token_id": 128100,
+        },
         "description": (
             "Base size of DeBERTaV3. "
             "Trained on English Wikipedia, BookCorpus and OpenWebText."
@@ -88,7 +94,9 @@ backbone_presets = {
             "max_sequence_length": 512,
             "bucket_size": 256,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": {
+            "mask_token_id": 128100,
+        },
         "description": (
             "Large size of DeBERTaV3. "
             "Trained on English Wikipedia, BookCorpus and OpenWebText."
@@ -109,7 +117,9 @@ backbone_presets = {
             "max_sequence_length": 512,
             "bucket_size": 256,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": {
+            "mask_token_id": 250101,
+        },
         "description": (
             "Base size of DeBERTaV3. "
             "Trained on the 2.5TB multilingual CC100 dataset."

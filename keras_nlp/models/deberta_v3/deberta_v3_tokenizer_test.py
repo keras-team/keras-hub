@@ -47,7 +47,7 @@ class DebertaV3TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.proto = bytes_io.getvalue()
 
-        self.tokenizer = DebertaV3Tokenizer(proto=self.proto)
+        self.tokenizer = DebertaV3Tokenizer(proto=self.proto, mask_token_id=10)
 
     def test_tokenize(self):
         input_data = "the quick brown fox"
@@ -65,8 +65,16 @@ class DebertaV3TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(output, tf.constant(["the quick brown fox"]))
 
     def test_vocabulary_size(self):
-        tokenizer = DebertaV3Tokenizer(proto=self.proto)
-        self.assertEqual(tokenizer.vocabulary_size(), 10)
+        self.assertEqual(self.tokenizer.vocabulary_size(), 11)
+
+    def test_get_vocabulary(self):
+        self.assertEqual(self.tokenizer.get_vocabulary()[10], "[MASK]")
+
+    def test_id_to_token(self):
+        self.assertEqual(self.tokenizer.id_to_token(10), "[MASK]")
+
+    def test_token_to_id(self):
+        self.assertEqual(self.tokenizer.token_to_id("[MASK]"), 10)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),

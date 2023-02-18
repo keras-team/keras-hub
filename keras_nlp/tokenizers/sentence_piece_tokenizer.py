@@ -159,7 +159,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         return int(self._sentence_piece.vocab_size().numpy())
 
     def get_vocabulary(self) -> List[str]:
-        """Get the size of the tokenizer vocabulary."""
+        """Get the tokenizer vocabulary."""
         return tensor_to_string_list(
             self._sentence_piece.id_to_string(tf.range(self.vocabulary_size()))
         )
