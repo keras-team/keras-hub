@@ -27,17 +27,16 @@ class BertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
         self.vocab += ["the", "quick", "brown", "fox"]
+        self.tokenizer = BertTokenizer(vocabulary=self.vocab)
 
     def test_tokenize(self):
         input_data = "THE QUICK BROWN FOX."
-        tokenizer = BertTokenizer(vocabulary=self.vocab)
-        output = tokenizer(input_data)
+        output = self.tokenizer(input_data)
         self.assertAllEqual(output, [5, 6, 7, 8, 1])
 
     def test_tokenize_batch(self):
         input_data = tf.constant(["THE QUICK BROWN FOX.", "THE FOX."])
-        tokenizer = BertTokenizer(vocabulary=self.vocab)
-        output = tokenizer(input_data)
+        output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[5, 6, 7, 8, 1], [5, 8, 1]])
 
     def test_lowercase(self):
@@ -48,13 +47,15 @@ class BertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_detokenize(self):
         input_tokens = [[5, 6, 7, 8]]
-        tokenizer = BertTokenizer(vocabulary=self.vocab)
-        output = tokenizer.detokenize(input_tokens)
+        output = self.tokenizer.detokenize(input_tokens)
         self.assertAllEqual(output, ["THE QUICK BROWN FOX"])
 
     def test_vocabulary_size(self):
-        tokenizer = BertTokenizer(vocabulary=self.vocab)
-        self.assertEqual(tokenizer.vocabulary_size(), 13)
+        self.assertEqual(self.tokenizer.vocabulary_size(), 13)
+
+    def test_errors_missing_special_tokens(self):
+        with self.assertRaises(ValueError):
+            BertTokenizer(vocabulary=["a", "b", "c"])
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),

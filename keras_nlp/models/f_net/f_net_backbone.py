@@ -159,8 +159,8 @@ class FNetBackbone(Backbone):
                 activation=lambda x: keras.activations.gelu(
                     x, approximate=True
                 ),
-                layer_norm_epsilon=1e-12,
                 dropout=dropout,
+                layer_norm_epsilon=1e-12,
                 kernel_initializer=f_net_kernel_initializer(),
                 bias_initializer=f_net_bias_initializer(),
                 name=f"f_net_layer_{i}",

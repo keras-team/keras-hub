@@ -144,10 +144,10 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
             prob = tf.constant([[[0.0, 0.0, 0.0, 1.0]]])
             return tf.tile(prob, [batch_size, seq_length, 1])
 
-        max_length = 5
-        inputs = tf.constant([[0, 1], [1, 2]])
         tf.random.set_seed(42)
         sampler = TopKSampler(k=4, seed=42)
+        max_length = 4
+        inputs = tf.constant([[0, 1], [1, 2]])
         outputs = sampler(
             inputs,
             token_probability_fn,
@@ -155,6 +155,17 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
             end_token_id=2,
             from_logits=False,
         )
-        # Top-k sampling result with seed 42.
-        expected_outputs = tf.ragged.constant([[0, 1, 3, 3, 3], [1]])
+        # end_token in prompt does not trigger truncation.
+        expected_outputs = tf.ragged.constant([[0, 1, 3, 3], [1, 2, 3, 3]])
+        self.assertAllEqual(outputs, expected_outputs)
+
+        outputs = sampler(
+            inputs,
+            token_probability_fn,
+            max_length=max_length,
+            end_token_id=3,
+            from_logits=False,
+        )
+        # Generated end_token will be truncated.
+        expected_outputs = tf.ragged.constant([[0, 1], [1, 2]])
         self.assertAllEqual(outputs, expected_outputs)

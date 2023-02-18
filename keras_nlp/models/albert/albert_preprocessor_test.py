@@ -35,7 +35,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=vocab_data.as_numpy_iterator(),
             model_writer=bytes_io,
-            vocab_size=10,
+            vocab_size=12,
             model_type="WORD",
             pad_id=0,
             unk_id=1,
@@ -45,6 +45,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             unk_piece="<unk>",
             bos_piece="[CLS]",
             eos_piece="[SEP]",
+            user_defined_symbols="[MASK]",
         )
         self.proto = bytes_io.getvalue()
 
@@ -57,7 +58,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         input_data = "the quick brown fox"
         output = self.preprocessor(input_data)
         self.assertAllEqual(
-            output["token_ids"], [2, 4, 9, 5, 7, 3, 0, 0, 0, 0, 0, 0]
+            output["token_ids"], [2, 5, 10, 6, 8, 3, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
             output["segment_ids"], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -72,7 +73,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         output = self.preprocessor(input_data)
         self.assertAllEqual(
             output["token_ids"],
-            [[2, 4, 9, 5, 7, 3, 0, 0, 0, 0, 0, 0]] * 4,
+            [[2, 5, 10, 6, 8, 3, 0, 0, 0, 0, 0, 0]] * 4,
         )
         self.assertAllEqual(
             output["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
@@ -88,7 +89,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         x_out, y_out, sw_out = self.preprocessor(x, y, sw)
         self.assertAllEqual(
             x_out["token_ids"],
-            [[2, 4, 9, 5, 7, 3, 0, 0, 0, 0, 0, 0]] * 4,
+            [[2, 5, 10, 6, 8, 3, 0, 0, 0, 0, 0, 0]] * 4,
         )
         self.assertAllEqual(
             x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
@@ -108,7 +109,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         x_out, y_out, sw_out = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(
             x_out["token_ids"],
-            [[2, 4, 9, 5, 7, 3, 0, 0, 0, 0, 0, 0]] * 4,
+            [[2, 5, 10, 6, 8, 3, 0, 0, 0, 0, 0, 0]] * 4,
         )
         self.assertAllEqual(
             x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
@@ -125,7 +126,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
             output["token_ids"],
-            [2, 4, 9, 5, 7, 3, 4, 6, 3, 0, 0, 0],
+            [2, 5, 10, 6, 8, 3, 5, 7, 3, 0, 0, 0],
         )
         self.assertAllEqual(
             output["segment_ids"], [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0]
@@ -142,7 +143,7 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
             output["token_ids"],
-            [[2, 4, 9, 5, 7, 3, 4, 6, 3, 0, 0, 0]] * 4,
+            [[2, 5, 10, 6, 8, 3, 5, 7, 3, 0, 0, 0]] * 4,
         )
         self.assertAllEqual(
             output["segment_ids"], [[0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0]] * 4

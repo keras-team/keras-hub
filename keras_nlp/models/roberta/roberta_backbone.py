@@ -135,6 +135,7 @@ class RobertaBackbone(Backbone):
                 intermediate_dim=intermediate_dim,
                 activation="gelu",
                 dropout=dropout,
+                layer_norm_epsilon=1e-5,
                 kernel_initializer=roberta_kernel_initializer(),
                 name=f"transformer_layer_{i}",
             )(x, padding_mask=padding_mask)

@@ -155,6 +155,7 @@ class DebertaV3Backbone(Backbone):
                 activation=lambda x: keras.activations.gelu(
                     x, approximate=False
                 ),
+                layer_norm_epsilon=1e-7,
                 kernel_initializer=deberta_kernel_initializer(),
                 name=f"disentangled_attention_encoder_layer_{i}",
             )(

@@ -76,6 +76,19 @@ class DebertaV3TokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_token_to_id(self):
         self.assertEqual(self.tokenizer.token_to_id("[MASK]"), 10)
 
+    def test_errors_missing_special_tokens(self):
+        bytes_io = io.BytesIO()
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=iter(["abc"]),
+            model_writer=bytes_io,
+            vocab_size=5,
+            pad_id=-1,
+            eos_id=-1,
+            bos_id=-1,
+        )
+        with self.assertRaises(ValueError):
+            DebertaV3Tokenizer(proto=bytes_io.getvalue())
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
