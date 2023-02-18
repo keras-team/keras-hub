@@ -48,6 +48,11 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
             `bytes` object with a serialized SentencePiece proto. See the
             [SentencePiece repository](https://github.com/google/sentencepiece)
             for more details on the format.
+        mask_token_id: The token ID (int) of the mask token (`[MASK]`). If
+            `None`, the SentencePiece vocabulary is expected to have the mask
+            token. Preset DeBERTa vocabularies do not have the mask token in the
+            provided vocabulary files, which is why this workaround is
+            necessary.
 
     Examples:
 
