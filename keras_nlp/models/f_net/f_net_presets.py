@@ -25,9 +25,14 @@ backbone_presets = {
             "num_segments": 4,
         },
         "preprocessor_config": {},
-        "description": (
-            "Base size of FNet. Trained on the C4 dataset (English)."
-        ),
+        "metadata": {
+            "description": (
+                "Base size of FNet. Trained on the C4 dataset (English)."
+            ),
+            "params": 82861056,
+            "official_name": "FNet",
+            "path": "fnet",
+        },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/f_net_base_en/v1/model.h5",
         "weights_hash": "35db90842b85a985a0e54c86c00746fe",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/f_net_base_en/v1/vocab.spm",
@@ -44,9 +49,14 @@ backbone_presets = {
             "num_segments": 4,
         },
         "preprocessor_config": {},
-        "description": (
-            "Large size of FNet. Trained on the C4 dataset (English)."
-        ),
+        "metadata": {
+            "description": (
+                "Large size of FNet. Trained on the C4 dataset (English)."
+            ),
+            "params": 236945408,
+            "official_name": "FNet",
+            "path": "fnet",
+        },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/f_net_large_en/v1/model.h5",
         "weights_hash": "7ae4a3faa67ff054f8cecffb5619f779",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/f_net_large_en/v1/vocab.spm",

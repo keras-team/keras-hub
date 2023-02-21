@@ -36,6 +36,8 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 11683584,
+            "official_name": "ALBERT",
+            "path": "albert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/albert_base_en_uncased/v1/model.h5",
         "weights_hash": "b83ccf3418dd84adc569324183176813",
@@ -63,6 +65,8 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 17683968,
+            "official_name": "ALBERT",
+            "path": "albert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/albert_large_en_uncased/v1/model.h5",
         "weights_hash": "c7754804efb245f06dd6e7ced32e082c",
@@ -90,6 +94,8 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 58724864,
+            "official_name": "ALBERT",
+            "path": "albert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/albert_extra_large_en_uncased/v1/model.h5",
         "weights_hash": "713209be8aadfa614fd79f18c9aeb16d",
@@ -117,6 +123,8 @@ backbone_presets = {
                 "Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 222595584,
+            "official_name": "ALBERT",
+            "path": "albert",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/albert_extra_extra_large_en_uncased/v1/model.h5",
         "weights_hash": "a835177b692fb6a82139f94c66db2f22",
