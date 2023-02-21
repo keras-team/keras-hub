@@ -180,7 +180,7 @@ class BartBackbone(Backbone):
         x = keras.layers.LayerNormalization(
             name="decoder_embeddings_layer_norm",
             axis=-1,
-            epsilon=1e-5,
+            epsilon=1e-12,
             dtype=tf.float32,
         )(x)
         x = keras.layers.Dropout(
