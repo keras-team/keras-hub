@@ -47,14 +47,14 @@ We are a new and growing project and welcome [contributions](CONTRIBUTING.md).
 To install the latest official release:
 
 ```
-pip install keras-nlp
+pip install keras-nlp --upgrade
 ```
 
 To install the latest unreleased changes to the library, we recommend using
 pip to install directly from the master branch on github:
 
 ```
-pip install git+https://github.com/keras-team/keras-nlp.git
+pip install git+https://github.com/keras-team/keras-nlp.git --upgrade
 ```
 
 ## Quickstart
@@ -66,18 +66,16 @@ Fine-tune BERT on a small sentiment analysis task using the
 import keras_nlp
 import tensorflow_datasets as tfds
 
-dataset = tfds.load(
+imdb_train, imdb_test = tfds.load(
     "imdb_reviews",
-    split="train",
+    split=["train", "test"],
     as_supervised=True,
     batch_size=16,
 )
 # Load a BERT model.
-classifier = keras_nlp.models.BertClassifier.from_preset(
-    "bert_base_en_uncased",
-)
+classifier = keras_nlp.models.BertClassifier.from_preset("bert_base_en_uncased")
 # Fine-tune on IMDb movie reviews.
-classifier.fit(dataset)
+classifier.fit(imdb_train, validation_data=imdb_test)
 # Predict two new examples.
 classifier.predict(["What an amazing movie!", "A total waste of my time."])
 ```
