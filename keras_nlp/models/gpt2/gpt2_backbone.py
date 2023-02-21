@@ -137,10 +137,10 @@ class GPT2Backbone(Backbone):
                 intermediate_dim=intermediate_dim,
                 num_heads=num_heads,
                 dropout=dropout,
+                layer_norm_epsilon=1e-05,
                 activation=lambda x: keras.activations.gelu(
                     x, approximate=True
                 ),
-                layer_norm_epsilon=1e-05,
                 kernel_initializer=_gpt_2_kernel_initializer(stddev=0.02),
                 normalize_first=True,
                 name=f"transformer_layer_{i}",

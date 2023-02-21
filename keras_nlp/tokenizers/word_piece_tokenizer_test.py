@@ -226,19 +226,19 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_no_oov_token_in_vocabulary(self):
         vocab_data = ["qu", "@@ick", "br", "@@OWN", "fox"]
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(ValueError):
             WordPieceTokenizer(
                 vocabulary=vocab_data,
             )
 
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(ValueError):
             WordPieceTokenizer(
                 vocabulary=vocab_data,
             )
 
         vocab_data = ["UNK", "qu", "@@ick", "br", "@@OWN", "fox"]
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(ValueError):
             WordPieceTokenizer(
                 vocabulary=vocab_data,
             )

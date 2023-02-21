@@ -46,15 +46,17 @@ class MaskedLMHeadTest(tf.test.TestCase):
             embedding_weights=embedding.embeddings,
             activation="softmax",
         )
-        encoded_tokens = keras.Input(shape=(10, 16))
+        # Use a difference "hidden dim" for the model than "embedding dim", we
+        # need to support this in the layer.
+        sequence = keras.Input(shape=(10, 32))
         positions = keras.Input(shape=(5,), dtype="int32")
-        outputs = head(encoded_tokens, mask_positions=positions)
-        model = keras.Model((encoded_tokens, positions), outputs)
-        token_data = tf.random.uniform(shape=(4, 10, 16))
+        outputs = head(sequence, mask_positions=positions)
+        model = keras.Model((sequence, positions), outputs)
+        sequence_data = tf.random.uniform(shape=(4, 10, 32))
         position_data = tf.random.uniform(
             shape=(4, 5), maxval=10, dtype="int32"
         )
-        model((token_data, position_data))
+        model((sequence_data, position_data))
 
     def test_get_config_and_from_config(self):
         head = masked_lm_head.MaskedLMHead(

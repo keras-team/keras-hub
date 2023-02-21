@@ -34,7 +34,7 @@ class AlbertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=vocab_data.as_numpy_iterator(),
             model_writer=bytes_io,
-            vocab_size=10,
+            vocab_size=12,
             model_type="WORD",
             pad_id=0,
             unk_id=1,
@@ -44,6 +44,7 @@ class AlbertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             unk_piece="<unk>",
             bos_piece="[CLS]",
             eos_piece="[SEP]",
+            user_defined_symbols="[MASK]",
         )
         self.proto = bytes_io.getvalue()
 
@@ -52,21 +53,34 @@ class AlbertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_tokenize(self):
         input_data = "the quick brown fox"
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [4, 9, 5, 7])
+        self.assertAllEqual(output, [5, 10, 6, 8])
 
     def test_tokenize_batch(self):
         input_data = tf.constant(["the quick brown fox", "the earth is round"])
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[4, 9, 5, 7], [4, 6, 8, 1]])
+        self.assertAllEqual(output, [[5, 10, 6, 8], [5, 7, 9, 11]])
 
     def test_detokenize(self):
-        input_data = tf.constant([[4, 9, 5, 7]])
+        input_data = tf.constant([[5, 10, 6, 8]])
         output = self.tokenizer.detokenize(input_data)
         self.assertEqual(output, tf.constant(["the quick brown fox"]))
 
     def test_vocabulary_size(self):
         tokenizer = AlbertTokenizer(proto=self.proto)
-        self.assertEqual(tokenizer.vocabulary_size(), 10)
+        self.assertEqual(tokenizer.vocabulary_size(), 12)
+
+    def test_errors_missing_special_tokens(self):
+        bytes_io = io.BytesIO()
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=iter(["abc"]),
+            model_writer=bytes_io,
+            vocab_size=5,
+            pad_id=-1,
+            eos_id=-1,
+            bos_id=-1,
+        )
+        with self.assertRaises(ValueError):
+            AlbertTokenizer(proto=bytes_io.getvalue())
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),

@@ -156,8 +156,8 @@ class BartBackbone(Backbone):
                 activation=lambda x: keras.activations.gelu(
                     x, approximate=False
                 ),
-                layer_norm_epsilon=1e-5,
                 dropout=dropout,
+                layer_norm_epsilon=1e-5,
                 kernel_initializer=bart_kernel_initializer(),
                 name=f"transformer_encoder_layer_{i}",
             )(x, padding_mask=encoder_padding_mask)
