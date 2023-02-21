@@ -239,7 +239,8 @@ class TransformerDecoder(keras.layers.Layer):
                 being processed. If `cache_index=None` while `cache` is set, it
                 means it's the first pass to build the cache.
         Returns:
-            A Tensor of the same shape as the `decoder_sequence`.
+            x: A Tensor of the same shape as the `decoder_sequence`.
+            cache: [Optional], a dense float Tensor. The updated `cache`.
         """
 
         has_encoder_sequence = encoder_sequence is not None

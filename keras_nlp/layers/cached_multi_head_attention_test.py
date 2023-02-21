@@ -35,7 +35,6 @@ class CachedMultiHeadAttentionTest(tf.test.TestCase, parameterized.TestCase):
         key_dim = 4
         layer = CachedMultiHeadAttention(num_heads=num_heads, key_dim=key_dim)
         x = tf.random.uniform(shape=[batch_size, seq_len, num_heads * key_dim])
-        # [2, batch_size, seq_length, num_heads, key_dim]
         cache = tf.zeros([2, batch_size, seq_len, num_heads, key_dim])
 
         # Build the intial cache.

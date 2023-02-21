@@ -213,7 +213,7 @@ class GPT2CausalLM(Task):
     def preprocessor_cls(cls):
         return GPT2CausalLMPreprocessor
 
-    def call_with_cache(self, inputs, cache, cache_index=None):
+    def call_with_cache(self, token_ids, padding_mask, cache, cache_index=None):
         """Forward pass of `GPT2CausalLM` with cache.
 
         The difference between `call_with_cache` and normal `__call__` is in
@@ -222,8 +222,8 @@ class GPT2CausalLM(Task):
         attention, we avoid recomputing the outputs of seen tokens.
 
         Args:
-            inputs: a dict of key `token_ids` and `padding_mask`, the same
-                format as `GPT2Backbone` inputs.
+            token_ids: a dense int Tensor, input token ids.
+            padding_mask: a dense bool Tensor, input padding mask.
             cache: a dense float Tensor, the cache of key and value.
             cache_index: int, or int Tensor, defaults to None. If set, it
                 represents the index of current inputs in the whole sequence.
@@ -232,8 +232,6 @@ class GPT2CausalLM(Task):
             x: a dense float Tensor, the next token logits of `inputs`.
             cache: a dense float Tensor, the updated cache.
         """
-        token_ids = inputs["token_ids"]
-        padding_mask = inputs["padding_mask"]
         token_embedding = self.token_embeddings(token_ids)
         if cache_index is None:
             position_embedding = self.position_embeddings(token_embedding)
@@ -288,11 +286,6 @@ class GPT2CausalLM(Task):
             token_ids = token_ids[:, :max_length]
             padding_mask = padding_mask[:, :max_length]
 
-        x = {
-            "token_ids": token_ids,
-            "padding_mask": padding_mask,
-        }
-
         batch_size = tf.shape(token_ids)[0]
         outputs = tf.zeros(
             [batch_size, max_length, self.backbone.vocabulary_size]
@@ -308,7 +301,7 @@ class GPT2CausalLM(Task):
             ],
         )
 
-        output, cache = self.call_with_cache(x, cache)
+        output, cache = self.call_with_cache(token_ids, padding_mask, cache)
         outputs = dynamic_update_slice(outputs, output, [0, 0, 0])
         return outputs, cache
 
@@ -316,8 +309,8 @@ class GPT2CausalLM(Task):
         self,
         prompt,
         mask,
-        cache_index=None,
         cache=None,
+        cache_index=None,
     ):
         model_inputs = {
             "token_ids": prompt,
@@ -329,12 +322,9 @@ class GPT2CausalLM(Task):
             batch_size = tf.shape(prompt)[0]
             prompt = tf.slice(prompt, [0, cache_index], [batch_size, 1])
             mask = mask[:, : cache_index + 1]
-            model_inputs = {
-                "token_ids": prompt,
-                "padding_mask": mask,
-            }
         output, cache = self.call_with_cache(
-            model_inputs,
+            prompt,
+            mask,
             cache,
             cache_index,
         )
