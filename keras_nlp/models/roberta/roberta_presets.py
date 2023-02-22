@@ -15,6 +15,15 @@
 
 backbone_presets = {
     "roberta_base_en": {
+        "metadata": {
+            "description": (
+                "12-layer RoBERTa model where case is maintained."
+                "Trained on English Wikipedia, BooksCorpus, CommonCraw, and OpenWebText."
+            ),
+            "params": 124052736,
+            "official_name": "RoBERTa",
+            "path": "roberta",
+        },
         "config": {
             "vocabulary_size": 50265,
             "num_layers": 12,
@@ -25,10 +34,6 @@ backbone_presets = {
             "max_sequence_length": 512,
         },
         "preprocessor_config": {},
-        "description": (
-            "Base size of RoBERTa where case is maintained."
-            "Trained on a 160 GB English dataset."
-        ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_en/v1/model.h5",
         "weights_hash": "958eede1c7edaa9308e027be18fde7a8",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_en/v1/vocab.json",
@@ -37,6 +42,15 @@ backbone_presets = {
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
     "roberta_large_en": {
+        "metadata": {
+            "description": (
+                "24-layer RoBERTa model where case is maintained."
+                "Trained on English Wikipedia, BooksCorpus, CommonCraw, and OpenWebText."
+            ),
+            "params": 354307072,
+            "official_name": "RoBERTa",
+            "path": "roberta",
+        },
         "config": {
             "vocabulary_size": 50265,
             "num_layers": 24,
@@ -47,10 +61,6 @@ backbone_presets = {
             "max_sequence_length": 512,
         },
         "preprocessor_config": {},
-        "description": (
-            "Large size of RoBERTa where case is maintained."
-            "Trained on a 160 GB English dataset."
-        ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_en/v1/model.h5",
         "weights_hash": "1978b864c317a697fe62a894d3664f14",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_en/v1/vocab.json",

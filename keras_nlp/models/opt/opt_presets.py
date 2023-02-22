@@ -16,6 +16,15 @@
 # Metadata for loading pretrained model weights.
 backbone_presets = {
     "opt_125m_en": {
+        "metadata": {
+            "description": (
+                "12-layer OPT model where case in maintained. Trained on "
+                "BookCorpus, CommonCrawl, Pile, and PushShift.io corpora."
+            ),
+            "params": 125237760,
+            "official_name": "OPT",
+            "path": "opt",
+        },
         "config": {
             "vocabulary_size": 50272,
             "num_layers": 12,
@@ -26,10 +35,6 @@ backbone_presets = {
             "max_sequence_length": 2048,
         },
         "preprocessor_config": {},
-        "description": (
-            "12-layer OPT model where case in maintained. Trained on "
-            "BookCorpus, CommonCrawl, Pile, and PushShift.io corpora."
-        ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/opt_125m_en/v1/model.h5",
         "weights_hash": "63e444998982e48da4a1a3970f4c6203",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/opt_125m_en/v1/vocab.json",
@@ -40,6 +45,15 @@ backbone_presets = {
     # We skip the 350m checkpoint because it does not match the structure of
     # other checkpoints.
     "opt_1.3b_en": {
+        "metadata": {
+            "description": (
+                "24-layer OPT model where case in maintained. Trained on "
+                "BookCorpus, CommonCrawl, Pile, and PushShift.io corpora."
+            ),
+            "params": 1315753984,
+            "official_name": "OPT",
+            "path": "opt",
+        },
         "config": {
             "vocabulary_size": 50272,
             "num_layers": 24,
@@ -50,10 +64,6 @@ backbone_presets = {
             "max_sequence_length": 2048,
         },
         "preprocessor_config": {},
-        "description": (
-            "24-layer OPT model where case in maintained. Trained on "
-            "BookCorpus, CommonCrawl, Pile, and PushShift.io corpora."
-        ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/opt_1.3b_en/v1/model.h5",
         "weights_hash": "0365ac8483e99a912c9770521909ecce",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/opt_1.3b_en/v1/vocab.json",
@@ -62,6 +72,15 @@ backbone_presets = {
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
     "opt_2.7b_en": {
+        "metadata": {
+            "description": (
+                "32-layer OPT model where case in maintained. Trained on "
+                "BookCorpus, CommonCrawl, Pile, and PushShift.io corpora."
+            ),
+            "params": 2700000000,
+            "official_name": "OPT",
+            "path": "opt",
+        },
         "config": {
             "vocabulary_size": 50272,
             "num_layers": 32,
@@ -72,10 +91,6 @@ backbone_presets = {
             "max_sequence_length": 2048,
         },
         "preprocessor_config": {},
-        "description": (
-            "32-layer OPT model where case in maintained. Trained on "
-            "BookCorpus, CommonCrawl, Pile, and PushShift.io corpora."
-        ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/opt_2.7b_en/v1/model.h5",
         "weights_hash": "af56da9206a95b9287356955c5bc14e7",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/opt_2.7b_en/v1/vocab.json",
@@ -84,6 +99,15 @@ backbone_presets = {
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
     "opt_6.7b_en": {
+        "metadata": {
+            "description": (
+                "32-layer OPT model where case in maintained. Trained on "
+                "BookCorpus, CommonCrawl, Pile, and PushShift.io corpora."
+            ),
+            "params": 6700000000,
+            "official_name": "OPT",
+            "path": "opt",
+        },
         "config": {
             "vocabulary_size": 50272,
             "num_layers": 32,
@@ -94,10 +118,6 @@ backbone_presets = {
             "max_sequence_length": 2048,
         },
         "preprocessor_config": {},
-        "description": (
-            "32-layer OPT model where case in maintained. Trained on "
-            "BookCorpus, CommonCrawl, Pile, and PushShift.io corpora."
-        ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/opt_6.7b_en/v1/model.h5",
         "weights_hash": "543120fbe601b70e6ec04cc909781e21",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/opt_6.7b_en/v1/vocab.json",
