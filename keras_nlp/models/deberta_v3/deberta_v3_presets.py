@@ -31,8 +31,8 @@ backbone_presets = {
                 "Extra small size of DeBERTaV3. "
                 "Trained on English Wikipedia, BookCorpus and OpenWebText."
             ),
-            "params": 70830722,
-            "official_name": "DeBERTa",
+            "params": 70682112,
+            "official_name": "DeBERTaV3",
             "path": "deberta",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_extra_small_en/v1/model.h5",
@@ -57,8 +57,8 @@ backbone_presets = {
                 "Small size of DeBERTaV3. "
                 "Trained on English Wikipedia, BookCorpus and OpenWebText."
             ),
-            "params": 141896450,
-            "official_name": "DeBERTa",
+            "params": 141304320,
+            "official_name": "DeBERTaV3",
             "path": "deberta",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_small_en/v1/model.h5",
@@ -83,8 +83,8 @@ backbone_presets = {
                 "Base size of DeBERTaV3. "
                 "Trained on English Wikipedia, BookCorpus and OpenWebText."
             ),
-            "params": 184423682,
-            "official_name": "DeBERTa",
+            "params": 183831552,
+            "official_name": "DeBERTaV3",
             "path": "deberta",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_base_en/v1/model.h5",
@@ -109,8 +109,8 @@ backbone_presets = {
                 "Large size of DeBERTaV3. "
                 "Trained on English Wikipedia, BookCorpus and OpenWebText."
             ),
-            "params": 435063810,
-            "official_name": "DeBERTa",
+            "params": 434012160,
+            "official_name": "DeBERTaV3",
             "path": "deberta",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_large_en/v1/model.h5",
@@ -135,8 +135,8 @@ backbone_presets = {
                 "Base size of DeBERTaV3. "
                 "Trained on the 2.5TB multilingual CC100 dataset."
             ),
-            "params": 278810882,
-            "official_name": "DeBERTa",
+            "params": 278218752,
+            "official_name": "DeBERTaV3",
             "path": "deberta",
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_base_multi/v1/model.h5",

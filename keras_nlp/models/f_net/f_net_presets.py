@@ -27,7 +27,8 @@ backbone_presets = {
         "preprocessor_config": {},
         "metadata": {
             "description": (
-                "Base size of FNet. Trained on the C4 dataset (English)."
+                "12-layer FNet model where case is maintained. "
+                "Trained on the C4 dataset."
             ),
             "params": 82861056,
             "official_name": "FNet",
@@ -51,7 +52,8 @@ backbone_presets = {
         "preprocessor_config": {},
         "metadata": {
             "description": (
-                "Large size of FNet. Trained on the C4 dataset (English)."
+                "24-layer FNet model where case is maintained. "
+                "Trained on the C4 dataset."
             ),
             "params": 236945408,
             "official_name": "FNet",

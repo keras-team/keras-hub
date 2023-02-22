@@ -28,9 +28,8 @@ backbone_presets = {
         
         "metadata": {
             "description": (
-                "Base size of BART where case is maintained. "
-                "Trained on a 160GB English dataset comprising BookCorpus, "
-                "English Wikipedia and CommonCrawl."
+                "6-layer BART model where case is maintained. "
+                "Trained on BookCorpus, English Wikipedia and CommonCrawl."
             ),
             "params": 139417344,
             "official_name": "BART",
@@ -56,8 +55,8 @@ backbone_presets = {
         "preprocessor_config": {},
         "metadata": {
             "description": (
-                "Base size of BART where all input is lowercased. "
-                "Trained on English Wikipedia + BooksCorpus."
+                "12-layer BART model where case is maintained. "
+                "Trained on BookCorpus, English Wikipedia and CommonCrawl."
             ),
             "params": 406287360,
             "official_name": "BART",
