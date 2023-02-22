@@ -28,7 +28,7 @@ backbone_presets = {
         "preprocessor_config": {},
         "metadata": {
             "description": (
-                "Extra small size of DeBERTaV3. "
+                "12-layer DeBERTaV3 model where case is maintained. "
                 "Trained on English Wikipedia, BookCorpus and OpenWebText."
             ),
             "params": 70682112,
@@ -54,7 +54,7 @@ backbone_presets = {
         "preprocessor_config": {},
         "metadata": {
             "description": (
-                "Small size of DeBERTaV3. "
+                "6-layer DeBERTaV3 model where case is maintained. "
                 "Trained on English Wikipedia, BookCorpus and OpenWebText."
             ),
             "params": 141304320,
@@ -80,7 +80,7 @@ backbone_presets = {
         "preprocessor_config": {},
         "metadata": {
             "description": (
-                "Base size of DeBERTaV3. "
+                "12-layer DeBERTaV3 model where case is maintained. "
                 "Trained on English Wikipedia, BookCorpus and OpenWebText."
             ),
             "params": 183831552,
@@ -106,7 +106,7 @@ backbone_presets = {
         "preprocessor_config": {},
         "metadata": {
             "description": (
-                "Large size of DeBERTaV3. "
+                "24-layer DeBERTaV3 model where case is maintained. "
                 "Trained on English Wikipedia, BookCorpus and OpenWebText."
             ),
             "params": 434012160,
@@ -132,7 +132,7 @@ backbone_presets = {
         "preprocessor_config": {},
         "metadata": {
             "description": (
-                "Base size of DeBERTaV3. "
+                "12-layer DeBERTaV3 model where case is maintained. "
                 "Trained on the 2.5TB multilingual CC100 dataset."
             ),
             "params": 278218752,
