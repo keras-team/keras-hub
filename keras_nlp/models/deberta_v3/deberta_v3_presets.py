@@ -28,10 +28,15 @@ backbone_presets = {
         "preprocessor_config": {
             "mask_token_id": 128000,
         },
-        "description": (
-            "Extra small size of DeBERTaV3. "
-            "Trained on English Wikipedia, BookCorpus and OpenWebText."
-        ),
+        "metadata": {
+            "description": (
+                "12-layer DeBERTaV3 model where case is maintained. "
+                "Trained on English Wikipedia, BookCorpus and OpenWebText."
+            ),
+            "params": 70682112,
+            "official_name": "DeBERTaV3",
+            "path": "deberta",
+        },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_extra_small_en/v1/model.h5",
         "weights_hash": "d8e10327107e5c5e20b45548a5028619",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_extra_small_en/v1/vocab.spm",
@@ -51,10 +56,15 @@ backbone_presets = {
         "preprocessor_config": {
             "mask_token_id": 128000,
         },
-        "description": (
-            "Small size of DeBERTaV3. "
-            "Trained on English Wikipedia, BookCorpus and OpenWebText."
-        ),
+        "metadata": {
+            "description": (
+                "6-layer DeBERTaV3 model where case is maintained. "
+                "Trained on English Wikipedia, BookCorpus and OpenWebText."
+            ),
+            "params": 141304320,
+            "official_name": "DeBERTaV3",
+            "path": "deberta",
+        },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_small_en/v1/model.h5",
         "weights_hash": "84118eb7c5a735f2061ecccaf71bb888",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_small_en/v1/vocab.spm",
@@ -74,10 +84,15 @@ backbone_presets = {
         "preprocessor_config": {
             "mask_token_id": 128000,
         },
-        "description": (
-            "Base size of DeBERTaV3. "
-            "Trained on English Wikipedia, BookCorpus and OpenWebText."
-        ),
+        "metadata": {
+            "description": (
+                "12-layer DeBERTaV3 model where case is maintained. "
+                "Trained on English Wikipedia, BookCorpus and OpenWebText."
+            ),
+            "params": 183831552,
+            "official_name": "DeBERTaV3",
+            "path": "deberta",
+        },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_base_en/v1/model.h5",
         "weights_hash": "cebce044aeed36aec9b94e3b8a255430",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_base_en/v1/vocab.spm",
@@ -97,10 +112,15 @@ backbone_presets = {
         "preprocessor_config": {
             "mask_token_id": 128000,
         },
-        "description": (
-            "Large size of DeBERTaV3. "
-            "Trained on English Wikipedia, BookCorpus and OpenWebText."
-        ),
+        "metadata": {
+            "description": (
+                "24-layer DeBERTaV3 model where case is maintained. "
+                "Trained on English Wikipedia, BookCorpus and OpenWebText."
+            ),
+            "params": 434012160,
+            "official_name": "DeBERTaV3",
+            "path": "deberta",
+        },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_large_en/v1/model.h5",
         "weights_hash": "bce7690f358a9e39304f8c0ebc71a745",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_large_en/v1/vocab.spm",
@@ -120,10 +140,15 @@ backbone_presets = {
         "preprocessor_config": {
             "mask_token_id": 250101,
         },
-        "description": (
-            "Base size of DeBERTaV3. "
-            "Trained on the 2.5TB multilingual CC100 dataset."
-        ),
+        "metadata": {
+            "description": (
+                "12-layer DeBERTaV3 model where case is maintained. "
+                "Trained on the 2.5TB multilingual CC100 dataset."
+            ),
+            "params": 278218752,
+            "official_name": "DeBERTaV3",
+            "path": "deberta",
+        },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_base_multi/v1/model.h5",
         "weights_hash": "26e5a824b26afd2ee336835bd337bbeb",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/deberta_v3_base_multi/v1/vocab.spm",
