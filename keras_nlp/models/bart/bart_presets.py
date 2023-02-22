@@ -25,7 +25,6 @@ backbone_presets = {
             "max_sequence_length": 1024,
         },
         "preprocessor_config": {},
-        
         "metadata": {
             "description": (
                 "6-layer BART model where case is maintained. "
