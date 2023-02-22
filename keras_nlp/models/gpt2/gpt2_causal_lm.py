@@ -189,18 +189,6 @@ class GPT2CausalLM(Task):
         self.backbone = backbone
         self.preprocessor = preprocessor
 
-        # These layer attributes are used in cached decoding.
-        # We save them as class attrs to avoid excessive `get_layer` calls.
-        self.transformer_layers = []
-        for i in range(self.backbone.num_layers):
-            self.transformer_layers.append(
-                self.backbone.get_layer(f"transformer_layer_{i}")
-            )
-        self.layer_norm = self.backbone.get_layer("layer_norm")
-        self.token_embeddings = self.backbone.get_layer("token_embedding")
-        self.position_embeddings = self.backbone.get_layer("position_embedding")
-        self.embeddings_dropout = self.backbone.get_layer("embeddings_dropout")
-
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
@@ -232,19 +220,29 @@ class GPT2CausalLM(Task):
             x: a dense float Tensor, the next token logits of `inputs`.
             cache: a dense float Tensor, the updated cache.
         """
-        token_embedding = self.token_embeddings(token_ids)
+        transformer_layers = []
+        for i in range(self.backbone.num_layers):
+            transformer_layers.append(
+                self.backbone.get_layer(f"transformer_layer_{i}")
+            )
+        layer_norm = self.backbone.get_layer("layer_norm")
+        token_embeddings = self.backbone.get_layer("token_embedding")
+        position_embeddings = self.backbone.get_layer("position_embedding")
+        embeddings_add = self.backbone.get_layer("embeddings_add")
+        embeddings_dropout = self.backbone.get_layer("embeddings_dropout")
+
+        token_embedding = token_embeddings(token_ids)
         if cache_index is None:
-            position_embedding = self.position_embeddings(token_embedding)
+            position_embedding = position_embeddings(token_embedding)
         else:
-            position_embedding = self.position_embeddings.position_embeddings[
+            position_embedding = position_embeddings.position_embeddings[
                 cache_index, :
             ]
-        x = token_embedding + position_embedding
-        x = self.embeddings_dropout(x)
-        # Each `TransformerDecoder` layer has a cache, we update them
-        # separately.
-        caches = tf.unstack(cache, axis=1)
-        for i, transformer_layer in enumerate(self.transformer_layers):
+        x = embeddings_add((token_embedding, position_embedding))
+        x = embeddings_dropout(x)
+        # Each `TransformerDecoder` layer has a cache, we update separately.
+        caches = tf.unstack(cache, axis=0)
+        for i, transformer_layer in enumerate(transformer_layers):
             current_cache = caches[i]
             x, current_cache = transformer_layer(
                 x,
@@ -253,8 +251,8 @@ class GPT2CausalLM(Task):
                 cache_index=cache_index,
             )
             caches[i] = current_cache
-        cache = tf.stack(caches, axis=1)
-        x = self.layer_norm(x)
+        cache = tf.stack(caches, axis=0)
+        x = layer_norm(x)
         x = tf.matmul(
             x,
             self.backbone.token_embedding.embeddings,
@@ -266,7 +264,7 @@ class GPT2CausalLM(Task):
         """Build initial cache based on the prompt.
 
         This method should be called before the decoding loop to build the
-        initial cache. The cache is of shape [2, `self.num_layers`, batch_size,
+        initial cache. The cache is of shape [`self.num_layers`, batch_size, 2
         max_length, `self.num_heads`, `self.hidden_dim // self.num_heads`].
         The first dim represents it's a key or value in multi-head attention.
 
@@ -292,16 +290,20 @@ class GPT2CausalLM(Task):
         )
         cache = tf.zeros(
             [
-                2,
                 self.backbone.num_layers,
                 batch_size,
+                2,
                 max_length,
                 self.backbone.num_heads,
                 self.backbone.hidden_dim // self.backbone.num_heads,
             ],
         )
 
-        output, cache = self.call_with_cache(token_ids, padding_mask, cache)
+        output, cache = self.call_with_cache(
+            token_ids,
+            padding_mask,
+            cache=cache,
+        )
         outputs = dynamic_update_slice(outputs, output, [0, 0, 0])
         return outputs, cache
 
@@ -353,6 +355,11 @@ class GPT2CausalLM(Task):
             sampler: a string or `keras_nlp.samplers.Sampler` instance. The
                 sampler to be used for text generation.
         """
+        if self.preprocessor is None:
+            raise ValueError(
+                "Missing `self.preprocessor`, please make sure `preprocessor` "
+                "is set before calling `generate`."
+            )
         end_token_id = self.preprocessor.tokenizer.end_token_id
 
         sampler = keras_nlp.samplers.get(sampler)
@@ -361,7 +368,6 @@ class GPT2CausalLM(Task):
             # backward compat.
             sampler.jit_compile = self.jit_compile
         sampler.run_eagerly = self.run_eagerly
-        initial_output, cache = None, None
         x, _, _ = self.preprocessor(prompt)
         token_ids = x["token_ids"]
         padding_mask = x["padding_mask"]
@@ -373,7 +379,7 @@ class GPT2CausalLM(Task):
             "token_ids": token_ids,
             "padding_mask": padding_mask,
         }
-        initial_output, cache = self.build_initial_cache(x, max_length)
+        _, cache = self.build_initial_cache(x, max_length)
         next_token_probability = self._get_token_probability
         generated = sampler(
             self.preprocessor.tokenizer(prompt),
@@ -381,6 +387,5 @@ class GPT2CausalLM(Task):
             max_length=max_length,
             end_token_id=end_token_id,
             cache=cache,
-            token_probs=initial_output,
         )
         return self.preprocessor.tokenizer.detokenize(generated)

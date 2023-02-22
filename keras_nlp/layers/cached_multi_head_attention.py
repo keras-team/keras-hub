@@ -43,7 +43,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             attention and 0 indicates no attention. Broadcasting can happen for
             the missing batch dimensions and the head dimension.
         cache: a dense float Tensor. The cache of key/value of leading tokens.
-            `cache` is of shape [2, B, max_seq_len, num_heads, key_dims].
+            `cache` is of shape [B, 2, max_seq_len, num_heads, key_dims].
         cache_index: a int or int Tensor, the index of the current token being
             processed. If `cache_index=None` while `cache` is set, it means
             it's the first pass to build the cache.
@@ -88,19 +88,19 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             if cache_index is None:
                 seq_len = tf.shape(query)[1]
                 k_update_indices = [0, 0, 0, 0, 0]
-                v_update_indices = [1, 0, 0, 0, 0]
+                v_update_indices = [0, 1, 0, 0, 0]
                 cache_index = seq_len - 1
             else:
                 k_update_indices = [0, 0, cache_index, 0, 0]
-                v_update_indices = [1, 0, cache_index, 0, 0]
+                v_update_indices = [0, 1, cache_index, 0, 0]
             cache = dynamic_update_slice(
-                cache, key[tf.newaxis, ...], k_update_indices
+                cache, key[:, tf.newaxis, ...], k_update_indices
             )
             cache = dynamic_update_slice(
-                cache, value[tf.newaxis, ...], v_update_indices
+                cache, value[:, tf.newaxis, ...], v_update_indices
             )
-            key = cache[0, :, : cache_index + 1, :, :]
-            value = cache[1, :, : cache_index + 1, :, :]
+            key = cache[:, 0, : cache_index + 1, :, :]
+            value = cache[:, 1, : cache_index + 1, :, :]
 
         query = tf.multiply(query, 1.0 / tf.math.sqrt(float(self._key_dim)))
         attention_scores = tf.einsum(self._dot_product_equation, key, query)

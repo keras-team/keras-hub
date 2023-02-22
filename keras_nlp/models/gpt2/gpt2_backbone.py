@@ -125,7 +125,9 @@ class GPT2Backbone(Backbone):
         )(token_embedding)
 
         # Sum and apply dropout to embeddings.
-        x = keras.layers.Add()((token_embedding, position_embedding))
+        x = keras.layers.Add(name="embeddings_add")(
+            (token_embedding, position_embedding)
+        )
         x = keras.layers.Dropout(
             dropout,
             name="embeddings_dropout",
@@ -144,10 +146,7 @@ class GPT2Backbone(Backbone):
                 kernel_initializer=_gpt_2_kernel_initializer(stddev=0.02),
                 normalize_first=True,
                 name=f"transformer_layer_{i}",
-            )(
-                x,
-                decoder_padding_mask=padding_mask,
-            )
+            )(x, decoder_padding_mask=padding_mask)
 
         sequence_output = keras.layers.LayerNormalization(
             name="layer_norm",
