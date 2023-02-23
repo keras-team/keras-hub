@@ -96,7 +96,6 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
 
     # Creating sentencepiece tokenizer for FNet LM preprocessor
     bytes_io = io.BytesIO()
-
     sentencepiece.SentencePieceTrainer.train(
         sentence_iterator=vocab_data.as_numpy_iterator(),
         model_writer=bytes_io,
@@ -112,13 +111,9 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
         eos_piece="[SEP]",
         user_defined_symbols="[MASK]",
     )
-
     proto = bytes_io.getvalue()
-
-    tokenizer = FNetTokenizer(proto=proto)
-
     preprocessor = FNetMaskedLMPreprocessor(
-        tokenizer=tokenizer
+        tokenizer=FNetTokenizer(proto=proto)
     )
 
     ```
