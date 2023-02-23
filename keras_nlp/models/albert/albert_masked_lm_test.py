@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for ALBERT classification model."""
+"""Tests for ALBERT masked language model."""
 
 import io
 import os
@@ -22,32 +22,33 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
-from keras_nlp.models.albert.albert_classifier import AlbertClassifier
-from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
+from keras_nlp.models.albert.albert_masked_lm import AlbertMaskedLM
+from keras_nlp.models.albert.albert_masked_lm_preprocessor import (
+    AlbertMaskedLMPreprocessor,
+)
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 
 
-class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
+class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.backbone = AlbertBackbone(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
-            embedding_dim=8,
+            embedding_dim=128,
             hidden_dim=64,
             intermediate_dim=128,
             max_sequence_length=128,
-            name="encoder",
+        )
+        vocab_data = tf.data.Dataset.from_tensor_slices(
+            ["the quick brown fox", "the earth is round", "an eagle flew"]
         )
 
         bytes_io = io.BytesIO()
-        vocab_data = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox", "the earth is round"]
-        )
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=vocab_data.as_numpy_iterator(),
             model_writer=bytes_io,
-            vocab_size=10,
+            vocab_size=15,
             model_type="WORD",
             pad_id=0,
             unk_id=1,
@@ -59,92 +60,93 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
             eos_piece="[SEP]",
             user_defined_symbols="[MASK]",
         )
-        self.proto = bytes_io.getvalue()
 
-        tokenizer = AlbertTokenizer(proto=self.proto)
+        proto = bytes_io.getvalue()
 
-        self.preprocessor = AlbertPreprocessor(
+        tokenizer = AlbertTokenizer(proto=proto)
+
+        self.preprocessor = AlbertMaskedLMPreprocessor(
             tokenizer=tokenizer,
-            sequence_length=8,
+            # Simplify out testing by masking every available token.
+            mask_selection_rate=1.0,
+            mask_token_rate=1.0,
+            random_token_rate=0.0,
+            mask_selection_length=5,
+            sequence_length=12,
         )
-        self.classifier = AlbertClassifier(
+        self.masked_lm = AlbertMaskedLM(
             self.backbone,
-            4,
             preprocessor=self.preprocessor,
         )
-        self.classifier_no_preprocessing = AlbertClassifier(
+        self.masked_lm_no_preprocessing = AlbertMaskedLM(
             self.backbone,
-            4,
             preprocessor=None,
         )
 
         self.raw_batch = tf.constant(
             [
-                "the quick brown fox.",
-                "the slow brown fox.",
-                "the smelly brown fox.",
-                "the old brown fox.",
+                "quick brown fox",
+                "eagle flew over fox",
+                "the eagle flew quick",
+                "a brown eagle",
             ]
         )
-        self.preprocessed_batch = self.preprocessor(self.raw_batch)
+        self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, tf.ones((4,)))
+            self.raw_batch
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
-    def test_valid_call_classifier(self):
-        self.classifier(self.preprocessed_batch)
+    def test_valid_call_masked_lm(self):
+        self.masked_lm(self.preprocessed_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_albert_classifier_predict(self, jit_compile):
-        self.classifier.compile(jit_compile=jit_compile)
-        self.classifier.predict(self.raw_batch)
+    def test_albert_masked_lm_predict(self, jit_compile):
+        self.masked_lm.compile(jit_compile=jit_compile)
+        self.masked_lm.predict(self.raw_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_albert_classifier_predict_no_preprocessing(self, jit_compile):
-        self.classifier_no_preprocessing.compile(jit_compile=jit_compile)
-        self.classifier_no_preprocessing.predict(self.preprocessed_batch)
-
-    def test_albert_classifier_fit_default_compile(self):
-        self.classifier.fit(self.raw_dataset)
+    def test_albert_masked_lm_predict_no_preprocessing(self, jit_compile):
+        self.masked_lm_no_preprocessing.compile(jit_compile=jit_compile)
+        self.masked_lm_no_preprocessing.predict(self.preprocessed_batch)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_albert_classifier_fit(self, jit_compile):
-        self.classifier.compile(
+    def test_albert_masked_lm_fit(self, jit_compile):
+        self.masked_lm.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             jit_compile=jit_compile,
         )
-        self.classifier.fit(self.raw_dataset)
+        self.masked_lm.fit(self.raw_dataset)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_albert_classifier_fit_no_preprocessing(self, jit_compile):
-        self.classifier_no_preprocessing.compile(
+    def test_albert_masked_lm_fit_no_preprocessing(self, jit_compile):
+        self.masked_lm_no_preprocessing.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             jit_compile=jit_compile,
         )
-        self.classifier_no_preprocessing.fit(self.preprocessed_dataset)
+        self.masked_lm_no_preprocessing.fit(self.preprocessed_dataset)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
     def test_saved_model(self, save_format, filename):
-        model_output = self.classifier.predict(self.raw_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)
-        self.classifier.save(save_path, save_format=save_format)
+        self.masked_lm.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, AlbertClassifier)
+        self.assertIsInstance(restored_model, AlbertMaskedLM)
 
-        # Check that output matches.
-        restored_output = restored_model.predict(self.raw_batch)
+        model_output = self.masked_lm(self.preprocessed_batch)
+        restored_output = restored_model(self.preprocessed_batch)
+
         self.assertAllClose(model_output, restored_output)
