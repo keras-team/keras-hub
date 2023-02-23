@@ -277,9 +277,8 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
             num_heads=num_heads,
         )
         x = tf.random.uniform(shape=[batch_size, seq_len, hidden_dim])
-        # [2, batch_size, seq_length, num_heads, hidden_dim // num_heads]
         cache = tf.zeros(
-            [2, batch_size, seq_len, num_heads, hidden_dim // num_heads]
+            [batch_size, 2, seq_len, num_heads, hidden_dim // num_heads]
         )
         # Build the intial cache.
         initial_seq_len = 2
