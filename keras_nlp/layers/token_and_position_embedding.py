@@ -24,8 +24,11 @@ from keras_nlp.utils.keras_utils import clone_initializer
 class TokenAndPositionEmbedding(keras.layers.Layer):
     """A layer which sums a token and position embedding.
 
-    This layer assumes that the last dimension in the input corresponds
-    to the sequence dimension.
+    Token and position embeddings are ways of representing words and their order
+    in a sentence. This layer creates a `keras.layers.Embedding` token embedding
+    and a `keras_nlp.layers.PositionEmbedding` position embedding and sums their
+    output when called. This layer assumes that the last dimension in the input
+    corresponds to the sequence dimension.
 
     Args:
         vocabulary_size: The size of the vocabulary.
@@ -44,14 +47,11 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
 
     Examples:
     ```python
-    seq_length = 50
-    vocab_size = 5000
-    embed_dim = 128
-    inputs = keras.Input(shape=(seq_length,))
+    inputs = tf.ones(shape=(1, 50), dtype=tf.int64)
     embedding_layer = keras_nlp.layers.TokenAndPositionEmbedding(
-        vocabulary_size=vocab_size,
-        sequence_length=seq_length,
-        embedding_dim=embed_dim,
+        vocabulary_size=10_000,
+        sequence_length=50,
+        embedding_dim=128,
     )
     outputs = embedding_layer(inputs)
     ```

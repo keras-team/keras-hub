@@ -190,6 +190,7 @@ class AlbertBackbone(Backbone):
                         x, approximate=True
                     ),
                     dropout=dropout,
+                    layer_norm_epsilon=1e-12,
                     kernel_initializer=albert_kernel_initializer(),
                     name=f"group_{group_idx}_inner_layer_{inner_idx}",
                 )

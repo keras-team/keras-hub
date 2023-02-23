@@ -141,6 +141,7 @@ class DistilBertBackbone(Backbone):
                 intermediate_dim=intermediate_dim,
                 activation="gelu",
                 dropout=dropout,
+                layer_norm_epsilon=1e-12,
                 kernel_initializer=distilbert_kernel_initializer(),
                 name=f"transformer_layer_{i}",
             )(x, padding_mask=padding_mask)

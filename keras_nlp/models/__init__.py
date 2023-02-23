@@ -13,6 +13,11 @@
 # limitations under the License.
 
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
+from keras_nlp.models.albert.albert_classifier import AlbertClassifier
+from keras_nlp.models.albert.albert_masked_lm import AlbertMaskedLM
+from keras_nlp.models.albert.albert_masked_lm_preprocessor import (
+    AlbertMaskedLMPreprocessor,
+)
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_nlp.models.bart.bart_backbone import BartBackbone
@@ -21,6 +26,14 @@ from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_classifier import BertClassifier
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
+from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
+from keras_nlp.models.deberta_v3.deberta_v3_classifier import (
+    DebertaV3Classifier,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
+    DebertaV3Preprocessor,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_classifier import (
     DistilBertClassifier,

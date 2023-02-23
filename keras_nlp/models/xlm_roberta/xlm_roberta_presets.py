@@ -15,6 +15,15 @@
 
 backbone_presets = {
     "xlm_roberta_base_multi": {
+        "metadata": {
+            "description": (
+                "12-layer XLM-RoBERTa model where case is maintained. "
+                "Trained on CommonCrawl in 100 languages."
+            ),
+            "params": 277450752,
+            "official_name": "XLM-RoBERTa",
+            "path": "xlm_roberta",
+        },
         "config": {
             "vocabulary_size": 250002,
             "num_layers": 12,
@@ -25,16 +34,21 @@ backbone_presets = {
             "max_sequence_length": 512,
         },
         "preprocessor_config": {},
-        "description": (
-            "Base size of XLM-RoBERTa. "
-            "Trained on the CommonCrawl dataset (100 languages)."
-        ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base_multi/v1/model.h5",
         "weights_hash": "2eb6fcda5a42f0a88056213ba3d93906",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_base_multi/v1/vocab.spm",
         "spm_proto_hash": "bf25eb5120ad92ef5c7d8596b5dc4046",
     },
     "xlm_roberta_large_multi": {
+        "metadata": {
+            "description": (
+                "24-layer XLM-RoBERTa model where case is maintained. "
+                "Trained on CommonCrawl in 100 languages."
+            ),
+            "params": 558837760,
+            "official_name": "XLM-RoBERTa",
+            "path": "xlm_roberta",
+        },
         "config": {
             "vocabulary_size": 250002,
             "num_layers": 24,
@@ -45,10 +59,6 @@ backbone_presets = {
             "max_sequence_length": 512,
         },
         "preprocessor_config": {},
-        "description": (
-            "Large size of XLM-RoBERTa. "
-            "Trained on the CommonCrawl dataset (100 languages)."
-        ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_large_multi/v1/model.h5",
         "weights_hash": "276211827174b71751f2ce3a89da503a",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/xlm_roberta_large_multi/v1/vocab.spm",
