@@ -249,8 +249,9 @@ class Sampler:
             token_probability_fn,
             mask,
             max_length - shortest_prompt_len,
-            cache=cache,
             from_logits=from_logits,
+            end_token_id=None,
+            cache=cache,
         )
         # Mask out tokens after `end_token_id`.
         if end_token_id is not None:
@@ -282,6 +283,7 @@ class Sampler:
         mask,
         num_steps,
         from_logits=True,
+        end_token_id=None,
         cache=None,
     ):
         """Sampling logic implementation.
@@ -297,6 +299,9 @@ class Sampler:
             from_logits: bool, defaults to True. Indicate if the
                 `token_probability_fn` returns logits. If False,
                 `token_probability_fn` returns probability distributions.
+            end_token_id: int, defaults to None. The token marking the end of
+                the sequence, once encountered the generation is finished for
+                the exact sequence.
             cache: a dense int tensor, the cache used in decoding. The cache
                 stores the key and value of each
                 `keras_nlp.layers.CachedMultiHeadAttention` layer to make the
@@ -312,6 +317,7 @@ class Sampler:
         # The index of the last non-padding token in prompt. Since all sequences
         # are aligned to the right side, the index is the same for all.
         current_index = max_length - num_steps
+        original_padding_mask = tf.identity(mask)
 
         def one_step(
             current_index,
@@ -319,17 +325,24 @@ class Sampler:
             mask,
             cache=None,
         ):
+            end_token_seen = (prompt == end_token_id) & (original_padding_mask == 0) 
+            sequence_done = tf.reduce_any(end_token_seen, axis=-1) 
+            # Store the indices of unfinishe sequences.
+            unfinished_indices = tf.where(sequence_done == 0)
+            unfinished_prompt = tf.boolean_mask(prompt, 1 - sequence_done)
+            unfinished_prompt_mask = tf.boolean_mask(mask, 1 - sequence_done)
             last_index = current_index - 1
+            # Compute the next token probs for unfinished sequences.
             if cache is not None:
                 probs, cache = token_probability_fn(
-                    prompt,
-                    mask,
+                    unfinished_prompt,
+                    unfinished_prompt_mask,
                     cache=cache,
                     cache_index=last_index,
                 )
                 next_token_probs = tf.squeeze(probs, axis=1)
             else:
-                probs = token_probability_fn(prompt, mask)
+                probs = token_probability_fn(unfinished_prompt_mask, unfinished_prompt_mask,)
                 next_token_probs = tf.gather(
                     probs,
                     tf.repeat(current_index - 1, batch_size),
@@ -343,6 +356,14 @@ class Sampler:
                 )
             next_token = self.get_next_token(next_token_probs)
             next_token = tf.cast(next_token, prompt.dtype)
+            not_end_token = next_token != end_token_id
+            # To update the prompt, we need to put the next token of unfinished
+            # sequences into the original indices.
+            next_token = tf.tensor_scatter_nd_update(
+                tf.cast(tf.zeros([batch_size]), dtype=tf.int32),
+                unfinished_indices,
+                next_token,
+            )
             next_token = tf.where(
                 mask[:, current_index],
                 prompt[:, current_index],
@@ -358,20 +379,24 @@ class Sampler:
                 return current_index, prompt, mask
             return [current_index, prompt, mask, cache]
 
+        def loop_cond(current_index, prompt, mask, cache=None):
+            new_end_tokens = (prompt == end_token_id) & (original_padding_mask == False) 
+            sequence_done = tf.reduce_any(end_token_seen, axis=-1) 
+            all_done = tf.reduce_all(new_end_tokens)
+            return all_done and tf.less(
+                current_index, max_length
+            )
+            
         if cache is None:
             current_index, prompt, mask = tf.while_loop(
-                cond=lambda current_index, prompt, mask: tf.less(
-                    current_index, max_length
-                ),
+                cond=loop_cond,
                 body=one_step,
                 loop_vars=[current_index, prompt, mask],
             )
             return prompt
         # Run a while loop till `max_length` of tokens has been generated.
         current_index, prompt, mask, cache = tf.while_loop(
-            cond=lambda current_index, prompt, mask, cache: tf.less(
-                current_index, max_length
-            ),
+            cond=loop_cond,
             body=one_step,
             loop_vars=[current_index, prompt, mask, cache],
         )
