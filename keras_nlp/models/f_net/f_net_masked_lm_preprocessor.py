@@ -112,10 +112,8 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
         user_defined_symbols="[MASK]",
     )
     proto = bytes_io.getvalue()
-    preprocessor = FNetMaskedLMPreprocessor(
-        tokenizer=FNetTokenizer(proto=proto)
-    )
-
+    tokenizer = FNetTokenizer(proto=proto)
+    preprocessor = FNetMaskedLMPreprocessor(tokenizer=tokenizer)
     ```
     """
 
