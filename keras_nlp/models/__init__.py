@@ -25,6 +25,8 @@ from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_classifier import BertClassifier
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
+from keras_nlp.models.bert.bert_masked_lm import BertMaskedLM
+from keras_nlp.models.bert.bert_masked_lm_preprocessor import BertMaskedLMPreprocessor
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_classifier import (
@@ -34,8 +36,6 @@ from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
     DebertaV3Preprocessor,
 )
 from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
-from keras_nlp.models.bert.bert_masked_lm import BertMaskedLM
-from keras_nlp.models.bert.bert_masked_lm_preprocessor import BertMaskedLMPreprocessor
 from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_classifier import (
     DistilBertClassifier,

@@ -122,10 +122,12 @@ class BertMaskedLM(Task):
         outputs = MaskedLMHead(
             vocabulary_size=backbone.vocabulary_size,
             embedding_weights=backbone.token_embedding.embeddings,
-            intermediate_activation="gelu",
+            intermediate_activation=lambda x: keras.activations.gelu(
+                x, approximate=True
+            ),
             kernel_initializer=bert_kernel_initializer(),
             name="mlm_head",
-        )(backbone_outputs, inputs["mask_positions"])
+        )(backbone_outputs["sequence_output"], inputs["mask_positions"])
 
         # Instantiate using Functional API Model constructor
         super().__init__(
