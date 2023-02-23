@@ -97,7 +97,7 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
 
         # We do not check for the presence of `mask_token`; this will be
         # handled in the corresponding MaskedLM processor.
-        for token in [cls_token, sep_token, pad_token]:
+        for token in [cls_token, pad_token, sep_token]:
             if token not in self._get_sentence_piece_vocabulary():
                 raise ValueError(
                     f"Cannot find token `'{token}'` in the provided "
