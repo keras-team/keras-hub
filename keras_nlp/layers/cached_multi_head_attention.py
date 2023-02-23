@@ -63,7 +63,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         value,
         key=None,
         attention_mask=None,
-        use_causal_mask=True,
+        use_causal_mask=False,
         cache=None,
         cache_index=None,
     ):

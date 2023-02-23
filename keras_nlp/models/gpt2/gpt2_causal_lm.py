@@ -217,8 +217,9 @@ class GPT2CausalLM(Task):
                 represents the index of current inputs in the whole sequence.
 
         Returns:
-            x: a dense float Tensor, the next token logits of `inputs`.
-            cache: a dense float Tensor, the updated cache.
+            A (logits, cache) tuple. Where the first output is the language
+            model logits for the input token_ids and the second output is the
+            cache.
         """
         transformer_layers = []
         for i in range(self.backbone.num_layers):
@@ -241,7 +242,7 @@ class GPT2CausalLM(Task):
         x = embeddings_add((token_embedding, position_embedding))
         x = embeddings_dropout(x)
         # Each `TransformerDecoder` layer has a cache, we update separately.
-        caches = tf.unstack(cache, axis=0)
+        caches = tf.unstack(cache, axis=1)
         for i, transformer_layer in enumerate(transformer_layers):
             current_cache = caches[i]
             x, current_cache = transformer_layer(
@@ -251,7 +252,7 @@ class GPT2CausalLM(Task):
                 cache_index=cache_index,
             )
             caches[i] = current_cache
-        cache = tf.stack(caches, axis=0)
+        cache = tf.stack(caches, axis=1)
         x = layer_norm(x)
         x = tf.matmul(
             x,
@@ -264,7 +265,7 @@ class GPT2CausalLM(Task):
         """Build initial cache based on the prompt.
 
         This method should be called before the decoding loop to build the
-        initial cache. The cache is of shape [`self.num_layers`, batch_size, 2
+        initial cache. The cache is of shape [batch_size, `self.num_layers`, 2
         max_length, `self.num_heads`, `self.hidden_dim // self.num_heads`].
         The first dim represents it's a key or value in multi-head attention.
 
@@ -274,8 +275,9 @@ class GPT2CausalLM(Task):
             max_length: int, the max length of the generated sequence.
 
         Returns:
-            cache: a dense float Tensor, the cache of key and value.
-            max_length: int, the max length of generated sequence.
+            A (logits, cache) tuple. Where the first output is the language
+            model logits for the input token_ids and the second output is the
+            cache.
         """
         token_ids = initial_inputs["token_ids"]
         padding_mask = initial_inputs["padding_mask"]
@@ -290,8 +292,8 @@ class GPT2CausalLM(Task):
         )
         cache = tf.zeros(
             [
-                self.backbone.num_layers,
                 batch_size,
+                self.backbone.num_layers,
                 2,
                 max_length,
                 self.backbone.num_heads,
@@ -336,7 +338,6 @@ class GPT2CausalLM(Task):
         self,
         prompt,
         max_length,
-        use_cache=True,
         sampler="top_k",
     ):
         """Generate text.
@@ -350,14 +351,12 @@ class GPT2CausalLM(Task):
             prompt: a string, string Tensor or string RaggedTensor. The prompt
                 text for generation.
             max_length: int. The max length of generated sequence.
-            use_cache: bool, defaults to True. If True, cache will be used
-                during decoding, which increases the decoding speed.
             sampler: a string or `keras_nlp.samplers.Sampler` instance. The
                 sampler to be used for text generation.
         """
         if self.preprocessor is None:
             raise ValueError(
-                "Missing `self.preprocessor`, please make sure `preprocessor` "
+                "`self.preprocessor` is None, please make sure `preprocessor` "
                 "is set before calling `generate`."
             )
         end_token_id = self.preprocessor.tokenizer.end_token_id

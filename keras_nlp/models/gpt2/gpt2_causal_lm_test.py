@@ -142,22 +142,6 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
         generated = generated.numpy().decode("utf-8")
         self.assertTrue(prompt in generated)
 
-    def test_generate_same_with_cache(self):
-        self.causal_lm.compile(jit_compile=False)
-        cached_result = self.causal_lm.generate(
-            self.raw_batch,
-            max_length=10,
-            sampler="greedy",
-            use_cache=True,
-        )
-        non_cached_result = self.causal_lm.generate(
-            self.raw_batch,
-            max_length=10,
-            sampler="greedy",
-            use_cache=False,
-        )
-        self.assertAllEqual(cached_result, non_cached_result)
-
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
