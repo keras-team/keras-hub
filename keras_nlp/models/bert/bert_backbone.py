@@ -107,9 +107,15 @@ class BertBackbone(Backbone):
         # Index of classification token in the vocabulary
         cls_token_index = 0
         # Inputs
-        token_id_input = keras.Input(shape=(None,), dtype="int32", name="token_ids")
-        segment_id_input = keras.Input(shape=(None,), dtype="int32", name="segment_ids")
-        padding_mask = keras.Input(shape=(None,), dtype="int32", name="padding_mask")
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        segment_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="segment_ids"
+        )
+        padding_mask = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
 
         # Embed tokens, positions, and segment ids.
         token_embedding_layer = keras.layers.Embedding(
@@ -132,7 +138,9 @@ class BertBackbone(Backbone):
         )(segment_id_input)
 
         # Sum, normalize and apply dropout to embeddings.
-        x = keras.layers.Add()((token_embedding, position_embedding, segment_embedding))
+        x = keras.layers.Add()(
+            (token_embedding, position_embedding, segment_embedding)
+        )
         x = keras.layers.LayerNormalization(
             name="embeddings_layer_norm",
             axis=-1,
@@ -149,7 +157,9 @@ class BertBackbone(Backbone):
             x = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
-                activation=lambda x: keras.activations.gelu(x, approximate=True),
+                activation=lambda x: keras.activations.gelu(
+                    x, approximate=True
+                ),
                 dropout=dropout,
                 layer_norm_epsilon=1e-12,
                 kernel_initializer=bert_kernel_initializer(),

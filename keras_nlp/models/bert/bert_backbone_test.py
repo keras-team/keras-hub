@@ -46,9 +46,9 @@ class BertBackboneTest(tf.test.TestCase, parameterized.TestCase):
             ),
         }
 
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(self.input_batch).batch(
-            2
-        )
+        self.input_dataset = tf.data.Dataset.from_tensor_slices(
+            self.input_batch
+        ).batch(2)
 
     def test_valid_call_bert(self):
         self.model(self.input_batch)
@@ -59,9 +59,15 @@ class BertBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def test_variable_sequence_length_call_bert(self):
         for seq_length in (25, 50, 75):
             input_data = {
-                "token_ids": tf.ones((self.batch_size, seq_length), dtype="int32"),
-                "segment_ids": tf.ones((self.batch_size, seq_length), dtype="int32"),
-                "padding_mask": tf.ones((self.batch_size, seq_length), dtype="int32"),
+                "token_ids": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
+                "segment_ids": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
+                "padding_mask": tf.ones(
+                    (self.batch_size, seq_length), dtype="int32"
+                ),
             }
             self.model(input_data)
 
@@ -117,9 +123,9 @@ class BertBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
             "segment_ids": tf.ones((8, 128), dtype="int32"),
             "padding_mask": tf.ones((8, 128), dtype="int32"),
         }
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(self.input_batch).batch(
-            2
-        )
+        self.input_dataset = tf.data.Dataset.from_tensor_slices(
+            self.input_batch
+        ).batch(2)
 
     def test_predict(self):
         self.model.compile()

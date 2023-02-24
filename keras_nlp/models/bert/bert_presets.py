@@ -158,7 +158,9 @@ backbone_presets = {
     },
     "bert_base_zh": {
         "metadata": {
-            "description": ("12-layer BERT model. Trained on Chinese Wikipedia."),
+            "description": (
+                "12-layer BERT model. Trained on Chinese Wikipedia."
+            ),
             "params": 102267648,
             "official_name": "BERT",
             "path": "bert",
