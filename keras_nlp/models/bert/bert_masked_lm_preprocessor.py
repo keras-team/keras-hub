@@ -65,7 +65,7 @@ class BertMaskedLMPreprocessor(BertPreprocessor):
     preprocessor = keras_nlp.models.BertMaskedLMPreprocessor(tokenizer)
     ```
     """
-    
+
     def __init__(
         self,
         tokenizer,
@@ -120,10 +120,12 @@ class BertMaskedLMPreprocessor(BertPreprocessor):
             )
 
         x = super().call(x)
-        
-        token_ids, padding_mask, segment_ids = (x["token_ids"], 
-                                                x["padding_mask"],
-                                                x["segment_ids"])
+
+        token_ids, padding_mask, segment_ids = (
+            x["token_ids"],
+            x["padding_mask"],
+            x["segment_ids"],
+        )
         masker_outputs = self.masker(token_ids)
         x = {
             "token_ids": masker_outputs["token_ids"],

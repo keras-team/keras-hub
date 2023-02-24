@@ -45,12 +45,8 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         input_data = ["THE QUICK BROWN FOX."] * 4
         output = self.preprocessor(input_data)
         self.assertAllEqual(output["token_ids"], [[2, 5, 6, 7, 8, 1, 3, 0]] * 4)
-        self.assertAllEqual(
-            output["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0]] * 4
-        )
-        self.assertAllEqual(
-            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
-        )
+        self.assertAllEqual(output["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4)
 
     def test_tokenize_labeled_batch(self):
         x = tf.constant(["THE QUICK BROWN FOX."] * 4)
@@ -58,12 +54,8 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         sw = tf.constant([1.0] * 4)
         x_out, y_out, sw_out = self.preprocessor(x, y, sw)
         self.assertAllEqual(x_out["token_ids"], [[2, 5, 6, 7, 8, 1, 3, 0]] * 4)
-        self.assertAllEqual(
-            x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0]] * 4
-        )
-        self.assertAllEqual(
-            x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
-        )
+        self.assertAllEqual(x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4)
         self.assertAllEqual(y_out, y)
         self.assertAllEqual(sw_out, sw)
 
@@ -75,12 +67,8 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         ds = ds.map(self.preprocessor)
         x_out, y_out, sw_out = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(x_out["token_ids"], [[2, 5, 6, 7, 8, 1, 3, 0]] * 4)
-        self.assertAllEqual(
-            x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0]] * 4
-        )
-        self.assertAllEqual(
-            x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
-        )
+        self.assertAllEqual(x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4)
         self.assertAllEqual(y_out, y)
         self.assertAllEqual(sw_out, sw)
 
@@ -99,12 +87,8 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         # separate sequences to concatenate.
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(output["token_ids"], [[2, 5, 6, 3, 7, 8, 1, 3]] * 4)
-        self.assertAllEqual(
-            output["segment_ids"], [[0, 0, 0, 0, 1, 1, 1, 1]] * 4
-        )
-        self.assertAllEqual(
-            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1]] * 4
-        )
+        self.assertAllEqual(output["segment_ids"], [[0, 0, 0, 0, 1, 1, 1, 1]] * 4)
+        self.assertAllEqual(output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1]] * 4)
 
     def test_errors_for_2d_list_input(self):
         ambiguous_input = [["one", "two"], ["three", "four"]]

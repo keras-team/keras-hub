@@ -37,13 +37,12 @@ class BertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             intermediate_dim=128,
             max_sequence_length=128,
         )
-        
+
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
         self.vocab += ["the", "quick", "brown", "fox"]
 
-
-        tokenizer = BertTokenizer(vocabulary = self.vocab)
+        tokenizer = BertTokenizer(vocabulary=self.vocab)
 
         self.preprocessor = BertMaskedLMPreprocessor(
             tokenizer=tokenizer,
@@ -72,9 +71,7 @@ class BertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             ]
         )
         self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
-        self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            self.raw_batch
-        ).batch(2)
+        self.raw_dataset = tf.data.Dataset.from_tensor_slices(self.raw_batch).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
     def test_valid_call_masked_lm(self):
@@ -130,4 +127,3 @@ class BertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         restored_output = restored_model(self.preprocessed_batch)
 
         self.assertAllClose(model_output, restored_output)
-        
