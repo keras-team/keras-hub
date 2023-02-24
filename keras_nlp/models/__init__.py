@@ -46,6 +46,10 @@ from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
 )
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_classifier import FNetClassifier
+from keras_nlp.models.f_net.f_net_masked_lm import FNetMaskedLM
+from keras_nlp.models.f_net.f_net_masked_lm_preprocessor import (
+    FNetMaskedLMPreprocessor,
+)
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
