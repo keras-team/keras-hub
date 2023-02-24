@@ -49,12 +49,11 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             it's the first pass to build the cache.
 
     Returns:
-        attention_output: The result of the computation, of shape `(B, T, E)`,
-            where `T` is for target sequence shapes and `E` is the query input
-            last dimension if `output_shape` is `None`. Otherwise, the
-            multi-head outputs are projected to the shape specified by
-            `output_shape`.
-        cache: the updated cache.
+        An (attention_output, cache) tuple. `attention_output` is the result of
+        the computation, of shape `(B, T, E)`, where `T` is for target sequence
+        shapes and `E` is the query input last dimension if  `output_shape` is
+        `None`. Otherwise, the multi-head outputs are projected to the shape
+        specified by `output_shape`. `cache` is the updated cache.
     """
 
     def call(

@@ -204,10 +204,10 @@ class GPT2CausalLM(Task):
     def call_with_cache(self, token_ids, padding_mask, cache, cache_index=None):
         """Forward pass of `GPT2CausalLM` with cache.
 
-        The difference between `call_with_cache` and normal `__call__` is in
-        this method, a `cache` arg is set, and the inputs is of
-        `sequence_length=1`. By cachine the previous key/value in multi-head
-        attention, we avoid recomputing the outputs of seen tokens.
+        `call_with_cache` adds an additional forward pass for the model for
+        autoregressive inference. Unlike calling the model directly, this method
+        allows caching previous key/value Tensors in multi-head attention layer,
+        and avoids recomputing the outputs of seen tokens.
 
         Args:
             token_ids: a dense int Tensor, input token ids.
@@ -275,7 +275,7 @@ class GPT2CausalLM(Task):
             max_length: int, the max length of the generated sequence.
 
         Returns:
-            A (logits, cache) tuple. Where the first output is the language
+            A (logits, cache) tuple. The first output is the language
             model logits for the input token_ids and the second output is the
             cache.
         """
@@ -368,16 +368,9 @@ class GPT2CausalLM(Task):
             sampler.jit_compile = self.jit_compile
         sampler.run_eagerly = self.run_eagerly
         x, _, _ = self.preprocessor(prompt)
-        token_ids = x["token_ids"]
-        padding_mask = x["padding_mask"]
-        if len(token_ids.shape) == 1:
-            token_ids = token_ids[tf.newaxis, :]
-            padding_mask = padding_mask[tf.newaxis, :]
-
-        x = {
-            "token_ids": token_ids,
-            "padding_mask": padding_mask,
-        }
+        if len(x["token_ids"].shape) == 1:
+            x["token_ids"] = x["token_ids"][tf.newaxis, :]
+            x["padding_mask"] = x["padding_mask"][tf.newaxis, :]
         _, cache = self.build_initial_cache(x, max_length)
         next_token_probability = self._get_token_probability
         generated = sampler(

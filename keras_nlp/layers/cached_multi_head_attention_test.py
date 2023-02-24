@@ -33,46 +33,9 @@ class CachedMultiHeadAttentionTest(tf.test.TestCase, parameterized.TestCase):
         seq_len = 5
         num_heads = 2
         key_dim = 4
-        layer = CachedMultiHeadAttention(num_heads=num_heads, key_dim=key_dim)
-        x = tf.random.uniform(shape=[batch_size, seq_len, num_heads * key_dim])
-        cache = tf.zeros([batch_size, 2, seq_len, num_heads, key_dim])
-
-        # Build the intial cache.
-        intial_size = 2
-        initial_inputs = x[:, :intial_size, :]
-        outputs = []
-        output, cache = layer(
-            query=initial_inputs,
-            value=initial_inputs,
-            use_causal_mask=True,
-            cache=cache,
-        )
-        outputs.append(output)
-        # Compute the rest tokens.
-        for i in range(intial_size, seq_len):
-            current_input = x[:, i : i + 1, :]
-            output, cache = layer(
-                query=current_input,
-                value=current_input,
-                use_causal_mask=True,
-                cache=cache,
-                cache_index=i,
-            )
-            outputs.append(output)
-        cached_outputs = tf.concat(outputs, axis=1)
-
-        normal_outputs, _ = layer(query=x, value=x, use_causal_mask=True)
-        self.assertAllClose(cached_outputs, normal_outputs)
-
-    def test_cache_call_with_tf_while(self):
-        batch_size = 2
-        seq_len = 5
-        num_heads = 2
-        key_dim = 4
 
         layer = CachedMultiHeadAttention(num_heads=num_heads, key_dim=key_dim)
         x = tf.random.uniform(shape=[batch_size, seq_len, num_heads * key_dim])
-        # [2, batch_size, seq_length, num_heads, key_dim]
         cache = tf.zeros([batch_size, 2, seq_len, num_heads, key_dim])
         # Build the intial cache.
         intial_seq_len = 2
