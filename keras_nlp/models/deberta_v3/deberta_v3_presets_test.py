@@ -53,6 +53,14 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         expected_outputs = [1, 279, 1538, 2]
         self.assertAllEqual(outputs, expected_outputs)
 
+    def test_preprocessor_mask_token(self):
+        preprocessor = DebertaV3Preprocessor.from_preset(
+            "deberta_v3_extra_small_en",
+            sequence_length=4,
+        )
+        self.assertEqual(preprocessor.tokenizer.id_to_token(128000), "[MASK]")
+        self.assertEqual(preprocessor.tokenizer.token_to_id("[MASK]"), 128000)
+
     @parameterized.named_parameters(
         ("preset_weights", True), ("random_weights", False)
     )
