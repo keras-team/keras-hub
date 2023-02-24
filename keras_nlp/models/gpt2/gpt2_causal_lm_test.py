@@ -122,10 +122,12 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
         self.causal_lm_no_preprocessing.fit(self.preprocessed_dataset)
 
     @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
+        ("non_jit_compile_cache", False, True),
+        ("non_jit_compile_non_cache", False, False),
+        ("jit_compile_non_cache", True, False),
     )
-    def test_gpt2_causal_lm_generate(self, jit_compile):
-        self.causal_lm_no_preprocessing.compile(jit_compile=jit_compile)
+    def test_gpt2_causal_lm_generate(self, jit_compile, use_cache):
+        self.causal_lm.compile(jit_compile=jit_compile)
         self.causal_lm.generate(
             self.raw_batch,
             max_length=10,

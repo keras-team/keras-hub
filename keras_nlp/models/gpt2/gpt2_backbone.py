@@ -125,7 +125,9 @@ class GPT2Backbone(Backbone):
         )(token_embedding)
 
         # Sum and apply dropout to embeddings.
-        x = keras.layers.Add()((token_embedding, position_embedding))
+        x = keras.layers.Add(name="embeddings_add")(
+            (token_embedding, position_embedding)
+        )
         x = keras.layers.Dropout(
             dropout,
             name="embeddings_dropout",

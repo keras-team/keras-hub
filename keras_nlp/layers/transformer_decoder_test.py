@@ -18,6 +18,7 @@ import os
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
+from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.layers import transformer_decoder
 
@@ -264,6 +265,57 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder_sequence._keras_mask = mask
         outputs = decoder(decoder_sequence)
         self.assertAllEqual(outputs._keras_mask, mask)
+
+    def test_cached_decoding_is_correct(self):
+        batch_size = 2
+        seq_len = 5
+        num_heads = 2
+        hidden_dim = 8
+
+        layer = transformer_decoder.TransformerDecoder(
+            intermediate_dim=4,
+            num_heads=num_heads,
+        )
+        x = tf.random.uniform(shape=[batch_size, seq_len, hidden_dim])
+        cache = tf.zeros(
+            [batch_size, 2, seq_len, num_heads, hidden_dim // num_heads]
+        )
+        # Build the intial cache.
+        initial_seq_len = 2
+        initial_inputs = x[:, :initial_seq_len, :]
+        outputs = tf.zeros_like(x)
+        output, cache = layer(
+            decoder_sequence=initial_inputs,
+            cache=cache,
+        )
+        # Update the outputs in place.
+        outputs = dynamic_update_slice(outputs, output, [0, 0, 0])
+
+        def call(i, cache, outputs):
+            def loop_body(i, cache, outputs):
+                # Compute the rest tokens.
+                current_input = x[:, i : i + 1, :]
+                output, cache = layer(
+                    decoder_sequence=current_input,
+                    cache=cache,
+                    cache_index=i,
+                )
+                outputs = dynamic_update_slice(outputs, output, [0, i, 0])
+                return i + 1, cache, outputs
+
+            i, cache, cached_outputs = tf.while_loop(
+                cond=lambda i, cache, outputs: i < seq_len,
+                body=loop_body,
+                loop_vars=[i, cache, outputs],
+            )
+            return cached_outputs
+
+        cached_outputs = call(initial_seq_len, cache, outputs)
+        graph_call = tf.function(call)
+        graph_cached_outputs = graph_call(initial_seq_len, cache, outputs)
+        normal_outputs = layer(decoder_sequence=x)
+        self.assertAllClose(cached_outputs, normal_outputs)
+        self.assertAllClose(graph_cached_outputs, normal_outputs)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),

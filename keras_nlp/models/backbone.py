@@ -102,7 +102,6 @@ class Backbone(keras.Model):
             cache_subdir=os.path.join("models", preset),
             file_hash=metadata["weights_hash"],
         )
-
         model.load_weights(weights)
         return model
 

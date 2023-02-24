@@ -15,6 +15,7 @@
 
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -39,6 +40,9 @@ call_args_docstring = """
     from_logits: bool, defaults to True. Indicate if the `token_probability_fn`
         returns logits. If False, `token_probability_fn` returns probability
         distributions.
+    cache: a dense int tensor, a cache of intermediate key and value tensor
+        computed by each decoder self-attention layer. These values will only
+        be computed once for each new token in the generated sequence.
     """
 
 
@@ -219,6 +223,7 @@ class Sampler:
         mask=None,
         end_token_id=None,
         from_logits=True,
+        cache=None,
     ):
         prompt, mask = self._validate_prompt_and_mask(prompt, mask)
         input_is_1d = prompt.shape.rank == 1
@@ -244,9 +249,9 @@ class Sampler:
             token_probability_fn,
             mask,
             max_length - shortest_prompt_len,
-            from_logits,
+            cache=cache,
+            from_logits=from_logits,
         )
-
         # Mask out tokens after `end_token_id`.
         if end_token_id is not None:
             prompt = self._mask_tokens_after_end_token(
@@ -271,7 +276,13 @@ class Sampler:
         raise NotImplementedError
 
     def sample(
-        self, prompt, token_probability_fn, mask, num_steps, from_logits=True
+        self,
+        prompt,
+        token_probability_fn,
+        mask,
+        num_steps,
+        from_logits=True,
+        cache=None,
     ):
         """Sampling logic implementation.
 
@@ -286,25 +297,46 @@ class Sampler:
             from_logits: bool, defaults to True. Indicate if the
                 `token_probability_fn` returns logits. If False,
                 `token_probability_fn` returns probability distributions.
+            cache: a dense int tensor, the cache used in decoding. The cache
+                stores the key and value of each
+                `keras_nlp.layers.CachedMultiHeadAttention` layer to make the
+                decoding faster by avoiding duplicated computation.
 
         Returns:
             A dense int Tensor, representing the generated text in token id
             space.
         """
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
-        max_length = tf.cast(max_length, num_steps.dtype)
+        num_steps = tf.cast(num_steps, tf.int32)
+        max_length = tf.cast(max_length, tf.int32)
         # The index of the last non-padding token in prompt. Since all sequences
         # are aligned to the right side, the index is the same for all.
         current_index = max_length - num_steps
 
-        def one_step(current_index, prompt, mask):
-            probs = token_probability_fn(prompt, mask)
-            next_token_probs = tf.gather(
-                probs,
-                tf.repeat(current_index - 1, batch_size),
-                axis=1,
-                batch_dims=1,
-            )
+        def one_step(
+            current_index,
+            prompt,
+            mask,
+            cache=None,
+        ):
+            last_index = current_index - 1
+            if cache is not None:
+                probs, cache = token_probability_fn(
+                    prompt,
+                    mask,
+                    cache=cache,
+                    cache_index=last_index,
+                )
+                next_token_probs = tf.squeeze(probs, axis=1)
+            else:
+                probs = token_probability_fn(prompt, mask)
+                next_token_probs = tf.gather(
+                    probs,
+                    tf.repeat(current_index - 1, batch_size),
+                    axis=1,
+                    batch_dims=1,
+                )
+
             if from_logits:
                 next_token_probs = keras.activations.softmax(
                     next_token_probs, axis=-1
@@ -312,47 +344,36 @@ class Sampler:
             next_token = self.get_next_token(next_token_probs)
             next_token = tf.cast(next_token, prompt.dtype)
             next_token = tf.where(
-                mask[:, current_index], prompt[:, current_index], next_token
+                mask[:, current_index],
+                prompt[:, current_index],
+                next_token,
             )
-            mask = tf.tensor_scatter_nd_update(
-                tensor=mask,
-                indices=tf.stack(
-                    (
-                        tf.cast(
-                            tf.range(batch_size), dtype=current_index.dtype
-                        ),
-                        tf.repeat(current_index, batch_size),
-                    ),
-                    axis=1,
-                ),
-                updates=tf.repeat(True, batch_size),
-            )
-
-            # Append the next token to current sequence.
-            prompt = tf.tensor_scatter_nd_update(
-                tensor=prompt,
-                indices=tf.stack(
-                    (
-                        tf.cast(
-                            tf.range(batch_size), dtype=current_index.dtype
-                        ),
-                        tf.repeat(current_index, batch_size),
-                    ),
-                    axis=1,
-                ),
-                updates=next_token,
-            )
-
+            next_token = next_token[:, tf.newaxis]
+            next_mask = tf.fill([batch_size, 1], True)
+            slice_start = [0, current_index]
+            mask = dynamic_update_slice(mask, next_mask, slice_start)
+            prompt = dynamic_update_slice(prompt, next_token, slice_start)
             current_index = tf.add(current_index, 1)
-            return (current_index, prompt, mask)
+            if cache is None:
+                return current_index, prompt, mask
+            return [current_index, prompt, mask, cache]
 
+        if cache is None:
+            current_index, prompt, mask = tf.while_loop(
+                cond=lambda current_index, prompt, mask: tf.less(
+                    current_index, max_length
+                ),
+                body=one_step,
+                loop_vars=[current_index, prompt, mask],
+            )
+            return prompt
         # Run a while loop till `max_length` of tokens has been generated.
-        current_index, prompt, mask = tf.while_loop(
-            cond=lambda current_index, prompt, mask: tf.less(
+        current_index, prompt, mask, cache = tf.while_loop(
+            cond=lambda current_index, prompt, mask, cache: tf.less(
                 current_index, max_length
             ),
             body=one_step,
-            loop_vars=(current_index, prompt, mask),
+            loop_vars=[current_index, prompt, mask, cache],
         )
         return prompt
 
