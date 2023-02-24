@@ -38,6 +38,12 @@ from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_classifier import (
     DistilBertClassifier,
 )
+from keras_nlp.models.distil_bert.distil_bert_masked_lm import (
+    DistilBertMaskedLM,
+)
+from keras_nlp.models.distil_bert.distil_bert_masked_lm_preprocessor import (
+    DistilBertMaskedLMPreprocessor,
+)
 from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
     DistilBertPreprocessor,
 )
