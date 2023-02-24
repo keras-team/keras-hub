@@ -25,9 +25,7 @@ backbone_presets = {
             "max_sequence_length": 512,
             "bucket_size": 256,
         },
-        "preprocessor_config": {
-            "mask_token_id": 128000,
-        },
+        "preprocessor_config": {},
         "metadata": {
             "description": (
                 "12-layer DeBERTaV3 model where case is maintained. "
@@ -53,9 +51,7 @@ backbone_presets = {
             "max_sequence_length": 512,
             "bucket_size": 256,
         },
-        "preprocessor_config": {
-            "mask_token_id": 128000,
-        },
+        "preprocessor_config": {},
         "metadata": {
             "description": (
                 "6-layer DeBERTaV3 model where case is maintained. "
@@ -81,9 +77,7 @@ backbone_presets = {
             "max_sequence_length": 512,
             "bucket_size": 256,
         },
-        "preprocessor_config": {
-            "mask_token_id": 128000,
-        },
+        "preprocessor_config": {},
         "metadata": {
             "description": (
                 "12-layer DeBERTaV3 model where case is maintained. "
@@ -109,9 +103,7 @@ backbone_presets = {
             "max_sequence_length": 512,
             "bucket_size": 256,
         },
-        "preprocessor_config": {
-            "mask_token_id": 128000,
-        },
+        "preprocessor_config": {},
         "metadata": {
             "description": (
                 "24-layer DeBERTaV3 model where case is maintained. "
@@ -137,9 +129,7 @@ backbone_presets = {
             "max_sequence_length": 512,
             "bucket_size": 256,
         },
-        "preprocessor_config": {
-            "mask_token_id": 250101,
-        },
+        "preprocessor_config": {},
         "metadata": {
             "description": (
                 "12-layer DeBERTaV3 model where case is maintained. "
