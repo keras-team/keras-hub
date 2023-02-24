@@ -85,7 +85,13 @@ class BeamSampler(Sampler):
         pass
 
     def sample(
-        self, prompt, token_probability_fn, mask, num_steps, from_logits=True
+        self,
+        prompt,
+        token_probability_fn,
+        mask,
+        num_steps,
+        from_logits=True,
+        return_all_beams_and_probs=False,
     ):
         """Sampling logic implementation.
 
@@ -201,14 +207,16 @@ class BeamSampler(Sampler):
                 mask.get_shape(),
             ],
         )
-
         # Get the beam with the maximum probability.
         max_indexes = tf.math.argmax(beams_prob, axis=-1)
         max_beams = tf.gather(
             beams, max_indexes[:, tf.newaxis], axis=1, batch_dims=1
         )
 
-        return tf.squeeze(max_beams, axis=1)
+        if return_all_beams_and_probs:
+            return tf.squeeze(max_beams, axis=1), beams, beams_prob
+        else:
+            return tf.squeeze(max_beams, axis=1)
 
     def get_config(self):
         config = super().get_config()

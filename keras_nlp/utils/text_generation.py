@@ -218,8 +218,7 @@ def beam_search(
     from_logits=False,
     end_token_id=None,
     pad_token_id=0,
-    return_all_beams=False,
-    return_all_scores=False,
+    return_all_beams_and_probs=False,
 ):
     """Text generation utility based on beam search algorithm.
 
@@ -331,12 +330,11 @@ def beam_search(
             prompt = tf.squeeze(prompt)
             all_beams = tf.squeeze(beams)
             all_scores = tf.squeeze(beams_prob)
+        else:
+            all_beams = beams
+            all_scores = beams_prob
 
-        if return_all_beams:
-            return prompt, all_beams
-        elif return_all_scores:
-            return prompt, all_scores
-        elif return_all_beams and return_all_scores:
+        if return_all_beams_and_probs:
             return prompt, all_beams, all_scores
         else:
             return prompt
@@ -423,11 +421,7 @@ def beam_search(
         all_beams = tf.squeeze(all_beams)
         all_scores = tf.squeeze(all_scores)
 
-    if return_all_beams:
-        return prompt, all_beams
-    elif return_all_scores:
-        return prompt, all_scores
-    elif return_all_beams and return_all_scores:
+    if return_all_beams_and_probs:
         return prompt, all_beams, all_scores
     else:
         return prompt
