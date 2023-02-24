@@ -111,7 +111,7 @@ class DistilBertMaskedLMPreprocessorTest(
         ("keras_format", "keras_v3", "model.keras"),
     )
     def test_saved_model(self, save_format, filename):
-        input_data = tf.constant([" airplane at airport"])
+        input_data = tf.constant([" THE QUICK BROWN FOX."])
 
         inputs = keras.Input(dtype="string", shape=())
         outputs = self.preprocessor(inputs)
