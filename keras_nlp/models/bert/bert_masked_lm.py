@@ -48,7 +48,7 @@ class BertMaskedLM(Task):
 
     Args:
         backbone: A `keras_nlp.models.BertBackbone` instance.
-        preprocessor: A `keras_nlp.models.BertaMaskedLMPreprocessor` or
+        preprocessor: A `keras_nlp.models.BertMaskedLMPreprocessor` or
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
 
@@ -86,7 +86,7 @@ class BertMaskedLM(Task):
     labels = [[3, 5]] * 2
 
     # Randomly initialize a BERT encoder
-    backbone = keras_nlp.models.BertaBackbone(
+    backbone = keras_nlp.models.BertBackbone(
         vocabulary_size=50265,
         num_layers=12,
         num_heads=12,
@@ -122,9 +122,7 @@ class BertMaskedLM(Task):
         outputs = MaskedLMHead(
             vocabulary_size=backbone.vocabulary_size,
             embedding_weights=backbone.token_embedding.embeddings,
-            intermediate_activation=lambda x: keras.activations.gelu(
-                x, approximate=True
-            ),
+            intermediate_activation="gelu",
             kernel_initializer=bert_kernel_initializer(),
             name="mlm_head",
         )(backbone_outputs["sequence_output"], inputs["mask_positions"])

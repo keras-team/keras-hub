@@ -13,10 +13,8 @@
 # limitations under the License.
 """Tests for BERT masked language model."""
 
-import io
 import os
 
-import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -35,35 +33,17 @@ class BertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
-            embedding_dim=128,
             hidden_dim=64,
             intermediate_dim=128,
             max_sequence_length=128,
         )
-        vocab_data = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox", "the earth is round", "an eagle flew"]
-        )
+        
+        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
+        self.vocab += ["the", "quick", "brown", "fox"]
 
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=vocab_data.as_numpy_iterator(),
-            model_writer=bytes_io,
-            vocab_size=15,
-            model_type="WORD",
-            pad_id=0,
-            unk_id=1,
-            bos_id=2,
-            eos_id=3,
-            pad_piece="[PAD]",
-            unk_piece="[UNK]",
-            bos_piece="[CLS]",
-            eos_piece="[SEP]",
-            user_defined_symbols="[MASK]",
-        )
 
-        proto = bytes_io.getvalue()
-
-        tokenizer = BertTokenizer(proto=proto)
+        tokenizer = BertTokenizer(vocabulary = self.vocab)
 
         self.preprocessor = BertMaskedLMPreprocessor(
             tokenizer=tokenizer,
@@ -71,8 +51,8 @@ class BertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             mask_selection_rate=1.0,
             mask_token_rate=1.0,
             random_token_rate=0.0,
-            mask_selection_length=5,
-            sequence_length=12,
+            mask_selection_length=2,
+            sequence_length=10,
         )
         self.masked_lm = BertMaskedLM(
             self.backbone,

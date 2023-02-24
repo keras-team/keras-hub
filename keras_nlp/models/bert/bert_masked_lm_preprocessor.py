@@ -24,7 +24,48 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class BertMaskedLMPreprocessor(BertPreprocessor):
-
+    """BERT preprocessing for the masked language modeling task.
+    This preprocessing layer will prepare inputs for a masked language modeling
+    task. It is primarily intended for use with the
+    `keras_nlp.models.BertMaskedLM` task model. Preprocessing will occur in
+    multiple steps.
+    - Tokenize any number of input segments using the `tokenizer`.
+    - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
+       with the appropriate `"[CLS]"`, `"[SEP]"`, `"[SEP]"`, `"[SEP]"` and `"[PAD]"` tokens.
+    - Randomly select non-special tokens to mask, controlled by
+      `mask_selection_rate`.
+    - Construct a `(x, y, sample_weight)` tuple suitable for training with a
+      `keras_nlp.models.BertMaskedLM` task model.
+    Examples:
+    ```python
+    # Load the preprocessor from a preset.
+    preprocessor = keras_nlp.models.BertMaskedLMPreprocessor.from_preset(
+        "bert_base_en"
+    )
+    # Tokenize and mask a single sentence.
+    sentence = tf.constant("The quick brown fox jumped.")
+    preprocessor(sentence)
+    # Tokenize and mask a batch of sentences.
+    sentences = tf.constant(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
+    preprocessor(sentences)
+    # Tokenize and mask a dataset of sentences.
+    features = tf.constant(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
+    ds = tf.data.Dataset.from_tensor_slices((features))
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+    # Alternatively, you can create a preprocessor from your own vocabulary.
+    # The usage is exactly the same as above.
+    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+    vocab += ["THE", "QUICK", "BROWN", "FOX"]
+    vocab += ["Call", "me", "Ishmael"]
+    tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
+    preprocessor = keras_nlp.models.BertMaskedLMPreprocessor(tokenizer)
+    ```
+    """
+    
     def __init__(
         self,
         tokenizer,
