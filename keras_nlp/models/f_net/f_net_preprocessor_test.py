@@ -35,7 +35,7 @@ class FNetPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=vocab_data.as_numpy_iterator(),
             model_writer=bytes_io,
-            vocab_size=10,
+            vocab_size=12,
             model_type="WORD",
             pad_id=3,
             unk_id=0,
@@ -45,6 +45,7 @@ class FNetPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             unk_piece="<unk>",
             bos_piece="[CLS]",
             eos_piece="[SEP]",
+            user_defined_symbols="[MASK]",
         )
         self.proto = bytes_io.getvalue()
 
@@ -57,19 +58,19 @@ class FNetPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         input_data = "the quick brown fox"
         output = self.preprocessor(input_data)
         self.assertAllEqual(
-            output["token_ids"], [4, 1, 9, 2, 7, 5, 3, 3, 3, 3, 3, 3]
+            output["token_ids"], [4, 2, 10, 6, 8, 5, 3, 3, 3, 3, 3, 3]
         )
         self.assertAllEqual(
             output["segment_ids"], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         )
 
     def test_tokenize_list_of_strings(self):
-        # We should handle a list of strings as as batch.
+        # We should handle a list of strings as batch.
         input_data = ["the quick brown fox"] * 4
         output = self.preprocessor(input_data)
         self.assertAllEqual(
             output["token_ids"],
-            [[4, 1, 9, 2, 7, 5, 3, 3, 3, 3, 3, 3]] * 4,
+            [[4, 2, 10, 6, 8, 5, 3, 3, 3, 3, 3, 3]] * 4,
         )
         self.assertAllEqual(
             output["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
@@ -82,7 +83,7 @@ class FNetPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         x_out, y_out, sw_out = self.preprocessor(x, y, sw)
         self.assertAllEqual(
             x_out["token_ids"],
-            [[4, 1, 9, 2, 7, 5, 3, 3, 3, 3, 3, 3]] * 4,
+            [[4, 2, 10, 6, 8, 5, 3, 3, 3, 3, 3, 3]] * 4,
         )
         self.assertAllEqual(
             x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
@@ -99,7 +100,7 @@ class FNetPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         x_out, y_out, sw_out = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(
             x_out["token_ids"],
-            [[4, 1, 9, 2, 7, 5, 3, 3, 3, 3, 3, 3]] * 4,
+            [[4, 2, 10, 6, 8, 5, 3, 3, 3, 3, 3, 3]] * 4,
         )
         self.assertAllEqual(
             x_out["segment_ids"], [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4
@@ -113,7 +114,7 @@ class FNetPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
             output["token_ids"],
-            [4, 1, 9, 2, 7, 5, 1, 6, 5, 3, 3, 3],
+            [4, 2, 10, 6, 8, 5, 2, 7, 5, 3, 3, 3],
         )
         self.assertAllEqual(
             output["segment_ids"], [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0]
@@ -127,7 +128,7 @@ class FNetPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
             output["token_ids"],
-            [[4, 1, 9, 2, 7, 5, 1, 6, 5, 3, 3, 3]] * 4,
+            [[4, 2, 10, 6, 8, 5, 2, 7, 5, 3, 3, 3]] * 4,
         )
         self.assertAllEqual(
             output["segment_ids"], [[0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0]] * 4

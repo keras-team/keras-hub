@@ -46,7 +46,7 @@ class FNetClassifierTest(tf.test.TestCase, parameterized.TestCase):
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=vocab_data.as_numpy_iterator(),
             model_writer=bytes_io,
-            vocab_size=10,
+            vocab_size=12,
             model_type="WORD",
             pad_id=3,
             unk_id=0,
@@ -56,6 +56,7 @@ class FNetClassifierTest(tf.test.TestCase, parameterized.TestCase):
             unk_piece="<unk>",
             bos_piece="[CLS]",
             eos_piece="[SEP]",
+            user_defined_symbols="[MASK]",
         )
 
         self.proto = bytes_io.getvalue()
