@@ -101,7 +101,10 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
             self.mask_token_id = super().vocabulary_size()
 
     def vocabulary_size(self):
-        return max(super().vocabulary_size(), self.mask_token_id + 1)
+        sentence_piece_size = super().vocabulary_size()
+        if sentence_piece_size == self.mask_token_id:
+            return sentence_piece_size + 1
+        return sentence_piece_size
 
     def get_vocabulary(self):
         sentence_piece_vocabulary = super().get_vocabulary()
