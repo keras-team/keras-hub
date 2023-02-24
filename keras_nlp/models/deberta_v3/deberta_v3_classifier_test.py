@@ -52,9 +52,7 @@ class DebertaV3ClassifierTest(tf.test.TestCase, parameterized.TestCase):
             unk_piece="[UNK]",
         )
         self.preprocessor = DebertaV3Preprocessor(
-            tokenizer=DebertaV3Tokenizer(
-                proto=bytes_io.getvalue(), mask_token_id=10
-            ),
+            tokenizer=DebertaV3Tokenizer(proto=bytes_io.getvalue()),
             sequence_length=12,
         )
         self.backbone = DebertaV3Backbone(

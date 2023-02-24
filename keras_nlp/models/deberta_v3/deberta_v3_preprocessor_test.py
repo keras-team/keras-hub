@@ -51,7 +51,7 @@ class DebertaV3PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.proto = bytes_io.getvalue()
 
         self.preprocessor = DebertaV3Preprocessor(
-            tokenizer=DebertaV3Tokenizer(proto=self.proto, mask_token_id=10),
+            tokenizer=DebertaV3Tokenizer(proto=self.proto),
             sequence_length=12,
         )
 

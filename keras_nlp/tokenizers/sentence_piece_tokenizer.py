@@ -161,7 +161,9 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     def get_vocabulary(self) -> List[str]:
         """Get the tokenizer vocabulary."""
         return tensor_to_string_list(
-            self._sentence_piece.id_to_string(tf.range(self.vocabulary_size()))
+            self._sentence_piece.id_to_string(
+                tf.range(int(self._sentence_piece.vocab_size().numpy()))
+            )
         )
 
     def id_to_token(self, id: int) -> str:

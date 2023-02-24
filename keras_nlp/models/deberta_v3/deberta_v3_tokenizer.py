@@ -16,13 +16,11 @@
 
 import copy
 
-import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -45,17 +43,16 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     If input is a scalar string (rank == 0), the layer will output a dense
     `tf.Tensor` with static shape `[None]`.
 
+    Note: The mask token (`"[MASK]"`) is handled differently in this tokenizer.
+    If the token is not present in the provided SentencePiece vocabulary, the
+    token will be appended to the vocabulary. For example, if the vocabulary
+    size is 100, the mask token will be assigned the ID 100.
+
     Args:
         proto: Either a `string` path to a SentencePiece proto file, or a
             `bytes` object with a serialized SentencePiece proto. See the
             [SentencePiece repository](https://github.com/google/sentencepiece)
             for more details on the format.
-        mask_token_id: The token ID (int) of the mask token (`[MASK]`). If
-            `None`, either the SentencePiece vocabulary has the mask
-            token or the mask token is not required by the user. This argument
-            should be non-None only if the SentencePiece vocabulary does not
-            have the mask token. Preset tokenizers will be loaded with the
-            correct mask token ID by default.
 
     Examples:
 
@@ -73,21 +70,8 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     ```
     """
 
-    def __init__(self, proto, mask_token_id=None, **kwargs):
+    def __init__(self, proto, **kwargs):
         super().__init__(proto=proto, **kwargs)
-
-        # Maintain a private copy of `mask_token_id` for config purposes.
-        self._mask_token_id = mask_token_id
-
-        if (
-            mask_token_id is not None
-            and mask_token_id < super().vocabulary_size()
-        ):
-            raise ValueError(
-                "`mask_token_id` must be greater than or equal to the "
-                f"SentencePiece vocabulary size, {self._original_vocabulary_size}. "
-                f"Received `mask_token_id = {mask_token_id}`."
-            )
 
         # Check for necessary special tokens.
         cls_token = "[CLS]"
@@ -98,7 +82,7 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         # We do not check for the presence of `mask_token`; this will be
         # handled in the corresponding MaskedLM processor.
         for token in [cls_token, pad_token, sep_token]:
-            if token not in self._get_sentence_piece_vocabulary():
+            if token not in super().get_vocabulary():
                 raise ValueError(
                     f"Cannot find token `'{token}'` in the provided "
                     f"`vocabulary`. Please provide `'{token}'` in your "
@@ -108,54 +92,32 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         self.cls_token_id = self.token_to_id(cls_token)
         self.sep_token_id = self.token_to_id(sep_token)
         self.pad_token_id = self.token_to_id(pad_token)
-        self.mask_token_id = mask_token_id
-        if (
-            mask_token_id is None
-            and mask_token in self._get_sentence_piece_vocabulary()
-        ):
-            self.mask_token_id = self.token_to_id(mask_token)
 
-    def _get_sentence_piece_vocabulary(self):
-        return tensor_to_string_list(
-            self._sentence_piece.id_to_string(
-                tf.range(super().vocabulary_size())
-            )
-        )
+        # If the mask token is not in the vocabulary, add it to the end of the
+        # vocabulary.
+        if mask_token in super().get_vocabulary():
+            self.mask_token_id = self.token_to_id(mask_token)
+        else:
+            self.mask_token_id = super().vocabulary_size()
 
     def vocabulary_size(self):
-        if self._mask_token_id is None:
-            return super().vocabulary_size()
-        return self._mask_token_id + 1
+        return max(super().vocabulary_size(), self.mask_token_id + 1)
 
     def get_vocabulary(self):
-        original_vocabulary = self._get_sentence_piece_vocabulary()
-        if self._mask_token_id is None:
-            return original_vocabulary
-
-        return (
-            original_vocabulary
-            + [None] * (self._mask_token_id - super().vocabulary_size())
-            + ["[MASK]"]
-        )
+        sentence_piece_vocabulary = super().get_vocabulary()
+        if self.mask_token_id < super().vocabulary_size():
+            return sentence_piece_vocabulary
+        return sentence_piece_vocabulary + ["[MASK]"]
 
     def id_to_token(self, id):
-        if self._mask_token_id is not None and id == self._mask_token_id:
+        if id == self.mask_token_id:
             return "[MASK]"
         return super().id_to_token(id)
 
     def token_to_id(self, token):
-        if self._mask_token_id is not None and token == "[MASK]":
-            return self._mask_token_id
-        return int(self._sentence_piece.string_to_id(token).numpy())
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "mask_token_id": self._mask_token_id,
-            }
-        )
-        return config
+        if token == "[MASK]":
+            return self.mask_token_id
+        return super().token_to_id(token)
 
     @classproperty
     def presets(cls):
