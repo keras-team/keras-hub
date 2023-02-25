@@ -34,7 +34,7 @@ class DebertaV3TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=vocab_data.as_numpy_iterator(),
             model_writer=bytes_io,
-            vocab_size=12,
+            vocab_size=10,
             model_type="WORD",
             pad_id=0,
             bos_id=1,
@@ -44,7 +44,6 @@ class DebertaV3TokenizerTest(tf.test.TestCase, parameterized.TestCase):
             bos_piece="[CLS]",
             eos_piece="[SEP]",
             unk_piece="[UNK]",
-            user_defined_symbols="[MASK]",
         )
         self.proto = bytes_io.getvalue()
 
@@ -53,15 +52,15 @@ class DebertaV3TokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_tokenize(self):
         input_data = "the quick brown fox"
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [5, 10, 6, 8])
+        self.assertAllEqual(output, [4, 9, 5, 7])
 
     def test_tokenize_batch(self):
         input_data = tf.constant(["the quick brown fox", "the earth is round"])
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[5, 10, 6, 8], [5, 7, 9, 11]])
+        self.assertAllEqual(output, [[4, 9, 5, 7], [4, 6, 8, 3]])
 
     def test_detokenize(self):
-        input_data = tf.constant([[5, 10, 6, 8]])
+        input_data = tf.constant([[4, 9, 5, 7]])
         output = self.tokenizer.detokenize(input_data)
         self.assertEqual(output, tf.constant(["the quick brown fox"]))
 
