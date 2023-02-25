@@ -71,9 +71,7 @@ class BertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             ]
         )
         self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
-        self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            self.raw_batch
-        ).batch(2)
+        self.raw_dataset = tf.data.Dataset.from_tensor_slices(self.raw_batch).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
     def test_valid_call_masked_lm(self):

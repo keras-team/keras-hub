@@ -49,9 +49,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         expected_outputs = [101, 1996, 4248, 102]
         self.assertAllEqual(outputs, expected_outputs)
 
-    @parameterized.named_parameters(
-        ("load_weights", True), ("no_load_weights", False)
-    )
+    @parameterized.named_parameters(("load_weights", True), ("no_load_weights", False))
     def test_backbone_output(self, load_weights):
         input_data = {
             "token_ids": tf.constant([[101, 1996, 4248, 102]]),
@@ -73,9 +71,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             # Keep a high tolerance, so we are robust to different hardware.
             self.assertAllClose(outputs, expected, atol=0.01, rtol=0.01)
 
-    @parameterized.named_parameters(
-        ("load_weights", True), ("no_load_weights", False)
-    )
+    @parameterized.named_parameters(("load_weights", True), ("no_load_weights", False))
     def test_classifier_output(self, load_weights):
         input_data = tf.constant(["The quick brown fox."])
         model = BertClassifier.from_preset(
@@ -85,9 +81,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         # We don't assert output values, as the head weights are random.
         model.predict(input_data)
 
-    @parameterized.named_parameters(
-        ("load_weights", True), ("no_load_weights", False)
-    )
+    @parameterized.named_parameters(("load_weights", True), ("no_load_weights", False))
     def test_classifier_output_without_preprocessing(self, load_weights):
         input_data = {
             "token_ids": tf.constant([[101, 1996, 4248, 102]]),
@@ -123,9 +117,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         config = BertBackbone.presets[preset]["config"]
         config["num_layers"] = 1
         self.assertEqual(config["num_layers"], 1)
-        self.assertEqual(
-            BertBackbone.presets[preset]["config"]["num_layers"], 2
-        )
+        self.assertEqual(BertBackbone.presets[preset]["config"]["num_layers"], 2)
 
     @parameterized.named_parameters(
         ("bert_tokenizer", BertTokenizer),
@@ -177,9 +169,7 @@ class BertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
     `pytest keras_nlp/models/bert_presets_test.py --run_extra_large`
     """
 
-    @parameterized.named_parameters(
-        ("load_weights", True), ("no_load_weights", False)
-    )
+    @parameterized.named_parameters(("load_weights", True), ("no_load_weights", False))
     def test_load_bert(self, load_weights):
         for preset in BertBackbone.presets:
             model = BertBackbone.from_preset(preset, load_weights=load_weights)
@@ -187,16 +177,12 @@ class BertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 "token_ids": tf.random.uniform(
                     shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
                 ),
-                "segment_ids": tf.constant(
-                    [0] * 200 + [1] * 312, shape=(1, 512)
-                ),
+                "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
                 "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
             }
             model(input_data)
 
-    @parameterized.named_parameters(
-        ("load_weights", True), ("no_load_weights", False)
-    )
+    @parameterized.named_parameters(("load_weights", True), ("no_load_weights", False))
     def test_load_bert_classifier(self, load_weights):
         for preset in BertClassifier.presets:
             classifier = BertClassifier.from_preset(
@@ -206,9 +192,7 @@ class BertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
             input_data = tf.constant(["This quick brown fox"])
             classifier.predict(input_data)
 
-    @parameterized.named_parameters(
-        ("load_weights", True), ("no_load_weights", False)
-    )
+    @parameterized.named_parameters(("load_weights", True), ("no_load_weights", False))
     def test_load_bert_classifier_without_preprocessing(self, load_weights):
         for preset in BertClassifier.presets:
             classifier = BertClassifier.from_preset(
@@ -222,9 +206,7 @@ class BertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                     dtype=tf.int64,
                     maxval=classifier.backbone.vocabulary_size,
                 ),
-                "segment_ids": tf.constant(
-                    [0] * 200 + [1] * 312, shape=(1, 512)
-                ),
+                "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
                 "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
             }
             classifier.predict(input_data)
