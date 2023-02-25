@@ -98,7 +98,7 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
             self.mask_token_id = super().token_to_id(mask_token)
         else:
             self.mask_token_id = super().vocabulary_size()
-            
+
     def vocabulary_size(self):
         sentence_piece_size = super().vocabulary_size()
         if sentence_piece_size == self.mask_token_id:
