@@ -118,9 +118,9 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
 
     proto = bytes_io.getvalue()
 
-    tokenizer = AlbertTokenizer(proto=proto)
+    tokenizer = keras_nlp.models.AlbertTokenizer(proto=proto)
 
-    preprocessor = AlbertMaskedLMPreprocessor(
+    preprocessor = keras_nlp.models.AlbertMaskedLMPreprocessor(
         tokenizer=tokenizer
     )
 
