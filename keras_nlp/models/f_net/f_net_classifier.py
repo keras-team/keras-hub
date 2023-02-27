@@ -71,7 +71,6 @@ class FNetClassifier(Task):
     backbone = keras_nlp.models.FNetBackbone(
         vocabulary_size=32000,
         num_layers=12,
-        num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12,
