@@ -73,8 +73,5 @@ def merge_padding_and_attention_mask(
         if mask is None:
             return attention_mask
         else:
-            return tf.minimum(
-                mask[:, tf.newaxis, :],
-                attention_mask,
-            )
+            return tf.minimum(mask, attention_mask)
     return mask
