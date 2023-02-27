@@ -76,7 +76,7 @@ class FNetMaskedLM(Task):
             [[1, 2, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
         ),
         "segment_ids": tf.constant(
-            [[1, 0, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
+            [[0, 0, 0, 1, 1, 1, 0, 0]] * 2, shape=(2, 8)
         ),
         "mask_positions": tf.constant([[2, 4]] * 2, shape=(2, 2))
     }
