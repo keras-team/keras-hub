@@ -67,7 +67,7 @@ class DistilBertMaskedLMPreprocessor(DistilBertPreprocessor):
 
     # Alternatively, you can create a preprocessor from your own vocabulary.
     # The usage is exactly the same as above.
-    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
+    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
     vocab += ["The", "qu", "##ick", "br", "##own", "fox", "tripped"]
     vocab += ["Call", "me", "Ish", "##mael", "."]
     vocab += ["Oh", "look", "a", "whale"]
