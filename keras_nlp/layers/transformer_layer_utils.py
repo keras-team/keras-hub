@@ -18,6 +18,22 @@ import tensorflow as tf
 from absl import logging
 
 
+def _check_masks_shapes(inputs, padding_mask, attention_mask):
+    mask = padding_mask
+    if hasattr(inputs, "_keras_mask") and mask is None:
+        mask = inputs._keras_mask
+    if mask is not None:
+        if mask._rank() != 2:
+            raise ValueError(
+                f"padding_mask should be of size [B, T], found {mask.shape}"
+            )
+    if attention_mask is not None:
+        if attention_mask._rank() != 3:
+            raise ValueError(
+                f"attention_mask should be of size [B, T, T], found {attention_mask.shape}"
+            )
+
+
 def compute_causal_mask(inputs):
     input_shape = tf.shape(inputs)
     batch_size, sequence_length = input_shape[0], input_shape[1]
@@ -53,6 +69,7 @@ def merge_padding_and_attention_mask(
         A merged 2D mask or None. If only `padding_mask` is provided, the
         returned mask is padding_mask with one additional axis.
     """
+    _check_masks_shapes(inputs, padding_mask, attention_mask)
     mask = padding_mask
     if hasattr(inputs, "_keras_mask"):
         if mask is None:
