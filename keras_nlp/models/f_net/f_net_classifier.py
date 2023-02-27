@@ -67,7 +67,7 @@ class FNetClassifier(Task):
     }
     labels = [0, 3]
 
-    # Randomly initialize a Fnet backbone
+    # Randomly initialize a FNet backbone.
     backbone = keras_nlp.models.FNetBackbone(
         vocabulary_size=32000,
         num_layers=12,
@@ -77,8 +77,8 @@ class FNetClassifier(Task):
         max_sequence_length=12,
     )
 
-    # Create a Fnet classifier and fit your data.
-    classifier = keras_nlp.models.FnetClassifier(
+    # Create a FNet classifier and fit your data.
+    classifier = keras_nlp.models.FNetClassifier(
         backbone,
         num_classes=4,
         preprocessor=None,
