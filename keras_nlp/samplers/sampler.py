@@ -317,7 +317,7 @@ class Sampler:
         # The index of the last non-padding token in prompt. Since all sequences
         # are aligned to the right side, the index is the same for all.
         current_index = max_length - num_steps
-        original_padding_mask = tf.identity(mask)
+        original_padding_mask = tf.cast(tf.identity(mask), dtype=tf.int32)
 
         def one_step(
             current_index,
@@ -325,8 +325,12 @@ class Sampler:
             mask,
             cache=None,
         ):
-            end_token_seen = (prompt == end_token_id) & (original_padding_mask == 0) 
-            sequence_done = tf.reduce_any(end_token_seen, axis=-1) 
+            end_token_seen = (prompt == end_token_id) & (
+                original_padding_mask == 0
+            )
+            sequence_done = tf.cast(
+                tf.reduce_any(end_token_seen, axis=-1), dtype=tf.int32
+            )
             # Store the indices of unfinishe sequences.
             unfinished_indices = tf.where(sequence_done == 0)
             unfinished_prompt = tf.boolean_mask(prompt, 1 - sequence_done)
@@ -342,7 +346,10 @@ class Sampler:
                 )
                 next_token_probs = tf.squeeze(probs, axis=1)
             else:
-                probs = token_probability_fn(unfinished_prompt_mask, unfinished_prompt_mask,)
+                probs = token_probability_fn(
+                    unfinished_prompt_mask,
+                    unfinished_prompt_mask,
+                )
                 next_token_probs = tf.gather(
                     probs,
                     tf.repeat(current_index - 1, batch_size),
@@ -356,7 +363,6 @@ class Sampler:
                 )
             next_token = self.get_next_token(next_token_probs)
             next_token = tf.cast(next_token, prompt.dtype)
-            not_end_token = next_token != end_token_id
             # To update the prompt, we need to put the next token of unfinished
             # sequences into the original indices.
             next_token = tf.tensor_scatter_nd_update(
@@ -380,13 +386,15 @@ class Sampler:
             return [current_index, prompt, mask, cache]
 
         def loop_cond(current_index, prompt, mask, cache=None):
-            new_end_tokens = (prompt == end_token_id) & (original_padding_mask == False) 
-            sequence_done = tf.reduce_any(end_token_seen, axis=-1) 
-            all_done = tf.reduce_all(new_end_tokens)
-            return all_done and tf.less(
+            end_token_seen = (prompt == end_token_id) & (
+                original_padding_mask == 0
+            )
+            sequence_done = tf.reduce_any(end_token_seen, axis=-1)
+            all_done = tf.reduce_all(sequence_done)
+            return tf.logical_not(all_done) and tf.less(
                 current_index, max_length
             )
-            
+
         if cache is None:
             current_index, prompt, mask = tf.while_loop(
                 cond=loop_cond,
