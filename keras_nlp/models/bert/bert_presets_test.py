@@ -174,7 +174,7 @@ class BertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
 
     This every presets for BERT and is only run manually.
     Run with:
-    `pytest keras_nlp/models/bert_presets_test.py --run_extra_large`
+    `pytest keras_nlp/models/bert/bert_presets_test.py --run_extra_large`
     """
 
     @parameterized.named_parameters(
