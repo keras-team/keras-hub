@@ -74,7 +74,7 @@ class Sampler:
     VOCAB_SIZE = 10
 
     # Create a dummy model to predict the next token. Note that the output is
-    # random without training, here we jsut demo how `samplers` works.
+    # random without training, here we just demo how `samplers` works.
     model = keras.Sequential(
         [
             keras.Input(shape=[None]),
