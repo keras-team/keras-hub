@@ -92,8 +92,8 @@ class BeamSampler(Sampler):
         mask,
         num_steps,
         from_logits=True,
+        end_token_id=None,
         cache=None,
-        token_probs=None,
     ):
         """Sampling logic implementation.
 
@@ -130,6 +130,7 @@ class BeamSampler(Sampler):
             )
             repeated_mask = tf.tile(mask, [num_beams, 1])
             probs = token_probability_fn(flattened_beams, repeated_mask)
+            # import pdb; pdb.set_trace()
             preds = tf.gather(
                 probs,
                 tf.repeat(length - 1, batch_size * num_beams),
@@ -139,7 +140,6 @@ class BeamSampler(Sampler):
             if from_logits:
                 preds = keras.activations.softmax(preds, axis=-1)
             # Reshape `preds` to shape `(batch_size, num_beams * vocab_size)`.
-
             preds = tf.reshape(preds, shape=[batch_size, -1])
 
             cum_probs = tf.math.log(preds) + tf.repeat(

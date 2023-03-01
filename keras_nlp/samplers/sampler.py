@@ -250,7 +250,7 @@ class Sampler:
             mask,
             max_length - shortest_prompt_len,
             from_logits=from_logits,
-            end_token_id=None,
+            end_token_id=end_token_id,
             cache=cache,
         )
         # Mask out tokens after `end_token_id`.
@@ -275,6 +275,30 @@ class Sampler:
         Subclasses must implement this method.
         """
         raise NotImplementedError
+
+    def _get_unfinished_sequence(
+        self,
+        prompt,
+        mask,
+        original_padding_mask,
+        end_token_id,
+    ):
+        if end_token_id is None:
+            # If no `end_token_id` is specified, every sequence needs to
+            # be processed until `max_length`.
+            sequence_done = tf.zeros([tf.shape(original_padding_mask)[0]])
+        else:
+            end_token_seen = (prompt == end_token_id) & (
+                original_padding_mask == 0
+            )
+            sequence_done = tf.cast(
+                tf.reduce_any(end_token_seen, axis=-1), dtype=tf.int32
+            )
+        # Store the indices of unfinishe sequences.
+        unfinished_indices = tf.where(sequence_done == 0)
+        unfinished_prompt = tf.boolean_mask(prompt, 1 - sequence_done)
+        unfinished_prompt_mask = tf.boolean_mask(mask, 1 - sequence_done)
+        return unfinished_prompt, unfinished_prompt_mask, unfinished_indices
 
     def sample(
         self,
@@ -325,21 +349,16 @@ class Sampler:
             mask,
             cache=None,
         ):
-            if end_token_id is None:
-                # If no `end_token_id` is specified, every sequence needs to
-                # be processed until `max_length`.
-                sequence_done = tf.zeros([batch_size])
-            else:
-                end_token_seen = (prompt == end_token_id) & (
-                    original_padding_mask == 0
-                )
-                sequence_done = tf.cast(
-                    tf.reduce_any(end_token_seen, axis=-1), dtype=tf.int32
-                )
-            # Store the indices of unfinishe sequences.
-            unfinished_indices = tf.where(sequence_done == 0)
-            unfinished_prompt = tf.boolean_mask(prompt, 1 - sequence_done)
-            unfinished_prompt_mask = tf.boolean_mask(mask, 1 - sequence_done)
+            (
+                unfinished_prompt,
+                unfinished_prompt_mask,
+                unfinished_indices,
+            ) = self._get_unfinished_sequence(
+                prompt,
+                mask,
+                original_padding_mask,
+                end_token_id,
+            )
             last_index = current_index - 1
             # Compute the next token probs for unfinished sequences.
             if cache is not None:
@@ -352,7 +371,7 @@ class Sampler:
                 next_token_probs = tf.squeeze(probs, axis=1)
             else:
                 probs = token_probability_fn(
-                    unfinished_prompt_mask,
+                    unfinished_prompt,
                     unfinished_prompt_mask,
                 )
                 next_token_probs = tf.gather(
