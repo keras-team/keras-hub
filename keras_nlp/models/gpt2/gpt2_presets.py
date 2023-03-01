@@ -56,7 +56,6 @@ backbone_presets = {
             "official_name": "GPT-2",
             "path": "gpt2",
             "model_card": "https://github.com/openai/gpt-2/blob/master/model_card.md",
-
         },
         "config": {
             "vocabulary_size": 50257,

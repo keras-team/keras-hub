@@ -50,7 +50,7 @@ backbone_presets = {
             "params": 141304320,
             "official_name": "DeBERTaV3",
             "path": "deberta_v3",
-            "model_card": "https://huggingface.co/microsoft/deberta-v3-small",            
+            "model_card": "https://huggingface.co/microsoft/deberta-v3-small",
         },
         "config": {
             "vocabulary_size": 128100,
@@ -77,7 +77,7 @@ backbone_presets = {
             "params": 183831552,
             "official_name": "DeBERTaV3",
             "path": "deberta_v3",
-            "model_card": "https://huggingface.co/microsoft/deberta-v3-base"
+            "model_card": "https://huggingface.co/microsoft/deberta-v3-base",
         },
         "config": {
             "vocabulary_size": 128100,

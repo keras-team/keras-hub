@@ -51,7 +51,7 @@ backbone_presets = {
             "params": 354307072,
             "official_name": "RoBERTa",
             "path": "roberta",
-            "model_card": "https://huggingface.co/roberta-large"
+            "model_card": "https://huggingface.co/roberta-large",
         },
         "config": {
             "vocabulary_size": 50265,

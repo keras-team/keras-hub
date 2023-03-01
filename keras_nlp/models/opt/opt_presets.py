@@ -82,7 +82,7 @@ backbone_presets = {
             "params": 2700000000,
             "official_name": "OPT",
             "path": "opt",
-            "model_card": "https://huggingface.co/facebook/opt-2.7b"
+            "model_card": "https://huggingface.co/facebook/opt-2.7b",
         },
         "config": {
             "vocabulary_size": 50272,
@@ -110,7 +110,7 @@ backbone_presets = {
             "params": 6700000000,
             "official_name": "OPT",
             "path": "opt",
-            "model_card": "https://huggingface.co/facebook/opt-6.7b"
+            "model_card": "https://huggingface.co/facebook/opt-6.7b",
         },
         "config": {
             "vocabulary_size": 50272,
