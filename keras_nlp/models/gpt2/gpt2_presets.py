@@ -24,6 +24,7 @@ backbone_presets = {
             "params": 124439808,
             "official_name": "GPT-2",
             "path": "gpt2",
+            "model_card": "https://github.com/openai/gpt-2/blob/master/model_card.md",
         },
         "config": {
             "vocabulary_size": 50257,
@@ -54,6 +55,8 @@ backbone_presets = {
             "params": 354823168,
             "official_name": "GPT-2",
             "path": "gpt2",
+            "model_card": "https://github.com/openai/gpt-2/blob/master/model_card.md",
+
         },
         "config": {
             "vocabulary_size": 50257,
@@ -84,6 +87,7 @@ backbone_presets = {
             "params": 774030080,
             "official_name": "GPT-2",
             "path": "gpt2",
+            "model_card": "https://github.com/openai/gpt-2/blob/master/model_card.md",
         },
         "config": {
             "vocabulary_size": 50257,
@@ -114,6 +118,7 @@ backbone_presets = {
             "params": 1557611200,
             "official_name": "GPT-2",
             "path": "gpt2",
+            "model_card": "https://github.com/openai/gpt-2/blob/master/model_card.md",
         },
         "config": {
             "vocabulary_size": 50257,
