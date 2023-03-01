@@ -74,7 +74,8 @@ class FNetTokenizer(SentencePieceTokenizer):
         cls_token = "[CLS]"
         sep_token = "[SEP]"
         pad_token = "<pad>"
-        for token in [cls_token, sep_token, pad_token]:
+        mask_token = "[MASK]"
+        for token in [cls_token, sep_token, pad_token, mask_token]:
             if token not in self.get_vocabulary():
                 raise ValueError(
                     f"Cannot find token `'{token}'` in the provided "
@@ -85,6 +86,7 @@ class FNetTokenizer(SentencePieceTokenizer):
         self.cls_token_id = self.token_to_id(cls_token)
         self.sep_token_id = self.token_to_id(sep_token)
         self.pad_token_id = self.token_to_id(pad_token)
+        self.mask_token_id = self.token_to_id(mask_token)
 
     @classproperty
     def presets(cls):

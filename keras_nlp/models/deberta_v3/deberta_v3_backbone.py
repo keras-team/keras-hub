@@ -47,6 +47,9 @@ class DebertaV3Backbone(Backbone):
     dimensions. To load preset architectures and weights, use the `from_preset`
     constructor.
 
+    Note: `DebertaV3Backbone` has a performance issue on TPUs, and we recommend
+    other models for TPU training and inference.
+
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
     third party and subject to a separate license, available

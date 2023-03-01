@@ -43,6 +43,11 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     If input is a scalar string (rank == 0), the layer will output a dense
     `tf.Tensor` with static shape `[None]`.
 
+    Note: The mask token (`"[MASK]"`) is handled differently in this tokenizer.
+    If the token is not present in the provided SentencePiece vocabulary, the
+    token will be appended to the vocabulary. For example, if the vocabulary
+    size is 100, the mask token will be assigned the ID 100.
+
     Args:
         proto: Either a `string` path to a SentencePiece proto file, or a
             `bytes` object with a serialized SentencePiece proto. See the
@@ -72,8 +77,12 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         cls_token = "[CLS]"
         sep_token = "[SEP]"
         pad_token = "[PAD]"
+        mask_token = "[MASK]"
+
+        # We do not throw an error if `mask_token` is not present in the
+        # vocabulary.
         for token in [cls_token, pad_token, sep_token]:
-            if token not in self.get_vocabulary():
+            if token not in super().get_vocabulary():
                 raise ValueError(
                     f"Cannot find token `'{token}'` in the provided "
                     f"`vocabulary`. Please provide `'{token}'` in your "
@@ -83,6 +92,35 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         self.cls_token_id = self.token_to_id(cls_token)
         self.sep_token_id = self.token_to_id(sep_token)
         self.pad_token_id = self.token_to_id(pad_token)
+
+        # If the mask token is not in the vocabulary, add it to the end of the
+        # vocabulary.
+        if mask_token in super().get_vocabulary():
+            self.mask_token_id = self.token_to_id(mask_token)
+        else:
+            self.mask_token_id = super().vocabulary_size()
+
+    def vocabulary_size(self):
+        sentence_piece_size = super().vocabulary_size()
+        if sentence_piece_size == self.mask_token_id:
+            return sentence_piece_size + 1
+        return sentence_piece_size
+
+    def get_vocabulary(self):
+        sentence_piece_vocabulary = super().get_vocabulary()
+        if self.mask_token_id < super().vocabulary_size():
+            return sentence_piece_vocabulary
+        return sentence_piece_vocabulary + ["[MASK]"]
+
+    def id_to_token(self, id):
+        if id == self.mask_token_id:
+            return "[MASK]"
+        return super().id_to_token(id)
+
+    def token_to_id(self, token):
+        if token == "[MASK]":
+            return self.mask_token_id
+        return super().token_to_id(token)
 
     @classproperty
     def presets(cls):

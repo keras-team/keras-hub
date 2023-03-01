@@ -25,11 +25,15 @@ backbone_presets = {
             "max_sequence_length": 1024,
         },
         "preprocessor_config": {},
-        "description": (
-            "Base size of BART where case is maintained. "
-            "Trained on a 160GB English dataset comprising BookCorpus, "
-            "English Wikipedia and CommonCrawl."
-        ),
+        "metadata": {
+            "description": (
+                "6-layer BART model where case is maintained. "
+                "Trained on BookCorpus, English Wikipedia and CommonCrawl."
+            ),
+            "params": 139417344,
+            "official_name": "BART",
+            "path": "bart",
+        },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bart_base_en/v1/model.h5",
         "weights_hash": "5b59403f0cafafbd89680e0785791163",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bart_base_en/v1/vocab.json",
@@ -48,11 +52,15 @@ backbone_presets = {
             "max_sequence_length": 1024,
         },
         "preprocessor_config": {},
-        "description": (
-            "Large size of BART where case is maintained. "
-            "Trained on a 160GB English dataset comprising BookCorpus, "
-            "English Wikipedia and CommonCrawl."
-        ),
+        "metadata": {
+            "description": (
+                "12-layer BART model where case is maintained. "
+                "Trained on BookCorpus, English Wikipedia and CommonCrawl."
+            ),
+            "params": 406287360,
+            "official_name": "BART",
+            "path": "bart",
+        },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/bart_large_en/v1/model.h5",
         "weights_hash": "6bfe7e591af8c5699ce6f9f18753af9a",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bart_large_en/v1/vocab.json",
