@@ -25,9 +25,9 @@ from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
 )
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.task import Task
-from keras_nlp.samplers import BeamSampler
 from keras_nlp.samplers import serialize
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.tf_utils import truncate_at
 
 
 @keras_nlp_export("keras_nlp.models.GPT2CasualLM")
@@ -190,6 +190,7 @@ class GPT2CausalLM(Task):
         self.backbone = backbone
         self.preprocessor = preprocessor
         self.sampler = None
+        self.generate_function = None
 
     @classproperty
     def presets(cls):
@@ -259,16 +260,47 @@ class GPT2CausalLM(Task):
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
         return tf.zeros(shape)
 
-    def _get_token_probability(
-        self,
-        prompt,
-        mask,
-        cache=None,
-        cache_index=None,
-    ):
-        batch_size = tf.shape(prompt)[0]
-        prompt = tf.slice(prompt, [0, cache_index], [batch_size, 1])
-        return self.call_with_cache(prompt, mask, cache, cache_index)
+    def make_generate_function(self, sampler):
+        """Create or return the compiled generation function."""
+        # If our sampler has not changed, re-use the compiled function.
+        if self.sampler and serialize(self.sampler) == serialize(sampler):
+            return self.generate_function
+        self.sampler = sampler
+
+        def fn(prompt, input_mask, min_length, max_length):
+            batch_size = tf.shape(prompt)[0]
+            # Ignore the padding mask during generation.
+            padding_mask = tf.ones_like(prompt)
+            cache = self.build_empty_cache(batch_size, max_length)
+            # Seed the cache.
+            _, cache = self.call_with_cache(prompt, padding_mask, cache, 0)
+
+            def next(prompt, state, index):
+                # The cache index is for our previous token
+                cache_index = index - 1
+                prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
+                probs, state = self.call_with_cache(
+                    prompt, padding_mask, state, cache_index
+                )
+                return tf.squeeze(probs, axis=1), state
+
+            return sampler(
+                prompt=prompt,
+                next=next,
+                state=cache,
+                index=min_length,
+                mask=input_mask,
+                end_token_id=self.preprocessor.tokenizer.end_token_id,
+            )
+
+        if self.run_eagerly:
+            self.generate_function = fn
+        else:
+            # `jit_compile` is a property of keras.Model after tf 2.12.
+            # Use `getattr()` for backwards compatibility.
+            jit_compile = getattr(self, "jit_compile", True)
+            self.generate_function = tf.function(fn, jit_compile=jit_compile)
+        return self.generate_function
 
     def generate(
         self,
@@ -296,45 +328,23 @@ class GPT2CausalLM(Task):
                 "`preprocessor` is set before calling `generate`."
             )
         sampler = keras_nlp.samplers.get(sampler)
-        if sampler.__class__ == BeamSampler:
-            raise ValueError(
-                "`BeamSampler` is not supported right now, please choose "
-                "another sampler, e.g., `TopPSampler`."
-            )
-        if hasattr(self, "jit_compile"):
-            # `jit_compile` is a public property as of tf 2.12. hasattr is for
-            # backward compat.
-            sampler.jit_compile = self.jit_compile
-        sampler.run_eagerly = self.run_eagerly
-        if self.sampler and serialize(sampler) == serialize(self.sampler):
-            # If the new sampler is the same as the older one, we reuse the old
-            # sampler to avoid recompile.
-            sampler = self.sampler
-        else:
-            self.sampler = sampler
 
         # Tokenize.
         prompt = self.preprocessor.tokenizer(prompt)
 
-        # Create and seed the cache before generation.
-        token_ids = prompt
-        if prompt.shape.rank == 1:
-            token_ids = tf.RaggedTensor.from_tensor(prompt[tf.newaxis, :])
-        token_ids = token_ids.to_tensor(shape=(None, max_length))
-        # Pass a padding mask of all ones when seeing the cache. The mask will
-        # not affect cached key/values for input tokens we care about.
-        padding_mask = tf.ones_like(token_ids, dtype=tf.bool)
-        batch_size = tf.shape(token_ids)[0]
-        cache = self.build_empty_cache(batch_size, max_length)
-        _, cache = self.call_with_cache(token_ids, padding_mask, cache, 0)
-        # Run generation.
-        generated = sampler(
-            prompt,
-            self._get_token_probability,
-            max_length=max_length,
-            end_token_id=self.preprocessor.tokenizer.end_token_id,
-            cache=cache,
-        )
+        # Pad ragged to dense tensors.
+        padded_shape = (None, max_length)
+        min_length = tf.cast(tf.reduce_min(prompt.row_lengths()), "int32")
+        input_mask = tf.ones_like(prompt, tf.bool).to_tensor(shape=padded_shape)
+        prompt = prompt.to_tensor(shape=padded_shape)
+
+        # Run the (possibly compiled) generate function on dense inputs.
+        generate_function = self.make_generate_function(sampler)
+        output = generate_function(prompt, input_mask, min_length, max_length)
+
+        # Truncate back to ragged to account for end of sequence ids.
+        end_token_id = self.preprocessor.tokenizer.end_token_id
+        output = truncate_at(output, end_token_id, input_mask)
 
         # Detokenize.
-        return self.preprocessor.tokenizer.detokenize(generated)
+        return self.preprocessor.tokenizer.detokenize(output)

@@ -17,14 +17,11 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.samplers.sampler import Sampler
-from keras_nlp.samplers.sampler import base_sampler_args_docstring
 from keras_nlp.samplers.sampler import call_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@format_docstring(
-    base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
-)
+@format_docstring(call_args=call_args_docstring)
 @keras_nlp_export("keras_nlp.samplers.TopPSampler")
 class TopPSampler(Sampler):
     """Top-P Sampler class.
@@ -38,7 +35,6 @@ class TopPSampler(Sampler):
     Args:
         p: float, the `p` value of top-p.
         seed: int, defaults to None. The random seed.
-        {{base_sampler_args}}
 
     Call Args:
         {{call_args}}
@@ -76,17 +72,15 @@ class TopPSampler(Sampler):
         self,
         p=0.1,
         seed=None,
-        jit_compile=True,
-        run_eagerly=False,
     ):
+        super().__init__()
         self.p = p
         self.seed = seed
-        super().__init__(jit_compile=jit_compile, run_eagerly=run_eagerly)
 
-    def get_next_token(self, next_token_probs):
+    def get_next_token(self, probs):
         # Sort preds in descending order.
         sorted_preds, sorted_indices = tf.math.top_k(
-            next_token_probs, k=tf.shape(next_token_probs)[1], sorted=True
+            probs, k=tf.shape(probs)[1], sorted=True
         )
         # Calculate cumulative probability distribution.
         cumulative_probs = tf.math.cumsum(sorted_preds, axis=-1)
@@ -100,7 +94,7 @@ class TopPSampler(Sampler):
         probs = tf.where(
             shifted_keep_mask,
             sorted_preds,
-            tf.zeros(tf.shape(next_token_probs), dtype=sorted_preds.dtype),
+            tf.zeros(tf.shape(probs), dtype=sorted_preds.dtype),
         )
         sorted_next_token = tf.random.categorical(
             tf.math.log(probs), 1, seed=self.seed
@@ -109,7 +103,6 @@ class TopPSampler(Sampler):
 
     def get_config(self):
         config = super().get_config()
-
         config.update(
             {
                 "p": self.p,

@@ -17,14 +17,11 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.samplers.sampler import Sampler
-from keras_nlp.samplers.sampler import base_sampler_args_docstring
 from keras_nlp.samplers.sampler import call_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@format_docstring(
-    base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
-)
+@format_docstring(call_args=call_args_docstring)
 @keras_nlp_export("keras_nlp.samplers.TopKSampler")
 class TopKSampler(Sampler):
     """Top-K Sampler class.
@@ -36,7 +33,6 @@ class TopKSampler(Sampler):
     Args:
         k: int, the `k` value of top-k.
         seed: int, defaults to None. The random seed.
-        {{base_sampler_args}}
 
     Call Args:
         {{call_args}}
@@ -74,18 +70,14 @@ class TopKSampler(Sampler):
         self,
         k=5,
         seed=None,
-        jit_compile=True,
-        run_eagerly=False,
     ):
+        super().__init__()
         self.k = k
         self.seed = seed
-        super().__init__(jit_compile=jit_compile, run_eagerly=run_eagerly)
 
-    def get_next_token(self, next_token_probs):
+    def get_next_token(self, probs):
         # Filter out top-k tokens.
-        top_k_pred, top_k_indices = tf.math.top_k(
-            next_token_probs, k=self.k, sorted=False
-        )
+        top_k_pred, top_k_indices = tf.math.top_k(probs, k=self.k, sorted=False)
         # Sample the next token from the probability distribution.
         next_token = tf.random.categorical(
             tf.math.log(top_k_pred), 1, seed=self.seed
@@ -96,7 +88,6 @@ class TopKSampler(Sampler):
 
     def get_config(self):
         config = super().get_config()
-
         config.update(
             {
                 "k": self.k,

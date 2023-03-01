@@ -17,23 +17,17 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.samplers.sampler import Sampler
-from keras_nlp.samplers.sampler import base_sampler_args_docstring
 from keras_nlp.samplers.sampler import call_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@format_docstring(
-    base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
-)
+@format_docstring(call_args=call_args_docstring)
 @keras_nlp_export("keras_nlp.samplers.GreedySampler")
 class GreedySampler(Sampler):
     """Greedy sampler class.
 
     This sampler is implemented on greedy search, i.e., always picking up the
     token of the largest probability as the next token.
-
-    Args:
-        {{base_sampler_args}}
 
     Call Args:
         {{call_args}}
@@ -67,12 +61,8 @@ class GreedySampler(Sampler):
     ```
     """
 
-    def __init__(
-        self,
-        jit_compile=True,
-        run_eagerly=False,
-    ):
-        super().__init__(jit_compile=jit_compile, run_eagerly=run_eagerly)
+    def __init__(self):
+        super().__init__()
 
-    def get_next_token(self, next_token_probs):
-        return tf.argmax(next_token_probs, axis=-1)
+    def get_next_token(self, probs):
+        return tf.argmax(probs, axis=-1)
