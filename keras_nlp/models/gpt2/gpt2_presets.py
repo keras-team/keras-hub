@@ -36,9 +36,6 @@ backbone_presets = {
             "max_sequence_length": 1024,
         },
         "preprocessor_config": {},
-        "description": (
-            "Base size of GPT-2 with 124M parameters. Trained on WebText."
-        ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_en/v1/model.h5",
         "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_en/v1/vocab.json",
@@ -67,9 +64,6 @@ backbone_presets = {
             "max_sequence_length": 1024,
         },
         "preprocessor_config": {},
-        "description": (
-            "Medium size of GPT-2 with 355M parameters. Trained on WebText."
-        ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_medium_en/v1/model.h5",
         "weights_hash": "580ff9b79c04fc90e6d6f47e975c5afe",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_medium_en/v1/vocab.json",
@@ -98,9 +92,6 @@ backbone_presets = {
             "max_sequence_length": 1024,
         },
         "preprocessor_config": {},
-        "description": (
-            "Large size of GPT-2 with 774M parameters. Trained on WebText."
-        ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_large_en/v1/model.h5",
         "weights_hash": "67957cb3dfc9e965960dabe068811e1a",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_large_en/v1/vocab.json",
@@ -129,10 +120,6 @@ backbone_presets = {
             "max_sequence_length": 1024,
         },
         "preprocessor_config": {},
-        "description": (
-            "Extra large size of GPT-2 with 1558M parameters. "
-            "Trained on WebText."
-        ),
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_extra_large_en/v1/model.h5",
         "weights_hash": "d093c1ee0d9705d845c0190909aa2917",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_extra_large_en/v1/vocab.json",
