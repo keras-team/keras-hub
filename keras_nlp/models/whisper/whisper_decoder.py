@@ -17,6 +17,9 @@
 from tensorflow import keras
 
 from keras_nlp.layers.transformer_decoder import TransformerDecoder
+from keras_nlp.models.whisper.cached_whisper_multi_head_attention import (
+    WhisperCachedMultiHeadAttention,
+)
 from keras_nlp.models.whisper.whisper_multi_head_attention import (
     WhisperMultiHeadAttention,
 )
@@ -29,7 +32,9 @@ class WhisperDecoder(TransformerDecoder):
     Inherits from `keras_nlp.layers.TransformerDecoder`, and overrides the
     `_build` method to use the
     `keras_nlp.models.whisper.whisper_multi_head_attention.WhisperMultiHeadAttention`
-    layer instead of `keras.layers.MultiHeadAttention`.
+    layer instead of `keras.layers.MultiHeadAttention` and
+    `keras_nlp.models.whisper.whisper_cached_multi_head_attention.WhisperCachedMultiHeadAttention`
+    instead of `keras_nlp.layers.cached_multi_head_attention.CachedMultiHeadAttention`.
     """
 
     def _build(self, input_shape, has_cross_attention):
@@ -43,7 +48,7 @@ class WhisperDecoder(TransformerDecoder):
         head_dim = int(hidden_dim // self.num_heads)
 
         # Self attention layers.
-        self._self_attention_layer = WhisperMultiHeadAttention(
+        self._self_attention_layer = WhisperCachedMultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=head_dim,
             dropout=self.dropout,

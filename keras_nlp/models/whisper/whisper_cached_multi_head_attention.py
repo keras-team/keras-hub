@@ -11,15 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Whisper Multi-Head Attention layer."""
+"""Whisper Cached Multi-Head Attention layer."""
 
 
 import string
 
 import tensorflow as tf
-from keras.layers import MultiHeadAttention
 from keras.layers import core
 from keras.utils import tf_utils
+
+from keras_nlp.layers.cached_multi_head_attention import (
+    CachedMultiHeadAttention,
+)
 
 _CHR_IDX = string.ascii_lowercase
 
@@ -57,8 +60,8 @@ def _get_output_shape(output_rank, known_last_dims):
     return [None] * (output_rank - len(known_last_dims)) + list(known_last_dims)
 
 
-class WhisperMultiHeadAttention(MultiHeadAttention):
-    """Whisper Multi-Head Attention layer.
+class WhisperMultiHeadAttention(CachedMultiHeadAttention):
+    """Whisper Cached Multi-Head Attention layer.
 
     Inherits from `keras.layers.MultiHeadAttention`, and overrides the
     `_build_from_signature` method so that Q, V projection layers have bias
