@@ -17,9 +17,12 @@
 import string
 
 import tensorflow as tf
-from keras.layers import MultiHeadAttention
 from keras.layers import core
 from keras.utils import tf_utils
+
+from keras_nlp.layers.cached_multi_head_attention import (
+    CachedMultiHeadAttention,
+)
 
 _CHR_IDX = string.ascii_lowercase
 
@@ -57,7 +60,7 @@ def _get_output_shape(output_rank, known_last_dims):
     return [None] * (output_rank - len(known_last_dims)) + list(known_last_dims)
 
 
-class WhisperMultiHeadAttention(MultiHeadAttention):
+class WhisperMultiHeadAttention(CachedMultiHeadAttention):
     """Whisper Multi-Head Attention layer.
 
     Inherits from `keras.layers.MultiHeadAttention`, and overrides the
