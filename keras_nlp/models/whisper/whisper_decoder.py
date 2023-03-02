@@ -17,7 +17,7 @@
 from tensorflow import keras
 
 from keras_nlp.layers.transformer_decoder import TransformerDecoder
-from keras_nlp.models.whisper.cached_whisper_multi_head_attention import (
+from keras_nlp.models.whisper.whisper_cached_multi_head_attention import (
     WhisperCachedMultiHeadAttention,
 )
 from keras_nlp.models.whisper.whisper_multi_head_attention import (
