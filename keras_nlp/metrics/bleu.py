@@ -63,8 +63,8 @@ class Bleu(keras.metrics.Metric):
     n-grams so as to not give a high score to a (reference, prediction) pair
     with redundant, repeated tokens. Secondly, BLEU score tends to reward
     shorter predictions more, which is why a brevity penalty is applied to
-    penalise short predictions. For more details, see the following article:
-    [Link](https://cloud.google.com/translate/automl/docs/evaluate#bleu).
+    penalise short predictions. For more details, see 
+    [this article](https://cloud.google.com/translate/automl/docs/evaluate#bleu).
 
     Note on input shapes:
     For unbatched inputs, `y_pred` should be a tensor of shape `()`, and
@@ -80,8 +80,8 @@ class Bleu(keras.metrics.Metric):
             (of any shape), and tokenizes the strings in the tensor. If the
             tokenizer is not specified, the default tokenizer is used. The
             default tokenizer replicates the behaviour of SacreBLEU's
-            `"tokenizer_13a"` tokenizer
-            [Link](https://github.com/mjpost/sacrebleu/blob/v2.1.0/sacrebleu/tokenizers/tokenizer_13a.py).
+            `"tokenizer_13a"` tokenizer, see
+            [tokenizer details](https://github.com/mjpost/sacrebleu/blob/v2.1.0/sacrebleu/tokenizers/tokenizer_13a.py).
         max_order: int. The maximum n-gram order to use. For example, if
             `max_order` is set to 3, unigrams, bigrams, and trigrams will be
             considered. Defaults to 4.
@@ -92,20 +92,15 @@ class Bleu(keras.metrics.Metric):
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
                not specified, it defaults to tf.float32.
         name: string. Name of the metric instance.
-        **kwargs: Other keyword arguments.
-        
+        **kwargs: Other keyword arguments.  
     Examples:
-            ```python
-            bleu = keras_nlp.metrics.Bleu(max_order=4)
-            # reference sentence
-            ref_sentence = "the quick brown fox jumps over the lazy dog"
-            # predicted sentence
-            pred_sentence = "the quick brown fox jumps over the box"
-            # compute BLEU score
-            score = bleu([ref_sentence], [pred_sentence])
-            print("BLEU score:", score)
-            ```
             
+            1. Calculate BLEU score by calling Bleu directly.
+            >>> bleu = keras_nlp.metrics.Bleu(max_order=4)
+            >>> ref_sentence = "the quick brown fox jumps over the lazy dog"
+            >>> pred_sentence = "the quick brown fox jumps over the box"
+            >>> score = bleu([ref_sentence], [pred_sentence])
+            <tf.Tensor(0.7420885, shape=(), dtype=float32)>
     References:
         - [Papineni et al., 2002](https://aclanthology.org/P02-1040/)
         - [SacreBLEU](https://github.com/mjpost/sacrebleu)
