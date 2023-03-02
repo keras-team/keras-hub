@@ -276,30 +276,6 @@ class Sampler:
         """
         raise NotImplementedError
 
-    def _get_unfinished_sequence(
-        self,
-        prompt,
-        mask,
-        original_padding_mask,
-        end_token_id,
-    ):
-        if end_token_id is None:
-            # If no `end_token_id` is specified, every sequence needs to
-            # be processed until `max_length`.
-            sequence_done = tf.zeros([tf.shape(original_padding_mask)[0]])
-        else:
-            end_token_seen = (prompt == end_token_id) & (
-                original_padding_mask == 0
-            )
-            sequence_done = tf.cast(
-                tf.reduce_any(end_token_seen, axis=-1), dtype=tf.int32
-            )
-        # Store the indices of unfinishe sequences.
-        unfinished_indices = tf.where(sequence_done == 0)
-        unfinished_prompt = tf.boolean_mask(prompt, 1 - sequence_done)
-        unfinished_prompt_mask = tf.boolean_mask(mask, 1 - sequence_done)
-        return unfinished_prompt, unfinished_prompt_mask, unfinished_indices
-
     def sample(
         self,
         prompt,
@@ -349,30 +325,19 @@ class Sampler:
             mask,
             cache=None,
         ):
-            (
-                unfinished_prompt,
-                unfinished_prompt_mask,
-                unfinished_indices,
-            ) = self._get_unfinished_sequence(
-                prompt,
-                mask,
-                original_padding_mask,
-                end_token_id,
-            )
             last_index = current_index - 1
-            # Compute the next token probs for unfinished sequences.
             if cache is not None:
                 probs, cache = token_probability_fn(
-                    unfinished_prompt,
-                    unfinished_prompt_mask,
+                    prompt,
+                    mask,
                     cache=cache,
                     cache_index=last_index,
                 )
                 next_token_probs = tf.squeeze(probs, axis=1)
             else:
                 probs = token_probability_fn(
-                    unfinished_prompt,
-                    unfinished_prompt_mask,
+                    prompt,
+                    mask,
                 )
                 next_token_probs = tf.gather(
                     probs,
@@ -387,14 +352,6 @@ class Sampler:
                 )
             next_token = self.get_next_token(next_token_probs)
             next_token = tf.cast(next_token, prompt.dtype)
-            if end_token_id is not None:
-                # To update the prompt, we need to put the next token of
-                # unfinished sequences into the original indices.
-                next_token = tf.tensor_scatter_nd_update(
-                    tf.cast(tf.zeros([batch_size]), dtype=tf.int32),
-                    unfinished_indices,
-                    next_token,
-                )
             next_token = tf.where(
                 mask[:, current_index],
                 prompt[:, current_index],
