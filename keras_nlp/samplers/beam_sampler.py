@@ -130,7 +130,6 @@ class BeamSampler(Sampler):
             )
             repeated_mask = tf.tile(mask, [num_beams, 1])
             probs = token_probability_fn(flattened_beams, repeated_mask)
-            # import pdb; pdb.set_trace()
             preds = tf.gather(
                 probs,
                 tf.repeat(length - 1, batch_size * num_beams),

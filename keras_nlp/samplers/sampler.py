@@ -319,7 +319,7 @@ class Sampler:
         current_index = max_length - num_steps
         original_padding_mask = tf.cast(tf.identity(mask), dtype=tf.int32)
 
-        def one_step(
+        def body(
             current_index,
             prompt,
             mask,
@@ -367,30 +367,30 @@ class Sampler:
                 return current_index, prompt, mask
             return [current_index, prompt, mask, cache]
 
-        def loop_cond(current_index, prompt, mask, cache=None):
+        def cond(current_index, prompt, mask, cache=None):
             if end_token_id is None:
-                return tf.less(current_index, max_length)
+                return True
             end_token_seen = (prompt == end_token_id) & (
                 original_padding_mask == 0
             )
             sequence_done = tf.reduce_any(end_token_seen, axis=-1)
             all_done = tf.reduce_all(sequence_done)
-            return tf.logical_not(all_done) and tf.less(
-                current_index, max_length
-            )
+            return tf.logical_not(all_done)
 
         if cache is None:
             current_index, prompt, mask = tf.while_loop(
-                cond=loop_cond,
-                body=one_step,
+                cond=cond,
+                body=body,
                 loop_vars=[current_index, prompt, mask],
+                maximum_iterations=num_steps,
             )
             return prompt
         # Run a while loop till `max_length` of tokens has been generated.
         current_index, prompt, mask, cache = tf.while_loop(
-            cond=loop_cond,
-            body=one_step,
+            cond=cond,
+            body=body,
             loop_vars=[current_index, prompt, mask, cache],
+            maximum_iterations=num_steps,
         )
         return prompt
 
