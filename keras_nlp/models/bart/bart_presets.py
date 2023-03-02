@@ -23,7 +23,7 @@ backbone_presets = {
             "params": 139417344,
             "official_name": "BART",
             "path": "bart",
-            "model_card": "https://huggingface.co/facebook/bart-base",
+            "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/bart/README.md",
         },
         "config": {
             "vocabulary_size": 50265,
@@ -51,7 +51,7 @@ backbone_presets = {
             "params": 406287360,
             "official_name": "BART",
             "path": "bart",
-            "model_card": "https://huggingface.co/facebook/bart-large",
+            "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/bart/README.md",
         },
         "config": {
             "vocabulary_size": 50265,

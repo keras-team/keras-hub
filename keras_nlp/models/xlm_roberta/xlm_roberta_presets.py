@@ -23,7 +23,7 @@ backbone_presets = {
             "params": 277450752,
             "official_name": "XLM-RoBERTa",
             "path": "xlm_roberta",
-            "model_card": "https://huggingface.co/xlm-roberta-base",
+            "model_card": "https://github.com/facebookresearch/fairseq/tree/main/examples/xlmr",
         },
         "config": {
             "vocabulary_size": 250002,
@@ -49,7 +49,7 @@ backbone_presets = {
             "params": 558837760,
             "official_name": "XLM-RoBERTa",
             "path": "xlm_roberta",
-            "model_card": "https://huggingface.co/xlm-roberta-large",
+            "model_card": "https://github.com/facebookresearch/fairseq/tree/main/examples/xlmr",
         },
         "config": {
             "vocabulary_size": 250002,

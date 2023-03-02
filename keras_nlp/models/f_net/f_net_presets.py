@@ -23,7 +23,7 @@ backbone_presets = {
             "params": 82861056,
             "official_name": "FNet",
             "path": "f_net",
-            "model_card": "https://huggingface.co/google/fnet-base",
+            "model_card": "https://github.com/google-research/google-research/blob/master/f_net/README.md",
         },
         "config": {
             "vocabulary_size": 32000,
@@ -49,7 +49,7 @@ backbone_presets = {
             "params": 236945408,
             "official_name": "FNet",
             "path": "f_net",
-            "model_card": "https://huggingface.co/google/fnet-large",
+            "model_card": "https://github.com/google-research/google-research/blob/master/f_net/README.md",
         },
         "config": {
             "vocabulary_size": 32000,
