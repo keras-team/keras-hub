@@ -57,6 +57,19 @@ pip to install directly from the master branch on github:
 pip install git+https://github.com/keras-team/keras-nlp.git --upgrade
 ```
 
+## Important note for Conda users
+`keras-nlp` uses `tensorflow-text` which is currently incompatible with Conda. If you are a Conda user and encounter issues with installing `keras-nlp`, we recommend using `pyenv` for version management instead.
+
+To use `pyenv`, you can follow the installation instructions on the [official website](https://github.com/pyenv/pyenv#installation). Once installed, create a new virtual environment with your desired Python version and activate it:
+```
+$ pyenv virtualenv <your-python-version> keras-nlp
+$ pyenv activate keras-nlp
+```
+Then you can proceed by installing `keras-nlp` and its dependencies in the activated environment by pasting the following in your command line interpreter:
+```
+$ pip install keras-nlp
+```
+
 ## Quickstart
 
 Fine-tune BERT on a small sentiment analysis task using the 
