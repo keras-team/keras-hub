@@ -60,7 +60,7 @@ def _get_output_shape(output_rank, known_last_dims):
     return [None] * (output_rank - len(known_last_dims)) + list(known_last_dims)
 
 
-class WhisperMultiHeadAttention(CachedMultiHeadAttention):
+class WhisperCachedMultiHeadAttention(CachedMultiHeadAttention):
     """Whisper Cached Multi-Head Attention layer.
 
     Inherits from `keras.layers.MultiHeadAttention`, and overrides the
