@@ -64,7 +64,7 @@ class Bleu(keras.metrics.Metric):
     with redundant, repeated tokens. Secondly, BLEU score tends to reward
     shorter predictions more, which is why a brevity penalty is applied to
     penalise short predictions. For more details, see the following article:
-    https://cloud.google.com/translate/automl/docs/evaluate#bleu.
+    [Link](https://cloud.google.com/translate/automl/docs/evaluate#bleu).
 
     Note on input shapes:
     For unbatched inputs, `y_pred` should be a tensor of shape `()`, and
@@ -81,7 +81,7 @@ class Bleu(keras.metrics.Metric):
             tokenizer is not specified, the default tokenizer is used. The
             default tokenizer replicates the behaviour of SacreBLEU's
             `"tokenizer_13a"` tokenizer
-            (https://github.com/mjpost/sacrebleu/blob/v2.1.0/sacrebleu/tokenizers/tokenizer_13a.py).
+            [Link](https://github.com/mjpost/sacrebleu/blob/v2.1.0/sacrebleu/tokenizers/tokenizer_13a.py).
         max_order: int. The maximum n-gram order to use. For example, if
             `max_order` is set to 3, unigrams, bigrams, and trigrams will be
             considered. Defaults to 4.
@@ -93,7 +93,19 @@ class Bleu(keras.metrics.Metric):
                not specified, it defaults to tf.float32.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
-
+        
+    Examples:
+            ```python
+            bleu = keras_nlp.metrics.Bleu(max_order=4)
+            # reference sentence
+            ref_sentence = "the quick brown fox jumps over the lazy dog"
+            # predicted sentence
+            pred_sentence = "the quick brown fox jumps over the box"
+            # compute BLEU score
+            score = bleu([ref_sentence], [pred_sentence])
+            print("BLEU score:", score)
+            ```
+            
     References:
         - [Papineni et al., 2002](https://aclanthology.org/P02-1040/)
         - [SacreBLEU](https://github.com/mjpost/sacrebleu)
