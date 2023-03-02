@@ -140,7 +140,7 @@ class BartBackbone(Backbone):
         x = keras.layers.LayerNormalization(
             name="encoder_embeddings_layer_norm",
             axis=-1,
-            epsilon=1e-12,
+            epsilon=1e-5,
             dtype=tf.float32,
         )(x)
         x = keras.layers.Dropout(
@@ -157,7 +157,7 @@ class BartBackbone(Backbone):
                     x, approximate=False
                 ),
                 dropout=dropout,
-                layer_norm_epsilon=1e-12,
+                layer_norm_epsilon=1e-5,
                 kernel_initializer=bart_kernel_initializer(),
                 name=f"transformer_encoder_layer_{i}",
             )(x, padding_mask=encoder_padding_mask)
@@ -180,7 +180,7 @@ class BartBackbone(Backbone):
         x = keras.layers.LayerNormalization(
             name="decoder_embeddings_layer_norm",
             axis=-1,
-            epsilon=1e-12,
+            epsilon=1e-5,
             dtype=tf.float32,
         )(x)
         x = keras.layers.Dropout(
@@ -197,7 +197,7 @@ class BartBackbone(Backbone):
                 activation=lambda x: keras.activations.gelu(
                     x, approximate=False
                 ),
-                layer_norm_epsilon=1e-12,
+                layer_norm_epsilon=1e-5,
                 kernel_initializer=bart_kernel_initializer(),
                 name=f"transformer_decoder_layer_{i}",
                 has_cross_attention=True,
