@@ -63,9 +63,9 @@ def _get_output_shape(output_rank, known_last_dims):
 class WhisperCachedMultiHeadAttention(CachedMultiHeadAttention):
     """Whisper Cached Multi-Head Attention layer.
 
-    Inherits from `keras.layers.MultiHeadAttention`, and overrides the
-    `_build_from_signature` method so that Q, V projection layers have bias
-    whereas K projection layer does not.
+    Inherits from `keras_nlp.layers.cached_multi_head_attention.CachedMultiHeadAttention`,
+    and overrides the `_build_from_signature` method so that Q, V projection
+    layers have bias whereas K projection layer does not.
     """
 
     def _build_from_signature(self, query, value, key=None):
@@ -120,7 +120,6 @@ class WhisperCachedMultiHeadAttention(CachedMultiHeadAttention):
                 output_shape=_get_output_shape(
                     output_rank - 1, [self._num_heads, self._key_dim]
                 ),
-                # bias_axes=bias_axes if self._use_bias else None,
                 name="key",
                 **self._get_common_kwargs_for_sublayer(),
             )
