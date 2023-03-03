@@ -99,12 +99,10 @@ class WhisperBackbone(Backbone):
 
         # ====== Encoder ======
 
-        # === Embedding ===
         # Embed the input features. This consists of two 1D convolutional
         # layers.
-
-        # Note: We use `padding="same"` here since that corresponds to a padding
-        # size of 1.
+        # For the first conv. layer, We use `padding="same"` here since that
+        # corresponds to a padding size of 1.
         encoder_conv_layer_1 = keras.layers.Conv1D(
             filters=hidden_dim,
             kernel_size=3,
@@ -117,9 +115,9 @@ class WhisperBackbone(Backbone):
             approximate=False,
         )
 
-        # Note: We cannot use `padding="same"` here since that corresponds to a
-        # padding size of 1.5 (since stride is 2). Hence, we will manually
-        # pad the input.
+        # For the second conv. layer, we cannot use `padding="same"` here since
+        # that corresponds to a padding size of 1.5 (since stride is 2). Hence,
+        # we will manually pad the input.
         embedded_features = tf.pad(
             embedded_features, paddings=[[0, 0], [1, 1], [0, 0]]
         )
@@ -148,7 +146,6 @@ class WhisperBackbone(Backbone):
             name="encoder_embeddings_dropout",
         )(x)
 
-        # === Transformer Encoder Layers ===
         # Apply successive transformer encoder blocks.
         for i in range(num_layers):
             x = WhisperEncoder(
@@ -174,7 +171,6 @@ class WhisperBackbone(Backbone):
 
         # ====== Decoder ======
 
-        # === Embedding ===
         # Embed tokens and positions.
         x = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
@@ -190,7 +186,6 @@ class WhisperBackbone(Backbone):
             name="decoder_embeddings_dropout",
         )(x)
 
-        # === Transformer Decoder Layers ===
         # Apply successive transformer decoder blocks.
         for i in range(num_layers):
             transformer_decoder_layer = WhisperDecoder(
