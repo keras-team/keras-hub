@@ -364,6 +364,10 @@ class Sampler:
         )
         return prompt
 
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
     def get_config(self):
         return {
             "jit_compile": self.jit_compile,
