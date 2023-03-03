@@ -99,8 +99,10 @@ class WhisperBackbone(Backbone):
 
         # ====== Encoder ======
 
+        # === Embedding ===
         # Embed the input features. This consists of two 1D convolutional
         # layers.
+
         # Note: We use `padding="same"` here since that corresponds to a padding
         # size of 1.
         encoder_conv_layer_1 = keras.layers.Conv1D(
@@ -146,6 +148,7 @@ class WhisperBackbone(Backbone):
             name="encoder_embeddings_dropout",
         )(x)
 
+        # === Transformer Encoder Layers ===
         # Apply successive transformer encoder blocks.
         for i in range(num_layers):
             x = WhisperEncoder(
@@ -171,6 +174,7 @@ class WhisperBackbone(Backbone):
 
         # ====== Decoder ======
 
+        # === Embedding ===
         # Embed tokens and positions.
         x = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
@@ -186,6 +190,7 @@ class WhisperBackbone(Backbone):
             name="decoder_embeddings_dropout",
         )(x)
 
+        # === Transformer Decoder Layers ===
         # Apply successive transformer decoder blocks.
         for i in range(num_layers):
             transformer_decoder_layer = WhisperDecoder(
