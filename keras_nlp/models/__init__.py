@@ -30,6 +30,10 @@ from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_classifier import (
     DebertaV3Classifier,
 )
+from keras_nlp.models.deberta_v3.deberta_v3_masked_lm import DebertaV3MaskedLM
+from keras_nlp.models.deberta_v3.deberta_v3_masked_lm_preprocessor import (
+    DebertaV3MaskedLMPreprocessor,
+)
 from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
     DebertaV3Preprocessor,
 )

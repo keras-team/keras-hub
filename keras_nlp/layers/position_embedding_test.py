@@ -284,24 +284,12 @@ class PositionEmbeddingLayerTest(tf.test.TestCase, parameterized.TestCase):
     def test_get_config_and_from_config(self):
         max_sequence_length = 40
         test_layer = position_embedding.PositionEmbedding(
-            sequence_length=max_sequence_length
+            sequence_length=max_sequence_length,
+            initializer="zeros",
         )
         config = test_layer.get_config()
-        expected_config_subset = {
-            "sequence_length": max_sequence_length,
-            "initializer": {
-                "class_name": "GlorotUniform",
-                "config": {"seed": None},
-            },
-        }
-        self.assertEqual(config, {**config, **expected_config_subset})
-
-        restored_encoder = position_embedding.PositionEmbedding.from_config(
-            config,
-        )
-        self.assertEqual(
-            restored_encoder.get_config(), {**config, **expected_config_subset}
-        )
+        restored = position_embedding.PositionEmbedding.from_config(config)
+        self.assertEqual(restored.get_config(), config)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),

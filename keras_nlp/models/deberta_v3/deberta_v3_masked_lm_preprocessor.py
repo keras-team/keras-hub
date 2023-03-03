@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2022 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,23 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""ALBERT masked language model preprocessor layer."""
+"""DeBERTa masked language model preprocessor layer."""
 
 from absl import logging
 from tensorflow import keras
 
 from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
-from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
+from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
+    DebertaV3Preprocessor,
+)
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
-    """ALBERT preprocessing for the masked language modeling task.
+class DebertaV3MaskedLMPreprocessor(DebertaV3Preprocessor):
+    """DeBERTa preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling
     task. It is primarily intended for use with the
-    `keras_nlp.models.AlbertMaskedLM` task model. Preprocessing will occur in
+    `keras_nlp.models.DebertaV3MaskedLM` task model. Preprocessing will occur in
     multiple steps.
 
     - Tokenize any number of input segments using the `tokenizer`.
@@ -39,10 +41,10 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
     - Randomly select non-special tokens to mask, controlled by
       `mask_selection_rate`.
     - Construct a `(x, y, sample_weight)` tuple suitable for training with a
-      `keras_nlp.models.AlbertMaskedLM` task model.
+      `keras_nlp.models.DebertaV3MaskedLM` task model.
 
     Args:
-        tokenizer: A `keras_nlp.models.AlbertTokenizer` instance.
+        tokenizer: A `keras_nlp.models.DebertaV3Tokenizer` instance.
         sequence_length: The length of the packed inputs.
         mask_selection_rate: The probability an input token will be dynamically
             masked.
@@ -71,60 +73,76 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
     Examples:
     ```python
     # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.AlbertMaskedLMPreprocessor.from_preset(
-        "albert_base_en_uncased"
+    preprocessor = keras_nlp.models.DebertaV3MaskedLMPreprocessor.from_preset(
+        "deberta_v3_base_en"
     )
 
-    # Tokenize and mask a single sentence.
+    # Tokenize and pack a single sentence.
     sentence = tf.constant("The quick brown fox jumped.")
     preprocessor(sentence)
+    # Same output.
+    preprocessor("The quick brown fox jumped.")
 
-    # Tokenize and mask a batch of sentences.
+    # Tokenize and a batch of single sentences.
     sentences = tf.constant(
         ["The quick brown fox jumped.", "Call me Ishmael."]
     )
     preprocessor(sentences)
+    # Same output.
+    preprocessor(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
 
-    # Tokenize and mask a dataset of sentences.
+    # Tokenize and pack a sentence pair.
+    first_sentence = tf.constant("The quick brown fox jumped.")
+    second_sentence = tf.constant("The fox tripped.")
+    preprocessor((first_sentence, second_sentence))
+
+    # Map a dataset to preprocess a single sentence.
     features = tf.constant(
         ["The quick brown fox jumped.", "Call me Ishmael."]
     )
-    ds = tf.data.Dataset.from_tensor_slices((features))
+    labels = tf.constant([0, 1])
+    ds = tf.data.Dataset.from_tensor_slices((features, labels))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
+    # Map a dataset to preprocess sentence pairs.
+    first_sentences = tf.constant(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
+    second_sentences = tf.constant(
+        ["The fox tripped.", "Oh look, a whale."]
+    )
+    labels = tf.constant([1, 1])
+    ds = tf.data.Dataset.from_tensor_slices(
+        (
+            (first_sentences, second_sentences), labels
+        )
+    )
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map a dataset to preprocess unlabeled sentence pairs.
+    first_sentences = tf.constant(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
+    second_sentences = tf.constant(
+        ["The fox tripped.", "Oh look, a whale."]
+    )
+    ds = tf.data.Dataset.from_tensor_slices((first_sentences, second_sentences))
+    # Watch out for tf.data's default unpacking of tuples here!
+    # Best to invoke the `preprocessor` directly in this case.
+    ds = ds.map(
+        lambda s1, s2: preprocessor(x=(s1, s2)),
+        num_parallel_calls=tf.data.AUTOTUNE,
+    )
+
     # Alternatively, you can create a preprocessor from your own vocabulary.
-    vocab_data = tf.data.Dataset.from_tensor_slices(
-        ["the quick brown fox", "the earth is round"]
+    # The usage is the exactly same as above.
+    tokenizer = keras_nlp.models.DebertaV3MaskedLMTokenizer(proto="model.spm")
+    preprocessor = keras_nlp.models.DebertaV3MaskedLMPreprocessor(
+        tokenizer=tokenizer,
+        sequence_length=10,
     )
-
-    # Creating sentencepiece tokenizer for ALBERT LM preprocessor
-    bytes_io = io.BytesIO()
-
-    sentencepiece.SentencePieceTrainer.train(
-        sentence_iterator=vocab_data.as_numpy_iterator(),
-        model_writer=bytes_io,
-        vocab_size=12,
-        model_type="WORD",
-        pad_id=0,
-        unk_id=1,
-        bos_id=2,
-        eos_id=3,
-        pad_piece="<pad>",
-        unk_piece="<unk>",
-        bos_piece="[CLS]",
-        eos_piece="[SEP]",
-        user_defined_symbols="[MASK]"
-    )
-
-    proto = bytes_io.getvalue()
-
-    tokenizer = keras_nlp.models.AlbertTokenizer(proto=proto)
-
-    preprocessor = keras_nlp.models.AlbertMaskedLMPreprocessor(
-        tokenizer=tokenizer
-    )
-
-    ```
     """
 
     def __init__(
@@ -181,15 +199,10 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
             )
 
         x = super().call(x)
-        token_ids, segment_ids, padding_mask = (
-            x["token_ids"],
-            x["segment_ids"],
-            x["padding_mask"],
-        )
+        token_ids, padding_mask = x["token_ids"], x["padding_mask"]
         masker_outputs = self.masker(token_ids)
         x = {
             "token_ids": masker_outputs["token_ids"],
-            "segment_ids": segment_ids,
             "padding_mask": padding_mask,
             "mask_positions": masker_outputs["mask_positions"],
         }

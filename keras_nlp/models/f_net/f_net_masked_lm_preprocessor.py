@@ -112,8 +112,8 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
         user_defined_symbols="[MASK]",
     )
     proto = bytes_io.getvalue()
-    tokenizer = FNetTokenizer(proto=proto)
-    preprocessor = FNetMaskedLMPreprocessor(tokenizer=tokenizer)
+    tokenizer = keras_nlp.models.FNetTokenizer(proto=proto)
+    preprocessor = keras_nlp.models.FNetMaskedLMPreprocessor(tokenizer=tokenizer)
     ```
     """
 
