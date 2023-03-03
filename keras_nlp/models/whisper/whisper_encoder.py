@@ -13,6 +13,7 @@
 # limitations under the License.
 """Whisper encoder block."""
 
+import tensorflow as tf
 
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
 
@@ -30,7 +31,11 @@ class WhisperEncoder(TransformerEncoder):
 
         # For simplicity of code, we just set the key layer's bias term to zero
         # and make it untrainable.
-        print(input_shape)
         self._self_attention_layer._key_dense.build(input_shape)
-        self._self_attention_layer._key_dense.bias.assign(0.0)
+        self._self_attention_layer._key_dense.bias.assign(
+            tf.zeros(
+                self._self_attention_layer._key_dense.bias.shape,
+                dtype=self._self_attention_layer._key_dense.bias.dtype,
+            )
+        )
         self._self_attention_layer._key_dense.bias.trainable = False
