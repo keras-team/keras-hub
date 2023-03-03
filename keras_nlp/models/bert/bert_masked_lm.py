@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""BERT masked lm model."""
+"""BERT masked LM model."""
 
 import copy
 
@@ -30,7 +30,7 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class BertMaskedLM(Task):
-    """An end-to-end BERT model for the masked language modeling task.
+    """An end-to-end BERT model for the masked language modelling task.
 
     This model will train BERT on a masked language modeling task.
     The model will predict labels for a number of masked tokens in the
@@ -95,7 +95,7 @@ class BertMaskedLM(Task):
         intermediate_dim=3072,
         max_sequence_length=12
     )
-    # Create a BERT masked_lm and fit the data.
+    # Create a BERT masked LM model and fit the data.
     masked_lm = keras_nlp.models.BertMaskedLM(
         backbone,
         preprocessor=None,
