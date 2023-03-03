@@ -51,21 +51,7 @@ class BertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             x["token_ids"], [2, 4, 4, 4, 4, 3, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
-            x["padding_mask"],
-            [
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-            ],
+            x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
             x["segment_ids"], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -82,23 +68,7 @@ class BertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             x["token_ids"], [[2, 4, 4, 4, 4, 3, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
-            x["padding_mask"],
-            [
-                [
-                    True,
-                    True,
-                    True,
-                    True,
-                    True,
-                    True,
-                    False,
-                    False,
-                    False,
-                    False,
-                    False,
-                    False,
-                ]
-            ]
+            x["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]]
             * 4,
         )
         self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4]] * 4)
@@ -129,21 +99,7 @@ class BertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             x["token_ids"], [2, 4, 4, 3, 4, 4, 3, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
-            x["padding_mask"],
-            [
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                False,
-            ],
+            x["padding_mask"], [ 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(x["mask_positions"], [1, 2, 4, 5])
         self.assertAllEqual(y, [9, 10, 11, 12])
@@ -163,21 +119,7 @@ class BertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             x["token_ids"], [2, 9, 10, 11, 12, 3, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
-            x["padding_mask"],
-            [
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-            ],
+            x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
         )
         self.assertAllEqual(x["mask_positions"], [0, 0, 0, 0])
         self.assertAllEqual(y, [0, 0, 0, 0])
