@@ -111,7 +111,6 @@ class TransformerEncoder(keras.layers.Layer):
 
         if self._input_shape is not None:
             self._build(self._input_shape)
-        print("--->", self._input_shape)
 
     def _build(self, input_shape):
         # Create layers based on input shape.
