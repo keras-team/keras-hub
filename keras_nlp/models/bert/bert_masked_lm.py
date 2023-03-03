@@ -30,7 +30,7 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class BertMaskedLM(Task):
-    """An end-to-end BERT model for the masked language modelling task.
+    """An end-to-end BERT model for the masked language modeling task.
 
     This model will train BERT on a masked language modeling task.
     The model will predict labels for a number of masked tokens in the
