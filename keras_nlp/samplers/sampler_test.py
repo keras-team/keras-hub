@@ -17,21 +17,18 @@ import tensorflow as tf
 
 import keras_nlp
 from keras_nlp.samplers.greedy_sampler import GreedySampler
+from keras_nlp.samplers.top_k_sampler import TopKSampler
 
 
 class SamplerTest(tf.test.TestCase):
     def test_serialization(self):
-        sampler = keras_nlp.samplers.GreedySampler()
-        config = keras_nlp.samplers.serialize(sampler)
-        expected_config = {
-            "class_name": "keras_nlp>GreedySampler",
-            "config": {
-                "jit_compile": True,
-            },
-        }
-        self.assertDictEqual(expected_config, config)
+        sampler = TopKSampler(k=5)
+        restored = keras_nlp.samplers.deserialize(
+            keras_nlp.samplers.serialize(sampler)
+        )
+        self.assertDictEqual(sampler.get_config(), restored.get_config())
 
-    def test_deserialization(self):
+    def test_get(self):
         # Test get from string.
         identifier = "greedy"
         sampler = keras_nlp.samplers.get(identifier)
