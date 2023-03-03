@@ -108,12 +108,15 @@ def test_fenced_docstrings():
             "keras_nlp.models.backbone",
             "keras_nlp.models.preprocessor",
             "keras_nlp.models.task",
-            # Preprocessors and tokenizers which use `model.spm` (temporary).
-            "keras_nlp.models.albert.albert_preprocessor",
-            "keras_nlp.models.albert.albert_tokenizer",
             "keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor",
             "keras_nlp.models.f_net.f_net_preprocessor",
             "keras_nlp.models.f_net.f_net_tokenizer",
+            # Preprocessors and tokenizers which use `model.spm` (temporary).
+            "keras_nlp.models.albert.albert_preprocessor",
+            "keras_nlp.models.albert.albert_tokenizer",
+            "keras_nlp.tokenizers.byte_pair_tokenizer",
+            "keras_nlp.tokenizers.sentence_piece_tokenizer",
+            "keras_nlp.tokenizers.word_piece_tokenizer",
         ]:
             continue
 
