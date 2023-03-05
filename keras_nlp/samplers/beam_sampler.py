@@ -76,22 +76,17 @@ class BeamSampler(Sampler):
         num_beams=5,
         jit_compile=True,
         run_eagerly=False,
+        return_all_beams=False,
     ):
         self.num_beams = num_beams
-        super().__init__(jit_compile=jit_compile, run_eagerly=run_eagerly)
+        super().__init__(jit_compile=jit_compile, run_eagerly=run_eagerly, return_all_beams=return_all_beams)
 
     def get_next_token(self, next_token_probs):
         # Beam search overrides the whole `sample` method.
         pass
 
     def sample(
-        self,
-        prompt,
-        token_probability_fn,
-        mask,
-        num_steps,
-        from_logits=True,
-        return_all_beams_and_probs=False,
+        self, prompt, token_probability_fn, mask, num_steps, from_logits=True
     ):
         """Sampling logic implementation.
 
@@ -207,13 +202,15 @@ class BeamSampler(Sampler):
                 mask.get_shape(),
             ],
         )
+
         # Get the beam with the maximum probability.
         max_indexes = tf.math.argmax(beams_prob, axis=-1)
         max_beams = tf.gather(
             beams, max_indexes[:, tf.newaxis], axis=1, batch_dims=1
         )
-
-        if return_all_beams_and_probs:
+        
+        return_all_beams = self.return_all_beams
+        if return_all_beams:
             return tf.squeeze(max_beams, axis=1), beams, beams_prob
         else:
             return tf.squeeze(max_beams, axis=1)

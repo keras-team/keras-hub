@@ -218,7 +218,6 @@ def beam_search(
     from_logits=False,
     end_token_id=None,
     pad_token_id=0,
-    return_all_beams_and_probs=False,
 ):
     """Text generation utility based on beam search algorithm.
 
@@ -315,6 +314,9 @@ def beam_search(
         token_probability_fn, prompt
     )
 
+    if length >= max_length:
+        return tf.squeeze(prompt) if input_is_1d else prompt
+
     # Initialize beam with shape `(batch_size, num_beams, length)`.
     beams = tf.repeat(tf.expand_dims(prompt, axis=1), num_beams, axis=1)
 
@@ -324,20 +326,6 @@ def beam_search(
         [beams_prob, tf.fill((batch_size, num_beams - 1), pred_dtype.min)],
         axis=-1,
     )
-
-    if length >= max_length:
-        if input_is_1d:
-            prompt = tf.squeeze(prompt)
-            all_beams = tf.squeeze(beams)
-            all_scores = tf.squeeze(beams_prob)
-        else:
-            all_beams = beams
-            all_scores = beams_prob
-
-        if return_all_beams_and_probs:
-            return prompt, all_beams, all_scores
-        else:
-            return prompt
 
     def one_step(beams, beams_prob, length):
         truncated_beams = beams[..., :length]
@@ -409,22 +397,7 @@ def beam_search(
         prompt = _mask_tokens_after_end_token(
             prompt, max_length, end_token_id, pad_token_id
         )
-        all_beams = _mask_tokens_after_end_token(
-            beams, max_length, end_token_id, pad_token_id
-        )
-        all_scores = _mask_tokens_after_end_token(
-            beams_prob, max_length, end_token_id, pad_token_id
-        )
-
-    if input_is_1d:
-        prompt = tf.squeeze(prompt)
-        all_beams = tf.squeeze(all_beams)
-        all_scores = tf.squeeze(all_scores)
-
-    if return_all_beams_and_probs:
-        return prompt, all_beams, all_scores
-    else:
-        return prompt
+    return tf.squeeze(prompt) if input_is_1d else prompt
 
 
 def random_search(
