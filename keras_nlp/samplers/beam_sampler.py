@@ -79,7 +79,11 @@ class BeamSampler(Sampler):
         return_all_beams=False,
     ):
         self.num_beams = num_beams
-        super().__init__(jit_compile=jit_compile, run_eagerly=run_eagerly, return_all_beams=return_all_beams)
+        super().__init__(
+            jit_compile=jit_compile,
+            run_eagerly=run_eagerly,
+            return_all_beams=return_all_beams,
+        )
 
     def get_next_token(self, next_token_probs):
         # Beam search overrides the whole `sample` method.
@@ -208,7 +212,7 @@ class BeamSampler(Sampler):
         max_beams = tf.gather(
             beams, max_indexes[:, tf.newaxis], axis=1, batch_dims=1
         )
-        
+
         return_all_beams = self.return_all_beams
         if return_all_beams:
             return tf.squeeze(max_beams, axis=1), beams, beams_prob
