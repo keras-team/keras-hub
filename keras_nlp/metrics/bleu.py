@@ -63,7 +63,7 @@ class Bleu(keras.metrics.Metric):
     n-grams so as to not give a high score to a (reference, prediction) pair
     with redundant, repeated tokens. Secondly, BLEU score tends to reward
     shorter predictions more, which is why a brevity penalty is applied to
-    penalise short predictions. For more details, see 
+    penalise short predictions. For more details, see
     [this article](https://cloud.google.com/translate/automl/docs/evaluate#bleu).
 
     Note on input shapes:
@@ -81,7 +81,7 @@ class Bleu(keras.metrics.Metric):
             tokenizer is not specified, the default tokenizer is used. The
             default tokenizer replicates the behaviour of SacreBLEU's
             `"tokenizer_13a"` tokenizer, see
-            [tokenizer details](https://github.com/mjpost/sacrebleu/blob/v2.1.0/sacrebleu/tokenizers/tokenizer_13a.py).
+            [SacreBLEU's `"tokenizer_13a"` tokenizer](https://github.com/mjpost/sacrebleu/blob/v2.1.0/sacrebleu/tokenizers/tokenizer_13a.py).
         max_order: int. The maximum n-gram order to use. For example, if
             `max_order` is set to 3, unigrams, bigrams, and trigrams will be
             considered. Defaults to 4.
@@ -92,15 +92,87 @@ class Bleu(keras.metrics.Metric):
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
                not specified, it defaults to tf.float32.
         name: string. Name of the metric instance.
-        **kwargs: Other keyword arguments.  
+
     Examples:
-            
-            1. Calculate BLEU score by calling Bleu directly.
-            >>> bleu = keras_nlp.metrics.Bleu(max_order=4)
-            >>> ref_sentence = "the quick brown fox jumps over the lazy dog"
-            >>> pred_sentence = "the quick brown fox jumps over the box"
-            >>> score = bleu([ref_sentence], [pred_sentence])
-            <tf.Tensor(0.7420885, shape=(), dtype=float32)>
+
+    1. Various Input Types.
+    1.1. Python string.
+    >>> bleu = keras_nlp.metrics.Bleu(max_order=4)
+    >>> ref_sentence = "the quick brown fox jumps over the lazy dog"
+    >>> pred_sentence = "the quick brown fox jumps over the box"
+    >>> score = bleu([ref_sentence], [pred_sentence])
+    <tf.Tensor(0.7420885, shape=(), dtype=float32)>
+
+    1.2. rank 1 inputs.
+    a. Python list.
+    >>> bleu = keras_nlp.metrics.Bleu(max_order=4)
+    >>> ref_sentence = [
+        "the quick brown fox jumps over the lazy dog",
+        "the quick brown fox jumps over the lazy frog"
+    ]
+    >>> pred_sentence = ["the quick brown fox jumps over the box"]
+    >>> score = bleu(ref_sentence, pred_sentence)
+    <tf.Tensor(0.7420885, shape=(), dtype=float32)>
+
+    b. Tensor.
+    >>> bleu = keras_nlp.metrics.Bleu(max_order=4)
+    >>> ref_sentence = tf.constant([
+        "the quick brown fox jumps over the lazy dog",
+        "the quick brown fox jumps over the lazy frog"
+    ])
+    >>> pred_sentence = tf.constant(["the quick brown fox jumps over the box"])
+    >>> score = bleu(ref_sentence, pred_sentence)
+    <tf.Tensor(0.7420885, shape=(), dtype=float32)>
+
+    c. RaggedTensor.
+    >>> bleu = keras_nlp.metrics.Bleu(max_order=4)
+    >>> ref_sentence = tf.ragged.constant([
+        [
+            "the quick brown fox jumps over the lazy dog",
+            "the quick brown fox jumps over the lazy frog"
+        ]
+    ])
+    >>> pred_sentence = tf.ragged.constant([
+        ["the quick brown fox jumps over the box"]
+    ])
+    >>> score = bleu(ref_sentence, pred_sentence)
+    <tf.Tensor(0.7420885, shape=(), dtype=float32)>
+
+    1.3. rank 2 inputs.
+    a. Python list.
+    >>> bleu = keras_nlp.metrics.Bleu(max_order=4)
+    >>> ref_sentence = [
+        ["the quick brown fox jumps over the lazy dog", "the quick brown fox jumps over the lazy frog"],
+        ["the quick brown fox jumps over the lazy dog", "the quick brown fox jumps over the lazy frog"]
+    ]
+    >>> pred_sentence = [
+        ["the quick brown fox jumps over the box"],
+        ["the quick brown fox jumps over the box"]
+    ]
+    >>> score = bleu(ref_sentence, pred_sentence)
+    <tf.Tensor(0.7420885, shape=(), dtype=float32)>
+
+    2. Passing a custom tokenizer.
+    >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "dog", "."]
+    >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(vocabulary = vocab, lowercase=True)
+    >>> bleu = keras_nlp.metrics.Bleu(max_order=4, tokenizer=tokenizer)
+    >>> ref_sentence = "the quick brown fox"
+    >>> pred_sentence = "the quick brown dog"
+    >>> score = bleu([ref_sentence], [pred_sentence])
+    <tf.Tensor(0.75983566, shape=(), dtype=float32)>
+
+    3. Pass the metric to `model.compile()`.
+    >>> inputs = keras.Input(shape=(), dtype='string')
+    >>> outputs = tf.strings.lower(inputs)
+    >>> model = keras.Model(inputs, outputs)
+    >>> model.compile(metrics=[keras_nlp.metrics.Bleu()])
+    >>> ref_sentence = tf.constant(["the quick brown fox jumps over the lazy dog"])
+    >>> pred_sentence = tf.constant(["the quick brown fox jumps over the box"])
+    >>> metric_dict = model.evaluate(ref_sentence, pred_sentence, return_dict=True)
+    >>> metric_dict['bleu']
+    0.7259795069694519
+
+
     References:
         - [Papineni et al., 2002](https://aclanthology.org/P02-1040/)
         - [SacreBLEU](https://github.com/mjpost/sacrebleu)
