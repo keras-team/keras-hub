@@ -18,21 +18,28 @@ import tensorflow as tf
 from absl import logging
 
 
-def compute_causal_mask(inputs):
-    input_shape = tf.shape(inputs)
-    batch_size, sequence_length = input_shape[0], input_shape[1]
-    i = tf.range(sequence_length)[:, tf.newaxis]
-    j = tf.range(sequence_length)
-    mask = tf.cast(i >= j, dtype="int32")
-    mask = tf.reshape(mask, (1, input_shape[1], input_shape[1]))
-    mult = tf.concat(
-        [
-            tf.expand_dims(batch_size, -1),
-            tf.constant([1, 1], dtype=tf.int32),
-        ],
-        axis=0,
-    )
-    return tf.tile(mask, mult)
+def compute_causal_mask(batch_size, input_length, output_length, cache_index=0):
+    """Compute a causal attention mask for a transformer decoder.
+
+    Args:
+        batch_size: batch size for the mask.
+        input_length: the length of key/value tensors in the attention layer.
+        output_length: the length of query tensors in the attention layer.
+        cache_index: the current index for cached generation. If passed, the
+            query sequence will be considered to start at `cache_index` rather
+            than zero. For example, a causal mask with `output_length=1` and
+            `cache_index=5` would allow the query tensor to attend to the first
+            five positions of the key/value tensors.
+
+    Return:
+        A causal attention mask with shape
+        `(batch_size, output_length, input_length)` that can be passed to a
+        attention layer.
+    """
+    i = tf.range(output_length)[:, tf.newaxis] + cache_index
+    j = tf.range(input_length)
+    mask = tf.cast(i >= j, dtype="int32")[tf.newaxis, :, :]
+    return tf.broadcast_to(mask, (batch_size, output_length, input_length))
 
 
 def merge_padding_and_attention_mask(
@@ -40,7 +47,7 @@ def merge_padding_and_attention_mask(
     padding_mask,
     attention_mask,
 ):
-    """Merge padding mask with users' customized mask.
+    """Merge the padding mask with a customized attention mask.
 
     Args:
         inputs: the input sequence.

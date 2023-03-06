@@ -55,23 +55,23 @@ class BertTokenizer(WordPieceTokenizer):
     Examples:
 
     Batched input.
-    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]"]
-    >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
+    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
+    >>> vocab += ["The", "quick", "brown", "fox.", "jumped", "over"]
     >>> inputs = ["The quick brown fox.", "The fox."]
     >>> tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
     >>> tokenizer(inputs)
-    <tf.RaggedTensor [[4, 5, 6, 7, 8, 9], [4, 8, 9]]>
+    <tf.RaggedTensor [[5, 6, 7, 0, 0], [5, 0, 0]]>
 
     Unbatched input.
-    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]"]
+    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
     >>> inputs = "The fox."
     >>> tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
     >>> tokenizer(inputs)
-    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([4, 8, 9], dtype=int32)>
+    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([ 5,  9, 10], dtype=int32)>
 
     Detokenization.
-    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]"]
+    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
     >>> inputs = "The quick brown fox."
     >>> tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
@@ -95,6 +95,7 @@ class BertTokenizer(WordPieceTokenizer):
         cls_token = "[CLS]"
         sep_token = "[SEP]"
         pad_token = "[PAD]"
+        mask_token = "[MASK]"
         for token in [cls_token, pad_token, sep_token]:
             if token not in self.get_vocabulary():
                 raise ValueError(
@@ -106,6 +107,7 @@ class BertTokenizer(WordPieceTokenizer):
         self.cls_token_id = self.token_to_id(cls_token)
         self.sep_token_id = self.token_to_id(sep_token)
         self.pad_token_id = self.token_to_id(pad_token)
+        self.mask_token_id = self.token_to_id(mask_token)
 
     @classproperty
     def presets(cls):

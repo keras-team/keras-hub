@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2022 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,26 +11,30 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""DeBERTaV3 masked lm model."""
+
 import copy
 
 from tensorflow import keras
 
 from keras_nlp.layers.masked_lm_head import MaskedLMHead
-from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
-from keras_nlp.models.f_net.f_net_backbone import f_net_kernel_initializer
-from keras_nlp.models.f_net.f_net_masked_lm_preprocessor import (
-    FNetMaskedLMPreprocessor,
+from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
+from keras_nlp.models.deberta_v3.deberta_v3_backbone import (
+    deberta_kernel_initializer,
 )
-from keras_nlp.models.f_net.f_net_presets import backbone_presets
+from keras_nlp.models.deberta_v3.deberta_v3_masked_lm_preprocessor import (
+    DebertaV3MaskedLMPreprocessor,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class FNetMaskedLM(Task):
-    """An end-to-end FNet model for the masked language modeling task.
+class DebertaV3MaskedLM(Task):
+    """An end-to-end DeBERTaV3 model for the masked language modeling task.
 
-    This model will train FNet on a masked language modeling task.
+    This model will train DeBERTaV3 on a masked language modeling task.
     The model will predict labels for a number of masked tokens in the
     input data. For usage of this model with pre-trained weights, see the
     `from_preset()` method.
@@ -42,11 +46,13 @@ class FNetMaskedLM(Task):
     with `from_preset()`.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
-    warranties or conditions of any kind.
+    warranties or conditions of any kind. The underlying model is provided by a
+    third party and subject to a separate license, available
+    [here](https://github.com/microsoft/DeBERTa).
 
     Args:
-        backbone: A `keras_nlp.models.FNetBackbone` instance.
-        preprocessor: A `keras_nlp.models.FNetMaskedLMPreprocessor` or
+        backbone: A `keras_nlp.models.DebertaV3Backbone` instance.
+        preprocessor: A `keras_nlp.models.DebertaV3MaskedLMPreprocessor` or
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
 
@@ -57,10 +63,10 @@ class FNetMaskedLM(Task):
     # Create a dataset with raw string features. Labels are inferred.
     features = ["The quick brown fox jumped.", "I forgot my homework."]
 
-    # Create a FNetMaskedLM with a pretrained backbone and further train
+    # Create a DebertaV3MaskedLM with a pretrained backbone and further train
     # on an MLM task.
-    masked_lm = keras_nlp.models.FNetMaskedLM.from_preset(
-        "f_net_base_en",
+    masked_lm = keras_nlp.models.DebertaV3MaskedLM.from_preset(
+        "deberta_v3_base_en",
     )
     masked_lm.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -75,24 +81,25 @@ class FNetMaskedLM(Task):
         "token_ids": tf.constant(
             [[1, 2, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
         ),
-        "segment_ids": tf.constant(
-            [[0, 0, 0, 1, 1, 1, 0, 0]] * 2, shape=(2, 8)
+        "padding_mask": tf.constant(
+            [[1, 1, 1, 1, 1, 1, 1, 1]] * 2, shape=(2, 8)
         ),
         "mask_positions": tf.constant([[2, 4]] * 2, shape=(2, 2))
     }
     # Labels are the original masked values.
     labels = [[3, 5]] * 2
 
-    # Randomly initialize a FNet encoder
-    backbone = keras_nlp.models.FNetBackbone(
+    # Randomly initialize a DeBERTaV3 encoder
+    backbone = keras_nlp.models.DebertaV3Backbone(
         vocabulary_size=50265,
         num_layers=12,
+        num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12
     )
-    # Create a FNet masked_lm and fit the data.
-    masked_lm = keras_nlp.models.FNetMaskedLM(
+    # Create a DeBERTaV3 masked_lm and fit the data.
+    masked_lm = keras_nlp.models.DebertaV3MaskedLM(
         backbone,
         preprocessor=None,
     )
@@ -119,10 +126,12 @@ class FNetMaskedLM(Task):
         outputs = MaskedLMHead(
             vocabulary_size=backbone.vocabulary_size,
             embedding_weights=backbone.token_embedding.embeddings,
-            intermediate_activation="gelu",
-            kernel_initializer=f_net_kernel_initializer(),
+            intermediate_activation=lambda x: keras.activations.gelu(
+                x, approximate=False
+            ),
+            kernel_initializer=deberta_kernel_initializer(),
             name="mlm_head",
-        )(backbone_outputs["sequence_output"], inputs["mask_positions"])
+        )(backbone_outputs, inputs["mask_positions"])
 
         # Instantiate using Functional API Model constructor
         super().__init__(
@@ -137,11 +146,11 @@ class FNetMaskedLM(Task):
 
     @classproperty
     def backbone_cls(cls):
-        return FNetBackbone
+        return DebertaV3Backbone
 
     @classproperty
     def preprocessor_cls(cls):
-        return FNetMaskedLMPreprocessor
+        return DebertaV3MaskedLMPreprocessor
 
     @classproperty
     def presets(cls):

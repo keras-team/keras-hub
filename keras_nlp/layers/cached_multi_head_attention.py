@@ -62,44 +62,24 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         value,
         key=None,
         attention_mask=None,
-        use_causal_mask=False,
         cache=None,
-        cache_index=None,
+        cache_index=0,
     ):
         if not self._built_from_signature:
             self._build_from_signature(query=query, value=value, key=key)
         if key is None:
             key = value
 
-        attention_mask = self._compute_attention_mask(
-            query,
-            value,
-            key=key,
-            attention_mask=attention_mask,
-            use_causal_mask=use_causal_mask,
-        )
-
         query = self._query_dense(query)
         key = self._key_dense(key)
         value = self._value_dense(value)
 
         if cache is not None:
-            if cache_index is None:
-                seq_len = tf.shape(query)[1]
-                k_update_indices = [0, 0, 0, 0, 0]
-                v_update_indices = [0, 1, 0, 0, 0]
-                cache_index = seq_len - 1
-            else:
-                k_update_indices = [0, 0, cache_index, 0, 0]
-                v_update_indices = [0, 1, cache_index, 0, 0]
-            cache = dynamic_update_slice(
-                cache, key[:, tf.newaxis, ...], k_update_indices
-            )
-            cache = dynamic_update_slice(
-                cache, value[:, tf.newaxis, ...], v_update_indices
-            )
-            key = cache[:, 0, : cache_index + 1, :, :]
-            value = cache[:, 1, : cache_index + 1, :, :]
+            key_cache, value_cache = tf.unstack(cache, axis=1)
+            start = [0, cache_index, 0, 0]
+            key = dynamic_update_slice(key_cache, key, start)
+            value = dynamic_update_slice(value_cache, value, start)
+            cache = tf.stack((key, value), axis=1)
 
         query = tf.multiply(query, 1.0 / tf.math.sqrt(float(self._key_dim)))
         attention_scores = tf.einsum(self._dot_product_equation, key, query)
