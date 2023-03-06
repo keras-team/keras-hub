@@ -74,7 +74,7 @@ class Sampler:
     VOCAB_SIZE = 10
 
     # Create a dummy model to predict the next token. Note that the output is
-    # random without training, here we jsut demo how `samplers` works.
+    # random without training, here we just demo how `samplers` works.
     model = keras.Sequential(
         [
             keras.Input(shape=[None]),
@@ -172,18 +172,6 @@ class Sampler:
         prompt = tf.ragged.boolean_mask(prompt, mask)
         return prompt, mask
 
-    def _validate_token_probability_fn(
-        self, token_probability_fn, prompt, mask
-    ):
-        """Helper method to validate `token_probability_fn` output."""
-        test_pred = token_probability_fn(prompt, mask=mask)
-        if len(test_pred.shape) != 3:
-            raise ValueError(
-                "Output of `token_probability_fn` is not a 3D tensor, "
-                "please provide a function with the output shape "
-                "[batch_size, sequence_length, vocab_size]."
-            )
-
     def _pad_prompt(self, prompt, max_length):
         """Pad prompt to `max_length`."""
         mask = tf.ones_like(prompt, dtype=tf.bool)
@@ -237,7 +225,6 @@ class Sampler:
         # current prompt.
         prompt, mask = self._pad_prompt(prompt, max_length)
         original_padding_mask = tf.identity(mask)
-        self._validate_token_probability_fn(token_probability_fn, prompt, mask)
 
         # Convert `sample` method to a `tf.function` if `self.run_eagerly=False`
         # , and turn on `jit_compile` accordingly.
@@ -378,7 +365,7 @@ class Sampler:
             return not all_done
 
         if cache is None:
-            current_index, prompt, mask = tf.while_loop(
+            _, prompt, _ = tf.while_loop(
                 cond=cond,
                 body=body,
                 loop_vars=(current_index, prompt, mask),
@@ -386,13 +373,17 @@ class Sampler:
             )
             return prompt
         # Run a while loop till `max_length` of tokens has been generated.
-        current_index, prompt, mask, cache = tf.while_loop(
+        _, prompt, _, _ = tf.while_loop(
             cond=cond,
             body=body,
             loop_vars=(current_index, prompt, mask, cache),
             maximum_iterations=num_steps,
         )
         return prompt
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     def get_config(self):
         return {
