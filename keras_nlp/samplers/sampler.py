@@ -365,7 +365,7 @@ class Sampler:
             current_index = tf.add(current_index, 1)
             if cache is None:
                 return current_index, prompt, mask
-            return [current_index, prompt, mask, cache]
+            return current_index, prompt, mask, cache
 
         def cond(current_index, prompt, mask, cache=None):
             if end_token_id is None:
@@ -375,13 +375,13 @@ class Sampler:
             )
             sequence_done = tf.reduce_any(end_token_seen, axis=-1)
             all_done = tf.reduce_all(sequence_done)
-            return tf.logical_not(all_done)
+            return not all_done
 
         if cache is None:
             current_index, prompt, mask = tf.while_loop(
                 cond=cond,
                 body=body,
-                loop_vars=[current_index, prompt, mask],
+                loop_vars=(current_index, prompt, mask),
                 maximum_iterations=num_steps,
             )
             return prompt
@@ -389,7 +389,7 @@ class Sampler:
         current_index, prompt, mask, cache = tf.while_loop(
             cond=cond,
             body=body,
-            loop_vars=[current_index, prompt, mask, cache],
+            loop_vars=(current_index, prompt, mask, cache),
             maximum_iterations=num_steps,
         )
         return prompt
