@@ -243,7 +243,10 @@ class Sampler:
         # , and turn on `jit_compile` accordingly.
         sample = self.sample
         if not self.run_eagerly:
-            sample = tf.function(self.sample, jit_compile=self.jit_compile)
+            # sample = tf.function(self.sample, jit_compile=self.jit_compile)
+            sample = self.sample_graph_xla
+        else:
+            sample = self.sample
         prompt = sample(
             prompt,
             token_probability_fn,
@@ -274,6 +277,22 @@ class Sampler:
         Subclasses must implement this method.
         """
         raise NotImplementedError
+    
+    @tf.function(jit_compile=True)
+    def sample_graph_xla(self,
+        prompt,
+        token_probability_fn,
+        mask,
+        num_steps,
+        from_logits=True,
+        cache=None,
+    ):
+        return self.sample(prompt,
+            token_probability_fn,
+            mask,
+            num_steps,
+            from_logits,
+            cache)
 
     def sample(
         self,

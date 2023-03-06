@@ -17,6 +17,7 @@ import copy
 
 import tensorflow as tf
 from tensorflow import keras
+from keras_nlp.samplers import serialize
 from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 import keras_nlp
@@ -360,8 +361,12 @@ class GPT2CausalLM(Task):
                 "is set before calling `generate`."
             )
         end_token_id = self.preprocessor.tokenizer.end_token_id
-
         sampler = keras_nlp.samplers.get(sampler)
+        import pdb; pdb.set_trace()
+        if hasattr(self, "sampler") and serialize(sampler) == serialize(self.sampler):
+            sampler = self.sampler
+        else:
+            self.sampler = sampler
         if hasattr(self, "jit_compile"):
             # `jit_compile` is a public property as of tf 2.12. hasattr is for
             # backward compat.
