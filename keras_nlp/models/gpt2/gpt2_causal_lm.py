@@ -280,7 +280,7 @@ class GPT2CausalLM(Task):
                 cache_index = index - 1
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
                 probs, state = self.call_with_cache(
-                    prompt, padding_mask, state, cache_index
+                    prompt, tf.ones_like(prompt), state, cache_index
                 )
                 return tf.squeeze(probs, axis=1), state
 
