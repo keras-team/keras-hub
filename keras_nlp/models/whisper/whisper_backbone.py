@@ -133,7 +133,7 @@ class WhisperBackbone(Backbone):
 
         position_embedding = PositionEmbedding(
             initializer=whisper_kernel_initializer(),
-            sequence_length=max_source_sequence_length//2,
+            sequence_length=max_source_sequence_length // 2,
             name="encoder_position_embedding",
         )(embedded_features)
 
