@@ -214,6 +214,7 @@ class Sampler:
         cache=None,
     ):
         prompt, mask = self._validate_prompt_and_mask(prompt, mask)
+        self.token_probability_fn = token_probability_fn
         input_is_1d = prompt.shape.rank == 1
         if input_is_1d:
             prompt = tf.RaggedTensor.from_tensor(prompt[tf.newaxis, :])
@@ -230,13 +231,12 @@ class Sampler:
         # , and turn on `jit_compile` accordingly.
         sample = self.sample
         if not self.run_eagerly:
-            # sample = tf.function(self.sample, jit_compile=self.jit_compile)
-            sample = self.sample_graph_xla
-        else:
-            sample = self.sample
+            if getattr(self, "jit_compile", True):
+                sample = self._sample_graph
+            else:
+                sample = self._sample_graph_xla
         prompt = sample(
             prompt,
-            token_probability_fn,
             mask,
             max_length - shortest_prompt_len,
             from_logits=from_logits,
@@ -265,27 +265,40 @@ class Sampler:
         Subclasses must implement this method.
         """
         raise NotImplementedError
-    
-    @tf.function(jit_compile=True)
-    def sample_graph_xla(self,
+
+    @tf.function
+    def _sample_graph(
+        self,
         prompt,
-        token_probability_fn,
         mask,
         num_steps,
         from_logits=True,
+        end_token_id=None,
         cache=None,
     ):
-        return self.sample(prompt,
-            token_probability_fn,
-            mask,
-            num_steps,
-            from_logits,
-            cache)
+        """Wrapper of `sample` method to make it a non-XLA tf graph."""
+        return self.sample(
+            prompt, mask, num_steps, from_logits, end_token_id, cache
+        )
+
+    @tf.function(jit_compile=True)
+    def _sample_graph_xla(
+        self,
+        prompt,
+        mask,
+        num_steps,
+        from_logits=True,
+        end_token_id=None,
+        cache=None,
+    ):
+        """Wrapper of `sample` method to make it an XLA tf graph."""
+        return self.sample(
+            prompt, mask, num_steps, from_logits, end_token_id, cache
+        )
 
     def sample(
         self,
         prompt,
-        token_probability_fn,
         mask,
         num_steps,
         from_logits=True,
@@ -333,7 +346,7 @@ class Sampler:
         ):
             last_index = current_index - 1
             if cache is not None:
-                probs, cache = token_probability_fn(
+                probs, cache = self.token_probability_fn(
                     prompt,
                     mask,
                     cache=cache,
@@ -341,7 +354,7 @@ class Sampler:
                 )
                 next_token_probs = tf.squeeze(probs, axis=1)
             else:
-                probs = token_probability_fn(
+                probs = self.token_probability_fn(
                     prompt,
                     mask,
                 )

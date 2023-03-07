@@ -17,8 +17,6 @@ import copy
 
 import tensorflow as tf
 from tensorflow import keras
-from keras_nlp.samplers import serialize
-from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 import keras_nlp
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
@@ -27,6 +25,7 @@ from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
 )
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.task import Task
+from keras_nlp.samplers import serialize
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -294,18 +293,24 @@ class GPT2CausalLM(Task):
                 "`self.preprocessor` is `None`, please make sure "
                 "`preprocessor` is set before calling `generate`."
             )
-        end_token_id = self.preprocessor.tokenizer.end_token_id
         sampler = keras_nlp.samplers.get(sampler)
-        import pdb; pdb.set_trace()
-        if hasattr(self, "sampler") and serialize(sampler) == serialize(self.sampler):
-            sampler = self.sampler
-        else:
-            self.sampler = sampler
+        if sampler.__class__.__name__ == "BeamSampler":
+            raise ValueError(
+                "`BeamSampler` is not supported right now, please choose "
+                "another sampler, e.g., `TopPSampler`.")
         if hasattr(self, "jit_compile"):
             # `jit_compile` is a public property as of tf 2.12. hasattr is for
             # backward compat.
             sampler.jit_compile = self.jit_compile
         sampler.run_eagerly = self.run_eagerly
+        if hasattr(self, "sampler") and serialize(sampler) == serialize(
+            self.sampler
+        ):
+            # If the new sampler is the same as the older one, we reuse the old
+            # sampler to avoid recompile.
+            sampler = self.sampler
+        else:
+            self.sampler = sampler
 
         # Tokenize.
         prompt = self.preprocessor.tokenizer(prompt)
@@ -321,7 +326,6 @@ class GPT2CausalLM(Task):
         batch_size = tf.shape(token_ids)[0]
         cache = self.build_empty_cache(batch_size, max_length)
         _, cache = self.call_with_cache(token_ids, padding_mask, cache, 0)
-
         # Run generation.
         generated = sampler(
             prompt,
