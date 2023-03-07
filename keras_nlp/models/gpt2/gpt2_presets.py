@@ -136,4 +136,34 @@ backbone_presets = {
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_extra_large_en/v1/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
+    "gpt2_base_en_news": {
+        "metadata": {
+            "description": (
+                "12-layer GPT-2 model where case is maintained. "
+                "Finetuned on CNN dataset."
+            ),
+            "params": 124439808,
+            "official_name": "GPT-2",
+            "path": "gpt2",
+        },
+        "config": {
+            "vocabulary_size": 50257,
+            "num_layers": 12,
+            "num_heads": 12,
+            "hidden_dim": 768,
+            "intermediate_dim": 3072,
+            "dropout": 0.1,
+            "max_sequence_length": 1024,
+        },
+        "preprocessor_config": {},
+        "description": (
+            "Base size of GPT-2 with 124M parameters.Finetuned on CNN dataset."
+        ),
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_en_news/model.h5",
+        "weights_hash": "09d86ca6e1b4213886b720a1392f2a70",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_en_news/vocab.json",
+        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_en_news/merges.txt",
+        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+    },
 }
