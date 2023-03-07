@@ -55,8 +55,7 @@ class WhisperBackbone(Backbone):
         hidden_dim: int. The size of the transformer encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
-        num_mels: int. The number of mel-frequency filters. For now, only 80
-            works.
+        num_mels: int. The number of mel-frequency filters.
         dropout: float. Dropout probability for the Transformer encoder.
         max_source_sequence_length: int. The maximum sequence length that the
             audio encoder can consume. Note that this is not the sequence length
@@ -101,8 +100,8 @@ class WhisperBackbone(Backbone):
 
         # Embed the input features. This consists of two 1D convolutional
         # layers.
-        # For the first conv. layer, We use `padding="same"` here since that
-        # corresponds to a padding size of 1.
+        # For the first layer, we use `padding="same"` since that corresponds to
+        # a padding size of 1.
         encoder_conv_layer_1 = keras.layers.Conv1D(
             filters=hidden_dim,
             kernel_size=3,
@@ -115,7 +114,7 @@ class WhisperBackbone(Backbone):
             approximate=False,
         )
 
-        # For the second conv. layer, we cannot use `padding="same"` here since
+        # For the second conv. layer, we cannot use `padding="same"` since
         # that corresponds to a padding size of 1.5 (since stride is 2). Hence,
         # we will manually pad the input.
         embedded_features = tf.pad(
@@ -241,19 +240,21 @@ class WhisperBackbone(Backbone):
         self.max_target_sequence_length = max_target_sequence_length
 
     def get_config(self):
-        return {
-            "vocabulary_size": self.vocabulary_size,
-            "num_layers": self.num_layers,
-            "num_heads": self.num_heads,
-            "hidden_dim": self.hidden_dim,
-            "intermediate_dim": self.intermediate_dim,
-            "num_mels": self.num_mels,
-            "dropout": self.dropout,
-            "max_source_sequence_length": self.max_source_sequence_length,
-            "max_target_sequence_length": self.max_target_sequence_length,
-            "name": self.name,
-            "trainable": self.trainable,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "vocabulary_size": self.vocabulary_size,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
+                "num_mels": self.num_mels,
+                "dropout": self.dropout,
+                "max_source_sequence_length": self.max_source_sequence_length,
+                "max_target_sequence_length": self.max_target_sequence_length,
+            }
+        )
+        return config
 
     @property
     def token_embedding(self):
