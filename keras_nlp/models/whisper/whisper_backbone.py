@@ -64,6 +64,30 @@ class WhisperBackbone(Backbone):
             positional embedding layer.
         max_target_sequence_length: int. The maximum sequence length that the
             text decoder can consume.
+
+    Examples:
+    ```python
+    input_data = {
+        "encoder_token_ids": tf.ones(shape=(1, 12, 80), dtype=tf.int64),
+        "decoder_token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
+        "decoder_padding_mask": tf.constant(
+            [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0], shape=(1, 12)
+        ),
+    }
+
+    # Randomly initialized Whisper encoder-decoder model with a custom config
+    model = keras_nlp.models.WhisperBackbone(
+        vocabulary_size=51864,
+        num_layers=6,
+        num_heads=8,
+        hidden_dim=512,
+        intermediate_dim=2048,
+        num_mels=80,
+        max_source_sequence_length=128,
+        max_target_sequence_length=64,
+    )
+    output = model(input_data)
+    ```
     """
 
     def __init__(
