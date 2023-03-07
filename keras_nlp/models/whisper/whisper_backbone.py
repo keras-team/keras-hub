@@ -58,11 +58,10 @@ class WhisperBackbone(Backbone):
         num_mels: int. The number of mel-frequency filters.
         dropout: float. Dropout probability for the Transformer encoder.
         max_source_sequence_length: int. The maximum sequence length that the
-            audio encoder can consume. Note that this is not the sequence length
-            of the encoder input since the input is passed through a couple of
-            convolutional layers, the second of which has a stride of 2. Hence,
-            `max_source_sequence_length` is generally half of what the maximum
-            encoder input length is.
+            audio encoder can consume. Since the second convolutional layer in
+            the encoder reduces the sequence length by half (stride of 2), we
+            use `max_source_sequence_length // 2` as the sequence length for the
+            positional embedding layer.
         max_target_sequence_length: int. The maximum sequence length that the
             text decoder can consume.
     """
@@ -76,7 +75,7 @@ class WhisperBackbone(Backbone):
         intermediate_dim,
         num_mels=80,
         dropout=0.0,
-        max_source_sequence_length=1500,
+        max_source_sequence_length=3000,
         max_target_sequence_length=448,
         **kwargs,
     ):
@@ -134,7 +133,7 @@ class WhisperBackbone(Backbone):
 
         position_embedding = PositionEmbedding(
             initializer=whisper_kernel_initializer(),
-            sequence_length=max_source_sequence_length,
+            sequence_length=max_source_sequence_length//2,
             name="encoder_position_embedding",
         )(embedded_features)
 
