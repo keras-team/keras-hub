@@ -37,7 +37,7 @@ class DebertaV3PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=vocab_data.as_numpy_iterator(),
             model_writer=bytes_io,
-            vocab_size=10,
+            vocab_size=12,
             model_type="WORD",
             pad_id=0,
             bos_id=1,
@@ -47,6 +47,7 @@ class DebertaV3PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             bos_piece="[CLS]",
             eos_piece="[SEP]",
             unk_piece="[UNK]",
+            user_defined_symbols="[MASK]",
         )
         self.proto = bytes_io.getvalue()
 
@@ -59,7 +60,7 @@ class DebertaV3PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         input_data = "the quick brown fox"
         output = self.preprocessor(input_data)
         self.assertAllEqual(
-            output["token_ids"], [1, 4, 9, 5, 7, 2, 0, 0, 0, 0, 0, 0]
+            output["token_ids"], [1, 5, 10, 6, 8, 2, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
             output["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
@@ -70,7 +71,7 @@ class DebertaV3PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         input_data = ["the quick brown fox"] * 4
         output = self.preprocessor(input_data)
         self.assertAllEqual(
-            output["token_ids"], [[1, 4, 9, 5, 7, 2, 0, 0, 0, 0, 0, 0]] * 4
+            output["token_ids"], [[1, 5, 10, 6, 8, 2, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
             output["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
@@ -82,7 +83,7 @@ class DebertaV3PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         sw = tf.constant([1.0] * 4)
         x_out, y_out, sw_out = self.preprocessor(x, y, sw)
         self.assertAllEqual(
-            x_out["token_ids"], [[1, 4, 9, 5, 7, 2, 0, 0, 0, 0, 0, 0]] * 4
+            x_out["token_ids"], [[1, 5, 10, 6, 8, 2, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
             x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
@@ -98,7 +99,7 @@ class DebertaV3PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         ds = ds.map(self.preprocessor)
         x_out, y_out, sw_out = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(
-            x_out["token_ids"], [[1, 4, 9, 5, 7, 2, 0, 0, 0, 0, 0, 0]] * 4
+            x_out["token_ids"], [[1, 5, 10, 6, 8, 2, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
             x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
@@ -111,7 +112,7 @@ class DebertaV3PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         sentence_two = tf.constant("the earth")
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
-            output["token_ids"], [1, 4, 9, 5, 7, 2, 4, 6, 2, 0, 0, 0]
+            output["token_ids"], [1, 5, 10, 6, 8, 2, 5, 7, 2, 0, 0, 0]
         )
         self.assertAllEqual(
             output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]
@@ -124,7 +125,7 @@ class DebertaV3PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         # separate sequences to concatenate.
         output = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
-            output["token_ids"], [[1, 4, 9, 5, 7, 2, 4, 6, 2, 0, 0, 0]] * 4
+            output["token_ids"], [[1, 5, 10, 6, 8, 2, 5, 7, 2, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
             output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]] * 4
