@@ -72,7 +72,7 @@ steps:
     sleep 5
     gcloud artifacts docker images delete $_IMAGE_NAME:$BUILD_ID
     exit $(kubectl get $pod_name -o jsonpath={.status.containerStatuses[0].state.terminated.exitCode})
-timeout: 3000s  # 50 minutes
+timeout: 3600s  # 60 minutes
 options:
   volumes:
   - name: go-modules
