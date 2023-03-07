@@ -95,7 +95,7 @@ KerasNLP provides access to pre-trained models via the `keras_nlp.models` API.
 These pre-trained models are provided on an "as is" basis, without warranties
 or conditions of any kind. The following underlying models are provided by third
 parties, and subject to separate licenses:
-BART, DeBERTa, DistilBERT, GPT-2, OPT, RoBERTa, and XLM-RoBERTa.
+BART, DeBERTa, DistilBERT, GPT-2, OPT, RoBERTa, Whisper, and XLM-RoBERTa.
 
 ## Citing KerasNLP
 
