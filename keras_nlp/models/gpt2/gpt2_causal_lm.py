@@ -297,7 +297,8 @@ class GPT2CausalLM(Task):
         if sampler.__class__.__name__ == "BeamSampler":
             raise ValueError(
                 "`BeamSampler` is not supported right now, please choose "
-                "another sampler, e.g., `TopPSampler`.")
+                "another sampler, e.g., `TopPSampler`."
+            )
         if hasattr(self, "jit_compile"):
             # `jit_compile` is a public property as of tf 2.12. hasattr is for
             # backward compat.
