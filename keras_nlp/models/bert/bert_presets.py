@@ -25,6 +25,7 @@ backbone_presets = {
             "params": 4385920,
             "official_name": "BERT",
             "path": "bert",
+            "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
         "config": {
             "vocabulary_size": 30522,
@@ -53,6 +54,7 @@ backbone_presets = {
             "params": 28763648,
             "official_name": "BERT",
             "path": "bert",
+            "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
         "config": {
             "vocabulary_size": 30522,
@@ -81,6 +83,7 @@ backbone_presets = {
             "params": 41373184,
             "official_name": "BERT",
             "path": "bert",
+            "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
         "config": {
             "vocabulary_size": 30522,
@@ -109,6 +112,7 @@ backbone_presets = {
             "params": 109482240,
             "official_name": "BERT",
             "path": "bert",
+            "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
         "config": {
             "vocabulary_size": 30522,
@@ -137,6 +141,7 @@ backbone_presets = {
             "params": 108310272,
             "official_name": "BERT",
             "path": "bert",
+            "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
         "config": {
             "vocabulary_size": 28996,
@@ -164,6 +169,7 @@ backbone_presets = {
             "params": 102267648,
             "official_name": "BERT",
             "path": "bert",
+            "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
         "config": {
             "vocabulary_size": 21128,
@@ -191,6 +197,7 @@ backbone_presets = {
             "params": 177853440,
             "official_name": "BERT",
             "path": "bert",
+            "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
         "config": {
             "vocabulary_size": 119547,
@@ -219,6 +226,7 @@ backbone_presets = {
             "params": 335141888,
             "official_name": "BERT",
             "path": "bert",
+            "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
         "config": {
             "vocabulary_size": 30522,
@@ -247,6 +255,7 @@ backbone_presets = {
             "params": 333579264,
             "official_name": "BERT",
             "path": "bert",
+            "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
         "config": {
             "vocabulary_size": 28996,
@@ -277,6 +286,7 @@ classifier_presets = {
             "params": 4385920,
             "official_name": "BERT",
             "path": "bert",
+            "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
         "config": {
             "backbone": {

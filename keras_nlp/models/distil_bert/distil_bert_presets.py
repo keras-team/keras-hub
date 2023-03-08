@@ -24,6 +24,7 @@ backbone_presets = {
             "params": 66362880,
             "official_name": "DistilBERT",
             "path": "distil_bert",
+            "model_card": "https://huggingface.co/distilbert-base-uncased",
         },
         "config": {
             "vocabulary_size": 30522,
@@ -52,6 +53,7 @@ backbone_presets = {
             "params": 65190912,
             "official_name": "DistilBERT",
             "path": "distil_bert",
+            "model_card": "https://huggingface.co/distilbert-base-cased",
         },
         "config": {
             "vocabulary_size": 28996,
@@ -78,6 +80,7 @@ backbone_presets = {
             "params": 134734080,
             "official_name": "DistilBERT",
             "path": "distil_bert",
+            "model_card": "https://huggingface.co/distilbert-base-multilingual-cased",
         },
         "config": {
             "vocabulary_size": 119547,
