@@ -23,6 +23,7 @@ backbone_presets = {
             "params": 124052736,
             "official_name": "RoBERTa",
             "path": "roberta",
+            "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/roberta/README.md",
         },
         "config": {
             "vocabulary_size": 50265,
@@ -50,6 +51,7 @@ backbone_presets = {
             "params": 354307072,
             "official_name": "RoBERTa",
             "path": "roberta",
+            "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/roberta/README.md",
         },
         "config": {
             "vocabulary_size": 50265,
