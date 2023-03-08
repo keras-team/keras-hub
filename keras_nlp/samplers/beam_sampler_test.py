@@ -38,7 +38,6 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
                     output_dim=self.feature_size,
                 ),
                 keras.layers.Dense(self.vocab_size),
-                keras.layers.Softmax(),
             ]
         )
 

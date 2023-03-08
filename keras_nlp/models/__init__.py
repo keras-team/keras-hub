@@ -24,6 +24,10 @@ from keras_nlp.models.bart.bart_backbone import BartBackbone
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_classifier import BertClassifier
+from keras_nlp.models.bert.bert_masked_lm import BertMaskedLM
+from keras_nlp.models.bert.bert_masked_lm_preprocessor import (
+    BertMaskedLMPreprocessor,
+)
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
