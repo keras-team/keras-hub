@@ -37,6 +37,8 @@ class WhisperBackbone(Backbone):
     This class implements a Transformer-based encoder-decoder model as
     described in
     ["Robust Speech Recognition via Large-Scale Weak Supervision"](https://arxiv.org/abs/2212.04356).
+    It includes the embedding lookups and transformer layers, but not the head
+    for predicting the next token.
 
     The default constructor gives a fully customizable, randomly initialized Whisper
     model with any number of layers, heads, and embedding dimensions. To load
