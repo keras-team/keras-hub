@@ -31,26 +31,25 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
             num_heads=2,
             hidden_dim=64,
             intermediate_dim=128,
-            num_mels=80,
-            max_source_sequence_length=128,
-            max_target_sequence_length=96,
+            max_encoder_sequence_length=128,
+            max_decoder_sequence_length=96,
         )
         self.batch_size = 8
         self.input_batch = {
             "encoder_features": tf.ones(
                 (
                     self.batch_size,
-                    self.model.max_source_sequence_length,
+                    self.model.max_encoder_sequence_length,
                     self.model.num_mels,
                 ),
                 dtype="int32",
             ),
             "decoder_token_ids": tf.ones(
-                (self.batch_size, self.model.max_target_sequence_length),
+                (self.batch_size, self.model.max_decoder_sequence_length),
                 dtype="int32",
             ),
             "decoder_padding_mask": tf.ones(
-                (self.batch_size, self.model.max_target_sequence_length),
+                (self.batch_size, self.model.max_decoder_sequence_length),
                 dtype="int32",
             ),
         }
@@ -95,6 +94,24 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
         self.model.compile(jit_compile=jit_compile)
         self.model.predict(self.input_dataset)
 
+    def test_key_projection_bias_absence(self):
+        # Check only for the first encoder layer and first decoder layer.
+        self.assertIsNone(
+            self.model.get_layer(
+                "transformer_encoder_layer_0"
+            )._self_attention_layer._key_dense.bias
+        )
+        self.assertIsNone(
+            self.model.get_layer(
+                "transformer_decoder_layer_0"
+            )._self_attention_layer._key_dense.bias
+        )
+        self.assertIsNone(
+            self.model.get_layer(
+                "transformer_decoder_layer_0"
+            )._cross_attention_layer._key_dense.bias
+        )
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
@@ -131,21 +148,24 @@ class WhisperBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
                 num_heads=2,
                 hidden_dim=64,
                 intermediate_dim=128,
-                num_mels=80,
-                max_source_sequence_length=128,
-                max_target_sequence_length=64,
+                max_encoder_sequence_length=128,
+                max_decoder_sequence_length=64,
             )
 
         self.input_batch = {
             "encoder_features": tf.ones(
-                (8, self.model.max_source_sequence_length, self.model.num_mels),
+                (
+                    8,
+                    self.model.max_encoder_sequence_length,
+                    self.model.num_mels,
+                ),
                 dtype="int32",
             ),
             "decoder_token_ids": tf.ones(
-                (8, self.model.max_target_sequence_length), dtype="int32"
+                (8, self.model.max_decoder_sequence_length), dtype="int32"
             ),
             "decoder_padding_mask": tf.ones(
-                (8, self.model.max_target_sequence_length), dtype="int32"
+                (8, self.model.max_decoder_sequence_length), dtype="int32"
             ),
         }
 

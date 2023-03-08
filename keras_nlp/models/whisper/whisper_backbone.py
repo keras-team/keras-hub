@@ -58,14 +58,13 @@ class WhisperBackbone(Backbone):
         hidden_dim: int. The size of the transformer encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
-        num_mels: int. The number of mel-frequency filters.
         dropout: float. Dropout probability for the Transformer encoder.
-        max_source_sequence_length: int. The maximum sequence length that the
+        max_encoder_sequence_length: int. The maximum sequence length that the
             audio encoder can consume. Since the second convolutional layer in
             the encoder reduces the sequence length by half (stride of 2), we
-            use `max_source_sequence_length // 2` as the sequence length for the
+            use `max_encoder_sequence_length // 2` as the sequence length for the
             positional embedding layer.
-        max_target_sequence_length: int. The maximum sequence length that the
+        max_decoder_sequence_length: int. The maximum sequence length that the
             text decoder can consume.
 
     Examples:
@@ -85,9 +84,8 @@ class WhisperBackbone(Backbone):
         num_heads=8,
         hidden_dim=512,
         intermediate_dim=2048,
-        num_mels=80,
-        max_source_sequence_length=128,
-        max_target_sequence_length=64,
+        max_encoder_sequence_length=128,
+        max_decoder_sequence_length=64,
     )
     output = model(input_data)
     ```
@@ -100,12 +98,16 @@ class WhisperBackbone(Backbone):
         num_heads,
         hidden_dim,
         intermediate_dim,
-        num_mels=80,
         dropout=0.0,
-        max_source_sequence_length=3000,
-        max_target_sequence_length=448,
+        max_encoder_sequence_length=3000,
+        max_decoder_sequence_length=448,
         **kwargs,
     ):
+        # The number of mel-frequency filters.
+        # TODO: We hardcode this to 80. In the future, we can make it
+        # configurable if needed.
+        num_mels = 80
+
         # Encoder inputs. Note that the encoder does not have a padding mask:
         # https://github.com/openai/whisper/blob/v20230124/whisper/model.py#L132.
         encoder_feature_input = keras.Input(
@@ -158,7 +160,7 @@ class WhisperBackbone(Backbone):
 
         position_embedding = PositionEmbedding(
             initializer=whisper_kernel_initializer(),
-            sequence_length=max_source_sequence_length // 2,
+            sequence_length=max_encoder_sequence_length // 2,
             name="encoder_position_embedding",
         )(embedded_features)
 
@@ -197,7 +199,7 @@ class WhisperBackbone(Backbone):
         # Embed tokens and positions.
         x = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
-            sequence_length=max_target_sequence_length,
+            sequence_length=max_decoder_sequence_length,
             embedding_dim=hidden_dim,
             embeddings_initializer=whisper_kernel_initializer(),
             name="decoder_token_and_position_embedding",
@@ -260,8 +262,8 @@ class WhisperBackbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.num_mels = num_mels
         self.dropout = dropout
-        self.max_source_sequence_length = max_source_sequence_length
-        self.max_target_sequence_length = max_target_sequence_length
+        self.max_encoder_sequence_length = max_encoder_sequence_length
+        self.max_decoder_sequence_length = max_decoder_sequence_length
 
     def get_config(self):
         config = super().get_config()
@@ -272,10 +274,9 @@ class WhisperBackbone(Backbone):
                 "num_heads": self.num_heads,
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
-                "num_mels": self.num_mels,
                 "dropout": self.dropout,
-                "max_source_sequence_length": self.max_source_sequence_length,
-                "max_target_sequence_length": self.max_target_sequence_length,
+                "max_encoder_sequence_length": self.max_encoder_sequence_length,
+                "max_decoder_sequence_length": self.max_decoder_sequence_length,
             }
         )
         return config
