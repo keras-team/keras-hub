@@ -106,8 +106,6 @@ class WhisperBackbone(Backbone):
     ):
         # Encoder inputs. Note that the encoder does not have a padding mask:
         # https://github.com/openai/whisper/blob/v20230124/whisper/model.py#L132.
-        # This is because we have two convolutional layers in the encoder, post
-        # which the sequence dimension reduces to half.
         encoder_feature_input = keras.Input(
             shape=(None, num_mels), dtype="float32", name="encoder_features"
         )
