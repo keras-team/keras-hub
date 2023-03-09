@@ -158,10 +158,14 @@ class WhisperBackbone(Backbone):
             approximate=False,
         )
 
+        # The position embedding layer for the encoder is a sinusoidal embedding
+        # layer: https://github.com/openai/whisper/blob/v20230124/whisper/model.py#L137.
+        # Hence, we set it to be non-trainable.
         position_embedding = PositionEmbedding(
             initializer=whisper_kernel_initializer(),
             sequence_length=max_encoder_sequence_length // 2,
             name="encoder_position_embedding",
+            trainable=False,
         )(embedded_features)
 
         # Sum and apply dropout to embeddings.
