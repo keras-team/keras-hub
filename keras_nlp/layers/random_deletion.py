@@ -16,8 +16,10 @@ import random
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+
+@keras_nlp_export("keras_nlp.layers.RandomDeletion")
 class RandomDeletion(keras.layers.Layer):
     """Augments input by randomly deleting tokens.
 

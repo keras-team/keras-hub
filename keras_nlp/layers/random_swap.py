@@ -16,7 +16,10 @@ import random
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 
+
+@keras_nlp_export("keras_nlp.layers.RandomSwap")
 class RandomSwap(keras.layers.Layer):
     """Augments input by randomly swapping words.
 

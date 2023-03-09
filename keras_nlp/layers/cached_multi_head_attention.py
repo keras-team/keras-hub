@@ -17,7 +17,10 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
+from keras_nlp.api_export import keras_nlp_export
 
+
+@keras_nlp_export("keras_nlp.layers.CachedMultiHeadAttention")
 class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
     """MutliHeadAttention layer with cache support.
 
