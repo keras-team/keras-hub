@@ -20,6 +20,7 @@ import math
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.tf_utils import tensor_to_list
 
 REPLACE_SUBSTRINGS = [
@@ -49,7 +50,7 @@ REGEX_PATTERNS = [
 ]
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.metrics.Bleu")
 class Bleu(keras.metrics.Metric):
     """BLEU metric.
 

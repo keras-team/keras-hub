@@ -17,8 +17,10 @@
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+
+@keras_nlp_export("keras_nlp.metrics.Perplexity")
 class Perplexity(keras.metrics.Metric):
     """Perplexity metric.
 
