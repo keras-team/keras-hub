@@ -19,6 +19,7 @@ from typing import List
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers import tokenizer
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -155,7 +156,7 @@ def pretokenize(
     return text
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.tokenizers.WordPieceTokenizer")
 class WordPieceTokenizer(tokenizer.Tokenizer):
     """A WordPiece tokenizer layer.
 
