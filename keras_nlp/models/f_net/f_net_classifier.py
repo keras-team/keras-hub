@@ -18,6 +18,7 @@ import copy
 
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_backbone import f_net_kernel_initializer
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
@@ -27,7 +28,7 @@ from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.FNetClassifier")
 class FNetClassifier(Task):
     """An end-to-end f_net model for classification tasks.
 

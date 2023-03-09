@@ -15,8 +15,7 @@
 
 import copy
 
-from tensorflow import keras
-
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.f_net.f_net_presets import backbone_presets
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
@@ -28,7 +27,7 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.FNetPreprocessor")
 class FNetPreprocessor(Preprocessor):
     """An FNet preprocessing layer which tokenizes and packs inputs.
 

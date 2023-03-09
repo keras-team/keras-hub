@@ -19,6 +19,7 @@ import copy
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers import PositionEmbedding
 from keras_nlp.layers import TransformerDecoder
 from keras_nlp.models.backbone import Backbone
@@ -30,7 +31,7 @@ def _gpt_2_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.GPT2Backbone")
 class GPT2Backbone(Backbone):
     """GPT-2 core network with hyperparameters.
 
