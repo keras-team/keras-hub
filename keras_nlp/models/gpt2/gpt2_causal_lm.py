@@ -16,9 +16,9 @@
 import copy
 
 import tensorflow as tf
-from tensorflow import keras
 
 import keras_nlp
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
     GPT2CausalLMPreprocessor,
@@ -28,7 +28,7 @@ from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.GPT2CasualLM")
 class GPT2CausalLM(Task):
     """An end-to-end GPT2 model for causal langauge modeling.
 

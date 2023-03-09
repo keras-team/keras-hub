@@ -19,6 +19,7 @@ import copy
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.models.deberta_v3.disentangled_attention_encoder import (
@@ -32,7 +33,7 @@ def deberta_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.DebertaV3Backbone")
 class DebertaV3Backbone(Backbone):
     """DeBERTa encoder network.
 

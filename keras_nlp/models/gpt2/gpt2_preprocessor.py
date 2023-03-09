@@ -17,8 +17,8 @@
 import copy
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.models.preprocessor import Preprocessor
@@ -29,7 +29,7 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.GPT2Preprocessor")
 class GPT2Preprocessor(Preprocessor):
     """GPT2 preprocessing layer which tokenizes and packs inputs.
 

@@ -17,15 +17,15 @@
 import copy
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.XLMRobertaTokenizer")
 class XLMRobertaTokenizer(SentencePieceTokenizer):
     """XLM-RoBERTa tokenizer layer based on SentencePiece.
 

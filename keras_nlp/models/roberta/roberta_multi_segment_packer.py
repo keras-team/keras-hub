@@ -14,6 +14,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.tf_utils import assert_tf_text_installed
 
 try:
@@ -24,7 +25,7 @@ except ImportError:
 
 # TODO: This is a temporary, unexported layer until we find a way to make the
 # `MultiSegmentPacker` layer more generic.
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.RobertaMultiSegmentPacker")
 class RobertaMultiSegmentPacker(keras.layers.Layer):
     """Packs multiple sequences into a single fixed width model input.
 
