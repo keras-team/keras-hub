@@ -17,6 +17,7 @@ import tensorflow as tf
 from absl import logging
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import base_sampler_args_docstring
 from keras_nlp.samplers.sampler import call_args_docstring
@@ -26,7 +27,7 @@ from keras_nlp.utils.python_utils import format_docstring
 @format_docstring(
     base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
 )
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.samplers.BeamSampler")
 class BeamSampler(Sampler):
     """Beam Sampler class.
 
