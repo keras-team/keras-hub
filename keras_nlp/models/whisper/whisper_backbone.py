@@ -161,6 +161,7 @@ class WhisperBackbone(Backbone):
         # The position embedding layer for the encoder is a sinusoidal embedding
         # layer: https://github.com/openai/whisper/blob/v20230124/whisper/model.py#L137.
         # Hence, we set it to be non-trainable.
+        # TODO: We can use `keras_nlp.layers.SinePositionEncoding` layer here.
         position_embedding = PositionEmbedding(
             initializer=whisper_kernel_initializer(),
             sequence_length=max_encoder_sequence_length // 2,
