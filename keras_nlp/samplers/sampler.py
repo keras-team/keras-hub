@@ -231,10 +231,10 @@ class Sampler:
         # , and turn on `jit_compile` accordingly.
         sample = self.sample
         if not self.run_eagerly:
-            if getattr(self, "jit_compile", True):
-                sample = self._sample_graph
-            else:
+            if self.jit_compile:
                 sample = self._sample_graph_xla
+            else:
+                sample = self._sample_graph
         prompt = sample(
             prompt,
             mask,

@@ -188,6 +188,7 @@ class GPT2CausalLM(Task):
 
         self.backbone = backbone
         self.preprocessor = preprocessor
+        self.sampler = None
 
     @classproperty
     def presets(cls):
@@ -304,9 +305,7 @@ class GPT2CausalLM(Task):
             # backward compat.
             sampler.jit_compile = self.jit_compile
         sampler.run_eagerly = self.run_eagerly
-        if hasattr(self, "sampler") and serialize(sampler) == serialize(
-            self.sampler
-        ):
+        if self.sampler and serialize(sampler) == serialize(self.sampler):
             # If the new sampler is the same as the older one, we reuse the old
             # sampler to avoid recompile.
             sampler = self.sampler
