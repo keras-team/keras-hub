@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.layers.cached_multi_head_attention import (
+    CachedMultiHeadAttention,
+)
 from keras_nlp.layers.f_net_encoder import FNetEncoder
 from keras_nlp.layers.masked_lm_head import MaskedLMHead
 from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator

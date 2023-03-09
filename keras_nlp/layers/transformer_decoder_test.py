@@ -18,6 +18,7 @@ import os
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
+from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.layers import transformer_decoder
 
@@ -264,6 +265,51 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder_sequence._keras_mask = mask
         outputs = decoder(decoder_sequence)
         self.assertAllEqual(outputs._keras_mask, mask)
+
+    @parameterized.named_parameters(
+        ("graph", False),
+        ("eager", True),
+    )
+    def test_cached_decoding_is_correct(self, eager):
+        batch_size = 2
+        seq_len = 5
+        num_heads = 2
+        head_dim = 4
+
+        layer = transformer_decoder.TransformerDecoder(
+            intermediate_dim=4,
+            num_heads=num_heads,
+        )
+        x = tf.random.uniform(shape=[batch_size, seq_len, num_heads * head_dim])
+        cache = tf.zeros([batch_size, 2, seq_len, num_heads, head_dim])
+        outputs = tf.zeros_like(x)
+
+        def call(outputs, cache):
+            def loop_body(i, outputs, cache):
+                # Compute the rest tokens.
+                next_input = x[:, i : i + 1, :]
+                next_output, cache = layer(
+                    decoder_sequence=next_input,
+                    cache=cache,
+                    cache_index=i,
+                )
+                outputs = dynamic_update_slice(outputs, next_output, [0, i, 0])
+                return i + 1, outputs, cache
+
+            _, outputs, cache = tf.while_loop(
+                cond=lambda i, outputs, cache: i < seq_len,
+                body=loop_body,
+                loop_vars=[0, outputs, cache],
+            )
+            return outputs, cache
+
+        call = call if eager else tf.function(call)
+        output, cache = call(outputs, cache)
+
+        no_loop_outputs = layer(x)
+        _, no_loop_cache = layer(x, cache=cache)
+        self.assertAllClose(output, no_loop_outputs)
+        self.assertAllClose(cache, no_loop_cache)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),

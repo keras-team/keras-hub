@@ -17,6 +17,9 @@
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.layers.cached_multi_head_attention import (
+    CachedMultiHeadAttention,
+)
 from keras_nlp.utils.keras_utils import clone_initializer
 
 from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
@@ -141,7 +144,7 @@ class TransformerDecoder(keras.layers.Layer):
         head_dim = int(hidden_dim // self.num_heads)
 
         # Self attention layers.
-        self._self_attention_layer = keras.layers.MultiHeadAttention(
+        self._self_attention_layer = CachedMultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=head_dim,
             dropout=self.dropout,
@@ -208,6 +211,8 @@ class TransformerDecoder(keras.layers.Layer):
         decoder_attention_mask=None,
         encoder_padding_mask=None,
         encoder_attention_mask=None,
+        cache=None,
+        cache_index=0,
     ):
         """Forward pass of the TransformerDecoder.
 
@@ -227,8 +232,14 @@ class TransformerDecoder(keras.layers.Layer):
             encoder_attention_mask: a boolean Tensor. Customized encoder
                 sequence mask, must of shape
                 [batch_size, encoder_sequence_length, encoder_sequence_length].
+            cache: a dense float Tensor. The cache of key/value of leading
+                tokens. `cache` is of shape [B, 2, max_seq_len, num_heads,
+                key_dims].
+            cache_index: a int or int Tensor, the index of the current token
+                being processed.
         Returns:
-            A Tensor of the same shape as the `decoder_sequence`.
+            Either a tuple of (outputs, cache) if a cache was passed, or a
+            single value outputs if a cache was not passed.
         """
 
         has_encoder_sequence = encoder_sequence is not None
@@ -260,7 +271,19 @@ class TransformerDecoder(keras.layers.Layer):
         x = decoder_sequence  # Intermediate result.
 
         # Compute self attention mask.
-        self_attention_mask = compute_causal_mask(decoder_sequence)
+        batch_size = tf.shape(decoder_sequence)[0]
+        input_length = output_length = tf.shape(decoder_sequence)[1]
+        # We need to handle a rectangular causal mask when doing cached
+        # decoding. For generative inference, `decoder_sequence` will
+        # generally be length 1, and `cache` will be the full generation length.
+        if cache is not None:
+            input_length = tf.shape(cache)[2]
+        self_attention_mask = compute_causal_mask(
+            batch_size,
+            input_length,
+            output_length,
+            cache_index,
+        )
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )
@@ -271,9 +294,11 @@ class TransformerDecoder(keras.layers.Layer):
         residual = x
         if self.normalize_first:
             x = self._self_attention_layernorm(x)
-        x = self._self_attention_layer(
+        x, cache = self._self_attention_layer(
             query=x,
             value=x,
+            cache=cache,
+            cache_index=cache_index,
             attention_mask=self_attention_mask,
         )
         x = self._self_attention_dropout(x)
@@ -313,7 +338,9 @@ class TransformerDecoder(keras.layers.Layer):
         if not self.normalize_first:
             x = self._feedforward_layernorm(x)
 
-        return x
+        if cache is None:
+            return x
+        return (x, cache)
 
     def get_config(self):
         config = super().get_config()

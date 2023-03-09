@@ -14,6 +14,7 @@
 """Beam Sampler."""
 
 import tensorflow as tf
+from absl import logging
 from tensorflow import keras
 
 from keras_nlp.samplers.sampler import Sampler
@@ -85,13 +86,26 @@ class BeamSampler(Sampler):
         pass
 
     def sample(
-        self, prompt, token_probability_fn, mask, num_steps, from_logits=True
+        self,
+        prompt,
+        token_probability_fn,
+        mask,
+        num_steps,
+        from_logits=True,
+        end_token_id=None,
+        cache=None,
     ):
         """Sampling logic implementation.
 
         Because beam search uses a different loop body, we have to override the
         whole `sample` method instead of just the `get_next_token` method.
         """
+        if cache is not None:
+            logging.warning(
+                "`BeamSampler` does not support cache decoding now, the cache "
+                "will be ignored. To use cache decoding, please use a "
+                "different sampler, e.g., `TopPSampler`."
+            )
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         max_length = tf.cast(max_length, num_steps.dtype)
         length = max_length - num_steps
@@ -125,7 +139,6 @@ class BeamSampler(Sampler):
             if from_logits:
                 preds = keras.activations.softmax(preds, axis=-1)
             # Reshape `preds` to shape `(batch_size, num_beams * vocab_size)`.
-
             preds = tf.reshape(preds, shape=[batch_size, -1])
 
             cum_probs = tf.math.log(preds) + tf.repeat(

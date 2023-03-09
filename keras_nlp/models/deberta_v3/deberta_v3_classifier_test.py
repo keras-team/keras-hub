@@ -50,6 +50,7 @@ class DebertaV3ClassifierTest(tf.test.TestCase, parameterized.TestCase):
             bos_piece="[CLS]",
             eos_piece="[SEP]",
             unk_piece="[UNK]",
+            user_defined_symbols="[MASK]",
         )
         self.preprocessor = DebertaV3Preprocessor(
             tokenizer=DebertaV3Tokenizer(proto=bytes_io.getvalue()),

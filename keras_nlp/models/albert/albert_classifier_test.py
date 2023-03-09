@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for BERT classification model."""
+"""Tests for ALBERT classification model."""
 
 import io
 import os
@@ -57,6 +57,7 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
             unk_piece="<unk>",
             bos_piece="[CLS]",
             eos_piece="[SEP]",
+            user_defined_symbols="[MASK]",
         )
         self.proto = bytes_io.getvalue()
 
