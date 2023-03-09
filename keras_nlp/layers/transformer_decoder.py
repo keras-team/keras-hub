@@ -20,6 +20,7 @@ from tensorflow import keras
 from keras_nlp.layers.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.keras_utils import clone_initializer
 
 from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
@@ -28,7 +29,7 @@ from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
 )
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.layers.TransformerDecoder")
 class TransformerDecoder(keras.layers.Layer):
     """Transformer decoder.
 

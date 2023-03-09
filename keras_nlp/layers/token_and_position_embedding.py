@@ -17,10 +17,11 @@
 from tensorflow import keras
 
 import keras_nlp.layers
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.layers.TokenAndPositionEmbedding")
 class TokenAndPositionEmbedding(keras.layers.Layer):
     """A layer which sums a token and position embedding.
 
