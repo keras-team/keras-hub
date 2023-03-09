@@ -25,7 +25,7 @@ from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 
-@keras_nlp_export("keras_nlp.models.xlm_roberta.XLMRobertaTokenizer")
+@keras_nlp_export("keras_nlp.models.XLMRobertaTokenizer")
 class XLMRobertaTokenizer(SentencePieceTokenizer):
     """XLM-RoBERTa tokenizer layer based on SentencePiece.
 

@@ -19,7 +19,7 @@ from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.f_net.FNetMaskedLMPreprocessor")
+@keras_nlp_export("keras_nlp.models.FNetMaskedLMPreprocessor")
 class FNetMaskedLMPreprocessor(FNetPreprocessor):
     """FNet preprocessing for the masked language modeling task.
 

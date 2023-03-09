@@ -22,7 +22,7 @@ from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.albert.AlbertMaskedLMPreprocessor")
+@keras_nlp_export("keras_nlp.models.AlbertMaskedLMPreprocessor")
 class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
     """ALBERT preprocessing for the masked language modeling task.
 

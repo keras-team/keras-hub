@@ -27,7 +27,7 @@ from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.roberta.RobertaClassifier")
+@keras_nlp_export("keras_nlp.models.RobertaClassifier")
 class RobertaClassifier(Task):
     """An end-to-end RoBERTa model for classification tasks.
 

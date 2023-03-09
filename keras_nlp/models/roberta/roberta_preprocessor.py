@@ -30,7 +30,7 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.roberta.RobertaPreprocessor")
+@keras_nlp_export("keras_nlp.models.RobertaPreprocessor")
 class RobertaPreprocessor(Preprocessor):
     """RoBERTa preprocessing layer which tokenizes and packs inputs.
 

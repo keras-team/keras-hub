@@ -22,7 +22,7 @@ from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.roberta.RobertaTokenizer")
+@keras_nlp_export("keras_nlp.models.RobertaTokenizer")
 class RobertaTokenizer(BytePairTokenizer):
     """A RoBERTa tokenizer using Byte-Pair Encoding subword segmentation.
 

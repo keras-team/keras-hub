@@ -24,7 +24,7 @@ from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.deberta_v3.DebertaV3MaskedLMPreprocessor")
+@keras_nlp_export("keras_nlp.models.DebertaV3MaskedLMPreprocessor")
 class DebertaV3MaskedLMPreprocessor(DebertaV3Preprocessor):
     """DeBERTa preprocessing for the masked language modeling task.
 

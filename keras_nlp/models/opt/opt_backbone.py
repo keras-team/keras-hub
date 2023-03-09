@@ -33,7 +33,7 @@ def opt_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.opt.OPTBackbone")
+@keras_nlp_export("keras_nlp.models.OPTBackbone")
 class OPTBackbone(Backbone):
     """OPT decoder network.
 

@@ -22,7 +22,7 @@ from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.albert.AlbertTokenizer")
+@keras_nlp_export("keras_nlp.models.AlbertTokenizer")
 class AlbertTokenizer(SentencePieceTokenizer):
     """ALBERT tokenizer layer based on SentencePiece.
 

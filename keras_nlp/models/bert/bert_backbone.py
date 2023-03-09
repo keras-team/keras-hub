@@ -31,7 +31,7 @@ def bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.bert.BertBackbone")
+@keras_nlp_export("keras_nlp.models.BertBackbone")
 class BertBackbone(Backbone):
     """BERT encoder network.
 

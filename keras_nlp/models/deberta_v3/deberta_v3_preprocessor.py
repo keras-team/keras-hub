@@ -27,7 +27,7 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.deberta_v3.DebertaV3Preprocessor")
+@keras_nlp_export("keras_nlp.models.DebertaV3Preprocessor")
 class DebertaV3Preprocessor(Preprocessor):
     """A DeBERTa preprocessing layer which tokenizes and packs inputs.
 

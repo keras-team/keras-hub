@@ -31,7 +31,7 @@ def albert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.albert.AlbertBackbone")
+@keras_nlp_export("keras_nlp.models.AlbertBackbone")
 class AlbertBackbone(Backbone):
     """ALBERT encoder network.
 

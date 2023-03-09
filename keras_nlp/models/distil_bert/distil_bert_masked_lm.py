@@ -31,7 +31,7 @@ from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.distil_bert.DistilBertMaskedLM")
+@keras_nlp_export("keras_nlp.models.DistilBertMaskedLM")
 class DistilBertMaskedLM(Task):
     """An end-to-end DistilBERT model for the masked language modeling task.
 

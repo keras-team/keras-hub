@@ -29,7 +29,7 @@ from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.bert.BertMaskedLM")
+@keras_nlp_export("keras_nlp.models.BertMaskedLM")
 class BertMaskedLM(Task):
     """An end-to-end BERT model for the masked language modeling task.
 

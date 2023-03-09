@@ -29,7 +29,7 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.distil_bert.DistilBertPreprocessor")
+@keras_nlp_export("keras_nlp.models.DistilBertPreprocessor")
 class DistilBertPreprocessor(Preprocessor):
     """A DistilBERT preprocessing layer which tokenizes and packs inputs.
 

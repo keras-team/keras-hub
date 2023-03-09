@@ -33,7 +33,7 @@ def distilbert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.distil_bert.DistilBertBackbone")
+@keras_nlp_export("keras_nlp.models.DistilBertBackbone")
 class DistilBertBackbone(Backbone):
     """DistilBERT encoder network.
 

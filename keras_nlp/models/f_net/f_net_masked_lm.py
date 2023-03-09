@@ -27,7 +27,7 @@ from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.f_net.FNetMaskedLM")
+@keras_nlp_export("keras_nlp.models.FNetMaskedLM")
 class FNetMaskedLM(Task):
     """An end-to-end FNet model for the masked language modeling task.
 

@@ -29,7 +29,7 @@ from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.roberta.RobertaMaskedLM")
+@keras_nlp_export("keras_nlp.models.RobertaMaskedLM")
 class RobertaMaskedLM(Task):
     """An end-to-end RoBERTa model for the masked language modeling task.
 

@@ -22,7 +22,7 @@ from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.bert.BertMaskedLMPreprocessor")
+@keras_nlp_export("keras_nlp.models.BertMaskedLMPreprocessor")
 class BertMaskedLMPreprocessor(BertPreprocessor):
     """BERT preprocessing for the masked language modeling task.
     This preprocessing layer will prepare inputs for a masked language modeling

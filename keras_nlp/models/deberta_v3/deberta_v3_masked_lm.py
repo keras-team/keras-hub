@@ -31,7 +31,7 @@ from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.deberta_v3.DebertaV3MaskedLM")
+@keras_nlp_export("keras_nlp.models.DebertaV3MaskedLM")
 class DebertaV3MaskedLM(Task):
     """An end-to-end DeBERTaV3 model for the masked language modeling task.
 

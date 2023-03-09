@@ -33,7 +33,7 @@ def deberta_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.deberta_v3.DebertaV3Backbone")
+@keras_nlp_export("keras_nlp.models.DebertaV3Backbone")
 class DebertaV3Backbone(Backbone):
     """DeBERTa encoder network.
 

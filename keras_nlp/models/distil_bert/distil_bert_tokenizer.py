@@ -21,7 +21,7 @@ from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.distil_bert.DistilBertTokenizer")
+@keras_nlp_export("keras_nlp.models.DistilBertTokenizer")
 class DistilBertTokenizer(WordPieceTokenizer):
     """A DistilBERT tokenizer using WordPiece subword segmentation.
 

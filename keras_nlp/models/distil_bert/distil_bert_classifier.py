@@ -31,7 +31,7 @@ from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.distil_bert.DistilBertClassifier")
+@keras_nlp_export("keras_nlp.models.DistilBertClassifier")
 class DistilBertClassifier(Task):
     """An end-to-end DistilBERT model for classification tasks.
 

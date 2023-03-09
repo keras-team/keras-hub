@@ -24,9 +24,7 @@ from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export(
-    "keras_nlp.models.distil_bert.DistilBertMaskedLMPrerprocessor"
-)
+@keras_nlp_export("keras_nlp.models.DistilBertMaskedLMPrerprocessor")
 class DistilBertMaskedLMPreprocessor(DistilBertPreprocessor):
     """DistilBERT preprocessing for the masked language modeling task.
 

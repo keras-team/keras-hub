@@ -22,7 +22,7 @@ from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.roberta.RobertaMaskedLMPreprocessor")
+@keras_nlp_export("keras_nlp.models.RobertaMaskedLMPreprocessor")
 class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
     """RoBERTa preprocessing for the masked language modeling task.
 

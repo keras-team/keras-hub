@@ -35,7 +35,7 @@ def f_net_bias_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.gpt2.FNetBackbone")
+@keras_nlp_export("keras_nlp.models.FNetBackbone")
 class FNetBackbone(Backbone):
     """FNet encoder network.
 

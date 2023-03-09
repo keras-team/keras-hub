@@ -29,7 +29,7 @@ from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.xlm_roberta.XLMRobertaClassifier")
+@keras_nlp_export("keras_nlp.models.XLMRobertaClassifier")
 class XLMRobertaClassifier(Task):
     """An end-to-end XLM-RoBERTa model for classification tasks.
 

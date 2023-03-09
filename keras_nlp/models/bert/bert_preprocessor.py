@@ -30,7 +30,7 @@ from keras_nlp.utils.python_utils import classproperty
 PRESET_NAMES = ", ".join(list(backbone_presets) + list(classifier_presets))
 
 
-@keras_nlp_export("keras_nlp.models.bert.BertPreprocessor")
+@keras_nlp_export("keras_nlp.models.BertPreprocessor")
 class BertPreprocessor(Preprocessor):
     """A BERT preprocessing layer which tokenizes and packs inputs.
 

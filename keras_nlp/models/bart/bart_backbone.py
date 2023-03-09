@@ -32,7 +32,7 @@ def bart_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.bart.BartBackbone")
+@keras_nlp_export("keras_nlp.models.BartBackbone")
 class BartBackbone(Backbone):
     """BART encoder-decoder network.
 

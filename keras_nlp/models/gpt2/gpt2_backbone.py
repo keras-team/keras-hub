@@ -31,7 +31,7 @@ def _gpt_2_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.gpt2.GPT2Backbone")
+@keras_nlp_export("keras_nlp.models.GPT2Backbone")
 class GPT2Backbone(Backbone):
     """GPT-2 core network with hyperparameters.
 

@@ -30,7 +30,7 @@ from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.albert.AlbertMaskedLM")
+@keras_nlp_export("keras_nlp.models.AlbertMaskedLM")
 class AlbertMaskedLM(Task):
     """An end-to-end ALBERT model for the masked language modeling task.
 

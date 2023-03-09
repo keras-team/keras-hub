@@ -31,7 +31,7 @@ from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.deberta_v3.DebertaV3Classifier")
+@keras_nlp_export("keras_nlp.models.DebertaV3Classifier")
 class DebertaV3Classifier(Task):
     """An end-to-end DeBERTa model for classification tasks.
 

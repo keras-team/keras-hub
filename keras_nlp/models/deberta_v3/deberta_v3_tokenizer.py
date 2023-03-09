@@ -22,7 +22,7 @@ from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.deberta_v3.DebertaV3Tokenizer")
+@keras_nlp_export("keras_nlp.models.DebertaV3Tokenizer")
 class DebertaV3Tokenizer(SentencePieceTokenizer):
     """DeBERTa tokenizer layer based on SentencePiece.
 

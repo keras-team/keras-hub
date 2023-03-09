@@ -28,7 +28,7 @@ from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.gpt2.GPT2CasualLM")
+@keras_nlp_export("keras_nlp.models.GPT2CasualLM")
 class GPT2CausalLM(Task):
     """An end-to-end GPT2 model for causal langauge modeling.
 

@@ -26,7 +26,7 @@ from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras_nlp_export("keras_nlp.models.f_net.FNetTokenizer")
+@keras_nlp_export("keras_nlp.models.FNetTokenizer")
 class FNetTokenizer(SentencePieceTokenizer):
     """FNet tokenizer layer based on SentencePiece.
 

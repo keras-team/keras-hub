@@ -29,7 +29,7 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.gpt2.GPT2Preprocessor")
+@keras_nlp_export("keras_nlp.models.GPT2Preprocessor")
 class GPT2Preprocessor(Preprocessor):
     """GPT2 preprocessing layer which tokenizes and packs inputs.
 
