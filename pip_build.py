@@ -32,6 +32,7 @@ import glob
 import os
 import pathlib
 import shutil
+
 import namex
 
 package = "keras_nlp"
@@ -80,7 +81,9 @@ def build():
         os.chdir(root_path)
         if not os.path.exists(dist_directory):
             os.mkdir(dist_directory)
-        for fpath in glob.glob(os.path.join(build_directory, dist_directory, "*.*")):
+        for fpath in glob.glob(
+            os.path.join(build_directory, dist_directory, "*.*")
+        ):
             shutil.copy(fpath, dist_directory)
 
         # Find the .whl file path
