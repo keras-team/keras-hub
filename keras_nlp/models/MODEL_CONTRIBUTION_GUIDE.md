@@ -20,23 +20,28 @@ A model is typically split into three/four sections. We would recommend you to
 compare this side-by-side with the
 [`keras_nlp.layers.DistilBERTBackbone` source code](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_backbone.py#L108-L114)!
 
-- The inputs to the model
+
+### The inputs to the model
+
 Generally, the standard inputs to any text model are:
-  - `token_ids`: tokenised inputs (IDs in the form of text).
-  - `padding_mask`: Masks the padding tokens.
+    - `token_ids`: tokenised inputs (IDs in the form of text).
+    - `padding_mask`: Masks the padding tokens.
 
-- the embedding layer(s)
-The standard layers used here are:
-`keras.layers.Embedding`, `keras_nlp.layers.PositionEmbedding`, `keras_nlp.layers.TokenAndPositionEmbedding`.
 
-- the encoder layers
-The standard layers used here are:
-`keras_nlp.layers.TransformerEncoder`, `keras_nlp.layers.FNetEncoder`.
+### the embedding layer(s)
+Standard layers used: `keras.layers.Embedding`,
+`keras_nlp.layers.PositionEmbedding`, `keras_nlp.layers.TokenAndPositionEmbedding`.
 
-- (possibly) the decoder layers
-The standard layers used: `keras_nlp.layers.TransformerDecoder`.
 
-- Other layers which might be used
+### the encoder layers
+Standard layers used: `keras_nlp.layers.TransformerEncoder`, `keras_nlp.layers.FNetEncoder`.
+
+
+### (possibly) the decoder layers
+Standard layers used: `keras_nlp.layers.TransformerDecoder`.
+
+
+### Other layers which might be used
 `keras.layers.LayerNorm`, `keras.layers.Dropout`, `keras.layers.Conv1D`, etc.
 
 The standard layers provided in Keras and KerasNLP are generally enough for
@@ -67,13 +72,13 @@ To make a complete model contribution, three PRs have to be opened:
 
 
 ### Open an issue/Claim an open issue
-Before getting started with the code, it's important to check if there are any open issues
-related to the model you wish to contribute: https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3Amodel-contribution.
-If there aren't any open issues, you can create one by clicking the "New Issue"
-button on our repository page. If there is an open issue, you can claim it by
-commenting on the issue and letting us know that you're interested in working on
-it. This helps us keep track of who is working on what and avoid duplicated
-effort.
+Before getting started with the code, it's important to check if there are any
+[open issues](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3Amodel-contribution)
+related to the model you wish to contribute. If there aren't any open issues,
+you can create one by clicking the "New Issue" button on our repository page. If
+there is an open issue, you can claim it by commenting on the issue and letting
+us know that you're interested in working on it. This helps us keep track of who
+is working on what and avoid duplicated effort.
 
 In case you open a new issue, please follow this template:
 
