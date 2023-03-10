@@ -17,13 +17,12 @@ import os
 
 from tensorflow import keras
 
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras_nlp_export("keras_nlp.models.Task")
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class Task(PipelineModel):
     """Base class for Task models."""
 
