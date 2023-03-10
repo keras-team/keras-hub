@@ -17,7 +17,7 @@ import copy
 
 import tensorflow as tf
 
-import keras_nlp
+from keras_nlp import samplers
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
@@ -25,7 +25,7 @@ from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
 )
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.task import Task
-from keras_nlp.samplers import serialize
+from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.tf_utils import truncate_at
 
@@ -37,8 +37,12 @@ class GPT2CausalLM(Task):
     A causal language model (LM) predicts the next token based on previous
     tokens the next token based on previous tokens, which is the way GPT2 gets
     pretrained. You can finetune `GPT2CausalLM` to generate text similar to
-    the custom dataset. `GPT2CausalLM` also has a method `generate()`, which
-    generates text based on given prompt.
+    the custom dataset.
+
+    `GPT2CausalLM` has a method `generate()`, which generates text based on a
+    prompt. The generation strategy used is controlled by an additional
+    `sampler` argument on `compile()`. You can recompile the model with
+    different samplers to control generation.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -67,15 +71,13 @@ class GPT2CausalLM(Task):
     gpt2_lm.generate(["This is a", "Where are you"], max_length=30)
     ```
 
-    Use a custom sampler for text generation.
+    Compile the `generate()` function with custom samplers.
     ```python
     gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
+    gpt2_lm.compile(sampler="top_p")
+    gpt2_lm.generate("I want to say", max_length=30)
 
-    # Use string identifier to set sampler.
-    gpt2_lm.generate("I want to say", max_length=30, sampler="top_p")
-
-    # Construct a sampler instance.
-    sampler = keras_nlp.samplers.BeamSampler(num_beams=2)
+    gpt2_lm.compile(sampler=keras_nlp.samplers.BeamSampler(num_beams=2))
     gpt2_lm.generate("I want to say", max_length=30, sampler=sampler)
     ```
 
@@ -189,8 +191,8 @@ class GPT2CausalLM(Task):
 
         self.backbone = backbone
         self.preprocessor = preprocessor
-        self.sampler = None
         self.generate_function = None
+        self.sampler = samplers.get("top_k")
 
     @classproperty
     def presets(cls):
@@ -260,12 +262,30 @@ class GPT2CausalLM(Task):
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
         return tf.zeros(shape)
 
-    def make_generate_function(self, sampler):
+    def compile(
+        self,
+        *args,
+        run_eagerly=False,
+        jit_compile=True,
+        sampler="top_k",
+        **kwargs,
+    ):
+        jit_compile = jit_compile and is_xla_compatible(self)
+        jit_compile = jit_compile and not run_eagerly
+        super().compile(
+            *args,
+            run_eagerly=run_eagerly,
+            jit_compile=jit_compile,
+            **kwargs,
+        )
+        # Clear the compiled generate function.
+        self.generate_function = None
+        self.sampler = samplers.get(sampler)
+
+    def make_generate_function(self):
         """Create or return the compiled generation function."""
-        # If our sampler has not changed, re-use the compiled function.
-        if self.sampler and serialize(self.sampler) == serialize(sampler):
+        if self.generate_function is not None:
             return self.generate_function
-        self.sampler = sampler
 
         def fn(prompt, input_mask, min_length, max_length):
             batch_size = tf.shape(prompt)[0]
@@ -284,9 +304,9 @@ class GPT2CausalLM(Task):
                 )
                 return tf.squeeze(probs, axis=1), state
 
-            return sampler(
-                prompt=prompt,
+            return self.sampler(
                 next=next,
+                prompt=prompt,
                 state=cache,
                 index=min_length,
                 mask=input_mask,
@@ -306,7 +326,6 @@ class GPT2CausalLM(Task):
         self,
         prompt,
         max_length,
-        sampler="top_k",
     ):
         """Generate text.
 
@@ -327,9 +346,11 @@ class GPT2CausalLM(Task):
                 "`self.preprocessor` is `None`, please make sure "
                 "`preprocessor` is set before calling `generate`."
             )
-        sampler = keras_nlp.samplers.get(sampler)
 
         # Tokenize.
+        prompt = tf.convert_to_tensor(prompt)
+        input_is_scalar = prompt.shape.rank == 0
+        prompt = prompt[tf.newaxis] if input_is_scalar else prompt
         prompt = self.preprocessor.tokenizer(prompt)
 
         # Pad ragged to dense tensors.
@@ -339,7 +360,7 @@ class GPT2CausalLM(Task):
         prompt = prompt.to_tensor(shape=padded_shape)
 
         # Run the (possibly compiled) generate function on dense inputs.
-        generate_function = self.make_generate_function(sampler)
+        generate_function = self.make_generate_function()
         output = generate_function(prompt, input_mask, min_length, max_length)
 
         # Truncate back to ragged to account for end of sequence ids.
@@ -347,4 +368,5 @@ class GPT2CausalLM(Task):
         output = truncate_at(output, end_token_id, input_mask)
 
         # Detokenize.
-        return self.preprocessor.tokenizer.detokenize(output)
+        output = self.preprocessor.tokenizer.detokenize(output)
+        return tf.squeeze(output, 0) if input_is_scalar else output

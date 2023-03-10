@@ -21,12 +21,12 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.python_utils import format_docstring
 
 call_args_docstring = """
-    prompt: A 2D integer tensor with shape `(batch_size, max_length)`. This
-        tensor will be iteratively updated column by column with new sampled
-        values.
     next: A function which takes in the `prompt, state, index` of the
         current generation loop, and outputs a tuple `probs, state` with the
         probability for the next token and state for the next iteration.
+    prompt: A 2D integer tensor with shape `(batch_size, max_length)`. This
+        tensor will be iteratively updated column by column with new sampled
+        values.
     state: Optional. A tensor or nested structure of tensors that will be
         updated by each call to `next`. This can be used to cache computations
         from early iterations of the generative loop.
@@ -53,76 +53,43 @@ class Sampler:
 
     This base class can be extended to implement different auto-regressive
     sampling methods. Subclasses can either:
-     - Override the `get_next_token()` method, which computes the next token
-       based on a probability distribution over all possible vocab entries.
-     - Override `__call__`, if the sampling method need additional state beyond
-       the next tokens probability distribution to sample a sequence.
+
+    - Override the `get_next_token()` method, which computes the next token
+      based on a probability distribution over all possible vocab entries.
+    - Override `__call__`, if the sampling method need additional state beyond
+      the next tokens probability distribution to sample a sequence.
+
     Please check available subclass samplers for examples.
 
     Examples:
 
     ```python
+    # Use a simple alphabet of lowercase characters to [0, 26).
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
     char_lookup = {v: k for k, v in int_lookup.items()}
-    vocab_size = len(int_lookup)
-    batch_size = 1
+    batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
     def next(prompt, state, index):
         # return a uniform distribution over our alphabet.
         probs = tf.ones((batch_size, vocab_size))
         return probs, state
 
-    output = keras_nlp.samplers.TopKSampler(k=2)(
-        prompt=tf.zeros((batch_size, 12,)),
+    output = keras_nlp.samplers.GreedySampler()(
         next=next,
+        prompt=tf.fill((batch_size, length,), char_lookup['z']),
+        index=5,
     )
-    print("".join([int_lookup[i] for i in output.numpy()[0].tolist()]))
-    # >>> "aaaaaaaaaaaa"
-    ```
-
-    Use with string inputs:
-    ```python
-    vocab = ["[UNK]", "[PAD]", "[END]", "the", "quick", "brown", "fox"]
-    tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-        vocabulary=vocab,
-        lowercase=True,
-    )
-    FEATURE_SIZE = 16
-    VOCAB_SIZE = len(vocab)
-    # Create a dummy model to predict the next token.
-    model = keras.Sequential(
-        [
-            keras.Input(shape=[None]),
-            keras.layers.Embedding(
-                input_dim=VOCAB_SIZE,
-                output_dim=FEATURE_SIZE,
-            ),
-            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
-        ]
-    )
-    # Define a function that outputs the next token's probability for each token
-    # in the input sequence.
-    def token_probability_fn(inputs, mask):
-        return model(inputs)
-
-    prompt = tokenizer("the quick brown fox")
-    sampler = keras_nlp.samplers.GreedySampler()
-    generated = sampler(
-        prompt,
-        token_probability_fn,
-        max_length=10,
-        end_token_id=tokenizer.token_to_id("[END]")
-    )
-    print(tokenizer.detokenize(generated))
+    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
+    # >>> "zzzzzaaaaaaa"
     ```
     """
 
     def __call__(
         self,
-        prompt,
         next,
-        index=0,
+        prompt,
         state=None,
+        index=0,
         mask=None,
         end_token_id=None,
         from_logits=True,

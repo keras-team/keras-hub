@@ -41,30 +41,23 @@ class TopPSampler(Sampler):
 
     Examples:
     ```python
-    VOCAB_SIZE = 10
+    # Use a simple alphabet of lowercase characters to [0, 26).
+    int_lookup = {i: chr(i + ord('a')) for i in range(26)}
+    char_lookup = {v: k for k, v in int_lookup.items()}
+    batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
-    # Create a dummy model to predict the next token.
-    model = keras.Sequential(
-        [
-            keras.Input(shape=[None]),
-            keras.layers.Embedding(
-                input_dim=VOCAB_SIZE,
-                output_dim=16,
-            ),
-            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
-        ]
+    def next(prompt, state, index):
+        # A uniform distribution over our alphabet.
+        probs = tf.ones((batch_size, vocab_size))
+        return probs, state
+
+    output = keras_nlp.samplers.TopPSampler(p=0.1)(
+        next=next,
+        prompt=tf.fill((batch_size, length,), char_lookup['z']),
+        index=5,
     )
-
-    # Define a function that outputs the next token's probability for each token
-    # in the input sequence.
-    def token_probability_fn(inputs, mask):
-        return model(inputs)
-
-    prompt = tf.fill((8, 1), 1)
-
-    sampler = keras_nlp.samplers.TopPSampler(p=0.1)
-    # Print the generated sequence (token ids).
-    print(sampler(prompt, token_probability_fn, max_length=10))
+    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
+    # >>> "zzzzzbabcccb"
     ```
     """
 

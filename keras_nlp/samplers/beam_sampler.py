@@ -42,30 +42,23 @@ class BeamSampler(Sampler):
 
     Examples:
     ```python
-    VOCAB_SIZE = 10
+    # Use a simple alphabet of lowercase characters to [0, 26).
+    int_lookup = {i: chr(i + ord('a')) for i in range(26)}
+    char_lookup = {v: k for k, v in int_lookup.items()}
+    batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
-    # Create a dummy model to predict the next token.
-    model = keras.Sequential(
-        [
-            keras.Input(shape=[None]),
-            keras.layers.Embedding(
-                input_dim=VOCAB_SIZE,
-                output_dim=16,
-            ),
-            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
-        ]
+    def next(prompt, state, index):
+        # A uniform distribution over our alphabet.
+        probs = tf.ones((batch_size, vocab_size))
+        return probs, state
+
+    output = keras_nlp.samplers.BeamSampler()(
+        next=next,
+        prompt=tf.fill((batch_size, length,), char_lookup['z']),
+        index=5,
     )
-
-    # Define a function that outputs the next token's probability for each token
-    # in the input sequence.
-    def token_probability_fn(inputs, mask):
-        return model(inputs)
-
-    prompt = tf.fill((8, 1), 1)
-
-    sampler = keras_nlp.samplers.BeamSampler(num_beams=3)
-    # Print the generated sequence (token ids).
-    print(sampler(prompt, token_probability_fn, max_length=10))
+    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
+    # >>> "zzzzzaaaaaaa"
     ```
     """
 
@@ -78,8 +71,8 @@ class BeamSampler(Sampler):
 
     def __call__(
         self,
-        prompt,
         next,
+        prompt,
         index=0,
         state=None,
         mask=None,
@@ -98,6 +91,17 @@ class BeamSampler(Sampler):
         def unflatten(x):
             unflat_shape = [batch_size, self.num_beams] + x.shape.as_list()[1:]
             return tf.reshape(x, shape=unflat_shape)
+
+        mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
+        # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
+        state = () if state is None else state
+        # Add extra sequences for each beam.
+        prompt, mask = add_beams(prompt), add_beams(mask)
+        state = tf.nest.map_structure(add_beams, state)
+        # Setup the initial beam log-likelihoods.
+        # On the first loop, make sure only the original beam is considered.
+        beam_probs = tf.constant([[0.0] + [-1e9] * (self.num_beams - 1)])
+        beam_probs = flatten(tf.repeat(beam_probs, batch_size, axis=0))
 
         def cond(prompt, state, index, beam_probs):
             if end_token_id is None:
@@ -127,13 +131,13 @@ class BeamSampler(Sampler):
             # We need `ensure_shape` as `top_k` will change the static shape.
             beam_probs = tf.ensure_shape(flatten(next_probs), beam_probs.shape)
 
-            # Gather the correct prompt and state beams.
-            prompt = unflatten(prompt)
-            state = tf.nest.map_structure(unflatten, state)
-            prompt = tf.gather(prompt, beam_indices, axis=1, batch_dims=1)
-            state = tf.gather(state, beam_indices, axis=1, batch_dims=1)
-            prompt = flatten(prompt)
-            state = tf.nest.map_structure(flatten, state)
+            def gather_beams(x):
+                x = unflatten(x)
+                x = tf.gather(x, beam_indices, axis=1, batch_dims=1)
+                return flatten(x)
+
+            prompt = gather_beams(prompt)
+            state = tf.nest.map_structure(gather_beams, state)
 
             # Update each beam with the next token.
             next_token = tf.cast(next_token, prompt.dtype)
@@ -145,17 +149,6 @@ class BeamSampler(Sampler):
             # Return the iteration of the loop state.
             return (prompt, state, index + 1, beam_probs)
 
-        mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
-        # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
-        state = () if state is None else state
-        # Add extra sequences for each beam.
-        prompt, mask = add_beams(prompt), add_beams(mask)
-        state = tf.nest.map_structure(add_beams, state)
-        # Setup the initial beam log-likelihoods.
-        # On the first loop, make sure only the original beam is considered.
-        beam_probs = tf.constant([[0.0] + [-1e9] * (self.num_beams - 1)])
-        beam_probs = flatten(tf.repeat(beam_probs, batch_size, axis=0))
-
         prompt, _, _, beam_probs = tf.while_loop(
             cond=cond,
             body=body,
@@ -163,7 +156,7 @@ class BeamSampler(Sampler):
             maximum_iterations=(max_length - index),
         )
 
-        # Gather the top beams for each batch index.
+        # Gather the top beam at each batch index.
         prompt, beam_probs = unflatten(prompt), unflatten(beam_probs)
         top_beams = tf.math.argmax(beam_probs, axis=-1)[:, tf.newaxis]
         prompt = tf.gather(prompt, top_beams, axis=1, batch_dims=1)
