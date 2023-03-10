@@ -14,10 +14,21 @@
 
 """Setup script."""
 
+import os
 import pathlib
 
 from setuptools import find_packages
 from setuptools import setup
+
+with open(os.path.abspath(__file__)) as f:
+    contents = f.read()
+    if contents.count("{VERSION}") > 1:
+        raise ValueError(
+            "If you are trying to build a fresh package, "
+            "you should be using `pip_build.py` instead of `setup.py`. "
+            "You can do `python pip_build.py --install` "
+            "to build and immediately install the new package."
+        )
 
 HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
@@ -29,7 +40,7 @@ setup(
     ),
     long_description=README,
     long_description_content_type="text/markdown",
-    version="0.5.0",
+    version="{{VERSION}}",
     url="https://github.com/keras-team/keras-nlp",
     author="Keras team",
     author_email="keras-nlp@google.com",
