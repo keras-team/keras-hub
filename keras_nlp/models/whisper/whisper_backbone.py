@@ -17,6 +17,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.token_and_position_embedding import (
     TokenAndPositionEmbedding,
@@ -26,11 +27,17 @@ from keras_nlp.models.whisper.whisper_decoder import WhisperDecoder
 from keras_nlp.models.whisper.whisper_encoder import WhisperEncoder
 
 
+# We hardcode the number of mel-frequency filters:
+# https://github.com/openai/whisper/blob/v20230124/whisper/audio.py#L101-L102.
+# TODO: If needed, we can make it configurable.
+NUM_MELS = 80
+
+
 def whisper_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.WhisperBackbone")
 class WhisperBackbone(Backbone):
     """Whisper encoder-decoder network for speech.
 
@@ -103,15 +110,10 @@ class WhisperBackbone(Backbone):
         max_decoder_sequence_length=448,
         **kwargs,
     ):
-        # The number of mel-frequency filters. We hardcode this to 80:
-        # https://github.com/openai/whisper/blob/v20230124/whisper/audio.py#L101-L102.
-        # TODO: If needed, we can make it configurable.
-        num_mels = 80
-
         # Encoder inputs. Note that the encoder does not have a padding mask:
         # https://github.com/openai/whisper/blob/v20230124/whisper/model.py#L132.
         encoder_feature_input = keras.Input(
-            shape=(None, num_mels), dtype="float32", name="encoder_features"
+            shape=(None, NUM_MELS), dtype="float32", name="encoder_features"
         )
 
         # Decoder inputs.
@@ -265,7 +267,6 @@ class WhisperBackbone(Backbone):
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
-        self.num_mels = num_mels
         self.dropout = dropout
         self.max_encoder_sequence_length = max_encoder_sequence_length
         self.max_decoder_sequence_length = max_decoder_sequence_length
