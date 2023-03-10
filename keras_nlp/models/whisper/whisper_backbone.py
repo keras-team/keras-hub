@@ -26,7 +26,6 @@ from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.whisper.whisper_decoder import WhisperDecoder
 from keras_nlp.models.whisper.whisper_encoder import WhisperEncoder
 
-
 # We hardcode the number of mel-frequency filters:
 # https://github.com/openai/whisper/blob/v20230124/whisper/audio.py#L101-L102.
 # TODO: If needed, we can make it configurable.
