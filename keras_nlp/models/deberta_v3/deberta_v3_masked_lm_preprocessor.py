@@ -15,8 +15,8 @@
 """DeBERTa masked language model preprocessor layer."""
 
 from absl import logging
-from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
 from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
     DebertaV3Preprocessor,
@@ -24,7 +24,7 @@ from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.DebertaV3MaskedLMPreprocessor")
 class DebertaV3MaskedLMPreprocessor(DebertaV3Preprocessor):
     """DeBERTa preprocessing for the masked language modeling task.
 

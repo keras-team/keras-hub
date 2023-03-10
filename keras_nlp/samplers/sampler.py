@@ -17,6 +17,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.python_utils import format_docstring
 
 base_sampler_args_docstring = """
@@ -49,7 +50,7 @@ call_args_docstring = """
 @format_docstring(
     base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
 )
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.samplers.Sampler")
 class Sampler:
     """Base sampler class.
 

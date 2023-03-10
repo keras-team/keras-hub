@@ -17,6 +17,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.tf_utils import assert_tf_text_installed
 
 try:
@@ -25,7 +26,7 @@ except ImportError:
     tf_text = None
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.layers.MultiSegmentPacker")
 class MultiSegmentPacker(keras.layers.Layer):
     """Packs multiple sequences into a single fixed width model input.
 

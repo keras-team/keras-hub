@@ -24,6 +24,7 @@ backbone_presets = {
             "params": 125237760,
             "official_name": "OPT",
             "path": "opt",
+            "model_card": "https://github.com/facebookresearch/metaseq/blob/main/projects/OPT/model_card.md",
         },
         "config": {
             "vocabulary_size": 50272,
@@ -53,6 +54,7 @@ backbone_presets = {
             "params": 1315753984,
             "official_name": "OPT",
             "path": "opt",
+            "model_card": "https://github.com/facebookresearch/metaseq/blob/main/projects/OPT/model_card.md",
         },
         "config": {
             "vocabulary_size": 50272,
@@ -80,6 +82,7 @@ backbone_presets = {
             "params": 2700000000,
             "official_name": "OPT",
             "path": "opt",
+            "model_card": "https://github.com/facebookresearch/metaseq/blob/main/projects/OPT/model_card.md",
         },
         "config": {
             "vocabulary_size": 50272,
@@ -107,6 +110,7 @@ backbone_presets = {
             "params": 6700000000,
             "official_name": "OPT",
             "path": "opt",
+            "model_card": "https://github.com/facebookresearch/metaseq/blob/main/projects/OPT/model_card.md",
         },
         "config": {
             "vocabulary_size": 50272,

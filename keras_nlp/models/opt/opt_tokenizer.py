@@ -16,14 +16,13 @@
 
 import copy
 
-from tensorflow import keras
-
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.opt.opt_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.OPTTokenizer")
 class OPTTokenizer(BytePairTokenizer):
     """An OPT tokenizer using Byte-Pair Encoding subword segmentation.
 

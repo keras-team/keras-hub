@@ -15,6 +15,16 @@
 
 backbone_presets = {
     "f_net_base_en": {
+        "metadata": {
+            "description": (
+                "12-layer FNet model where case is maintained. "
+                "Trained on the C4 dataset."
+            ),
+            "params": 82861056,
+            "official_name": "FNet",
+            "path": "f_net",
+            "model_card": "https://github.com/google-research/google-research/blob/master/f_net/README.md",
+        },
         "config": {
             "vocabulary_size": 32000,
             "num_layers": 12,
@@ -25,21 +35,22 @@ backbone_presets = {
             "num_segments": 4,
         },
         "preprocessor_config": {},
-        "metadata": {
-            "description": (
-                "12-layer FNet model where case is maintained. "
-                "Trained on the C4 dataset."
-            ),
-            "params": 82861056,
-            "official_name": "FNet",
-            "path": "f_net",
-        },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/f_net_base_en/v1/model.h5",
         "weights_hash": "35db90842b85a985a0e54c86c00746fe",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/f_net_base_en/v1/vocab.spm",
         "spm_proto_hash": "71c5f4610bef1daf116998a113a01f3d",
     },
     "f_net_large_en": {
+        "metadata": {
+            "description": (
+                "24-layer FNet model where case is maintained. "
+                "Trained on the C4 dataset."
+            ),
+            "params": 236945408,
+            "official_name": "FNet",
+            "path": "f_net",
+            "model_card": "https://github.com/google-research/google-research/blob/master/f_net/README.md",
+        },
         "config": {
             "vocabulary_size": 32000,
             "num_layers": 24,
@@ -50,15 +61,6 @@ backbone_presets = {
             "num_segments": 4,
         },
         "preprocessor_config": {},
-        "metadata": {
-            "description": (
-                "24-layer FNet model where case is maintained. "
-                "Trained on the C4 dataset."
-            ),
-            "params": 236945408,
-            "official_name": "FNet",
-            "path": "f_net",
-        },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/f_net_large_en/v1/model.h5",
         "weights_hash": "7ae4a3faa67ff054f8cecffb5619f779",
         "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/f_net_large_en/v1/vocab.spm",

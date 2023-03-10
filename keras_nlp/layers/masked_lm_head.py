@@ -17,8 +17,10 @@
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 
-# TODO(mattdangerw): register this class as serializable.
+
+@keras_nlp_export("keras_nlp.layers.MaskedLMHead")
 class MaskedLMHead(keras.layers.Layer):
     """Masked Language Model (MaskedLM) head.
 
