@@ -246,8 +246,6 @@ class BartBackbone(Backbone):
                 "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
                 "max_sequence_length": self.max_sequence_length,
-                "name": self.name,
-                "trainable": self.trainable,
             }
         )
 
