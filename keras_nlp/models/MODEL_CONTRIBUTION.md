@@ -13,7 +13,7 @@ with KerasNLP to learn more about the high-level symbols we have.
 
 ## How is a Backbone model structured in KerasNLP?
 To keep the code simple and readable, we follow
-[Keras' functional model](https://keras.io/guides/functional_api/) style wrapped
+[Keras' functional style model](https://keras.io/guides/functional_api/) wrapped
 around by a class to implement our models.
 
 A model is typically split into three/four sections. We would recommend you to
