@@ -103,6 +103,8 @@ layers since the architecture is the same as BERT's.
 - Official Repository: https://github.com/huggingface/transformers/tree/v4.26.1/src/transformers/models/distilbert
 -----
 
+<br/>
+
 Note that you need not have all the answers or complete knowledge of the inner
 workings of the model at the time of opening the issue. But it is appreciated if
 you can furnish as much detail as possible to enable us to help you with the
