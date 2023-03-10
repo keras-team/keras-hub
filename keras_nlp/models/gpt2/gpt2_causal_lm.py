@@ -25,6 +25,7 @@ from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
 )
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.task import Task
+from keras_nlp.samplers import BeamSampler
 from keras_nlp.samplers import serialize
 from keras_nlp.utils.python_utils import classproperty
 
@@ -295,7 +296,7 @@ class GPT2CausalLM(Task):
                 "`preprocessor` is set before calling `generate`."
             )
         sampler = keras_nlp.samplers.get(sampler)
-        if sampler.__class__.__name__ == "BeamSampler":
+        if sampler.__class__ == BeamSampler:
             raise ValueError(
                 "`BeamSampler` is not supported right now, please choose "
                 "another sampler, e.g., `TopPSampler`."
