@@ -18,15 +18,15 @@ import copy
 from tensorflow import keras
 
 from keras_nlp.layers.masked_lm_head import MaskedLMHead
-from keras_nlp.models.distil_bert.distil_bert_backbone import 
 from keras_nlp.models.distil_bert.distil_bert_backbone import (
     distilbert_kernel_initializer,
 )
-from keras_nlp.models.roberta_xlm_masked_lm_preprocessor import (
-    RobertaXlmMaskedLMPreprocessor,
-)
-from keras_nlp.models.robert_xlm.roberat_xlm_presets import backbone_presets
 from keras_nlp.models.task import Task
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
+from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
+    XLMRobertaPreprocessor,
+)
+from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -100,11 +100,11 @@ class RobertaXlmMaskedLM(Task):
 
     @classproperty
     def backbone_cls(cls):
-        return RobertaXlmBackbone
+        return XLMRobertaBackbone
 
     @classproperty
     def preprocessor_cls(cls):
-        return RobertaXlmLMPreprocessor
+        return XLMRobertaPreprocessor
 
     @classproperty
     def presets(cls):

@@ -19,21 +19,18 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.roberta_xlm.roberta_xlm_backbone import RobertaXlmBackbone
-from keras_nlp.models.roberta_xlm.roberta_xlm_masked_lm import (
-    RobertaXlmMaskedLM,
-)
-from keras_nlp.models.roberta_xlm.roberta_xlm_masked_lm_preprocessor import (
-    RobertaXlmMaskedLMPreprocessor,
-)
 from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
-    RobertaXlmTokenizer,
+    XlmRobertaTokenizer,
+)
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
+from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
+    XLMRobertaPreprocessor,
 )
 
 
-class RobertaXlmMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
+class RobertaXlmMaskedLM(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.backbone = RobertaXlmBackbone(
+        self.backbone = XLMRobertaBackbone(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
@@ -62,16 +59,16 @@ class RobertaXlmMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
         merges += ["pla ne"]
         self.merges = merges
-        self.preprocessor = RobertaXlmMaskedLMPreprocessor(
-            RobertaXlmTokenizer(vocabulary=self.vocab, merges=self.merges),
+        self.preprocessor = XLMRobertaPreprocessor(
+            XlmRobertaTokenizer(vocabulary=self.vocab, merges=self.merges),
             sequence_length=8,
             mask_selection_length=2,
         )
-        self.masked_lm = RobertaXlMaskedLM(
+        self.masked_lm = RobertaXlmMaskedLM(
             self.backbone,
             preprocessor=self.preprocessor,
         )
-        self.masked_lm_no_preprocessing = DRobertaXlmMaskedLM(
+        self.masked_lm_no_preprocessing = RobertaXlmMaskedLM(
             self.backbone,
             preprocessor=None,
         )
@@ -137,7 +134,7 @@ class RobertaXlmMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, RobertaXlmaskedLM)
+        self.assertIsInstance(restored_model, RobertaXlmMaskedLM)
 
         model_output = self.masked_lm(self.preprocessed_batch)
         restored_output = restored_model(self.preprocessed_batch)
