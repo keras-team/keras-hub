@@ -21,7 +21,7 @@ compare this side-by-side with the
 [`keras_nlp.layers.DistilBERTBackbone` source code](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_backbone.py#L108-L114)!
 
 
-### The inputs to the model
+### Inputs to the model
 
 Generally, the standard inputs to any text model are:
     - `token_ids`: tokenised inputs (IDs in the form of text).
