@@ -17,6 +17,7 @@ import tensorflow as tf
 from absl import logging
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import base_sampler_args_docstring
 from keras_nlp.samplers.sampler import call_args_docstring
@@ -26,7 +27,7 @@ from keras_nlp.utils.python_utils import format_docstring
 @format_docstring(
     base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
 )
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.samplers.BeamSampler")
 class BeamSampler(Sampler):
     """Beam Sampler class.
 
@@ -88,12 +89,11 @@ class BeamSampler(Sampler):
     def sample(
         self,
         prompt,
-        token_probability_fn,
         mask,
         num_steps,
         from_logits=True,
+        end_token_id=None,
         cache=None,
-        token_probs=None,
     ):
         """Sampling logic implementation.
 
@@ -109,7 +109,7 @@ class BeamSampler(Sampler):
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         max_length = tf.cast(max_length, num_steps.dtype)
         length = max_length - num_steps
-        dummy_preds = token_probability_fn(prompt, mask=mask)
+        dummy_preds = self.token_probability_fn(prompt, mask=mask)
         vocab_size = tf.shape(dummy_preds)[-1]
         pred_dtype = dummy_preds.dtype
 
@@ -129,7 +129,7 @@ class BeamSampler(Sampler):
                 beams, shape=[batch_size * num_beams, -1]
             )
             repeated_mask = tf.tile(mask, [num_beams, 1])
-            probs = token_probability_fn(flattened_beams, repeated_mask)
+            probs = self.token_probability_fn(flattened_beams, repeated_mask)
             preds = tf.gather(
                 probs,
                 tf.repeat(length - 1, batch_size * num_beams),
@@ -139,7 +139,6 @@ class BeamSampler(Sampler):
             if from_logits:
                 preds = keras.activations.softmax(preds, axis=-1)
             # Reshape `preds` to shape `(batch_size, num_beams * vocab_size)`.
-
             preds = tf.reshape(preds, shape=[batch_size, -1])
 
             cum_probs = tf.math.log(preds) + tf.repeat(

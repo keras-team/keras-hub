@@ -15,14 +15,13 @@
 
 import copy
 
-from tensorflow import keras
-
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.distil_bert.distil_bert_presets import backbone_presets
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.DistilBertTokenizer")
 class DistilBertTokenizer(WordPieceTokenizer):
     """A DistilBERT tokenizer using WordPiece subword segmentation.
 

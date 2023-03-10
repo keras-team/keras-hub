@@ -24,11 +24,19 @@ from keras_nlp.models.bart.bart_backbone import BartBackbone
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_classifier import BertClassifier
+from keras_nlp.models.bert.bert_masked_lm import BertMaskedLM
+from keras_nlp.models.bert.bert_masked_lm_preprocessor import (
+    BertMaskedLMPreprocessor,
+)
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_classifier import (
     DebertaV3Classifier,
+)
+from keras_nlp.models.deberta_v3.deberta_v3_masked_lm import DebertaV3MaskedLM
+from keras_nlp.models.deberta_v3.deberta_v3_masked_lm_preprocessor import (
+    DebertaV3MaskedLMPreprocessor,
 )
 from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
     DebertaV3Preprocessor,
@@ -75,6 +83,7 @@ from keras_nlp.models.roberta.roberta_masked_lm_preprocessor import (
 )
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_classifier import (
     XLMRobertaClassifier,

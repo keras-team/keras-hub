@@ -16,14 +16,13 @@
 
 import copy
 
-from tensorflow import keras
-
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.DebertaV3Tokenizer")
 class DebertaV3Tokenizer(SentencePieceTokenizer):
     """DeBERTa tokenizer layer based on SentencePiece.
 
@@ -92,11 +91,10 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         self.cls_token_id = self.token_to_id(cls_token)
         self.sep_token_id = self.token_to_id(sep_token)
         self.pad_token_id = self.token_to_id(pad_token)
-
         # If the mask token is not in the vocabulary, add it to the end of the
         # vocabulary.
         if mask_token in super().get_vocabulary():
-            self.mask_token_id = self.token_to_id(mask_token)
+            self.mask_token_id = super().token_to_id(mask_token)
         else:
             self.mask_token_id = super().vocabulary_size()
 

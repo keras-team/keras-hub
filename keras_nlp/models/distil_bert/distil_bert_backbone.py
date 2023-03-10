@@ -19,6 +19,7 @@ import copy
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
@@ -32,7 +33,7 @@ def distilbert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.DistilBertBackbone")
 class DistilBertBackbone(Backbone):
     """DistilBERT encoder network.
 

@@ -17,6 +17,7 @@ import copy
 
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.models.albert.albert_backbone import albert_kernel_initializer
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
@@ -26,7 +27,7 @@ from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.AlbertClassifier")
 class AlbertClassifier(Task):
     """An end-to-end ALBERT model for classification tasks
 

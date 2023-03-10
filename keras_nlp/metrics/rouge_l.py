@@ -14,12 +14,11 @@
 
 """ROUGE-L metric."""
 
-from tensorflow import keras
-
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.metrics.rouge_base import RougeBase
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.metrics.RougeL")
 class RougeL(RougeBase):
     """ROUGE-L metric.
 

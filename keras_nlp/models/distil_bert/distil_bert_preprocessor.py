@@ -15,8 +15,7 @@
 
 import copy
 
-from tensorflow import keras
-
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.distil_bert.distil_bert_presets import backbone_presets
 from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
@@ -30,7 +29,7 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.DistilBertPreprocessor")
 class DistilBertPreprocessor(Preprocessor):
     """A DistilBERT preprocessing layer which tokenizes and packs inputs.
 
@@ -139,7 +138,7 @@ class DistilBertPreprocessor(Preprocessor):
 
     # Alternatively, you can create a preprocessor from your own vocabulary.
     # The usage is exactly the same as above.
-    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
+    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
     vocab += ["The", "qu", "##ick", "br", "##own", "fox", "tripped"]
     vocab += ["Call", "me", "Ish", "##mael", "."]
     vocab += ["Oh", "look", "a", "whale"]

@@ -24,6 +24,7 @@ backbone_presets = {
             "params": 11683584,
             "official_name": "ALBERT",
             "path": "albert",
+            "model_card": "https://github.com/google-research/albert/blob/master/README.md",
         },
         "config": {
             "vocabulary_size": 30000,
@@ -53,6 +54,7 @@ backbone_presets = {
             "params": 17683968,
             "official_name": "ALBERT",
             "path": "albert",
+            "model_card": "https://github.com/google-research/albert/blob/master/README.md",
         },
         "config": {
             "vocabulary_size": 30000,
@@ -82,6 +84,7 @@ backbone_presets = {
             "params": 58724864,
             "official_name": "ALBERT",
             "path": "albert",
+            "model_card": "https://github.com/google-research/albert/blob/master/README.md",
         },
         "config": {
             "vocabulary_size": 30000,
@@ -111,6 +114,7 @@ backbone_presets = {
             "params": 222595584,
             "official_name": "ALBERT",
             "path": "albert",
+            "model_card": "https://github.com/google-research/albert/blob/master/README.md",
         },
         "config": {
             "vocabulary_size": 30000,

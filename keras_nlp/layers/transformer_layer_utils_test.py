@@ -19,8 +19,7 @@ import keras_nlp.layers.transformer_layer_utils as utils
 
 class TransformerEncoderTest(tf.test.TestCase):
     def test_compute_causal_mask(self):
-        inputs = tf.random.uniform(shape=[1, 2, 2])
-        mask = utils.compute_causal_mask(inputs)
+        mask = utils.compute_causal_mask(1, 2, 2)
         self.assertTrue((mask.numpy() == [[1, 0], [1, 1]]).all())
 
     def test_merge_padding_and_attention_mask(self):

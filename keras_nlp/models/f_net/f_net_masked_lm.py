@@ -15,6 +15,7 @@ import copy
 
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.masked_lm_head import MaskedLMHead
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_backbone import f_net_kernel_initializer
@@ -26,7 +27,7 @@ from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.FNetMaskedLM")
 class FNetMaskedLM(Task):
     """An end-to-end FNet model for the masked language modeling task.
 
@@ -76,7 +77,7 @@ class FNetMaskedLM(Task):
             [[1, 2, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
         ),
         "segment_ids": tf.constant(
-            [[1, 0, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
+            [[0, 0, 0, 1, 1, 1, 0, 0]] * 2, shape=(2, 8)
         ),
         "mask_positions": tf.constant([[2, 4]] * 2, shape=(2, 2))
     }
@@ -87,7 +88,6 @@ class FNetMaskedLM(Task):
     backbone = keras_nlp.models.FNetBackbone(
         vocabulary_size=50265,
         num_layers=12,
-        num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12

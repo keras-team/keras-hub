@@ -15,8 +15,7 @@
 
 import copy
 
-from tensorflow import keras
-
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.bert.bert_presets import classifier_presets
@@ -31,7 +30,7 @@ from keras_nlp.utils.python_utils import classproperty
 PRESET_NAMES = ", ".join(list(backbone_presets) + list(classifier_presets))
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.BertPreprocessor")
 class BertPreprocessor(Preprocessor):
     """A BERT preprocessing layer which tokenizes and packs inputs.
 

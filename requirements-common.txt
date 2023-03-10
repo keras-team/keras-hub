@@ -8,6 +8,8 @@ flake8
 isort
 pytest
 pytest-cov
+build
+namex
 # Optional deps.
 rouge-score
 sentencepiece

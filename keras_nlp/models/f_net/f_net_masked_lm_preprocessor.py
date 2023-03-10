@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from absl import logging
-from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.FNetMaskedLMPreprocessor")
 class FNetMaskedLMPreprocessor(FNetPreprocessor):
     """FNet preprocessing for the masked language modeling task.
 
@@ -112,8 +112,8 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
         user_defined_symbols="[MASK]",
     )
     proto = bytes_io.getvalue()
-    tokenizer = FNetTokenizer(proto=proto)
-    preprocessor = FNetMaskedLMPreprocessor(tokenizer=tokenizer)
+    tokenizer = keras_nlp.models.FNetTokenizer(proto=proto)
+    preprocessor = keras_nlp.models.FNetMaskedLMPreprocessor(tokenizer=tokenizer)
     ```
     """
 

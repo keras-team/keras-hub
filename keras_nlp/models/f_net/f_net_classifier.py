@@ -18,6 +18,7 @@ import copy
 
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_backbone import f_net_kernel_initializer
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
@@ -27,7 +28,7 @@ from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.FNetClassifier")
 class FNetClassifier(Task):
     """An end-to-end f_net model for classification tasks.
 
@@ -67,18 +68,17 @@ class FNetClassifier(Task):
     }
     labels = [0, 3]
 
-    # Randomly initialize a Fnet backbone
+    # Randomly initialize a FNet backbone.
     backbone = keras_nlp.models.FNetBackbone(
         vocabulary_size=32000,
         num_layers=12,
-        num_heads=12,
         hidden_dim=768,
         intermediate_dim=3072,
         max_sequence_length=12,
     )
 
-    # Create a Fnet classifier and fit your data.
-    classifier = keras_nlp.models.FnetClassifier(
+    # Create a FNet classifier and fit your data.
+    classifier = keras_nlp.models.FNetClassifier(
         backbone,
         num_classes=4,
         preprocessor=None,

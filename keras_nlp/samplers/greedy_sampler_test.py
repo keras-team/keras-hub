@@ -94,7 +94,7 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_end_token_id(self):
         def token_probability_fn(inputs, mask):
-            batch_size = inputs.shape[0]
+            batch_size = tf.shape(inputs)[0]
             prob = tf.constant([[[0.0, 0.0, 0.0, 1.0]]])
             return tf.repeat(
                 tf.repeat(prob, batch_size, axis=0), max_length, axis=1
