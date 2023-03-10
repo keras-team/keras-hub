@@ -84,7 +84,7 @@ is working on what and avoid duplicated effort.
 
 In case you open a new issue, please follow this template:
 
-```md
+-----
 I would like to contribute the DistilBERT model. The DistilBERT model is a more
 efficient, distilled version of BERT; it is 60% smaller than BERT, and 40% faster.
 It is trained with BERT in a student-teacher fashion. At the same time, it does
@@ -92,15 +92,16 @@ not lose much of BERT's performance on the GLUE benchmark. Because DistilBERT is
 efficient and performs well on common downstream tasks, it is widely used in the
 industry and hence, will be a good addition to KerasNLP's model library!
 
-- Will any non-standard layers be needed?
+**Will any non-standard layers be needed?**
+
 No, non-standard layers will not be needed. We can use the native
 `keras.layers.TokenAndPositionEmbedding` and `keras_nlp.layers.TransformerEncoder`
 layers since the architecture is the same as BERT's.
 
-- Important Links:
-Paper: [DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter](https://arxiv.org/abs/1910.01108)
-Official Repository: https://github.com/huggingface/transformers/tree/v4.26.1/src/transformers/models/distilbert
-```
+**Links**
+- Paper: [DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter](https://arxiv.org/abs/1910.01108)
+- Official Repository: https://github.com/huggingface/transformers/tree/v4.26.1/src/transformers/models/distilbert
+-----
 
 Note that you need not have all the answers or complete knowledge of the inner
 workings of the model at the time of opening the issue. But it is appreciated if
