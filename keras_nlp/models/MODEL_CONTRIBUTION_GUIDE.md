@@ -28,16 +28,16 @@ Generally, the standard inputs to any text model are:
     - `padding_mask`: Masks the padding tokens.
 
 
-### the embedding layer(s)
+### Embedding layer(s)
 Standard layers used: `keras.layers.Embedding`,
 `keras_nlp.layers.PositionEmbedding`, `keras_nlp.layers.TokenAndPositionEmbedding`.
 
 
-### the encoder layers
+### Encoder layers
 Standard layers used: `keras_nlp.layers.TransformerEncoder`, `keras_nlp.layers.FNetEncoder`.
 
 
-### (possibly) the decoder layers
+### Decoder layers (possibly)
 Standard layers used: `keras_nlp.layers.TransformerDecoder`.
 
 
