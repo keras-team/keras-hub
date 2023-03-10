@@ -103,9 +103,9 @@ class WhisperBackbone(Backbone):
         max_decoder_sequence_length=448,
         **kwargs,
     ):
-        # The number of mel-frequency filters.
-        # TODO: We hardcode this to 80. In the future, we can make it
-        # configurable if needed.
+        # The number of mel-frequency filters. We hardcode this to 80:
+        # https://github.com/openai/whisper/blob/v20230124/whisper/audio.py#L101-L102.
+        # TODO: If needed, we can make it configurable.
         num_mels = 80
 
         # Encoder inputs. Note that the encoder does not have a padding mask:
@@ -161,7 +161,7 @@ class WhisperBackbone(Backbone):
         # The position embedding layer for the encoder is a sinusoidal embedding
         # layer: https://github.com/openai/whisper/blob/v20230124/whisper/model.py#L137.
         # Hence, we set it to be non-trainable.
-        # TODO: We can use `keras_nlp.layers.SinePositionEncoding` layer here.
+        # TODO: We can use `keras_nlp.layers.SinePositionEncoding` layer.
         position_embedding = PositionEmbedding(
             initializer=whisper_kernel_initializer(),
             sequence_length=max_encoder_sequence_length // 2,
