@@ -22,7 +22,7 @@ from keras_nlp.utils.python_utils import format_docstring
 
 call_args_docstring = """
     next: A function which takes in the `prompt, state, index` of the
-        current generation loop, and outputs a tuple `probs, state` with the
+        current generation loop, and outputs a tuple `logits, state` with the
         probability for the next token and state for the next iteration.
     prompt: A 2D integer tensor with shape `(batch_size, max_length)`. This
         tensor will be iteratively updated column by column with new sampled
@@ -38,8 +38,6 @@ call_args_docstring = """
     end_token_id: Optional. The token marking the end of the sequence. If
         specified, sampling will stop as soon as all sequences in the prompt
         produce a `end_token_id` in a location where `mask` is `False`.
-    from_logits: Optional. Set to `True` if the `next` function return softmax
-        probabilities instead of logits.
     """
 
 
@@ -71,8 +69,8 @@ class Sampler:
 
     def next(prompt, state, index):
         # return a uniform distribution over our alphabet.
-        probs = tf.ones((batch_size, vocab_size))
-        return probs, state
+        logits = tf.ones((batch_size, vocab_size))
+        return logits, state
 
     output = keras_nlp.samplers.GreedySampler()(
         next=next,
@@ -92,7 +90,6 @@ class Sampler:
         index=0,
         mask=None,
         end_token_id=None,
-        from_logits=True,
     ):
         max_length = tf.shape(prompt)[-1]
         mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
@@ -109,11 +106,11 @@ class Sampler:
 
         def body(prompt, state, index):
             # Compute the softmax distribution for the next token.
-            probs, state = next(prompt, state, index)
-            probs = keras.activations.softmax(probs) if from_logits else probs
+            logits, state = next(prompt, state, index)
+            probabilities = keras.activations.softmax(logits)
 
             # Compute the next token.
-            next_token = self.get_next_token(probs)
+            next_token = self.get_next_token(probabilities)
             # Don't overwrite anywhere mask is True.
             next_token = tf.cast(next_token, prompt.dtype)
             next_token = tf.where(mask[:, index], prompt[:, index], next_token)
@@ -131,11 +128,11 @@ class Sampler:
         )
         return prompt
 
-    def get_next_token(self, probs):
+    def get_next_token(self, probabilities):
         """Get the next token.
 
         Args:
-            probs: a Tensor, the probability distribution for next
+            probabilities: a Tensor, the probability distribution for next
                 token over all vocab tokens.
 
         Get the next token based on given probability distribution over tokens.

@@ -32,8 +32,8 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
 
         def next(prompt, state, index):
             # Return a probability distribution favoring the next char in state.
-            probs = tf.one_hot(state[:, index], self.vocab_size) * 1e9
-            return probs, state
+            logits = tf.one_hot(state[:, index], self.vocab_size) * 1e9
+            return logits, state
 
         self.next = next
         self.sampler = BeamSampler(num_beams=5)
@@ -44,9 +44,9 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
     def test_stateless(self):
         def next(prompt, state, index):
             # Return a probability distribution favoring the first index.
-            probs = np.zeros((self.batch_size, self.vocab_size))
-            probs[:, 0] = 1e9
-            return tf.constant(probs, dtype="float32"), state
+            logits = np.zeros((self.batch_size, self.vocab_size))
+            logits[:, 0] = 1e9
+            return tf.constant(logits, dtype="float32"), state
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(

@@ -32,8 +32,8 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
 
         def next(prompt, state, index):
             # Return a probability distribution favoring the next char in state.
-            probs = tf.one_hot(state[:, index], self.vocab_size) * 1e9
-            return probs, state
+            logits = tf.one_hot(state[:, index], self.vocab_size) * 1e9
+            return logits, state
 
         self.next = next
         self.sampler = GreedySampler()
@@ -44,9 +44,9 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
     def test_stateless(self):
         def next(prompt, state, index):
             # Return a probability distribution favoring the first index.
-            probs = np.zeros((self.batch_size, self.vocab_size))
-            probs[:, 0] = 1e9
-            return tf.constant(probs), state
+            logits = np.zeros((self.batch_size, self.vocab_size))
+            logits[:, 0] = 1e9
+            return tf.constant(logits), state
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
@@ -82,9 +82,9 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
     def test_is_greedy(self):
         def next(prompt, state, index):
             # Return a distribution where each id is progressively less likely.
-            probs = self.vocab_size - tf.range(self.vocab_size, dtype="float32")
-            probs = tf.repeat(probs[tf.newaxis, :], self.batch_size, axis=0)
-            return probs, state
+            logits = tf.range(self.vocab_size, 0, -1, dtype="float32")
+            logits = tf.repeat(logits[tf.newaxis, :], self.batch_size, axis=0)
+            return logits, state
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(

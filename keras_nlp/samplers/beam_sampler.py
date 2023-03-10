@@ -49,8 +49,8 @@ class BeamSampler(Sampler):
 
     def next(prompt, state, index):
         # A uniform distribution over our alphabet.
-        probs = tf.ones((batch_size, vocab_size))
-        return probs, state
+        logits = tf.ones((batch_size, vocab_size))
+        return logits, state
 
     output = keras_nlp.samplers.BeamSampler()(
         next=next,
@@ -77,7 +77,6 @@ class BeamSampler(Sampler):
         state=None,
         mask=None,
         end_token_id=None,
-        from_logits=True,
     ):
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
 
@@ -100,10 +99,10 @@ class BeamSampler(Sampler):
         state = tf.nest.map_structure(add_beams, state)
         # Setup the initial beam log-likelihoods.
         # On the first loop, make sure only the original beam is considered.
-        beam_probs = tf.constant([[0.0] + [-1e9] * (self.num_beams - 1)])
-        beam_probs = flatten(tf.repeat(beam_probs, batch_size, axis=0))
+        log_probs = tf.constant([[0.0] + [-1e9] * (self.num_beams - 1)])
+        log_probs = flatten(tf.repeat(log_probs, batch_size, axis=0))
 
-        def cond(prompt, state, index, beam_probs):
+        def cond(prompt, state, index, log_probs):
             if end_token_id is None:
                 return True
             # Stop if all sequences have produced a *new* end_token_id.
@@ -111,25 +110,26 @@ class BeamSampler(Sampler):
             prompt_done = tf.reduce_any(end_tokens, axis=-1)
             return not tf.reduce_all(prompt_done)
 
-        def body(prompt, state, index, beam_probs):
+        def body(prompt, state, index, log_probs):
             # Compute the softmax distribution for the next token.
-            probs, state = next(prompt, state, index)
-            probs = keras.activations.softmax(probs) if from_logits else probs
+            logits, state = next(prompt, state, index)
+            vocab_size = tf.shape(logits)[-1]
+            probs = keras.activations.softmax(logits)
 
             # Compute the running log-likelihood of each new candidate.
-            vocab_size = tf.shape(probs)[-1]
-            cum_probs = tf.math.log(probs) + beam_probs[..., tf.newaxis]
+            next_log_probs = tf.math.log(probs) + log_probs[..., tf.newaxis]
             # Reshape `preds` to shape `(batch_size, num_beams * vocab_size)`.
-            cum_probs = tf.reshape(cum_probs, shape=[batch_size, -1])
+            next_log_probs = tf.reshape(next_log_probs, shape=[batch_size, -1])
 
             # Compute the top beam indices and next tokens.
-            next_probs, indices = tf.math.top_k(
-                cum_probs, k=self.num_beams, sorted=False
+            next_log_probs, indices = tf.math.top_k(
+                next_log_probs, k=self.num_beams, sorted=False
             )
             beam_indices = indices // vocab_size
             next_token = flatten(indices % vocab_size)
             # We need `ensure_shape` as `top_k` will change the static shape.
-            beam_probs = tf.ensure_shape(flatten(next_probs), beam_probs.shape)
+            next_log_probs = flatten(next_log_probs)
+            log_probs = tf.ensure_shape(log_probs, log_probs.shape)
 
             def gather_beams(x):
                 x = unflatten(x)
@@ -147,18 +147,18 @@ class BeamSampler(Sampler):
             next_token = next_token[:, tf.newaxis]
             prompt = dynamic_update_slice(prompt, next_token, [0, index])
             # Return the iteration of the loop state.
-            return (prompt, state, index + 1, beam_probs)
+            return (prompt, state, index + 1, log_probs)
 
-        prompt, _, _, beam_probs = tf.while_loop(
+        prompt, _, _, log_probs = tf.while_loop(
             cond=cond,
             body=body,
-            loop_vars=(prompt, state, index, beam_probs),
+            loop_vars=(prompt, state, index, log_probs),
             maximum_iterations=(max_length - index),
         )
 
         # Gather the top beam at each batch index.
-        prompt, beam_probs = unflatten(prompt), unflatten(beam_probs)
-        top_beams = tf.math.argmax(beam_probs, axis=-1)[:, tf.newaxis]
+        prompt, log_probs = unflatten(prompt), unflatten(log_probs)
+        top_beams = tf.math.argmax(log_probs, axis=-1)[:, tf.newaxis]
         prompt = tf.gather(prompt, top_beams, axis=1, batch_dims=1)
         return tf.squeeze(prompt, axis=1)
 

@@ -46,8 +46,8 @@ class TopKSampler(Sampler):
 
     def next(prompt, state, index):
         # A uniform distribution over our alphabet.
-        probs = tf.ones((batch_size, vocab_size))
-        return probs, state
+        logits = tf.ones((batch_size, vocab_size))
+        return logits, state
 
     output = keras_nlp.samplers.TopKSampler(k=3)(
         next=next,
@@ -68,9 +68,11 @@ class TopKSampler(Sampler):
         self.k = k
         self.seed = seed
 
-    def get_next_token(self, probs):
+    def get_next_token(self, probabilities):
         # Filter out top-k tokens.
-        top_k_pred, top_k_indices = tf.math.top_k(probs, k=self.k, sorted=False)
+        top_k_pred, top_k_indices = tf.math.top_k(
+            probabilities, k=self.k, sorted=False
+        )
         # Sample the next token from the probability distribution.
         next_token = tf.random.categorical(
             tf.math.log(top_k_pred), 1, seed=self.seed

@@ -41,8 +41,8 @@ class GreedySampler(Sampler):
 
     def next(prompt, state, index):
         # return a uniform distribution over our alphabet.
-        probs = tf.ones((batch_size, vocab_size))
-        return probs, state
+        logits = tf.ones((batch_size, vocab_size))
+        return logits, state
 
     output = keras_nlp.samplers.GreedySampler()(
         next=next,
@@ -57,5 +57,5 @@ class GreedySampler(Sampler):
     def __init__(self):
         super().__init__()
 
-    def get_next_token(self, probs):
-        return tf.argmax(probs, axis=-1)
+    def get_next_token(self, probabilities):
+        return tf.argmax(probabilities, axis=-1)

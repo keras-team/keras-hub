@@ -297,8 +297,8 @@ class GPT2CausalLM(Task):
                 # The cache index is for our previous token.
                 cache_index = index - 1
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
-                probs, state = self.call_with_cache(prompt, state, cache_index)
-                return tf.squeeze(probs, axis=1), state
+                logits, state = self.call_with_cache(prompt, state, cache_index)
+                return tf.squeeze(logits, axis=1), state
 
             return self.sampler(
                 next=next,
