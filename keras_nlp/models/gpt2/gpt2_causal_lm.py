@@ -25,6 +25,8 @@ from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
 )
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.task import Task
+from keras_nlp.samplers import BeamSampler
+from keras_nlp.samplers import serialize
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -187,6 +189,7 @@ class GPT2CausalLM(Task):
 
         self.backbone = backbone
         self.preprocessor = preprocessor
+        self.sampler = None
 
     @classproperty
     def presets(cls):
@@ -293,10 +296,22 @@ class GPT2CausalLM(Task):
                 "`preprocessor` is set before calling `generate`."
             )
         sampler = keras_nlp.samplers.get(sampler)
-        # `jit_compile` is a property of keras.Model after tf 2.12.
-        # Use `getattr()` for backwards compatibility.
-        sampler.jit_compile = getattr(self, "jit_compile", True)
+        if sampler.__class__ == BeamSampler:
+            raise ValueError(
+                "`BeamSampler` is not supported right now, please choose "
+                "another sampler, e.g., `TopPSampler`."
+            )
+        if hasattr(self, "jit_compile"):
+            # `jit_compile` is a public property as of tf 2.12. hasattr is for
+            # backward compat.
+            sampler.jit_compile = self.jit_compile
         sampler.run_eagerly = self.run_eagerly
+        if self.sampler and serialize(sampler) == serialize(self.sampler):
+            # If the new sampler is the same as the older one, we reuse the old
+            # sampler to avoid recompile.
+            sampler = self.sampler
+        else:
+            self.sampler = sampler
 
         # Tokenize.
         prompt = self.preprocessor.tokenizer(prompt)
@@ -312,7 +327,6 @@ class GPT2CausalLM(Task):
         batch_size = tf.shape(token_ids)[0]
         cache = self.build_empty_cache(batch_size, max_length)
         _, cache = self.call_with_cache(token_ids, padding_mask, cache, 0)
-
         # Run generation.
         generated = sampler(
             prompt,
