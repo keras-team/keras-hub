@@ -286,10 +286,11 @@ class GPT2CausalLM(Task):
 
     def make_generate_function(self):
         """Create or return the compiled generation function."""
+        # Return the saved generate_function if we have it.
         if self.generate_function is not None:
             return self.generate_function
 
-        def fn(prompt, input_mask, min_length, max_length):
+        def generate_function(prompt, input_mask, min_length, max_length):
             # Create and seed cache with a single forward pass.
             cache = self.build_cache(prompt)
 
@@ -310,12 +311,14 @@ class GPT2CausalLM(Task):
             )
 
         if self.run_eagerly:
-            self.generate_function = fn
+            self.generate_function = generate_function
         else:
             # `jit_compile` is a property of keras.Model after tf 2.12.
             # Use `getattr()` for backwards compatibility.
             jit_compile = getattr(self, "jit_compile", True)
-            self.generate_function = tf.function(fn, jit_compile=jit_compile)
+            self.generate_function = tf.function(
+                generate_function, jit_compile=jit_compile
+            )
         return self.generate_function
 
     def generate(
