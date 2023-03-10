@@ -20,6 +20,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
+from keras_nlp.models.whisper.whisper_backbone import NUM_MELS
 from keras_nlp.models.whisper.whisper_backbone import WhisperBackbone
 
 
@@ -40,7 +41,7 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
                 (
                     self.batch_size,
                     self.model.max_encoder_sequence_length,
-                    self.model.num_mels,
+                    NUM_MELS,
                 ),
                 dtype="int32",
             ),
@@ -68,7 +69,7 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
         for seq_length in (25, 50, 75):
             input_data = {
                 "encoder_features": tf.ones(
-                    (self.batch_size, seq_length, self.model.num_mels),
+                    (self.batch_size, seq_length, NUM_MELS),
                     dtype="int32",
                 ),
                 "decoder_token_ids": tf.ones(
@@ -157,7 +158,7 @@ class WhisperBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
                 (
                     8,
                     self.model.max_encoder_sequence_length,
-                    self.model.num_mels,
+                    NUM_MELS,
                 ),
                 dtype="int32",
             ),
