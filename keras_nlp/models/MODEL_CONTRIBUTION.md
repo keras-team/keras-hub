@@ -57,7 +57,16 @@ layer does not have a bias term. In this case, we can inherit the custom layer
 from one of the standard layers and make minor modifications. See [this PR](https://github.com/keras-team/keras-nlp/pull/801/files#diff-8533ae3a7755c0dbe95ccbb71f85c677297f687bf3884fadefc64f1d0fdce51aR22) for
 more details.
 
-## Open an issue/Claim an open issue
+## Steps
+
+To make a complete model contribution, three PRs have to be opened:
+
+1) "Add `DistilBertBackbone`" (with a Colab link demonstrating correct model implementation and weight conversion)
+2) "Add `DistilBertTokenizer` and `DistilBertPreprocessor`"
+3) "Add `DistilBertBackbone` Presets"
+
+
+### Open an issue/Claim an open issue
 Before getting started with the code, it's important to check if there are any open issues
 related to the model you wish to contribute: https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3Amodel-contribution.
 If there aren't any open issues, you can create one by clicking the "New Issue"
@@ -89,7 +98,7 @@ Official Repository: https://github.com/huggingface/transformers/tree/v4.26.1/sr
 Note that you need not have all the answers or complete knowledge of the inner
 workings of the model at the time of opening the issue. But it is appreciated if
 you can furnish as much detail as possible to enable us to help you with the
-contribution! :)
+contribution! 🙂
 
 Occasionally, if the model requires, say a variant of the original self-attention,
 or other non-standard layers, we may ask you to first contribute an example on
@@ -98,16 +107,88 @@ out the contribution, and possibly propose suggestions on how to implement the
 model.
 
 
-## Write down the `DistilBertBackbone` class!
-
+### Write down the `DistilBertBackbone` class!
+Once you are done identifying all the required layers, you should write down the
+model backbone class. You might have to write custom layers as mentioned earlier.
+Since the first PR is only to add the model backbone class, you should omit the
+`from_presets()` function; this will be added at a later stage when you open a PR
+for adding presets.
 
 
 ## Convert weights from the original source and check output!
+Before you open a PR for adding the model backbone class, it is essential to check
+whether the model has been implemented exactly as the source implementation. This
+also helps in adding model "presets" at a later stage.
 
+The preferred way of doing this is to add a Colab link in the PR description, which
+1) converts the original preset weights to our format, and
+2) checks whether the outputs of the original model and your implemented model are close enough.
 
-## Add presets
-<<fill-this>>
+A sample Colab for DistilBERT is given [here](https://colab.research.google.com/drive/1SeZWJorKWmwWJax8ORSdxKrxE25BfhHa?usp=sharing).
 
+It is okay if you demonstrate it for one preset at this stage; you can do the conversion
+for the other presets when you officially add presets to the library in a later stage.
 
-## Add tokenizer and preprocessor
-<<fill-this>>
+It is essential to add units tests. These unit tests are basic and mostly check
+whether the forward pass goes through successfully, whether the model can be saved
+and loaded correctly, etc. Check [this file](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_backbone_test.py) for more details.
+
+### Add tokenizer and preprocessor
+Most text models nowadays use subword tokenizers such as WordPiece, SentencePiece
+and BPE Tokenizer. Hence, it becomes easy to implement the tokenizer layer for
+the model; the tokenizer class inherits from one of these base tokenizer classes.
+
+For example, DistilBERT uses the WordPiece tokenizer. So, we can introduce a new
+class, `DistilBertTokenizer`, which inherits from `keras_nlp.tokenizers.WordPieceTokenizer`
+as shown [here](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_tokenizer.py#L26).
+All the underlying actual tokenization will be taken care of by the superclass.
+
+The important thing here is adding "special tokens". Most models have
+special tokens such as beginning-of-sequence token, end-of-sequence token, mask token,
+pad token, etc. These have to be
+[added as member attributes](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_tokenizer.py#L91-L105)
+to the tokenizer class. These member attributes are then accessed by the preprocessor class.
+
+For a full list of the tokenizers KerasNLP offers, please visit [this link](https://keras.io/api/keras_nlp/tokenizers/)
+and make use of the tokenizer your model uses!
+
+The preprocessor class is responsible for making the inputs suitable for consumption
+by the model - it packs multiple inputs together, i.e., given multiple input texts,
+it will add appropriate special tokens, pad the inputs and return the dictionary
+in the form expected by the model. For more details, check out
+[`keras_nlp.models.DistilBertPreprocessor`](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_preprocessor.py).
+
+The last step here is to add unit tests for both the tokenizer and the preprocessor.
+A dummy vocabulary is created, and the output of both these layers is verified
+including tokenization, detokenization, etc. For more details, check out the
+[tests for DistilBertTokenizer](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_tokenizer_test.py) and
+[tests for DistilBertPreprocessor](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_preprocessor_test.py). 
+
+### Add presets
+Once the two PR have been merged, you can open a PR for adding presets. For every
+model, we have [a separate file where we mention our preset configurations](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_presets.py).
+This preset configuration has model-specific arguments such as number of layers,
+number of attention heads; preprocessor-specific arguments such as whether we want to
+lowercase the input text; checkpoint and vocabulary file URLs, etc.
+In the PR description, you can add Google Drive links to the checkpoint and the
+vocabulary files. These files will then be uploaded to GCP by us!
+
+After wrapping up the preset configuration file, you need to
+add the `from_preset` function to all three classes, i.e., `DistilBertBackbone`,
+`DistilBertTokenizer` and `DistilBertPreprocessor`,. Here is an
+[example](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_backbone.py#L187-L189).
+
+The testing for presets is divided into two:
+["large"](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_presets_test.py#L32-L33)
+and ["extra large"](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_presets_test.py#L123-L124).
+For "large" tests, we pick the smallest preset (in terms of number of parameters)
+and verify whether the output is correct. For "extra large tests", we loop over
+all the presets and just check whether all three - backbone, tokenizer and preprocessor
+can be called without any error.
+
+## Conclusion
+
+Once all three PRs have been merged, you have successfully contributed a model to
+KerasNLP. Congratulations! 🔥
+
+If you are looking to contribute further, you can add task models such as classifiers, etc.
