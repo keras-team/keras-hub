@@ -25,12 +25,16 @@ def _check_masks_shapes(inputs, padding_mask, attention_mask):
     if mask is not None:
         if mask._rank() != 2:
             raise ValueError(
-                f"padding_mask should be of size [B, T], found {mask.shape}"
+                "`padding_mask` should have shape "
+                "(batch_size, target_length). "
+                f"Received shape `{mask.shape}`."
             )
     if attention_mask is not None:
         if attention_mask._rank() != 3:
             raise ValueError(
-                f"attention_mask should be of size [B, T, T], found {attention_mask.shape}"
+                "`attention_mask` should have shape "
+                "(batch_size, target_length, source_length). "
+                f"Received shape `{mask.shape}`."
             )
 
 
