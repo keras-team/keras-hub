@@ -124,7 +124,7 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_compilation(self, jit_compile):
+    def test_generate(self, jit_compile):
         # Tensor input.
         self.causal_lm.compile(jit_compile=jit_compile)
         self.causal_lm.generate(

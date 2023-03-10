@@ -73,8 +73,8 @@ class BeamSampler(Sampler):
         self,
         next,
         prompt,
-        index=0,
         state=None,
+        index=0,
         mask=None,
         end_token_id=None,
     ):
