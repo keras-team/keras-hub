@@ -44,6 +44,8 @@ Standard layers used: `keras_nlp.layers.TransformerDecoder`.
 ### Other layers which might be used
 `keras.layers.LayerNorm`, `keras.layers.Dropout`, `keras.layers.Conv1D`, etc.
 
+<br/>
+
 The standard layers provided in Keras and KerasNLP are generally enough for
 99% of the usecases and it is recommended to do a thorough search
 [here](https://keras.io/api/layers/) and [here](https://keras.io/api/keras_nlp/layers/).
@@ -120,7 +122,7 @@ Since the first PR is only to add the model backbone class, you should omit the
 for adding presets.
 
 
-## Convert weights from the original source and check output!
+### Convert weights from the original source and check output!
 Before you open a PR for adding the model backbone class, it is essential to check
 whether the model has been implemented exactly as the source implementation. This
 also helps in adding model "presets" at a later stage.
