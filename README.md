@@ -14,7 +14,7 @@ easy productionization using the TensorFlow ecosystem.
 
 This library is an extension of the core Keras API; all high-level modules are 
 [`Layers`](https://keras.io/api/layers/) or 
-[`Models`](https://keras.io/api/models/) that recieve that same level of polish 
+[`Models`](https://keras.io/api/models/) that receive that same level of polish 
 as core Keras. If you are familiar with Keras, congratulations! You already 
 understand most of KerasNLP.
 
