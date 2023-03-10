@@ -39,10 +39,10 @@ class GPT2CausalLM(Task):
     pretrained. You can finetune `GPT2CausalLM` to generate text similar to
     the custom dataset.
 
-    `GPT2CausalLM` has a method `generate()`, which generates text based on a
+    This model has a `generate()` method, which generates text based on a
     prompt. The generation strategy used is controlled by an additional
     `sampler` argument on `compile()`. You can recompile the model with
-    different samplers to control generation.
+    different `keras_nlp.samplers` objects to control the generation.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -206,7 +206,7 @@ class GPT2CausalLM(Task):
     def preprocessor_cls(cls):
         return GPT2CausalLMPreprocessor
 
-    def call_with_cache(self, token_ids, padding_mask, cache, cache_index):
+    def call_with_cache(self, token_ids, cache, cache_index):
         """Forward pass of `GPT2CausalLM` with cache.
 
         `call_with_cache` adds an additional forward pass for the model for
@@ -216,7 +216,6 @@ class GPT2CausalLM(Task):
 
         Args:
             token_ids: a dense int Tensor, input token ids.
-            padding_mask: a dense bool Tensor, input padding mask.
             cache: a dense float Tensor, the cache of key and value.
             cache_index: int, or int Tensor. The index of current inputs in the
                 whole sequence.
@@ -240,7 +239,6 @@ class GPT2CausalLM(Task):
             current_cache = caches[i]
             x, next_cache = self.backbone.get_layer(f"transformer_layer_{i}")(
                 x,
-                decoder_padding_mask=padding_mask,
                 cache=current_cache,
                 cache_index=cache_index,
             )
@@ -254,13 +252,17 @@ class GPT2CausalLM(Task):
         )
         return x, cache
 
-    def build_empty_cache(self, batch_size, max_length):
+    def build_cache(self, prompt):
         """Build an empty cache for use with `call_with_cache()`."""
+        batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_heads
         head_dim = self.backbone.hidden_dim // self.backbone.num_heads
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
-        return tf.zeros(shape)
+        cache = tf.zeros(shape)
+        # Seed the cache.
+        _, cache = self.call_with_cache(prompt, cache, 0)
+        return cache
 
     def compile(
         self,
@@ -270,12 +272,12 @@ class GPT2CausalLM(Task):
         sampler="top_k",
         **kwargs,
     ):
-        jit_compile = jit_compile and is_xla_compatible(self)
-        jit_compile = jit_compile and not run_eagerly
+        xla_compatible = is_xla_compatible(self)
         super().compile(
             *args,
             run_eagerly=run_eagerly,
-            jit_compile=jit_compile,
+            # Only `jit_compile` if not eager and in a compatible environment.
+            jit_compile=jit_compile and xla_compatible and not run_eagerly,
             **kwargs,
         )
         # Clear the compiled generate function.
@@ -288,20 +290,14 @@ class GPT2CausalLM(Task):
             return self.generate_function
 
         def fn(prompt, input_mask, min_length, max_length):
-            batch_size = tf.shape(prompt)[0]
-            # Ignore the padding mask during generation.
-            padding_mask = tf.ones_like(prompt)
-            cache = self.build_empty_cache(batch_size, max_length)
-            # Seed the cache.
-            _, cache = self.call_with_cache(prompt, padding_mask, cache, 0)
+            # Create and seed cache with a single forward pass.
+            cache = self.build_cache(prompt)
 
             def next(prompt, state, index):
-                # The cache index is for our previous token
+                # The cache index is for our previous token.
                 cache_index = index - 1
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
-                probs, state = self.call_with_cache(
-                    prompt, tf.ones_like(prompt), state, cache_index
-                )
+                probs, state = self.call_with_cache(prompt, state, cache_index)
                 return tf.squeeze(probs, axis=1), state
 
             return self.sampler(
