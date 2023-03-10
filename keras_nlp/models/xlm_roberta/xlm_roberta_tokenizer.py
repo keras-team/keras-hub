@@ -91,13 +91,14 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         super().__init__(proto=proto, **kwargs)
 
         # List of special tokens.
-        self._vocabulary_prefix = ["<s>", "<pad>", "</s>", "<unk>"]
+        self._vocabulary_prefix = ["<s>", "<pad>", "</s>", "<unk>", "[MASK]"]
 
         # IDs of special tokens.
         self.start_token_id = 0  # <s>
         self.pad_token_id = 1  # <pad>
         self.end_token_id = 2  # </s>
         self.unk_token_id = 3  # <unk>
+        self.mask_token_id = 4  # [MASK]
 
     def vocabulary_size(self):
         """Get the size of the tokenizer vocabulary."""
