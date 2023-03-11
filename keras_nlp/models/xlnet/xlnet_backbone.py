@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""XLNet backbone model."""
+
 
 import tensorflow as tf
 from tensorflow import keras
@@ -19,8 +21,6 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.xlnet.xlnet_encoder import XLNetEncoder
-
-"""XLNet backbone model."""
 
 
 def xlnet_kernel_initializer(stddev=0.02):

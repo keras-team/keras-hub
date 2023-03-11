@@ -126,7 +126,7 @@ class XLNetEncoder(keras.layers.Layer):
 
         # Relaive attention layers.
         self._relative_attention_layer = (
-            keras_nlp.layers.TwoStreamRelativeAttention(
+            keras_nlp.layers.MultiHeadRelativeAttention(
                 num_heads=self.num_heads,
                 key_dim=key_dim,
                 dropout=self.dropout,
@@ -195,7 +195,7 @@ class XLNetEncoder(keras.layers.Layer):
         residual = x
         if self.normalize_first:
             x = self._relative_attention_layernorm(x)
-        x, y = self._relative_attention_layer(
+        x = self._relative_attention_layer(
             query=x,
             value=x,
             attention_mask=relative_attention_mask,
