@@ -81,13 +81,11 @@ class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_outputs_in_top_p(self):
         def next(prompt, state, index):
-            # Return a probability distribution favoring the first index.
-            probabilities = np.zeros((self.batch_size, self.vocab_size)) + -1e9
-            probabilities[:, 0:3] = 0.1
-            return tf.math.log(probabilities), state
+            logits = np.zeros((self.batch_size, self.vocab_size))
+            return tf.constant(logits), state
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
-        output = TopPSampler(p=0.3)(
+        output = TopPSampler(p=(2.0 / self.vocab_size))(
             next=next,
             prompt=prompt,
         )

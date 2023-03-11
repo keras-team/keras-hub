@@ -129,7 +129,7 @@ class BeamSampler(Sampler):
             next_token = flatten(indices % vocab_size)
             # We need `ensure_shape` as `top_k` will change the static shape.
             next_log_probs = flatten(next_log_probs)
-            log_probs = tf.ensure_shape(log_probs, log_probs.shape)
+            log_probs = tf.ensure_shape(next_log_probs, log_probs.shape)
 
             def gather_beams(x):
                 x = unflatten(x)
