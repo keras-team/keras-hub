@@ -17,6 +17,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
+import keras_nlp
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.models.backbone import Backbone
@@ -29,7 +30,7 @@ from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
 
 @keras_nlp_export("keras_nlp.layers.XLNetEncoder")
 class XLNetEncoder(keras.layers.Layer):
-    """XLnet encoder.
+    """XLNet encoder.
 
     This class follows the architecture of the transformer encoder layer in the
     paper [Attention is All You Need](https://arxiv.org/abs/1706.03762). Users
@@ -125,22 +126,24 @@ class XLNetEncoder(keras.layers.Layer):
         # Attention head size is `hidden_dim` over the number of heads.
         key_dim = int(hidden_dim // self.num_heads)
 
-        # Self attention layers.
-        self._self_attention_layer = keras.layers.MultiHeadRelativeAttention(
-            num_heads=self.num_heads,
-            key_dim=key_dim,
-            dropout=self.dropout,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-            bias_initializer=clone_initializer(self.bias_initializer),
+        # Relaive attention layers.
+        self._relative_attention_layer = (
+            keras_nlp.layers.TwoStreamRelativeAttention(
+                num_heads=self.num_heads,
+                key_dim=key_dim,
+                dropout=self.dropout,
+                kernel_initializer=clone_initializer(self.kernel_initializer),
+                bias_initializer=clone_initializer(self.bias_initializer),
+            )
         )
-        self._self_attention_layer._build_from_signature(
+        self._relative_attention_layer._build_from_signature(
             query=input_shape,
             value=input_shape,
         )
-        self._self_attention_layernorm = keras.layers.LayerNormalization(
+        self._relative_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
-        self._self_attention_dropout = keras.layers.Dropout(
+        self._relative_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,
         )
 
@@ -164,10 +167,10 @@ class XLNetEncoder(keras.layers.Layer):
         )
 
     def call(self, inputs, padding_mask=None, attention_mask=None):
-        """Forward pass of the TransformerEncoder.
+        """Forward pass of the XLNetEncoder.
 
         Args:
-            inputs: a Tensor. The input data to TransformerEncoder, should be
+            inputs: a Tensor. The input data to XLNetEncoder, should be
                 of shape [batch_size, sequence_length, hidden_dim].
             padding_mask: a boolean Tensor. It indicates if the token should be
                 masked because the token is introduced due to padding.
@@ -186,23 +189,23 @@ class XLNetEncoder(keras.layers.Layer):
         x = inputs  # Intermediate result.
 
         # Compute self attention mask.
-        self_attention_mask = merge_padding_and_attention_mask(
+        relative_attention_mask = merge_padding_and_attention_mask(
             inputs, padding_mask, attention_mask
         )
 
         # Self attention block.
         residual = x
         if self.normalize_first:
-            x = self._self_attention_layernorm(x)
-        x = self._self_attention_layer(
+            x = self._relative_attention_layernorm(x)
+        x, y = self._relative_attention_layer(
             query=x,
             value=x,
-            attention_mask=self_attention_mask,
+            attention_mask=relative_attention_mask,
         )
-        x = self._self_attention_dropout(x)
+        x = self._relative_attention_dropout(x)
         x = x + residual
         if not self.normalize_first:
-            x = self._self_attention_layernorm(x)
+            x = self._relative_attention_layernorm(x)
 
         # Feedforward block.
         residual = x
