@@ -20,9 +20,6 @@ from tensorflow import keras
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.models.backbone import Backbone
-
-
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.keras_utils import clone_initializer
 
 from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
@@ -99,7 +96,7 @@ class XLNetEncoder(keras.layers.Layer):
         bias_initializer="zeros",
         normalize_first=False,
         name=None,
-        **kwargs
+        **kwargs,
     ):
         # Work around for model saving
         self._input_shape = kwargs.pop("build_input_shape", None)
@@ -240,8 +237,10 @@ class XLNetEncoder(keras.layers.Layer):
             }
         )
         return config
-    
+
+
 """XLNet backbone model."""
+
 
 def xlnet_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
