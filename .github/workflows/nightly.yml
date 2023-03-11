@@ -39,3 +39,6 @@ jobs:
       - name: Test with pytest
         run: |
           pytest --cov=keras_nlp --cov-report xml:coverage.xml
+      - name: Run integration tests
+        run: |
+          python pip_build.py --install && cd integration_tests && pytest .
