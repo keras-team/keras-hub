@@ -89,7 +89,6 @@ class BeamSampler(Sampler):
     def sample(
         self,
         prompt,
-        token_probability_fn,
         mask,
         num_steps,
         from_logits=True,
@@ -110,7 +109,7 @@ class BeamSampler(Sampler):
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         max_length = tf.cast(max_length, num_steps.dtype)
         length = max_length - num_steps
-        dummy_preds = token_probability_fn(prompt, mask=mask)
+        dummy_preds = self.token_probability_fn(prompt, mask=mask)
         vocab_size = tf.shape(dummy_preds)[-1]
         pred_dtype = dummy_preds.dtype
 
@@ -130,7 +129,7 @@ class BeamSampler(Sampler):
                 beams, shape=[batch_size * num_beams, -1]
             )
             repeated_mask = tf.tile(mask, [num_beams, 1])
-            probs = token_probability_fn(flattened_beams, repeated_mask)
+            probs = self.token_probability_fn(flattened_beams, repeated_mask)
             preds = tf.gather(
                 probs,
                 tf.repeat(length - 1, batch_size * num_beams),

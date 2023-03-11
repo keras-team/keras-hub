@@ -36,10 +36,14 @@ jobs:
         run: |
           pip install -r requirements.txt --progress-bar off
           pip install -e "." --progress-bar off
-      - name: Lint
-        run: bash shell/lint.sh
-  build:
-    name: Run tests
+      - name: Test with pytest
+        run: |
+          pytest --cov=keras_nlp --cov-report xml:coverage.xml
+      - name: Run integration tests
+        run: |
+          python pip_build.py --install && cd integration_tests && pytest .
+  format:
+    name: Check the code format
     runs-on: ubuntu-latest
     needs: [format]
     steps:
