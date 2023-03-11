@@ -103,7 +103,6 @@ class DebertaV3MaskedLMTest(tf.test.TestCase, parameterized.TestCase):
     def test_deberta_v3_masked_lm_predict_no_preprocessing(self, jit_compile):
         self.masked_lm_no_preprocessing.compile(jit_compile=jit_compile)
         self.masked_lm_no_preprocessing.predict(self.preprocessed_batch)
-        
 
         def test_delberta_masked_lm_fit_default_compile(self):
             self.masked_lm.fit(self.raw_dataset)

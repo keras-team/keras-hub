@@ -146,7 +146,6 @@ class DebertaV3MaskedLM(Task):
         self.backbone = backbone
         self.preprocessor = preprocessor
 
-
         self.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(5e-5),
