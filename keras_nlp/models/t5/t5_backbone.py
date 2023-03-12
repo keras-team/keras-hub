@@ -378,7 +378,9 @@ class T5Attention(keras.layers.Layer):
 
         if past_key_value is not None:
             if len(past_key_value) != 2:
-                raise ValueError(f"Argument `past_key_value` should have 2 past states: keys and values. Got {len(past_key_value)} past states.")
+                raise ValueError(
+                    f"Argument `past_key_value` should have 2 past states: keys and values. Got {len(past_key_value)} past states."
+                )
             real_seq_length += (
                 shape_list(past_key_value[0])[2]
                 if query_length is None
