@@ -282,20 +282,22 @@ class T5Attention(keras.layers.Layer):
     def _relative_position_bucket(
         relative_position, bidirectional=True, num_buckets=32, max_distance=128
     ):
-        """
-        Adapted from Mesh Tensorflow:
+        """Adapted from Mesh Tensorflow:
+
         https://github.com/tensorflow/mesh/blob/0cb87fe07da627bf0b7e60475d59f95ed6b5be3d/mesh_tensorflow/transformer/transformer_layers.py#L593
         Translate relative position to a bucket number for relative attention. The relative position is defined as
         memory_position - query_position, i.e. the distance in tokens from the attending position to the attended-to
         position. If bidirectional=False, then positive relative positions are invalid. We use smaller buckets for
         small absolute relative_position and larger buckets for larger absolute relative_positions. All relative
         positions >=max_distance map to the same bucket. All relative positions <=-max_distance map to the same bucket.
-        This should allow for more graceful generalization to longer sequences than the model has been trained on
+        This should allow for more graceful generalization to longer sequences than the model has been trained on.
+
         Args:
             relative_position: an int32 Tensor
             bidirectional: a boolean - whether the attention is bidirectional
             num_buckets: an integer
             max_distance: an integer
+
         Returns:
             a Tensor with the same shape as relative_position, containing int32 values in the range [0, num_buckets)
         """
@@ -375,9 +377,8 @@ class T5Attention(keras.layers.Layer):
         real_seq_length = seq_length
 
         if past_key_value is not None:
-            assert (
-                len(past_key_value) == 2
-            ), f"past_key_value should have 2 past states: keys and values. Got {len(past_key_value)} past states"
+            if len(past_key_value) != 2:
+                raise ValueError(f"Argument `past_key_value` should have 2 past states: keys and values. Got {len(past_key_value)} past states.")
             real_seq_length += (
                 shape_list(past_key_value[0])[2]
                 if query_length is None
@@ -410,23 +411,23 @@ class T5Attention(keras.layers.Layer):
         ):
             """projects hidden states correctly to key/query states"""
             if key_value_states is None:
-                # self-attn
+                # self-attention
                 # (batch_size, num_heads, seq_length, dim_per_head)
                 hidden_states = shape(proj_layer(hidden_states))
             elif past_key_value is None:
-                # cross-attn
+                # cross-attention
                 # (batch_size, num_heads, seq_length, dim_per_head)
                 hidden_states = shape(proj_layer(key_value_states))
 
             if past_key_value is not None:
                 if key_value_states is None:
-                    # self-attn
+                    # self-attention
                     # (batch_size, num_heads, key_length, dim_per_head)
                     hidden_states = tf.concat(
                         [past_key_value, hidden_states], axis=2
                     )
                 else:
-                    # cross-attn
+                    # cross-attention
                     hidden_states = past_key_value
             return hidden_states
 
@@ -448,9 +449,6 @@ class T5Attention(keras.layers.Layer):
             key_value_states,
             past_key_value[1] if past_key_value is not None else None,
         )
-
-        # to cope with keras serialization
-        present_key_value_states = None
 
         scores = tf.einsum(
             "bnqd,bnkd->bnqk", query_states, key_states
@@ -494,33 +492,19 @@ class T5Attention(keras.layers.Layer):
             weights, training=training
         )  # (batch_size, num_heads, query_length, key_length)
 
-        # Mask heads if we want to
+        # Opitonally mask heads
         if layer_head_mask is not None:
-            tf.debugging.assert_equal(
-                shape_list(layer_head_mask),
-                [self.num_heads],
-                message=(
-                    f"Head mask for a single layer should be of size {(self.num_heads)}, but is"
-                    f" {shape_list(layer_head_mask)}"
-                ),
-            )
             weights = tf.reshape(layer_head_mask, (1, -1, 1, 1)) * weights
 
-        attn_output = tf.matmul(
+        attention_output = tf.matmul(
             weights, value_states
         )  # (batch_size, num_heads, query_length, dim_per_head)
 
-        attn_output = self.output_projector(unshape(attn_output))
-
-        outputs = (
-            (attn_output,) + (present_key_value_states,) + (position_bias,)
-        )
-        return outputs
+        attention_output = self.output_projector(unshape(attention_output))
+        return (attention_output, position_bias)
 
 
-class T5SelfAttention(keras.layers.Layer):
-    # This layer is adapted from Hugging Face
-    # Ref: https://github.com/huggingface/transformers/blob/main/src/transformers/models/t5/modeling_tf_t5.py
+class T5AttentionBlock(keras.layers.Layer):
     def __init__(
         self,
         is_decoder,
@@ -533,7 +517,7 @@ class T5SelfAttention(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.SelfAttention = T5Attention(
+        self.attention = T5Attention(
             is_decoder,
             output_dim,
             key_value_dim,
@@ -541,61 +525,13 @@ class T5SelfAttention(keras.layers.Layer):
             dropout,
             use_relative_attention_bias=use_relative_attention_bias,
         )
-        self.layer_norm = T5LayerNorm(layer_norm_epsilon)
-        self.dropout_layer = keras.layers.Dropout(dropout)
-
-    def call(
-        self,
-        hidden_states,
-        attention_mask=None,
-        position_bias=None,
-        layer_head_mask=None,
-        past_key_value=None,
-        training=False,
-    ):
-        normed_hidden_states = self.layer_norm(hidden_states)
-        attention_output = self.SelfAttention(
-            normed_hidden_states,
-            mask=attention_mask,
-            position_bias=position_bias,
-            layer_head_mask=layer_head_mask,
-            past_key_value=past_key_value,
-            training=training,
-        )
-        hidden_states = hidden_states + self.dropout_layer(
-            attention_output[0], training=training
-        )
-        outputs = (hidden_states,) + attention_output[1:]
-        return outputs
-
-
-class T5CrossAttention(keras.layers.Layer):
-    def __init__(
-        self,
-        is_decoder,
-        output_dim,
-        key_value_dim,
-        num_heads,
-        dropout,
-        layer_norm_epsilon,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.attention = T5Attention(
-            is_decoder,
-            output_dim,
-            key_value_dim,
-            num_heads,
-            dropout,
-            use_relative_attention_bias=False,
-        )
         self.layer_norm = T5LayerNorm(epsilon=layer_norm_epsilon)
         self.dropout_layer = keras.layers.Dropout(dropout)
 
     def call(
         self,
         hidden_states,
-        key_value_states,
+        key_value_states=None,
         attention_mask=None,
         position_bias=None,
         layer_head_mask=None,
@@ -604,7 +540,7 @@ class T5CrossAttention(keras.layers.Layer):
         training=False,
     ):
         normed_hidden_states = self.layer_norm(hidden_states)
-        attention_output = self.attention(
+        attention_output, position_bias = self.attention(
             normed_hidden_states,
             mask=attention_mask,
             key_value_states=key_value_states,
@@ -615,10 +551,9 @@ class T5CrossAttention(keras.layers.Layer):
             training=training,
         )
         hidden_states = hidden_states + self.dropout_layer(
-            attention_output[0], training=training
+            attention_output, training=training
         )
-        outputs = (hidden_states,) + attention_output[1:]
-        return outputs
+        return (hidden_states, position_bias)
 
 
 class T5Block(keras.layers.Layer):
@@ -641,7 +576,7 @@ class T5Block(keras.layers.Layer):
         super().__init__(**kwargs)
         self.is_decoder = is_decoder
 
-        self.self_attention = T5SelfAttention(
+        self.self_attention = T5AttentionBlock(
             is_decoder,
             output_dim,
             key_value_dim,
@@ -651,7 +586,7 @@ class T5Block(keras.layers.Layer):
             use_relative_attention_bias=use_relative_attention_bias,
         )
         if self.is_decoder:
-            self.cross_attention = T5CrossAttention(
+            self.cross_attention = T5AttentionBlock(
                 is_decoder,
                 output_dim,
                 key_value_dim,
@@ -683,14 +618,12 @@ class T5Block(keras.layers.Layer):
     ):
         if past_key_value is not None:
             self_attention_past_key_value = past_key_value[:2]
-            cross_attn_past_key_value = past_key_value[2:]
+            cross_attention_past_key_value = past_key_value[2:]
         else:
-            self_attention_past_key_value, cross_attn_past_key_value = (
-                None,
-                None,
-            )
+            self_attention_past_key_value = None
+            cross_attention_past_key_value = None
 
-        self_attention_outputs = self.self_attention(
+        hidden_states, position_bias = self.self_attention(
             hidden_states,
             attention_mask=attention_mask,
             position_bias=position_bias,
@@ -698,37 +631,20 @@ class T5Block(keras.layers.Layer):
             past_key_value=self_attention_past_key_value,
             training=training,
         )
-        hidden_states, present_key_value_states = self_attention_outputs[:2]
-        position_bias = self_attention_outputs[2]
-        encoder_decoder_position_bias = None
 
+        encoder_decoder_position_bias = None
         if self.is_decoder and encoder_hidden_states is not None:
-            # the actual query length is unknown for cross attention
-            # if using past key value states. Need to inject it here
-            if present_key_value_states is not None:
-                query_length = shape_list(present_key_value_states[0])[2]
-            else:
-                query_length = None
-            cross_attention_outputs = self.cross_attention(
+            hidden_states, encoder_decoder_position_bias = self.cross_attention(
                 hidden_states,
                 key_value_states=encoder_hidden_states,
                 attention_mask=encoder_attention_mask,
                 position_bias=encoder_decoder_position_bias,
                 layer_head_mask=encoder_layer_head_mask,
-                past_key_value=cross_attn_past_key_value,
-                query_length=query_length,
+                past_key_value=cross_attention_past_key_value,
+                query_length=None,
                 training=training,
             )
-            hidden_states = cross_attention_outputs[0]
-            # Combine self attn and cross attn key value states
-            if present_key_value_states is not None:
-                present_key_value_states = (
-                    present_key_value_states + cross_attention_outputs[1]
-                )
-            # Keep cross-attention outputs and relative position weights
-            encoder_decoder_position_bias = cross_attention_outputs[0]
 
-        # Apply dense block
         hidden_states = self.dense_block(hidden_states, training=training)
         return {
             "hidden_states": hidden_states,
@@ -795,7 +711,8 @@ class T5MainLayer(keras.layers.Layer):
         if token_ids is not None and inputs_embeddings is not None:
             err_msg_prefix = "decoder_" if self.is_decoder else ""
             raise ValueError(
-                f"You cannot specify both {err_msg_prefix}token_ids and {err_msg_prefix}inputs_embeddings at the same time"
+                f"You cannot specify both {err_msg_prefix}token_ids and "
+                f"{err_msg_prefix}inputs_embeddings at the same time."
             )
         elif token_ids is not None:
             input_shape = shape_list(token_ids)
@@ -805,23 +722,11 @@ class T5MainLayer(keras.layers.Layer):
         else:
             err_msg_prefix = "decoder_" if self.is_decoder else ""
             raise ValueError(
-                f"You have to specify either {err_msg_prefix}token_ids or {err_msg_prefix}inputs_embeddings"
+                f"You have to specify either `{err_msg_prefix}token_ids` "
+                f"or `{err_msg_prefix}inputs_embeddings`."
             )
 
         if inputs_embeddings is None:
-            assert (
-                self.token_embeddings is not None
-            ), "You have to initialize the model with valid token embeddings"
-            # Note: tf.gather, on which the embedding layer is based, won't check positive out of bound
-            # indices on GPU, returning zeros instead. This is a dangerous silent behavior.
-            tf.debugging.assert_less(
-                token_ids,
-                tf.cast(self.token_embeddings.input_dim, dtype=token_ids.dtype),
-                message=(
-                    "token_ids must be smaller than the embedding layer's input dimension (got"
-                    f" {tf.math.reduce_max(token_ids)} >= {self.token_embeddings.input_dim})"
-                ),
-            )
             inputs_embeddings = self.token_embeddings(token_ids)
 
         batch_size, seq_length = input_shape
