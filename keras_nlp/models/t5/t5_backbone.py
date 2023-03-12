@@ -200,12 +200,10 @@ class T5DenseBlock(keras.layers.Layer):
             hidden_act = self.input_projector(hidden_states)
             hidden_linear = self.gate_projector(hidden_states)
             hidden_states = hidden_act * hidden_linear
-            hidden_states = self.dropout_layer(hidden_states, training=training)
-            hidden_states = self.output_projector(hidden_states)
         else:
             hidden_states = self.input_projector(hidden_states)
-            hidden_states = self.dropout_layer(hidden_states, training=training)
-            hidden_states = self.output_projector(hidden_states)
+        hidden_states = self.dropout_layer(hidden_states, training=training)
+        hidden_states = self.output_projector(hidden_states)
         return inputs + self.dropout_layer(hidden_states, training=training)
 
 
@@ -276,7 +274,6 @@ class T5Attention(keras.layers.Layer):
                     mean=0, stddev=self.inner_dim**-0.5
                 ),
             )
-        super().build(input_shape)
 
     @staticmethod
     def _relative_position_bucket(
@@ -846,5 +843,4 @@ class T5MainLayer(keras.layers.Layer):
                 ]
 
         hidden_states = self.final_layer_norm(hidden_states)
-        hidden_states = self.dropout_layer(hidden_states, training=training)
-        return hidden_states
+        return self.dropout_layer(hidden_states, training=training)
