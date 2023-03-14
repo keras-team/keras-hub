@@ -31,9 +31,8 @@ class T5Backbone(Backbone):
     def __init__(
         self,
         vocabulary_size,
-        output_dim,
         hidden_dim,
-        key_value_dim,
+        intermediate_dim,
         num_blocks,
         num_heads,
         use_gated_activation,
@@ -42,38 +41,36 @@ class T5Backbone(Backbone):
         layer_norm_epsilon,
         **kwargs,
     ):
-        shared_embedding = keras.layers.Embedding(
+        token_embedding = keras.layers.Embedding(
             input_dim=vocabulary_size,
-            output_dim=output_dim,
+            output_dim=hidden_dim,
             embeddings_initializer=keras.initializers.TruncatedNormal(1.0),
-            name="shared_embedding",
+            name="token_embedding",
         )
         encoder = T5MainLayer(
             is_decoder=False,
             use_gated_activation=use_gated_activation,
-            output_dim=output_dim,
             hidden_dim=hidden_dim,
+            intermediate_dim=intermediate_dim,
             dropout=dropout,
             activation=activation,
             layer_norm_epsilon=layer_norm_epsilon,
-            key_value_dim=key_value_dim,
             num_heads=num_heads,
             num_blocks=num_blocks,
-            token_embeddings=shared_embedding,
+            token_embeddings=token_embedding,
             name="encoder",
         )
         decoder = T5MainLayer(
             is_decoder=True,
             use_gated_activation=use_gated_activation,
-            output_dim=output_dim,
             hidden_dim=hidden_dim,
+            intermediate_dim=intermediate_dim,
             dropout=dropout,
             activation=activation,
             layer_norm_epsilon=layer_norm_epsilon,
-            key_value_dim=key_value_dim,
             num_heads=num_heads,
             num_blocks=num_blocks,
-            token_embeddings=shared_embedding,
+            token_embeddings=token_embedding,
             name="decoder",
         )
         token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
@@ -92,9 +89,8 @@ class T5Backbone(Backbone):
         )
         # All references to `self` below this line
         self.vocabulary_size = vocabulary_size
-        self.output_dim = output_dim
         self.hidden_dim = hidden_dim
-        self.key_value_dim = key_value_dim
+        self.intermediate_dim = intermediate_dim
         self.num_blocks = num_blocks
         self.num_heads = num_heads
         self.use_gated_activation = use_gated_activation
@@ -107,9 +103,8 @@ class T5Backbone(Backbone):
         config.update(
             {
                 "vocabulary_size": self.vocabulary_size,
-                "output_dim": self.output_dim,
                 "hidden_dim": self.hidden_dim,
-                "key_value_dim": self.key_value_dim,
+                "intermediate_dim": self.intermediate_dim,
                 "num_blocks": self.num_blocks,
                 "num_heads": self.num_heads,
                 "use_gated_activation": self.use_gated_activation,
@@ -119,6 +114,10 @@ class T5Backbone(Backbone):
             }
         )
         return config
+    
+    @property
+    def token_embedding(self):
+        return self.get_layer("token_embedding")
 
     @classproperty
     def presets(cls):
@@ -155,8 +154,8 @@ class T5DenseBlock(keras.layers.Layer):
     def __init__(
         self,
         use_gated_activation,
-        output_dim,
         hidden_dim,
+        intermediate_dim,
         dropout,
         activation,
         layer_norm_epsilon,
@@ -166,29 +165,29 @@ class T5DenseBlock(keras.layers.Layer):
         self.use_gated_activation = use_gated_activation
 
         self.input_projector = keras.layers.Dense(
-            hidden_dim,
+            intermediate_dim,
             use_bias=False,
             name="input_projector",
             activation=keras.activations.get(activation),
             kernel_initializer=keras.initializers.RandomNormal(
-                mean=0, stddev=output_dim**-0.5
+                mean=0, stddev=hidden_dim**-0.5
             ),
         )
         if self.use_gated_activation:
             self.gate_projector = keras.layers.Dense(
-                hidden_dim,
+                intermediate_dim,
                 use_bias=False,
                 name="gate_projector",
                 kernel_initializer=keras.initializers.RandomNormal(
-                    mean=0, stddev=output_dim**-0.5
+                    mean=0, stddev=hidden_dim**-0.5
                 ),
             )
         self.output_projector = keras.layers.Dense(
-            output_dim,
+            hidden_dim,
             use_bias=False,
             name="output_projector",
             kernel_initializer=keras.initializers.RandomNormal(
-                mean=0, stddev=hidden_dim**-0.5
+                mean=0, stddev=intermediate_dim**-0.5
             ),
         )
         self.layer_norm = T5LayerNorm(epsilon=layer_norm_epsilon)
@@ -213,8 +212,7 @@ class T5Attention(keras.layers.Layer):
     def __init__(
         self,
         is_decoder,
-        output_dim,
-        key_value_dim,
+        hidden_dim,
         num_heads,
         dropout,
         use_relative_attention_bias=False,
@@ -222,8 +220,8 @@ class T5Attention(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
         self.is_decoder = is_decoder
-        self.output_dim = output_dim
-        self.key_value_dim = key_value_dim
+        self.hidden_dim = hidden_dim
+        self.key_value_dim = hidden_dim // num_heads
         self.num_heads = num_heads
         self.use_relative_attention_bias = use_relative_attention_bias
 
@@ -256,7 +254,7 @@ class T5Attention(keras.layers.Layer):
             ),
         )
         self.output_projector = keras.layers.Dense(
-            self.output_dim,
+            self.hidden_dim,
             use_bias=False,
             name="output_projector",
             kernel_initializer=keras.initializers.RandomNormal(
@@ -279,15 +277,18 @@ class T5Attention(keras.layers.Layer):
     def _relative_position_bucket(
         relative_position, bidirectional=True, num_buckets=32, max_distance=128
     ):
-        """Adapted from Mesh Tensorflow:
+        """Adapted from Mesh Tensorflow.
 
-        https://github.com/tensorflow/mesh/blob/0cb87fe07da627bf0b7e60475d59f95ed6b5be3d/mesh_tensorflow/transformer/transformer_layers.py#L593
-        Translate relative position to a bucket number for relative attention. The relative position is defined as
-        memory_position - query_position, i.e. the distance in tokens from the attending position to the attended-to
-        position. If bidirectional=False, then positive relative positions are invalid. We use smaller buckets for
-        small absolute relative_position and larger buckets for larger absolute relative_positions. All relative
-        positions >=max_distance map to the same bucket. All relative positions <=-max_distance map to the same bucket.
-        This should allow for more graceful generalization to longer sequences than the model has been trained on.
+        Translate relative position to a bucket number for relative attention.
+        The relative position is defined as memory_position - query_position,
+        i.e. the distance in tokens from the attending position to the
+        attended-to position. If bidirectional=False, then positive relative
+        positions are invalid. We use smaller buckets for
+        small absolute relative_position and larger buckets for larger absolute
+        relative_positions. All relative positions >=max_distance map to
+        the same bucket. All relative positions <=-max_distance map to
+        the same bucket. This should allow for more graceful generalization to
+        longer sequences than the model has been trained on.
 
         Args:
             relative_position: an int32 Tensor
@@ -296,7 +297,8 @@ class T5Attention(keras.layers.Layer):
             max_distance: an integer
 
         Returns:
-            a Tensor with the same shape as relative_position, containing int32 values in the range [0, num_buckets)
+            Tensor with the same shape as relative_position,
+            containing int32 values in the range [0, num_buckets)
         """
         relative_buckets = 0
         if bidirectional:
@@ -363,11 +365,9 @@ class T5Attention(keras.layers.Layer):
         query_length=None,
         training=False,
     ):
-        """
-        Self-attention (if key_value_states is None) or attention over source sentence (provided by key_value_states).
-        """
         # Input is (batch_size, query_length, dim)
-        # Mask is (batch_size, key_length) (non-causal) or (batch_size, key_length, key_length)
+        # Mask is (batch_size, key_length) (non-causal)
+        # or (batch_size, key_length, key_length)
         # past_key_value[0] is (batch_size, num_heads, q_len - 1, dim_per_head)
         batch_size, seq_length = shape_list(hidden_states)[:2]
 
@@ -376,7 +376,8 @@ class T5Attention(keras.layers.Layer):
         if past_key_value is not None:
             if len(past_key_value) != 2:
                 raise ValueError(
-                    f"Argument `past_key_value` should have 2 past states: keys and values. Got {len(past_key_value)} past states."
+                    f"Argument `past_key_value` should have 2 past states: "
+                    f"keys and values. Got {len(past_key_value)} past states."
                 )
             real_seq_length += (
                 shape_list(past_key_value[0])[2]
@@ -461,12 +462,14 @@ class T5Attention(keras.layers.Layer):
             else:
                 position_bias = self.compute_bias(real_seq_length, key_length)
 
-            # if key and values are already calculated we want only the last query position bias
+            # if key and values are already calculated we want only
+            # the last query position bias
             if past_key_value is not None:
                 if not self.use_relative_attention_bias:
                     position_bias = position_bias[:, :, -seq_length:, :]
                 else:
-                    # we might have a padded past structure, in which case we want to fetch the position bias slice
+                    # we might have a padded past structure,
+                    # in which case we want to fetch the position bias slice
                     # right after the most recently filled past index
                     most_recently_filled_past_index = tf.reduce_max(
                         tf.where(past_key_value[0][0, 0, :, 0] != 0.0)
@@ -507,8 +510,7 @@ class T5AttentionBlock(keras.layers.Layer):
     def __init__(
         self,
         is_decoder,
-        output_dim,
-        key_value_dim,
+        hidden_dim,
         num_heads,
         dropout,
         layer_norm_epsilon,
@@ -518,8 +520,7 @@ class T5AttentionBlock(keras.layers.Layer):
         super().__init__(**kwargs)
         self.attention = T5Attention(
             is_decoder,
-            output_dim,
-            key_value_dim,
+            hidden_dim,
             num_heads,
             dropout,
             use_relative_attention_bias=use_relative_attention_bias,
@@ -555,19 +556,18 @@ class T5AttentionBlock(keras.layers.Layer):
         return (hidden_states, position_bias)
 
 
-class T5Block(keras.layers.Layer):
+class T5TransformerDecoder(keras.layers.Layer):
     # This layer is adapted from Hugging Face
     # Ref: https://github.com/huggingface/transformers/blob/main/src/transformers/models/t5/modeling_tf_t5.py
     def __init__(
         self,
         is_decoder,
         use_gated_activation,
-        output_dim,
         hidden_dim,
+        intermediate_dim,
         dropout,
         activation,
-        layer_norm_epsilon,
-        key_value_dim,
+        layer_norm_epsilon,        
         num_heads,
         use_relative_attention_bias=False,
         **kwargs,
@@ -577,8 +577,7 @@ class T5Block(keras.layers.Layer):
 
         self.self_attention = T5AttentionBlock(
             is_decoder,
-            output_dim,
-            key_value_dim,
+            hidden_dim,
             num_heads,
             dropout,
             layer_norm_epsilon,
@@ -587,16 +586,15 @@ class T5Block(keras.layers.Layer):
         if self.is_decoder:
             self.cross_attention = T5AttentionBlock(
                 is_decoder,
-                output_dim,
-                key_value_dim,
+                hidden_dim,
                 num_heads,
                 dropout,
                 layer_norm_epsilon,
             )
         self.dense_block = T5DenseBlock(
             use_gated_activation,
-            output_dim,
             hidden_dim,
+            intermediate_dim,
             dropout,
             activation,
             layer_norm_epsilon,
@@ -659,12 +657,11 @@ class T5MainLayer(keras.layers.Layer):
         self,
         is_decoder,
         use_gated_activation,
-        output_dim,
         hidden_dim,
+        intermediate_dim,
         dropout,
         activation,
         layer_norm_epsilon,
-        key_value_dim,
         num_heads,
         num_blocks,
         token_embeddings=None,
@@ -676,16 +673,15 @@ class T5MainLayer(keras.layers.Layer):
         self.num_hidden_layers = num_blocks
 
         self.blocks = [
-            T5Block(
-                is_decoder,
-                use_gated_activation,
-                output_dim,
-                hidden_dim,
-                dropout,
-                activation,
-                layer_norm_epsilon,
-                key_value_dim,
-                num_heads,
+            T5TransformerDecoder(
+                is_decoder=is_decoder,
+                use_gated_activation=use_gated_activation,
+                hidden_dim=hidden_dim,
+                intermediate_dim=intermediate_dim,
+                dropout=dropout,
+                activation=activation,
+                layer_norm_epsilon=layer_norm_epsilon,
+                num_heads=num_heads,
                 use_relative_attention_bias=bool(i == 0),
             )
             for i in range(num_blocks)
@@ -753,16 +749,17 @@ class T5MainLayer(keras.layers.Layer):
         if past_key_values is None:
             past_key_values = [None] * len(self.blocks)
 
-        # We can provide a self-attention mask of dimensions [batch_size, from_seq_length, to_seq_length]
-        # ourselves in which case we just need to make it broadcastable to all heads.
+        # We can provide a self-attention mask of dimensions
+        # [batch_size, from_seq_length, to_seq_length] ourselves
+        # in which case we just need to make it broadcastable to all heads.
         attention_mask = tf.cast(attention_mask, dtype=inputs_embeddings.dtype)
         num_dims_attention_mask = len(shape_list(attention_mask))
         if num_dims_attention_mask == 3:
             extended_attention_mask = attention_mask[:, None, :, :]
         elif num_dims_attention_mask == 2:
             # Provided a padding mask of dimensions [batch_size, mask_seq_length]
-            # - if the model is a decoder, apply a causal mask in addition to the padding mask
-            # - if the model is an encoder, make the mask broadcastable to
+            # - if decoder, apply a causal mask in addition to the padding mask
+            # - if encoder, make the mask broadcastable to
             # [batch_size, num_heads, mask_seq_length, mask_seq_length]
             if self.is_decoder:
                 seq_ids = tf.range(mask_seq_length)
@@ -787,8 +784,8 @@ class T5MainLayer(keras.layers.Layer):
         extended_attention_mask = (1.0 - extended_attention_mask) * -1e9
         if self.is_decoder and encoder_attention_mask is not None:
             # If a 2D ou 3D attention mask is provided for the cross-attention
-            # we need to make broadcastable to [batch_size, num_heads, mask_seq_length, mask_seq_length]
-            # we need to make broadcastable to [batch_size, num_heads, seq_length, seq_length]
+            # we need to make broadcastable to
+            # [batch_size, num_heads, mask_seq_length, mask_seq_length]
             encoder_attention_mask = tf.cast(
                 encoder_attention_mask, dtype=extended_attention_mask.dtype
             )
