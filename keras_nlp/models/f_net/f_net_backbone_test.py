@@ -114,7 +114,7 @@ class FNetBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
             )
         self.input_batch = {
             "token_ids": tf.ones((8, 128), dtype="int32"),
-            "padding_mask": tf.ones((8, 128), dtype="int32"),
+            "segment_ids": tf.ones((8, 128), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch
