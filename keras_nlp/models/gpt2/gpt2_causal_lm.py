@@ -275,6 +275,7 @@ class GPT2CausalLM(Task):
         prompt,
         max_length,
         sampler="top_k",
+        append_end_token=False,
     ):
         """Generate text.
 
