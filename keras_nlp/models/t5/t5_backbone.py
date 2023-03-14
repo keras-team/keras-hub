@@ -33,7 +33,7 @@ class T5Backbone(Backbone):
         vocabulary_size,
         hidden_dim,
         intermediate_dim,
-        num_blocks,
+        num_layers,
         num_heads,
         use_gated_activation,
         activation,
@@ -56,7 +56,7 @@ class T5Backbone(Backbone):
             activation=activation,
             layer_norm_epsilon=layer_norm_epsilon,
             num_heads=num_heads,
-            num_blocks=num_blocks,
+            num_layers=num_layers,
             token_embeddings=token_embedding,
             name="encoder",
         )
@@ -69,7 +69,7 @@ class T5Backbone(Backbone):
             activation=activation,
             layer_norm_epsilon=layer_norm_epsilon,
             num_heads=num_heads,
-            num_blocks=num_blocks,
+            num_layers=num_layers,
             token_embeddings=token_embedding,
             name="decoder",
         )
@@ -91,7 +91,7 @@ class T5Backbone(Backbone):
         self.vocabulary_size = vocabulary_size
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
-        self.num_blocks = num_blocks
+        self.num_layers = num_layers
         self.num_heads = num_heads
         self.use_gated_activation = use_gated_activation
         self.activation = activation
@@ -105,7 +105,7 @@ class T5Backbone(Backbone):
                 "vocabulary_size": self.vocabulary_size,
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
-                "num_blocks": self.num_blocks,
+                "num_layers": self.num_layers,
                 "num_heads": self.num_heads,
                 "use_gated_activation": self.use_gated_activation,
                 "activation": self.activation,
@@ -114,7 +114,7 @@ class T5Backbone(Backbone):
             }
         )
         return config
-    
+
     @property
     def token_embedding(self):
         return self.get_layer("token_embedding")
@@ -567,7 +567,7 @@ class T5TransformerDecoder(keras.layers.Layer):
         intermediate_dim,
         dropout,
         activation,
-        layer_norm_epsilon,        
+        layer_norm_epsilon,
         num_heads,
         use_relative_attention_bias=False,
         **kwargs,
@@ -663,14 +663,14 @@ class T5MainLayer(keras.layers.Layer):
         activation,
         layer_norm_epsilon,
         num_heads,
-        num_blocks,
+        num_layers,
         token_embeddings=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.token_embeddings = token_embeddings
         self.is_decoder = is_decoder
-        self.num_hidden_layers = num_blocks
+        self.num_hidden_layers = num_layers
 
         self.blocks = [
             T5TransformerDecoder(
@@ -684,7 +684,7 @@ class T5MainLayer(keras.layers.Layer):
                 num_heads=num_heads,
                 use_relative_attention_bias=bool(i == 0),
             )
-            for i in range(num_blocks)
+            for i in range(num_layers)
         ]
         self.final_layer_norm = T5LayerNorm(
             epsilon=layer_norm_epsilon, name="final_layer_norm"

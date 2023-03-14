@@ -16,9 +16,7 @@
 backbone_presets = {
     "t5_small": {
         "metadata": {
-            "description": (
-                "'Small' configuration of T5 (60 million parameters)."
-            ),
+            "description": ("6-layer T5 model with 60 million parameters."),
             "params": 60506624,
             "official_name": "T5-Small",
             "path": "t5",
@@ -32,7 +30,7 @@ backbone_presets = {
             "dropout": 0.1,
             "layer_norm_epsilon": 1e-06,
             "num_heads": 8,
-            "num_blocks": 6,
+            "num_layers": 6,
             "vocabulary_size": 32128,
         },
         "preprocessor_config": {},
@@ -45,9 +43,7 @@ backbone_presets = {
     },
     "t5_base": {
         "metadata": {
-            "description": (
-                "'Base' configuration of T5 (223 million parameters)."
-            ),
+            "description": ("12-layer T5 model with 223 million parameters."),
             "params": 222903552,
             "official_name": "T5-Base",
             "path": "t5",
@@ -61,7 +57,7 @@ backbone_presets = {
             "dropout": 0.1,
             "layer_norm_epsilon": 1e-06,
             "num_heads": 12,
-            "num_blocks": 12,
+            "num_layers": 12,
             "vocabulary_size": 32128,
         },
         "preprocessor_config": {},
@@ -74,9 +70,7 @@ backbone_presets = {
     },
     "t5_large": {
         "metadata": {
-            "description": (
-                "'Large' configuration of T5 (738 million parameters)."
-            ),
+            "description": ("24-layer T5 model with 738 million parameters."),
             "params": 737668096,
             "official_name": "T5-Large",
             "path": "t5",
@@ -90,7 +84,7 @@ backbone_presets = {
             "dropout": 0.1,
             "layer_norm_epsilon": 1e-06,
             "num_heads": 16,
-            "num_blocks": 24,
+            "num_layers": 24,
             "vocabulary_size": 32128,
         },
         "preprocessor_config": {},
@@ -103,9 +97,7 @@ backbone_presets = {
     },
     "t5_3b": {
         "metadata": {
-            "description": (
-                "'3B' configuration of T5 (2.85 billion parameters)."
-            ),
+            "description": "24-layer T5 model with 2.85 billion parameters.",
             "params": 2851598336,
             "official_name": "T5-3B",
             "path": "t5",
@@ -119,7 +111,7 @@ backbone_presets = {
             "dropout": 0.1,
             "layer_norm_epsilon": 1e-06,
             "num_heads": 32,
-            "num_blocks": 24,
+            "num_layers": 24,
             "vocabulary_size": 32128,
         },
         "preprocessor_config": {},
