@@ -5,9 +5,13 @@ on:
   pull_request:
   release:
     types: [created]
+  schedule:
+    - cron: '0 0 * * *'
+
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
 jobs:
   format:
     name: Check the code format
