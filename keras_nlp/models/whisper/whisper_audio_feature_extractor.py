@@ -14,12 +14,13 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.models.whisper.whisper_backbone import NUM_MELS
-
 try:
     import librosa
 except ImportError:
     librosa = None
+
+
+NUM_MELS = 80
 
 
 class WhisperAudioFeatureExtractor(keras.layers.Layer):
@@ -47,6 +48,12 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         chunk_length=30,
         **kwargs,
     ):
+        if librosa is None:
+            raise ImportError(
+                f"{self.__class__.__name__} requires the `librosa` "
+                "package. Please install it with `pip install librosa`."
+            )
+
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
             kwargs["dtype"] = tf.float32
