@@ -203,13 +203,13 @@ class BartPreprocessor(Preprocessor):
             encoder_inputs
         )
         encoder_inputs = [self.tokenizer(segment) for segment in encoder_inputs]
-        encoder_token_ids, _ = self.packer(encoder_inputs)
+        encoder_token_ids, _ = self.encoder_packer(encoder_inputs)
 
         decoder_inputs = convert_inputs_to_list_of_tensor_segments(
             decoder_inputs
         )
         decoder_inputs = [self.tokenizer(segment) for segment in decoder_inputs]
-        decoder_token_ids, _ = self.packer(decoder_inputs)
+        decoder_token_ids, _ = self.decoder_packer(decoder_inputs)
 
         x = {
             "encoder_token_ids": encoder_token_ids,
