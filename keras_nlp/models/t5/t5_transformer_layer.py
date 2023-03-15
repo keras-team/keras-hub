@@ -29,11 +29,13 @@ class T5TransformerLayer(keras.layers.Layer):
         activation,
         layer_norm_epsilon,
         num_heads,
+        use_gated_activation=False,
         use_relative_attention_bias=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.is_decoder = is_decoder
+        self.use_gated_activation = use_gated_activation
 
         self.self_attention = T5MultiHeadAttention(
             is_decoder,
@@ -65,6 +67,15 @@ class T5TransformerLayer(keras.layers.Layer):
                 mean=0, stddev=hidden_dim**-0.5
             ),
         )
+        if self.use_gated_activation:
+            self.gate_projector = keras.layers.Dense(
+                intermediate_dim,
+                use_bias=False,
+                name="gate_projector",
+                kernel_initializer=keras.initializers.RandomNormal(
+                    mean=0, stddev=hidden_dim**-0.5
+                ),
+            )
         self.output_projector = keras.layers.Dense(
             hidden_dim,
             use_bias=False,
@@ -112,7 +123,12 @@ class T5TransformerLayer(keras.layers.Layer):
 
         residual = x
         x = self.layer_norm(x)
-        x = self.input_projector(x)
+        if self.use_gated_activation:
+            hidden_activation = self.input_projector(x)
+            hidden_linear = self.gate_projector(hidden_states)
+            x = hidden_activation * hidden_linear
+        else:
+            x = self.input_projector(x)
         x = self.dropout_layer(x, training=training)
         x = self.output_projector(x)
         x = self.dropout_layer(x, training=training)

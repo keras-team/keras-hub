@@ -32,14 +32,15 @@ from keras_nlp.utils.python_utils import classproperty
 class T5Backbone(Backbone):
     def __init__(
         self,
+        num_layers,
+        num_heads,
         vocabulary_size,
         hidden_dim,
         intermediate_dim,
-        num_layers,
-        num_heads,
-        activation,
-        dropout,
-        layer_norm_epsilon,
+        dropout=0.1,
+        activation="relu",
+        use_gated_activation=False,
+        layer_norm_epsilon=1e-06,
         **kwargs,
     ):
         # Encoder inputs
@@ -88,6 +89,7 @@ class T5Backbone(Backbone):
                 activation=activation,
                 layer_norm_epsilon=layer_norm_epsilon,
                 num_heads=num_heads,
+                use_gated_activation=use_gated_activation,
                 use_relative_attention_bias=bool(i == 0),
                 name=f"transformer_encoder_layer_{i}",
             )(
@@ -131,6 +133,7 @@ class T5Backbone(Backbone):
                 activation=activation,
                 layer_norm_epsilon=layer_norm_epsilon,
                 num_heads=num_heads,
+                use_gated_activation=use_gated_activation,
                 use_relative_attention_bias=bool(i == 0),
                 name=f"transformer_decoder_layer_{i}",
             )(

@@ -23,6 +23,7 @@ backbone_presets = {
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md",
         },
         "config": {
+            "use_gated_activation": False,
             "activation": "relu",
             "intermediate_dim": 2048,
             "hidden_dim": 512,
@@ -49,6 +50,7 @@ backbone_presets = {
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md",
         },
         "config": {
+            "use_gated_activation": False,
             "activation": "relu",
             "intermediate_dim": 3072,
             "hidden_dim": 768,
@@ -75,6 +77,7 @@ backbone_presets = {
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md",
         },
         "config": {
+            "use_gated_activation": False,
             "activation": "relu",
             "intermediate_dim": 4096,
             "hidden_dim": 1024,
@@ -101,6 +104,7 @@ backbone_presets = {
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md",
         },
         "config": {
+            "use_gated_activation": False,
             "activation": "relu",
             "intermediate_dim": 16384,
             "hidden_dim": 1024,
