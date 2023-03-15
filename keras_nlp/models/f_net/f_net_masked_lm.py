@@ -139,7 +139,7 @@ class FNetMaskedLM(Task):
         self.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(2e-5),
-            metrics=keras.metrics.SparseCategoricalAccuracy(),
+            weighted_metrics=keras.metrics.SparseCategoricalAccuracy(),
             jit_compile=is_xla_compatible(self),
         )
 
