@@ -30,16 +30,64 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras_nlp_export("keras_nlp.models.T5Backbone")
 class T5Backbone(Backbone):
+    """T5 encoder-decoder backbone model.
+
+    T5 is a LLM pretrained on a mix of unsupervised and supervised tasks,
+    where each task is converted to a sequence-to-sequence format.
+    T5 works well on a variety of tasks out-of-the-box by prepending
+    various prefixex to the input sequence, e.g., for translation:
+    `"translate English to German: ..."`, for summarization:
+    `"summarize: ..."`.
+
+    T5 was introduced in
+    [Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer](https://arxiv.org/abs/1910.10683)
+
+    The default constructor gives a fully customizable, randomly initialized T5
+    model with any number of layers, heads, and embedding dimensions. To load
+    preset architectures and weights, use the `from_preset` constructor.
+
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind. The underlying model is provided by
+    Google Research under the Apache 2.0 license
+    ([here](https://github.com/google-research/text-to-text-transfer-transformer/blob/main/LICENSE)).
+
+    Args:
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of Transformer layers.
+        num_heads: int. The number of attention heads for each Transformer.
+            The hidden size must be divisible by the number of attention heads.
+        hidden_dim: int. The hidden size of the Transformer layers.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for each Transformer layer.
+        dropout: float. Dropout probability for the Transformer layers.
+        activation: activation function (or activation string name). The
+            activation to be used in the inner dense blocks of the
+            Transformer layers. Defaults to `"gelu"`. The original
+            T5 architecture used `"relu"`,
+            but the modern version uses `"gelu"`.
+        use_gated_activation: boolean. Whether to use activation gating in
+            the inner dense blocks of the Transformer layers.
+            Defaults to True. The original T5 architecture didn't use
+            gating, but the version does.
+        layer_norm_epsilon: Epsilon factor to be used in the
+            layer normalization layers in the Transformer layers.
+
+    Examples:
+
+    ```python
+    TODO
+    ```
+    """
     def __init__(
         self,
+        vocabulary_size,
         num_layers,
         num_heads,
-        vocabulary_size,
         hidden_dim,
         intermediate_dim,
         dropout=0.1,
-        activation="relu",
-        use_gated_activation=False,
+        activation="gelu",
+        use_gated_activation=True,
         layer_norm_epsilon=1e-06,
         **kwargs,
     ):

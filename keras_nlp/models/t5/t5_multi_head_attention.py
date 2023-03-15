@@ -103,8 +103,8 @@ class T5MultiHeadAttention(keras.layers.Layer):
         attended-to position. If bidirectional=False, then positive relative
         positions are invalid. We use smaller buckets for
         small absolute relative_position and larger buckets for larger absolute
-        relative_positions. All relative positions >=max_distance map to
-        the same bucket. All relative positions <=-max_distance map to
+        relative_positions. All relative positions >= max_distance map to
+        the same bucket. All relative positions <= -max_distance map to
         the same bucket. This should allow for more graceful generalization to
         longer sequences than the model has been trained on.
 

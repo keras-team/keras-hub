@@ -18,8 +18,6 @@ from keras_nlp.models.t5.t5_multi_head_attention import T5MultiHeadAttention
 
 
 class T5TransformerLayer(keras.layers.Layer):
-    # This layer is adapted from Hugging Face
-    # Ref: https://github.com/huggingface/transformers/blob/main/src/transformers/models/t5/modeling_tf_t5.py
     def __init__(
         self,
         is_decoder,
