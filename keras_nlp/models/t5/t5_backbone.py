@@ -22,6 +22,7 @@ from tensorflow import keras
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.transformer_layer_utils import compute_causal_mask
 from keras_nlp.models.backbone import Backbone
+from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.models.t5.t5_multi_head_attention import T5MultiHeadAttention
 from keras_nlp.models.t5.t5_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
@@ -205,24 +206,6 @@ class T5Backbone(Backbone):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-
-class T5LayerNorm(keras.layers.Layer):
-    def __init__(self, epsilon=1e-6, **kwargs):
-        super().__init__(**kwargs)
-        self.epsilon = epsilon
-
-    def build(self, input_shape):
-        self.weight = self.add_weight(
-            "weight", shape=(input_shape[-1],), initializer="ones"
-        )
-
-    def call(self, hidden_states):
-        variance = tf.math.reduce_mean(
-            tf.math.square(hidden_states), axis=-1, keepdims=True
-        )
-        hidden_states = hidden_states * tf.math.rsqrt(variance + self.epsilon)
-        return self.weight * hidden_states
 
 
 class T5DenseBlock(keras.layers.Layer):
