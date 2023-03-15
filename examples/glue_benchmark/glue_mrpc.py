@@ -13,6 +13,7 @@
 # limitations under the License.
 import inspect
 import os
+import time
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -169,6 +170,7 @@ def main(_):
     validation_ds = preprocess_data(
         dataset=validation_ds, preprocessor=preprocessor
     )
+    print("GLUE/MRPC Dataset Loaded!")
 
     lr = tf.keras.optimizers.schedules.PolynomialDecay(
         FLAGS.learning_rate,
@@ -184,7 +186,16 @@ def main(_):
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
     # Start training
+    print("Starting Training...")
+
+    st = time.time()
     model.fit(train_ds, validation_data=validation_ds, epochs=FLAGS.epochs)
+    et = time.time()
+
+    print("Training Finished!")
+    print(
+        f"Training took :: {(et-st):.4f} seconds, or {((et-st)/60):.2f} minutes, or {((et-st)/3600):.2f} hours!"
+    )
 
 
 if __name__ == "__main__":
