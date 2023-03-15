@@ -49,8 +49,7 @@ FLAGS = flags.FLAGS
 
 def load_data():
     """
-    Load GLUE dataset.
-    Load GLUE dataset, and convert the dictionary format to (features, label),
+    Load GLUE/MRPC dataset, and convert the dictionary format to (features, label),
     where features is a tuple of all input sentences.
     """
 
