@@ -16,6 +16,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -23,7 +24,7 @@ from tensorflow import keras
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 
 
-class RobertaTest(tf.test.TestCase, parameterized.TestCase):
+class RobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.model = RobertaBackbone(
             vocabulary_size=1000,
@@ -99,3 +100,29 @@ class RobertaTest(tf.test.TestCase, parameterized.TestCase):
         # Check that output matches.
         restored_output = restored_model(self.input_batch)
         self.assertAllClose(model_output, restored_output)
+
+
+@pytest.mark.tpu
+@pytest.mark.usefixtures("tpu_test_class")
+class RobertaBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+    def setUp(self):
+        with self.tpu_strategy.scope():
+            self.model = RobertaBackbone(
+                vocabulary_size=1000,
+                num_layers=2,
+                num_heads=2,
+                hidden_dim=64,
+                intermediate_dim=128,
+                max_sequence_length=128,
+            )
+        self.input_batch = {
+            "token_ids": tf.ones((8, 128), dtype="int32"),
+            "padding_mask": tf.ones((8, 128), dtype="int32"),
+        }
+        self.input_dataset = tf.data.Dataset.from_tensor_slices(
+            self.input_batch
+        ).batch(2)
+
+    def test_predict(self):
+        self.model.compile()
+        self.model.predict(self.input_dataset)
