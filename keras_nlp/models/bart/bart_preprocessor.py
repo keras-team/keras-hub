@@ -15,6 +15,8 @@
 
 import copy
 
+from absl import logging
+
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.bart.bart_presets import backbone_presets
@@ -151,35 +153,26 @@ class BartPreprocessor(Preprocessor):
     def __init__(
         self,
         tokenizer,
-        encoder_sequence_length=1024,
-        decoder_sequence_length=1024,
+        sequence_length=1024,
         truncate="round_robin",
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
-        self.encoder_packer = MultiSegmentPacker(
+        self.packer = MultiSegmentPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
             pad_value=self.tokenizer.pad_token_id,
             truncate=truncate,
-            sequence_length=encoder_sequence_length,
-        )
-        self.decoder_packer = MultiSegmentPacker(
-            start_value=self.tokenizer.start_token_id,
-            end_value=self.tokenizer.end_token_id,
-            pad_value=self.tokenizer.pad_token_id,
-            truncate=truncate,
-            sequence_length=decoder_sequence_length,
+            sequence_length=sequence_length,
         )
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "encoder_sequence_length": self.decoder_packer.sequence_length,
-                "decoder_sequence_length": self.decoder_packer.sequence_length,
-                "truncate": self.encoder_packer.truncate,
+                "sequence_length": self.packer.sequence_length,
+                "truncate": self.packer.truncate,
             }
         )
         return config
@@ -192,9 +185,9 @@ class BartPreprocessor(Preprocessor):
             )
 
         if y is not None:
-            raise ValueError(
-                "`BartPreprocessor` does not support `y` as an input. `y` is "
-                "calculated by shifting `decoder_inputs` to the left by one."
+            logging.warning(
+                "You are explicitly passing `y` to `BartPreprocessor`. However, "
+                "`y` is inferred from decoder inputs, and will be ignored."
             )
 
         encoder_inputs, decoder_inputs = x
@@ -203,13 +196,13 @@ class BartPreprocessor(Preprocessor):
             encoder_inputs
         )
         encoder_inputs = [self.tokenizer(segment) for segment in encoder_inputs]
-        encoder_token_ids, _ = self.encoder_packer(encoder_inputs)
+        encoder_token_ids, _ = self.packer(encoder_inputs)
 
         decoder_inputs = convert_inputs_to_list_of_tensor_segments(
             decoder_inputs
         )
         decoder_inputs = [self.tokenizer(segment) for segment in decoder_inputs]
-        decoder_token_ids, _ = self.decoder_packer(decoder_inputs)
+        decoder_token_ids, _ = self.packer(decoder_inputs)
 
         x = {
             "encoder_token_ids": encoder_token_ids,
@@ -219,7 +212,12 @@ class BartPreprocessor(Preprocessor):
             "decoder_padding_mask": decoder_token_ids
             != self.tokenizer.pad_token_id,
         }
-        y = decoder_token_ids[:, 1:]
+
+        # Get the labels by shifting the decoder inputs one place to the left.
+        if decoder_token_ids.shape.rank == 1:
+            y = decoder_token_ids[1:]
+        else:
+            y = decoder_token_ids[:, 1:]
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty
