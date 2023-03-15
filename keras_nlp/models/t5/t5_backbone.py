@@ -23,8 +23,8 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.transformer_layer_utils import compute_causal_mask
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
-from keras_nlp.models.t5.t5_multi_head_attention import T5MultiHeadAttention
 from keras_nlp.models.t5.t5_presets import backbone_presets
+from keras_nlp.models.t5.t5_transformer_layer import T5TransformerLayer
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -80,7 +80,7 @@ class T5Backbone(Backbone):
 
         position_bias = None
         for i in range(num_layers):
-            layer_outputs = T5TransformerDecoder(
+            x, position_bias = T5TransformerLayer(
                 is_decoder=False,
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
@@ -95,8 +95,6 @@ class T5Backbone(Backbone):
                 attention_mask=encoder_attention_mask,
                 position_bias=position_bias,
             )
-            x = layer_outputs["hidden_states"]
-            position_bias = layer_outputs["position_bias"]
 
         x = T5LayerNorm(
             epsilon=layer_norm_epsilon,
@@ -124,9 +122,8 @@ class T5Backbone(Backbone):
         decoder_attention_mask = causal_mask & decoder_attention_mask
 
         position_bias = None
-        encoder_decoder_position_bias = None
         for i in range(num_layers):
-            layer_outputs = T5TransformerDecoder(
+            x, position_bias = T5TransformerLayer(
                 is_decoder=True,
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
@@ -142,13 +139,7 @@ class T5Backbone(Backbone):
                 position_bias=position_bias,
                 encoder_hidden_states=encoder_output,
                 encoder_attention_mask=encoder_attention_mask,
-                encoder_decoder_position_bias=encoder_decoder_position_bias,
             )
-            x = layer_outputs["hidden_states"]
-            position_bias = layer_outputs["position_bias"]
-            encoder_decoder_position_bias = layer_outputs[
-                "encoder_decoder_position_bias"
-            ]
 
         x = T5LayerNorm(
             epsilon=layer_norm_epsilon,
@@ -206,173 +197,3 @@ class T5Backbone(Backbone):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-
-class T5DenseBlock(keras.layers.Layer):
-    def __init__(
-        self,
-        hidden_dim,
-        intermediate_dim,
-        dropout,
-        activation,
-        layer_norm_epsilon,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-
-        self.input_projector = keras.layers.Dense(
-            intermediate_dim,
-            use_bias=False,
-            name="input_projector",
-            activation=keras.activations.get(activation),
-            kernel_initializer=keras.initializers.RandomNormal(
-                mean=0, stddev=hidden_dim**-0.5
-            ),
-        )
-        self.output_projector = keras.layers.Dense(
-            hidden_dim,
-            use_bias=False,
-            name="output_projector",
-            kernel_initializer=keras.initializers.RandomNormal(
-                mean=0, stddev=intermediate_dim**-0.5
-            ),
-        )
-        self.layer_norm = T5LayerNorm(epsilon=layer_norm_epsilon)
-        self.dropout_layer = keras.layers.Dropout(dropout)
-
-    def call(self, inputs, training=False):
-        hidden_states = self.layer_norm(inputs)
-        hidden_states = self.input_projector(hidden_states)
-        hidden_states = self.dropout_layer(hidden_states, training=training)
-        hidden_states = self.output_projector(hidden_states)
-        return inputs + self.dropout_layer(hidden_states, training=training)
-
-
-class T5AttentionBlock(keras.layers.Layer):
-    def __init__(
-        self,
-        is_decoder,
-        hidden_dim,
-        num_heads,
-        dropout,
-        layer_norm_epsilon,
-        use_relative_attention_bias=False,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.attention = T5MultiHeadAttention(
-            is_decoder,
-            hidden_dim,
-            num_heads,
-            dropout,
-            use_relative_attention_bias=use_relative_attention_bias,
-        )
-        self.layer_norm = T5LayerNorm(epsilon=layer_norm_epsilon)
-        self.dropout_layer = keras.layers.Dropout(dropout)
-
-    def call(
-        self,
-        hidden_states,
-        key_value_states=None,
-        attention_mask=None,
-        position_bias=None,
-        layer_head_mask=None,
-        past_key_value=None,
-        query_length=None,
-        training=False,
-    ):
-        normed_hidden_states = self.layer_norm(hidden_states)
-        attention_output, position_bias = self.attention(
-            normed_hidden_states,
-            mask=attention_mask,
-            key_value_states=key_value_states,
-            position_bias=position_bias,
-            layer_head_mask=layer_head_mask,
-            past_key_value=past_key_value,
-            query_length=query_length,
-            training=training,
-        )
-        hidden_states = hidden_states + self.dropout_layer(
-            attention_output, training=training
-        )
-        return (hidden_states, position_bias)
-
-
-class T5TransformerDecoder(keras.layers.Layer):
-    # This layer is adapted from Hugging Face
-    # Ref: https://github.com/huggingface/transformers/blob/main/src/transformers/models/t5/modeling_tf_t5.py
-    def __init__(
-        self,
-        is_decoder,
-        hidden_dim,
-        intermediate_dim,
-        dropout,
-        activation,
-        layer_norm_epsilon,
-        num_heads,
-        use_relative_attention_bias=False,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.is_decoder = is_decoder
-
-        self.self_attention = T5AttentionBlock(
-            is_decoder,
-            hidden_dim,
-            num_heads,
-            dropout,
-            layer_norm_epsilon,
-            use_relative_attention_bias=use_relative_attention_bias,
-        )
-        if self.is_decoder:
-            self.cross_attention = T5AttentionBlock(
-                is_decoder,
-                hidden_dim,
-                num_heads,
-                dropout,
-                layer_norm_epsilon,
-            )
-        self.dense_block = T5DenseBlock(
-            hidden_dim,
-            intermediate_dim,
-            dropout,
-            activation,
-            layer_norm_epsilon,
-        )
-
-    def call(
-        self,
-        hidden_states,
-        attention_mask=None,
-        position_bias=None,
-        encoder_hidden_states=None,
-        encoder_attention_mask=None,
-        encoder_decoder_position_bias=None,
-        layer_head_mask=None,
-        training=False,
-    ):
-        hidden_states, position_bias = self.self_attention(
-            hidden_states,
-            attention_mask=attention_mask,
-            position_bias=position_bias,
-            layer_head_mask=layer_head_mask,
-            training=training,
-        )
-
-        encoder_decoder_position_bias = None
-        if self.is_decoder and encoder_hidden_states is not None:
-            hidden_states, encoder_decoder_position_bias = self.cross_attention(
-                hidden_states,
-                key_value_states=encoder_hidden_states,
-                attention_mask=encoder_attention_mask,
-                position_bias=encoder_decoder_position_bias,
-                query_length=None,
-                training=training,
-            )
-
-        hidden_states = self.dense_block(hidden_states, training=training)
-        return {
-            "hidden_states": hidden_states,
-            "position_bias": position_bias,
-            "encoder_decoder_position_bias": encoder_decoder_position_bias,
-        }
