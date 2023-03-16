@@ -79,6 +79,9 @@ class BertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call_masked_lm(self):
         self.masked_lm(self.preprocessed_batch)
 
+    def test_bert_masked_lm_fit_default_compile(self):
+        self.masked_lm.fit(self.raw_dataset)
+
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
