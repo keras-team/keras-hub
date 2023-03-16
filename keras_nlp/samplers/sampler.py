@@ -176,8 +176,8 @@ class Sampler:
     def _pad_prompt(self, prompt, max_length):
         """Pad prompt to `max_length`."""
         mask = tf.ones_like(prompt, dtype=tf.bool)
-        mask = mask.to_tensor(shape=(None, max_length))
-        prompt = prompt.to_tensor(shape=(None, max_length))
+        mask = mask.to_tensor(shape=tf.stack([tf.constant(-1, dtype=tf.int32), tf.cast(max_length, dtype=tf.int32)], axis=0))
+        prompt = prompt.to_tensor(shape=tf.stack([tf.constant(-1, dtype=tf.int32), tf.cast(max_length, dtype=tf.int32)], axis=0))
         return prompt, mask
 
     def _mask_tokens_after_end_token(
@@ -221,6 +221,8 @@ class Sampler:
             prompt = tf.RaggedTensor.from_tensor(prompt[tf.newaxis, :])
 
         shortest_prompt_len = tf.reduce_min(prompt.row_lengths())
+        if isinstance(max_length, tf.Tensor):
+            max_length = tf.cast(max_length, dtype=shortest_prompt_len.dtype)
         # Pad prompt to be a dense Tensor of shape [batch_size, max_length].
         # This step is required for XLA compatibility because XLA requires a
         # static shape, which means we cannot concatenate generated token to

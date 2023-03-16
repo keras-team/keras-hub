@@ -320,7 +320,9 @@ class GPT2CausalLM(Task):
         token_ids = prompt
         if prompt.shape.rank == 1:
             token_ids = tf.RaggedTensor.from_tensor(prompt[tf.newaxis, :])
-        token_ids = token_ids.to_tensor(shape=(None, max_length))
+        token_ids = token_ids.to_tensor(
+            shape=tf.stack([tf.constant(-1, dtype=tf.int32), tf.cast(max_length, dtype=tf.int32)], axis=0)
+        )
         # Pass a padding mask of all ones when seeing the cache. The mask will
         # not affect cached key/values for input tokens we care about.
         padding_mask = tf.ones_like(token_ids, dtype=tf.bool)
