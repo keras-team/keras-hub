@@ -30,10 +30,16 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
     This layer takes in a batch of audio tensors, and computes the log-mel
     spectrogram features for each audio tensor.
 
+    The input audio tensor can either be of shape `(length_of_audio,)` or
+    `(batch_size, length_of_audio)`. The output is a tensor of shape
+    `(batch_size, num_frames, num_mels)`, where `num_frames` is
+    `length_of_audio / stride`.
+
     Args:
         sample_rate: int, defaults to 16000. The sample rate of the audio.
-        n_fft: int, defaults to 400. The size of the Fourier Transform in STFT.
-        hop_length: int, defaults to 160. The distance between neighboring
+        num_fft_bins: int, defaults to 400. The size of the Fourier Transform in
+            STFT.
+        stride: int, defaults to 160. The distance between neighboring
             sliding window frames while computing STFT.
         chunk_length: int, defaults to 30. The length of each audio chunk in
             seconds. The input audio tensor will be padded/trimmed to
@@ -43,8 +49,8 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
     def __init__(
         self,
         sample_rate=16000,
-        n_fft=400,
-        hop_length=160,
+        num_fft_bins=400,
+        stride=160,
         chunk_length=30,
         **kwargs,
     ):
@@ -67,17 +73,17 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         super().__init__(**kwargs)
 
         self.sample_rate = sample_rate
-        self.n_fft = n_fft
-        self.hop_length = hop_length
+        self.num_fft_bins = num_fft_bins
+        self.stride = stride
         self.chunk_length = chunk_length
         self.n_samples = self.sample_rate * self.chunk_length
 
         # After transposition, `self.mel_filters`'s shape is
-        # `(n_fft // 2 + 1, NUM_MELS).`
+        # `(num_fft_bins // 2 + 1, NUM_MELS).`
         self.mel_filters = tf.constant(
             librosa.filters.mel(
                 sr=sample_rate,
-                n_fft=n_fft,
+                n_fft=num_fft_bins,
                 n_mels=NUM_MELS,
             ),
             dtype=self.dtype,
@@ -89,16 +95,16 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         # internally.
         audio = tf.pad(
             audio,
-            paddings=[[0, 0], [self.n_fft // 2, self.n_fft // 2]],
+            paddings=[[0, 0], [self.num_fft_bins // 2, self.num_fft_bins // 2]],
             mode="REFLECT",
         )
 
         # Compute the mel spectrogram.
         stft = tf.signal.stft(
             audio,
-            frame_length=self.n_fft,
-            frame_step=self.hop_length,
-            fft_length=self.n_fft,
+            frame_length=self.num_fft_bins,
+            frame_step=self.stride,
+            fft_length=self.num_fft_bins,
         )
         magnitudes = tf.square(tf.abs(stft[:, :-1, :]))
 
@@ -164,8 +170,8 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         config.update(
             {
                 "sample_rate": self.sample_rate,
-                "n_fft": self.n_fft,
-                "hop_length": self.hop_length,
+                "num_fft_bins": self.num_fft_bins,
+                "stride": self.stride,
                 "chunk_length": self.chunk_length,
             }
         )
