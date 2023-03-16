@@ -35,7 +35,7 @@ class BartPreprocessor(Preprocessor):
 
     This preprocessing layer will do three things:
 
-     - Tokenize any number of input segments using the `tokenizer`.
+     - Tokenize both encoder inputs and decoder inputs using the `tokenizer`.
      - Add the appropriate special tokens - `"<s>"`, `"</s>"` and `"<pad>"`.
      - Construct a dictionary with keys `"encoder_token_ids"`,
        `"encoder_padding_mask"`, `"decoder_token_ids"`, `"decoder_padding_mask"`
