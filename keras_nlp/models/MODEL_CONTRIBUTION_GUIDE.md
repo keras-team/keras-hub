@@ -8,7 +8,8 @@ In this guide, we will walk you through the steps one needs to take in order to 
 a backbone model. For illustration purposes, let's assume that you want to
 contribute the DistilBERT model. Before we dive in, we encourage you to go through
 [our guide](https://keras.io/guides/keras_nlp/getting_started/) on getting started
-with KerasNLP to learn more about the high-level symbols we have.
+with KerasNLP to learn more about the high-level symbols we have. If you are a
+first-time contributor, please go through our [contribution guide](https://github.com/keras-team/keras-nlp/blob/master/CONTRIBUTING.md).
 
 
 ## How is a Backbone model structured in KerasNLP?
@@ -18,7 +19,7 @@ around by a class to implement our models.
 
 A model is typically split into three/four sections. We would recommend you to
 compare this side-by-side with the
-[`keras_nlp.layers.DistilBERTBackbone` source code](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_backbone.py#L108-L114)!
+[`keras_nlp.layers.DistilBERTBackbone` source code](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_backbone.py)!
 
 
 ### Inputs to the model
@@ -47,7 +48,7 @@ Standard layers used: `keras_nlp.layers.TransformerDecoder`.
 <br/>
 
 The standard layers provided in Keras and KerasNLP are generally enough for
-99% of the usecases and it is recommended to do a thorough search
+most of the usecases and it is recommended to do a thorough search
 [here](https://keras.io/api/layers/) and [here](https://keras.io/api/keras_nlp/layers/).
 However, sometimes, models have small tweaks/paradigm changes in their architecture.
 This is when things might slightly get complicated.
@@ -55,7 +56,7 @@ This is when things might slightly get complicated.
 If the model introduces a paradigm shift, such as using relative attention instead
 of vanilla attention, the contributor will have to implement complete custom layers. A case
 in point is `keras_nlp.models.DebertaV3Backbone` where we had to [implement layers
-from scratch](https://github.com/keras-team/keras-nlp/tree/v0.4.1/keras_nlp/models/distil_bert).
+from scratch](https://github.com/keras-team/keras-nlp/tree/master/keras_nlp/models/deberta_v3).
 
 On the other hand, if the model has a small tweak, something simpler can be done.
 For instance, in the Whisper model, the self-attention and cross-attention mechanism
@@ -63,6 +64,11 @@ is exactly the same as vanilla attention, with the exception that the key projec
 layer does not have a bias term. In this case, we can inherit the custom layer
 from one of the standard layers and make minor modifications. See [this PR](https://github.com/keras-team/keras-nlp/pull/801/files#diff-8533ae3a7755c0dbe95ccbb71f85c677297f687bf3884fadefc64f1d0fdce51aR22) for
 more details.
+
+Occasionally, if the model requires non-standard layers, we may ask you to first
+contribute an example on keras.io, or demonstrate the working in a Colab notebook.
+This will help us scope out the contribution, and possibly propose suggestions
+on how to implement the model.
 
 ## Steps
 
@@ -73,16 +79,16 @@ To make a complete model contribution, three PRs have to be opened:
 3) "Add `DistilBertBackbone` Presets"
 
 
-### Open an issue/Claim an open issue
+### Open an issue/Find an open issue
 Before getting started with the code, it's important to check if there are any
 [open issues](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3Amodel-contribution)
-related to the model you wish to contribute. If there aren't any open issues,
-you can create one by clicking the "New Issue" button on our repository page. If
-there is an open issue, you can claim it by commenting on the issue and letting
-us know that you're interested in working on it. This helps us keep track of who
-is working on what and avoid duplicated effort.
+related to the model you wish to contribute. If there is an open issue, you can
+claim it by commenting on the issue and letting us know that you're interested
+in working on it. This helps us keep track of who is working on what and avoid
+duplicated effort.
 
-In case you open a new issue, please follow this template:
+If there aren't any open issues, you can create one by clicking the "New Issue"
+button on our repository page. Please follow this template:
 
 -----
 I would like to contribute the DistilBERT model. The DistilBERT model is a more
@@ -110,12 +116,6 @@ workings of the model at the time of opening the issue. But it is appreciated if
 you can furnish as much detail as possible to enable us to help you with the
 contribution! 🙂
 
-Occasionally, if the model requires, say a variant of the original self-attention,
-or other non-standard layers, we may ask you to first contribute an example on
-keras.io, or demonstrate the working in a Colab notebook. This will help us scope
-out the contribution, and possibly propose suggestions on how to implement the
-model.
-
 
 ### Write down the `DistilBertBackbone` class!
 Once you are done identifying all the required layers, you should write down the
@@ -137,11 +137,11 @@ The preferred way of doing this is to add a Colab link in the PR description, wh
 A sample Colab for DistilBERT is given [here](https://colab.research.google.com/drive/1SeZWJorKWmwWJax8ORSdxKrxE25BfhHa?usp=sharing).
 
 It is okay if you demonstrate it for one preset at this stage; you can do the conversion
-for the other presets when you officially add presets to the library in a later stage.
+for the other presets when you officially add presets to the library at a later stage.
 
 It is essential to add units tests. These unit tests are basic and mostly check
 whether the forward pass goes through successfully, whether the model can be saved
-and loaded correctly, etc. Check [this file](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_backbone_test.py) for more details.
+and loaded correctly, etc. Check [this file](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_backbone_test.py) for more details.
 
 ### Add tokenizer and preprocessor
 Most text models nowadays use subword tokenizers such as WordPiece, SentencePiece
@@ -150,13 +150,13 @@ the model; the tokenizer class inherits from one of these base tokenizer classes
 
 For example, DistilBERT uses the WordPiece tokenizer. So, we can introduce a new
 class, `DistilBertTokenizer`, which inherits from `keras_nlp.tokenizers.WordPieceTokenizer`
-as shown [here](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_tokenizer.py#L26).
+as shown [here](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_tokenizer.py#L26).
 All the underlying actual tokenization will be taken care of by the superclass.
 
 The important thing here is adding "special tokens". Most models have
 special tokens such as beginning-of-sequence token, end-of-sequence token, mask token,
 pad token, etc. These have to be
-[added as member attributes](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_tokenizer.py#L91-L105)
+[added as member attributes](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_tokenizer.py#L91-L105)
 to the tokenizer class. These member attributes are then accessed by the preprocessor class.
 
 For a full list of the tokenizers KerasNLP offers, please visit [this link](https://keras.io/api/keras_nlp/tokenizers/)
@@ -166,17 +166,17 @@ The preprocessor class is responsible for making the inputs suitable for consump
 by the model - it packs multiple inputs together, i.e., given multiple input texts,
 it will add appropriate special tokens, pad the inputs and return the dictionary
 in the form expected by the model. For more details, check out
-[`keras_nlp.models.DistilBertPreprocessor`](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_preprocessor.py).
+[`keras_nlp.models.DistilBertPreprocessor`](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_preprocessor.py).
 
 The last step here is to add unit tests for both the tokenizer and the preprocessor.
 A dummy vocabulary is created, and the output of both these layers is verified
 including tokenization, detokenization, etc. For more details, check out the
-[tests for DistilBertTokenizer](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_tokenizer_test.py) and
-[tests for DistilBertPreprocessor](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_preprocessor_test.py). 
+[tests for DistilBertTokenizer](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_tokenizer_test.py) and
+[tests for DistilBertPreprocessor](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_preprocessor_test.py). 
 
 ### Add presets
 Once the two PR have been merged, you can open a PR for adding presets. For every
-model, we have [a separate file where we mention our preset configurations](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_presets.py).
+model, we have [a separate file where we mention our preset configurations](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_presets.py).
 This preset configuration has model-specific arguments such as number of layers,
 number of attention heads; preprocessor-specific arguments such as whether we want to
 lowercase the input text; checkpoint and vocabulary file URLs, etc.
@@ -186,15 +186,15 @@ vocabulary files. These files will then be uploaded to GCP by us!
 After wrapping up the preset configuration file, you need to
 add the `from_preset` function to all three classes, i.e., `DistilBertBackbone`,
 `DistilBertTokenizer` and `DistilBertPreprocessor`,. Here is an
-[example](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_backbone.py#L187-L189).
+[example](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_backbone.py#L187-L189).
 
 The testing for presets is divided into two:
-["large"](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_presets_test.py#L32-L33)
-and ["extra large"](https://github.com/keras-team/keras-nlp/blob/v0.4.1/keras_nlp/models/distil_bert/distil_bert_presets_test.py#L123-L124).
+["large"](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_presets_test.py#L32-L33)
+and ["extra large"](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_presets_test.py#L123-L124).
 For "large" tests, we pick the smallest preset (in terms of number of parameters)
 and verify whether the output is correct. For "extra large tests", we loop over
-all the presets and just check whether all three - backbone, tokenizer and preprocessor
-can be called without any error.
+all the presets and just check whether all three - backbone, tokenizer and
+preprocessor - can be called without any error.
 
 ## Conclusion
 
