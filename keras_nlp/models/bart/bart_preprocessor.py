@@ -38,10 +38,10 @@ class BartPreprocessor(Preprocessor):
     This preprocessing layer will do three things:
 
      - Tokenize any number of input segments using the `tokenizer`.
-     - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
-       with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
-     - Construct a dictionary with keys `"token_ids"`, `"segment_ids"`,
-       `"padding_mask"`, that can be passed directly to a BERT model.
+     - Add the appropriate special tokens - `"<s>"`, `"</s>"` and `"<pad>"`.
+     - Construct a dictionary with keys `"encoder_token_ids"`,
+       `"encoder_padding_mask"`, `"decoder_token_ids"`, `"decoder_padding_mask"`
+       that can be passed directly to a BART model.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
@@ -49,16 +49,9 @@ class BartPreprocessor(Preprocessor):
 
     The call method of this layer accepts three arguments, `x`, `y`, and
     `sample_weight`. `x` can be a python string or tensor representing a single
-    segment, a list of python strings representing a batch of single segments,
-    or a list of tensors representing multiple segments to be packed together.
+    segment or a list of python strings representing a batch of single segments.
     `y` and `sample_weight` are both optional, can have any format, and will be
     passed through unaltered.
-
-    Special care should be taken when using `tf.data` to map over an unlabeled
-    tuple of string segments. `tf.data.Dataset.map` will unpack this tuple
-    directly into the call arguments of this layer, rather than forward all
-    argument to `x`. To handle this case, it is recommended to  explicitly call
-    the layer, e.g. `ds.map(lambda seg1, seg2: preprocessor(x=(seg1, seg2)))`.
 
     Args:
         tokenizer: A `keras_nlp.models.BartTokenizer` instance.
@@ -178,7 +171,7 @@ class BartPreprocessor(Preprocessor):
         return config
 
     def call(self, x, y=None, sample_weight=None):
-        if not isinstance(x, tuple) or len(x) != 2:
+        if not isinstance(x, (tuple, list)) or len(x) != 2:
             raise ValueError(
                 "The input to `BartPreprocessor` must be a tuple "
                 "`(encoder_inputs, decoder_inputs)`."
@@ -193,13 +186,13 @@ class BartPreprocessor(Preprocessor):
         encoder_inputs, decoder_inputs = x
 
         encoder_inputs = convert_inputs_to_list_of_tensor_segments(
-            encoder_inputs
+            encoder_inputs, support_multiple_segments=False
         )
         encoder_inputs = [self.tokenizer(segment) for segment in encoder_inputs]
         encoder_token_ids, _ = self.packer(encoder_inputs)
 
         decoder_inputs = convert_inputs_to_list_of_tensor_segments(
-            decoder_inputs
+            decoder_inputs, support_multiple_segments=False
         )
         decoder_inputs = [self.tokenizer(segment) for segment in decoder_inputs]
         decoder_token_ids, _ = self.packer(decoder_inputs)
