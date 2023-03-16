@@ -28,8 +28,6 @@ from keras_nlp.utils.keras_utils import (
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 
-PRESET_NAMES = ", ".join(list(backbone_presets))
-
 
 @keras_nlp_export("keras_nlp.models.BartPreprocessor")
 class BartPreprocessor(Preprocessor):
@@ -228,4 +226,4 @@ class BartPreprocessor(Preprocessor):
 
     @classproperty
     def presets(cls):
-        return copy.deepcopy({**backbone_presets})
+        return copy.deepcopy(backbone_presets)
