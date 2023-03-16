@@ -32,8 +32,8 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
 
     The input audio tensor can either be of shape `(length_of_audio,)` or
     `(batch_size, length_of_audio)`. The output is a tensor of shape
-    `(batch_size, num_frames, num_mels)`, where `num_frames` is
-    `length_of_audio / stride`.
+    `(batch_size, num_frames, NUM_MELS)`, where `num_frames` is
+    `length_of_audio / stride` and `NUM_MELS` is 80.
 
     Args:
         sample_rate: int, defaults to 16000. The sample rate of the audio.
