@@ -91,7 +91,7 @@ class GPT2CausalLM(Task):
         "I don't listen to music while coding.",
         "But I watch youtube while coding!",
     ]
-    ds = tf.data.Dataset.from_tensor_slices(features)
+    ds = tf.data.Dataset.from_tensor_slices(features).batch(2)
 
     # Create a `GPT2CausalLM` and fit your data.
     gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset(
@@ -100,8 +100,6 @@ class GPT2CausalLM(Task):
     gpt2_lm.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
     )
-
-    ds = ds.batch(2)
     gpt2_lm.fit(ds)
     ```
 
