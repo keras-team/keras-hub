@@ -97,6 +97,10 @@ recommend using `conda` to install tensorflow dependencies (such as CUDA), and
 `pip` to install python packages from PyPI. The exact method will depend on your
 OS.
 
+**Note**: Please be careful not to use the `tensorflow` pre-packaged with conda,
+which is incompatible with `tensorflow-text` on PyPi, and follow the
+instructions below.
+
 ### Linux (recommended)
 
 To setup a complete environment with TensorFlow, a local install of keras-nlp,
