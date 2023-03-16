@@ -100,7 +100,9 @@ class GPT2CausalLM(Task):
     gpt2_lm.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
     )
-    gpt2_lm.fit(ds, batch_size=2)
+
+    ds = ds.batch(2)
+    gpt2_lm.fit(ds)
     ```
 
     Load a pretrained `GPT2CausalLM` with custom preprocessor, and predict on
