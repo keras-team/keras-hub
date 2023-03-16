@@ -48,10 +48,13 @@ class BartPreprocessor(Preprocessor):
     `keras.Model.fit`.
 
     The call method of this layer accepts three arguments, `x`, `y`, and
-    `sample_weight`. `x` can be a python string or tensor representing a single
-    segment or a list of python strings representing a batch of single segments.
-    `y` and `sample_weight` are both optional, can have any format, and will be
-    passed through unaltered.
+    `sample_weight`. `x` should be python dictionary, having "encoder_inputs"
+    and "decoder_inputs" as its keys. Each value in the dictionary can be a
+    python string or tensor representing a single segment or a list of python
+    strings representing a batch of single segments. Any value passed to `y`
+    will be ignored; `y` is inferred internally by shifting `x["decoder_inputs"]`
+    to the left by one. `sample_weight` is optional, can have any format, and
+    will be passed through unaltered.
 
     Args:
         tokenizer: A `keras_nlp.models.BartTokenizer` instance.
@@ -70,76 +73,71 @@ class BartPreprocessor(Preprocessor):
     Examples:
     ```python
     # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.BartPreprocessor.from_preset("bert_base_en_uncased")
+    preprocessor = keras_nlp.models.BartPreprocessor.from_preset("bart_base_en")
 
     # Tokenize and pack a single sentence.
-    sentence = tf.constant("The quick brown fox jumped.")
-    preprocessor(sentence)
+    inputs = {
+        "encoder_inputs": "The fox was sleeping.",
+        "decoder_inputs": "The fox was awake."
+    }
+    preprocessor(inputs)
     # Same output.
-    preprocessor("The quick brown fox jumped.")
+    inputs = {
+        "encoder_inputs": tf.constant("The fox was sleeping."),
+        "decoder_inputs": tf.constant("The fox was awake.")
+    }
+    preprocessor(inputs)
 
     # Tokenize and a batch of single sentences.
-    sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    preprocessor(sentences)
+    inputs = {
+        "encoder_inputs": ["The fox was sleeping.", "The lion was quiet."],
+        "decoder_inputs": ["The fox was awake.", "The lion was roaring."]
+    }
+    preprocessor(inputs)
     # Same output.
-    preprocessor(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-
-    # Tokenize and pack a sentence pair.
-    first_sentence = tf.constant("The quick brown fox jumped.")
-    second_sentence = tf.constant("The fox tripped.")
-    preprocessor((first_sentence, second_sentence))
+    inputs = {
+        "encoder_inputs": tf.constant(
+            ["The fox was sleeping.", "The lion was quiet."]
+        ),
+        "decoder_inputs": tf.constant(
+            ["The fox was awake.", "The lion was roaring."]
+        )
+    }
+    preprocessor(inputs)
 
     # Map a dataset to preprocess a single sentence.
-    features = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    labels = tf.constant([0, 1])
-    ds = tf.data.Dataset.from_tensor_slices((features, labels))
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map a dataset to preprocess sentence pairs.
-    first_sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    second_sentences = tf.constant(
-        ["The fox tripped.", "Oh look, a whale."]
-    )
-    labels = tf.constant([1, 1])
-    ds = tf.data.Dataset.from_tensor_slices(
-        (
-            (first_sentences, second_sentences), labels
+    features = {
+        "encoder_inputs": tf.constant(
+            ["The fox was sleeping.", "The lion was quiet."]
+        ),
+        "decoder_inputs": tf.constant(
+            ["The fox was awake.", "The lion was roaring."]
         )
-    )
+    }
+    ds = tf.data.Dataset.from_tensor_slices(features)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map a dataset to preprocess unlabeled sentence pairs.
-    first_sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    second_sentences = tf.constant(
-        ["The fox tripped.", "Oh look, a whale."]
-    )
-    ds = tf.data.Dataset.from_tensor_slices((first_sentences, second_sentences))
-    # Watch out for tf.data's default unpacking of tuples here!
-    # Best to invoke the `preprocessor` directly in this case.
-    ds = ds.map(
-        lambda s1, s2: preprocessor(x=(s1, s2)),
-        num_parallel_calls=tf.data.AUTOTUNE,
-    )
 
     # Alternatively, you can create a preprocessor from your own vocabulary.
-    # The usage is exactly the same as shown above.
-    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]"]
-    vocab += ["The", "qu", "##ick", "br", "##own", "fox", "tripped"]
-    vocab += ["Call", "me", "Ish", "##mael", "."]
-    vocab += ["Oh", "look", "a", "whale"]
-    vocab += ["I", "forgot", "my", "home", "##work"]
-    tokenizer = keras_nlp.models.BartTokenizer(vocabulary=vocab)
-    preprocessor = keras_nlp.models.BartPreprocessor(tokenizer)
+    # The usage is exactly the same as above.
+    vocab = {
+        "<s>": 0,
+        "<pad>": 1,
+        "</s>": 2,
+        "Ġafter": 5,
+        "noon": 6,
+        "Ġsun": 7,
+    }
+    merges = ["Ġ a", "Ġ s", "Ġ n", "e r", "n o", "o n", "Ġs u", "Ġa f", "no on"]
+    merges += ["Ġsu n", "Ġaf t", "Ġaft er"]
+
+    tokenizer = keras_nlp.models.BartTokenizer(
+        vocabulary=vocab,
+        merges=merges,
+    )
+    preprocessor = keras_nlp.models.BartPreprocessor(
+        tokenizer=tokenizer,
+        sequence_length=20,
+    )
     ```
     """
 
@@ -152,6 +150,12 @@ class BartPreprocessor(Preprocessor):
     ):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
+
+        # TODO: Allow users to pass separate `sequence_length`s for encoder and
+        # decoder.
+        # Note: We use `MultiSegmentPacker` instead of `StartEndPacker` because
+        # we might want to support multiple segments in the future (at least for
+        # the encoder).
         self.packer = MultiSegmentPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
@@ -171,19 +175,24 @@ class BartPreprocessor(Preprocessor):
         return config
 
     def call(self, x, y=None, sample_weight=None):
-        if not isinstance(x, (tuple, list)) or len(x) != 2:
+        if not (
+            isinstance(x, dict)
+            and ["encoder_inputs", "decoder_inputs"] == list(x.keys())
+        ):
             raise ValueError(
-                "The input to `BartPreprocessor` must be a tuple "
-                "`(encoder_inputs, decoder_inputs)`."
+                f'`x` must be a dictionary, containing the keys `"encoder_inputs"`'
+                f' and `"decoder_inputs"`. Received x={x}.'
             )
 
         if y is not None:
             logging.warning(
-                "You are explicitly passing `y` to `BartPreprocessor`. However, "
-                "`y` is inferred from decoder inputs, and will be ignored."
+                "You are explicitly passing `y`. However, "
+                "`y` is inferred from decoder inputs given in `x`, and will be "
+                "ignored."
             )
 
-        encoder_inputs, decoder_inputs = x
+        encoder_inputs = x["encoder_inputs"]
+        decoder_inputs = x["decoder_inputs"]
 
         encoder_inputs = convert_inputs_to_list_of_tensor_segments(
             encoder_inputs, support_multiple_segments=False
