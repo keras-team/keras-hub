@@ -83,6 +83,7 @@ from keras_nlp.models.roberta.roberta_masked_lm_preprocessor import (
 )
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_classifier import (
