@@ -20,7 +20,7 @@ Keep this checklist handy!
 ### PR #1: Add XXBackbone
 - [ ] A `xx/xx_backbone.py` file which has the model graph [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_backbone.py)].
 - [ ] A `xx/xx_backbone_test.py` file which has unit tests for the backbone [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_backbone_test.py)].
-- [ ] A Colab notebook link in the PR description which matches the outputs of the implemented backbone model with the original source.
+- [ ] A Colab notebook link in the PR description which matches the outputs of the implemented backbone model with the original source [[Example Link](https://colab.research.google.com/drive/1SeZWJorKWmwWJax8ORSdxKrxE25BfhHa?usp=sharing)].
 
 ### PR #2: Add XXTokenizer and XXPreprocessor
 - [ ] A `xx/xx_tokenizer.py` file which has the tokenizer for the model [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_tokenizer.py)].
@@ -150,8 +150,6 @@ also helps in adding model "presets" at a later stage.
 The preferred way of doing this is to add a Colab link in the PR description, which
 1) converts the original preset weights to our format, and
 2) checks whether the outputs of the original model and your implemented model are close enough.
-
-A sample Colab for DistilBERT is given [here](https://colab.research.google.com/drive/1SeZWJorKWmwWJax8ORSdxKrxE25BfhHa?usp=sharing).
 
 It is okay if you demonstrate it for one preset at this stage; you can do the conversion
 for the other presets when you officially add presets to the library at a later stage.
