@@ -26,14 +26,14 @@ from keras_nlp.models.t5.t5_backbone import T5Backbone
 class T5Test(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.model = T5Backbone(
-            vocabulary_size=1000,
+            vocabulary_size=4,
             num_layers=2,
             num_heads=2,
-            hidden_dim=32,
-            intermediate_dim=128,
+            hidden_dim=4,
+            intermediate_dim=4,
         )
-        self.batch_size = 8
-        seq_length = 6
+        self.batch_size = 2
+        seq_length = 3
         self.input_batch = {
             "encoder_token_ids": tf.ones(
                 (self.batch_size, seq_length), dtype="int32"
@@ -58,7 +58,7 @@ class T5Test(tf.test.TestCase, parameterized.TestCase):
         self.assertRegexpMatches(self.model.name, "t5_backbone")
 
     def test_variable_sequence_length_call_t5(self):
-        for seq_length in (25, 50, 75):
+        for seq_length in (4, 5, 6):
             input_data = {
                 "encoder_token_ids": tf.ones(
                     (self.batch_size, seq_length), dtype="int32"
@@ -120,15 +120,15 @@ class T5BackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.model = T5Backbone(
-                vocabulary_size=1000,
+                vocabulary_size=4,
                 num_layers=2,
                 num_heads=2,
-                hidden_dim=32,
-                intermediate_dim=128,
+                hidden_dim=4,
+                intermediate_dim=4,
             )
         self.input_batch = {
-            "token_ids": tf.ones((8, 128), dtype="int32"),
-            "padding_mask": tf.ones((8, 128), dtype="int32"),
+            "token_ids": tf.ones((8, 4), dtype="int32"),
+            "padding_mask": tf.ones((8, 4), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch
