@@ -143,6 +143,8 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
         second_fn = self.causal_lm.generate_function
         # Assert we did not recompile.
         self.assertEqual(first_fn, second_fn)
+        self.causal_lm.compile(sampler="greedy")
+        self.assertIsNone(self.causal_lm.generate_function)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),

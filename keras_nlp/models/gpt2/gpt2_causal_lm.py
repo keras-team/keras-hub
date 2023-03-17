@@ -27,7 +27,7 @@ from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.task import Task
 from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.tf_utils import truncate_at
+from keras_nlp.utils.tf_utils import truncate_at_token
 
 
 @keras_nlp_export("keras_nlp.models.GPT2CasualLM")
@@ -42,7 +42,8 @@ class GPT2CausalLM(Task):
     This model has a `generate()` method, which generates text based on a
     prompt. The generation strategy used is controlled by an additional
     `sampler` argument on `compile()`. You can recompile the model with
-    different `keras_nlp.samplers` objects to control the generation.
+    different `keras_nlp.samplers` objects to control the generation. By
+    default, `"top_k"` sampling will be used.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -192,7 +193,8 @@ class GPT2CausalLM(Task):
         self.backbone = backbone
         self.preprocessor = preprocessor
         self.generate_function = None
-        self.sampler = samplers.get("top_k")
+        # Private sampler set by compile.
+        self._sampler = samplers.get("top_k")
 
     @classproperty
     def presets(cls):
@@ -252,7 +254,7 @@ class GPT2CausalLM(Task):
         )
         return x, cache
 
-    def build_cache(self, prompt):
+    def _build_cache(self, prompt):
         """Build an empty cache for use with `call_with_cache()`."""
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         num_layers = self.backbone.num_layers
@@ -280,9 +282,9 @@ class GPT2CausalLM(Task):
             jit_compile=jit_compile and xla_compatible and not run_eagerly,
             **kwargs,
         )
+        self._sampler = samplers.get(sampler)
         # Clear the compiled generate function.
         self.generate_function = None
-        self.sampler = samplers.get(sampler)
 
     def make_generate_function(self):
         """Create or return the compiled generation function."""
@@ -292,7 +294,7 @@ class GPT2CausalLM(Task):
 
         def generate_function(prompt, input_mask, min_length, max_length):
             # Create and seed cache with a single forward pass.
-            cache = self.build_cache(prompt)
+            cache = self._build_cache(prompt)
 
             def next(prompt, state, index):
                 # The cache index is for our previous token.
@@ -301,7 +303,7 @@ class GPT2CausalLM(Task):
                 logits, state = self.call_with_cache(prompt, state, cache_index)
                 return tf.squeeze(logits, axis=1), state
 
-            return self.sampler(
+            return self._sampler(
                 next=next,
                 prompt=prompt,
                 state=cache,
@@ -364,7 +366,7 @@ class GPT2CausalLM(Task):
 
         # Truncate back to ragged to account for end of sequence ids.
         end_token_id = self.preprocessor.tokenizer.end_token_id
-        output = truncate_at(output, end_token_id, input_mask)
+        output = truncate_at_token(output, end_token_id, input_mask)
 
         # Detokenize.
         output = self.preprocessor.tokenizer.detokenize(output)

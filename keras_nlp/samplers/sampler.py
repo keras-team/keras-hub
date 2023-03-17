@@ -22,11 +22,11 @@ from keras_nlp.utils.python_utils import format_docstring
 
 call_args_docstring = """
     next: A function which takes in the `prompt, state, index` of the
-        current generation loop, and outputs a tuple `logits, state` with the
+        current generation loop, and outputs a tuple `(logits, state)` with the
         probability for the next token and state for the next iteration.
     prompt: A 2D integer tensor with shape `(batch_size, max_length)`. This
         tensor will be iteratively updated column by column with new sampled
-        values.
+        values, starting at `index`.
     state: Optional. A tensor or nested structure of tensors that will be
         updated by each call to `next`. This can be used to cache computations
         from early iterations of the generative loop.

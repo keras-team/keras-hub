@@ -66,7 +66,7 @@ def tensor_to_string_list(inputs):
     return _decode_strings_to_utf8(list_outputs)
 
 
-def truncate_at(inputs, token, mask):
+def truncate_at_token(inputs, token, mask):
     """Truncate at first instance of `token`, ignoring `mask`."""
     matches = (inputs == token) & (~mask)
     end_indices = tf.cast(tf.math.argmax(matches, -1), "int32")
