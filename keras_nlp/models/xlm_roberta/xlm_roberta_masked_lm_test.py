@@ -21,13 +21,13 @@ from tensorflow import keras
 
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRoBERTaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm import (
-    XLMRoBERTaMaskedLM,
+    XLMRobertaMaskedLM,
 )
 from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import (
     XLMRoBERTaMaskedLMPreprocessor,
 )
 from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
-    XLMRoBERTaTokenizer,
+    XLMRobertaTokenizer,
 )
 
 
@@ -46,7 +46,7 @@ class XLMRoBERTaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
         self.vocab += ["the", "quick", "brown", "fox"]
 
-        tokenizer = XLMRoBERTaTokenizer(vocabulary=self.vocab)
+        tokenizer = XLMRobertaTokenizer(vocabulary=self.vocab)
 
         self.preprocessor = XLMRoBERTaMaskedLMPreprocessor(
             tokenizer=tokenizer,
@@ -57,11 +57,11 @@ class XLMRoBERTaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             mask_selection_length=2,
             sequence_length=10,
         )
-        self.masked_lm = XLMRoBERTaMaskedLM(
+        self.masked_lm = XLMRobertaMaskedLM(
             self.backbone,
             preprocessor=self.preprocessor,
         )
-        self.masked_lm_no_preprocessing = XLMRoBERTaMaskedLM(
+        self.masked_lm_no_preprocessing = XLMRobertaMaskedLM(
             self.backbone,
             preprocessor=None,
         )
@@ -127,7 +127,7 @@ class XLMRoBERTaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
-        self.assertIsInstance(restored_model, XLMRoBERTaMaskedLM)
+        self.assertIsInstance(restored_model, XLMRobertaMaskedLM)
 
         model_output = self.masked_lm(self.preprocessed_batch)
         restored_output = restored_model(self.preprocessed_batch)

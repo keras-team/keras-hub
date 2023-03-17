@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for XLMRoberta masked language model preprocessor layer."""
+"""Tests for BERT masked language model preprocessor layer."""
 
 import os
 
@@ -23,7 +23,7 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import (
     XLMRoBERTaMaskedLMPreprocessor,
 )
 from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
-    XLMRoBERTaTokenizer,
+    XLMRobertaTokenizer,
 )
 
 
@@ -35,7 +35,7 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
         self.vocab += ["the", "quick", "brown", "fox"]
 
-        tokenizer = XLMRoBERTaTokenizer(vocabulary=self.vocab)
+        tokenizer = XLMRobertaTokenizer(vocabulary=self.vocab)
 
         self.preprocessor = XLMRoBERTaMaskedLMPreprocessor(
             tokenizer=tokenizer,

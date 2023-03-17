@@ -19,7 +19,7 @@ from tensorflow import keras
 
 from keras_nlp.layers.masked_lm_head import MaskedLMHead
 from keras_nlp.models.task import Task
-from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRoBERTaBackbone
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import (
     xlm_roberta_kernel_initializer,
 )
@@ -143,7 +143,7 @@ class XLMRobertaMaskedLM(Task):
 
     @classproperty
     def backbone_cls(cls):
-        return XLMRoBERTaBackbone
+        return XLMRobertaBackbone
 
     @classproperty
     def preprocessor_cls(cls):
