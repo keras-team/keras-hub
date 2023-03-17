@@ -11,10 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for BERT masked language model preprocessor layer."""
+"""Tests for ALBERT masked language model preprocessor layer."""
 
+import io
 import os
 
+import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -31,11 +33,30 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
     tf.test.TestCase, parameterized.TestCase
 ):
     def setUp(self):
-        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
-        self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
-        self.vocab += ["the", "quick", "brown", "fox"]
+        vocab_data = tf.data.Dataset.from_tensor_slices(
+            ["the quick brown fox", "the earth is round"]
+        )
 
-        tokenizer = XLMRobertaTokenizer(vocabulary=self.vocab)
+        bytes_io = io.BytesIO()
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=vocab_data.as_numpy_iterator(),
+            model_writer=bytes_io,
+            vocab_size=12,
+            model_type="WORD",
+            pad_id=0,
+            unk_id=1,
+            bos_id=2,
+            eos_id=3,
+            pad_piece="<pad>",
+            unk_piece="<unk>",
+            bos_piece="[CLS]",
+            eos_piece="[SEP]",
+            user_defined_symbols="[MASK]",
+        )
+
+        proto = bytes_io.getvalue()
+
+        tokenizer = XLMRobertaTokenizer(proto=proto)
 
         self.preprocessor = XLMRoBERTaMaskedLMPreprocessor(
             tokenizer=tokenizer,
@@ -57,11 +78,8 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
         self.assertAllEqual(
             x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
         )
-        self.assertAllEqual(
-            x["segment_ids"], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        )
         self.assertAllEqual(x["mask_positions"], [1, 2, 3, 4])
-        self.assertAllEqual(y, [9, 10, 11, 12])
+        self.assertAllEqual(y, [5, 10, 6, 8])
         self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0])
 
     def test_preprocess_list_of_strings(self):
@@ -72,11 +90,10 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
             x["token_ids"], [[2, 4, 4, 4, 4, 3, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
-            x["padding_mask"],
-            [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4,
+            x["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4]] * 4)
-        self.assertAllEqual(y, [[9, 10, 11, 12]] * 4)
+        self.assertAllEqual(y, [[5, 10, 6, 8]] * 4)
         self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0]] * 4)
 
     def test_preprocess_dataset(self):
@@ -91,7 +108,7 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
             x["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4]] * 4)
-        self.assertAllEqual(y, [[9, 10, 11, 12]] * 4)
+        self.assertAllEqual(y, [[5, 10, 6, 8]] * 4)
         self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0]] * 4)
 
     def test_mask_multiple_sentences(self):
@@ -106,7 +123,7 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
             x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(x["mask_positions"], [1, 2, 4, 5])
-        self.assertAllEqual(y, [9, 10, 11, 12])
+        self.assertAllEqual(y, [5, 10, 6, 8])
         self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0])
 
     def test_no_masking_zero_rate(self):
@@ -120,11 +137,10 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
 
         x, y, sw = no_mask_preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [2, 9, 10, 11, 12, 3, 0, 0, 0, 0, 0, 0]
+            x["token_ids"], [2, 5, 10, 6, 8, 3, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
-            x["padding_mask"],
-            [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+            x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(x["mask_positions"], [0, 0, 0, 0])
         self.assertAllEqual(y, [0, 0, 0, 0])
