@@ -30,12 +30,12 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras_nlp_export("keras_nlp.models.BertClassifier")
 class BertClassifier(Task):
-    """An end-to-end BERT model for classification tasks
+    """An end-to-end BERT model for classification tasks.
 
-    This model attaches a classification head to a `keras_nlp.model.BertBackbone`
-    backbone, mapping from the backbone outputs to logit output suitable for
-    a classification task. For usage of this model with pre-trained weights, see
-    the `from_preset()` method.
+    This model attaches a classification head to a
+    `keras_nlp.model.BertBackbone` instance, mapping from the backbone outputs
+    to logits suitable for a classification task. For usage of this model with
+    pre-trained weights, use the `from_preset()` constructor.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -56,10 +56,34 @@ class BertClassifier(Task):
 
     Examples:
 
-    Example usage.
+    Raw string data.
     ```python
-    # Define the preprocessed inputs.
-    preprocessed_features = {
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    labels = [0, 3]
+
+    # Pretrained classifier.
+    classifier = keras_nlp.models.BertClassifier.from_preset(
+        "bert_base_en_uncased",
+        num_classes=4,
+    )
+    classifier.fit(x=features, y=labels, batch_size=2)
+    classifier.predict(x=features, batch_size=2)
+
+    # Re-compile (e.g., with a new learning rate).
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        optimizer=keras.optimizers.Adam(5e-5),
+        jit_compile=True,
+    )
+    # Access backbone programatically (e.g., to change `trainable`).
+    classifier.backbone.trainable = False
+    # Fit again.
+    classifier.fit(x=features, y=labels, batch_size=2)
+    ```
+
+    Preprocessed integer data.
+    ```python
+    features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
         "segment_ids": tf.constant(
             [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
@@ -70,96 +94,43 @@ class BertClassifier(Task):
     }
     labels = [0, 3]
 
-    # Randomly initialize a BERT backbone.
-    backbone = keras_nlp.models.BertBackbone(
-        vocabulary_size=30552,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
-    )
-
-    # Create a BERT classifier and fit your data.
-    classifier = keras_nlp.models.BertClassifier(
-        backbone,
-        num_classes=4,
-        preprocessor=None,
-    )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
-
-    # Access backbone programatically (e.g., to change `trainable`)
-    classifier.backbone.trainable = False
-    ```
-
-    Raw string inputs.
-    ```python
-    # Create a dataset with raw string features in an `(x, y)` format.
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
-    labels = [0, 3]
-
-    # Create a BertClassifier and fit your data.
+    # Pretrained classifier without preprocessing.
     classifier = keras_nlp.models.BertClassifier.from_preset(
         "bert_base_en_uncased",
         num_classes=4,
-    )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        preprocessor=None,
     )
     classifier.fit(x=features, y=labels, batch_size=2)
     ```
 
-    Raw string inputs with customized preprocessing.
+    Custom backbone and vocabulary.
     ```python
-    # Create a dataset with raw string features in an `(x, y)` format.
     features = ["The quick brown fox jumped.", "I forgot my homework."]
     labels = [0, 3]
 
-    # Use a shorter sequence length.
-    preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-        "bert_base_en_uncased",
+    vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
+    vocab += ["The", "quick", "brown", "fox", "jumped", "."]
+    tokenizer = keras_nlp.models.BertTokenizer(
+        vocabulary=vocab,
+    )
+    preprocessor = keras_nlp.models.BertPreprocessor(
+        tokenizer=tokenizer,
         sequence_length=128,
     )
-
-    # Create a BertClassifier and fit your data.
-    classifier = keras_nlp.models.BertClassifier.from_preset(
-        "bert_base_en_uncased",
-        num_classes=4,
-        preprocessor=preprocessor,
+    backbone = keras_nlp.models.BertBackbone(
+        vocabulary_size=30552,
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        intermediate_dim=512,
+        max_sequence_length=128,
     )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    classifier = keras_nlp.models.BertClassifier(
+        backbone=backbone,
+        preprocessor=preprocessor,
+        num_classes=4,
     )
     classifier.fit(x=features, y=labels, batch_size=2)
-    ```
-
-    Preprocessed inputs.
-    ```python
-    # Create a dataset with preprocessed features in an `(x, y)` format.
-    preprocessed_features = {
-        "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
-        "segment_ids": tf.constant(
-            [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-        ),
-        "padding_mask": tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-        ),
-    }
-    labels = [0, 3]
-
-    # Create a BERT classifier and fit your data.
-    classifier = keras_nlp.models.BertClassifier.from_preset(
-        "bert_base_en_uncased",
-        num_classes=4,
-        preprocessor=None,
-    )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
     ```
     """
 
