@@ -30,7 +30,7 @@ from keras_nlp.samplers import serialize
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.GPT2CasualLM")
+@keras_nlp_export("keras_nlp.models.GPT2CausalLM")
 class GPT2CausalLM(Task):
     """An end-to-end GPT2 model for causal langauge modeling.
 
