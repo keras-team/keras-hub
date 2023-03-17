@@ -44,8 +44,8 @@ class BertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.backbone = BertBackbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
-            num_layers=1,
-            num_heads=1,
+            num_layers=2,
+            num_heads=2,
             hidden_dim=2,
             intermediate_dim=4,
             max_sequence_length=self.preprocessor.packer.sequence_length,
