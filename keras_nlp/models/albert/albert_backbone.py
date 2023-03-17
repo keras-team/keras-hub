@@ -33,7 +33,7 @@ def albert_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.AlbertBackbone")
 class AlbertBackbone(Backbone):
-    """ALBERT encoder network.
+    """A ALBERT encoder network.
 
     This class implements a bi-directional Transformer-based encoder as
     described in
@@ -46,7 +46,7 @@ class AlbertBackbone(Backbone):
 
     The default constructor gives a fully customizable, randomly initialized
     ALBERT encoder with any number of layers, heads, and embedding dimensions.
-    To load preset architectures and weights, use the `from_preset` constructor.
+    To load preset architectures and weights, use the `from_preset()` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind.
@@ -90,14 +90,14 @@ class AlbertBackbone(Backbone):
     # Randomly initialized ALBERT encoder
     model = keras_nlp.models.AlbertBackbone(
         vocabulary_size=30000,
-        num_layers=12,
-        num_heads=12,
+        num_layers=4,
+        num_heads=4,
         num_groups=1,
         num_inner_repetitions=1,
         embedding_dim=128,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12,
+        hidden_dim=256,
+        intermediate_dim=512,
+        max_sequence_length=128,
     )
     output = model(input_data)
     ```

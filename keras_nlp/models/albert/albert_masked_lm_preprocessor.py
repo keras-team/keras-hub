@@ -31,14 +31,14 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
     `keras_nlp.models.AlbertMaskedLM` task model. Preprocessing will occur in
     multiple steps.
 
-    - Tokenize any number of input segments using the `tokenizer`.
-    - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
+    1. Tokenize any number of input segments using the `tokenizer`.
+    2. Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
       `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
       entire sequence, `"</s></s>"` between each segment,
       and a `"</s>"` at the end of the entire sequence.
-    - Randomly select non-special tokens to mask, controlled by
+    3. Randomly select non-special tokens to mask, controlled by
       `mask_selection_rate`.
-    - Construct a `(x, y, sample_weight)` tuple suitable for training with a
+    4. Construct a `(x, y, sample_weight)` tuple suitable for training with a
       `keras_nlp.models.AlbertMaskedLM` task model.
 
     Args:
@@ -68,6 +68,15 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
                     left-to-right manner and fills up the buckets until we run
                     out of budget. It supports an arbitrary number of segments.
 
+        Call arguments:
+        x: A tensor of single string sequences, or a tuple of multiple
+            tensor sequences to be packed together. Inputs may be batched or
+            unbatched. For single sequences, raw python inputs will be converted
+            to tensors. For multiple sequences, pass tensors directly.
+        y: Label data. Should always be `None` as the layer generates labels.
+        sample_weight: Label weights. Should always be `None` as the layer
+            generates label weights.
+
     Examples:
     ```python
     # Load the preprocessor from a preset.
@@ -76,54 +85,37 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
     )
 
     # Tokenize and mask a single sentence.
-    sentence = tf.constant("The quick brown fox jumped.")
-    preprocessor(sentence)
+    preprocessor("The quick brown fox jumped.")
 
     # Tokenize and mask a batch of sentences.
-    sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    preprocessor(sentences)
+    preprocessor("The quick brown fox jumped.", "Call me Ishmael.")
 
-    # Tokenize and mask a dataset of sentences.
-    features = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
+    # Tokenize and mask sentence pairs.
+    # In this case, always convert input to tensors before calling the layer.
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+    preprocessor((first, second))
+    ```
+
+    Mapping with `tf.data.Dataset`.
+    ```python
+    preprocessor = keras_nlp.models.BertMaskedLMPreprocessor.from_preset(
+        "albert_base_en_uncased"
     )
-    ds = tf.data.Dataset.from_tensor_slices((features))
+
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+    # Map single sentences.
+    ds = tf.data.Dataset.from_tensor_slices(first)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Alternatively, you can create a preprocessor from your own vocabulary.
-    vocab_data = tf.data.Dataset.from_tensor_slices(
-        ["the quick brown fox", "the earth is round"]
+    # Map sentence pairs.
+    ds = tf.data.Dataset.from_tensor_slices((first, second))
+    # Watch out for tf.data's default unpacking of tuples here!
+    # Best to invoke the `preprocessor` directly in this case.
+    ds = ds.map(
+        lambda first, second: preprocessor(x=(first, second)),
+        num_parallel_calls=tf.data.AUTOTUNE,
     )
-
-    # Creating sentencepiece tokenizer for ALBERT LM preprocessor
-    bytes_io = io.BytesIO()
-
-    sentencepiece.SentencePieceTrainer.train(
-        sentence_iterator=vocab_data.as_numpy_iterator(),
-        model_writer=bytes_io,
-        vocab_size=12,
-        model_type="WORD",
-        pad_id=0,
-        unk_id=1,
-        bos_id=2,
-        eos_id=3,
-        pad_piece="<pad>",
-        unk_piece="<unk>",
-        bos_piece="[CLS]",
-        eos_piece="[SEP]",
-        user_defined_symbols="[MASK]"
-    )
-
-    proto = bytes_io.getvalue()
-
-    tokenizer = keras_nlp.models.AlbertTokenizer(proto=proto)
-
-    preprocessor = keras_nlp.models.AlbertMaskedLMPreprocessor(
-        tokenizer=tokenizer
-    )
-
     ```
     """
 

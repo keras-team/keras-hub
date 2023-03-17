@@ -61,6 +61,13 @@ class AlbertTokenizer(SentencePieceTokenizer):
 
     # Detokenization.
     tokenizer.detokenize(tf.constant([[2, 14, 2231, 886, 2385, 3]]))
+
+    # Custom vocabulary.
+    vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
+    vocab += ["The", "quick", "brown", "fox", "jumped", "."]
+    tokenizer = keras_nlp.models.AlbertTokenizer(vocabulary=vocab)
+    tokenizer("The quick brown fox jumped.")
+
     ```
     """
 

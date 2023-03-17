@@ -31,10 +31,10 @@ from keras_nlp.utils.python_utils import classproperty
 class AlbertClassifier(Task):
     """An end-to-end ALBERT model for classification tasks
 
-    This model attaches a classification head to a `keras_nlp.model.AlbertBackbone`
-    backbone, mapping from the backbone outputs to logit output suitable for
-    a classification task. For usage of this model with pre-trained weights, see
-    the `from_preset()` method.
+    This model attaches a classification head to a
+    `keras_nlp.model.AlbertBackbone`instance, mapping from the backbone outputs to logit output suitable for
+    a classification task. For usage of this model with pre-trained weights, use
+    the `from_preset()` constructor.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -55,49 +55,8 @@ class AlbertClassifier(Task):
 
     Examples:
 
-    Example usage.
+    Raw string data.
     ```python
-    # Define the preprocessed inputs.
-    preprocessed_features = {
-        "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
-        "segment_ids": tf.constant(
-            [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-        ),
-        "padding_mask": tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-        ),
-    }
-    labels = [0, 3]
-
-    # Randomly initialize a ALBERT backbone.
-    backbone = AlbertBackbone(
-        vocabulary_size=1000,
-        num_layers=2,
-        num_heads=2,
-        embedding_dim=8,
-        hidden_dim=64,
-        intermediate_dim=128,
-        max_sequence_length=128,
-        name="encoder",
-    )
-
-    # Create a ALBERT classifier and fit your data.
-    classifier = keras_nlp.models.AlbertClassifier(
-        backbone,
-        num_classes=4,
-        preprocessor=None,
-    )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
-
-    # Access backbone programatically (e.g., to change `trainable`)
-    classifier.backbone.trainable = False
-
-    Raw string inputs with customized preprocessing.
-    ```python
-    # Create a dataset with raw string features in an `(x, y)` format.
     features = ["The quick brown fox jumped.", "I forgot my homework."]
     labels = [0, 3]
 
@@ -107,19 +66,22 @@ class AlbertClassifier(Task):
         sequence_length=128,
     )
 
-    # Create a AlbertClassifier and fit your data.
+    #Pretrained classifier.
     classifier = keras_nlp.models.AlbertClassifier.from_preset(
         "albert_base_en_uncased",
         num_classes=4,
         preprocessor=preprocessor,
     )
+    # Re-compile (e.g., with a new learning rate).
     classifier.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        optimizer=keras.optimizers.Adam(5e-5),
+        jit_compile=True,
     )
     classifier.fit(x=features, y=labels, batch_size=2)
     ```
 
-    Preprocessed inputs.
+    Preprocessed integer data.
     ```python
     # Create a dataset with preprocessed features in an `(x, y)` format.
     preprocessed_features = {
@@ -133,17 +95,42 @@ class AlbertClassifier(Task):
     }
     labels = [0, 3]
 
-    # Create a ALBERT classifier and fit your data.
+    # Pretrained classifier without preprocessing.
     classifier = keras_nlp.models.AlbertClassifier.from_preset(
         "albert_base_en_uncased",
         num_classes=4,
         preprocessor=None,
     )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
     classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
     ```
+
+     Custom backbone and vocabulary.
+    ```python
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    labels = [0, 3]
+    vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
+    vocab += ["The", "quick", "brown", "fox", "jumped", "."]
+    tokenizer = keras_nlp.models.AlbertTokenizer(
+        vocabulary=vocab,
+    )
+    preprocessor = keras_nlp.models.AlbertPreprocessor(
+        tokenizer=tokenizer,
+        sequence_length=128,
+    )
+    backbone = keras_nlp.models.AlbertBackbone(
+        vocabulary_size=30552,
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        intermediate_dim=512,
+        max_sequence_length=128,
+    )
+    classifier = keras_nlp.models.AlbertClassifier(
+        backbone=backbone,
+        preprocessor=preprocessor,
+        num_classes=4,
+    )
+    classifier.fit(x=features, y=labels, batch_size=2)
     """
 
     def __init__(
