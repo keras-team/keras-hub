@@ -94,7 +94,7 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm import (
     XLMRobertaMaskedLM,
 )
 from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import (
-    XLMRobertaLMPreprocessor,
+    XLMRoBERTaMaskedLMPreprocessor,
 )
 from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
     XLMRobertaPreprocessor,
