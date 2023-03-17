@@ -19,7 +19,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRoBERTaBackbone
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm import (
     XLMRobertaMaskedLM,
 )
@@ -33,7 +33,7 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
 
 class XLMRoBERTaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.backbone = XLMRoBERTaBackbone(
+        self.backbone = XLMRobertaBackbone(
             vocabulary_size=1000,
             num_layers=2,
             num_heads=2,
