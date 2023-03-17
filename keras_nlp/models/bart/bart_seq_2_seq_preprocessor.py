@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BART Causal LM preprocessor layer."""
+"""BART Seq2Seq preprocessor layer."""
 
 from absl import logging
 
@@ -21,9 +21,9 @@ from keras_nlp.models.bart.bart_preprocessor import BartPreprocessor
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.BartCausalLMPreprocessor")
-class BartCausalLMPreprocessor(BartPreprocessor):
-    """BART Causal LM preprocessor.
+@keras_nlp_export("keras_nlp.models.BartSeq2SeqPreprocessor")
+class BartSeq2SeqPreprocessor(BartPreprocessor):
+    """BART Seq2Seq preprocessor.
 
     This layer is used as preprocessor for seq2seq tasks using the BART model.
     This class subclasses `keras_nlp.models.BartPreprocessor` and keeps most of
@@ -42,7 +42,7 @@ class BartCausalLMPreprocessor(BartPreprocessor):
     Examples:
     ```python
     # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.BartCausalLMPreprocessor.from_preset("bart_base_en")
+    preprocessor = keras_nlp.models.BartSeq2SeqPreprocessor.from_preset("bart_base_en")
 
     # Tokenize and pack a single sentence.
     inputs = {
@@ -74,19 +74,6 @@ class BartCausalLMPreprocessor(BartPreprocessor):
     }
     preprocessor(inputs)
 
-    # Tokenize and pack a sentence pair.
-    inputs = {
-        "encoder_inputs": (
-            tf.constant("The fox was sleeping."),
-            tf.constant("The lion was quiet.")
-        ),
-        "decoder_inputs": (
-            tf.constant("The fox was awake."),
-            tf.constant("The lion was roaring.")
-        )
-    }
-    preprocessor(inputs)
-
     # Map a dataset to preprocess a single sentence.
     features = {
         "encoder_inputs": tf.constant(
@@ -95,28 +82,6 @@ class BartCausalLMPreprocessor(BartPreprocessor):
         "decoder_inputs": tf.constant(
             ["The fox was awake.", "The lion was roaring."]
         )
-    }
-    ds = tf.data.Dataset.from_tensor_slices(features)
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map a dataset to preprocess sentence pairs.
-    features = {
-        "encoder_inputs": (
-            tf.constant(
-                ["The fox was sleeping.", "The lion was quiet."]
-            ),
-            tf.constant(
-                ["It wanted to get up.", "It wanted to roar."]
-            ),
-        ),
-        "decoder_inputs": (
-            tf.constant(
-                ["The fox was sleeping.", "The lion was quiet."]
-            ),
-            tf.constant(
-                ["It wanted to get up.", "It wanted to roar."]
-            ),
-        ),
     }
     ds = tf.data.Dataset.from_tensor_slices(features)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
@@ -138,7 +103,7 @@ class BartCausalLMPreprocessor(BartPreprocessor):
         vocabulary=vocab,
         merges=merges,
     )
-    preprocessor = keras_nlp.models.BartCausalLMPreprocessor(
+    preprocessor = keras_nlp.models.BartSeq2SeqPreprocessor(
         tokenizer=tokenizer,
         sequence_length=20,
     )
@@ -148,7 +113,7 @@ class BartCausalLMPreprocessor(BartPreprocessor):
     def call(self, x, y=None, sample_weight=None):
         if y is not None or sample_weight is not None:
             logging.warning(
-                "`BartCausalLMPreprocessor` infers `y` and `sample_weight` "
+                "`BartSeq2SeqPreprocessor` infers `y` and `sample_weight` "
                 "from the provided input data, i.e., `x`. However, non-`None`"
                 "values have been passed for `y` or `sample_weight` or both. "
                 "These values will be ignored."
