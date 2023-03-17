@@ -11,9 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# DISCLAIMER:This script only supports GLUE/mrpc (for now). #
+
 import inspect
 import os
 import time
+import warnings
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -129,6 +133,7 @@ def preprocess_data(dataset, preprocessor):
 
 
 def main(_):
+    warnings.warn("DISCLAIMER:This script only supports GLUE/mrpc (for now).")
     # checking task version (erroring out other testes except "mrpc")
     if FLAGS.task != "mrpc":
         raise ValueError("task - mrpc is only supported currently.")
