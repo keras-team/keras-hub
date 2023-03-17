@@ -21,7 +21,7 @@ from keras_nlp.models.gpt2.gpt2_preprocessor import GPT2Preprocessor
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.GPT2CasualLMPreprocessor")
+@keras_nlp_export("keras_nlp.models.GPT2CausalLMPreprocessor")
 class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     """GPT2 Causal LM preprocessor.
 
