@@ -15,8 +15,6 @@
 
 import copy
 
-from absl import logging
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.bart.bart_presets import backbone_presets
@@ -36,7 +34,9 @@ class BartPreprocessor(Preprocessor):
     This preprocessing layer will do three things:
 
      - Tokenize both encoder inputs and decoder inputs using the `tokenizer`.
-     - Add the appropriate special tokens - `"<s>"`, `"</s>"` and `"<pad>"`.
+       Both inputs can contain any number of segments.
+     - Pack the inputs together using `keras_nlp.layers.MultiSegmentPacker` with
+       the appropriate special tokens - `"<s>"`, `"</s>"` and `"<pad>"`.
      - Construct a dictionary with keys `"encoder_token_ids"`,
        `"encoder_padding_mask"`, `"decoder_token_ids"`, `"decoder_padding_mask"`
        that can be passed directly to a BART model.
@@ -48,11 +48,10 @@ class BartPreprocessor(Preprocessor):
     The call method of this layer accepts three arguments, `x`, `y`, and
     `sample_weight`. `x` should be python dictionary, having "encoder_inputs"
     and "decoder_inputs" as its keys. Each value in the dictionary can be a
-    python string or tensor representing a single segment or a list of python
-    strings representing a batch of single segments. Any value passed to `y`
-    will be ignored; `y` is inferred internally by shifting `x["decoder_inputs"]`
-    to the left by one. `sample_weight` is optional, can have any format, and
-    will be passed through unaltered.
+    python string or tensor representing a single segment, a list of python
+    strings representing a batch of single segments, or a list of tensors
+    representing multiple segments to be packed together. `y` and `sample_weight`
+    are both optional, can have any format, and will be passed through unaltered.
 
     Args:
         tokenizer: A `keras_nlp.models.BartTokenizer` instance.
@@ -86,7 +85,7 @@ class BartPreprocessor(Preprocessor):
     }
     preprocessor(inputs)
 
-    # Tokenize and a batch of single sentences.
+    # Tokenize a batch of single sentences.
     inputs = {
         "encoder_inputs": ["The fox was sleeping.", "The lion was quiet."],
         "decoder_inputs": ["The fox was awake.", "The lion was roaring."]
@@ -103,6 +102,19 @@ class BartPreprocessor(Preprocessor):
     }
     preprocessor(inputs)
 
+    # Tokenize and pack a sentence pair.
+    inputs = {
+        "encoder_inputs": (
+            tf.constant("The fox was sleeping."),
+            tf.constant("The lion was quiet.")
+        ),
+        "decoder_inputs": (
+            tf.constant("The fox was awake."),
+            tf.constant("The lion was roaring.")
+        )
+    }
+    preprocessor(inputs)
+
     # Map a dataset to preprocess a single sentence.
     features = {
         "encoder_inputs": tf.constant(
@@ -113,6 +125,33 @@ class BartPreprocessor(Preprocessor):
         )
     }
     ds = tf.data.Dataset.from_tensor_slices(features)
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map a dataset to preprocess sentence pairs.
+    features = {
+        "encoder_inputs": (
+            tf.constant(
+                ["The fox was sleeping.", "The lion was quiet."]
+            ),
+            tf.constant(
+                ["It wanted to get up.", "It wanted to roar."]
+            ),
+        ),
+        "decoder_inputs": (
+            tf.constant(
+                ["The fox was sleeping.", "The lion was quiet."]
+            ),
+            tf.constant(
+                ["It wanted to get up.", "It wanted to roar."]
+            ),
+        ),
+    }
+    labels = tf.constant([0, 1])
+    ds = tf.data.Dataset.from_tensor_slices(
+        (
+            features, labels
+        )
+    )
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
     # Alternatively, you can create a preprocessor from your own vocabulary.
@@ -151,9 +190,6 @@ class BartPreprocessor(Preprocessor):
 
         # TODO: Allow users to pass separate `sequence_length`s for encoder and
         # decoder.
-        # Note: We use `MultiSegmentPacker` instead of `StartEndPacker` because
-        # we might want to support multiple segments in the future (at least for
-        # the encoder).
         self.packer = MultiSegmentPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
@@ -178,28 +214,21 @@ class BartPreprocessor(Preprocessor):
             and ["encoder_inputs", "decoder_inputs"] == list(x.keys())
         ):
             raise ValueError(
-                f'`x` must be a dictionary, containing the keys `"encoder_inputs"`'
+                '`x` must be a dictionary, containing the keys `"encoder_inputs"`'
                 f' and `"decoder_inputs"`. Received x={x}.'
-            )
-
-        if y is not None:
-            logging.warning(
-                "You are explicitly passing `y`. However, "
-                "`y` is inferred from decoder inputs given in `x`, and will be "
-                "ignored."
             )
 
         encoder_inputs = x["encoder_inputs"]
         decoder_inputs = x["decoder_inputs"]
 
         encoder_inputs = convert_inputs_to_list_of_tensor_segments(
-            encoder_inputs, support_multiple_segments=False
+            encoder_inputs
         )
         encoder_inputs = [self.tokenizer(segment) for segment in encoder_inputs]
         encoder_token_ids, _ = self.packer(encoder_inputs)
 
         decoder_inputs = convert_inputs_to_list_of_tensor_segments(
-            decoder_inputs, support_multiple_segments=False
+            decoder_inputs
         )
         decoder_inputs = [self.tokenizer(segment) for segment in decoder_inputs]
         decoder_token_ids, _ = self.packer(decoder_inputs)
@@ -213,11 +242,6 @@ class BartPreprocessor(Preprocessor):
             != self.tokenizer.pad_token_id,
         }
 
-        # Get the labels by shifting the decoder inputs one place to the left.
-        if decoder_token_ids.shape.rank == 1:
-            y = decoder_token_ids[1:]
-        else:
-            y = decoder_token_ids[:, 1:]
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty

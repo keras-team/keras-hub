@@ -52,9 +52,7 @@ def pack_x_y_sample_weight(x, y=None, sample_weight=None):
         return (x, y, sample_weight)
 
 
-def convert_inputs_to_list_of_tensor_segments(
-    x, support_multiple_segments=True
-):
+def convert_inputs_to_list_of_tensor_segments(x):
     """Converts user inputs to a list of a tensor segments.
 
     For models and layers which accept lists of string tensors to pack together,
@@ -66,8 +64,7 @@ def convert_inputs_to_list_of_tensor_segments(
     - A single string will be converted to a tensor and wrapped in a list.
     - A list of strings will be converted to a tensor and wrapped in a list.
     - A single tensor will be wrapped in a list.
-    - A list of tensors will be passed through unaltered (only if
-      `support_multiple_segments` is `True`).
+    - A list of tensors will be passed through unaltered.
 
     All other inputs will result in an error. This effectively means that users
     who would like to pack multiple segments together should convert those
@@ -89,26 +86,17 @@ def convert_inputs_to_list_of_tensor_segments(
     elif is_tensor:
         # Automatically wrap a single tensor as a single segment.
         x = [x]
-    elif support_multiple_segments and is_tensor_list:
+    elif is_tensor_list:
         # Pass lists of tensors though unaltered.
         x = x
     else:
         # Error for all other input.
-        error_msg = "Unsupported input for `x`. `x` should be a string,"
-        if support_multiple_segments:
-            error_msg = (
-                error_msg
-                + " a list of strings, or a list of tensors."
-                + " If passing multiple segments which should packed together,"
-                " please convert your inputs to a list of tensors."
-            )
-        else:
-            error_msg = error_msg + " or a list of strings."
-
-        error_msg = f" Received `x={x}`"
-
-        raise ValueError(error_msg)
-
+        raise ValueError(
+            f"Unsupported input for `x`. `x` should be a string, a list of "
+            "strings, or a list of tensors. If passing multiple segments "
+            "which should packed together, please convert your inputs to a "
+            f"list of tensors. Received `x={x}`"
+        )
     return x
 
 
