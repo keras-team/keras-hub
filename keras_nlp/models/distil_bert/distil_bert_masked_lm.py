@@ -146,7 +146,7 @@ class DistilBertMaskedLM(Task):
 
         self.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            optimizer=keras.optimizers.Adam(1e-4),
+            optimizer=keras.optimizers.Adam(5e-5),
             weighted_metrics=keras.metrics.SparseCategoricalAccuracy(),
             jit_compile=is_xla_compatible(self),
         )
