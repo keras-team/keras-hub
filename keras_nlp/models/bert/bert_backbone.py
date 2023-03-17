@@ -33,7 +33,7 @@ def bert_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.BertBackbone")
 class BertBackbone(Backbone):
-    """BERT encoder network.
+    """A BERT encoder network.
 
     This class implements a bi-directional Transformer-based encoder as
     described in ["BERT: Pre-training of Deep Bidirectional Transformers for
@@ -41,9 +41,9 @@ class BertBackbone(Backbone):
     embedding lookups and transformer layers, but not the masked language model
     or next sentence prediction heads.
 
-    The default constructor gives a fully customizable, randomly initialized BERT
-    encoder with any number of layers, heads, and embedding dimensions. To load
-    preset architectures and weights, use the `from_preset` constructor.
+    The default constructor gives a fully customizable, randomly initialized
+    BERT encoder with any number of layers, heads, and embedding dimensions. To
+    load preset architectures and weights, use the `from_preset()` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind.
@@ -76,20 +76,20 @@ class BertBackbone(Backbone):
         ),
     }
 
-    # Pretrained BERT encoder
+    # Pretrained BERT encoder.
     model = keras_nlp.models.BertBackbone.from_preset("bert_base_en_uncased")
-    output = model(input_data)
+    model(input_data)
 
-    # Randomly initialized BERT encoder with a custom config
+    # Randomly initialized BERT encoder with a custom config.
     model = keras_nlp.models.BertBackbone(
         vocabulary_size=30552,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12,
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        intermediate_dim=512,
+        max_sequence_length=128,
     )
-    output = model(input_data)
+    model(input_data)
     ```
     """
 
