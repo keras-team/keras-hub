@@ -11,132 +11,144 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for DistilBERT masked language model."""
+"""xlm_roberta masked LM model."""
 
-import os
+import copy
 
-import tensorflow as tf
-from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
-    XlmRobertaTokenizer,
+from keras_nlp.layers.masked_lm_head import MaskedLMHead
+from keras_nlp.models.task import Task
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRoBERTaBackbone
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import (
+    xlm_roberta_kernel_initializer,
 )
-from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
-from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
-    XLMRobertaPreprocessor,
+from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import (
+    XLMRoBERTaMaskedLMPreprocessor,
 )
+from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
+from keras_nlp.utils.python_utils import classproperty
 
 
-class RobertaXlmMaskedLM(tf.test.TestCase, parameterized.TestCase):
-    def setUp(self):
-        self.backbone = XLMRobertaBackbone(
-            vocabulary_size=1000,
-            num_layers=2,
-            num_heads=2,
-            hidden_dim=64,
-            intermediate_dim=128,
-            max_sequence_length=128,
-        )
-        self.vocab = {
-            "<s>": 0,
-            "<pad>": 1,
-            "</s>": 2,
-            "Ġair": 3,
-            "plane": 4,
-            "Ġat": 5,
-            "port": 6,
-            "Ġkoh": 7,
-            "li": 8,
-            "Ġis": 9,
-            "Ġthe": 10,
-            "Ġbest": 11,
-            "<mask>": 12,
+@keras.utils.register_keras_serializable(package="keras_nlp")
+class XLMRobertaMaskedLM(Task):
+    """An end-to-end xlm_roberta model for the masked language modeling task.
+
+    This model will train xlm_roberta on a masked language modeling task.
+    The model will predict labels for a number of masked tokens in the
+    input data. For usage of this model with pre-trained weights, see the
+    `from_preset()` method.
+
+    This model can optionally be configured with a `preprocessor` layer, in
+    which case inputs can be raw string features during `fit()`, `predict()`,
+    and `evaluate()`. Inputs will be tokenized and dynamically masked during
+    training and evaluation. This is done by default when creating the model
+    with `from_preset()`.
+
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind.
+
+    Args:
+        backbone: A `keras_nlp.models.XLMRoBERTaBackbone` instance.
+        preprocessor: A `keras_nlp.models.XLMRoBERTaMaskedLMPreprocessor` or
+            `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
+
+    Example usage:
+
+    Raw string inputs and pretrained backbone.
+    ```python
+    # Create a dataset with raw string features. Labels are inferred.
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+
+    # Create a XLMRoBERTaMaskedLM with a pretrained backbone and further train
+    # on an MLM task.
+    masked_lm = keras_nlp.models.XLMRoBERTaMaskedLM.from_preset(
+        "bert_base_en",
+    )
+    masked_lm.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    )
+    masked_lm.fit(x=features, batch_size=2)
+    ```
+
+    Preprocessed inputs and custom backbone.
+    ```python
+    # Create a preprocessed dataset where 0 is the mask token.
+    preprocessed_features = {
+        "token_ids": tf.constant(
+            [[1, 2, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
+        ),
+        "padding_mask": tf.constant(
+            [[1, 1, 1, 1, 1, 1, 1, 1]] * 2, shape=(2, 8)
+        ),
+        "mask_positions": tf.constant([[2, 4]] * 2, shape=(2, 2)),
+        "segment_ids": tf.constant([[0, 0, 0, 0, 0, 0, 0, 0]] * 2, shape=(2, 8))
+    }
+    # Labels are the original masked values.
+    labels = [[3, 5]] * 2
+
+    # Randomly initialize a xlm_roberta encoder
+    backbone = keras_nlp.models.XLMRoBERTaBackbone(
+        vocabulary_size=50265,
+        num_layers=12,
+        num_heads=12,
+        hidden_dim=768,
+        intermediate_dim=3072,
+        max_sequence_length=12
+    )
+    # Create a xlm_roberta masked LM model and fit the data.
+    masked_lm = keras_nlp.models.XLMRoBERTaMaskedLM(
+        backbone,
+        preprocessor=None,
+    )
+    masked_lm.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    )
+    masked_lm.fit(x=preprocessed_features, y=labels, batch_size=2)
+    ```
+    """
+
+    def __init__(
+        self,
+        backbone,
+        preprocessor=None,
+        **kwargs,
+    ):
+        inputs = {
+            **backbone.input,
+            "mask_positions": keras.Input(
+                shape=(None,), dtype="int32", name="mask_positions"
+            ),
         }
+        backbone_outputs = backbone(backbone.input)
+        outputs = MaskedLMHead(
+            vocabulary_size=backbone.vocabulary_size,
+            embedding_weights=backbone.token_embedding.embeddings,
+            intermediate_activation="gelu",
+            kernel_initializer=xlm_roberta_kernel_initializer(),
+            name="mlm_head",
+        )(backbone_outputs["sequence_output"], inputs["mask_positions"])
 
-        merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
-        merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
-        merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
-        merges += ["pla ne"]
-        self.merges = merges
-        self.preprocessor = XLMRobertaPreprocessor(
-            XlmRobertaTokenizer(vocabulary=self.vocab, merges=self.merges),
-            sequence_length=8,
-            mask_selection_length=2,
+        # Instantiate using Functional API Model constructor
+        super().__init__(
+            inputs=inputs,
+            outputs=outputs,
+            include_preprocessing=preprocessor is not None,
+            **kwargs,
         )
-        self.masked_lm = RobertaXlmMaskedLM(
-            self.backbone,
-            preprocessor=self.preprocessor,
-        )
-        self.masked_lm_no_preprocessing = RobertaXlmMaskedLM(
-            self.backbone,
-            preprocessor=None,
-        )
+        # All references to `self` below this line
+        self.backbone = backbone
+        self.preprocessor = preprocessor
 
-        self.raw_batch = tf.constant(
-            [
-                " airplane at airport",
-                " the airplane is the best",
-                " the best airport",
-                " kohli is the best",
-            ]
-        )
-        self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
-        self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            self.raw_batch
-        ).batch(2)
-        self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
+    @classproperty
+    def backbone_cls(cls):
+        return XLMRoBERTaBackbone
 
-    def test_valid_call_masked_lm(self):
-        self.masked_lm(self.preprocessed_batch)
+    @classproperty
+    def preprocessor_cls(cls):
+        return XLMRoBERTaMaskedLMPreprocessor
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_distilbert_masked_lm_predict(self, jit_compile):
-        self.masked_lm.compile(jit_compile=jit_compile)
-        self.masked_lm.predict(self.raw_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_distilbert_masked_lm_predict_no_preprocessing(self, jit_compile):
-        self.masked_lm_no_preprocessing.compile(jit_compile=jit_compile)
-        self.masked_lm_no_preprocessing.predict(self.preprocessed_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_distilbert_masked_lm_fit(self, jit_compile):
-        self.masked_lm.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
-        )
-        self.masked_lm.fit(self.raw_dataset)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_distilbert_masked_lm_fit_no_preprocessing(self, jit_compile):
-        self.masked_lm_no_preprocessing.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
-        )
-        self.masked_lm_no_preprocessing.fit(self.preprocessed_dataset)
-
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        self.masked_lm.save(save_path, save_format=save_format)
-        restored_model = keras.models.load_model(save_path)
-
-        # Check we got the real object back.
-        self.assertIsInstance(restored_model, RobertaXlmMaskedLM)
-
-        model_output = self.masked_lm(self.preprocessed_batch)
-        restored_output = restored_model(self.preprocessed_batch)
-
-        self.assertAllClose(model_output, restored_output)
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)

@@ -12,67 +12,59 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""RobertaXlmmasked language model preprocessor layer."""
+"""XLMRoBERTa masked language model preprocessor layer."""
 
 from absl import logging
 from tensorflow import keras
 
 from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
-from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
-    RobertaXlmLPreprocessor,
+from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
+    XLMRoBERTaPreprocessor,
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class RobertaXlmMaskedLMPreprocessor(RobertaXlmLPreprocessor):
-    """RobertaXlmL preprocessing for the masked language modeling task.
-
+class XLMRoBERTaMaskedLMPreprocessor(XLMRoBERTaPreprocessor):
+    """XLMRoBERTa preprocessing for the masked language modeling task.
     This preprocessing layer will prepare inputs for a masked language modeling
     task. It is primarily intended for use with the
-    `keras_nlp.models.DistilBertMaskedLM` task model. Preprocessing will occur in
+    `keras_nlp.models.XLMRoBERTaMaskedLM` task model. Preprocessing will occur in
     multiple steps.
-
     - Tokenize any number of input segments using the `tokenizer`.
-    - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
-      `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
-      entire sequence, `"</s></s>"` between each segment,
-      and a `"</s>"` at the end of the entire sequence.
+    - Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
+       with the appropriate `"[CLS]"`, `"[SEP]"`, `"[SEP]"`, `"[SEP]"` and `"[PAD]"` tokens.
     - Randomly select non-special tokens to mask, controlled by
       `mask_selection_rate`.
     - Construct a `(x, y, sample_weight)` tuple suitable for training with a
-      `keras_nlp.models.DistilBertMaskedLM` task model.
-
-    Args:
-        tokenizer: A `keras_nlp.models.DistilBertTokenizer` instance.
-        sequence_length: The length of the packed inputs.
-        mask_selection_rate: The probability an input token will be dynamically
-            masked.
-        mask_selection_length: The maximum number of masked tokens supported
-            by the layer.
-        mask_token_rate: float, defaults to 0.8. `mask_token_rate` must be
-            between 0 and 1 which indicates how often the mask_token is
-            substituted for tokens selected for masking.
-        random_token_rate: float, defaults to 0.1. `random_token_rate` must be
-            between 0 and 1 which indicates how often a random token is
-            substituted for tokens selected for masking. Default is 0.1.
-            Note: mask_token_rate + random_token_rate <= 1,  and for
-            (1 - mask_token_rate - random_token_rate), the token will not be
-            changed.
-        truncate: string. The algorithm to truncate a list of batched segments
-            to fit within `sequence_length`. The value can be either
-            `round_robin` or `waterfall`:
-                - `"round_robin"`: Available space is assigned one token at a
-                    time in a round-robin fashion to the inputs that still need
-                    some, until the limit is reached.
-                - `"waterfall"`: The allocation of the budget is done using a
-                    "waterfall" algorithm that allocates quota in a
-                    left-to-right manner and fills up the buckets until we run
-                    out of budget. It supports an arbitrary number of segments.
-
+      `keras_nlp.models.XLMRoBERTaMaskedLM` task model.
     Examples:
     ```python
-
+    # Load the preprocessor from a preset.
+    preprocessor = keras_nlp.models.XLMRoBERTaMaskedLMPreprocessor.from_preset(
+        "xlm_roberta_base_en"
+    )
+    # Tokenize and mask a single sentence.
+    sentence = tf.constant("The quick brown fox jumped.")
+    preprocessor(sentence)
+    # Tokenize and mask a batch of sentences.
+    sentences = tf.constant(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
+    preprocessor(sentences)
+    # Tokenize and mask a dataset of sentences.
+    features = tf.constant(
+        ["The quick brown fox jumped.", "Call me Ishmael."]
+    )
+    ds = tf.data.Dataset.from_tensor_slices((features))
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+    # Alternatively, you can create a preprocessor from your own vocabulary.
+    # The usage is exactly the same as above.
+    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+    vocab += ["THE", "QUICK", "BROWN", "FOX"]
+    vocab += ["Call", "me", "Ishmael"]
+    tokenizer = keras_nlp.models.XLMRoBERTaTokenizer(vocabulary=vocab)
+    preprocessor = keras_nlp.models.XLMRoBERTaMaskedLMPreprocessor(tokenizer)
     ```
     """
 
@@ -102,8 +94,8 @@ class RobertaXlmMaskedLMPreprocessor(RobertaXlmLPreprocessor):
             vocabulary_size=tokenizer.vocabulary_size(),
             mask_token_id=tokenizer.mask_token_id,
             unselectable_token_ids=[
-                tokenizer.start_token_id,
-                tokenizer.end_token_id,
+                tokenizer.cls_token_id,
+                tokenizer.sep_token_id,
                 tokenizer.pad_token_id,
             ],
         )
@@ -130,11 +122,17 @@ class RobertaXlmMaskedLMPreprocessor(RobertaXlmLPreprocessor):
             )
 
         x = super().call(x)
-        token_ids, padding_mask = x["token_ids"], x["padding_mask"]
+
+        token_ids, padding_mask, segment_ids = (
+            x["token_ids"],
+            x["padding_mask"],
+            x["segment_ids"],
+        )
         masker_outputs = self.masker(token_ids)
         x = {
             "token_ids": masker_outputs["token_ids"],
             "padding_mask": padding_mask,
+            "segment_ids": segment_ids,
             "mask_positions": masker_outputs["mask_positions"],
         }
         y = masker_outputs["mask_ids"]

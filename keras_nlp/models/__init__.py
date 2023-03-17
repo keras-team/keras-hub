@@ -90,13 +90,15 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_classifier import (
     XLMRobertaClassifier,
 )
+from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm import (
+    XLMRobertaMaskedLM,
+)
+from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import (
+    XLMRobertaLMPreprocessor,
+)
 from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
     XLMRobertaPreprocessor,
 )
 from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
-)
-from keras_nlp.models.xlm_roberta_mased_lm import XLMRobertaMaskedLM
-from keras_nlp.models.xlm_roberta_masked_lm_preprocessor import (
-    XLMRobertaMaskedLMPreprocessor,
 )
