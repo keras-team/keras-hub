@@ -25,12 +25,15 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 class BartCausalLMPreprocessor(BartPreprocessor):
     """BART Causal LM preprocessor.
 
-    This preprocessor is majorly used as preprocessor for seq2seq tasks using
-    the BART model. This class subclasses `keras_nlp.models.BartPreprocessor`
-    and keeps most of its functionality. The only change is that it sets
-    `y` (label) and `sample_weights` field by shifting the decoder input
-    sequence one step towards left, and drops the last token as it does not have
-    a successor.
+    This layer is used as preprocessor for seq2seq tasks using the BART model.
+    This class subclasses `keras_nlp.models.BartPreprocessor` and keeps most of
+    its functionality. It has two changes from the superclass:
+
+     - Sets the `y` (label) and `sample_weights` fields by shifting the
+       decoder input sequence one step towards the left. Both these fields are
+       inferred internally, and any passed values will be ignored.
+     - Drops the last token from the decoder input sequence as it does not have
+       a successor.
 
     Args:
         tokenizer: A `keras_nlp.models.BartTokenizer` instance.
@@ -145,23 +148,24 @@ class BartCausalLMPreprocessor(BartPreprocessor):
     def call(self, x, y=None, sample_weight=None):
         if y is not None or sample_weight is not None:
             logging.warning(
-                "`BartCausalLMPreprocessor` generates `y` and `sample_weight` "
-                "based on your input data, but your data already contains `y` "
-                "or `sample_weight`. Your `y` and `sample_weight` will be "
-                "ignored."
+                "`BartCausalLMPreprocessor` infers `y` and `sample_weight` "
+                "from the provided input data, i.e., `x`. However, non-`None`"
+                "values have been passed for `y` or `sample_weight` or both. "
+                "These values will be ignored."
             )
 
         x = super().call(x)
         decoder_token_ids = x.pop("decoder_token_ids")
         decoder_padding_mask = x.pop("decoder_padding_mask")
 
-        # The last token does not have a next token, so we truncate it out.
+        # The last token does not have a next token. Hence, we truncate it.
         x = {
             **x,
             "decoder_token_ids": decoder_token_ids[..., :-1],
             "decoder_padding_mask": decoder_padding_mask[..., :-1],
         }
-        # Target `y` will be the next token.
+        # Target `y` will be the decoder input sequence shifted one step to the
+        # left (i.e., the next token).
         y = decoder_token_ids[..., 1:]
         sample_weight = decoder_padding_mask[..., 1:]
         return pack_x_y_sample_weight(x, y, sample_weight)
