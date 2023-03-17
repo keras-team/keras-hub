@@ -31,14 +31,9 @@ tf.random.set_seed(seed)
 flags.DEFINE_string(
     "task",
     "mrpc",
-    "The name of the test that the model is going to be trained and evaluated on.",
+    "The name of the GLUE task to finetune on.",
 )
 flags.DEFINE_string("model", None, "The Model you want to train and evaluate.")
-flags.DEFINE_bool(
-    "freeze_backbone",
-    True,
-    "If you want to freeze the backbone and only train the downstream layers or not.",
-)
 flags.DEFINE_string(
     "preset",
     None,
