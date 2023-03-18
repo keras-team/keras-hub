@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for ALBERT masked language model preprocessor layer."""
+"""Tests for  XLMRoBERTa masked language model preprocessor layer."""
 
 import io
 import os
