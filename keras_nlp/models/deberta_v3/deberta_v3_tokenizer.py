@@ -16,11 +16,12 @@
 
 import copy
 
+import tensorflow as tf
+
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
-import tensorflow as tf
 
 
 @keras_nlp_export("keras_nlp.models.DebertaV3Tokenizer")
@@ -122,10 +123,9 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         return super().token_to_id(token)
 
     def detokenize(self, ids):
-        blank_token_id = self.token_to_id('')
+        blank_token_id = self.token_to_id("")
         ids = tf.where(ids == self.mask_token_id, blank_token_id, ids)
         return super().detokenize(ids)
-
 
     @classproperty
     def presets(cls):
