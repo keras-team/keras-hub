@@ -13,6 +13,8 @@
 # limitations under the License.
 import os
 import shutil
+import tarfile
+import zipfile
 
 import numpy as np
 import tensorflow as tf
@@ -42,16 +44,21 @@ flags.DEFINE_string(
 )
 
 
-def download_model(preset, size, hf_model_name):
+def download_model(size, hf_model_name):
     print("-> Download original weights.")
     extract_dir = EXTRACT_DIR.format(size)
     archive_file_path = keras.utils.get_file(
         fname=None,
         origin=DOWNLOAD_SCRIPT_URL.format(size),
-        cache_subdir=os.path.join("checkpoint_conversion", preset),
+        cache_subdir=os.path.join("checkpoint_conversion", FLAGS.preset),
     )
 
-    os.system(f"tar -xvf {archive_file_path}")
+    if archive_file_path.endswith(".tar.gz"):
+        with tarfile.open(archive_file_path, "r:gz") as tar:
+            tar.extractall(extract_dir)
+    elif archive_file_path.endswith(".zip"):
+        with zipfile.ZipFile(archive_file_path, "r") as zip_ref:
+            zip_ref.extractall(extract_dir)
 
     # The original `tar.gz` file does not have the vocab files. Let's fetch
     # them from HF.
@@ -67,7 +74,7 @@ def download_model(preset, size, hf_model_name):
     shutil.copy(merges_path, extract_dir)
 
 
-def convert_checkpoints(preset, size):
+def convert_checkpoints(size):
     print("\n-> Convert original weights to KerasNLP format.")
     # RoBERTa paths.
     extract_dir = EXTRACT_DIR.format(size)
@@ -94,7 +101,7 @@ def convert_checkpoints(preset, size):
     print("Config:", cfg)
 
     keras_nlp_model = keras_nlp.models.RobertaBackbone.from_preset(
-        preset, load_weights=False
+        FLAGS.preset, load_weights=False
     )
 
     # Embedding Layer.
@@ -265,13 +272,13 @@ def convert_checkpoints(preset, size):
         )
 
     # Save the model.
-    print(f"\n-> Save KerasNLP model weights to `{preset}.h5`.")
-    keras_nlp_model.save_weights(f"{preset}.h5")
+    print(f"\n-> Save KerasNLP model weights to `{FLAGS.preset}.h5`.")
+    keras_nlp_model.save_weights(f"{FLAGS.preset}.h5")
 
     return keras_nlp_model
 
 
-def define_preprocessor(preset, hf_model_name, size):
+def define_preprocessor(hf_model_name, size):
     print("\n-> Define the tokenizers.")
     extract_dir = EXTRACT_DIR.format(size)
     vocabulary_path = os.path.join(extract_dir, "vocab.json")
@@ -294,7 +301,6 @@ def define_preprocessor(preset, hf_model_name, size):
 
 
 def check_output(
-    preset,
     keras_nlp_model,
     keras_nlp_preprocessor,
     hf_model,
@@ -318,7 +324,7 @@ def check_output(
     print("Difference:", np.mean(keras_nlp_output - hf_output.detach().numpy()))
 
     # Show the MD5 checksum of the model weights.
-    print("Model md5sum: ", get_md5_checksum(f"./{preset}.h5"))
+    print("Model md5sum: ", get_md5_checksum(f"./{FLAGS.preset}.h5"))
 
     return keras_nlp_output
 
@@ -330,20 +336,19 @@ def main(_):
     size = PRESET_MAP[FLAGS.preset][0]
     hf_model_name = PRESET_MAP[FLAGS.preset][1]
 
-    download_model(FLAGS.preset, size, hf_model_name)
+    download_model(size, hf_model_name)
 
-    keras_nlp_model = convert_checkpoints(FLAGS.preset, size)
+    keras_nlp_model = convert_checkpoints(size)
 
     print("\n-> Load HF model.")
     hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
     hf_model.eval()
 
     keras_nlp_preprocessor, hf_tokenizer = define_preprocessor(
-        FLAGS.preset, hf_model_name, size
+        hf_model_name, size
     )
 
     check_output(
-        FLAGS.preset,
         keras_nlp_model,
         keras_nlp_preprocessor,
         hf_model,
