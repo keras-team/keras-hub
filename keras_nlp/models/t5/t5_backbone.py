@@ -14,8 +14,6 @@
 
 """T5 backbone model."""
 
-import copy
-
 import tensorflow as tf
 from tensorflow import keras
 
