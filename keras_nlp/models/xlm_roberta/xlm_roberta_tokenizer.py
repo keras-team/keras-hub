@@ -100,7 +100,6 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         self.pad_token_id = 1  # <pad>
         self.end_token_id = 2  # </s>
         self.unk_token_id = 3  # <unk>
-        self.mask_token = 4
 
     def vocabulary_size(self):
         """Get the size of the tokenizer vocabulary."""
