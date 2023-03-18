@@ -23,7 +23,6 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.transformer_layer_utils import compute_causal_mask
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
-from keras_nlp.models.t5.t5_presets import backbone_presets
 from keras_nlp.models.t5.t5_transformer_layer import T5TransformerLayer
 from keras_nlp.utils.python_utils import classproperty
 
@@ -47,9 +46,7 @@ class T5Backbone(Backbone):
     preset architectures and weights, use the `from_preset` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
-    warranties or conditions of any kind. The underlying model is provided by
-    Google Research under the Apache 2.0 license
-    ([here](https://github.com/google-research/text-to-text-transfer-transformer/blob/main/LICENSE)).
+    warranties or conditions of any kind.
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -64,19 +61,13 @@ class T5Backbone(Backbone):
             activation to be used in the inner dense blocks of the
             Transformer layers. Defaults to `"gelu"`. The original
             T5 architecture used `"relu"`,
-            but the modern version uses `"gelu"`.
+            but more recent versions use `"gelu"`.
         use_gated_activation: boolean. Whether to use activation gating in
             the inner dense blocks of the Transformer layers.
             Defaults to True. The original T5 architecture didn't use
-            gating, but the version does.
-        layer_norm_epsilon: Epsilon factor to be used in the
+            gating, but more recent versions do.
+        layer_norm_epsilon: float. Epsilon factor to be used in the
             layer normalization layers in the Transformer layers.
-
-    Examples:
-
-    ```python
-    TODO
-    ```
     """
 
     def __init__(
@@ -248,4 +239,4 @@ class T5Backbone(Backbone):
 
     @classproperty
     def presets(cls):
-        return copy.deepcopy(backbone_presets)
+        raise NotImplementedError
