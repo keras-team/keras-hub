@@ -16,6 +16,7 @@
 import io
 import os
 
+import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
@@ -29,16 +30,7 @@ from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 
 class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.backbone = AlbertBackbone(
-            vocabulary_size=1000,
-            num_layers=2,
-            num_heads=2,
-            embedding_dim=8,
-            hidden_dim=64,
-            intermediate_dim=128,
-            max_sequence_length=128,
-            name="encoder",
-        )
+        # Setup model.
 
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
@@ -47,7 +39,7 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=vocab_data.as_numpy_iterator(),
             model_writer=bytes_io,
-            vocab_size=10,
+            vocab_size=5,
             model_type="WORD",
             pad_id=0,
             unk_id=1,
@@ -65,7 +57,18 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
 
         self.preprocessor = AlbertPreprocessor(
             tokenizer=tokenizer,
-            sequence_length=8,
+            sequence_length=5,
+        )
+        self.backbone = AlbertBackbone(
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_heads=2,
+            num_groups=1,
+            num_inner_repetitions=1,
+            embedding_dim=2,
+            hidden_dim=2,
+            intermediate_dim=4,
+            max_sequence_length=self.preprocessor.packer.sequence_length,
         )
         self.classifier = AlbertClassifier(
             self.backbone,
@@ -88,54 +91,41 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, tf.ones((4,)))
+            (self.raw_batch, tf.ones((2,)))
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
-    def test_valid_call_classifier(self):
-        self.classifier(self.preprocessed_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_albert_classifier_predict(self, jit_compile):
-        self.classifier.compile(jit_compile=jit_compile)
+    def test_classifier_predict(self):
         self.classifier.predict(self.raw_batch)
+        self.classifier.preprocessor = None
+        self.classifier.predict(self.preprocessed_batch)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_albert_classifier_predict_no_preprocessing(self, jit_compile):
-        self.classifier_no_preprocessing.compile(jit_compile=jit_compile)
-        self.classifier_no_preprocessing.predict(self.preprocessed_batch)
-
-    def test_albert_classifier_fit_default_compile(self):
+    def test_classifier_fit(self):
         self.classifier.fit(self.raw_dataset)
+        self.classifier.preprocessor = None
+        self.classifier.fit(self.preprocessed_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_albert_classifier_fit(self, jit_compile):
+    def test_classifier_fit_no_xla(self):
+        self.classifier.preprocessor = None
         self.classifier.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+            jit_compile=False,
         )
-        self.classifier.fit(self.raw_dataset)
+        self.classifier.fit(self.preprocessed_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_albert_classifier_fit_no_preprocessing(self, jit_compile):
-        self.classifier_no_preprocessing.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
+    def test_serialization(self):
+        config = keras.utils.serialize_keras_object(self.classifier)
+        new_classifier = keras.utils.deserialize_keras_object(config)
+        self.assertEqual(
+            new_classifier.get_config(),
+            self.classifier.get_config(),
         )
-        self.classifier_no_preprocessing.fit(self.preprocessed_dataset)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         model_output = self.classifier.predict(self.raw_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)

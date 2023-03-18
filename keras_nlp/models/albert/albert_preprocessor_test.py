@@ -17,6 +17,7 @@
 import io
 import os
 
+import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
@@ -157,10 +158,19 @@ class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         with self.assertRaises(ValueError):
             self.preprocessor(ambiguous_input)
 
+    def test_serialization(self):
+        config = keras.utils.serialize_keras_object(self.preprocessor)
+        new_preprocessor = keras.utils.deserialize_keras_object(config)
+        self.assertEqual(
+            new_preprocessor.get_config(),
+            self.preprocessor.get_config(),
+        )
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["the quick brown fox"])
         inputs = keras.Input(dtype="string", shape=())
