@@ -16,9 +16,12 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.api_export import keras_nlp_export
+
 NUM_MELS = 80
 
 
+@keras_nlp_export("keras_nlp.models.WhisperAudioFeatureExtractor")
 class WhisperAudioFeatureExtractor(keras.layers.Layer):
     """
     Whisper audio feature extractor layer.
@@ -70,7 +73,7 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
 
         # After transposition, `self.mel_filters`'s shape is
         # `(num_fft_bins // 2 + 1, NUM_MELS).`
-        self.mel_filters = tf.transpose(tf.constant(self._get_mel_filters()))
+        self.mel_filters = self._get_mel_filters()
 
     def _get_mel_filters(self):
         """
@@ -132,6 +135,7 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         enorm = 2.0 / (mel_f[2 : NUM_MELS + 2] - mel_f[:NUM_MELS])
         weights *= enorm[:, np.newaxis]
 
+        weights = tf.transpose(tf.constant(weights))
         return weights
 
     def _extract_audio_features(self, audio):
@@ -159,11 +163,7 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
 
         def tf_log10(x):
             """
-            Computes log base 10 of input tensor.
-
-            TensorFlow does not have a native implementation of log base 10, but
-            does have a log base `e` (`tf.math.log`). Hence, this short
-            workaround.
+            Computes log base 10 of input tensor using TensorFlow's natural log operator.
             """
             numerator = tf.math.log(x)
             denominator = tf.math.log(tf.constant(10, dtype=numerator.dtype))

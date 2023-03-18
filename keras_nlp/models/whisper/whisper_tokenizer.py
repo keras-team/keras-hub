@@ -15,6 +15,8 @@
 
 import json
 
+from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.models.whisper.whisper_presets import LANGUAGE_TOKENS
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
@@ -25,6 +27,7 @@ def _load_dict(dict_or_path):
     return dict_or_path
 
 
+@keras_nlp_export("keras_nlp.models.WhisperTokenizer")
 class WhisperTokenizer(BytePairTokenizer):
     """Whisper text tokenizer using Byte-Pair Encoding subword segmentation.
 
@@ -39,11 +42,9 @@ class WhisperTokenizer(BytePairTokenizer):
             it should be the file path to merge rules. The merge rule file
             should have one merge rule per line. Every merge rule contains
             merge entities separated by a space.
-        special_tokens: string or dict, maps special toens to integer IDs. If
+        special_tokens: string or dict, maps special tokens to integer IDs. If
             it is a string, it should be the path to a JSON file.
-        language_tokens: string or dict, maps language tokens to integer IDs. If
-            it is a string, it should be the path to a JSON file. The expectation
-            is that this argument will be non-`None` for multilingual tokenizers.
+        is_multilingual: bool, whether the tokenizer is multilingual.
     """
 
     def __init__(
@@ -51,30 +52,28 @@ class WhisperTokenizer(BytePairTokenizer):
         vocabulary,
         merges,
         special_tokens,
-        language_tokens=None,
+        is_multilingual,
         **kwargs,
     ):
         vocabulary = _load_dict(vocabulary)
-
-        if language_tokens is not None:
-            language_tokens = _load_dict(language_tokens)
-
-            # Add language tokens to the vocabulary. This makes detokenization
-            # easier for us.
-            for language_token in language_tokens:
-                language_token_idx = language_tokens[language_token]
-                vocabulary[language_token] = language_token_idx
 
         # Necessary special tokens.
         bos_token = "<|startoftranscript|>"
         eos_token = "<|endoftext|>"
 
-        if language_tokens is None:
-            # English tokenizer
-            pad_token = "<|endoftext|>"
-        else:
+        if is_multilingual:
             # Multilingual tokenizer.
             pad_token = ""
+
+            # Add language tokens to the vocabulary. This makes detokenization
+            # easier for us.
+            vocabulary = {
+                **vocabulary,
+                **LANGUAGE_TOKENS,
+            }
+        else:
+            # English tokenizer.
+            pad_token = "<|endoftext|>"
 
         no_timestamps_token = "<|notimestamps|>"
         # Task special tokens.
@@ -96,6 +95,7 @@ class WhisperTokenizer(BytePairTokenizer):
                     f"`special_tokens`. Please provide `'{token}'` in your "
                     "`special_tokens`."
                 )
+            # Add special tokens to `vocabulary` for easy detokenization.
             vocabulary[token] = special_tokens[token]
 
         self.bos_token_id = special_tokens[bos_token]
@@ -110,3 +110,5 @@ class WhisperTokenizer(BytePairTokenizer):
             merges=merges,
             **kwargs,
         )
+
+        self.is_multilingual = is_multilingual
