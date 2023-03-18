@@ -237,4 +237,4 @@ class T5Backbone(Backbone):
 
     @classproperty
     def presets(cls):
-        raise NotImplementedError
+        return {}
