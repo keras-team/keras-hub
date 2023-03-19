@@ -71,6 +71,9 @@ class DistilBertPreprocessor(Preprocessor):
 
     Directly calling the layer on data.
     ```python
+    preprocessor = keras_nlp.models.DistilBertPreprocessor.from_preset(
+    "distil_bert_base_en_uncased"
+    )
     preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
     
     # Custom vocabulary.
