@@ -86,8 +86,8 @@ class DistilBertMaskedLMPreprocessor(DistilBertPreprocessor):
     ```
     Mapping with `tf.data.Dataset`.
     ```python
-    preprocessor = keras_nlp.models.DistilbertMaskedLMPreprocessor.from_preset(
-        "distil_bert_base_en"
+    preprocessor = keras_nlp.models.DistilBertMaskedLMPreprocessor.from_preset(
+        "distil_bert_base_en_uncased"
     )
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
