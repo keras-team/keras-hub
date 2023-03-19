@@ -96,9 +96,6 @@ class DistilBertClassifier(Task):
     ```python
     features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
-        "segment_ids": tf.constant(
-            [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-        ),
         "padding_mask": tf.constant(
             [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
         ),
