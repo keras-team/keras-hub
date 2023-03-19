@@ -33,9 +33,9 @@ class FNetClassifier(Task):
     """An end-to-end f_net model for classification tasks.
 
     This model attaches a classification head to a
-    `keras_nlp.model.FNetBackbone` model, mapping from the backbone
-    outputs to logit output suitable for a classification task. For usage of
-    this model with pre-trained weights, see the `from_preset()` method.
+    `keras_nlp.model.FNetBackbone` instance, mapping from the backbone outputs
+    to logits suitable for a classification task. For usage of this model with 
+    pre-trained weights, use the `from_preset()` constructor.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -55,7 +55,7 @@ class FNetClassifier(Task):
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
 
-    Example usage:
+    Raw string data:
     ```python
     preprocessed_features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
@@ -71,13 +71,13 @@ class FNetClassifier(Task):
     # Randomly initialize a FNet backbone.
     backbone = keras_nlp.models.FNetBackbone(
         vocabulary_size=32000,
-        num_layers=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12,
+        num_layers=4,
+        hidden_dim=256,
+        intermediate_dim=512,
+        max_sequence_length=128,
     )
 
-    # Create a FNet classifier and fit your data.
+    # Pretrained classifier.
     classifier = keras_nlp.models.FNetClassifier(
         backbone,
         num_classes=4,
