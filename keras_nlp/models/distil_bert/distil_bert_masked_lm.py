@@ -66,7 +66,7 @@ class DistilBertMaskedLM(Task):
 
     # Pretrained language model.
     masked_lm = keras_nlp.models.DistilBertMaskedLM.from_preset(
-        "distil_bert_base_en",
+        "distil_bert_base_en_uncased",
     )
     masked_lm.fit(x=features, batch_size=2)
 
@@ -97,8 +97,8 @@ class DistilBertMaskedLM(Task):
     # Labels are the original masked values.
     labels = [[3, 5]] * 2
 
-    masked_lm = keras_nlp.models.BertMaskedLM.from_preset(
-        "distil_bert_base_en",
+    masked_lm = keras_nlp.models.DistilBertMaskedLM.from_preset(
+        "distil_bert_base_en_uncased",
         preprocessor=None,
     )
     masked_lm.fit(x=features, y=labels, batch_size=2)

@@ -89,7 +89,7 @@ class DistilBertClassifier(Task):
     # Access backbone programatically (e.g., to change `trainable`).
     classifier.backbone.trainable = False
     # Fit again.
-    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
+    classifier.fit(x=features, y=labels, batch_size=2)
     ```
 
     Preprocessed integer data.
@@ -106,7 +106,7 @@ class DistilBertClassifier(Task):
     labels = [0, 3]
     
     # Pretrained classifier without preprocessing.
-    classifier = keras_nlp.models.DistilbertClassifier.from_preset(
+    classifier = keras_nlp.models.DistilBertClassifier.from_preset(
         "distil_bert_base_en_uncased",
         num_classes=4,
         preprocessor=None,
@@ -120,14 +120,14 @@ class DistilBertClassifier(Task):
     labels = [0, 3]
     vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     vocab += ["The", "quick", "brown", "fox", "jumped", "."]
-    tokenizer = keras_nlp.models.DistilbertTokenizer(
+    tokenizer = keras_nlp.models.DistilBertTokenizer(
         vocabulary=vocab,
     )
-    preprocessor = keras_nlp.models.DistilbertPreprocessor(
+    preprocessor = keras_nlp.models.DistilBertPreprocessor(
         tokenizer=tokenizer,
         sequence_length=128,
     )
-    backbone = keras_nlp.models.DistilbertBackbone(
+    backbone = keras_nlp.models.DistilBertBackbone(
         vocabulary_size=30552,
         num_layers=4,
         num_heads=4,
@@ -135,7 +135,7 @@ class DistilBertClassifier(Task):
         intermediate_dim=512,
         max_sequence_length=128,
     )
-    classifier = keras_nlp.models.BertClassifier(
+    classifier = keras_nlp.models.DistilBertClassifier(
         backbone=backbone,
         preprocessor=preprocessor,
         num_classes=4,

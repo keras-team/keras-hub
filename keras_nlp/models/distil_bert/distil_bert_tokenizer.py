@@ -52,7 +52,7 @@ class DistilBertTokenizer(WordPieceTokenizer):
 
     ```python
     # Unbatched input.
-    tokenizer = keras_nlp.models.DistilbertTokenizer.from_preset(
+    tokenizer = keras_nlp.models.DistilBertTokenizer.from_preset(
         "distil_bert_base_en_uncased",
     )
     tokenizer("The quick brown fox jumped.")
@@ -63,7 +63,7 @@ class DistilBertTokenizer(WordPieceTokenizer):
     # Custom vocabulary.
     vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     vocab += ["The", "quick", "brown", "fox", "jumped", "."]
-    tokenizer = keras_nlp.models.DistilbertTokenizer(vocabulary=vocab)
+    tokenizer = keras_nlp.models.DistilBertTokenizer(vocabulary=vocab)
     tokenizer("The quick brown fox jumped.")
     ```
     """

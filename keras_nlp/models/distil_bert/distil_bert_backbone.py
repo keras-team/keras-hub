@@ -91,7 +91,7 @@ class DistilBertBackbone(Backbone):
         intermediate_dim=512,
         max_sequence_length=128,
     )
-    output = model(input_data)
+    model(input_data)
     ```
     """
 

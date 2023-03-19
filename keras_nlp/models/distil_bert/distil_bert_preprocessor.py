@@ -76,14 +76,14 @@ class DistilBertPreprocessor(Preprocessor):
     # Custom vocabulary.
     vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     vocab += ["The", "quick", "brown", "fox", "jumped", "."]
-    tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
-    preprocessor = keras_nlp.models.BertPreprocessor(tokenizer)
+    tokenizer = keras_nlp.models.DistilBertTokenizer(vocabulary=vocab)
+    preprocessor = keras_nlp.models.DistilBertPreprocessor(tokenizer)
     preprocessor("The quick brown fox jumped.")
     ```
 
     Mapping with `tf.data.Dataset`.
     ```python
-    preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
+    preprocessor = keras_nlp.models.DistilBertPreprocessor.from_preset(
         "distil_bert_base_en_uncased"
     )
     

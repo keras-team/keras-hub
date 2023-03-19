@@ -75,7 +75,7 @@ class DistilBertMaskedLMPreprocessor(DistilBertPreprocessor):
     Examples:
     ```python
     preprocessor = keras_nlp.models.DistilBertMaskedLMPreprocessor.from_preset(
-        "distil_bert_base_en"
+        "distil_bert_base_en_uncased"
     )
 
     # Tokenize and mask a single sentence.
