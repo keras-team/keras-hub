@@ -101,7 +101,7 @@ class DistilBertClassifier(Task):
         ),
     }
     labels = [0, 3]
-    
+
     # Pretrained classifier without preprocessing.
     classifier = keras_nlp.models.DistilBertClassifier.from_preset(
         "distil_bert_base_en_uncased",
@@ -110,7 +110,7 @@ class DistilBertClassifier(Task):
     )
     classifier.fit(x=features, y=labels, batch_size=2)
     ```
-    
+
     Custom backbone and vocabulary.
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]

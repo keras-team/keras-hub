@@ -75,7 +75,7 @@ class DistilBertPreprocessor(Preprocessor):
     "distil_bert_base_en_uncased"
     )
     preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
-    
+
     # Custom vocabulary.
     vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     vocab += ["The", "quick", "brown", "fox", "jumped", "."]
@@ -89,7 +89,7 @@ class DistilBertPreprocessor(Preprocessor):
     preprocessor = keras_nlp.models.DistilBertPreprocessor.from_preset(
         "distil_bert_base_en_uncased"
     )
-    
+
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
     label = tf.constant([1, 1])
@@ -97,7 +97,7 @@ class DistilBertPreprocessor(Preprocessor):
     ds = tf.data.Dataset.from_tensor_slices((first, label))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
-    
+
     # Map unlabeled single sentences.
     ds = tf.data.Dataset.from_tensor_slices(first)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
@@ -107,7 +107,7 @@ class DistilBertPreprocessor(Preprocessor):
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     # Map unlabeled sentence pairs.
     ds = tf.data.Dataset.from_tensor_slices((first, second))
-    
+
     # Watch out for tf.data's default unpacking of tuples here!
     # Best to invoke the `preprocessor` directly in this case.
     ds = ds.map(
