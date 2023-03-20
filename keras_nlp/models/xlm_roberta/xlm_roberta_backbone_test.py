@@ -61,8 +61,7 @@ class XLMRobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
             }
             output = self.backbone(input_data)
             self.assertAllEqual(
-                tf.shape(output),
-                [2, seq_length, self.backbone.hidden_dim]
+                tf.shape(output), [2, seq_length, self.backbone.hidden_dim]
             )
 
     def test_predict(self):
@@ -92,6 +91,7 @@ class XLMRobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
         # Check that output matches.
         restored_output = restored_model(self.input_batch)
         self.assertAllClose(model_output, restored_output)
+
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
