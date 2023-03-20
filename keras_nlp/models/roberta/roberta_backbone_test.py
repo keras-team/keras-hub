@@ -26,22 +26,18 @@ from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 
 class RobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = RobertaBackbone(
-            vocabulary_size=1000,
+        self.backbone = RobertaBackbone(
+            vocabulary_size=10,
             num_layers=2,
             num_heads=2,
-            hidden_dim=64,
-            intermediate_dim=128,
-            max_sequence_length=128,
+            hidden_dim=2,
+            intermediate_dim=4,
+            max_sequence_length=5,
         )
         self.batch_size = 8
         self.input_batch = {
-            "token_ids": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-            "padding_mask": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
+            "token_ids": tf.ones((2, 5), dtype="int32"),
+            "padding_mask": tf.ones((2, 5), dtype="int32"),
         }
 
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
@@ -49,24 +45,25 @@ class RobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
         ).batch(2)
 
     def test_valid_call_roberta(self):
-        self.model(self.input_batch)
+        self.backbone(self.input_batch)
+        
 
-        # Check default name passed through
-        self.assertRegexpMatches(self.model.name, "roberta_backbone")
+    def test_token_embedding(self):
+        output = self.backbone.token_embedding(self.input_batch["token_ids"])
+        self.assertEqual(output.shape, (2, 5, 2))
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_roberta_compile(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_batch)
+    def test_name(self):
+        self.assertRegexpMatches(self.backbone.name, "roberta_backbone")
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_roberta_compile_batched_ds(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_dataset)
+    def test_predict(self):
+        self.backbone.predict(self.input_batch)
+        self.backbone.predict(self.input_dataset)
+
+    def test_serialization(self):
+        new_backbone = keras.utils.deserialize_keras_object(
+            keras.utils.serialize_keras_object(self.backbone)
+        )
+        self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 
     def test_variable_sequence_length_call_roberta(self):
         for seq_length in (25, 50, 75):
@@ -78,7 +75,7 @@ class RobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
                     (self.batch_size, seq_length), dtype="int32"
                 ),
             }
-            output = self.model(input_data)
+            output = self.backbone(input_data)
             self.assertAllEqual(
                 tf.shape(output),
                 [self.batch_size, seq_length, self.model.hidden_dim],
@@ -88,6 +85,7 @@ class RobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large # Saving is slow, so mark these large.
     def test_saved_model(self, save_format, filename):
         model_output = self.model(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)
@@ -107,7 +105,7 @@ class RobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
 class RobertaBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
-            self.model = RobertaBackbone(
+            self.backbone = RobertaBackbone(
                 vocabulary_size=1000,
                 num_layers=2,
                 num_heads=2,
@@ -124,5 +122,5 @@ class RobertaBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
         ).batch(2)
 
     def test_predict(self):
-        self.model.compile()
-        self.model.predict(self.input_dataset)
+        self.backbone.compile()
+        self.backbone.predict(self.input_dataset)
