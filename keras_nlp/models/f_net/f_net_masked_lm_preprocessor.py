@@ -66,7 +66,7 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
                     out of budget. It supports an arbitrary number of segments.
 
     Examples:
-    
+
     Directly calling the layer on data.
     ```python
     # Load the preprocessor from a preset.
@@ -76,10 +76,10 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
 
     # Tokenize and mask a single sentence.
     preprocessor("The quick brown fox jumped.")
-    
+
     # Tokenize and mask a batch of single sentences.
     preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
-    
+
     # Tokenize and mask sentence pairs.
     # In this case, always convert input to tensors before calling the layer.
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
@@ -91,11 +91,11 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
     preprocessor = keras_nlp.models.FNetMaskedLMPreprocessor.from_preset(
         "bert_base_en_uncased"
     )
-    
-    
+
+
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
-    
+
     # Map single sentences.
     ds = tf.data.Dataset.from_tensor_slices(first)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
