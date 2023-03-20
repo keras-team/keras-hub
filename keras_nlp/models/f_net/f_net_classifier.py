@@ -34,7 +34,7 @@ class FNetClassifier(Task):
 
     This model attaches a classification head to a
     `keras_nlp.model.FNetBackbone` instance, mapping from the backbone outputs
-    to logits suitable for a classification task. For usage of this model with 
+    to logits suitable for a classification task. For usage of this model with
     pre-trained weights, use the `from_preset()` constructor.
 
     This model can optionally be configured with a `preprocessor` layer, in
