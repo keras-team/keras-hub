@@ -313,12 +313,13 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 )
 
         super().__init__(**kwargs)
-
-        if isinstance(vocabulary_size, int) == False:
-            raise ValueError(
-                "vocabulary size must be int. "
-                f"Recieved: type {type(vocabulary_size)}"
-            )
+        
+        if vocabulary_size is not None:
+            if isinstance(vocabulary_size, int) == False:
+                raise ValueError(
+                    "vocabulary size must be int. "
+                    f"Recieved: type {type(vocabulary_size)}"
+                )
 
         if isinstance(vocabulary, str):
             self.vocabulary = [
@@ -347,7 +348,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
         
-        self.vocabulary_size = vocabulary_size
+        self._vocabulary_size = vocabulary_size
         self.sequence_length = sequence_length
         self.lowercase = lowercase
         self.strip_accents = strip_accents
@@ -401,7 +402,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 # the saved model. We have no good way to support this
                 # currently, so we save the vocabulary in the config.
                 "vocabulary": self.vocabulary,
-                "vocabulary size": self.vocabulary_size,
+                "vocabulary size": self._vocabulary_size,
                 "sequence_length": self.sequence_length,
                 "lowercase": self.lowercase,
                 "strip_accents": self.strip_accents,
