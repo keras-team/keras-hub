@@ -288,16 +288,15 @@ class GPT2CausalLM(Task):
 
     def make_generate_function(self):
         """Create or return the compiled generation function."""
-        # Return the saved generate_function if we have it.
         if self.generate_function is not None:
             return self.generate_function
 
-        def generate_function(prompt, input_mask, min_length, max_length):
+        def generate_function(prompt, input_mask, min_length):
             # Create and seed cache with a single forward pass.
             cache = self._build_cache(prompt)
 
             def next(prompt, state, index):
-                # The cache index is for our previous token.
+                # The cache index is the index of our previous token.
                 cache_index = index - 1
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
                 logits, state = self.call_with_cache(prompt, state, cache_index)
@@ -315,7 +314,7 @@ class GPT2CausalLM(Task):
         if self.run_eagerly:
             self.generate_function = generate_function
         else:
-            # `jit_compile` is a property of keras.Model after tf 2.12.
+            # `jit_compile` is a property of keras.Model after TF 2.12.
             # Use `getattr()` for backwards compatibility.
             jit_compile = getattr(self, "jit_compile", True)
             self.generate_function = tf.function(
@@ -356,15 +355,15 @@ class GPT2CausalLM(Task):
 
         # Pad ragged to dense tensors.
         padded_shape = (None, max_length)
-        min_length = tf.cast(tf.reduce_min(prompt.row_lengths()), "int32")
+        min_length = tf.reduce_min(prompt.row_lengths())
         input_mask = tf.ones_like(prompt, tf.bool).to_tensor(shape=padded_shape)
         prompt = prompt.to_tensor(shape=padded_shape)
 
         # Run the (possibly compiled) generate function on dense inputs.
         generate_function = self.make_generate_function()
-        output = generate_function(prompt, input_mask, min_length, max_length)
+        output = generate_function(prompt, input_mask, min_length)
 
-        # Truncate back to ragged to account for end of sequence ids.
+        # Truncate to ragged by removing tokens after the first end token.
         end_token_id = self.preprocessor.tokenizer.end_token_id
         output = truncate_at_token(output, end_token_id, input_mask)
 

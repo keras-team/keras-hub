@@ -79,15 +79,20 @@ class BeamSampler(Sampler):
         end_token_id=None,
     ):
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
+        # Make sure max length and start index are the same dtype.
+        index = tf.cast(index, max_length.dtype)
 
-        def add_beams(x):
+        def create_beams(x):
+            """Add initial beam state."""
             return tf.repeat(x, self.num_beams, axis=0)
 
-        def flatten(x):
+        def flatten_beams(x):
+            """Combine the beam dim and batch dim."""
             flat_shape = [batch_size * self.num_beams] + x.shape.as_list()[2:]
             return tf.reshape(x, shape=flat_shape)
 
-        def unflatten(x):
+        def unflatten_beams(x):
+            """Separate the beam dim and batch dim."""
             unflat_shape = [batch_size, self.num_beams] + x.shape.as_list()[1:]
             return tf.reshape(x, shape=unflat_shape)
 
@@ -95,12 +100,12 @@ class BeamSampler(Sampler):
         # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
         state = () if state is None else state
         # Add extra sequences for each beam.
-        prompt, mask = add_beams(prompt), add_beams(mask)
-        state = tf.nest.map_structure(add_beams, state)
+        prompt, mask = create_beams(prompt), create_beams(mask)
+        state = tf.nest.map_structure(create_beams, state)
         # Setup the initial beam log-likelihoods.
         # On the first loop, make sure only the original beam is considered.
         log_probs = tf.constant([[0.0] + [-1e9] * (self.num_beams - 1)])
-        log_probs = flatten(tf.repeat(log_probs, batch_size, axis=0))
+        log_probs = flatten_beams(tf.repeat(log_probs, batch_size, axis=0))
 
         def cond(prompt, state, index, log_probs):
             if end_token_id is None:
@@ -126,15 +131,15 @@ class BeamSampler(Sampler):
                 next_log_probs, k=self.num_beams, sorted=False
             )
             beam_indices = indices // vocab_size
-            next_token = flatten(indices % vocab_size)
+            next_token = flatten_beams(indices % vocab_size)
             # We need `ensure_shape` as `top_k` will change the static shape.
-            next_log_probs = flatten(next_log_probs)
+            next_log_probs = flatten_beams(next_log_probs)
             log_probs = tf.ensure_shape(next_log_probs, log_probs.shape)
 
             def gather_beams(x):
-                x = unflatten(x)
+                x = unflatten_beams(x)
                 x = tf.gather(x, beam_indices, axis=1, batch_dims=1)
-                return flatten(x)
+                return flatten_beams(x)
 
             prompt = gather_beams(prompt)
             state = tf.nest.map_structure(gather_beams, state)
@@ -157,7 +162,7 @@ class BeamSampler(Sampler):
         )
 
         # Gather the top beam at each batch index.
-        prompt, log_probs = unflatten(prompt), unflatten(log_probs)
+        prompt, log_probs = unflatten_beams(prompt), unflatten_beams(log_probs)
         top_beams = tf.math.argmax(log_probs, axis=-1)[:, tf.newaxis]
         prompt = tf.gather(prompt, top_beams, axis=1, batch_dims=1)
         return tf.squeeze(prompt, axis=1)

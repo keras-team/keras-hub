@@ -92,6 +92,8 @@ class Sampler:
         end_token_id=None,
     ):
         max_length = tf.shape(prompt)[-1]
+        # Make sure `max_length` and `index` are the same dtype.
+        index = tf.cast(index, max_length.dtype)
         mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
         # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
         state = () if state is None else state
