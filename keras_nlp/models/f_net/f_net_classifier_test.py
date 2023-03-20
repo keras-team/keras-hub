@@ -93,7 +93,6 @@ class FNetClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.classifier.preprocessor = None
         self.classifier.predict(self.preprocessed_batch)
 
-    
     def test_fnet_classifier_fit(self):
         self.classifier.fit(self.raw_dataset)
         self.classifier.preprocessor = None
@@ -113,6 +112,7 @@ class FNetClassifierTest(tf.test.TestCase, parameterized.TestCase):
             new_classifier.get_config(),
             self.classifier.get_config(),
         )
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),

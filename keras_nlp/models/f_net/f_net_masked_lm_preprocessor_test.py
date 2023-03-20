@@ -128,7 +128,7 @@ class FNetMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             new_preprocessor.get_config(),
             self.preprocessor.get_config(),
         )
-    
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),

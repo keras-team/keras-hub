@@ -59,18 +59,17 @@ class FNetBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def test_predict(self):
         self.backbone.predict(self.input_batch)
         self.backbone.predict(self.input_dataset)
-    
+
     def test_serialization(self):
         new_backbone = keras.utils.deserialize_keras_object(
             keras.utils.serialize_keras_object(self.backbone)
         )
         self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
-    
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
-
     @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         model_output = self.backbone(self.input_batch)

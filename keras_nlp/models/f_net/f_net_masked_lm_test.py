@@ -85,13 +85,12 @@ class FNetMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         self.masked_lm(self.preprocessed_batch)
         self.masked_lm.preprocessor = None
         self.masked_lm.predict(self.preprocessed_batch[0])
-        
+
     def test_classifier_predict(self, jit_compile):
         self.masked_lm.predict(self.raw_batch)
         self.masked_lm.preprocessor = None
         self.masked_lm.predict(self.preprocessed_batch[0])
 
-    
     def test_classifier_fit(self):
         self.masked_lm.fit(self.raw_dataset)
         self.masked_lm.preprocessor = None

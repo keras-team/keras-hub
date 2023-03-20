@@ -152,7 +152,6 @@ class FNetPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
-
     @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["the quick brown fox"])
