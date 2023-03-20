@@ -56,7 +56,7 @@ class FNetPreprocessor(Preprocessor):
                     "waterfall" algorithm that allocates quota in a
                     left-to-right manner and fills up the buckets until we run
                     out of budget. It supports an arbitrary number of segments.
-                    
+
     Call arguments:
         x: A tensor of single string sequences, or a tuple of multiple
             tensor sequences to be packed together. Inputs may be batched or
@@ -64,9 +64,9 @@ class FNetPreprocessor(Preprocessor):
             to tensors. For multiple sequences, pass tensors directly.
         y: Any label data. Will be passed through unaltered.
         sample_weight: Any label weight data. Will be passed through unaltered.
-        
+
     Examples:
-    
+
     Directly calling the layer on data.
     ```python
     tokenizer = keras_nlp.models.FNetTokenizer(proto="model.spm")
@@ -103,7 +103,7 @@ class FNetPreprocessor(Preprocessor):
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
     label = tf.constant([1, 1])
-    
+
     # Map labeled single sentences.
     ds = tf.data.Dataset.from_tensor_slices((first, label))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
@@ -115,10 +115,10 @@ class FNetPreprocessor(Preprocessor):
     # Map labeled sentence pairs.
     ds = tf.data.Dataset.from_tensor_slices(((first, second), label))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-    
+
     # Map unlabeled sentence pairs.
     ds = tf.data.Dataset.from_tensor_slices((first, second))
-    
+
     # Watch out for tf.data's default unpacking of tuples here!
     # Best to invoke the `preprocessor` directly in this case.
     ds = ds.map(
