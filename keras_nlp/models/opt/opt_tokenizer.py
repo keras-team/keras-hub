@@ -50,7 +50,7 @@ class OPTTokenizer(BytePairTokenizer):
     Examples:
 
     Batched inputs.
-    >>> vocab = {"<pad>": 1, "</s>": 2, "a": 3, "Ġquick": 4, "Ġfox": 5}
+    >>> vocab = {"<pad>": 1, "</s>": 2, "a": 102, "Ġquick": 2119, "Ġfox": 23602}
     >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
     >>> merges += ["Ġ f", "o x", "Ġf ox"]
     >>> tokenizer = keras_nlp.models.OPTTokenizer(
@@ -58,10 +58,10 @@ class OPTTokenizer(BytePairTokenizer):
     ...     merges=merges,
     ... )
     >>> tokenizer(["a quick fox", "a fox quick"])
-    <tf.RaggedTensor [[3, 4, 5], [3, 5, 4]]>
+    <tf.RaggedTensor [[102, 2119, 23602], [102, 23602, 2119]]>
 
     Unbatched input.
-    >>> vocab = {"<pad>": 1, "</s>": 2, "a": 3, "Ġquick": 4, "Ġfox": 5}
+    >>> vocab = {"<pad>": 1, "</s>": 2, "a": 102, "Ġquick": 2119, "Ġfox": 23602}
     >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
     >>> merges += ["Ġ f", "o x", "Ġf ox"]
     >>> tokenizer = keras_nlp.models.OPTTokenizer(
@@ -69,10 +69,10 @@ class OPTTokenizer(BytePairTokenizer):
     ...     merges=merges,
     ... )
     >>> tokenizer("a quick fox")
-    <tf.Tensor: shape=(4,), dtype=int32, numpy=array([3, 4, 5], dtype=int32)>
+    <tf.Tensor: shape=(4,), dtype=int32, numpy=array([102, 2119, 23602], dtype=int32)>
 
     Detokenization.
-    >>> vocab = {"<pad>": 1, "</s>": 2, "Ġquick": 4, "Ġfox": 5}
+    >>> vocab = {"<pad>": 1, "</s>": 2, "Ġquick": 2119, "Ġfox": 23602}
     >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
     >>> merges += ["Ġ f", "o x", "Ġf ox"]
     >>> tokenizer = keras_nlp.models.OPTTokenizer(
