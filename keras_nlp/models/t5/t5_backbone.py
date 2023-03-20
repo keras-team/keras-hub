@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""T5 backbone model."""
+"""A T5 backbone model."""
 
 import tensorflow as tf
 from tensorflow import keras
@@ -41,7 +41,7 @@ class T5Backbone(Backbone):
 
     The default constructor gives a fully customizable, randomly initialized T5
     model with any number of layers, heads, and embedding dimensions. To load
-    preset architectures and weights, use the `from_preset` constructor.
+    preset architectures and weights, use the `from_preset()` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind.
@@ -70,11 +70,11 @@ class T5Backbone(Backbone):
 
     def __init__(
         self,
-        vocabulary_size,
-        num_layers,
-        num_heads,
-        hidden_dim,
-        intermediate_dim,
+        vocabulary_size=30552,
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        intermediate_dim=512,
         dropout=0.1,
         activation="gelu",
         use_gated_activation=True,
