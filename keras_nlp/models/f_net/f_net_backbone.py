@@ -44,8 +44,8 @@ class FNetBackbone(Backbone):
     It includes the embedding lookups and `keras_nlp.layers.FNetEncoder` layers,
     but not the masked language model or next sentence prediction heads.
 
-    The default constructor gives a fully customizable, randomly initialized 
-    FNet encoder with any number of layers and embedding dimensions. To 
+    The default constructor gives a fully customizable, randomly initialized
+    FNet encoder with any number of layers and embedding dimensions. To
     load preset architectures and weights, use the `from_preset()` constructor.
 
     Note: unlike other models, FNet does not take in a `"padding_mask"` input,
