@@ -15,6 +15,7 @@
 import os
 from typing import Iterable
 from typing import List
+import warnings
 
 import tensorflow as tf
 from tensorflow import keras
@@ -197,6 +198,10 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             passing a list, each element of the list should be a single
             WordPiece token string. If passing a filename, the file should be a
             plain text file containing a single WordPiece token per line.
+        vocabulary_size: Force the vocabulary to be exactly `vocabulary_size`,
+            by truncating the input vocabulary if necessary. This is not
+            equivalent to retraining a word piece vocabulary from scratch, but
+            can be useful for quick hyperparameter tuning.
         sequence_length: int. If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of sequence_length.
         lowercase: bool, defaults to `False`. If true, the input text will be
@@ -284,6 +289,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     def __init__(
         self,
         vocabulary=None,
+        vocabulary_size=None,
         sequence_length: int = None,
         lowercase: bool = False,
         strip_accents: bool = False,
@@ -308,13 +314,31 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         super().__init__(**kwargs)
 
+        if isinstance(vocabulary_size, int) == False:
+            raise ValueError(
+                "vocabulary size must be int. "
+                f"Recieved: type {type(vocabulary_size)}"
+            )
+
         if isinstance(vocabulary, str):
             self.vocabulary = [
                 line.rstrip() for line in tf.io.gfile.GFile(vocabulary)
             ]
+            if vocabulary_size is None:
+                vocabulary_size = len(self.vocabulary)
+            if len(self.vocabulary) < vocabulary_size:
+                warnings.warn("Setting vocab size to a larger value than the input vocabulary file.\
+￼                        Some token ids will never be output from the tokenizer.")
+                vocabulary_size = len(self.vocabulary)
+            else:
+                self.vocabulary = self.vocabulary[vocabulary_size]
         elif isinstance(vocabulary, Iterable):
             # Make a copy.
             self.vocabulary = list(vocabulary)
+            if vocabulary_size is None:
+                vocabulary_size = len(self.vocabulary)
+            else:
+                self.vocabulary = self.vocabulary[0:vocabulary_size]
         else:
             raise ValueError(
                 "Vocabulary must be an file path or list of terms. "
@@ -322,7 +346,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             )
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
-
+        
+        self.vocabulary_size = vocabulary_size
         self.sequence_length = sequence_length
         self.lowercase = lowercase
         self.strip_accents = strip_accents
@@ -376,6 +401,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 # the saved model. We have no good way to support this
                 # currently, so we save the vocabulary in the config.
                 "vocabulary": self.vocabulary,
+                "vocabulary size": self.vocabulary_size,
                 "sequence_length": self.sequence_length,
                 "lowercase": self.lowercase,
                 "strip_accents": self.strip_accents,

@@ -25,7 +25,8 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_tokenize(self):
         input_data = ["the quick brown fox."]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
-        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+        vocab_size = 5
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data, vocabulary_size=vocab_size)
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
         self.assertIsInstance(call_output, tf.RaggedTensor)
