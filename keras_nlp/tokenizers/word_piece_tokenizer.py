@@ -332,7 +332,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 ￼                        Some token ids will never be output from the tokenizer.")
                 vocabulary_size = len(self.vocabulary)
             else:
-                self.vocabulary = self.vocabulary[vocabulary_size]
+                self.vocabulary = self.vocabulary[0:vocabulary_size]
         elif isinstance(vocabulary, Iterable):
             # Make a copy.
             self.vocabulary = list(vocabulary)
@@ -348,7 +348,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
         
-        self._vocabulary_size = vocabulary_size
         self.sequence_length = sequence_length
         self.lowercase = lowercase
         self.strip_accents = strip_accents
@@ -402,7 +401,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 # the saved model. We have no good way to support this
                 # currently, so we save the vocabulary in the config.
                 "vocabulary": self.vocabulary,
-                "vocabulary size": self._vocabulary_size,
                 "sequence_length": self.sequence_length,
                 "lowercase": self.lowercase,
                 "strip_accents": self.strip_accents,
@@ -499,6 +497,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         config.update(
             {
                 "vocabulary": vocabulary,
+                "vocabulary_size": len(vocabulary)
             },
         )
 
