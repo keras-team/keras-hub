@@ -55,13 +55,13 @@ class FNetTokenizer(SentencePieceTokenizer):
         "bert_base_en_uncased",
     )
     tokenizer("The quick brown fox jumped.")
-    
+
     # Batched input.
     tokenizer(["The quick brown fox jumped.", "The fox slept."])
-    
+
     # Detokenization.
     tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
-    
+
     # Custom vocabulary.
     vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     vocab += ["The", "quick", "brown", "fox", "jumped", "."]
