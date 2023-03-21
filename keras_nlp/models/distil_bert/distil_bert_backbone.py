@@ -35,7 +35,7 @@ def distilbert_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.DistilBertBackbone")
 class DistilBertBackbone(Backbone):
-    """DistilBERT encoder network.
+    """A DistilBERT encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["DistilBERT, a distilled version of BERT: smaller, faster,
@@ -45,8 +45,8 @@ class DistilBertBackbone(Backbone):
 
     The default constructor gives a fully customizable, randomly initialized
     DistilBERT encoder with any number of layers, heads, and embedding
-    dimensions. To load preset architectures and weights, use the `from_preset`
-    constructor.
+    dimensions. To load preset architectures and weights, use the
+    `from_preset()` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
@@ -76,22 +76,22 @@ class DistilBertBackbone(Backbone):
         ),
     }
 
-    # Pretrained DistilBERT encoder
+    # Pretrained DistilBERT encoder.
     model = keras_nlp.models.DistilBertBackbone.from_preset(
         "distil_bert_base_en_uncased"
     )
-    output = model(input_data)
+    model(input_data)
 
-    # Randomly initialized DistilBERT encoder with custom config
+    # Randomly initialized DistilBERT encoder with custom config.
     model = keras_nlp.models.DistilBertBackbone(
         vocabulary_size=30552,
-        num_layers=6,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12,
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        intermediate_dim=512,
+        max_sequence_length=128,
     )
-    output = model(input_data)
+    model(input_data)
     ```
     """
 
