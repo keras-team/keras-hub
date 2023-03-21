@@ -59,7 +59,7 @@ class DistilBertPreprocessor(Preprocessor):
                     left-to-right manner and fills up the buckets until we run
                     out of budget. It supports an arbitrary number of segments.
 
-        Call arguments:
+    Call arguments:
         x: A tensor of single string sequences, or a tuple of multiple
             tensor sequences to be packed together. Inputs may be batched or
             unbatched. For single sequences, raw python inputs will be converted
@@ -72,7 +72,7 @@ class DistilBertPreprocessor(Preprocessor):
     Directly calling the layer on data.
     ```python
     preprocessor = keras_nlp.models.DistilBertPreprocessor.from_preset(
-    "distil_bert_base_en_uncased"
+        "distil_bert_base_en_uncased"
     )
     preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
 

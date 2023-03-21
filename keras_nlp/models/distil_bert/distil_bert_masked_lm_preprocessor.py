@@ -64,6 +64,7 @@ class DistilBertMaskedLMPreprocessor(DistilBertPreprocessor):
             replaced with a random token from the vocabulary. A selected token
             will be left as is with probability
             `1 - mask_token_rate - random_token_rate`.
+
     Call arguments:
         x: A tensor of single string sequences, or a tuple of multiple
             tensor sequences to be packed together. Inputs may be batched or
@@ -73,18 +74,25 @@ class DistilBertMaskedLMPreprocessor(DistilBertPreprocessor):
         sample_weight: Label weights. Should always be `None` as the layer
             generates label weights.
 
-    Examples:
+    Directly calling the layer on data.
     ```python
     preprocessor = keras_nlp.models.DistilBertMaskedLMPreprocessor.from_preset(
         "distil_bert_base_en_uncased"
     )
 
     # Tokenize and mask a single sentence.
+    preprocessor("The quick brown fox jumped.")
+
+    # Tokenize and mask a batch of single sentences.
+    preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
+
+    # Tokenize and mask sentence pairs.
     # In this case, always convert input to tensors before calling the layer.
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
     preprocessor((first, second))
     ```
+
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_nlp.models.DistilBertMaskedLMPreprocessor.from_preset(
@@ -93,6 +101,7 @@ class DistilBertMaskedLMPreprocessor(DistilBertPreprocessor):
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+
     # Map single sentences.
     ds = tf.data.Dataset.from_tensor_slices(first)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
