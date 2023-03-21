@@ -57,7 +57,7 @@ class RobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             mask_selection_length=2,
         )
         self.backbone = RobertaBackbone(
-            vocabulary_size=len(self.vocab),
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
             hidden_dim=2,
@@ -75,8 +75,8 @@ class RobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
 
         self.raw_batch = tf.constant(
             [
-                "the quick brown fox.",
-                "the slow brown fox.",
+                " airplane at airport",
+                " the airplane is the best",
             ]
         )
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
@@ -92,7 +92,7 @@ class RobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         self.masked_lm.predict(self.raw_batch)
         self.masked_lm.preprocessor = None
         self.masked_lm.predict(self.preprocessed_batch[0])
-        
+
     def test_classifier_fit(self):
         self.masked_lm.fit(self.raw_dataset)
         self.masked_lm.preprocessor = None

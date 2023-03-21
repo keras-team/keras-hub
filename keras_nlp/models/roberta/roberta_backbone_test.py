@@ -46,7 +46,6 @@ class RobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_valid_call_roberta(self):
         self.backbone(self.input_batch)
-        
 
     def test_token_embedding(self):
         output = self.backbone.token_embedding(self.input_batch["token_ids"])
@@ -66,26 +65,22 @@ class RobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 
     def test_variable_sequence_length_call_roberta(self):
-        for seq_length in (25, 50, 75):
+        for seq_length in (2, 3, 4):
             input_data = {
-                "token_ids": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
-                "padding_mask": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
+                "token_ids": tf.ones((2, seq_length), dtype="int32"),
+                "padding_mask": tf.ones((2, seq_length), dtype="int32"),
             }
             output = self.backbone(input_data)
             self.assertAllEqual(
                 tf.shape(output),
-                [self.batch_size, seq_length, self.model.hidden_dim],
+                [2, seq_length, self.backbone.hidden_dim],
             )
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
-    @pytest.mark.large # Saving is slow, so mark these large.
+    @pytest.mark.large  # Saving is slow, so mark these large.
     def test_saved_model(self, save_format, filename):
         model_output = self.model(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)

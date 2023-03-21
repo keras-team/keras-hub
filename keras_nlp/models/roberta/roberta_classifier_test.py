@@ -28,7 +28,6 @@ from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 
 class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-
         self.vocab = {
             "<s>": 0,
             "<pad>": 1,
@@ -55,7 +54,7 @@ class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
             sequence_length=5,
         )
         self.backbone = RobertaBackbone(
-            vocabulary_size=len(self.vocab),
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
             hidden_dim=2,
@@ -71,8 +70,8 @@ class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
         # Setup data.
         self.raw_batch = tf.constant(
             [
-                "the quick brown fox.",
-                "the slow brown fox"
+                " airplane at airport",
+                " the airplane is the best",
             ]
         )
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
@@ -82,7 +81,7 @@ class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
     def test_valid_call_classifier(self):
-        self.classifier(self.raw_batch)
+        self.classifier(self.preprocessed_batch)
 
     def test_classifier_predict(self):
         self.classifier.predict(self.raw_batch)
