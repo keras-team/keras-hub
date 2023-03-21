@@ -65,7 +65,7 @@ class DebertaV3TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(output, tf.constant(["the quick brown fox"]))
 
     def test_detokenize_mask_token(self):
-        input_data = tf.constant([[4, 9, 5, 7, 128000]])
+        input_data = tf.constant([[4, 9, 5, 7, 10]])
         output = self.tokenizer.detokenize(input_data)
         self.assertEqual(output, tf.constant(["the quick brown fox"]))
 
