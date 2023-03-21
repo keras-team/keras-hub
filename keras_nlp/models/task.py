@@ -28,6 +28,7 @@ class Task(PipelineModel):
   
     def __init__(self, *args, **kwargs):
         self._backbone = None
+        self._preprocessor = None
         super().__init__(*args, **kwargs)
     
     def preprocess_samples(self, x, y=None, sample_weight=None):
