@@ -20,246 +20,121 @@ from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.python_utils import format_docstring
 
-base_sampler_args_docstring = """
-    jit_compile: bool, defaults to True. If True, XLA compilation will be used.
-    run_eagerly: bool, defaults to False. If True, the sampler will run in
-        the eager mode.
-    """
-
 call_args_docstring = """
-    prompt: a list of integers or an integer Tensor, can be 1D or 2D. The
-        initial tokens to append generated tokens.
-    token_probability_fn: a function that generates the probability of
-        the next token over the whole vocabulary for each input token.
-    max_length: int. The max length of generated sequence.
-    mask: a tensor, defaults to None. The padding mask of the prompt.
-    end_token_id: int, defaults to None. The token marking the end of the
-        sequence, once encountered the generation is finished for the exact
-        sequence. If None, every sequence is generated up to `max_length`.
-        If set, all tokens after encountering `end_token_id` will be
-        replaced with `pad_token_id`.
-    from_logits: bool, defaults to True. Indicate if the `token_probability_fn`
-        returns logits. If False, `token_probability_fn` returns probability
-        distributions.
-    cache: a dense int tensor, a cache of intermediate key and value tensor
-        computed by each decoder self-attention layer. These values will only
-        be computed once for each new token in the generated sequence.
+    next: A function which takes in the `prompt, state, index` of the
+        current generation loop, and outputs a tuple `(logits, state)` with the
+        probability for the next token and state for the next iteration.
+    prompt: A 2D integer tensor with shape `(batch_size, max_length)`. This
+        tensor will be iteratively updated column by column with new sampled
+        values, starting at `index`.
+    state: Optional. A tensor or nested structure of tensors that will be
+        updated by each call to `next`. This can be used to cache computations
+        from early iterations of the generative loop.
+    index: Optional. The first index to start sampling at.
+    mask: Optional. A 2D integer tensor with the same shape as `prompt`.
+        Locations which are `True` in the mask are never updated during
+        sampling. Often this will mark all ids in `prompt` which were present in
+        the original input.
+    end_token_id: Optional. The token marking the end of the sequence. If
+        specified, sampling will stop as soon as all sequences in the prompt
+        produce a `end_token_id` in a location where `mask` is `False`.
     """
 
 
-@format_docstring(
-    base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
-)
+@format_docstring(call_args=call_args_docstring)
 @keras_nlp_export("keras_nlp.samplers.Sampler")
 class Sampler:
     """Base sampler class.
 
-    Args:
-        {{base_sampler_args}}
-
     Call Args:
         {{call_args}}
 
-    The inputs and outputs of Sampler class are both token ids.
+    This base class can be extended to implement different auto-regressive
+    sampling methods. Subclasses can either:
 
-    Subclassers should always implement the `get_next_token()` method, which
-    gets the next token based on probability distribution over vocab tokens.
-    Please check available subclass samplers for examples. If you need more
-    control over the sampling process, please implement `sample()` method
-    instead, see `keras_nlp.samplers.BeamSampler` for examples.
+    - Override the `get_next_token()` method, which computes the next token
+      based on a probability distribution over all possible vocab entries.
+    - Override `__call__`, if the sampling method need additional state beyond
+      the next tokens probability distribution to sample a sequence.
+
+    Please check available subclass samplers for examples.
 
     Examples:
 
-    Basic usage:
     ```python
-    VOCAB_SIZE = 10
+    # Use a simple alphabet of lowercase characters to [0, 26).
+    int_lookup = {i: chr(i + ord('a')) for i in range(26)}
+    char_lookup = {v: k for k, v in int_lookup.items()}
+    batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
-    # Create a dummy model to predict the next token. Note that the output is
-    # random without training, here we just demo how `samplers` works.
-    model = keras.Sequential(
-        [
-            keras.Input(shape=[None]),
-            keras.layers.Embedding(
-                input_dim=VOCAB_SIZE,
-                output_dim=16,
-            ),
-            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
-        ]
+    def next(prompt, state, index):
+        # return a uniform distribution over our alphabet.
+        logits = tf.ones((batch_size, vocab_size))
+        return logits, state
+
+    output = keras_nlp.samplers.GreedySampler()(
+        next=next,
+        prompt=tf.fill((batch_size, length,), char_lookup['z']),
+        index=5,
     )
-
-    # Define a function that outputs the next token's probability for each token
-    # in the input sequence.
-    def token_probability_fn(inputs, mask):
-        return model(inputs)
-
-    prompt = tf.fill((8, 1), 1)
-
-    sampler = keras_nlp.samplers.GreedySampler()
-    # Print the generated sequence (token ids).
-    print(sampler(prompt, token_probability_fn, max_length=10, end_token_id=2))
-    ```
-
-    Use with string inputs:
-    ```python
-    vocab = ["[UNK]", "[PAD]", "[END]", "the", "quick", "brown", "fox"]
-    tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-        vocabulary=vocab,
-        lowercase=True,
-    )
-    FEATURE_SIZE = 16
-    VOCAB_SIZE = len(vocab)
-    # Create a dummy model to predict the next token.
-    model = keras.Sequential(
-        [
-            keras.Input(shape=[None]),
-            keras.layers.Embedding(
-                input_dim=VOCAB_SIZE,
-                output_dim=FEATURE_SIZE,
-            ),
-            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
-        ]
-    )
-    # Define a function that outputs the next token's probability for each token
-    # in the input sequence.
-    def token_probability_fn(inputs, mask):
-        return model(inputs)
-
-    prompt = tokenizer("the quick brown fox")
-    sampler = keras_nlp.samplers.GreedySampler()
-    generated = sampler(
-        prompt,
-        token_probability_fn,
-        max_length=10,
-        end_token_id=tokenizer.token_to_id("[END]")
-    )
-    print(tokenizer.detokenize(generated))
+    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
+    # >>> "zzzzzaaaaaaa"
     ```
     """
 
-    def __init__(
-        self,
-        jit_compile=True,
-        run_eagerly=False,
-    ):
-        if run_eagerly and jit_compile:
-            raise ValueError(
-                "XLA cannot be turned on under eager mode, received "
-                "`jit_compile=True` and `run_eagerly=True`. Please either set "
-                "`jit_compile=False` or set `run_eagerly=False`."
-            )
-        self.jit_compile = jit_compile
-        self.run_eagerly = run_eagerly
-
-    def _validate_prompt_and_mask(self, prompt, mask):
-        """Helper method to validate input prompt."""
-        if not isinstance(prompt, (list, tf.RaggedTensor, tf.Tensor)):
-            raise ValueError(
-                "`prompt` must be one of `list`, `tf.RaggedTensor` or "
-                f"`tf.Tensor`, but received: prompt={type(prompt)}."
-            )
-
-        if isinstance(prompt, tf.RaggedTensor):
-            if mask:
-                raise ValueError(
-                    "`mask` is only valid when `prompt` is a list or dense "
-                    f"tensor, but received type(prompt)={type(prompt)}."
-                )
-            return prompt, mask
-
-        if isinstance(prompt, list):
-            prompt = tf.convert_to_tensor(prompt)
-        if not mask:
-            mask = tf.cast(tf.ones_like(prompt), dtype=tf.bool)
-        prompt = tf.ragged.boolean_mask(prompt, mask)
-        return prompt, mask
-
-    def _pad_prompt(self, prompt, max_length):
-        """Pad prompt to `max_length`."""
-        mask = tf.ones_like(prompt, dtype=tf.bool)
-        mask = mask.to_tensor(shape=(None, max_length))
-        prompt = prompt.to_tensor(shape=(None, max_length))
-        return prompt, mask
-
-    def _mask_tokens_after_end_token(
-        self,
-        generated_result,
-        original_padding_mask,
-        max_length,
-        end_token_id,
-    ):
-        """Helper function to truncate the tokens after the end token."""
-        # Create a tensor with True for each end_token_id.
-        end_tokens = generated_result == end_token_id
-        # Remove all end_token_ids in the original input.
-        end_tokens = end_tokens & (original_padding_mask == tf.constant(False))
-        # Find index of first end_token_id.
-        end_indices = tf.math.argmax(end_tokens, -1)
-        # Use max_length if no `end_token_id` is found.
-        end_indices = tf.where(
-            end_indices == 0,
-            tf.cast(max_length, dtype=end_indices.dtype),
-            end_indices,
-        )
-        # Truncate out tokens after (including) the end token.
-        mask_indices = tf.sequence_mask(end_indices, maxlen=max_length)
-        return tf.ragged.boolean_mask(generated_result, mask_indices)
-
     def __call__(
         self,
+        next,
         prompt,
-        token_probability_fn,
-        max_length,
+        state=None,
+        index=0,
         mask=None,
         end_token_id=None,
-        from_logits=True,
-        cache=None,
     ):
-        prompt, mask = self._validate_prompt_and_mask(prompt, mask)
-        self.token_probability_fn = token_probability_fn
-        input_is_1d = prompt.shape.rank == 1
-        if input_is_1d:
-            prompt = tf.RaggedTensor.from_tensor(prompt[tf.newaxis, :])
+        max_length = tf.shape(prompt)[-1]
+        # Make sure `max_length` and `index` are the same dtype.
+        index = tf.cast(index, max_length.dtype)
+        mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
+        # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
+        state = () if state is None else state
 
-        shortest_prompt_len = tf.reduce_min(prompt.row_lengths())
-        # Pad prompt to be a dense Tensor of shape [batch_size, max_length].
-        # This step is required for XLA compatibility because XLA requires a
-        # static shape, which means we cannot concatenate generated token to
-        # current prompt.
-        prompt, mask = self._pad_prompt(prompt, max_length)
-        original_padding_mask = tf.identity(mask)
+        def cond(prompt, state, index):
+            if end_token_id is None:
+                return True
+            # Stop if all sequences have produced a *new* end_token_id.
+            end_tokens = (prompt == end_token_id) & (~mask)
+            prompt_done = tf.reduce_any(end_tokens, axis=-1)
+            return not tf.reduce_all(prompt_done)
 
-        # Convert `sample` method to a `tf.function` if `self.run_eagerly=False`
-        # , and turn on `jit_compile` accordingly.
-        sample = self.sample
-        if not self.run_eagerly:
-            if self.jit_compile:
-                sample = self._sample_graph_xla
-            else:
-                sample = self._sample_graph
-        prompt = sample(
-            prompt,
-            mask,
-            max_length - shortest_prompt_len,
-            from_logits=from_logits,
-            end_token_id=end_token_id,
-            cache=cache,
+        def body(prompt, state, index):
+            # Compute the softmax distribution for the next token.
+            logits, state = next(prompt, state, index)
+            probabilities = keras.activations.softmax(logits)
+
+            # Compute the next token.
+            next_token = self.get_next_token(probabilities)
+            # Don't overwrite anywhere mask is True.
+            next_token = tf.cast(next_token, prompt.dtype)
+            next_token = tf.where(mask[:, index], prompt[:, index], next_token)
+            # Update the prompt with the next token.
+            next_token = next_token[:, tf.newaxis]
+            prompt = dynamic_update_slice(prompt, next_token, [0, index])
+            # Return the next prompt, state and incremented index.
+            return (prompt, state, index + 1)
+
+        prompt, _, _ = tf.while_loop(
+            cond=cond,
+            body=body,
+            loop_vars=(prompt, state, index),
+            maximum_iterations=(max_length - index),
         )
-        # Mask out tokens after `end_token_id`.
-        if end_token_id is not None:
-            prompt = self._mask_tokens_after_end_token(
-                prompt,
-                original_padding_mask,
-                max_length,
-                end_token_id,
-            )
+        return prompt
 
-        return tf.squeeze(prompt, axis=0) if input_is_1d else prompt
-
-    def get_next_token(self, next_token_probs):
+    def get_next_token(self, probabilities):
         """Get the next token.
 
         Args:
-            next_token_probs: a Tensor, the probability distribution for next
+            probabilities: a Tensor, the probability distribution for next
                 token over all vocab tokens.
 
         Get the next token based on given probability distribution over tokens.
@@ -267,158 +142,9 @@ class Sampler:
         """
         raise NotImplementedError
 
-    @tf.function
-    def _sample_graph(
-        self,
-        prompt,
-        mask,
-        num_steps,
-        from_logits=True,
-        end_token_id=None,
-        cache=None,
-    ):
-        """Wrapper of `sample` method to make it a non-XLA tf graph."""
-        return self.sample(
-            prompt, mask, num_steps, from_logits, end_token_id, cache
-        )
-
-    @tf.function(jit_compile=True)
-    def _sample_graph_xla(
-        self,
-        prompt,
-        mask,
-        num_steps,
-        from_logits=True,
-        end_token_id=None,
-        cache=None,
-    ):
-        """Wrapper of `sample` method to make it an XLA tf graph."""
-        return self.sample(
-            prompt, mask, num_steps, from_logits, end_token_id, cache
-        )
-
-    def sample(
-        self,
-        prompt,
-        mask,
-        num_steps,
-        from_logits=True,
-        end_token_id=None,
-        cache=None,
-    ):
-        """Sampling logic implementation.
-
-        Args:
-            prompt: a dense int Tensor of shape [batch_size, max_length]. The
-                placeholder for generated sequence.
-            token_probability_fn: a function that generates the probability of
-                the next token over the whole vocabulary for each input token.
-            mask: a dense bool Tensor of shape [batch_size, max_length]. The
-                mask of prompt.
-            num_steps: int. The remaining number of tokens to generate.
-            from_logits: bool, defaults to True. Indicate if the
-                `token_probability_fn` returns logits. If False,
-                `token_probability_fn` returns probability distributions.
-            end_token_id: int, defaults to None. The token marking the end of
-                the sequence, once encountered the generation is finished for
-                the exact sequence.
-            cache: a dense int tensor, the cache used in decoding. The cache
-                stores the key and value of each
-                `keras_nlp.layers.CachedMultiHeadAttention` layer to make the
-                decoding faster by avoiding duplicated computation.
-
-        Returns:
-            A dense int Tensor, representing the generated text in token id
-            space.
-        """
-        batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
-        num_steps = tf.cast(num_steps, tf.int32)
-        max_length = tf.cast(max_length, tf.int32)
-        # The index of the last non-padding token in prompt. Since all sequences
-        # are aligned to the right side, the index is the same for all.
-        current_index = max_length - num_steps
-        original_padding_mask = tf.cast(tf.identity(mask), dtype=tf.int32)
-
-        def body(
-            current_index,
-            prompt,
-            mask,
-            cache=None,
-        ):
-            last_index = current_index - 1
-            if cache is not None:
-                probs, cache = self.token_probability_fn(
-                    prompt,
-                    mask,
-                    cache=cache,
-                    cache_index=last_index,
-                )
-                next_token_probs = tf.squeeze(probs, axis=1)
-            else:
-                probs = self.token_probability_fn(
-                    prompt,
-                    mask,
-                )
-                next_token_probs = tf.gather(
-                    probs,
-                    tf.repeat(current_index - 1, batch_size),
-                    axis=1,
-                    batch_dims=1,
-                )
-
-            if from_logits:
-                next_token_probs = keras.activations.softmax(
-                    next_token_probs, axis=-1
-                )
-            next_token = self.get_next_token(next_token_probs)
-            next_token = tf.cast(next_token, prompt.dtype)
-            next_token = tf.where(
-                mask[:, current_index],
-                prompt[:, current_index],
-                next_token,
-            )
-            next_token = next_token[:, tf.newaxis]
-            next_mask = tf.fill([batch_size, 1], True)
-            slice_start = [0, current_index]
-            mask = dynamic_update_slice(mask, next_mask, slice_start)
-            prompt = dynamic_update_slice(prompt, next_token, slice_start)
-            current_index = tf.add(current_index, 1)
-            if cache is None:
-                return current_index, prompt, mask
-            return current_index, prompt, mask, cache
-
-        def cond(current_index, prompt, mask, cache=None):
-            if end_token_id is None:
-                return True
-            end_token_seen = (prompt == end_token_id) & (
-                original_padding_mask == 0
-            )
-            sequence_done = tf.reduce_any(end_token_seen, axis=-1)
-            all_done = tf.reduce_all(sequence_done)
-            return not all_done
-
-        if cache is None:
-            _, prompt, _ = tf.while_loop(
-                cond=cond,
-                body=body,
-                loop_vars=(current_index, prompt, mask),
-                maximum_iterations=num_steps,
-            )
-            return prompt
-        # Run a while loop till `max_length` of tokens has been generated.
-        _, prompt, _, _ = tf.while_loop(
-            cond=cond,
-            body=body,
-            loop_vars=(current_index, prompt, mask, cache),
-            maximum_iterations=num_steps,
-        )
-        return prompt
-
     @classmethod
     def from_config(cls, config):
         return cls(**config)
 
     def get_config(self):
-        return {
-            "jit_compile": self.jit_compile,
-        }
+        return {}
