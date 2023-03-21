@@ -35,7 +35,7 @@ def opt_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.OPTBackbone")
 class OPTBackbone(Backbone):
-    """A OPT decoder network.
+    """An OPT decoder network.
 
     This class implements a Transformer-based decoder model as described in
     ["OPT: Open Pre-trained Transformer Language Models"](https://arxiv.org/abs/2205.01068).
