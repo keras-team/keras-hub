@@ -123,9 +123,8 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         return super().token_to_id(token)
 
     def detokenize(self, ids):
-        blank_token_id = self.token_to_id("")
         mask = tf.not_equal(ids, self.mask_token_id)
-        ids = tf.ragged.boolean_mask(ids, mask, default_value=blank_token_id)
+        ids = tf.ragged.boolean_mask(ids, mask)
         return super().detokenize(ids)
 
     @classproperty
