@@ -13,8 +13,6 @@
 # limitations under the License.
 import os
 import shutil
-import tarfile
-import zipfile
 
 import numpy as np
 import tensorflow as tf
@@ -26,12 +24,12 @@ from tensorflow import keras
 
 import keras_nlp
 from tools.checkpoint_conversion.checkpoint_conversion_utils import (
-    get_md5_checksum,
+    get_md5_checksum, file_type_extractor
 )
 
 PRESET_MAP = {
-    "roberta_base": ("roberta.base", "roberta-base"),
-    "roberta_large": ("roberta.large", "roberta-large"),
+    "roberta_base": ("roberta_base", "roberta_base_en"),
+    "roberta_large": ("roberta_large", "roberta_large_en"),
 }
 
 DOWNLOAD_SCRIPT_URL = "https://dl.fbaipublicfiles.com/fairseq/models/{}.tar.gz"
@@ -53,13 +51,7 @@ def download_model(size, hf_model_name):
         cache_subdir=os.path.join("checkpoint_conversion", FLAGS.preset),
     )
 
-    archive_file_path = os.path.abspath(archive_file_path)
-    if archive_file_path.endswith(".tar.gz"):
-        with tarfile.open(archive_file_path, "r:gz") as tar:
-            tar.extractall(extract_dir)
-    elif archive_file_path.endswith(".zip"):
-        with zipfile.ZipFile(archive_file_path, "r") as zip_ref:
-            zip_ref.extractall(extract_dir)
+    file_type_extractor(archive_file_path, extract_dir)
 
     # The original `tar.gz` file does not have the vocab files. Let's fetch
     # them from HF.
