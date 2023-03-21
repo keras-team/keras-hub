@@ -20,14 +20,11 @@ import torch
 import transformers
 from absl import app
 from absl import flags
+from checkpoint_conversion_utils import file_type_extractor
+from checkpoint_conversion_utils import get_md5_checksum
 from tensorflow import keras
 
 import keras_nlp
-# from tools.checkpoint_conversion.checkpoint_conversion_utils import (
-#     get_md5_checksum, file_type_extractor
-# )
-#importing get_md5_checksum and file_type_extractor
-from checkpoint_conversion_utils import get_md5_checksum, file_type_extractor
 
 PRESET_MAP = {
     "roberta_base": ("roberta_base", "roberta_base_en"),
