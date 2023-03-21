@@ -113,11 +113,14 @@ class Sampler:
 
             # Compute the next token.
             next_token = self.get_next_token(probabilities)
+            # next_token = tf.ensure_shape(next_token, [None,])
             # Don't overwrite anywhere mask is True.
             next_token = tf.cast(next_token, prompt.dtype)
+            # next_token = tf.ensure_shape(next_token, [None,])
             next_token = tf.where(mask[:, index], prompt[:, index], next_token)
             # Update the prompt with the next token.
-            next_token = next_token[:, tf.newaxis]
+            next_token = tf.expand_dims(next_token, axis=1)
+            
             prompt = dynamic_update_slice(prompt, next_token, [0, index])
             # Return the next prompt, state and incremented index.
             return (prompt, state, index + 1)
