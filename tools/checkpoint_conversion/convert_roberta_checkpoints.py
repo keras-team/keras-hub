@@ -53,6 +53,7 @@ def download_model(size, hf_model_name):
         cache_subdir=os.path.join("checkpoint_conversion", FLAGS.preset),
     )
 
+    archive_file_path = os.path.abspath(archive_file_path)
     if archive_file_path.endswith(".tar.gz"):
         with tarfile.open(archive_file_path, "r:gz") as tar:
             tar.extractall(extract_dir)
