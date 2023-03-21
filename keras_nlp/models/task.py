@@ -25,12 +25,12 @@ from keras_nlp.utils.python_utils import format_docstring
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class Task(PipelineModel):
     """Base class for Task models."""
-  
+
     def __init__(self, *args, **kwargs):
         self._backbone = None
         self._preprocessor = None
         super().__init__(*args, **kwargs)
-    
+
     def preprocess_samples(self, x, y=None, sample_weight=None):
         return self.preprocessor(x, y=y, sample_weight=sample_weight)
 
