@@ -82,9 +82,9 @@ class RobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
     )
     @pytest.mark.large  # Saving is slow, so mark these large.
     def test_saved_model(self, save_format, filename):
-        model_output = self.model(self.input_batch)
+        model_output = self.backbone(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)
-        self.model.save(save_path, save_format=save_format)
+        self.backbone.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
