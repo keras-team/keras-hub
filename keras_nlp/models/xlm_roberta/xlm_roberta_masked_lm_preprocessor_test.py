@@ -49,8 +49,8 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
             eos_id=3,
             pad_piece="<pad>",
             unk_piece="<unk>",
-            bos_piece="[CLS]",
-            eos_piece="[SEP]",
+            bos_piece="</s>",
+            eos_piece="<s>",
             user_defined_symbols="[MASK]",
         )
 

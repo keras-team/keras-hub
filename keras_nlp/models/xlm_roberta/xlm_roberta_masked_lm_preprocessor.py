@@ -60,7 +60,7 @@ class XLMRoBERTaMaskedLMPreprocessor(XLMRobertaPreprocessor):
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     # Alternatively, you can create a preprocessor from your own vocabulary.
     # The usage is exactly the same as above.
-    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+    vocab = ["[PAD]", "[UNK]" , "[MASK]"]
     vocab += ["THE", "QUICK", "BROWN", "FOX"]
     vocab += ["Call", "me", "Ishmael"]
     tokenizer = keras_nlp.models.XLMRoBERTaTokenizer(vocabulary=vocab)
@@ -94,8 +94,8 @@ class XLMRoBERTaMaskedLMPreprocessor(XLMRobertaPreprocessor):
             vocabulary_size=tokenizer.vocabulary_size(),
             mask_token_id=tokenizer.mask_token_id,
             unselectable_token_ids=[
-                tokenizer.cls_token_id,
-                tokenizer.sep_token_id,
+                tokenizer.start_token_id,
+                tokenizer.end_token_id,
                 tokenizer.pad_token_id,
             ],
         )
@@ -123,16 +123,14 @@ class XLMRoBERTaMaskedLMPreprocessor(XLMRobertaPreprocessor):
 
         x = super().call(x)
 
-        token_ids, padding_mask, segment_ids = (
+        token_ids, padding_mask = (
             x["token_ids"],
             x["padding_mask"],
-            x["segment_ids"],
         )
         masker_outputs = self.masker(token_ids)
         x = {
             "token_ids": masker_outputs["token_ids"],
             "padding_mask": padding_mask,
-            "segment_ids": segment_ids,
             "mask_positions": masker_outputs["mask_positions"],
         }
         y = masker_outputs["mask_ids"]
