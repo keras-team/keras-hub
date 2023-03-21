@@ -14,19 +14,16 @@
 """Beam Sampler."""
 
 import tensorflow as tf
-from absl import logging
 from tensorflow import keras
+from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.samplers.sampler import Sampler
-from keras_nlp.samplers.sampler import base_sampler_args_docstring
 from keras_nlp.samplers.sampler import call_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@format_docstring(
-    base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
-)
+@format_docstring(call_args=call_args_docstring)
 @keras_nlp_export("keras_nlp.samplers.BeamSampler")
 class BeamSampler(Sampler):
     """Beam Sampler class.
@@ -39,192 +36,142 @@ class BeamSampler(Sampler):
     Args:
         num_beams: int. The number of beams that should be kept at each
             time-step. `num_beams` should be strictly positive.
-        {{base_sampler_args}}
 
     Call Args:
         {{call_args}}
 
     Examples:
     ```python
-    VOCAB_SIZE = 10
+    # Use a simple alphabet of lowercase characters to [0, 26).
+    int_lookup = {i: chr(i + ord('a')) for i in range(26)}
+    char_lookup = {v: k for k, v in int_lookup.items()}
+    batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
-    # Create a dummy model to predict the next token.
-    model = keras.Sequential(
-        [
-            keras.Input(shape=[None]),
-            keras.layers.Embedding(
-                input_dim=VOCAB_SIZE,
-                output_dim=16,
-            ),
-            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
-        ]
+    def next(prompt, state, index):
+        # A uniform distribution over our alphabet.
+        logits = tf.ones((batch_size, vocab_size))
+        return logits, state
+
+    output = keras_nlp.samplers.BeamSampler()(
+        next=next,
+        prompt=tf.fill((batch_size, length,), char_lookup['z']),
+        index=5,
     )
-
-    # Define a function that outputs the next token's probability for each token
-    # in the input sequence.
-    def token_probability_fn(inputs, mask):
-        return model(inputs)
-
-    prompt = tf.fill((8, 1), 1)
-
-    sampler = keras_nlp.samplers.BeamSampler(num_beams=3)
-    # Print the generated sequence (token ids).
-    print(sampler(prompt, token_probability_fn, max_length=10))
+    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
+    # >>> "zzzzzaaaaaaa"
     ```
     """
 
     def __init__(
         self,
         num_beams=5,
-        jit_compile=True,
-        run_eagerly=False,
     ):
+        super().__init__()
         self.num_beams = num_beams
-        super().__init__(jit_compile=jit_compile, run_eagerly=run_eagerly)
 
-    def get_next_token(self, next_token_probs):
-        # Beam search overrides the whole `sample` method.
-        pass
-
-    def sample(
+    def __call__(
         self,
+        next,
         prompt,
-        mask,
-        num_steps,
-        from_logits=True,
+        state=None,
+        index=0,
+        mask=None,
         end_token_id=None,
-        cache=None,
     ):
-        """Sampling logic implementation.
-
-        Because beam search uses a different loop body, we have to override the
-        whole `sample` method instead of just the `get_next_token` method.
-        """
-        if cache is not None:
-            logging.warning(
-                "`BeamSampler` does not support cache decoding now, the cache "
-                "will be ignored. To use cache decoding, please use a "
-                "different sampler, e.g., `TopPSampler`."
-            )
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
-        max_length = tf.cast(max_length, num_steps.dtype)
-        length = max_length - num_steps
-        dummy_preds = self.token_probability_fn(prompt, mask=mask)
-        vocab_size = tf.shape(dummy_preds)[-1]
-        pred_dtype = dummy_preds.dtype
+        # Make sure max length and start index are the same dtype.
+        index = tf.cast(index, max_length.dtype)
 
-        num_beams = self.num_beams
+        def create_beams(x):
+            """Add initial beam state."""
+            return tf.repeat(x, self.num_beams, axis=0)
 
-        # Initialize beam with shape `(batch_size, num_beams, length)`.
-        beams = tf.repeat(tf.expand_dims(prompt, axis=1), num_beams, axis=1)
-        # Initialize `beams_prob` with shape `(batch_size, num_beams)`.
-        beams_prob = tf.zeros([batch_size, 1], dtype=pred_dtype)
-        beams_prob = tf.concat(
-            [beams_prob, tf.fill((batch_size, num_beams - 1), pred_dtype.min)],
-            axis=-1,
-        )
+        def flatten_beams(x):
+            """Combine the beam dim and batch dim."""
+            flat_shape = [batch_size * self.num_beams] + x.shape.as_list()[2:]
+            return tf.reshape(x, shape=flat_shape)
 
-        def one_step(beams, beams_prob, length, mask):
-            flattened_beams = tf.reshape(
-                beams, shape=[batch_size * num_beams, -1]
-            )
-            repeated_mask = tf.tile(mask, [num_beams, 1])
-            probs = self.token_probability_fn(flattened_beams, repeated_mask)
-            preds = tf.gather(
-                probs,
-                tf.repeat(length - 1, batch_size * num_beams),
-                axis=1,
-                batch_dims=1,
-            )
-            if from_logits:
-                preds = keras.activations.softmax(preds, axis=-1)
+        def unflatten_beams(x):
+            """Separate the beam dim and batch dim."""
+            unflat_shape = [batch_size, self.num_beams] + x.shape.as_list()[1:]
+            return tf.reshape(x, shape=unflat_shape)
+
+        mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
+        # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
+        state = () if state is None else state
+        # Add extra sequences for each beam.
+        prompt, mask = create_beams(prompt), create_beams(mask)
+        state = tf.nest.map_structure(create_beams, state)
+        # Setup the initial beam log-likelihoods.
+        # On the first loop, make sure only the original beam is considered.
+        log_probs = tf.constant([[0.0] + [-1e9] * (self.num_beams - 1)])
+        log_probs = flatten_beams(tf.repeat(log_probs, batch_size, axis=0))
+
+        def cond(prompt, state, index, log_probs):
+            if end_token_id is None:
+                return True
+            # Stop if all sequences have produced a *new* end_token_id.
+            end_tokens = (prompt == end_token_id) & (~mask)
+            prompt_done = tf.reduce_any(end_tokens, axis=-1)
+            return not tf.reduce_all(prompt_done)
+
+        def body(prompt, state, index, log_probs):
+            # Compute the softmax distribution for the next token.
+            logits, state = next(prompt, state, index)
+            vocab_size = tf.shape(logits)[-1]
+            probs = keras.activations.softmax(logits)
+
+            # Compute the running log-likelihood of each new candidate.
+            next_log_probs = tf.math.log(probs) + log_probs[..., tf.newaxis]
             # Reshape `preds` to shape `(batch_size, num_beams * vocab_size)`.
-            preds = tf.reshape(preds, shape=[batch_size, -1])
+            next_log_probs = tf.reshape(next_log_probs, shape=[batch_size, -1])
 
-            cum_probs = tf.math.log(preds) + tf.repeat(
-                beams_prob, repeats=vocab_size, axis=1
+            # Compute the top beam indices and next tokens.
+            next_log_probs, indices = tf.math.top_k(
+                next_log_probs, k=self.num_beams, sorted=False
             )
+            beam_indices = indices // vocab_size
+            next_token = flatten_beams(indices % vocab_size)
+            # We need `ensure_shape` as `top_k` will change the static shape.
+            next_log_probs = flatten_beams(next_log_probs)
+            log_probs = tf.ensure_shape(next_log_probs, log_probs.shape)
 
-            candidate_prob, candidate_indexes = tf.math.top_k(
-                cum_probs, k=num_beams, sorted=False
-            )
+            def gather_beams(x):
+                x = unflatten_beams(x)
+                x = tf.gather(x, beam_indices, axis=1, batch_dims=1)
+                return flatten_beams(x)
 
-            candidate_beam_indexes = candidate_indexes // vocab_size
-            next_token = candidate_indexes % vocab_size
+            prompt = gather_beams(prompt)
+            state = tf.nest.map_structure(gather_beams, state)
 
-            beams = tf.gather(
-                beams, candidate_beam_indexes, axis=1, batch_dims=1
-            )
+            # Update each beam with the next token.
+            next_token = tf.cast(next_token, prompt.dtype)
+            # Don't overwrite anywhere mask is True.
+            next_token = tf.where(mask[:, index], prompt[:, index], next_token)
+            # Update the prompt with the next token.
+            next_token = next_token[:, tf.newaxis]
+            prompt = dynamic_update_slice(prompt, next_token, [0, index])
+            # Return the iteration of the loop state.
+            return (prompt, state, index + 1, log_probs)
 
-            # Build a new column of updates to scatter into the beam tensor.
-            next_token = tf.where(
-                condition=mask[..., length, tf.newaxis],
-                x=beams[..., length],
-                y=next_token,
-            )
-            next_token = tf.reshape(next_token, shape=[-1])
-
-            mask = tf.tensor_scatter_nd_update(
-                tensor=mask,
-                indices=tf.stack(
-                    (
-                        tf.cast(tf.range(batch_size), dtype=length.dtype),
-                        tf.repeat(length, batch_size),
-                    ),
-                    axis=1,
-                ),
-                updates=tf.repeat(True, batch_size),
-            )
-
-            # Generate `(batch_index, beam_index)` tuples for each beam.
-            beam_indices = tf.where(tf.ones((batch_size, num_beams), tf.bool))
-            beam_indices = tf.cast(beam_indices, dtype=length.dtype)
-            # Build a tensor of repeated `length` values.
-            length_indices = tf.fill((batch_size * num_beams, 1), length)
-            # Concatenate to a triplet of `(batch_index, beam_index, length)`.
-            indices = tf.concat([beam_indices, length_indices], axis=-1)
-
-            # Update `beams[:, :, length]` with `next_token`.
-            beams = tf.tensor_scatter_nd_update(
-                tensor=beams,
-                indices=indices,
-                updates=next_token,
-            )
-
-            beams_prob = candidate_prob
-
-            length = tf.add(length, 1)
-            return beams, beams_prob, length, mask
-
-        # Run a while loop till text of length `max_length` has been generated.
-        beams, beams_prob, length, mask = tf.while_loop(
-            cond=lambda beams, beams_prob, length, mask: tf.less(
-                length, max_length
-            ),
-            body=one_step,
-            loop_vars=[beams, beams_prob, length, mask],
-            # There is a strange issue that when `batch_size=1`, the first loop
-            # iteration changes `beams_prob`'s shape from [1, None] to
-            # [None, None], which does not happen for `batch_size>1`.
-            # As a workaround, we set shape invariants.
-            shape_invariants=[
-                beams.get_shape(),
-                tf.TensorShape([None, None]),
-                length.get_shape(),
-                mask.get_shape(),
-            ],
+        prompt, _, _, log_probs = tf.while_loop(
+            cond=cond,
+            body=body,
+            loop_vars=(prompt, state, index, log_probs),
+            maximum_iterations=(max_length - index),
         )
 
-        # Get the beam with the maximum probability.
-        max_indexes = tf.math.argmax(beams_prob, axis=-1)
-        max_beams = tf.gather(
-            beams, max_indexes[:, tf.newaxis], axis=1, batch_dims=1
-        )
-
-        return tf.squeeze(max_beams, axis=1)
+        # Gather the top beam at each batch index.
+        prompt, log_probs = unflatten_beams(prompt), unflatten_beams(log_probs)
+        top_beams = tf.math.argmax(log_probs, axis=-1)[:, tf.newaxis]
+        prompt = tf.gather(prompt, top_beams, axis=1, batch_dims=1)
+        return tf.squeeze(prompt, axis=1)
 
     def get_config(self):
         config = super().get_config()
-
-        config.update({"num_beams": self.num_beams})
+        config.update(
+            {
+                "num_beams": self.num_beams,
+            }
+        )
         return config

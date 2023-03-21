@@ -13,9 +13,9 @@
 # limitations under the License.
 """Tests for Greedy sampler."""
 
+import numpy as np
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
 from keras_nlp.samplers.greedy_sampler import GreedySampler
 
@@ -23,116 +23,88 @@ from keras_nlp.samplers.greedy_sampler import GreedySampler
 class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
-        self.vocab_size = 10
-        self.feature_size = 16
+        # Use a simple alphabet of lowercase characters to [0, 26).
+        self.int_lookup = {i: chr(i + ord("a")) for i in range(26)}
+        self.char_lookup = {v: k for k, v in self.int_lookup.items()}
+        self.batch_size = 1
+        self.length = 12
+        self.vocab_size = len(self.int_lookup)
 
-        # Create a dummy model to predict the next token.
-        model = keras.Sequential(
-            [
-                keras.Input(shape=[None]),
-                keras.layers.Embedding(
-                    input_dim=self.vocab_size,
-                    output_dim=self.feature_size,
-                ),
-                keras.layers.Dense(self.vocab_size),
-                keras.layers.Softmax(),
-            ]
-        )
+        def next(prompt, state, index):
+            # Return a distribution favoring the next char in state.
+            logits = tf.one_hot(state[:, index], self.vocab_size) * 1e9
+            return logits, state
 
-        def token_probability_fn(inputs, mask):
-            return model(inputs)
-
-        self.token_probability_fn = token_probability_fn
-
+        self.next = next
         self.sampler = GreedySampler()
 
-    def test_generate_with_1d_prompt(self):
-        inputs = tf.constant([1])
-        outputs = self.sampler(inputs, self.token_probability_fn, max_length=5)
-        self.assertEqual(outputs.shape, [5])
+    def join_as_string(self, x):
+        return ["".join([self.int_lookup[i] for i in s]) for s in x.numpy()]
 
-    def test_generate_with_2d_prompt(self):
-        inputs = tf.constant([[1], [1]])
-        outputs = self.sampler(inputs, self.token_probability_fn, max_length=5)
-        self.assertEqual(outputs.shape, [2, 5])
+    def test_stateless_call(self):
+        def next(prompt, state, index):
+            # Return a distribution favoring the first token in the vocab.
+            logits = np.zeros((self.batch_size, self.vocab_size))
+            logits[:, 0] = 1e9
+            return tf.constant(logits), state
 
-    def test_generate_with_list_prompt(self):
-        inputs = [[1], [1]]
-        outputs = self.sampler(inputs, self.token_probability_fn, max_length=5)
-        self.assertEqual(outputs.shape, [2, 5])
-
-    def test_generate_with_ragged_prompt(self):
-        max_length = 5
-
-        def token_probability_fn(inputs, mask):
-            # Assert that user function is passed only dense tensors.
-            self.assertIsInstance(inputs, tf.Tensor)
-            prob = tf.constant([[[0.0, 0.0, 0.0, 1.0]]])
-            return tf.repeat(tf.repeat(prob, 2, axis=0), max_length, axis=1)
-
-        inputs = tf.ragged.constant([[1], [2, 1, 2]])
-        outputs = self.sampler(inputs, token_probability_fn, max_length)
-        self.assertEqual(outputs.shape, [2, 5])
-
-    def test_assert_generation_is_correct(self):
-        batch_size = 10
-        max_length = 3
-
-        def token_probability_fn(inputs, mask):
-            prob = tf.constant([[[0.0, 0.0, 0.0, 1.0]]])
-            return tf.repeat(
-                tf.repeat(prob, batch_size, axis=0), max_length, axis=1
-            )
-
-        inputs = 3 * tf.ones([batch_size, 1], dtype=tf.int32)
-        outputs = self.sampler(
-            inputs, token_probability_fn, max_length=max_length
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        output = self.sampler(
+            next=next,
+            prompt=prompt,
+            index=5,
         )
-        self.assertAllEqual(
-            outputs, 3 * tf.ones(shape=[batch_size, max_length])
+        self.assertEqual(self.join_as_string(output), ["zzzzzaaaaaaa"])
+
+    def test_stateful_call(self):
+        state_chars = list("sequentially")
+        state = tf.constant([[self.char_lookup[c] for c in state_chars]])
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        output = self.sampler(
+            next=self.next,
+            prompt=prompt,
+            state=state,
         )
+        self.assertEqual(self.join_as_string(output), ["sequentially"])
 
-    def test_end_token_id(self):
-        def token_probability_fn(inputs, mask):
-            batch_size = tf.shape(inputs)[0]
-            prob = tf.constant([[[0.0, 0.0, 0.0, 1.0]]])
-            return tf.repeat(
-                tf.repeat(prob, batch_size, axis=0), max_length, axis=1
-            )
-
-        max_length = 4
-        sampler = GreedySampler()
-        inputs = tf.constant([[0, 1], [1, 2]])
-        outputs = sampler(
-            inputs,
-            token_probability_fn,
-            max_length=max_length,
-            end_token_id=2,
+    def test_early_stopping(self):
+        state_chars = list("sequentially")
+        state = tf.constant([[self.char_lookup[c] for c in state_chars]])
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        output = self.sampler(
+            next=self.next,
+            prompt=prompt,
+            state=state,
+            end_token_id=self.char_lookup["t"],
         )
-        # end_token in prompt does not trigger truncation.
-        expected_outputs = tf.ragged.constant([[0, 1, 3, 3], [1, 2, 3, 3]])
-        self.assertAllEqual(outputs, expected_outputs)
+        self.assertEqual(self.join_as_string(output), ["sequentzzzzz"])
 
-        outputs = sampler(
-            inputs,
-            token_probability_fn,
-            max_length=max_length,
-            end_token_id=3,
+    def test_is_greedy(self):
+        def next(prompt, state, index):
+            # Return a distribution where each id is progressively less likely.
+            logits = tf.range(self.vocab_size, 0, -1, dtype="float32")
+            logits = tf.repeat(logits[tf.newaxis, :], self.batch_size, axis=0)
+            return logits, state
+
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        output = self.sampler(
+            next=next,
+            prompt=prompt,
         )
-        # Generated end_token will be truncated.
-        expected_outputs = tf.ragged.constant([[0, 1], [1, 2]])
-        self.assertAllEqual(outputs, expected_outputs)
+        output_ids = set(output[0].numpy())
+        self.assertContainsSubset(output_ids, [0])
 
-    def test_compare_xla_noxla_results(self):
-        inputs = [[1], [1]]
-        xla_sampler = GreedySampler(jit_compile=True)
-        outputs_xla = xla_sampler(
-            inputs, self.token_probability_fn, max_length=5
-        )
+    @parameterized.named_parameters(
+        ("jit_compile_false", False), ("jit_compile_true", True)
+    )
+    def test_compilation(self, jit_compile):
+        state_chars = list("sequentially")
+        state = tf.constant([[self.char_lookup[c] for c in state_chars]])
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
 
-        xla_sampler = GreedySampler(jit_compile=False)
-        outputs_no_xla = xla_sampler(
-            inputs, self.token_probability_fn, max_length=5
-        )
+        @tf.function(jit_compile=jit_compile)
+        def generate(prompt, state):
+            return self.sampler(self.next, prompt=prompt, state=state)
 
-        self.assertAllEqual(outputs_xla, outputs_no_xla)
+        output = generate(prompt, state)
+        self.assertEqual(self.join_as_string(output), ["sequentially"])
