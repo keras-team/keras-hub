@@ -61,7 +61,6 @@ class FNetClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.backbone = FNetBackbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
-            num_heads=2,
             hidden_dim=2,
             intermediate_dim=4,
             max_sequence_length=self.preprocessor.packer.sequence_length,
@@ -99,6 +98,7 @@ class FNetClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.classifier.fit(self.preprocessed_dataset)
 
     def test_classifier_fit_no_xla(self):
+        self.classifier.preprocessor = None
         self.classifier.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),
             jit_compile=False,
