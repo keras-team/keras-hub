@@ -76,7 +76,7 @@ class WhisperBackbone(Backbone):
     Examples:
     ```python
     input_data = {
-        "encoder_token_ids": tf.ones(shape=(1, 12, 80), dtype=tf.int64),
+        "encoder_features": tf.ones(shape=(1, 12, 80), dtype=tf.int64),
         "decoder_token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
         "decoder_padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0], shape=(1, 12)
