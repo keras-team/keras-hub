@@ -15,9 +15,9 @@
 import os
 from typing import Iterable
 from typing import List
-import warnings
 
 import tensorflow as tf
+from absl import logging
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
@@ -313,13 +313,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 )
 
         super().__init__(**kwargs)
-        
-        if vocabulary_size is not None:
-            if isinstance(vocabulary_size, int) == False:
-                raise ValueError(
-                    "vocabulary size must be int. "
-                    f"Recieved: type {type(vocabulary_size)}"
-                )
 
         if isinstance(vocabulary, str):
             self.vocabulary = [
@@ -328,26 +321,28 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             if vocabulary_size is None:
                 vocabulary_size = len(self.vocabulary)
             if len(self.vocabulary) < vocabulary_size:
-                warnings.warn("Setting vocab size to a larger value than the input vocabulary file.\
-￼                        Some token ids will never be output from the tokenizer.")
+                logging.warn(
+                    "Setting vocab size to a larger value than the input vocabulary file.\
+￼                        Some token ids will never be output from the tokenizer."
+                )
                 vocabulary_size = len(self.vocabulary)
             else:
-                self.vocabulary = self.vocabulary[0:vocabulary_size]
+                self.vocabulary = self.vocabulary[:vocabulary_size]
         elif isinstance(vocabulary, Iterable):
             # Make a copy.
             self.vocabulary = list(vocabulary)
             if vocabulary_size is None:
                 vocabulary_size = len(self.vocabulary)
             else:
-                self.vocabulary = self.vocabulary[0:vocabulary_size]
+                self.vocabulary = self.vocabulary[:vocabulary_size]
         else:
             raise ValueError(
                 "Vocabulary must be an file path or list of terms. "
-                f"Received: vocabulary={vocabulary}"
+                f"Recieved: vocabulary={vocabulary}"
             )
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
-        
+
         self.sequence_length = sequence_length
         self.lowercase = lowercase
         self.strip_accents = strip_accents
@@ -495,10 +490,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         config = metadata["preprocessor_config"]
         config.update(
-            {
-                "vocabulary": vocabulary,
-                "vocabulary_size": len(vocabulary)
-            },
+            {"vocabulary": vocabulary, "vocabulary_size": len(vocabulary)},
         )
 
         return cls.from_config({**config, **kwargs})
