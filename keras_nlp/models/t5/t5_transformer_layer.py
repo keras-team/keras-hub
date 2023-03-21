@@ -23,6 +23,7 @@ class T5TransformerLayer(keras.layers.Layer):
         is_decoder,
         hidden_dim,
         intermediate_dim,
+        key_value_dim,
         dropout,
         activation,
         layer_norm_epsilon,
@@ -36,10 +37,11 @@ class T5TransformerLayer(keras.layers.Layer):
         self.use_gated_activation = use_gated_activation
 
         self.self_attention = T5MultiHeadAttention(
-            is_decoder,
-            hidden_dim,
-            num_heads,
-            dropout,
+            is_decoder=is_decoder,
+            hidden_dim=hidden_dim,
+            key_value_dim=key_value_dim,
+            num_heads=num_heads,
+            dropout=dropout,
             use_relative_attention_bias=use_relative_attention_bias,
         )
         self.self_attention_layernorm = T5LayerNorm(layer_norm_epsilon)
@@ -47,14 +49,24 @@ class T5TransformerLayer(keras.layers.Layer):
 
         if self.is_decoder:
             self.cross_attention = T5MultiHeadAttention(
-                is_decoder,
-                hidden_dim,
-                num_heads,
-                dropout,
+                is_decoder=is_decoder,
+                hidden_dim=hidden_dim,
+                key_value_dim=key_value_dim,
+                num_heads=num_heads,
+                dropout=dropout,
                 use_relative_attention_bias=False,
             )
             self.cross_attention_layernorm = T5LayerNorm(layer_norm_epsilon)
             self.cross_attention_dropout = keras.layers.Dropout(dropout)
+
+        if activation == "gelu":
+
+            def approx_gelu(x):
+                return keras.activations.gelu(x, approximate=True)
+
+            activation = approx_gelu
+        else:
+            activation = keras.activations.get(activation)
 
         self.input_projector = keras.layers.Dense(
             intermediate_dim,
@@ -123,7 +135,7 @@ class T5TransformerLayer(keras.layers.Layer):
         x = self.layer_norm(x)
         if self.use_gated_activation:
             hidden_activation = self.input_projector(x)
-            hidden_linear = self.gate_projector(hidden_states)
+            hidden_linear = self.gate_projector(x)
             x = hidden_activation * hidden_linear
         else:
             x = self.input_projector(x)

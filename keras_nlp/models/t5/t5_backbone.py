@@ -14,6 +14,8 @@
 
 """T5 backbone model."""
 
+import copy
+
 import tensorflow as tf
 from tensorflow import keras
 
@@ -21,6 +23,7 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.transformer_layer_utils import compute_causal_mask
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
+from keras_nlp.models.t5.t5_presets import backbone_presets
 from keras_nlp.models.t5.t5_transformer_layer import T5TransformerLayer
 from keras_nlp.utils.python_utils import classproperty
 
@@ -54,6 +57,9 @@ class T5Backbone(Backbone):
         hidden_dim: int. The hidden size of the Transformer layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each Transformer layer.
+        key_value_dim: int. The dimension of each head of the key/value
+            projections in the multi-head attention layers. Defaults to
+            hidden_dim / num_heads.
         dropout: float. Dropout probability for the Transformer layers.
         activation: activation function (or activation string name). The
             activation to be used in the inner dense blocks of the
@@ -75,6 +81,7 @@ class T5Backbone(Backbone):
         num_heads,
         hidden_dim,
         intermediate_dim,
+        key_value_dim=None,
         dropout=0.1,
         activation="gelu",
         use_gated_activation=True,
@@ -123,6 +130,7 @@ class T5Backbone(Backbone):
                 is_decoder=False,
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
+                key_value_dim=key_value_dim or hidden_dim // num_heads,
                 dropout=dropout,
                 activation=activation,
                 layer_norm_epsilon=layer_norm_epsilon,
@@ -167,6 +175,7 @@ class T5Backbone(Backbone):
                 is_decoder=True,
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
+                key_value_dim=key_value_dim or hidden_dim // num_heads,
                 dropout=dropout,
                 activation=activation,
                 layer_norm_epsilon=layer_norm_epsilon,
@@ -237,4 +246,4 @@ class T5Backbone(Backbone):
 
     @classproperty
     def presets(cls):
-        return {}
+        return copy.deepcopy(backbone_presets)

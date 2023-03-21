@@ -31,6 +31,7 @@ class T5MultiHeadAttention(keras.layers.Layer):
         self,
         is_decoder,
         hidden_dim,
+        key_value_dim,
         num_heads,
         dropout,
         use_relative_attention_bias=False,
@@ -39,7 +40,7 @@ class T5MultiHeadAttention(keras.layers.Layer):
         super().__init__(**kwargs)
         self.is_decoder = is_decoder
         self.hidden_dim = hidden_dim
-        self.key_value_dim = hidden_dim // num_heads
+        self.key_value_dim = key_value_dim
         self.num_heads = num_heads
         self.use_relative_attention_bias = use_relative_attention_bias
 
