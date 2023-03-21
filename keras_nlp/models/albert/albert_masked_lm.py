@@ -97,7 +97,7 @@ class AlbertMaskedLM(Task):
     labels = [[3, 5]] * 2
 
     masked_lm = keras_nlp.models.AlbertMaskedLM.from_preset(
-    "albert_base_en_uncased",
+        "albert_base_en_uncased",
     preprocessor=None,
     )
     masked_lm.fit(x=preprocessed_features, y=labels, batch_size=2)

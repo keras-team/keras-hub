@@ -33,11 +33,12 @@ def albert_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.AlbertBackbone")
 class AlbertBackbone(Backbone):
-    """A ALBERT encoder network.
+    """An ALBERT encoder network.
 
     This class implements a bi-directional Transformer-based encoder as
     described in
-    ["ALBERT: A Lite BERT for Self-supervised Learning of Language Representations"](https://arxiv.org/abs/1909.11942).
+    ["ALBERT: A Lite BERT for Self-supervised Learning of Language Representations"]
+    (https://arxiv.org/abs/1909.11942).
     ALBERT is a more efficient variant of BERT, and uses parameter reduction
     techniques such as cross-layer parameter sharing and factorized embedding
     parameterization. This model class includes the embedding lookups and

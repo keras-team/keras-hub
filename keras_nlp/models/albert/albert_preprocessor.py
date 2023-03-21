@@ -33,10 +33,10 @@ class AlbertPreprocessor(Preprocessor):
 
     This preprocessing layer will do three things:
 
-     1.Tokenize any number of input segments using the `tokenizer`.
-     2.Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
+     1. Tokenize any number of input segments using the `tokenizer`.
+     2. Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
        with the appropriate `"[CLS]"`, `"[SEP]"` and `"<pad>"` tokens.
-     3.Construct a dictionary with keys `"token_ids"`, `"segment_ids"` and
+     3. Construct a dictionary with keys `"token_ids"`, `"segment_ids"` and
        `"padding_mask"`, that can be passed directly to
        `keras_nlp.models.AlbertBackbone`.
 
@@ -57,7 +57,8 @@ class AlbertPreprocessor(Preprocessor):
                     "waterfall" algorithm that allocates quota in a
                     left-to-right manner and fills up the buckets until we run
                     out of budget. It supports an arbitrary number of segments.
-        Call arguments:
+
+    Call arguments:
         x: A tensor of single string sequences, or a tuple of multiple
             tensor sequences to be packed together. Inputs may be batched or
             unbatched. For single sequences, raw python inputs will be converted
@@ -93,23 +94,29 @@ class AlbertPreprocessor(Preprocessor):
     preprocessor = keras_nlp.models.AlbertPreprocessor(tokenizer)
     preprocessor("The quick brown fox jumped.")
     ```
+
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_nlp.models.AlbertPreprocessor.from_preset(
         "bert_base_en_uncased"
     )
+
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
     label = tf.constant([1, 1])
+
     # Map labeled single sentences.
     ds = tf.data.Dataset.from_tensor_slices((first, label))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
     # Map unlabeled single sentences.
     ds = tf.data.Dataset.from_tensor_slices(first)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
     # Map labeled sentence pairs.
     ds = tf.data.Dataset.from_tensor_slices(((first, second), label))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
     # Map unlabeled sentence pairs.
     ds = tf.data.Dataset.from_tensor_slices((first, second))
     # Watch out for tf.data's default unpacking of tuples here!

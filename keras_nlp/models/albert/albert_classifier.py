@@ -66,12 +66,15 @@ class AlbertClassifier(Task):
         sequence_length=128,
     )
 
-    #Pretrained classifier.
+    # Pretrained classifier.
     classifier = keras_nlp.models.AlbertClassifier.from_preset(
         "albert_base_en_uncased",
         num_classes=4,
         preprocessor=preprocessor,
     )
+    classifier.fit(x=features, y=labels, batch_size=2)
+    classifier.predict(x=features, batch_size=2)
+
     # Re-compile (e.g., with a new learning rate).
     classifier.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -108,7 +111,7 @@ class AlbertClassifier(Task):
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]
     labels = [0, 3]
-    vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
+    vocab = ["[CLS]", "[SEP]","[UNK]", "[PAD]", "[MASK]"]
     vocab += ["The", "quick", "brown", "fox", "jumped", "."]
     tokenizer = keras_nlp.models.AlbertTokenizer(
         vocabulary=vocab,
