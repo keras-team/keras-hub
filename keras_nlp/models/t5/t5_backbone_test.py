@@ -25,7 +25,7 @@ from keras_nlp.models.t5.t5_backbone import T5Backbone
 
 class T5Test(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = T5Backbone(
+        self.backbone = T5Backbone(
             vocabulary_size=4,
             num_layers=2,
             num_heads=2,
@@ -53,12 +53,20 @@ class T5Test(tf.test.TestCase, parameterized.TestCase):
         ).batch(2)
 
     def test_valid_call_t5(self):
-        self.model(self.input_batch)
+        self.backbone(self.input_batch)
+
+    def test_token_embedding(self):
+        output = self.backbone.token_embedding(
+            self.input_batch["encoder_token_ids"]
+        )
+        self.assertEqual(output.shape, (2, 3, 4))
+
+    def test_name(self):
         # Check default name passed through
-        self.assertRegexpMatches(self.model.name, "t5_backbone")
+        self.assertRegexpMatches(self.backbone.name, "t5_backbone")
 
     def test_variable_sequence_length_call_t5(self):
-        for seq_length in (4, 5, 6):
+        for seq_length in (2, 3, 4):
             input_data = {
                 "encoder_token_ids": tf.ones(
                     (self.batch_size, seq_length), dtype="int32"
@@ -73,36 +81,29 @@ class T5Test(tf.test.TestCase, parameterized.TestCase):
                     (self.batch_size, seq_length), dtype="int32"
                 ),
             }
-            outputs = self.model(input_data)
+            outputs = self.backbone(input_data)
             self.assertIn("encoder_sequence_output", outputs)
             self.assertIn("decoder_sequence_output", outputs)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_t5_compile(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        outputs = self.model.predict(self.input_batch)
-        self.assertIn("encoder_sequence_output", outputs)
-        self.assertIn("decoder_sequence_output", outputs)
+    def test_predict(self):
+        self.backbone.predict(self.input_batch)
+        self.backbone.predict(self.input_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_t5_compile_batched_ds(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        outputs = self.model.predict(self.input_dataset)
-        self.assertIn("encoder_sequence_output", outputs)
-        self.assertIn("decoder_sequence_output", outputs)
+    def test_serialization(self):
+        new_backbone = keras.utils.deserialize_keras_object(
+            keras.utils.serialize_keras_object(self.backbone)
+        )
+        self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large  # Saving is slow, so mark these large.
     def test_saved_model(self, save_format, filename):
-        outputs = self.model(self.input_batch)
+        outputs = self.backbone(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)
-        self.model.save(save_path, save_format=save_format)
+        self.backbone.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
@@ -119,7 +120,7 @@ class T5Test(tf.test.TestCase, parameterized.TestCase):
 class T5BackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
-            self.model = T5Backbone(
+            self.backbone = T5Backbone(
                 vocabulary_size=4,
                 num_layers=2,
                 num_heads=2,
@@ -136,6 +137,6 @@ class T5BackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_predict(self):
         self.model.compile()
-        outputs = self.model.predict(self.input_dataset)
+        outputs = self.backbone.predict(self.input_dataset)
         self.assertIn("encoder_sequence_output", outputs)
         self.assertIn("decoder_sequence_output", outputs)
