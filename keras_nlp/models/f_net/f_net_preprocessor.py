@@ -91,14 +91,14 @@ class FNetPreprocessor(Preprocessor):
     # Custom vocabulary.
     vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     vocab += ["The", "quick", "brown", "fox", "jumped", "."]
-    tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
-    preprocessor = keras_nlp.models.BertPreprocessor(tokenizer)
+    tokenizer = keras_nlp.models.FNetTokenizer(vocabulary=vocab)
+    preprocessor = keras_nlp.models.FNetPreprocessor(tokenizer)
     preprocessor("The quick brown fox jumped.")
     ```
     
     Mapping with `tf.data.Dataset`.
     ```python
-    preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
+    preprocessor = keras_nlp.models.FNetPreprocessor.from_preset(
         "bert_base_en_uncased"
     )
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
