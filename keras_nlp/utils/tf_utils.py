@@ -66,6 +66,14 @@ def tensor_to_string_list(inputs):
     return _decode_strings_to_utf8(list_outputs)
 
 
+def truncate_at_token(inputs, token, mask):
+    """Truncate at first instance of `token`, ignoring `mask`."""
+    matches = (inputs == token) & (~mask)
+    end_indices = tf.cast(tf.math.argmax(matches, -1), "int32")
+    end_indices = tf.where(end_indices == 0, tf.shape(inputs)[-1], end_indices)
+    return tf.RaggedTensor.from_tensor(inputs, end_indices)
+
+
 def assert_tf_text_installed(symbol_name):
     """Detokenize and convert tensor to nested lists of python strings."""
     if tf_text is None:

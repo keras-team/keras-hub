@@ -122,18 +122,17 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
         self.causal_lm_no_preprocessing.fit(self.preprocessed_dataset)
 
     @parameterized.named_parameters(
-        ("non_jit_compile_cache", False, True),
-        ("non_jit_compile_non_cache", False, False),
-        ("jit_compile_non_cache", True, False),
+        ("jit_compile_false", False), ("jit_compile_true", True)
     )
-    def test_gpt2_causal_lm_generate(self, jit_compile, use_cache):
+    def test_generate(self, jit_compile):
+        # Tensor input.
         self.causal_lm.compile(jit_compile=jit_compile)
         self.causal_lm.generate(
             self.raw_batch,
             max_length=10,
         )
-
-        # String input
+        first_fn = self.causal_lm.generate_function
+        # String input.
         prompt = " airplane"
         generated = self.causal_lm.generate(
             prompt,
@@ -141,6 +140,11 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
         )
         generated = generated.numpy().decode("utf-8")
         self.assertTrue(prompt in generated)
+        second_fn = self.causal_lm.generate_function
+        # Assert we did not recompile.
+        self.assertEqual(first_fn, second_fn)
+        self.causal_lm.compile(sampler="greedy")
+        self.assertIsNone(self.causal_lm.generate_function)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
