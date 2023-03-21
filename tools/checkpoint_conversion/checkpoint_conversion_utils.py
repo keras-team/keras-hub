@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import hashlib
-import os
 import tarfile
 import zipfile
 
@@ -26,10 +25,9 @@ def get_md5_checksum(file_path):
 
 
 def file_type_extractor(archive_file_path):
-    archive_dir = os.path.dirname(archive_file_path)
     if archive_file_path.endswith(".tar.gz"):
         with tarfile.open(archive_file_path, "r:gz") as tar:
-            return tar.extractall(archive_dir)
+            return tar.extractall()
     elif archive_file_path.endswith(".zip"):
         with zipfile.ZipFile(archive_file_path, "r") as zip_ref:
-            return zip_ref.extractall(archive_dir)
+            return zip_ref.extractall()
