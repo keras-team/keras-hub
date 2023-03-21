@@ -490,7 +490,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         config = metadata["preprocessor_config"]
         config.update(
-            {"vocabulary": vocabulary, "vocabulary_size": len(vocabulary)},
+            {"vocabulary": vocabulary, "vocabulary_size": None},
         )
 
         return cls.from_config({**config, **kwargs})
