@@ -129,13 +129,13 @@ class WhisperBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.backbone = WhisperBackbone(
-                vocabulary_size=1000,
+                vocabulary_size=10,
                 num_layers=2,
                 num_heads=2,
-                hidden_dim=64,
-                intermediate_dim=128,
-                max_encoder_sequence_length=128,
-                max_decoder_sequence_length=64,
+                hidden_dim=2,
+                intermediate_dim=4,
+                max_encoder_sequence_length=6,
+                max_decoder_sequence_length=6,
             )
 
         self.input_batch = {
