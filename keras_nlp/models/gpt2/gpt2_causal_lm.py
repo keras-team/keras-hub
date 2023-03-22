@@ -318,10 +318,10 @@ class GPT2CausalLM(Task):
                 next=next,
                 prompt=prompt,
                 state=cache,
-                initial_hidden_states=hidden_states,
                 index=min_length,
                 mask=input_mask,
                 end_token_id=self.preprocessor.tokenizer.end_token_id,
+                init_hidden_states=hidden_states,
             )
 
         if self.run_eagerly:

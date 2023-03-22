@@ -23,7 +23,9 @@ from keras_nlp.utils.python_utils import format_docstring
 call_args_docstring = """
     next: A function which takes in the `prompt, state, index` of the
         current generation loop, and outputs a tuple `(logits, state)` with the
-        probability for the next token and state for the next iteration.
+        probability for the next token and state for the next iteration. Or a
+        tuple `(logits, state, hidden_states)` with `hidden_states` being the
+        representation of the token.
     prompt: A 2D integer tensor with shape `(batch_size, max_length)`. This
         tensor will be iteratively updated column by column with new sampled
         values, starting at `index`.
@@ -87,10 +89,10 @@ class Sampler:
         next,
         prompt,
         state=None,
-        initial_hidden_states=None,
         index=0,
         mask=None,
         end_token_id=None,
+        init_hidden_states=None,
     ):
         max_length = tf.shape(prompt)[-1]
         # Make sure `max_length` and `index` are the same dtype.
@@ -109,7 +111,13 @@ class Sampler:
 
         def body(prompt, state, index):
             # Compute the softmax distribution for the next token.
-            logits, state, _ = next(prompt, state, index)
+            outputs = next(prompt, state, index)
+            if len(outputs) == 2:
+                logits, state = next(prompt, state, index)
+            else:
+                # `next` could contain a `hidden_states` return value, which is
+                # only used in contrastive search now.
+                logits, state, _ = next(prompt, state, index)
             probabilities = keras.activations.softmax(logits)
             # Compute the next token.
             next_token = self.get_next_token(probabilities)

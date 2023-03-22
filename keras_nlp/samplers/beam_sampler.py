@@ -105,10 +105,10 @@ class BeamSampler(Sampler):
         next,
         prompt,
         state=None,
-        initial_hidden_states=None,
         index=0,
         mask=None,
         end_token_id=None,
+        init_hidden_states=None,
     ):
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         # Make sure max length and start index are the same dtype.
