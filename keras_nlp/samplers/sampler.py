@@ -116,7 +116,7 @@ class Sampler:
             next_token = tf.cast(next_token, prompt.dtype)
             # Ensure shape is `[None]`, otherwise it causes issues after
             # converting to TFLite.
-            next_token = tf.ensure_shape(next_token, [None,])
+            next_token = tf.ensure_shape(next_token, [None])
             next_token = tf.where(mask[:, index], prompt[:, index], next_token)
             # Update the prompt with the next token.
             next_token = next_token[:, tf.newaxis]
