@@ -128,7 +128,9 @@ class BytePairTokenizerCache(tf.Module):
         # `tf.lookup.experimental.MutableHashTable` does not support string to
         # string mapping. So we first convert to string to an integer key, and
         # use the integer key to find the value.
-        self.factors = tf.pow(256, tf.range(0, 8, dtype=tf.int64))
+        self.factors = tf.pow(
+            tf.constant(256, dtype=tf.int64), tf.range(0, 8, dtype=tf.int64)
+        )
         self.id2value = tf.lookup.experimental.MutableHashTable(
             tf.int64, tf.string, ""
         )
