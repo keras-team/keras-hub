@@ -105,6 +105,7 @@ class BeamSampler(Sampler):
         next,
         prompt,
         state=None,
+        initial_hidden_states=None,
         index=0,
         mask=None,
         end_token_id=None,

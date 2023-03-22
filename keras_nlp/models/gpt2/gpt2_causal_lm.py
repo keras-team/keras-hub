@@ -16,7 +16,6 @@
 import copy
 
 import tensorflow as tf
-from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
@@ -211,7 +210,10 @@ class GPT2CausalLM(Task):
         return GPT2CausalLMPreprocessor
 
     def call_with_cache(
-        self, token_ids, cache, cache_index, hidden_states=None
+        self,
+        token_ids,
+        cache,
+        cache_index,
     ):
         """Forward pass of `GPT2CausalLM` with cache.
 
@@ -251,10 +253,7 @@ class GPT2CausalLM(Task):
             caches[i] = next_cache
         cache = tf.stack(caches, axis=1)
         x = self.backbone.get_layer("layer_norm")(x)
-        if hidden_states is not None:
-            hidden_states = dynamic_update_slice(
-                hidden_states, tf.identity(x), [0, cache_index, 0]
-            )
+        hidden_states = tf.identity(x)
         x = tf.matmul(
             x,
             self.backbone.get_layer("token_embedding").embeddings,
@@ -262,7 +261,7 @@ class GPT2CausalLM(Task):
         )
         return x, cache, hidden_states
 
-    def _build_cache(self, prompt, include_hidden_states=False):
+    def _build_cache(self, prompt):
         """Build an empty cache for use with `call_with_cache()`."""
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         num_layers = self.backbone.num_layers
@@ -270,16 +269,8 @@ class GPT2CausalLM(Task):
         head_dim = self.backbone.hidden_dim // self.backbone.num_heads
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
         cache = tf.zeros(shape)
-        if include_hidden_states:
-            hidden_states = tf.zeros(
-                [batch_size, max_length, self.backbone.hidden_dim]
-            )
-        else:
-            hidden_states = None
         # Seed the cache.
-        _, cache, hidden_states = self.call_with_cache(
-            prompt, cache, 0, hidden_states
-        )
+        _, cache, hidden_states = self.call_with_cache(prompt, cache, 0)
         return cache, hidden_states
 
     def compile(
@@ -302,41 +293,32 @@ class GPT2CausalLM(Task):
         # Clear the compiled generate function.
         self.generate_function = None
 
-    def make_generate_function(self, include_hidden_states=False):
+    def make_generate_function(self):
         """Create or return the compiled generation function."""
         if self.generate_function is not None:
             return self.generate_function
 
         def generate_function(prompt, input_mask, min_length):
             # Create and seed cache with a single forward pass.
-            cache, hidden_states = self._build_cache(
-                prompt, include_hidden_states
-            )
+            cache, hidden_states = self._build_cache(prompt)
 
             def next(prompt, state, index):
                 # The cache index is the index of our previous token.
                 cache_index = index - 1
-                cache = state["cache"]
-                hidden_states = state.get("hidden_states", None)
+                cache = state
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
                 logits, cache, hidden_states = self.call_with_cache(
                     prompt,
                     cache,
                     cache_index,
-                    hidden_states,
                 )
-                state["cache"] = cache
-                if hidden_states is not None:
-                    state["hidden_states"] = hidden_states
-                return tf.squeeze(logits, axis=1), state
+                return tf.squeeze(logits, axis=1), cache, hidden_states
 
-            state = {"cache": cache}
-            if hidden_states is not None:
-                state["hidden_states"] = hidden_states
             return self._sampler(
                 next=next,
                 prompt=prompt,
-                state=state,
+                state=cache,
+                initial_hidden_states=hidden_states,
                 index=min_length,
                 mask=input_mask,
                 end_token_id=self.preprocessor.tokenizer.end_token_id,
@@ -389,14 +371,7 @@ class GPT2CausalLM(Task):
         prompt = prompt.to_tensor(shape=padded_shape)
 
         # Run the (possibly compiled) generate function on dense inputs.
-        if isinstance(self._sampler, ContrastiveSampler):
-            generate_function = self.make_generate_function(
-                include_hidden_states=True
-            )
-        else:
-            generate_function = self.make_generate_function(
-                include_hidden_states=False
-            )
+        generate_function = self.make_generate_function()
         output = generate_function(prompt, input_mask, min_length)
 
         # Truncate to ragged by removing tokens after the first end token.

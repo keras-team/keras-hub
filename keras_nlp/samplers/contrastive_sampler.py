@@ -66,6 +66,7 @@ class ContrastiveSampler(Sampler):
         mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
         # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
         state = () if state is None else state
+        logits, state, hidden_states = next(prompt, state, 0)
 
         def cond(prompt, state, index):
             if end_token_id is None:
@@ -77,9 +78,9 @@ class ContrastiveSampler(Sampler):
 
         def body(prompt, state, index):
             # Compute the softmax distribution for the next token.
-            logits, state = next(prompt, state, index)
+            logits, state, next_hidden_states = next(prompt, state, index)
             probabilities = keras.activations.softmax(logits)
-
+            
             prompt_beams, mask_beams = create_beams(prompt), create_beams(mask)
             state_beams = tf.nest.map_structure(create_beams, state)
 
@@ -100,7 +101,6 @@ class ContrastiveSampler(Sampler):
             )
 
             _, next_state_beams = next(prompt_beams, state_beams, index + 1)
-            hidden_states = next_state_beams["hidden_states"]
             last_token_state = hidden_states[:, index, :][:, tf.newaxis, :]
             previous_states = state_beams["hidden_states"][:, :index, :]
             similarity_scores = self.similarity(

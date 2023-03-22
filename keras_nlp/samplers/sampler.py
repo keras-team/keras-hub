@@ -87,6 +87,7 @@ class Sampler:
         next,
         prompt,
         state=None,
+        initial_hidden_states=None,
         index=0,
         mask=None,
         end_token_id=None,
@@ -108,7 +109,7 @@ class Sampler:
 
         def body(prompt, state, index):
             # Compute the softmax distribution for the next token.
-            logits, state = next(prompt, state, index)
+            logits, state, _ = next(prompt, state, index)
             probabilities = keras.activations.softmax(logits)
             # Compute the next token.
             next_token = self.get_next_token(probabilities)
