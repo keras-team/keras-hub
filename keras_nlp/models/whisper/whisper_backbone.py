@@ -83,7 +83,7 @@ class WhisperBackbone(Backbone):
         ),
     }
 
-    # Randomly initialized Whisper encoder-decoder model with a custom config
+    # Randomly initialized Whisper encoder-decoder model with a custom config.
     model = keras_nlp.models.WhisperBackbone(
         vocabulary_size=51864,
         num_layers=4,
