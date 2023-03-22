@@ -20,7 +20,7 @@ from keras_nlp.layers.transformer_encoder import TransformerEncoder
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
 class WhisperEncoder(TransformerEncoder):
-    """Whisper encoder.
+    """A Whisper encoder.
 
     Inherits from `keras_nlp.layers.TransformerEncoder`, and overrides the
     `_build` method so as to remove the bias term from the key projection layer.
