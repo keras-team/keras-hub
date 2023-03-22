@@ -15,8 +15,8 @@
 
 import io
 import os
-import pytest
 
+import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized

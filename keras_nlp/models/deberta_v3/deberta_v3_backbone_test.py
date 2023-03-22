@@ -25,7 +25,7 @@ from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 
 class DebertaV3BackboneTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.backbone = DebertaV3Backbone( 
+        self.backbone = DebertaV3Backbone(
             vocabulary_size=10,
             num_layers=2,
             num_heads=2,
