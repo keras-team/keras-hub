@@ -43,6 +43,25 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         chunk_length: int, defaults to 30. The length of each audio chunk in
             seconds. The input audio tensor will be padded/trimmed to
             `chunk_length*sample_rate`.
+
+    Examples:
+    ```python
+
+    # Load an audio.
+    from keras_nlp.utils.audio_utils import load_audio
+    audio_tensor = load_audio("path/to/audio.mp3")
+
+    whisper_audio_feature_extractor = keras_nlp.models.WhisperAudioFeatureExtractor()
+
+    # Compute the log-mel spectrogram.
+    whisper_audio_feature_extractor(audio_tensor)
+
+    # Compute the log-mel spectrogram for a batch of audio tensors.
+    audio_tensor_1 = tf.expand_dims(load_audio("path/to/audio_1.mp3"), axis=0)
+    audio_tensor_2 = tf.expand_dims(load_audio("path/to/audio_2.mp3"), axis=0)
+    audio_tensor = tf.stack([audio_tensor_1, audio_tensor_2], axis=0)
+    whisper_audio_feature_extractor(audio_tensor)
+    ```
     """
 
     def __init__(
@@ -198,7 +217,8 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
             audio = tf.expand_dims(audio, 0)
 
         # Convert the tensor to a Ragged Tensor.
-        audio = tf.RaggedTensor.from_tensor(audio)
+        if isinstance(audio, tf.Tensor):
+            audio = tf.RaggedTensor.from_tensor(audio)
 
         # Pad audio.
         audio_shape = audio.shape.as_list()
