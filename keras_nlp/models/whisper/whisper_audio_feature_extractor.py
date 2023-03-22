@@ -47,7 +47,7 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
     Examples:
     ```python
 
-    # Load an audio.
+    # Load an audio file.
     from keras_nlp.utils.audio_utils import load_audio
     audio_tensor = load_audio("path/to/audio.mp3")
 
@@ -57,9 +57,9 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
     whisper_audio_feature_extractor(audio_tensor)
 
     # Compute the log-mel spectrogram for a batch of audio tensors.
-    audio_tensor_1 = tf.expand_dims(load_audio("path/to/audio_1.mp3"), axis=0)
-    audio_tensor_2 = tf.expand_dims(load_audio("path/to/audio_2.mp3"), axis=0)
-    audio_tensor = tf.stack([audio_tensor_1, audio_tensor_2], axis=0)
+    audio_tensor_1 = load_audio("path/to/audio_1.mp3")
+    audio_tensor_2 = tf.expand_dims(load_audio("path/to/audio_2.mp3")
+    audio_tensor = tf.ragged.stack([audio_tensor_1, audio_tensor_2], axis=0)
     whisper_audio_feature_extractor(audio_tensor)
     ```
     """
