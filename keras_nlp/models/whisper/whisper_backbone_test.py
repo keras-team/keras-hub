@@ -26,33 +26,19 @@ from keras_nlp.models.whisper.whisper_backbone import WhisperBackbone
 
 class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = WhisperBackbone(
-            vocabulary_size=1000,
+        self.backbone = WhisperBackbone(
+            vocabulary_size=10,
             num_layers=2,
             num_heads=2,
-            hidden_dim=64,
-            intermediate_dim=128,
-            max_encoder_sequence_length=128,
-            max_decoder_sequence_length=96,
+            hidden_dim=2,
+            intermediate_dim=4,
+            max_encoder_sequence_length=6,
+            max_decoder_sequence_length=6,
         )
-        self.batch_size = 8
         self.input_batch = {
-            "encoder_features": tf.ones(
-                (
-                    self.batch_size,
-                    self.model.max_encoder_sequence_length,
-                    NUM_MELS,
-                ),
-                dtype="int32",
-            ),
-            "decoder_token_ids": tf.ones(
-                (self.batch_size, self.model.max_decoder_sequence_length),
-                dtype="int32",
-            ),
-            "decoder_padding_mask": tf.ones(
-                (self.batch_size, self.model.max_decoder_sequence_length),
-                dtype="int32",
-            ),
+            "encoder_features": tf.ones((2, 5, NUM_MELS), dtype="int32"),
+            "decoder_token_ids": tf.ones((2, 5), dtype="int32"),
+            "decoder_padding_mask": tf.ones((2, 5), dtype="int32"),
         }
 
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
@@ -60,55 +46,53 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
         ).batch(2)
 
     def test_valid_call_whisper(self):
-        self.model(self.input_batch)
+        self.backbone(self.input_batch)
 
+    def test_token_embedding(self):
+        output = self.backbone.token_embedding(
+            self.input_batch["decoder_token_ids"]
+        )
+        self.assertEqual(output.shape, (2, 5, 2))
+
+    def test_name(self):
         # Check default name passed through
-        self.assertRegexpMatches(self.model.name, "whisper_backbone")
+        self.assertRegexpMatches(self.backbone.name, "whisper_backbone")
 
     def test_variable_sequence_length_call_whisper(self):
-        for seq_length in (25, 50, 75):
+        for seq_length in (2, 3, 4):
             input_data = {
                 "encoder_features": tf.ones(
-                    (self.batch_size, seq_length, NUM_MELS),
-                    dtype="int32",
+                    (2, seq_length, NUM_MELS), dtype="int32"
                 ),
-                "decoder_token_ids": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
-                "decoder_padding_mask": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
+                "decoder_token_ids": tf.ones((2, seq_length), dtype="int32"),
+                "decoder_padding_mask": tf.ones((2, seq_length), dtype="int32"),
             }
-            self.model(input_data)
+            self.backbone(input_data)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_compile(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_batch)
+    def test_predict(self):
+        self.backbone.predict(self.input_batch)
+        self.backbone.predict(self.input_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_compile_batched_ds(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_dataset)
+    def test_serialization(self):
+        new_backbone = keras.utils.deserialize_keras_object(
+            keras.utils.serialize_keras_object(self.backbone)
+        )
+        self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 
     def test_key_projection_bias_absence(self):
         # Check only for the first encoder layer and first decoder layer.
         self.assertIsNone(
-            self.model.get_layer(
+            self.backbone.get_layer(
                 "transformer_encoder_layer_0"
             )._self_attention_layer._key_dense.bias
         )
         self.assertIsNone(
-            self.model.get_layer(
+            self.backbone.get_layer(
                 "transformer_decoder_layer_0"
             )._self_attention_layer._key_dense.bias
         )
         self.assertIsNone(
-            self.model.get_layer(
+            self.backbone.get_layer(
                 "transformer_decoder_layer_0"
             )._cross_attention_layer._key_dense.bias
         )
@@ -117,10 +101,11 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large  # Saving is slow, so mark these large.
     def test_saved_model(self, save_format, filename):
-        model_output = self.model(self.input_batch)
+        model_output = self.backbone(self.input_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)
-        self.model.save(save_path, save_format=save_format)
+        self.backbone.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
@@ -143,14 +128,14 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
 class WhisperBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
-            self.model = WhisperBackbone(
-                vocabulary_size=1000,
+            self.backbone = WhisperBackbone(
+                vocabulary_size=10,
                 num_layers=2,
                 num_heads=2,
-                hidden_dim=64,
-                intermediate_dim=128,
-                max_encoder_sequence_length=128,
-                max_decoder_sequence_length=64,
+                hidden_dim=2,
+                intermediate_dim=4,
+                max_encoder_sequence_length=6,
+                max_decoder_sequence_length=6,
             )
 
         self.input_batch = {
@@ -175,5 +160,5 @@ class WhisperBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
         ).batch(2)
 
     def test_predict(self):
-        self.model.compile()
-        self.model.predict(self.input_dataset)
+        self.backbone.compile()
+        self.backbone.predict(self.input_dataset)
