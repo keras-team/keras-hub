@@ -35,13 +35,13 @@ def opt_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.OPTBackbone")
 class OPTBackbone(Backbone):
-    """OPT decoder network.
+    """An OPT decoder network.
 
     This class implements a Transformer-based decoder model as described in
     ["OPT: Open Pre-trained Transformer Language Models"](https://arxiv.org/abs/2205.01068).
     The default constructor gives a fully customizable, randomly initialized OPT
     model with any number of layers, heads, and embedding dimensions. To load
-    preset architectures and weights, use the `from_preset` constructor.
+    preset architectures and weights, use the `from_preset()` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
@@ -73,18 +73,18 @@ class OPTBackbone(Backbone):
 
     # Pretrained OPT decoder
     model = keras_nlp.models.OPTBackbone.from_preset("opt_125m_en")
-    output = model(input_data)
+    model(input_data)
 
     # Randomly initialized OPT decoder model with a custom config
     model = keras_nlp.models.OPTBackbone(
         vocabulary_size=50265,
-        num_layers=6,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12,
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        intermediate_dim=512,
+        max_sequence_length=128,
     )
-    output = model(input_data)
+    model(input_data)
     ```
     """
 

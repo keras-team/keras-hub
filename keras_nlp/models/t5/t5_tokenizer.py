@@ -12,29 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""FNet tokenizer."""
-
-import copy
+"""T5 tokenizer."""
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.models.f_net.f_net_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
-from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.FNetTokenizer")
-class FNetTokenizer(SentencePieceTokenizer):
-    """FNet tokenizer layer based on SentencePiece.
+@keras_nlp_export("keras_nlp.models.T5Tokenizer")
+class T5Tokenizer(SentencePieceTokenizer):
+    """T5 tokenizer layer based on SentencePiece.
 
     This tokenizer class will tokenize raw strings into integer sequences and
     is based on `keras_nlp.tokenizers.SentencePieceTokenizer`. Unlike the
     underlying tokenizer, it will check for all special tokens needed by
-    FNet models and provides a `from_preset()` method to automatically
-    download a matching vocabulary for a FNet preset.
-
-    This tokenizer does not provide truncation or padding of inputs. It can be
-    combined with a `keras_nlp.models.FNetPreprocessor` layer for input
-    packing.
+    T5 models and provides a `from_preset()` method to automatically
+    download a matching vocabulary for a T5 preset.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -51,7 +43,7 @@ class FNetTokenizer(SentencePieceTokenizer):
     Examples:
 
     ```python
-    tokenizer = keras_nlp.models.FNetTokenizer(proto="model.spm")
+    tokenizer = keras_nlp.models.T5Tokenizer(proto="model.spm")
 
     # Batched inputs.
     tokenizer(["the quick brown fox", "the earth is round"])
@@ -68,11 +60,9 @@ class FNetTokenizer(SentencePieceTokenizer):
         super().__init__(proto=proto, **kwargs)
 
         # Check for necessary special tokens.
-        cls_token = "[CLS]"
-        sep_token = "[SEP]"
+        end_token = "</s>"
         pad_token = "<pad>"
-        mask_token = "[MASK]"
-        for token in [cls_token, sep_token, pad_token, mask_token]:
+        for token in [pad_token]:
             if token not in self.get_vocabulary():
                 raise ValueError(
                     f"Cannot find token `'{token}'` in the provided "
@@ -80,11 +70,7 @@ class FNetTokenizer(SentencePieceTokenizer):
                     "`vocabulary` or use a pretrained `vocabulary` name."
                 )
 
-        self.cls_token_id = self.token_to_id(cls_token)
-        self.sep_token_id = self.token_to_id(sep_token)
         self.pad_token_id = self.token_to_id(pad_token)
-        self.mask_token_id = self.token_to_id(mask_token)
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
+        self.end_token_id = self.token_to_id(end_token)
+        # T5 uses the same start token as end token, i.e., "<\s>".
+        self.start_token_id = self.end_token_id

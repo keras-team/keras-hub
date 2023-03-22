@@ -12,64 +12,75 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for RoBERTa tokenizer."""
+"""Tests for T5 tokenizer."""
 
+import io
 import os
 
 import pytest
+import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.models.t5.t5_tokenizer import T5Tokenizer
 
 
-class RobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class T5TokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        vocab = {
-            "<s>": 0,
-            "<pad>": 1,
-            "</s>": 2,
-            "Ġair": 3,
-            "plane": 4,
-            "Ġat": 5,
-            "port": 6,
-            "Ġkoh": 7,
-            "li": 8,
-            "Ġis": 9,
-            "Ġthe": 10,
-            "Ġbest": 11,
-            "<mask>": 12,
-        }
+        bytes_io = io.BytesIO()
+        vocab_data = tf.data.Dataset.from_tensor_slices(
+            ["the quick brown fox", "the earth is round"]
+        )
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=vocab_data.as_numpy_iterator(),
+            model_writer=bytes_io,
+            vocab_size=11,
+            model_type="WORD",
+            bos_id=-1,
+            pad_id=0,
+            eos_id=1,
+            unk_id=2,
+            pad_piece="<pad>",
+            eos_piece="</s>",
+            unk_piece="<unk>",
+            user_defined_symbols="[MASK]",
+        )
+        self.proto = bytes_io.getvalue()
 
-        merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
-        merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
-        merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
-        merges += ["pla ne"]
-
-        self.tokenizer = RobertaTokenizer(vocabulary=vocab, merges=merges)
+        self.tokenizer = T5Tokenizer(proto=self.proto)
 
     def test_tokenize(self):
-        input_data = " airplane at airport"
+        input_data = "the quick brown fox"
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [3, 4, 5, 3, 6])
+        self.assertAllEqual(output, [4, 9, 5, 7])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant([" airplane at airport", " kohli is the best"])
+        input_data = tf.constant(["the quick brown fox", "the earth is round"])
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[3, 4, 5, 3, 6], [7, 8, 9, 10, 11]])
+        self.assertAllEqual(output, [[4, 9, 5, 7], [4, 6, 8, 10]])
 
     def test_detokenize(self):
-        input_tokens = [[3, 4, 5, 3, 6]]
-        output = self.tokenizer.detokenize(input_tokens)
-        self.assertAllEqual(output, [" airplane at airport"])
+        input_data = tf.constant([[4, 9, 5, 7]])
+        output = self.tokenizer.detokenize(input_data)
+        self.assertEqual(output, tf.constant(["the quick brown fox"]))
 
     def test_vocabulary_size(self):
-        self.assertEqual(self.tokenizer.vocabulary_size(), 13)
+        tokenizer = T5Tokenizer(proto=self.proto)
+        self.assertEqual(tokenizer.vocabulary_size(), 11)
 
     def test_errors_missing_special_tokens(self):
+        bytes_io = io.BytesIO()
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=iter(["abc"]),
+            model_writer=bytes_io,
+            vocab_size=5,
+            pad_id=-1,
+            eos_id=-1,
+            bos_id=-1,
+        )
         with self.assertRaises(ValueError):
-            RobertaTokenizer(vocabulary=["a", "b", "c"], merges=[])
+            T5Tokenizer(proto=bytes_io.getvalue())
 
     def test_serialization(self):
         config = keras.utils.serialize_keras_object(self.tokenizer)
@@ -83,9 +94,9 @@ class RobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
-    @pytest.mark.large
+    @pytest.mark.large  # Saving is slow, so mark these large.
     def test_saved_model(self, save_format, filename):
-        input_data = tf.constant([" airplane at airport"])
+        input_data = tf.constant(["the quick brown fox"])
 
         inputs = keras.Input(dtype="string", shape=())
         outputs = self.tokenizer(inputs)

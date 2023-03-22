@@ -36,9 +36,9 @@ class DistilBertClassifier(Task):
     """An end-to-end DistilBERT model for classification tasks.
 
     This model attaches a classification head to a
-    `keras_nlp.model.DistilBertBackbone` model, mapping from the backbone
-    outputs to logit output suitable for a classification task. For usage of
-    this model with pre-trained weights, see the `from_preset()` method.
+    `keras_nlp.model.DistilBertBackbone` instance, mapping from the backbone
+    outputs to logits suitable for a classification task. For usage of
+    this model with pre-trained weights, see the `from_preset()` constructor.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -62,60 +62,8 @@ class DistilBertClassifier(Task):
 
     Examples:
 
-    Example usage.
+    Raw string data.
     ```python
-    preprocessed_features = {
-        "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
-        "padding_mask": tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)),
-    }
-    labels = [0, 3]
-
-    # Randomly initialized DistilBertBackbone
-    backbone = keras_nlp.models.DistilBertBackbone(
-        vocabulary_size=30552,
-        num_layers=6,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=512
-    )
-
-    # Create a DistilBertClassifier and fit your data.
-    classifier = keras_nlp.models.DistilBertClassifier(
-        backbone,
-        num_classes=4,
-        preprocessor=None,
-    )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
-
-    # Access backbone programatically (e.g., to change `trainable`)
-    classifier.backbone.trainable = False
-    ```
-
-    Raw string inputs.
-    ```python
-    # Create a dataset with raw string features in an `(x, y)` format.
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
-    labels = [0, 3]
-
-    # Create a DistilBertClassifier and fit your data.
-    classifier = keras_nlp.models.DistilBertClassifier.from_preset(
-        "distil_bert_base_en_uncased",
-        num_classes=4,
-    )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    classifier.fit(x=features, y=labels, batch_size=2)
-    ```
-
-    Raw string inputs with customized preprocessing.
-    ```python
-    # Create a dataset with raw string features in an `(x, y)` format.
     features = ["The quick brown fox jumped.", "I forgot my homework."]
     labels = [0, 3]
 
@@ -124,43 +72,72 @@ class DistilBertClassifier(Task):
         "distil_bert_base_en_uncased",
         sequence_length=128,
     )
-    # Create a DistilBertClassifier and fit your data.
+    # Pretrained classifier.
     classifier = keras_nlp.models.DistilBertClassifier.from_preset(
         "distil_bert_base_en_uncased",
         num_classes=4,
         preprocessor=preprocessor,
     )
+    classifier.fit(x=features, y=labels, batch_size=2)
+
+    # Re-compile (e.g., with a new learning rate)
     classifier.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        optimizer=keras.optimizers.Adam(5e-5),
+        jit_compile=True,
     )
+    # Access backbone programatically (e.g., to change `trainable`).
+    classifier.backbone.trainable = False
+    # Fit again.
     classifier.fit(x=features, y=labels, batch_size=2)
     ```
 
-    Preprocessed inputs.
+    Preprocessed integer data.
     ```python
-    # Create a dataset with preprocessed features in an `(x, y)` format.
-    preprocessed_features = {
+    features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
-        "segment_ids": tf.constant(
-            [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-        ),
         "padding_mask": tf.constant(
             [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
         ),
     }
     labels = [0, 3]
 
-    # Create a DistilBERT classifier and fit your data.
+    # Pretrained classifier without preprocessing.
     classifier = keras_nlp.models.DistilBertClassifier.from_preset(
         "distil_bert_base_en_uncased",
         num_classes=4,
         preprocessor=None,
     )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
+    classifier.fit(x=features, y=labels, batch_size=2)
     ```
+
+    Custom backbone and vocabulary.
+    ```python
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    labels = [0, 3]
+    vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
+    vocab += ["The", "quick", "brown", "fox", "jumped", "."]
+    tokenizer = keras_nlp.models.DistilBertTokenizer(
+        vocabulary=vocab,
+    )
+    preprocessor = keras_nlp.models.DistilBertPreprocessor(
+        tokenizer=tokenizer,
+        sequence_length=128,
+    )
+    backbone = keras_nlp.models.DistilBertBackbone(
+        vocabulary_size=30552,
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        intermediate_dim=512,
+        max_sequence_length=128,
+    )
+    classifier = keras_nlp.models.DistilBertClassifier(
+        backbone=backbone,
+        preprocessor=preprocessor,
+        num_classes=4,
+    )
+    classifier.fit(x=features, y=labels, batch_size=2)
     """
 
     def __init__(
