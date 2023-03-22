@@ -26,7 +26,7 @@ from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 class FNetBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.backbone = FNetBackbone(
-            vocabulary_size=1000,
+            vocabulary_size=100,
             num_layers=2,
             hidden_dim=2,
             intermediate_dim=4,
@@ -93,7 +93,7 @@ class FNetBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.backbone = FNetBackbone(
-                vocabulary_size=1000,
+                vocabulary_size=100,
                 num_layers=2,
                 hidden_dim=16,
                 intermediate_dim=32,
