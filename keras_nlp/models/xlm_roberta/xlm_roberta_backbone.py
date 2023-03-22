@@ -24,7 +24,7 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaBackbone")
 class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
-    """An XLM-RoBERTa encoder.
+    """An XLM-RoBERTa encoder network.
 
     This class implements a bi-directional Transformer-based encoder as
     described in ["Unsupervised Cross-lingual Representation Learning at Scale"](https://arxiv.org/abs/1911.02116).
@@ -32,8 +32,8 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
     include the masked language modeling head used during pretraining.
 
     The default constructor gives a fully customizable, randomly initialized
-    RoBERTa encoder with any number of layers, heads, and embedding dimensions. 
-    To load preset architectures and weights, use the `from_preset()` 
+    RoBERTa encoder with any number of layers, heads, and embedding dimensions.
+    To load preset architectures and weights, use the `from_preset()`
     constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
@@ -52,7 +52,7 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
         dropout: float. Dropout probability for the Transformer encoder.
         max_sequence_length: int. The maximum sequence length this encoder can
             consume. The sequence length of the input must be less than
-            `max_sequence_length` default value. This determines the variable 
+            `max_sequence_length` default value. This determines the variable
             shape for positional embeddings.
 
     Examples:

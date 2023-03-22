@@ -40,9 +40,9 @@ class XLMRobertaPreprocessor(Preprocessor):
 
     1. Tokenize any number of input segments using the `tokenizer`.
     2. Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
-      with the appropriate `"<s>"`, `"</s>"` and `"<pad>"` tokens, i.e., adding 
-      a single `"<s>"` at the start of the entire sequence, `"</s></s>"` at the 
-      end of each segment, save the last and a `"</s>"` at the end of the 
+      with the appropriate `"<s>"`, `"</s>"` and `"<pad>"` tokens, i.e., adding
+      a single `"<s>"` at the start of the entire sequence, `"</s></s>"` at the
+      end of each segment, save the last and a `"</s>"` at the end of the
       entire sequence.
     3. Construct a dictionary with keys `"token_ids"` and `"padding_mask"`,
       that can be passed directly to an XLM-RoBERTa model.
@@ -88,7 +88,7 @@ class XLMRobertaPreprocessor(Preprocessor):
     # Preprocess a batch of sentence pairs.
     # When handling multiple sequences, always convert to tensors first!
     first = tf.constant(["The quick brown fox jumped.", "اسمي اسماعيل"])
-    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+    second = tf.constant(["The fox tripped.", "الأسد ملك الغابة"])
     preprocessor((first, second))
 
     # Custom vocabulary.
@@ -110,7 +110,7 @@ class XLMRobertaPreprocessor(Preprocessor):
     proto = train_sentencepiece(ds, vocab_size=10)
     tokenizer = keras_nlp.models.XLMRobertaTokenizer(proto=proto)
     preprocessor = keras_nlp.models.XLMRobertaPreprocessor(tokenizer)
-    preprocessor("The quick brown fox jumped.") 
+    preprocessor("The quick brown fox jumped.")
     ```
 
     Mapping with `tf.data.Dataset`.

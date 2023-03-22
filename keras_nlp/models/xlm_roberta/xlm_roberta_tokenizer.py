@@ -35,11 +35,10 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     XLM-RoBERTa models and provides a `from_preset()` method to automatically
     download a matching vocabulary for an XLM-RoBERTa preset.
 
-    The original fairseq implementation of XLM-RoBERTa modifies the indices of
-    the SentencePiece tokenizer output. To preserve compatibility, we make the
-    same changes, i.e., `"<s>"`, `"<pad>"`, `"</s>"` and `"<unk>"` are mapped to
-    0, 1, 2, and 3, respectively, and non-special token indices are shifted 
-    right by one.
+    Note: If you are providing your own custom SentencePiece model, the original
+    fairseq implementation of XLM-RoBERTa re-maps some token indices from the
+    underlying sentencepiece output. To preserve compatibility, we do the same
+    re-mapping here.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -58,7 +57,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     tokenizer = keras_nlp.models.XLMRobertaTokenizer.from_preset(
         "xlm_roberta_base_multi",
     )
-    
+
     # Unbatched inputs.
     tokenizer("the quick brown fox")
 

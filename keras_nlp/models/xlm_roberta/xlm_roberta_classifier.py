@@ -91,7 +91,7 @@ class XLMRobertaClassifier(Task):
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
         "padding_mask": tf.constant(
             [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-        ),
+        ), xlm
     }
     labels = [0, 3]
 
