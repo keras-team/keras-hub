@@ -23,8 +23,8 @@ class Preprocessor(keras.layers.Layer):
     """Base class for model preprocessors."""
 
     def __init__(self, *args, **kwargs):
-        self._tokenizer = None
         super().__init__(*args, **kwargs)
+        self._tokenizer = None
 
     @property
     def tokenizer(self):
