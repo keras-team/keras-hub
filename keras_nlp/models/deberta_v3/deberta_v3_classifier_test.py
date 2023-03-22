@@ -16,6 +16,7 @@
 import io
 import os
 
+import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
@@ -53,87 +54,70 @@ class DebertaV3ClassifierTest(tf.test.TestCase, parameterized.TestCase):
             user_defined_symbols="[MASK]",
         )
         self.preprocessor = DebertaV3Preprocessor(
-            tokenizer=DebertaV3Tokenizer(proto=bytes_io.getvalue()),
-            sequence_length=12,
+            DebertaV3Tokenizer(proto=bytes_io.getvalue()),
+            sequence_length=5,
         )
         self.backbone = DebertaV3Backbone(
-            vocabulary_size=1000,
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
-            hidden_dim=64,
-            intermediate_dim=128,
-            max_sequence_length=128,
-            bucket_size=64,
+            hidden_dim=2,
+            intermediate_dim=4,
+            max_sequence_length=self.preprocessor.packer.sequence_length,
+            bucket_size=2,
         )
         self.classifier = DebertaV3Classifier(
             self.backbone,
             4,
             preprocessor=self.preprocessor,
         )
-        self.classifier_no_preprocessing = DebertaV3Classifier(
-            self.backbone,
-            4,
-            preprocessor=None,
-        )
 
         self.raw_batch = tf.constant(
             [
                 "the quick brown fox.",
                 "the slow brown fox.",
-                "the earth is round",
-                "the earth is spherical",
             ]
         )
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, tf.ones((4,)))
+            (self.raw_batch, tf.ones((2,)))
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
     def test_valid_call_classifier(self):
         self.classifier(self.preprocessed_batch)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_classifier_predict(self, jit_compile):
-        self.classifier.compile(jit_compile=jit_compile)
+    def test_classifier_predict(self):
         self.classifier.predict(self.raw_batch)
+        self.classifier.preprocessor = None
+        self.classifier.predict(self.preprocessed_batch)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_classifier_predict_no_preprocessing(self, jit_compile):
-        self.classifier_no_preprocessing.compile(jit_compile=jit_compile)
-        self.classifier_no_preprocessing.predict(self.preprocessed_batch)
-
-    def test_debertav3_classifier_fit_default_compile(self):
+    def test_classifier_fit(self):
         self.classifier.fit(self.raw_dataset)
+        self.classifier.preprocessor = None
+        self.classifier.fit(self.preprocessed_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_classifier_fit(self, jit_compile):
+    def test_classifier_fit_no_xla(self):
+        self.classifier.preprocessor = None
         self.classifier.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+            jit_compile=False,
         )
-        self.classifier.fit(self.raw_dataset)
+        self.classifier.fit(self.preprocessed_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_classifier_fit_no_preprocessing(self, jit_compile):
-        self.classifier_no_preprocessing.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
+    def test_serialization(self):
+        config = keras.utils.serialize_keras_object(self.classifier)
+        new_classifier = keras.utils.deserialize_keras_object(config)
+        self.assertEqual(
+            new_classifier.get_config(),
+            self.classifier.get_config(),
         )
-        self.classifier_no_preprocessing.fit(self.preprocessed_dataset)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saving_model(self, save_format, filename):
         model_output = self.classifier.predict(self.raw_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)
