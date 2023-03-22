@@ -55,6 +55,8 @@ class FNetClassifier(Task):
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
 
+    Examples:
+
     Raw string data:
     ```python
     preprocessed_features = {
