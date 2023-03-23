@@ -65,9 +65,11 @@ class BeamSampler(Sampler):
     def __init__(
         self,
         num_beams=5,
+        return_all_beams=False,
     ):
         super().__init__()
         self.num_beams = num_beams
+        self.return_all_beams = return_all_beams
 
     def __call__(
         self,
@@ -165,13 +167,18 @@ class BeamSampler(Sampler):
         prompt, log_probs = unflatten_beams(prompt), unflatten_beams(log_probs)
         top_beams = tf.math.argmax(log_probs, axis=-1)[:, tf.newaxis]
         prompt = tf.gather(prompt, top_beams, axis=1, batch_dims=1)
-        return tf.squeeze(prompt, axis=1)
+
+        if self.return_all_beams:
+            return tf.squeeze(prompt, axis=1), prompt, log_probs
+        else:
+            return tf.squeeze(prompt, axis=1)
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "num_beams": self.num_beams,
+                "return_all_beams": self.return_all_beams,
             }
         )
         return config

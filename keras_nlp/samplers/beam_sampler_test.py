@@ -67,6 +67,22 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.assertEqual(self.join_as_string(output), ["sequentially"])
 
+    def test_return_all_beams(self):
+        state_chars = list("sequentially")
+        state = tf.constant([[self.char_lookup[c] for c in state_chars]])
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        output = self.sampler(
+            next=self.next,
+            prompt=prompt,
+            state=state,
+            return_all_beams=True,
+        )
+        self.assertEqual(self.join_as_string(output[0]), ["sequentially"])
+        self.assertLen(output[1], 5)
+        self.assertEqual(self.join_as_string(output[1]), ["sequentially"] * 5)
+        self.assertLen(output[2], 5)
+        self.assertEqual(output[2], [1.0] * 5)
+
     def test_early_stopping(self):
         state_chars = list("sequentially")
         state = tf.constant([[self.char_lookup[c] for c in state_chars]])
