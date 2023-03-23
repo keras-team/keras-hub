@@ -27,10 +27,10 @@ from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 
 PRESET_MAP = {
-    "gpt2_base": ("124M", "gpt2"),
-    "gpt2_medium": ("355M", "gpt2-medium"),
-    "gpt2_large": ("774M", "gpt2-large"),
-    "gpt2_extra_large": ("1558M", "gpt2-xl"),
+    "gpt2_base_en": ("124M", "gpt2"),
+    "gpt2_medium_en": ("355M", "gpt2-medium"),
+    "gpt2_large_en": ("774M", "gpt2-large"),
+    "gpt2_extra_large_en": ("1558M", "gpt2-xl"),
 }
 
 DOWNLOAD_SCRIPT_URL = (
