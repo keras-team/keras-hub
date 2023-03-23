@@ -45,7 +45,7 @@ class RobertaTokenizer(BytePairTokenizer):
     Args:
         vocabulary: A dictionary or a string filename path. If passing a
             filename, the file should be a json file. both json and dictionary
-            should map a single word piece token string to an integer id
+            should map a single word piece token string to an integer id.
         merges: A list of merge rules or a string filename path, If passing a
             filename, the file should have one merge rule per line. Every merge
             rule contains merge entities separated by a space.
