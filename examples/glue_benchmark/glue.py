@@ -28,9 +28,7 @@ Disclaimer: This script only supports GLUE/mrpc (for now).
 """
 
 import inspect
-import os
 import time
-import warnings
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -50,7 +48,9 @@ flags.DEFINE_string(
     "mrpc",
     "The name of the GLUE task to finetune on.",
 )
-flags.DEFINE_string("model", None, "The name of the classifier such as BertClassifier.")
+flags.DEFINE_string(
+    "model", None, "The name of the classifier such as BertClassifier."
+)
 flags.DEFINE_string(
     "preset",
     None,
@@ -123,16 +123,16 @@ def main(_):
 
     # checking task version (erroring out other testes except "mrpc")
     if FLAGS.task != "mrpc":
-        raise ValueError(f"For now this script only supports mrpc, but received {FLAGS.task}")
+        raise ValueError(
+            f"For now this script only supports mrpc, but received {FLAGS.task}"
+        )
 
     logging.info(
         f"\nMODEL : {FLAGS.model} | PRESET : {FLAGS.preset} | DATASET : glue/mrpc | batch_size : {FLAGS.batch_size} | epochs : {FLAGS.epochs}\n"
     )
 
     # Load the model
-    model = load_model(
-        model=FLAGS.model, preset=FLAGS.preset, num_classes=2
-    )
+    model = load_model(model=FLAGS.model, preset=FLAGS.preset, num_classes=2)
     # Add loss and optimizer
     loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     metrics = [keras.metrics.SparseCategoricalAccuracy()]
@@ -141,16 +141,16 @@ def main(_):
     train_ds, test_ds, validation_ds = load_data()
     train_ds = train_ds.batch(FLAGS.batch_size).prefetch(tf.data.AUTOTUNE)
     test_ds = test_ds.batch(FLAGS.batch_size).prefetch(tf.data.AUTOTUNE)
-    validation_ds = validation_ds.batch(FLAGS.batch_size).prefetch(tf.data.AUTOTUNE)
+    validation_ds = validation_ds.batch(FLAGS.batch_size).prefetch(
+        tf.data.AUTOTUNE
+    )
 
     lr = tf.keras.optimizers.schedules.PolynomialDecay(
         FLAGS.learning_rate,
         decay_steps=train_ds.cardinality() * FLAGS.epochs,
         end_learning_rate=0.0,
     )
-    optimizer = tf.keras.optimizers.experimental.AdamW(
-        lr, weight_decay=0.01
-    )
+    optimizer = tf.keras.optimizers.experimental.AdamW(lr, weight_decay=0.01)
     optimizer.exclude_from_weight_decay(
         var_names=["LayerNorm", "layer_norm", "bias"]
     )
@@ -160,15 +160,19 @@ def main(_):
     logging.info("Starting Training...")
 
     st = time.time()
-    history = model.fit(train_ds, validation_data=validation_ds, epochs=FLAGS.epochs)
+    history = model.fit(
+        train_ds, validation_data=validation_ds, epochs=FLAGS.epochs
+    )
     wall_time = time.time() - st
 
     logging.info("Training Finished!")
+    logging.info(f"Wall Time :: {wall_time:.4f} seconds.")
     logging.info(
-        f"Wall Time :: {wall_time:.4f} seconds."
+        f"Validation Accuracy :: {history.history['val_sparse_categorical_accuracy'][-1]:.4f}"
     )
-    logging.info(f"Validation Accuracy :: {history.history['val_sparse_categorical_accuracy'][-1]:.4f}")
-    logging.info(f"examples_per_second :: {(FLAGS.epochs*FLAGS.batch_size*(len(train_ds)+len(validation_ds)))/wall_time:.4f}")
+    logging.info(
+        f"examples_per_second :: {(FLAGS.epochs*FLAGS.batch_size*(len(train_ds)+len(validation_ds)))/wall_time:.4f}"
+    )
 
 
 if __name__ == "__main__":
