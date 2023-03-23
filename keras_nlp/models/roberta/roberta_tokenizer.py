@@ -43,48 +43,39 @@ class RobertaTokenizer(BytePairTokenizer):
     `tf.Tensor` with static shape `[None]`.
 
     Args:
-        vocabulary: string or dict, maps token to integer ids. If it is a
-            string, it should be the file path to a json file.
-        merges: string or list, contains the merge rule. If it is a string,
-            it should be the file path to merge rules. The merge rule file
-            should have one merge rule per line. Every merge rule contains
-            merge entities separated by a space.
+        vocabulary: A dictionary or a string filename path. If passing a
+            filename, the file should be a json file. both json and dictionary
+            should map a single word piece token string to an integer id
+        merges: A list of merge rules or a string filename path, If passing a
+            filename, the file should have one merge rule per line. Every merge
+            rule contains merge entities separated by a space.
 
     Examples:
+    ```python
+    # Unbatched input.
+    tokenizer = keras_nlp.models.RobertaTokenizer.from_preset(
+        "roberta_base_en",
+    )
+    tokenizer("The quick brown fox jumped.")
 
-    Batched inputs.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab, merges=merges
-    ... )
-    >>> tokenizer(["a quick fox", "a fox quick"])
-    <tf.RaggedTensor [[4, 5, 6], [4, 6, 5]]>
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
 
+    # Detokenization.
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
 
-    Unbatched input.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab, merges=merges
-    ... )
-    >>> tokenizer("a quick fox")
-    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([4, 5, 6], dtype=int32)>
-
-    Detokenization.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab, merges=merges
-    ... )
-    >>> tokenizer.detokenize(tokenizer("a quick fox")).numpy().decode('utf-8')
-    'a quick fox'
+    # Custom vocabulary.
+    # Note: 'Ġ' is space
+    vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    merges += ["Ġ f", "o x", "Ġf ox"]
+    tokenizer = keras_nlp.models.RobertaTokenizer(
+        vocabulary=vocab,
+        merges=merges
+    )
+    tokenizer(["a quick fox", "a fox quick"])
+    ```
     """
 
     def __init__(
