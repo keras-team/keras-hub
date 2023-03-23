@@ -20,7 +20,7 @@ import torch
 import transformers
 from absl import app
 from absl import flags
-from checkpoint_conversion_utils import file_type_extractor
+from checkpoint_conversion_utils import extract_files_from_archive
 from checkpoint_conversion_utils import get_md5_checksum
 from tensorflow import keras
 
@@ -50,7 +50,7 @@ def download_model(size, hf_model_name):
         cache_subdir=os.path.join("checkpoint_conversion", FLAGS.preset),
     )
 
-    file_type_extractor(archive_file_path)
+    extract_files_from_archive(archive_file_path)
 
     # The original `tar.gz` file does not have the vocab files. Let's fetch
     # them from HF.

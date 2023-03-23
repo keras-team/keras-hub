@@ -24,7 +24,7 @@ def get_md5_checksum(file_path):
     return md5_hash.hexdigest()
 
 
-def file_type_extractor(archive_file_path):
+def extract_files_from_archive(archive_file_path):
     if archive_file_path.endswith(".tar.gz"):
         with tarfile.open(archive_file_path, "r:gz") as tar:
             return tar.extractall()
