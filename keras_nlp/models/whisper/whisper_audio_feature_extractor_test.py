@@ -13,7 +13,12 @@
 # limitations under the License.
 """Tests for Whisper audio feature extractor."""
 
+import os
+
+import pytest
 import tensorflow as tf
+from absl.testing import parameterized
+from tensorflow import keras
 
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import NUM_MELS
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
@@ -21,13 +26,15 @@ from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
 )
 
 
-class WhisperAudioFeatureExtractorTest(tf.test.TestCase):
+class WhisperAudioFeatureExtractorTest(
+    tf.test.TestCase, parameterized.TestCase
+):
     def setUp(self):
         self.sample_rate = 100
         self.num_fft_bins = 400
         self.stride = 100
         self.max_audio_length = 5
-        self.whisper_audio_feature_extractor = WhisperAudioFeatureExtractor(
+        self.audio_feature_extractor = WhisperAudioFeatureExtractor(
             sample_rate=self.sample_rate,
             num_fft_bins=self.num_fft_bins,
             stride=self.stride,
@@ -37,7 +44,7 @@ class WhisperAudioFeatureExtractorTest(tf.test.TestCase):
     def test_unbatched_inputs(self):
         audio_tensor = tf.ones((2,), dtype="float32")
 
-        outputs = self.whisper_audio_feature_extractor(audio_tensor)
+        outputs = self.audio_feature_extractor(audio_tensor)
 
         # Verify shape.
         self.assertEqual(outputs.shape, (1, 5, NUM_MELS))
@@ -51,7 +58,40 @@ class WhisperAudioFeatureExtractorTest(tf.test.TestCase):
         audio_tensor_2 = tf.ones((25,), dtype="float32")
         audio_tensor = tf.ragged.stack([audio_tensor_1, audio_tensor_2], axis=0)
 
-        outputs = self.whisper_audio_feature_extractor(audio_tensor)
+        outputs = self.audio_feature_extractor(audio_tensor)
 
         # Verify shape.
         self.assertEqual(outputs.shape, (2, 5, NUM_MELS))
+
+    def test_serialization(self):
+        config = keras.utils.serialize_keras_object(
+            self.audio_feature_extractor
+        )
+        new_audio_feature_extractor = keras.utils.deserialize_keras_object(
+            config
+        )
+        self.assertEqual(
+            new_audio_feature_extractor.get_config(),
+            self.audio_feature_extractor.get_config(),
+        )
+
+    @parameterized.named_parameters(
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
+    )
+    @pytest.mark.large  # Saving is slow, so mark these large.
+    def test_saved_model(self, save_format, filename):
+        audio_tensor = tf.ones((2,), dtype="float32")
+
+        inputs = keras.Input(dtype="float32", shape=())
+        outputs = self.audio_feature_extractor(inputs)
+        model = keras.Model(inputs, outputs)
+
+        path = os.path.join(self.get_temp_dir(), filename)
+        model.save(path, save_format=save_format)
+
+        restored_model = keras.models.load_model(path)
+        self.assertAllEqual(
+            model(audio_tensor),
+            restored_model(audio_tensor),
+        )
