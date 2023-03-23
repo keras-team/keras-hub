@@ -59,8 +59,6 @@ duplicated effort.
 If there aren't any open issues, you can create one by clicking the "New Issue"
 button on our repository page.
 
-<br/>
-
 Note that you need not have all the answers or complete knowledge of the inner
 workings of the model at the time of opening the issue. But it is appreciated if
 you can furnish as much detail as possible to enable us to help you with the
