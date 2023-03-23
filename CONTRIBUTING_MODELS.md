@@ -11,35 +11,68 @@ contribute the DistilBERT model. Before we dive in, we encourage you to go throu
 for an introduction to the library, and our
 [contribution guide](https://github.com/keras-team/keras-nlp/blob/master/CONTRIBUTING.md).
 
-
 ## Checklist
+
 This to-do list is a brief outline of how a backbone model can be contributed.
 Keep this checklist handy!
 
-### Step 1: Open an issue/find an issue.
+### Step 1: Open an issue/find an issue
+
 - [ ] Open an issue or find an issue to contribute a backbone model.
 
 ### Step 2: PR #1 - Add XXBackbone
+
 - [ ] A `xx/xx_backbone.py` file which has the model graph [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_backbone.py)].
 - [ ] A `xx/xx_backbone_test.py` file which has unit tests for the backbone [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_backbone_test.py)].
 - [ ] A Colab notebook link in the PR description which matches the outputs of the implemented backbone model with the original source [[Example Link](https://colab.research.google.com/drive/1SeZWJorKWmwWJax8ORSdxKrxE25BfhHa?usp=sharing)].
 
 ### Step 3: PR #2 - Add XXTokenizer and XXPreprocessor [The preprocessor is optional at this stage]
+
 - [ ] A `xx/xx_tokenizer.py` file which has the tokenizer for the model [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_tokenizer.py)].
 - [ ] [Optional] A `xx/xx_preprocessor.py` file which has the preprocessor and can be used to get inputs suitable for the model [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_preprocessor.py)].
 - [ ] `xx/xx_tokenizer_test.py` and `xx/xx_preprocessor_test.py` which has unit tests for the above two modules [[Example Link 1](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_tokenizer_test.py) and [Example Link 2](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_preprocessor_test.py)].
 
 ### Step 4: PR #3 - Add XX Presets
+
 - [ ] A `xx/xx_presets.py` file with links to weights uploaded to a personal GCP bucket/Google Drive [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_presets.py)].
 - [ ] A `xx/xx_presets_test.py` file with runnable tests for each preset [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_presets_test.py)].
 - [ ] A `tools/checkpoint_conversion/convert_xx_checkpoints.py` which is reusable script for converting checkpoints [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/tools/checkpoint_conversion/convert_distilbert_checkpoints.py)].
-- [ ] A Colab notebook showing an end-to-end task such as text classification, etc. The task model can be built using the backbone model, with the task head on top.
+- [ ] A Colab notebook showing an end-to-end task such as text classification, etc. The task model can be built using the backbone model, with the task head on top [[Example Link](https://gist.github.com/mattdangerw/bf0ca07fb66b6738150c8b56ee5bab4e)].
 
 ### Step 5: PR #4 and Beyond - Add XX Tasks and Preprocessors
+
 This PR is optional and is for adding tasks like classifier, masked LM, etc. [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_classifier.py)]
 
+## Detailed Instructions
 
-## How is a Backbone model structured in KerasNLP?
+This section discusses, in details, every necessary step.
+
+### Step 1: Open an issue/Find an open issue
+
+Before getting started with the code, it's important to check if there are any
+[open issues](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3Amodel-contribution)
+related to the model you wish to contribute. If there is an open issue, you can
+claim it by commenting on the issue and letting us know that you're interested
+in working on it. This helps us keep track of who is working on what and avoid
+duplicated effort.
+
+If there aren't any open issues, you can create one by clicking the "New Issue"
+button on our repository page.
+
+<br/>
+
+Note that you need not have all the answers or complete knowledge of the inner
+workings of the model at the time of opening the issue. But it is appreciated if
+you can furnish as much detail as possible to enable us to help you with the
+contribution! 🙂
+
+### Step 2: PR #1 - Add XXBackbone
+
+#### Add the backbone class
+
+Once you are done identifying all the required layers, you should write down the
+model backbone class.
+
 To keep the code simple and readable, we follow
 [Keras' functional style model](https://keras.io/guides/functional_api/) wrapped
 around by a class to implement our models.
@@ -48,27 +81,22 @@ A model is typically split into three/four sections. We would recommend you to
 compare this side-by-side with the
 [`keras_nlp.layers.DistilBertBackbone` source code](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_backbone.py)!
 
-
-### Inputs to the model
+**Inputs to the model**
 Generally, the standard inputs to any text model are:
     - `token_ids`: tokenised inputs (An integer representation of the text sequence).
     - `padding_mask`: Masks the padding tokens.
 
-
-### Embedding layer(s)
+**Embedding layer(s)**
 Standard layers used: `keras.layers.Embedding`,
 `keras_nlp.layers.PositionEmbedding`, `keras_nlp.layers.TokenAndPositionEmbedding`.
 
-
-### Encoder layers
+**Encoder layers**
 Standard layers used: `keras_nlp.layers.TransformerEncoder`, `keras_nlp.layers.FNetEncoder`.
 
-
-### Decoder layers (possibly)
+**Decoder layers (possibly)**
 Standard layers used: `keras_nlp.layers.TransformerDecoder`.
 
-
-### Other layers which might be used
+**Other layers which might be used**
 `keras.layers.LayerNorm`, `keras.layers.Dropout`, `keras.layers.Conv1D`, etc.
 
 <br/>
@@ -96,38 +124,12 @@ contribute an example on keras.io, or demonstrate the working in a Colab noteboo
 This will help us scope out the contribution, and possibly propose suggestions
 on how to implement the model.
 
-
-## Detailed Instructions
-This section discusses, in details, every necessary step.
-
-### Open an issue/Find an open issue
-Before getting started with the code, it's important to check if there are any
-[open issues](https://github.com/keras-team/keras-nlp/issues?q=is%3Aissue+is%3Aopen+label%3Amodel-contribution)
-related to the model you wish to contribute. If there is an open issue, you can
-claim it by commenting on the issue and letting us know that you're interested
-in working on it. This helps us keep track of who is working on what and avoid
-duplicated effort.
-
-If there aren't any open issues, you can create one by clicking the "New Issue"
-button on our repository page.
-
-<br/>
-
-Note that you need not have all the answers or complete knowledge of the inner
-workings of the model at the time of opening the issue. But it is appreciated if
-you can furnish as much detail as possible to enable us to help you with the
-contribution! 🙂
-
-
-### Step 2: PR #1 - Add XXBackbone
-Once you are done identifying all the required layers, you should write down the
-model backbone class. You might have to write custom layers as mentioned earlier.
 Since the first PR is only to add the model backbone class, you should omit the
 `from_presets()` function; this will be added at a later stage when you open a PR
 for adding presets.
 
-
 #### Convert weights from the original source and check output!
+
 Before you open a PR for adding the model backbone class, it is essential to check
 whether the model has been implemented exactly as the source implementation. This
 also helps in adding model "presets" at a later stage.
@@ -139,11 +141,16 @@ The preferred way of doing this is to add a Colab link in the PR description, wh
 It is okay if you demonstrate it for one preset at this stage; you can do the conversion
 for the other presets when you officially add presets to the library at a later stage.
 
+#### Add Unit Tests
+
 It is essential to add units tests. These unit tests are basic and mostly check
 whether the forward pass goes through successfully, whether the model can be saved
 and loaded correctly, etc.
 
-###  Step 3: PR #2 - Add XXTokenizer and XXPreprocessor [The preprocessor is optional at this stage]
+### Step 3: PR #2 - Add XXTokenizer and XXPreprocessor [The preprocessor is optional at this stage]
+
+#### Tokenizer
+
 Most text models nowadays use subword tokenizers such as WordPiece, SentencePiece
 and BPE Tokenizer. Hence, it becomes easy to implement the tokenizer layer for
 the model; the tokenizer class inherits from one of these base tokenizer classes.
@@ -153,12 +160,15 @@ class, `DistilBertTokenizer`, which inherits from `keras_nlp.tokenizers.WordPiec
 All the underlying actual tokenization will be taken care of by the superclass.
 
 The important thing here is adding "special tokens". Most models have
-special tokens such as beginning-of-sequence token, end-of-sequence token, mask token,
-pad token, etc. These have to be
+special tokens such as beginning-of-sequence token, end-of-sequence token,
+mask token, pad token, etc. These have to be
 [added as member attributes](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_tokenizer.py#L91-L105)
-to the tokenizer class. These member attributes are then accessed by the preprocessor class.
+to the tokenizer class. These member attributes are then accessed by the
+preprocessor class.
 
 For a full list of the tokenizers KerasNLP offers, please visit [this link](https://keras.io/api/keras_nlp/tokenizers/) and make use of the tokenizer your model uses!
+
+#### Preprocessor
 
 The preprocessor class is responsible for making the inputs suitable for consumption
 by the model - it packs multiple inputs together, i.e., given multiple input texts,
@@ -173,11 +183,14 @@ might require different input formats. For instance, we have a [separate preproc
 for masked language modeling (MLM) for DistilBERT. So, we don't always recommend
 adding the preprocessor right away; this can optionally be done in step 5.
 
+#### Unit Tests
+
 The last step here is to add unit tests for both the tokenizer and the preprocessor.
 A dummy vocabulary is created, and the output of both these layers is verified
 including tokenization, detokenization, etc.
 
 ### Step 4: PR #3 - Add XX Presets
+
 Once the two PR have been merged, you can open a PR for adding presets. For every
 model, we have a separate file where we mention our preset configurations.
 This preset configuration has model-specific arguments such as number of layers,
@@ -202,6 +215,7 @@ demonstrates that the outputs of our backbone model and outputs of the source
 model match. This should be done for all presets.
 
 ### Step 5: PR #4 and Beyond: Add XX Tasks and Preprocessors
+
 Once you are finished with Steps 1-4, you can add "task" models. Task models
 are essentially models which have "task heads" on top of the backbone models.
 For instance, for the text classification task, you can have a feedforward layer
@@ -212,7 +226,7 @@ token classification, text summarization, neural machine translation, etc.
 For every task, we might need a preprocessor depending on the input
 format. This has been described in Step 3.
 
-
 ## Conclusion
+
 Once all three PRs (and optionally, the fourth PR) have been merged, you have
 successfully contributed a model to KerasNLP. Congratulations! 🔥
