@@ -26,8 +26,8 @@ from tensorflow import keras
 import keras_nlp
 
 PRESET_MAP = {
-    "xlm_roberta_base": ("xlmr.base", "xlm-roberta-base"),
-    "xlm_roberta_large": ("xlmr.large", "xlm-roberta-large"),
+    "xlm_roberta_base_multi": ("xlmr.base", "xlm-roberta-base"),
+    "xlm_roberta_large_multi": ("xlmr.large", "xlm-roberta-large"),
 }
 
 DOWNLOAD_SCRIPT_URL = "https://dl.fbaipublicfiles.com/fairseq/models/{}.tar.gz"
