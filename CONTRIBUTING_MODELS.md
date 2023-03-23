@@ -22,20 +22,20 @@ Keep this checklist handy!
 
 ### Step 2: PR #1 - Add XXBackbone
 
-- [ ] A `xx/xx_backbone.py` file which has the model graph [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_backbone.py)].
-- [ ] A `xx/xx_backbone_test.py` file which has unit tests for the backbone [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_backbone_test.py)].
+- [ ] An `xx/xx_backbone.py` file which has the model graph [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_backbone.py)].
+- [ ] An `xx/xx_backbone_test.py` file which has unit tests for the backbone [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_backbone_test.py)].
 - [ ] A Colab notebook link in the PR description which matches the outputs of the implemented backbone model with the original source [[Example Link](https://colab.research.google.com/drive/1SeZWJorKWmwWJax8ORSdxKrxE25BfhHa?usp=sharing)].
 
 ### Step 3: PR #2 - Add XXTokenizer and XXPreprocessor [The preprocessor is optional at this stage]
 
-- [ ] A `xx/xx_tokenizer.py` file which has the tokenizer for the model [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_tokenizer.py)].
-- [ ] [Optional] A `xx/xx_preprocessor.py` file which has the preprocessor and can be used to get inputs suitable for the model [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_preprocessor.py)].
-- [ ] `xx/xx_tokenizer_test.py` and `xx/xx_preprocessor_test.py` which has unit tests for the above two modules [[Example Link 1](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_tokenizer_test.py) and [Example Link 2](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_preprocessor_test.py)].
+- [ ] An `xx/xx_tokenizer.py` file which has the tokenizer for the model [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_tokenizer.py)].
+- [ ] [Optional] An `xx/xx_preprocessor.py` file which has the preprocessor and can be used to get inputs suitable for the model [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_preprocessor.py)].
+- [ ] An `xx/xx_tokenizer_test.py` file and an `xx/xx_preprocessor_test.py` file which has unit tests for the above two modules [[Example Link 1](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_tokenizer_test.py) and [Example Link 2](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_preprocessor_test.py)].
 
 ### Step 4: PR #3 - Add XX Presets
 
-- [ ] A `xx/xx_presets.py` file with links to weights uploaded to a personal GCP bucket/Google Drive [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_presets.py)].
-- [ ] A `xx/xx_presets_test.py` file with runnable tests for each preset [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_presets_test.py)].
+- [ ] An `xx/xx_presets.py` file with links to weights uploaded to a personal GCP bucket/Google Drive [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_presets.py)].
+- [ ] An `xx/xx_presets_test.py` file with runnable tests for each preset [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_presets_test.py)].
 - [ ] A `tools/checkpoint_conversion/convert_xx_checkpoints.py` which is reusable script for converting checkpoints [[Example Link](https://github.com/keras-team/keras-nlp/blob/master/tools/checkpoint_conversion/convert_distilbert_checkpoints.py)].
 - [ ] A Colab notebook showing an end-to-end task such as text classification, etc. The task model can be built using the backbone model, with the task head on top [[Example Link](https://gist.github.com/mattdangerw/bf0ca07fb66b6738150c8b56ee5bab4e)].
 
