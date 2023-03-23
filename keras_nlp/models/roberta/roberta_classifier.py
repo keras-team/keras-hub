@@ -32,8 +32,8 @@ class RobertaClassifier(Task):
     """An end-to-end RoBERTa model for classification tasks.
 
     This model attaches a classification head to a
-    `keras_nlp.model.RobertaBackbone` instance, mapping from the backbone 
-    outputs to logits suitable for a classification task. For usage of this 
+    `keras_nlp.model.RobertaBackbone` instance, mapping from the backbone
+    outputs to logits suitable for a classification task. For usage of this
     model with pre-trained weights, see the `from_preset()` constructor.
 
     This model can optionally be configured with a `preprocessor` layer, in

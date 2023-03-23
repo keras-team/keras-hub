@@ -54,7 +54,7 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
                     "waterfall" algorithm that allocates quota in a
                     left-to-right manner and fills up the buckets until we run
                     out of budget. It supports an arbitrary number of segments.
-        mask_selection_rate: float. The probability an input token will be 
+        mask_selection_rate: float. The probability an input token will be
             dynamically masked.
         mask_selection_length: int. The maximum number of masked tokens
             in a given sample.
@@ -64,7 +64,7 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
             replaced with a random token from the vocabulary. A selected token
             will be left as is with probability
             `1 - mask_token_rate - random_token_rate`.
-        
+
     Call arguments:
         x: A tensor of single string sequences, or a tuple of multiple
             tensor sequences to be packed together. Inputs may be batched or

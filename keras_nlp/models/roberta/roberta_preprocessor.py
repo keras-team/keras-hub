@@ -66,9 +66,9 @@ class RobertaPreprocessor(Preprocessor):
         x: A tensor of single string sequences, or a tuple of multiple
             tensor sequences to be packed together. Inputs may be batched or
             unbatched. For single sequences, raw python inputs will be converted
-            to tensors. For multiple sequences, pass tensors directly. 
+            to tensors. For multiple sequences, pass tensors directly.
         y: Any label data. Will be passed through unaltered.
-        sample_weight: Any label weight data. Will be passed through unaltered. 
+        sample_weight: Any label weight data. Will be passed through unaltered.
 
 
     Examples:
