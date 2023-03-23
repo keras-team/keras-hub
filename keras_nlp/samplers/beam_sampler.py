@@ -170,12 +170,14 @@ class BeamSampler(Sampler):
         )
 
         # Gather the top beam at each batch index.
-        prompt, log_probs = unflatten_beams(prompt), unflatten_beams(log_probs)
-        top_beams = tf.math.argmax(log_probs, axis=-1)[:, tf.newaxis]
-        prompt = tf.gather(prompt, top_beams, axis=1, batch_dims=1)
+        all_prompts, all_log_probs = unflatten_beams(prompt), unflatten_beams(
+            log_probs
+        )
+        top_beams = tf.math.argmax(all_log_probs, axis=-1)[:, tf.newaxis]
+        prompt = tf.gather(all_prompts, top_beams, axis=1, batch_dims=1)
 
         if return_all_beams:
-            return tf.squeeze(prompt, axis=1), prompt, log_probs
+            return tf.squeeze(prompt, axis=1), all_prompts, all_log_probs
         else:
             return tf.squeeze(prompt, axis=1)
 
