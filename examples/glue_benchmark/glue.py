@@ -12,7 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# DISCLAIMER:This script only supports GLUE/mrpc (for now). #
+""" GLUE benchmark script to test model performance.
+
+To run the script, use this command:
+```
+python3 glue.py --model BertClassifier \
+                --preset bert_base_en \
+                --epochs 5 \
+                --batch_size 16 \
+                --learning_rate 0.001 \
+                --mixed_precision_policy mixed_float16
+```
+
+Disclaimer: This script only supports GLUE/mrpc (for now).
+"""
 
 import inspect
 import os
@@ -23,12 +36,12 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 from absl import app
 from absl import flags
+from absl import logging
 from tensorflow import keras
 
 import keras_nlp
 
 seed = 42
-os.environ["PYTHONHASHSEED"] = str(seed)
 tf.random.set_seed(seed)
 
 
@@ -37,7 +50,7 @@ flags.DEFINE_string(
     "mrpc",
     "The name of the GLUE task to finetune on.",
 )
-flags.DEFINE_string("model", None, "The Model you want to train and evaluate.")
+flags.DEFINE_string("model", None, "The name of the classifier such as BertClassifier.")
 flags.DEFINE_string(
     "preset",
     None,
@@ -45,6 +58,11 @@ flags.DEFINE_string(
 )
 flags.DEFINE_float(
     "learning_rate", 0.005, "The learning_rate for the optimizer."
+)
+flags.DEFINE_string(
+    "mixed_precision_policy",
+    "mixed_float16",
+    "The global precision policy to use. E.g. 'mixed_float16' or 'float32'.",
 )
 flags.DEFINE_integer("epochs", 2, "No of Epochs.")
 flags.DEFINE_integer("batch_size", 8, "Batch Size.")
@@ -79,76 +97,40 @@ def load_data():
     validation_ds = validation_ds.map(
         split_features, num_parallel_calls=tf.data.AUTOTUNE
     )
+
     return train_ds, test_ds, validation_ds
 
 
-def load_model_and_preprocessor(model, preset, num_classes):
+def load_model(model, preset, num_classes):
     for name, symbol in keras_nlp.models.__dict__.items():
         if inspect.isclass(symbol) and issubclass(symbol, keras.Model):
             if model and name != model:
                 continue
             if not hasattr(symbol, "from_preset"):
                 continue
-            for _preset in symbol.presets:
-                if preset and _preset != preset:
+            for preset in symbol.presets:
+                if preset and preset != preset:
                     continue
-                if "Backbone" in name:
-                    model = keras_nlp.models.__dict__[
-                        name.replace("Backbone", "Classifier")
-                    ](
-                        backbone=symbol.from_preset(preset),
-                        num_classes=num_classes,
-                        preprocessor=None,
-                    )
-                    preprocessor = keras_nlp.models.__dict__[
-                        name.replace("Backbone", "Preprocessor")
-                    ].from_preset(preset)
-                elif "Classifier" in name:
-                    model = symbol.from_preset(
-                        preset=preset,
-                        num_classes=num_classes,
-                        preprocessor=None,
-                    )
-                    preprocessor = keras_nlp.models.__dict__[
-                        name.replace("Classifier", "Preprocessor")
-                    ].from_preset(preset)
-
-                print(f"Using model {name} with preset {preset}")
-                return model, preprocessor
+                model = symbol.from_preset(preset, num_classes=num_classes)
+                logging.info(f"\nUsing model {name} with preset {preset}\n")
+                return model
 
     raise ValueError(f"Model {model} or preset {preset} not found.")
 
 
-def preprocess_data(dataset, preprocessor):
-    """Run `proprocess_fn` on input dataset then batch & prefetch."""
-
-    def preprocess_fn(feature, label):
-        return preprocessor(feature), label
-
-    return (
-        dataset.map(preprocess_fn)
-        .batch(FLAGS.batch_size)
-        .prefetch(tf.data.AUTOTUNE)
-    )
-
-
 def main(_):
-    warnings.warn("DISCLAIMER:This script only supports GLUE/mrpc (for now).")
+    keras.mixed_precision.set_global_policy(FLAGS.mixed_precision_policy)
+
     # checking task version (erroring out other testes except "mrpc")
     if FLAGS.task != "mrpc":
-        raise ValueError("task - mrpc is only supported currently.")
+        raise ValueError(f"For now this script only supports mrpc, but received {FLAGS.task}")
 
-    print(tf.__version__)
-    print("GPU available : ", tf.test.is_gpu_available())
-
-    print("=" * 120)
-    print(
-        f"MODEL : {FLAGS.model} | PRESET : {FLAGS.preset} | DATASET : glue/mrpc | batch_size : {FLAGS.batch_size} | epochs : {FLAGS.epochs}"
+    logging.info(
+        f"\nMODEL : {FLAGS.model} | PRESET : {FLAGS.preset} | DATASET : glue/mrpc | batch_size : {FLAGS.batch_size} | epochs : {FLAGS.epochs}\n"
     )
-    print("=" * 120)
 
     # Load the model
-    model, preprocessor = load_model_and_preprocessor(
+    model = load_model(
         model=FLAGS.model, preset=FLAGS.preset, num_classes=2
     )
     # Add loss and optimizer
@@ -157,11 +139,9 @@ def main(_):
 
     # Load datasets
     train_ds, test_ds, validation_ds = load_data()
-    train_ds = preprocess_data(dataset=train_ds, preprocessor=preprocessor)
-    validation_ds = preprocess_data(
-        dataset=validation_ds, preprocessor=preprocessor
-    )
-    print("GLUE/MRPC Dataset Loaded!")
+    train_ds = train_ds.batch(FLAGS.batch_size).prefetch(tf.data.AUTOTUNE)
+    test_ds = test_ds.batch(FLAGS.batch_size).prefetch(tf.data.AUTOTUNE)
+    validation_ds = validation_ds.batch(FLAGS.batch_size).prefetch(tf.data.AUTOTUNE)
 
     lr = tf.keras.optimizers.schedules.PolynomialDecay(
         FLAGS.learning_rate,
@@ -169,7 +149,7 @@ def main(_):
         end_learning_rate=0.0,
     )
     optimizer = tf.keras.optimizers.experimental.AdamW(
-        lr, weight_decay=0.01, global_clipnorm=1.0
+        lr, weight_decay=0.01
     )
     optimizer.exclude_from_weight_decay(
         var_names=["LayerNorm", "layer_norm", "bias"]
@@ -177,16 +157,18 @@ def main(_):
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
     # Start training
-    print("Starting Training...")
+    logging.info("Starting Training...")
 
     st = time.time()
-    model.fit(train_ds, validation_data=validation_ds, epochs=FLAGS.epochs)
-    et = time.time()
+    history = model.fit(train_ds, validation_data=validation_ds, epochs=FLAGS.epochs)
+    wall_time = time.time() - st
 
-    print("Training Finished!")
-    print(
-        f"Training took :: {(et-st):.4f} seconds, or {((et-st)/60):.2f} minutes, or {((et-st)/3600):.2f} hours!"
+    logging.info("Training Finished!")
+    logging.info(
+        f"Wall Time :: {wall_time:.4f} seconds."
     )
+    logging.info(f"Validation Accuracy :: {history.history['val_sparse_categorical_accuracy'][-1]:.4f}")
+    logging.info(f"examples_per_second :: {(FLAGS.epochs*FLAGS.batch_size*(len(train_ds)+len(validation_ds)))/wall_time:.4f}")
 
 
 if __name__ == "__main__":
