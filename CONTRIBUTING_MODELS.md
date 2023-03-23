@@ -80,21 +80,26 @@ compare this side-by-side with the
 [`keras_nlp.layers.DistilBertBackbone` source code](https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/models/distil_bert/distil_bert_backbone.py)!
 
 **Inputs to the model**
+
 Generally, the standard inputs to any text model are:
     - `token_ids`: tokenised inputs (An integer representation of the text sequence).
     - `padding_mask`: Masks the padding tokens.
 
 **Embedding layer(s)**
+
 Standard layers used: `keras.layers.Embedding`,
 `keras_nlp.layers.PositionEmbedding`, `keras_nlp.layers.TokenAndPositionEmbedding`.
 
 **Encoder layers**
+
 Standard layers used: `keras_nlp.layers.TransformerEncoder`, `keras_nlp.layers.FNetEncoder`.
 
 **Decoder layers (possibly)**
+
 Standard layers used: `keras_nlp.layers.TransformerDecoder`.
 
 **Other layers which might be used**
+
 `keras.layers.LayerNorm`, `keras.layers.Dropout`, `keras.layers.Conv1D`, etc.
 
 <br/>
