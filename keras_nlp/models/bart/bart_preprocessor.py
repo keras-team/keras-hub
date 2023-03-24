@@ -33,17 +33,13 @@ class BartPreprocessor(Preprocessor):
 
     This preprocessing layer will do three things:
 
-     - Tokenize both encoder inputs and decoder inputs using the `tokenizer`.
-       Both inputs can contain any number of segments.
-     - Pack the inputs together using `keras_nlp.layers.MultiSegmentPacker` with
-       the appropriate special tokens - `"<s>"`, `"</s>"` and `"<pad>"`.
-     - Construct a dictionary with keys `"encoder_token_ids"`,
-       `"encoder_padding_mask"`, `"decoder_token_ids"`, `"decoder_padding_mask"`
-       that can be passed directly to a BART model.
-
-    This layer can be used directly with `tf.data.Dataset.map` to preprocess
-    string data in the `(x, y, sample_weight)` format used by
-    `keras.Model.fit`.
+     1. Tokenize both encoder inputs and decoder inputs using the `tokenizer`.
+        Both inputs can contain any number of segments.
+     2. Pack the inputs together using `keras_nlp.layers.MultiSegmentPacker`
+        with the appropriate special tokens - `"<s>"`, `"</s>"` and `"<pad>"`.
+     3. Construct a dictionary with keys `"encoder_token_ids"`,
+        `"encoder_padding_mask"`, `"decoder_token_ids"`, `"decoder_padding_mask"`
+        that can be passed directly to a BART model.
 
     The call method of this layer accepts three arguments, `x`, `y`, and
     `sample_weight`. `x` should be python dictionary, having "encoder_inputs"
@@ -55,7 +51,8 @@ class BartPreprocessor(Preprocessor):
 
     Args:
         tokenizer: A `keras_nlp.models.BartTokenizer` instance.
-        sequence_length: The length of the packed inputs.
+        encoder_sequence_length: The length of the packed encoder inputs.
+        decoder_sequence_length: The length of the packed decoder inputs.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
             `round_robin` or `waterfall`:
@@ -67,9 +64,20 @@ class BartPreprocessor(Preprocessor):
                     left-to-right manner and fills up the buckets until we run
                     out of budget. It supports an arbitrary number of segments.
 
+    Call arguments:
+        x: A dictionary with `encoder_inputs` and `decoder_inputs` as its keys.
+            Each value in the dictionary can be a tensor of single string
+            sequences, or a tuple of multiple tensor sequences to be packed
+            together. Inputs may be batched or unbatched. For single sequences,
+            raw python inputs will be converted to tensors. For multiple
+            sequences, pass tensors directly.
+        y: Any label data. Will be passed through unaltered.
+        sample_weight: Any label weight data. Will be passed through unaltered.
+
     Examples:
+
+    Directly calling the layer on data
     ```python
-    # Load the preprocessor from a preset.
     preprocessor = keras_nlp.models.BartPreprocessor.from_preset("bart_base_en")
 
     # Tokenize and pack a single sentence.
@@ -78,27 +86,11 @@ class BartPreprocessor(Preprocessor):
         "decoder_inputs": "The fox was awake."
     }
     preprocessor(inputs)
-    # Same output.
-    inputs = {
-        "encoder_inputs": tf.constant("The fox was sleeping."),
-        "decoder_inputs": tf.constant("The fox was awake.")
-    }
-    preprocessor(inputs)
 
     # Tokenize a batch of single sentences.
     inputs = {
         "encoder_inputs": ["The fox was sleeping.", "The lion was quiet."],
         "decoder_inputs": ["The fox was awake.", "The lion was roaring."]
-    }
-    preprocessor(inputs)
-    # Same output.
-    inputs = {
-        "encoder_inputs": tf.constant(
-            ["The fox was sleeping.", "The lion was quiet."]
-        ),
-        "decoder_inputs": tf.constant(
-            ["The fox was awake.", "The lion was roaring."]
-        )
     }
     preprocessor(inputs)
 
@@ -115,47 +107,7 @@ class BartPreprocessor(Preprocessor):
     }
     preprocessor(inputs)
 
-    # Map a dataset to preprocess a single sentence.
-    features = {
-        "encoder_inputs": tf.constant(
-            ["The fox was sleeping.", "The lion was quiet."]
-        ),
-        "decoder_inputs": tf.constant(
-            ["The fox was awake.", "The lion was roaring."]
-        )
-    }
-    ds = tf.data.Dataset.from_tensor_slices(features)
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map a dataset to preprocess sentence pairs.
-    features = {
-        "encoder_inputs": (
-            tf.constant(
-                ["The fox was sleeping.", "The lion was quiet."]
-            ),
-            tf.constant(
-                ["It wanted to get up.", "It wanted to roar."]
-            ),
-        ),
-        "decoder_inputs": (
-            tf.constant(
-                ["The fox was sleeping.", "The lion was quiet."]
-            ),
-            tf.constant(
-                ["It wanted to get up.", "It wanted to roar."]
-            ),
-        ),
-    }
-    labels = tf.constant([0, 1])
-    ds = tf.data.Dataset.from_tensor_slices(
-        (
-            features, labels
-        )
-    )
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Alternatively, you can create a preprocessor from your own vocabulary.
-    # The usage is exactly the same as above.
+    # Custom vocabulary.
     vocab = {
         "<s>": 0,
         "<pad>": 1,
@@ -173,37 +125,126 @@ class BartPreprocessor(Preprocessor):
     )
     preprocessor = keras_nlp.models.BartPreprocessor(
         tokenizer=tokenizer,
-        sequence_length=20,
+        encoder_sequence_length=20,
+        decoder_sequence_length=10,
     )
+    inputs = {
+        "encoder_inputs": "The fox was sleeping.",
+        "decoder_inputs": "The fox was awake."
+    }
+    preprocessor(inputs)
+    ```
+
+    Mapping with `tf.data.Dataset`.
+    ```python
+    preprocessor = keras_nlp.models.BartPreprocessor.from_preset("bart_base_en")
+
+    # Map labeled single sentences.
+    features = {
+        "encoder_inputs": tf.constant(
+            ["The fox was sleeping.", "The lion was quiet."]
+        ),
+        "decoder_inputs": tf.constant(
+            ["The fox was awake.", "The lion was silent."]
+        )
+    }
+    labels = tf.constant(["True", "False"])
+    ds = tf.data.Dataset.from_tensor_slices((features, labels))
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map unlabeled single sentences.
+    features = {
+        "encoder_inputs": tf.constant(
+            ["The fox was sleeping.", "The lion was quiet."]
+        ),
+        "decoder_inputs": tf.constant(
+            ["The fox was awake.", "The lion was roaring."]
+        )
+    }
+    ds = tf.data.Dataset.from_tensor_slices(features)
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map labeled sentence pairs.
+    features = {
+        "encoder_inputs": (
+            tf.constant(
+                ["The fox was sleeping.", "The lion was quiet."]
+            ),
+            tf.constant(
+                ["It wanted to get up.", "It wanted to roar."]
+            ),
+        ),
+        "decoder_inputs": (
+            tf.constant(
+                ["The fox was awake.", "The lion was roaring."]
+            ),
+            tf.constant(
+                ["It wanted to sleep.", "It wanted to shout."]
+            ),
+        ),
+    }
+    labels = tf.constant(["True", "False"])
+    ds = tf.data.Dataset.from_tensor_slices((features, labels))
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map unlabeled sentence pairs.
+    features = {
+        "encoder_inputs": (
+            tf.constant(
+                ["The fox was sleeping.", "The lion was quiet."]
+            ),
+            tf.constant(
+                ["It wanted to get up.", "It wanted to roar."]
+            ),
+        ),
+        "decoder_inputs": (
+            tf.constant(
+                ["The fox was awake.", "The lion was roaring."]
+            ),
+            tf.constant(
+                ["It wanted to sleep.", "It wanted to shout."]
+            ),
+        ),
+    }
+    labels = tf.constant(["True", "False"])
+    ds = tf.data.Dataset.from_tensor_slices(features)
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     ```
     """
 
     def __init__(
         self,
         tokenizer,
-        sequence_length=1024,
+        encoder_sequence_length=1024,
+        decoder_sequence_length=1024,
         truncate="round_robin",
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
 
-        # TODO: Allow users to pass separate `sequence_length`s for encoder and
-        # decoder.
-        self.packer = MultiSegmentPacker(
+        self.encoder_packer = MultiSegmentPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
             pad_value=self.tokenizer.pad_token_id,
             truncate=truncate,
-            sequence_length=sequence_length,
+            sequence_length=encoder_sequence_length,
+        )
+        self.decoder_packer = MultiSegmentPacker(
+            start_value=self.tokenizer.start_token_id,
+            end_value=self.tokenizer.end_token_id,
+            pad_value=self.tokenizer.pad_token_id,
+            truncate=truncate,
+            sequence_length=decoder_sequence_length,
         )
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "sequence_length": self.packer.sequence_length,
-                "truncate": self.packer.truncate,
+                "encoder_sequence_length": self.encoder_packer.sequence_length,
+                "decoder_sequence_length": self.decoder_packer.sequence_length,
+                "truncate": self.encoder_packer.truncate,
             }
         )
         return config
@@ -225,13 +266,13 @@ class BartPreprocessor(Preprocessor):
             encoder_inputs
         )
         encoder_inputs = [self.tokenizer(segment) for segment in encoder_inputs]
-        encoder_token_ids, _ = self.packer(encoder_inputs)
+        encoder_token_ids, _ = self.encoder_packer(encoder_inputs)
 
         decoder_inputs = convert_inputs_to_list_of_tensor_segments(
             decoder_inputs
         )
         decoder_inputs = [self.tokenizer(segment) for segment in decoder_inputs]
-        decoder_token_ids, _ = self.packer(decoder_inputs)
+        decoder_token_ids, _ = self.decoder_packer(decoder_inputs)
 
         x = {
             "encoder_token_ids": encoder_token_ids,
@@ -251,3 +292,63 @@ class BartPreprocessor(Preprocessor):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        # Override base class's `from_preset` to handle `encoder_sequence_length`
+        # and `decoder_sequence_length`.
+        if not cls.presets:
+            raise NotImplementedError(
+                "No presets have been created for this class."
+            )
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+
+        tokenizer = cls.tokenizer_cls.from_preset(preset)
+
+        metadata = cls.presets[preset]
+        # For task model presets, the backbone config is nested.
+        if "backbone" in metadata["config"]:
+            backbone_config = metadata["config"]["backbone"]["config"]
+        else:
+            backbone_config = metadata["config"]
+
+        # Use model's `max_sequence_length` if either `encoder_sequence_length`
+        # or `decoder_sequence_length` are unspecified; otherwise check that
+        # `encoder_sequence_length`/`decoder_sequence_length` are not too long.
+        encoder_sequence_length = kwargs.pop("encoder_sequence_length", None)
+        decoder_sequence_length = kwargs.pop("decoder_sequence_length", None)
+        max_sequence_length = backbone_config["max_sequence_length"]
+
+        def check_sequence_length(sequence_length, name):
+            if sequence_length is not None:
+                if sequence_length > max_sequence_length:
+                    raise ValueError(
+                        f"`{name}` cannot be longer than `{preset}` "
+                        f"preset's `max_sequence_length` of {max_sequence_length}. "
+                        f"Received: {sequence_length}."
+                    )
+                return sequence_length
+            else:
+                return max_sequence_length
+
+        encoder_sequence_length = check_sequence_length(
+            encoder_sequence_length, "encoder_sequence_length"
+        )
+        decoder_sequence_length = check_sequence_length(
+            decoder_sequence_length, "decoder_sequence_length"
+        )
+
+        return cls(
+            tokenizer=tokenizer,
+            encoder_sequence_length=encoder_sequence_length,
+            decoder_sequence_length=decoder_sequence_length,
+            **kwargs,
+        )
