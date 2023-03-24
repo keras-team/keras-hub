@@ -41,14 +41,6 @@ class BartPreprocessor(Preprocessor):
         `"encoder_padding_mask"`, `"decoder_token_ids"`, `"decoder_padding_mask"`
         that can be passed directly to a BART model.
 
-    The call method of this layer accepts three arguments, `x`, `y`, and
-    `sample_weight`. `x` should be python dictionary, having "encoder_inputs"
-    and "decoder_inputs" as its keys. Each value in the dictionary can be a
-    python string or tensor representing a single segment, a list of python
-    strings representing a batch of single segments, or a list of tensors
-    representing multiple segments to be packed together. `y` and `sample_weight`
-    are both optional, can have any format, and will be passed through unaltered.
-
     Args:
         tokenizer: A `keras_nlp.models.BartTokenizer` instance.
         encoder_sequence_length: The length of the packed encoder inputs.
