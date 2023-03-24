@@ -79,18 +79,95 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
                 actual mask, 0 means it is a pad.
 
     Examples:
+    ```python
+    masker = keras_nlp.layers.MaskedLMMaskGenerator(
+        vocabulary_size=10,
+        mask_selection_rate=0.2,
+        mask_token_id=0,
+        mask_selection_length=5
+    )
+    # Basic usage.
+    masker(tf.constant([1, 2, 3, 4, 5]))
 
-    Basic usage.
-    >>> masker = keras_nlp.layers.MaskedLMMaskGenerator(
-    ...     vocabulary_size=10, mask_selection_rate=0.2, mask_token_id=0,
-    ...     mask_selection_length=5)
-    >>> masker(tf.constant([1, 2, 3, 4, 5]))
+    # Ragged Input.
+    masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
+    ```
+    An end-to-end masked language model training using masked kanguage mask
+    generator.
+    ```python
+    train_data = tf.constant([
+        "The quick brown fox jumped.",
+        "Call me Ishmael.",
+        "The fox tripped.",
+        "Oh look, a whale.",
+    ])
+    
+    sequence_length = 20
+    mask_selection_length = 5
+    embedding_size = 32
 
-    Ragged Input:
-    >>> masker = keras_nlp.layers.MaskedLMMaskGenerator(
-    ...     vocabulary_size=10, mask_selection_rate=0.5, mask_token_id=0,
-    ...     mask_selection_length=5)
-    >>> masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
+    # create tokenizer and masked language model generator instnces
+    tokenizer = keras_nlp.models.RobertaTokenizer.from_preset(
+        "roberta_base_en"
+    )
+    mask = keras_nlp.layers.MaskedLMMaskGenerator(
+        vocabulary_size=tokenizer.vocabulary_size(),
+        mask_token_id=tokenizer.mask_token_id,
+        mask_selection_rate=0.2,
+        mask_selection_length=mask_selection_length
+    ) 
+
+    # Create Dummy language model with masked language model head
+    tokens_ids = keras.layers.Input(
+        shape = (sequence_length),
+        name = 'tokens_ids'
+    )
+    mask_positions = keras.layers.Input(
+        shape = (mask_selection_length),
+        dtype =" int64",
+        name = 'mask_positions'
+    )
+    embeddings = keras.layers.Embedding(
+        input_dim = tokenizer.vocabulary_size(),
+        output_dim = embedding_size
+    )(tokens_ids)
+    dummy_LM = keras.layers.Dense(
+        embedding_size
+    )(embeddings)
+    MLM_head = keras_nlp.layers.MaskedLMHead(
+        vocabulary_size = tokenizer.vocabulary_size(),
+    )(dummy_LM, mask_positions)
+    dummy_MLM = keras.Model(
+        inputs=[tokens_ids, mask_positions], 
+        outputs=MLM_head
+    )
+
+    dummy_MLM.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        optimizer=keras.optimizers.Adam(5e-5),
+        weighted_metrics=keras.metrics.SparseCategoricalAccuracy(),
+    )
+
+    # Preprocess training data 
+    tokenized = tokenizer(train_input)
+    # Add padding to tokens
+    tokenized = tokenized.to_tensor(
+        shape = tf.cast([-1, sequence_length], tf.int64),
+        default_value=1
+    )
+    mask = masker(tokenized)
+    x = mask["token_ids"]
+    y = mask["mask_ids"]
+    sample_weight = mask["mask_weights"]
+    mask_positions = mask["mask_positions"]
+
+    # Fit the data 
+    dummy_MLM.fit(
+        x=[x, mask_positions],
+        y=y,
+        sample_weight=sample_weight,
+    )
+    ```
     """
 
     def __init__(
