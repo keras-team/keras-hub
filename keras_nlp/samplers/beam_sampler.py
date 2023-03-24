@@ -36,11 +36,14 @@ class BeamSampler(Sampler):
     Args:
         num_beams: int. The number of beams that should be kept at each
             time-step. `num_beams` should be strictly positive.
+        return_all_beams: bool. When set to `True`, the sampler will return the top prompt, 
+            all prompts and their respective probabilities score.
 
     Call Args:
         {{call_args}}
 
     Examples:
+    Example 1:
     ```python
     # Use a simple alphabet of lowercase characters to [0, 26).
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
@@ -59,6 +62,30 @@ class BeamSampler(Sampler):
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
     # >>> "zzzzzaaaaaaa"
+    ```
+    Example 2:
+    ```python
+    # Use a simple alphabet of lowercase characters to [0, 26).
+    int_lookup = {i: chr(i + ord('a')) for i in range(26)}
+    char_lookup = {v: k for k, v in int_lookup.items()}
+    batch_size, length, vocab_size = 1, 12, len(int_lookup)
+
+    def next(prompt, state, index):
+        # A uniform distribution over our alphabet.
+        logits = tf.ones((batch_size, vocab_size))
+        return logits, state
+
+    output = keras_nlp.samplers.BeamSampler(return_all_beams=True)(
+        next=next,
+        prompt=tf.fill((batch_size, length,), char_lookup['z']),
+        index=5,
+    )
+    print(["".join([int_lookup[i] for i in s]) for s in output[0].numpy()])
+    print(output[1].shape)
+    print(output[2].shape)
+    # >>> "zzzzzaaaaaaa"
+    # >>> (1, 5, 12)
+    # >>> (1, 5)
     ```
     """
 
@@ -79,12 +106,7 @@ class BeamSampler(Sampler):
         index=0,
         mask=None,
         end_token_id=None,
-        # return_all_beams=None,
     ):
-        # if return_all_beams is None:
-        #     return_all_beams = self.return_all_beams
-        # else:
-        #     return_all_beams = bool(return_all_beams)
 
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         # Make sure max length and start index are the same dtype.
