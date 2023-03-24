@@ -101,7 +101,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         "The fox tripped.",
         "Oh look, a whale.",
     ])
-    
+
     sequence_length = 20
     mask_selection_length = 5
     embedding_size = 32
@@ -115,7 +115,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         mask_token_id=tokenizer.mask_token_id,
         mask_selection_rate=0.2,
         mask_selection_length=mask_selection_length
-    ) 
+    )
 
     # Create Dummy language model with masked language model head
     tokens_ids = keras.layers.Input(
@@ -138,7 +138,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         vocabulary_size = tokenizer.vocabulary_size(),
     )(dummy_LM, mask_positions)
     dummy_MLM = keras.Model(
-        inputs=[tokens_ids, mask_positions], 
+        inputs=[tokens_ids, mask_positions],
         outputs=MLM_head
     )
 
@@ -148,7 +148,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         weighted_metrics=keras.metrics.SparseCategoricalAccuracy(),
     )
 
-    # Preprocess training data 
+    # Preprocess training data
     tokenized = tokenizer(train_input)
     # Add padding to tokens
     tokenized = tokenized.to_tensor(
@@ -161,7 +161,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
     sample_weight = mask["mask_weights"]
     mask_positions = mask["mask_positions"]
 
-    # Fit the data 
+    # Fit the data
     dummy_MLM.fit(
         x=[x, mask_positions],
         y=y,
