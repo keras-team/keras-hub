@@ -91,6 +91,41 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
     ...     vocabulary_size=10, mask_selection_rate=0.5, mask_token_id=0,
     ...     mask_selection_length=5)
     >>> masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
+
+    Usage in a workflow:
+    ```python
+    max_value_1=17
+    max_value_2=25
+    OOV_TOKEN = "<UNK>"
+
+    #Creating random data and vocabulary
+    train_data=tf.strings.as_string(tf.random.uniform(shape=[3,5],minval=1, maxval=max_value_1, dtype=tf.int64))
+    test_data=tf.strings.as_string(tf.random.uniform(shape=[3,5],minval=1, maxval=max_value_2, dtype=tf.int64))
+    data = tf.concat([train_data, test_data], 0)
+
+    vocabulary={str(i):i for i in range(1,max_value_1+1)}
+    vocabulary[OOV_TOKEN] = 0
+    vocab_size = len(vocabulary)
+
+    #Instantiating tokenizer
+    word_tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+             vocabulary=vocabulary.keys(),
+             oov_token=OOV_TOKEN,
+             lowercase=False, strip_accents=False, split=False
+         )
+
+    #Using MaskedLMMaskGenerator
+    masker = keras_nlp.layers.MaskedLMMaskGenerator(
+    vocabulary_size=vocab_size, mask_selection_rate=0.5, mask_token_id=0,
+    mask_selection_length=1)
+
+    masked_output = masker(word_tokenizer(data))    
+
+    #Passing the masked outputs to MaskedLMHead layer
+    encoded_tokens = tf.random.normal([6, 5, 5]) #generating random encodings for data
+    mask_preds = keras_nlp.layers.MaskedLMHead(vocabulary_size=18,activation="softmax",)(encoded_tokens, mask_positions=masked_output['mask_positions'])
+    keras.losses.sparse_categorical_crossentropy(masked_output['mask_ids'], mask_preds)
+    ```
     """
 
     def __init__(
