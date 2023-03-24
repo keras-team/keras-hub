@@ -16,6 +16,7 @@
 import os
 
 import tensorflow as tf
+import keras_nlp
 from tensorflow import keras
 
 from keras_nlp.utils.keras_utils import print_msg
