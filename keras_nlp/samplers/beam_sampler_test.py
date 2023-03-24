@@ -37,6 +37,7 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
 
         self.next = next
         self.sampler = BeamSampler(num_beams=5)
+        self.sampler_all_beams = BeamSampler(num_beams=5, return_all_beams=True)
 
     def join_as_string(self, x):
         return ["".join([self.int_lookup[i] for i in s]) for s in x.numpy()]
@@ -71,11 +72,10 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
         state_chars = list("sequentially")
         state = tf.constant([[self.char_lookup[c] for c in state_chars]])
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
-        output = self.sampler(
+        output = self.sampler_all_beams(
             next=self.next,
             prompt=prompt,
             state=state,
-            return_all_beams=True,
         )
         self.assertEqual(self.join_as_string(output[0]), ["sequentially"])
         self.assertEqual(output[1].shape, (self.batch_size, 5, self.length))

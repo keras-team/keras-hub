@@ -79,12 +79,12 @@ class BeamSampler(Sampler):
         index=0,
         mask=None,
         end_token_id=None,
-        return_all_beams=None,
+        # return_all_beams=None,
     ):
-        if return_all_beams is None:
-            return_all_beams = self.return_all_beams
-        else:
-            return_all_beams = bool(return_all_beams)
+        # if return_all_beams is None:
+        #     return_all_beams = self.return_all_beams
+        # else:
+        #     return_all_beams = bool(return_all_beams)
 
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         # Make sure max length and start index are the same dtype.
@@ -176,7 +176,7 @@ class BeamSampler(Sampler):
         top_beams = tf.math.argmax(all_log_probs, axis=-1)[:, tf.newaxis]
         prompt = tf.gather(all_prompts, top_beams, axis=1, batch_dims=1)
 
-        if return_all_beams:
+        if self.return_all_beams:
             return tf.squeeze(prompt, axis=1), all_prompts, all_log_probs
         else:
             return tf.squeeze(prompt, axis=1)
