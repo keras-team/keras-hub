@@ -39,6 +39,7 @@ class XLMRobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         vocab_data = tf.data.Dataset.from_tensor_slices(
             ["the quick brown fox", "the earth is round", "an eagle flew"]
         )
+
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=vocab_data.as_numpy_iterator(),
             model_writer=bytes_io,
