@@ -28,7 +28,7 @@ except ImportError:
 class MaskedLMMaskGenerator(keras.layers.Layer):
     """Layer that applies language model masking.
 
-    This layer is useful for preparing inputs for masked languaged modeling
+    This layer is useful for preparing inputs for masked language modeling
     (MaskedLM) tasks. It follows the masking strategy described in the [original BERT
     paper](https://arxiv.org/abs/1810.04805). Given tokenized text,
     it randomly selects certain number of tokens for masking. Then for each
@@ -92,7 +92,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
     # Ragged Input.
     masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
     ```
-    An end-to-end masked language model training using masked kanguage mask
+    An end-to-end masked language model training using masked language mask
     generator.
     ```python
     train_data = tf.constant([
@@ -106,25 +106,25 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
     mask_selection_length = 5
     embedding_size = 32
 
-    # create tokenizer and masked language model generator instnces
+    # create tokenizer and masked language model generator instances
     tokenizer = keras_nlp.models.RobertaTokenizer.from_preset(
         "roberta_base_en"
     )
-    mask = keras_nlp.layers.MaskedLMMaskGenerator(
+    masker = keras_nlp.layers.MaskedLMMaskGenerator(
         vocabulary_size=tokenizer.vocabulary_size(),
         mask_token_id=tokenizer.mask_token_id,
         mask_selection_rate=0.2,
         mask_selection_length=mask_selection_length
     )
 
-    # Create Dummy language model with masked language model head
+    # Create a dummy language model with masked language model head
     tokens_ids = keras.layers.Input(
         shape = (sequence_length),
         name = 'tokens_ids'
     )
     mask_positions = keras.layers.Input(
         shape = (mask_selection_length),
-        dtype =" int64",
+        dtype = "int64",
         name = 'mask_positions'
     )
     embeddings = keras.layers.Embedding(
@@ -149,7 +149,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
     )
 
     # Preprocess training data
-    tokenized = tokenizer(train_input)
+    tokenized = tokenizer(train_data)
     # Add padding to tokens
     tokenized = tokenized.to_tensor(
         shape = tf.cast([-1, sequence_length], tf.int64),
