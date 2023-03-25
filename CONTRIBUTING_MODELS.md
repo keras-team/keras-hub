@@ -199,8 +199,8 @@ and `DistilBertTokenizer`. Here is an
 The testing for presets is divided into two: "large" and "extra large".
 For "large" tests, we pick the smallest preset (in terms of number of parameters)
 and verify whether the output is correct. For "extra large tests", we loop over
-all the presets and just check whether all three - backbone, tokenizer and
-preprocessor - can be called without any error.
+all the presets and just check whether the backbone and the tokenizer can
+be called without any error.
 
 Additionally, a checkpoint conversion script should be added. This script
 demonstrates that the outputs of our backbone model and outputs of the source
