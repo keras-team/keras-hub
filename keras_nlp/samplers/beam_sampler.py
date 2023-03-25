@@ -36,7 +36,7 @@ class BeamSampler(Sampler):
     Args:
         num_beams: int. The number of beams that should be kept at each
             time-step. `num_beams` should be strictly positive.
-        return_all_beams: bool. When set to `True`, the sampler will return the top prompt, 
+        return_all_beams: bool. When set to `True`, the sampler will return the top prompt,
             all prompts and their respective probabilities score.
 
     Call Args:
@@ -107,7 +107,6 @@ class BeamSampler(Sampler):
         mask=None,
         end_token_id=None,
     ):
-
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         # Make sure max length and start index are the same dtype.
         index = tf.cast(index, max_length.dtype)
@@ -199,7 +198,12 @@ class BeamSampler(Sampler):
         prompt = tf.gather(all_prompts, top_beams, axis=1, batch_dims=1)
 
         if self.return_all_beams:
-            return tf.squeeze(prompt, axis=1), all_prompts, all_log_probs
+            sorted_indices = tf.argsort(
+                all_log_probs, axis=-1, direction="DESCENDING"
+            )
+            sorted_log_probs = tf.gather(all_log_probs, sorted_indices, axis=-1)
+            sorted_prompts = tf.gather(all_prompts, sorted_indices, axis=1)
+            return sorted_prompts, sorted_log_probs
         else:
             return tf.squeeze(prompt, axis=1)
 
