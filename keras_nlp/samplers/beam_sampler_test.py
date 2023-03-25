@@ -81,6 +81,9 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(output[0].shape, (self.batch_size, 5, self.length))
         self.assertEqual(output[1].shape, (self.batch_size, 5))
         self.assertTrue(tf.reduce_all(output[1][:, 1:] <= output[1][:, :-1]))
+        self.assertEqual(
+            self.join_as_string(output[0][:, 0, :]), ["sequentially"]
+        )
 
     def test_early_stopping(self):
         state_chars = list("sequentially")

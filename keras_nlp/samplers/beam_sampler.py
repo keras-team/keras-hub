@@ -80,12 +80,13 @@ class BeamSampler(Sampler):
         prompt=tf.fill((batch_size, length,), char_lookup['z']),
         index=5,
     )
-    print(["".join([int_lookup[i] for i in s]) for s in output[0].numpy()])
-    print(output[1].shape)
-    print(output[2].shape)
-    # >>> "zzzzzaaaaaaa"
+
+    print(output[0].shape)
     # >>> (1, 5, 12)
+    print(output[1].shape)
     # >>> (1, 5)
+    print(["".join([int_lookup[i] for i in s]) for s in output[0][0].numpy()])
+    # >>> "zzzzzaaaaaaa"
     ```
     """
 
