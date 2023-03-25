@@ -201,8 +201,12 @@ class BeamSampler(Sampler):
             sorted_indices = tf.argsort(
                 all_log_probs, axis=-1, direction="DESCENDING"
             )
-            sorted_log_probs = tf.gather(all_log_probs, sorted_indices, axis=-1)
-            sorted_prompts = tf.gather(all_prompts, sorted_indices, axis=1)
+            sorted_log_probs = tf.gather(
+                all_log_probs, sorted_indices, axis=-1, batch_dims=1
+            )
+            sorted_prompts = tf.gather(
+                all_prompts, sorted_indices, axis=1, batch_dims=1
+            )
             return sorted_prompts, sorted_log_probs
         else:
             return tf.squeeze(prompt, axis=1)
