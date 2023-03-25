@@ -1,6 +1,6 @@
 # Model Contribution Guide
 
-KerasNLP has a plethora of cutting-edge pre-trained large language models
+KerasNLP has a plethora of pre-trained large language models
 ranging from BERT to OPT. We are always looking for more models and are always
 open to contributions!
 
