@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for  XLMRoBERTa masked language model preprocessor layer."""
-
 import io
 import os
 
+import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
@@ -54,12 +54,12 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
             user_defined_symbols="[MASK]",
         )
 
-        proto = bytes_io.getvalue()
+        self.proto = bytes_io.getvalue()
 
-        tokenizer = XLMRobertaTokenizer(proto=proto)
+        self.tokenizer = XLMRobertaTokenizer(proto=self.proto)
 
         self.preprocessor = XLMRoBERTaMaskedLMPreprocessor(
-            tokenizer=tokenizer,
+            tokenizer=self.tokenizer,
             # Simplify out testing by masking every available token.
             mask_selection_rate=1.0,
             mask_token_rate=1.0,
@@ -73,7 +73,7 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
 
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [2, 4, 4, 4, 4, 3, 0, 0, 0, 0, 0, 0]
+            x["token_ids"], [1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
             x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
@@ -87,7 +87,7 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
 
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [[2, 4, 4, 4, 4, 3, 0, 0, 0, 0, 0, 0]] * 4
+            x["token_ids"], [[1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
             x["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
@@ -102,7 +102,7 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
         ds = ds.map(self.preprocessor)
         x, y, sw = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(
-            x["token_ids"], [[2, 4, 4, 4, 4, 3, 0, 0, 0, 0, 0, 0]] * 4
+            x["token_ids"], [[1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
             x["padding_mask"], [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]] * 4
@@ -117,7 +117,7 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
 
         x, y, sw = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
-            x["token_ids"], [2, 4, 4, 3, 4, 4, 3, 0, 0, 0, 0, 0]
+            x["token_ids"], [1, 4, 4, 2, 4, 4, 2, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
             x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
@@ -137,7 +137,7 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
 
         x, y, sw = no_mask_preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [2, 5, 10, 6, 8, 3, 0, 0, 0, 0, 0, 0]
+            x["token_ids"], [1, 5, 10, 6, 8, 2, 0, 0, 0, 0, 0, 0]
         )
         self.assertAllEqual(
             x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
@@ -146,10 +146,19 @@ class XLMRoBERTaMaskedLMPreprocessorTest(
         self.assertAllEqual(y, [0, 0, 0, 0])
         self.assertAllEqual(sw, [0.0, 0.0, 0.0, 0.0])
 
+    def test_serialization(self):
+        config = keras.utils.serialize_keras_object(self.preprocessor)
+        new_preprocessor = keras.utils.deserialize_keras_object(config)
+        self.assertEqual(
+            new_preprocessor.get_config(),
+            self.preprocessor.get_config(),
+        )
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["the quick brown fox"])
 

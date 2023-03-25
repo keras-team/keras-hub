@@ -11,10 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for BERT masked language model."""
+"""Tests for XLMRobertaMaskedLM masked language model."""
 
+import io
 import os
 
+import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -31,7 +33,7 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
 )
 
 
-class XLMRoBERTaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
+class XLMRobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.backbone = XLMRobertaBackbone(
             vocabulary_size=1000,
@@ -41,12 +43,30 @@ class XLMRoBERTaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             intermediate_dim=128,
             max_sequence_length=128,
         )
-
-        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab = ["[PAD]", "[UNK]", "<s>", "</s>", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
         self.vocab += ["the", "quick", "brown", "fox"]
 
-        tokenizer = XLMRobertaTokenizer(vocabulary=self.vocab)
+        bytes_io = io.BytesIO()
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=self.vocab.as_numpy_iterator(),
+            model_writer=bytes_io,
+            vocab_size=15,
+            model_type="WORD",
+            pad_id=0,
+            unk_id=1,
+            bos_id=2,
+            eos_id=3,
+            pad_piece="<pad>",
+            unk_piece="<unk>",
+            bos_piece="<s>",
+            eos_piece="</s>",
+            user_defined_symbols="[MASK]",
+        )
+
+        proto = bytes_io.getvalue()
+
+        tokenizer = XLMRobertaTokenizer(proto=proto)
 
         self.preprocessor = XLMRoBERTaMaskedLMPreprocessor(
             tokenizer=tokenizer,
@@ -54,8 +74,8 @@ class XLMRoBERTaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             mask_selection_rate=1.0,
             mask_token_rate=1.0,
             random_token_rate=0.0,
-            mask_selection_length=2,
-            sequence_length=10,
+            mask_selection_length=5,
+            sequence_length=12,
         )
         self.masked_lm = XLMRobertaMaskedLM(
             self.backbone,
