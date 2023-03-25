@@ -13,7 +13,7 @@ for an introduction to the library, and our
 
 ## Checklist
 
-This to-do list is a brief outline of how a backbone model can be contributed.
+This to-do list is a brief outline of how a model can be contributed.
 Keep this checklist handy!
 
 ### Step 1: Open an issue/find an issue
