@@ -14,7 +14,6 @@
 
 """Transformer encoder block implementation based on `keras.layers.Layer`."""
 
-import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
@@ -161,17 +160,6 @@ class TransformerEncoder(keras.layers.Layer):
             rate=self.dropout,
         )
 
-        self.bias_param1 = tf.get_variable(
-            shape=input_shape,
-            name="bias_param1",
-            initializer=tf.zeros_initializer(),
-        )
-        self.bias_param2 = tf.get_variable(
-            shape=input_shape,
-            name="bias_param2",
-            initializer=tf.zeros_initializer(),
-        )
-
     def call(self, inputs, padding_mask=None, attention_mask=None):
         """Forward pass of the TransformerEncoder.
 
@@ -206,8 +194,6 @@ class TransformerEncoder(keras.layers.Layer):
         x = self._self_attention_layer(
             query=x,
             value=x,
-            content_attention_bias=self.bias_param1,
-            positional_attention_bias=self.bias_param2,
             attention_mask=self_attention_mask,
         )
         x = self._self_attention_dropout(x)

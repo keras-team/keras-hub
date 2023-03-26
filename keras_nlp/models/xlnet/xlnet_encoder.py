@@ -15,6 +15,7 @@
 
 """Transformer encoder block implementation based on `keras.layers.Layer`."""
 
+import tensorflow as tf
 from tensorflow import keras
 
 import keras_nlp
@@ -138,13 +139,7 @@ class XLNetEncoder(keras.layers.Layer):
             query=input_shape,
             value=input_shape,
         )
-        self._relative_attention_layernorm = keras.layers.LayerNormalization(
-            epsilon=self.layer_norm_epsilon,
-        )
-        self._relative_attention_dropout = keras.layers.Dropout(
-            rate=self.dropout,
-        )
-
+        
         # Feedforward layers.
         self._feedforward_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
@@ -162,6 +157,17 @@ class XLNetEncoder(keras.layers.Layer):
         )
         self._feedforward_dropout = keras.layers.Dropout(
             rate=self.dropout,
+        )
+
+        self.bias_param1 = tf.Variable(
+            shape=input_shape,
+            name="bias_param1",
+            initializer=tf.zeros_initializer(),
+        )
+        self.bias_param2 = tf.Variable(
+            shape=input_shape,
+            name="bias_param2",
+            initializer=tf.zeros_initializer(),
         )
 
     def call(self, inputs, padding_mask=None, attention_mask=None):
@@ -199,6 +205,8 @@ class XLNetEncoder(keras.layers.Layer):
             query=x,
             value=x,
             attention_mask=relative_attention_mask,
+            content_attention_bias=self.bias_param1,
+            positional_attention_bias=self.bias_param2,
         )
         x = self._relative_attention_dropout(x)
         x = x + residual
