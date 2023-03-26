@@ -141,7 +141,7 @@ class XLNetEncoder(keras.layers.Layer):
             content_attention_bias=self.bias_param1,
             positional_attention_bias=self.bias_param2,
         )
-        
+
         # Feedforward layers.
         self._feedforward_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
