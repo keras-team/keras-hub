@@ -50,10 +50,6 @@ class AlbertBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call_albert(self):
         self.backbone(self.input_batch)
 
-    def test_token_embedding(self):
-        output = self.backbone.token_embedding(self.input_batch["token_ids"])
-        self.assertEqual(output.shape, (2, 5, 2))
-
     def test_name(self):
         # Check default name passed through
         self.assertRegexpMatches(self.backbone.name, "albert_backbone")

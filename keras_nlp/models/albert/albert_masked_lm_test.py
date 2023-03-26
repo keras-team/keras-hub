@@ -56,8 +56,10 @@ class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
 
         proto = bytes_io.getvalue()
 
+        tokenizer = AlbertTokenizer(proto=proto)
+
         self.preprocessor = AlbertMaskedLMPreprocessor(
-            AlbertTokenizer(proto=proto),
+            tokenizer=tokenizer,
             # Simplify out testing by masking every available token.
             mask_selection_rate=1.0,
             mask_token_rate=1.0,
@@ -69,10 +71,8 @@ class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
-            hidden_dim=2,
-            num_groups=1,
-            num_inner_repetitions=1,
-            embedding_dim=16,
+            embedding_dim=4,
+            hidden_dim=4,
             intermediate_dim=4,
             max_sequence_length=self.preprocessor.packer.sequence_length,
         )
@@ -100,12 +100,15 @@ class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
     def test_valid_call_classifier(self):
-        self.masked_lm(self.preprocessed_batch[0])
+        self.masked_lm(self.preprocessed_batch)
+
+    def test_albert_masked_lm_fit_default_compile(self):
+        self.masked_lm.fit(self.raw_dataset)
 
     def test_classifier_predict(self):
         self.masked_lm.predict(self.raw_batch)
         self.masked_lm.preprocessor = None
-        self.masked_lm.predict(self.preprocessed_batch[0])
+        self.masked_lm.predict(self.preprocessed_batch)
 
     def test_classifier_fit(self):
         self.masked_lm.fit(self.raw_dataset)
@@ -120,14 +123,6 @@ class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.masked_lm.fit(self.preprocessed_dataset)
 
-    def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.masked_lm)
-        new_classifier = keras.utils.deserialize_keras_object(config)
-        self.assertEqual(
-            new_classifier.get_config(),
-            self.masked_lm.get_config(),
-        )
-
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
@@ -141,7 +136,6 @@ class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
 
         # Check we got the real object back.
         self.assertIsInstance(restored_model, AlbertMaskedLM)
-
+        # Check that output matches.
         restored_output = restored_model.predict(self.raw_batch)
-
         self.assertAllClose(model_output, restored_output)

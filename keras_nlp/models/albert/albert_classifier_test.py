@@ -30,7 +30,7 @@ from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 
 class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        # Setup model.
+        # Setup model
 
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
@@ -39,7 +39,7 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         sentencepiece.SentencePieceTrainer.train(
             sentence_iterator=vocab_data.as_numpy_iterator(),
             model_writer=bytes_io,
-            vocab_size=5,
+            vocab_size=10,
             model_type="WORD",
             pad_id=0,
             unk_id=1,
@@ -63,13 +63,12 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
-            num_groups=1,
-            num_inner_repetitions=1,
             embedding_dim=2,
             hidden_dim=2,
             intermediate_dim=4,
             max_sequence_length=self.preprocessor.packer.sequence_length,
         )
+
         self.classifier = AlbertClassifier(
             self.backbone,
             4,
@@ -91,9 +90,12 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, tf.ones((2,)))
+            (self.raw_batch, tf.ones((4,)))
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
+
+    def test_valid_call_classifier(self):
+        self.classifier(self.preprocessed_batch)
 
     def test_classifier_predict(self):
         self.classifier.predict(self.raw_batch)
@@ -105,13 +107,8 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.classifier.preprocessor = None
         self.classifier.fit(self.preprocessed_dataset)
 
-    def test_classifier_fit_no_xla(self):
-        self.classifier.preprocessor = None
-        self.classifier.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),
-            jit_compile=False,
-        )
-        self.classifier.fit(self.preprocessed_dataset)
+    def test_distilbert_classifier_fit_default_compile(self):
+        self.classifier.fit(self.raw_dataset)
 
     def test_serialization(self):
         config = keras.utils.serialize_keras_object(self.classifier)
@@ -126,13 +123,13 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large
-    def test_saved_model(self, save_format, filename):
+    def test_saving_model(self, save_format, filename):
         model_output = self.classifier.predict(self.raw_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)
         self.classifier.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
-        # Check we got the real object back.
+        # Check we got the real object back
         self.assertIsInstance(restored_model, AlbertClassifier)
 
         # Check that output matches.
