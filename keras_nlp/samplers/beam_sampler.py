@@ -43,7 +43,7 @@ class BeamSampler(Sampler):
         {{call_args}}
 
     Examples:
-    Example 1:
+    1. Return only the beam with the highest accumulated probability.
     ```python
     # Use a simple alphabet of lowercase characters to [0, 26).
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
@@ -63,7 +63,7 @@ class BeamSampler(Sampler):
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
     # >>> "zzzzzaaaaaaa"
     ```
-    Example 2:
+    2. Return all beams and their probabilities.
     ```python
     # Use a simple alphabet of lowercase characters to [0, 26).
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
@@ -191,12 +191,8 @@ class BeamSampler(Sampler):
             maximum_iterations=(max_length - index),
         )
 
-        # Gather the top beam at each batch index.
-        all_prompts, all_log_probs = unflatten_beams(prompt), unflatten_beams(
-            log_probs
-        )
-        top_beams = tf.math.argmax(all_log_probs, axis=-1)[:, tf.newaxis]
-        prompt = tf.gather(all_prompts, top_beams, axis=1, batch_dims=1)
+        all_prompts = unflatten_beams(prompt)
+        all_log_probs = unflatten_beams(log_probs)
 
         if self.return_all_beams:
             sorted_indices = tf.argsort(
@@ -210,6 +206,9 @@ class BeamSampler(Sampler):
             )
             return sorted_prompts, sorted_log_probs
         else:
+            # Gather the top beam at each batch index.
+            top_beams = tf.math.argmax(all_log_probs, axis=-1)[:, tf.newaxis]
+            prompt = tf.gather(all_prompts, top_beams, axis=1, batch_dims=1)
             return tf.squeeze(prompt, axis=1)
 
     def get_config(self):
