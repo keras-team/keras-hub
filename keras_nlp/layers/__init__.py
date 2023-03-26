@@ -22,6 +22,8 @@ from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.random_deletion import RandomDeletion
 from keras_nlp.layers.random_swap import RandomSwap
+from keras_nlp.layers.relative_attention import MultiHeadRelativeAttention
+from keras_nlp.layers.relative_attention import TwoStreamRelativeAttention
 from keras_nlp.layers.sine_position_encoding import SinePositionEncoding
 from keras_nlp.layers.start_end_packer import StartEndPacker
 from keras_nlp.layers.token_and_position_embedding import (
