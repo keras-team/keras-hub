@@ -37,7 +37,7 @@ class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
 
         self.input_batch = {
             "token_ids": tf.ones((2, 5), dtype="int32"),
-            "segment_ids": tf.ones((2, 5), dtype="int32"),
+            "mask_positions": tf.ones((2, 5), dtype="int32"),
             "padding_mask": tf.ones((2, 5), dtype="int32"),
         }
 
@@ -56,7 +56,7 @@ class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
         for seq_length in (2, 3, 4):
             input_data = {
                 "token_ids": tf.ones((2, seq_length), dtype="int32"),
-                "segment_ids": tf.ones((2, seq_length), dtype="int32"),
+                "mask_positions": tf.ones((2, seq_length), dtype="int32"),
                 "padding_mask": tf.ones((2, seq_length), dtype="int32"),
             }
             self.backbone(input_data)

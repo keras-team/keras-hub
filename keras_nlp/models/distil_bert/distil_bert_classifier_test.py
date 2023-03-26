@@ -34,12 +34,13 @@ from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
 
 class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        # Setup model.
+        # Setup model
+
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["the", "quick", "brown", "fox", "."]
         self.preprocessor = DistilBertPreprocessor(
             DistilBertTokenizer(vocabulary=self.vocab),
-            sequence_length=5,
+            sequence_length=8,
         )
         self.backbone = DistilBertBackbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
@@ -55,7 +56,6 @@ class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
             preprocessor=self.preprocessor,
         )
 
-        # Setup data.
         self.raw_batch = tf.constant(
             [
                 "the quick brown fox.",
@@ -66,7 +66,7 @@ class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, tf.ones((2,)))
+            (self.raw_batch, tf.ones((4,)))
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
@@ -78,7 +78,7 @@ class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.classifier.preprocessor = None
         self.classifier.predict(self.preprocessed_batch)
 
-    def test_classifier_fit(self, jit_compile):
+    def test_classifier_fit(self):
         self.classifier.fit(self.raw_dataset)
         self.classifier.preprocessor = None
         self.classifier.fit(self.preprocessed_dataset)
