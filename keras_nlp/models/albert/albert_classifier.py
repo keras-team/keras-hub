@@ -32,7 +32,7 @@ class AlbertClassifier(Task):
     """An end-to-end ALBERT model for classification tasks
 
     This model attaches a classification head to a
-    `keras_nlp.model.AlbertBackbone`instance, mapping from the backbone outputs to logit output suitable for
+    `keras_nlp.model.AlbertBackbone` instance, mapping from the backbone outputs to logit output suitable for
     a classification task. For usage of this model with pre-trained weights, use
     the `from_preset()` constructor.
 
