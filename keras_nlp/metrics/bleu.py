@@ -4,7 +4,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#       https://www.apache.org/licenses/LICENSE-2.0
+#      https://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -100,7 +100,7 @@ class Bleu(keras.metrics.Metric):
     >>> bleu = keras_nlp.metrics.Bleu(max_order=4)
     >>> ref_sentence = "the quick brown fox jumps over the lazy dog"
     >>> pred_sentence = "the quick brown fox jumps over the box"
-    >>> score = bleu([ref_sentence], [pred_sentence])
+    >>> bleu([ref_sentence], pred_sentence)
     <tf.Tensor(0.7420885, shape=(), dtype=float32)>
 
     1.2. rank 1 inputs.
@@ -111,7 +111,7 @@ class Bleu(keras.metrics.Metric):
         "the quick brown fox jumps over the lazy frog"
     ]
     >>> pred_sentence = ["the quick brown fox jumps over the box"]
-    >>> score = bleu(ref_sentence, pred_sentence)
+    >>> bleu(ref_sentence, pred_sentence)
     <tf.Tensor(0.7420885, shape=(), dtype=float32)>
 
     b. Tensor.
@@ -121,7 +121,7 @@ class Bleu(keras.metrics.Metric):
         "the quick brown fox jumps over the lazy frog"
     ])
     >>> pred_sentence = tf.constant(["the quick brown fox jumps over the box"])
-    >>> score = bleu(ref_sentence, pred_sentence)
+    >>> bleu(ref_sentence, pred_sentence)
     <tf.Tensor(0.7420885, shape=(), dtype=float32)>
 
     c. RaggedTensor.
@@ -129,13 +129,16 @@ class Bleu(keras.metrics.Metric):
     >>> ref_sentence = tf.ragged.constant([
         [
             "the quick brown fox jumps over the lazy dog",
-            "the quick brown fox jumps over the lazy frog"
+        ],
+        [
+            "the quick brown fox jumps over the lazy frog",
+            "the quick brown fox jumps over the lazy dog"
         ]
     ])
-    >>> pred_sentence = tf.ragged.constant([
+    >>> pred_sentence = tf.constant([
         ["the quick brown fox jumps over the box"]
     ])
-    >>> score = bleu(ref_sentence, pred_sentence)
+    >>> bleu(ref_sentence, pred_sentence)
     <tf.Tensor(0.7420885, shape=(), dtype=float32)>
 
     1.3. rank 2 inputs.
@@ -149,7 +152,7 @@ class Bleu(keras.metrics.Metric):
         ["the quick brown fox jumps over the box"],
         ["the quick brown fox jumps over the box"]
     ]
-    >>> score = bleu(ref_sentence, pred_sentence)
+    >>> bleu(ref_sentence, pred_sentence)
     <tf.Tensor(0.7420885, shape=(), dtype=float32)>
 
     2. Passing a custom tokenizer.
@@ -158,7 +161,7 @@ class Bleu(keras.metrics.Metric):
     >>> bleu = keras_nlp.metrics.Bleu(max_order=4, tokenizer=tokenizer)
     >>> ref_sentence = "the quick brown fox"
     >>> pred_sentence = "the quick brown dog"
-    >>> score = bleu([ref_sentence], [pred_sentence])
+    >>> bleu([ref_sentence], [pred_sentence])
     <tf.Tensor(0.75983566, shape=(), dtype=float32)>
 
     3. Pass the metric to `model.compile()`.
