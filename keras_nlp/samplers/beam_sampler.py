@@ -43,7 +43,7 @@ class BeamSampler(Sampler):
         {{call_args}}
 
     Examples:
-    1. Return only the beam with the highest accumulated probability.
+    Return only the beam with the highest accumulated probability.
     ```python
     # Use a simple alphabet of lowercase characters to [0, 26).
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
@@ -63,7 +63,7 @@ class BeamSampler(Sampler):
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
     # >>> "zzzzzaaaaaaa"
     ```
-    2. Return all beams and their probabilities.
+    Return all beams and their probabilities.
     ```python
     # Use a simple alphabet of lowercase characters to [0, 26).
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
