@@ -136,7 +136,7 @@ class T5BackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
         ).batch(2)
 
     def test_predict(self):
-        self.model.compile()
+        self.backbone.compile()
         outputs = self.backbone.predict(self.input_dataset)
         self.assertIn("encoder_sequence_output", outputs)
         self.assertIn("decoder_sequence_output", outputs)

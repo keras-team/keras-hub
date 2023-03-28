@@ -34,34 +34,22 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaPreprocessor")
 class XLMRobertaPreprocessor(Preprocessor):
-    """XLM-RoBERTa preprocessing layer.
+    """An XLM-RoBERTa preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
 
-    - Tokenize any number of input segments using the `tokenizer`.
-    - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
-      `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
-      entire sequence, `"</s></s>"` at the end of each segment, save the last
-      and a `"</s>"` at the end of the entire sequence.
-    - Construct a dictionary with keys `"token_ids"` and `"padding_mask"`,
-      that can be passed directly to a XLM-RoBERTa model.
+    1. Tokenize any number of input segments using the `tokenizer`.
+    2. Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
+      with the appropriate `"<s>"`, `"</s>"` and `"<pad>"` tokens, i.e., adding
+      a single `"<s>"` at the start of the entire sequence, `"</s></s>"` at the
+      end of each segment, save the last and a `"</s>"` at the end of the
+      entire sequence.
+    3. Construct a dictionary with keys `"token_ids"` and `"padding_mask"`,
+      that can be passed directly to an XLM-RoBERTa model.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
     `keras.Model.fit`.
-
-    The call method of this layer accepts three arguments, `x`, `y`, and
-    `sample_weight`. `x` can be a python string or tensor representing a single
-    segment, a list of python strings representing a batch of single segments,
-    or a list of tensors representing multiple segments to be packed together.
-    `y` and `sample_weight` are both optional, can have any format, and will be
-    passed through unaltered.
-
-    Special care should be taken when using `tf.data` to map over an unlabeled
-    tuple of string segments. `tf.data.Dataset.map` will unpack this tuple
-    directly into the call arguments of this layer, rather than forward all
-    argument to `x`. To handle this case, it is recommended to  explicitly call
-    the layer, e.g. `ds.map(lambda seg1, seg2: preprocessor(x=(seg1, seg2)))`.
 
     Args:
         tokenizer: A `keras_nlp.tokenizers.XLMRobertaTokenizer` instance.
@@ -77,76 +65,83 @@ class XLMRobertaPreprocessor(Preprocessor):
                     left-to-right manner and fills up the buckets until we run
                     out of budget. It supports an arbitrary number of segments.
 
+    Call arguments:
+        x: A tensor of single string sequences, or a tuple of multiple
+            tensor sequences to be packed together. Inputs may be batched or
+            unbatched. For single sequences, raw python inputs will be converted
+            to tensors. For multiple sequences, pass tensors directly.
+        y: Any label data. Will be passed through unaltered.
+        sample_weight: Any label weight data. Will be passed through unaltered.
+
     Examples:
     ```python
-    # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.XLMRobertaPreprocessor.from_preset("xlm_roberta_base_multi")
+    preprocessor = keras_nlp.models.XLMRobertaPreprocessor.from_preset(
+        "xlm_roberta_base_multi"
+    )
 
     # Tokenize and pack a single sentence.
-    sentence = tf.constant("The quick brown fox jumped.")
-    preprocessor(sentence)
-    # Same output.
     preprocessor("The quick brown fox jumped.")
 
-    # Tokenize and a batch of single sentences.
-    sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    preprocessor(sentences)
-    # Same output.
-    preprocessor(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
+    # Tokenize a batch of single sentences.
+    preprocessor(["The quick brown fox jumped.", "اسمي اسماعيل"])
 
-    # Tokenize and pack a sentence pair.
-    first_sentence = tf.constant("The quick brown fox jumped.")
-    second_sentence = tf.constant("The fox tripped.")
-    preprocessor((first_sentence, second_sentence))
+    # Preprocess a batch of sentence pairs.
+    # When handling multiple sequences, always convert to tensors first!
+    first = tf.constant(["The quick brown fox jumped.", "اسمي اسماعيل"])
+    second = tf.constant(["The fox tripped.", "الأسد ملك الغابة"])
+    preprocessor((first, second))
 
-    # Map a dataset to preprocess a single sentence.
-    features = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    labels = tf.constant([0, 1])
-    ds = tf.data.Dataset.from_tensor_slices((features, labels))
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map a dataset to preprocess sentence pairs.
-    first_sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    second_sentences = tf.constant(
-        ["The fox tripped.", "Oh look, a whale."]
-    )
-    labels = tf.constant([1, 1])
-    ds = tf.data.Dataset.from_tensor_slices(
-        (
-            (first_sentences, second_sentences), labels
+    # Custom vocabulary.
+    def train_sentencepiece(ds, vocab_size):
+        bytes_io = io.BytesIO()
+        sentencepiece.SentencePieceTrainer.train(
+            sentence_iterator=ds.as_numpy_iterator(),
+            model_writer=bytes_io,
+            vocab_size=vocab_size,
+            model_type="WORD",
+            unk_id=0,
+            bos_id=1,
+            eos_id=2,
         )
+        return bytes_io.getvalue()
+    ds = tf.data.Dataset.from_tensor_slices(
+        ["the quick brown fox", "the earth is round"]
     )
+    proto = train_sentencepiece(ds, vocab_size=10)
+    tokenizer = keras_nlp.models.XLMRobertaTokenizer(proto=proto)
+    preprocessor = keras_nlp.models.XLMRobertaPreprocessor(tokenizer)
+    preprocessor("The quick brown fox jumped.")
+    ```
+
+    Mapping with `tf.data.Dataset`.
+    ```python
+    preprocessor = keras_nlp.models.XLMRobertaPreprocessor.from_preset(
+        "xlm_roberta_base_multi"
+    )
+
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+    label = tf.constant([1, 1])
+
+    # Map labeled single sentences.
+    ds = tf.data.Dataset.from_tensor_slices((first, label))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
-    # Map a dataset to preprocess unlabeled sentence pairs.
-    first_sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    second_sentences = tf.constant(
-        ["The fox tripped.", "Oh look, a whale."]
-    )
-    ds = tf.data.Dataset.from_tensor_slices((first_sentences, second_sentences))
+    # Map unlabeled single sentences.
+    ds = tf.data.Dataset.from_tensor_slices(first)
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map labeled sentence pairs.
+    ds = tf.data.Dataset.from_tensor_slices(((first, second), label))
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map unlabeled sentence pairs.
+    ds = tf.data.Dataset.from_tensor_slices((first, second))
     # Watch out for tf.data's default unpacking of tuples here!
     # Best to invoke the `preprocessor` directly in this case.
     ds = ds.map(
-        lambda s1, s2: preprocessor(x=(s1, s2)),
+        lambda first, second: preprocessor(x=(first, second)),
         num_parallel_calls=tf.data.AUTOTUNE,
-    )
-
-    # Alternatively, you can create a preprocessor from your own vocabulary.
-    # The usage is exactly the same as above.
-    tokenizer = keras_nlp.models.XLMRobertaTokenizer(proto="model.spm")
-    preprocessor = keras_nlp.models.XLMRobertaPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=10,
     )
     ```
     """
