@@ -71,7 +71,7 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
     ```python
     # Load the preprocessor from a preset.
     preprocessor = keras_nlp.models.FNetMaskedLMPreprocessor.from_preset(
-        "f_net_base_en_uncased"
+        "f_net_base_en"
     )
 
     # Tokenize and mask a single sentence.
@@ -90,7 +90,7 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_nlp.models.FNetMaskedLMPreprocessor.from_preset(
-        "bert_base_en_uncased"
+        "f_net_base_en"
     )
 
 
