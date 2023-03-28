@@ -67,7 +67,7 @@ class FNetPreprocessor(Preprocessor):
 
     Examples:
 
-    Directly calling the layer on data.
+    Directly calling the from_preset().
     ```python
     tokenizer = keras_nlp.models.FNetTokenizer(proto="model.spm")
     preprocessor = keras_nlp.models.FNetPreprocessor(
@@ -99,7 +99,7 @@ class FNetPreprocessor(Preprocessor):
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_nlp.models.FNetPreprocessor.from_preset(
-        "bert_base_en_uncased"
+        "f_net_base_en"
     )
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
