@@ -15,11 +15,11 @@ import json
 import os
 
 import numpy as np
-import requests
 import tensorflow as tf
 import transformers
 from absl import app
 from absl import flags
+from tensorflow import keras
 
 import keras_nlp
 from tools.checkpoint_conversion.checkpoint_conversion_utils import (
@@ -49,16 +49,16 @@ def download_files(hf_model_name):
 
     # Config.
     config_path = os.path.join(extract_dir, "config.json")
-    response = requests.get(
-        f"https://huggingface.co/{hf_model_name}/raw/main/config.json"
+    response = keras.utils.get_file(
+        origin=f"https://huggingface.co/{hf_model_name}/raw/main/config.json"
     )
     open(config_path, "wb").write(response.content)
     print(f"`{config_path}`")
 
     # Vocab.
     vocab_path = os.path.join(extract_dir, "vocab.txt")
-    response = requests.get(
-        f"https://huggingface.co/{hf_model_name}/raw/main/vocab.txt"
+    response = keras.utils.get_file(
+        origin=f"https://huggingface.co/{hf_model_name}/raw/main/vocab.txt"
     )
     open(vocab_path, "wb").write(response.content)
     print(f"`{vocab_path}`")

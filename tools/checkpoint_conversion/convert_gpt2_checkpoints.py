@@ -15,12 +15,12 @@ import json
 import os
 
 import numpy as np
-import requests
 import tensorflow as tf
 import transformers
 from absl import app
 from absl import flags
 from checkpoint_conversion_utils import get_md5_checksum
+from tensorflow import keras
 
 # Temporarily directly import gpt2 until we expose it.
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
@@ -47,7 +47,7 @@ flags.DEFINE_string(
 
 def download_model(num_params):
     print("-> Download original weights.")
-    response = requests.get(DOWNLOAD_SCRIPT_URL)
+    response = keras.utils.get_file(origin=DOWNLOAD_SCRIPT_URL)
     open("download_model.py", "wb").write(response.content)
 
     os.system(f"python download_model.py {num_params}")
