@@ -142,16 +142,16 @@ class WhisperBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
             "encoder_features": tf.ones(
                 (
                     8,
-                    self.model.max_encoder_sequence_length,
+                    self.backbone.max_encoder_sequence_length,
                     NUM_MELS,
                 ),
                 dtype="int32",
             ),
             "decoder_token_ids": tf.ones(
-                (8, self.model.max_decoder_sequence_length), dtype="int32"
+                (8, self.backbone.max_decoder_sequence_length), dtype="int32"
             ),
             "decoder_padding_mask": tf.ones(
-                (8, self.model.max_decoder_sequence_length), dtype="int32"
+                (8, self.backbone.max_decoder_sequence_length), dtype="int32"
             ),
         }
 
