@@ -61,12 +61,6 @@ class FNetTokenizer(SentencePieceTokenizer):
 
     # Detokenization.
     tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
-
-    # Custom vocabulary.
-    vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
-    vocab += ["The", "quick", "brown", "fox", "jumped", "."]
-    tokenizer = keras_nlp.models.FNetTokenizer(vocabulary=vocab)
-    tokenizer("The quick brown fox jumped.")
     ```
     """
 
