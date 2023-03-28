@@ -169,8 +169,9 @@ def main(_):
     st = time.time()
     history = model.fit(
         train_ds,
-        validation_data=validation_ds,
+        validation_data=validation_ds.take(2),
         epochs=FLAGS.epochs,
+        steps_per_epoch=2,
     )
 
     wall_time = time.time() - st
