@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" GLUE benchmark script to test model performance.
+"""GLUE benchmark script to test model performance.
 
 To run the script, use this command:
 ```
@@ -54,7 +54,7 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     "preset",
     None,
-    "The model preset(eg. For bert it is 'bert_base_en', 'bert_tiny_en_uncased')",
+    "The model preset, e.g., 'bert_base_en_uncased' for `BertClassifier`",
 )
 flags.DEFINE_float(
     "learning_rate", 0.005, "The learning_rate for the optimizer."
@@ -62,9 +62,9 @@ flags.DEFINE_float(
 flags.DEFINE_string(
     "mixed_precision_policy",
     "mixed_float16",
-    "The global precision policy to use. E.g. 'mixed_float16' or 'float32'.",
+    "The global precision policy to use, e.g., 'mixed_float16' or 'float32'.",
 )
-flags.DEFINE_integer("epochs", 2, "No of Epochs.")
+flags.DEFINE_integer("epochs", 2, "The number of epochs.")
 flags.DEFINE_integer("batch_size", 8, "Batch Size.")
 
 
@@ -72,11 +72,11 @@ FLAGS = flags.FLAGS
 
 
 def load_data():
-    """
-    Load GLUE/MRPC dataset, and convert the dictionary format to (features, label),
-    where features is a tuple of all input sentences.
-    """
+    """Load data.
 
+    Load GLUE/MRPC dataset, and convert the dictionary format to
+    (features, label), where `features` is a tuple of all input sentences.
+    """
     feature_names = ("sentence1", "sentence2")
 
     def split_features(x):
@@ -97,7 +97,6 @@ def load_data():
     validation_ds = validation_ds.map(
         split_features, num_parallel_calls=tf.data.AUTOTUNE
     )
-
     return train_ds, test_ds, validation_ds
 
 
@@ -121,23 +120,25 @@ def load_model(model, preset, num_classes):
 def main(_):
     keras.mixed_precision.set_global_policy(FLAGS.mixed_precision_policy)
 
-    # checking task version (erroring out other testes except "mrpc")
+    # Check task is supported.
+    # TODO(chenmoneygithub): Add support for other glue tasks.
     if FLAGS.task != "mrpc":
         raise ValueError(
-            f"For now this script only supports mrpc, but received {FLAGS.task}"
+            f"For now only mrpc is supported, but received {FLAGS.task}."
         )
 
     logging.info(
-        f"\nMODEL : {FLAGS.model} | PRESET : {FLAGS.preset} | DATASET : glue/mrpc | batch_size : {FLAGS.batch_size} | epochs : {FLAGS.epochs}\n"
+        "Benchmarking configs...\n"
+        "=========================\n"
+        f"MODEL: {FLAGS.model}\n"
+        f"PRESET: {FLAGS.preset}\n"
+        f"TASK: glue/{FLAGS.task}\n"
+        f"BATCH_SIZE: {FLAGS.batch_size}\n"
+        f"EPOCHS: {FLAGS.epochs}\n"
+        "=========================\n"
     )
 
-    # Load the model
-    model = load_model(model=FLAGS.model, preset=FLAGS.preset, num_classes=2)
-    # Add loss and optimizer
-    loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-    metrics = [keras.metrics.SparseCategoricalAccuracy()]
-
-    # Load datasets
+    # Load datasets.
     train_ds, test_ds, validation_ds = load_data()
     train_ds = train_ds.batch(FLAGS.batch_size).prefetch(tf.data.AUTOTUNE)
     test_ds = test_ds.batch(FLAGS.batch_size).prefetch(tf.data.AUTOTUNE)
@@ -145,6 +146,12 @@ def main(_):
         tf.data.AUTOTUNE
     )
 
+    # Load the model.
+    model = load_model(model=FLAGS.model, preset=FLAGS.preset, num_classes=2)
+    # Set loss and metrics.
+    loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    metrics = [keras.metrics.SparseCategoricalAccuracy()]
+    # Configure optimizer.
     lr = tf.keras.optimizers.schedules.PolynomialDecay(
         FLAGS.learning_rate,
         decay_steps=train_ds.cardinality() * FLAGS.epochs,
@@ -156,23 +163,26 @@ def main(_):
     )
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
-    # Start training
+    # Start training.
     logging.info("Starting Training...")
 
     st = time.time()
     history = model.fit(
-        train_ds, validation_data=validation_ds, epochs=FLAGS.epochs
+        train_ds,
+        validation_data=validation_ds,
+        epochs=FLAGS.epochs,
     )
+
     wall_time = time.time() - st
+    validation_accuracy = history.history["val_sparse_categorical_accuracy"][-1]
+    examples_per_second = (
+        FLAGS.epochs * FLAGS.batch_size * (len(train_ds) + len(validation_ds))
+    ) / wall_time
 
     logging.info("Training Finished!")
-    logging.info(f"Wall Time :: {wall_time:.4f} seconds.")
-    logging.info(
-        f"Validation Accuracy :: {history.history['val_sparse_categorical_accuracy'][-1]:.4f}"
-    )
-    logging.info(
-        f"examples_per_second :: {(FLAGS.epochs*FLAGS.batch_size*(len(train_ds)+len(validation_ds)))/wall_time:.4f}"
-    )
+    logging.info(f"Wall Time: {wall_time:.4f} seconds.")
+    logging.info(f"Validation Accuracy: {validation_accuracy:.4f}")
+    logging.info(f"examples_per_second: {examples_per_second:.4f}")
 
 
 if __name__ == "__main__":
