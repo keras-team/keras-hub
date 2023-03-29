@@ -163,7 +163,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
             token_ids = token_ids.to_tensor()
 
         mask_weights = tf.ones_like(mask_positions, self.compute_dtype)
-        # If mask_selection_length is set, covert to raggeds to dense.
+        # If `mask_selection_length` is set, convert to dense.
         if self.mask_selection_length:
             target_shape = tf.cast([-1, self.mask_selection_length], tf.int64)
             mask_positions = mask_positions.to_tensor(shape=target_shape)
