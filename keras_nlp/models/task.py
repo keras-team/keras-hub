@@ -29,10 +29,10 @@ from keras_nlp.utils.python_utils import format_docstring
 class Task(PipelineModel):
     """Base class for Task models."""
 
-    # def __init__(self, *args, **kwargs):
-    #     super().__init__(*args, **kwargs)
-    #     self._backbone = None
-    #     self._preprocessor = None
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._backbone = None
+        self._preprocessor = None
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
         return self.preprocessor(x, y=y, sample_weight=sample_weight)
@@ -178,41 +178,41 @@ class Task(PipelineModel):
                 preset_names='", "'.join(cls.presets),
             )(cls.from_preset.__func__)
 
-    # def summary(
-    #     self,
-    #     line_length=None,
-    #     positions=None,
-    #     print_fn=None,
-    #     **kwargs,
-    # ):
-    #     """Override `model.summary()` to show a preprocessor if set."""
-    #     # Defaults are copied from core Keras; we should try to stay in sync.
-    #     line_length = line_length or 98
-    #     positions = positions or [0.33, 0.55, 0.67, 1.0]
-    #     if positions[-1] <= 1:
-    #         positions = [int(line_length * p) for p in positions]
-    #     if print_fn is None:
-    #         print_fn = print_msg
+    def summary(
+        self,
+        line_length=None,
+        positions=None,
+        print_fn=None,
+        **kwargs,
+    ):
+        """Override `model.summary()` to show a preprocessor if set."""
+        # Defaults are copied from core Keras; we should try to stay in sync.
+        line_length = line_length or 98
+        positions = positions or [0.33, 0.55, 0.67, 1.0]
+        if positions[-1] <= 1:
+            positions = [int(line_length * p) for p in positions]
+        if print_fn is None:
+            print_fn = print_msg
 
-    #     if self.preprocessor:
-    #         column_names = ["Tokenizer (type)", "Vocab #"]
-    #         tokenizer = self.preprocessor.tokenizer
-    #         column_values = [
-    #             f"{tokenizer.name} ({tokenizer.__class__.__name__})",
-    #             f"{tokenizer.vocabulary_size()}",
-    #         ]
+        if self.preprocessor:
+            column_names = ["Tokenizer (type)", "Vocab #"]
+            tokenizer = self.preprocessor.tokenizer
+            column_values = [
+                f"{tokenizer.name} ({tokenizer.__class__.__name__})",
+                f"{tokenizer.vocabulary_size()}",
+            ]
 
-    #         print_fn(f'Preprocessor: "{self.preprocessor.name}"')
-    #         print_fn("_" * line_length)
-    #         print_row(column_names, positions[1:3], print_fn)
-    #         print_fn("=" * line_length)
-    #         print_row(column_values, positions[1:3], print_fn)
-    #         print_fn("_" * line_length)
-    #         print_fn(" " * line_length)
+            print_fn(f'Preprocessor: "{self.preprocessor.name}"')
+            print_fn("_" * line_length)
+            print_row(column_names, positions[1:3], print_fn)
+            print_fn("=" * line_length)
+            print_row(column_values, positions[1:3], print_fn)
+            print_fn("_" * line_length)
+            print_fn(" " * line_length)
 
-    #     super().summary(
-    #         line_length=line_length,
-    #         positions=positions,
-    #         print_fn=print_fn,
-    #         **kwargs,
-    #     )
+        super().summary(
+            line_length=line_length,
+            positions=positions,
+            print_fn=print_fn,
+            **kwargs,
+        )
