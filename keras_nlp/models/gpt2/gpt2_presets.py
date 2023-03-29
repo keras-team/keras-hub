@@ -154,4 +154,58 @@ backbone_presets = {
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_en_news/v1/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
+    "gpt2_base_en_reddit": {
+        "metadata": {
+            "description": (
+                "12-layer GPT-2 model where case is maintained. "
+                "Finetuned on the TFDS reddit_tifu dataset."
+            ),
+            "params": 124439808,
+            "official_name": "GPT-2",
+            "path": "gpt2",
+        },
+        "config": {
+            "vocabulary_size": 50257,
+            "num_layers": 12,
+            "num_heads": 12,
+            "hidden_dim": 768,
+            "intermediate_dim": 3072,
+            "dropout": 0.1,
+            "max_sequence_length": 1024,
+        },
+        "preprocessor_config": {},
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_en_reddit/v1/model.h5",
+        "weights_hash": "7344655a414ff5ba4b54257d8869fcd1",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_en_reddit/v1/vocab.json",
+        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_en_reddit/v1/merges.txt",
+        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+    },
+    "gpt2_base_zh_poetry": {
+        "metadata": {
+            "description": (
+                "12-layer GPT-2 model where case is maintained. "
+                "Finetuned on the 全唐诗 dataset."
+            ),
+            "params": 124439808,
+            "official_name": "GPT-2",
+            "path": "gpt2",
+        },
+        "config": {
+            "vocabulary_size": 50257,
+            "num_layers": 12,
+            "num_heads": 12,
+            "hidden_dim": 768,
+            "intermediate_dim": 3072,
+            "dropout": 0.1,
+            "max_sequence_length": 1024,
+        },
+        "preprocessor_config": {},
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_zh_poetry/v1/model.h5",
+        "weights_hash": "ef68d8940bc108d02e53318bd905925d",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_zh_poetry/v1/vocab.json",
+        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/gpt2_base_zh_poetry/v1/merges.txt",
+        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+    },
 }
