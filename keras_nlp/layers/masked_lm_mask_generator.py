@@ -95,61 +95,27 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
     masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
     ```
 
-    An end-to-end masked language model training using masked language mask
-    generator.
+    Masking a batch that contains special tokens.
     ```python
-    train_data = tf.constant([
-        "The quick brown fox jumped.",
-        "Call me Ishmael.",
-        "The fox tripped.",
-        "Oh look, a whale.",
+    pad_id, cls_id, sep_id, mask_id = 0, 1, 2, 3
+    batch = tf.constant([
+        [cls_id,     4,     5,      6, sep_id,    7,    8, sep_id, pad_id, pad_id],
+        [cls_id,     4,     5, sep_id,      6,    7,    8,      9, sep_id, pad_id],
     ])
-
-    # Create a dummy masked language model.
-    bert_mlm = keras_nlp.models.BertMaskedLM.from_preset(
-        "bert_tiny_en_uncased",
-        preprocessor=None,
-    )
-
-    # Create preprocessor and masked language model generator instances.
-    preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
-        "bert_tiny_en_uncased"
-    )
+   
     masker = keras_nlp.layers.MaskedLMMaskGenerator(
-        vocabulary_size=preprocessor.tokenizer.vocabulary_size(),
-        mask_token_id=preprocessor.tokenizer.mask_token_id,
-        mask_selection_rate=0.2,
-        mask_selection_length=5,
-        unselectable_token_ids=[
-            preprocessor.tokenizer.cls_token_id,
-            preprocessor.tokenizer.sep_token_id,
-            preprocessor.tokenizer.pad_token_id,
+        vocabulary_size = 10,
+        mask_selection_rate = 0.2,
+        mask_selection_length = 5,
+        mask_token_id = mask_id,
+        unselectable_token_ids = [
+            cls_id,
+            sep_id,
+            pad_id,
         ]
     )
 
-    # Preprocess training data.
-    preprocessed = preprocessor(train_data)
-    token_ids, padding_mask, segment_ids = (
-        preprocessed["token_ids"],
-        preprocessed["padding_mask"],
-        preprocessed["segment_ids"],
-    )
-    masked = masker(token_ids)
-    x = {
-        "token_ids": masked["token_ids"],
-        "padding_mask": padding_mask,
-        "segment_ids": segment_ids,
-        "mask_positions": masked["mask_positions"],
-    }
-    y = masked["mask_ids"]
-    sample_weight = masked["mask_weights"]
-
-    # Fit the data
-    bert_mlm.fit(
-        x=x,
-        y=y,
-        sample_weight=sample_weight,
-    )
+    masker(batch)
     ```
     """
 
