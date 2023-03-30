@@ -33,16 +33,16 @@ def roberta_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.RobertBackbone")
 class RobertaBackbone(Backbone):
-    """RoBERTa encoder.
+    """A RoBERTa encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["RoBERTa: A Robustly Optimized BERT Pretraining Approach"](https://arxiv.org/abs/1907.11692).
     It includes the embedding lookups and transformer layers, but does not
-    include the masked language modeling head used during pretraining.
+    include the masked language model head used during pretraining.
 
     The default constructor gives a fully customizable, randomly initialized
     RoBERTa encoder with any number of layers, heads, and embedding
-    dimensions. To load preset architectures and weights, use the `from_preset`
+    dimensions. To load preset architectures and weights, use the `from_preset()`
     constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
@@ -61,9 +61,10 @@ class RobertaBackbone(Backbone):
         dropout: float. Dropout probability for the Transformer encoder.
         max_sequence_length: int. The maximum sequence length this encoder can
             consume. The sequence length of the input must be less than
-            `max_sequence_length`.
+            `max_sequence_length` default value. This determines the variable
+            shape for positional embeddings.
 
-    Example usage:
+    Examples:
     ```python
     input_data = {
         "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
@@ -73,18 +74,18 @@ class RobertaBackbone(Backbone):
 
     # Pretrained RoBERTa encoder
     model = keras_nlp.models.RobertaBackbone.from_preset("roberta_base_en")
-    output = model(input_data)
+    model(input_data)
 
     # Randomly initialized RoBERTa model with custom config
     model = keras_nlp.models.RobertaBackbone(
         vocabulary_size=50265,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        intermediate_dim=512,
+        max_sequence_length=128,
     )
-    output = model(input_data)
+    model(input_data)
     ```
     """
 
