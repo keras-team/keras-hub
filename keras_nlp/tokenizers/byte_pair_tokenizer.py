@@ -20,8 +20,8 @@ but is TF graph compatible.
 """
 
 import json
-import re
 import os
+import re
 from typing import Iterable
 from typing import List
 
@@ -88,13 +88,7 @@ def remove_strings_from_inputs(tensor, string_to_remove):
     )
     return result
 
-# def mask_special_tokens(inputs, special_tokens):
-#     alts = [" IGuessIamAValidWord" + "d" * i for i in range(len(special_tokens))]
-#     for token, alt in zip(special_tokens, alts):
-#         escaped_token = re.escape(token)
-#         inputs = tf.regex_replace(inputs, escaped_token, alt)
-#     return inputs, alts
-        
+
 def split_strings_for_bpe(inputs, special_tokens=None):
     # We need to recreate the exact behavior of token presplitting in the
     # original gpt2 tokenizer which uses a lookahead. As re2 does not
@@ -107,17 +101,29 @@ def split_strings_for_bpe(inputs, special_tokens=None):
     inputs = tf.strings.regex_replace(
         inputs, rf"(\s{SPECIAL_WHITESPACES})$", r"\1६"
     )
+    alts = [
+        " IGuessIamAValidWord" + "d" * i for i in range(len(special_tokens))
+    ]
     if special_tokens:
-        for token in special_tokens:
+        # Alternate special tokens so that it won't be further split.
+        for token, alt in zip(special_tokens, alts):
             escaped_token = re.escape(token)
             inputs = tf_text.regex_split(inputs, escaped_token, escaped_token)
-
+            inputs = tf.strings.regex_replace(inputs, escaped_token, alt)
     raw_tokens = tf_text.regex_split(inputs, SPLIT_PATTERN_1, SPLIT_PATTERN_1)
     # Second pass splits out the last whilespace char or "६".
     raw_tokens = tf_text.regex_split(
         raw_tokens, SPLIT_PATTERN_2, SPLIT_PATTERN_2
     )
-    if raw_tokens.shape.rank > 2:
+
+    if special_tokens:
+        # Alternate special tokens back.
+        for token, alt in zip(special_tokens, alts):
+            escaped_alt = re.escape(alt)
+            raw_tokens = tf.strings.regex_replace(
+                raw_tokens, escaped_alt, token
+            )
+    while raw_tokens.shape.rank > 2:
         raw_tokens = raw_tokens.merge_dims(1, 2)
     return remove_strings_from_inputs(raw_tokens, "६")
 
@@ -304,6 +310,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         )
 
         self.cache = BytePairTokenizerCache()
+        # Put special tokens into cache, so it won't be further split and
+        # merged.
+        self.cache.insert(special_tokens, special_tokens)
 
         # Create mapping between string tokens to int ids, and vice versa.
         byte_pairs = [x[0] for x in self.vocabulary.items()]
