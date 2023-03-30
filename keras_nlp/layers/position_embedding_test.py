@@ -309,7 +309,9 @@ class PositionEmbeddingLayerTest(tf.test.TestCase, parameterized.TestCase):
         model(data)
 
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
         loaded_model = keras.models.load_model(path)
 
         model_output = model.predict(data)
