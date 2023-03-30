@@ -80,13 +80,13 @@ class RobertaPreprocessor(Preprocessor):
     )
 
     # Tokenize and pack a single sentence.
-    preprocessor("The quick b  rown fox jumped.")
+    preprocessor("The quick brown fox jumped.")
 
-    # Tokenize a batch of single sentences .
+    # Tokenize a batch of single sentences.
     preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
 
     # Preprocess a batch of sentence pairs.
-    # When handling multiple sequences, always convert to tensors first !
+    # When handling multiple sequences, always convert to tensors first!
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
     preprocessor((first, second))

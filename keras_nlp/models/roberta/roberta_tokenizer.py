@@ -43,11 +43,10 @@ class RobertaTokenizer(BytePairTokenizer):
     `tf.Tensor` with static shape `[None]`.
 
     Args:
-        vocabulary: A dictionary or a string filename path. If passing a
-            filename, the file should be a json file. both json and dictionary
-            should map a single word piece token string to an integer id.
-        merges: A list of merge rules or a string filename path, If passing a
-            filename, the file should have one merge rule per line. Every merge
+        vocabulary: A dictionary mapping tokens to integer ids, or file path
+            to a json file containing the token to id mapping.
+        merges: A list of merge rules or a string file path, If passing a file
+            path. the file should have one merge rule per line. Every merge
             rule contains merge entities separated by a space.
 
     Examples:
