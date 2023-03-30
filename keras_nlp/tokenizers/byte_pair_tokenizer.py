@@ -101,11 +101,13 @@ def split_strings_for_bpe(inputs, special_tokens=None):
     inputs = tf.strings.regex_replace(
         inputs, rf"(\s{SPECIAL_WHITESPACES})$", r"\1६"
     )
-    alts = [
-        " IGuessIamAValidWord" + "d" * i for i in range(len(special_tokens))
-    ]
     if special_tokens:
+        def build_alt(i):
+            return " " + "I" * i + "IGuessIamAValidWord" + "d" * i
         # Alternate special tokens so that it won't be further split.
+        alts = [
+            build_alt(i) for i in range(len(special_tokens))
+        ]
         for token, alt in zip(special_tokens, alts):
             escaped_token = re.escape(token)
             inputs = tf_text.regex_split(inputs, escaped_token, escaped_token)
@@ -115,7 +117,6 @@ def split_strings_for_bpe(inputs, special_tokens=None):
     raw_tokens = tf_text.regex_split(
         raw_tokens, SPLIT_PATTERN_2, SPLIT_PATTERN_2
     )
-
     if special_tokens:
         # Alternate special tokens back.
         for token, alt in zip(special_tokens, alts):
@@ -310,9 +311,10 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         )
 
         self.cache = BytePairTokenizerCache()
-        # Put special tokens into cache, so it won't be further split and
-        # merged.
-        self.cache.insert(special_tokens, special_tokens)
+        if special_tokens:
+            # Put special tokens into cache, so it won't be further split and
+            # merged.
+            self.cache.insert(special_tokens, special_tokens)
 
         # Create mapping between string tokens to int ids, and vice versa.
         byte_pairs = [x[0] for x in self.vocabulary.items()]
