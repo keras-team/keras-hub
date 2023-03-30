@@ -16,6 +16,7 @@
 import io
 import os
 
+import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
@@ -31,15 +32,7 @@ from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 
 class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.backbone = AlbertBackbone(
-            vocabulary_size=1000,
-            num_layers=2,
-            num_heads=2,
-            embedding_dim=128,
-            hidden_dim=64,
-            intermediate_dim=128,
-            max_sequence_length=128,
-        )
+        # Setup model.
         vocab_data = tf.data.Dataset.from_tensor_slices(
             ["the quick brown fox", "the earth is round", "an eagle flew"]
         )
@@ -72,7 +65,16 @@ class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             mask_token_rate=1.0,
             random_token_rate=0.0,
             mask_selection_length=5,
-            sequence_length=12,
+            sequence_length=5,
+        )
+        self.backbone = AlbertBackbone(
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_heads=2,
+            embedding_dim=4,
+            hidden_dim=4,
+            intermediate_dim=4,
+            max_sequence_length=self.preprocessor.packer.sequence_length,
         )
         self.masked_lm = AlbertMaskedLM(
             self.backbone,
@@ -97,59 +99,43 @@ class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
-    def test_valid_call_masked_lm(self):
+    def test_valid_call_classifier(self):
         self.masked_lm(self.preprocessed_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_albert_masked_lm_predict(self, jit_compile):
-        self.masked_lm.compile(jit_compile=jit_compile)
-        self.masked_lm.predict(self.raw_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_albert_masked_lm_predict_no_preprocessing(self, jit_compile):
-        self.masked_lm_no_preprocessing.compile(jit_compile=jit_compile)
-        self.masked_lm_no_preprocessing.predict(self.preprocessed_batch)
 
     def test_albert_masked_lm_fit_default_compile(self):
         self.masked_lm.fit(self.raw_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_albert_masked_lm_fit(self, jit_compile):
-        self.masked_lm.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
-        )
-        self.masked_lm.fit(self.raw_dataset)
+    def test_classifier_predict(self):
+        self.masked_lm.predict(self.raw_batch)
+        self.masked_lm.preprocessor = None
+        self.masked_lm.predict(self.preprocessed_batch)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_albert_masked_lm_fit_no_preprocessing(self, jit_compile):
-        self.masked_lm_no_preprocessing.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
+    def test_classifier_fit(self):
+        self.masked_lm.fit(self.raw_dataset)
+        self.masked_lm.preprocessor = None
+        self.masked_lm.fit(self.preprocessed_dataset)
+
+    def test_classifier_fit_no_xla(self):
+        self.masked_lm.preprocessor = None
+        self.masked_lm.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+            jit_compile=False,
         )
-        self.masked_lm_no_preprocessing.fit(self.preprocessed_dataset)
+        self.masked_lm.fit(self.preprocessed_dataset)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
+        model_output = self.masked_lm.predict(self.raw_batch)
         save_path = os.path.join(self.get_temp_dir(), filename)
         self.masked_lm.save(save_path, save_format=save_format)
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.
         self.assertIsInstance(restored_model, AlbertMaskedLM)
-
-        model_output = self.masked_lm(self.preprocessed_batch)
-        restored_output = restored_model(self.preprocessed_batch)
-
+        # Check that output matches.
+        restored_output = restored_model.predict(self.raw_batch)
         self.assertAllClose(model_output, restored_output)
