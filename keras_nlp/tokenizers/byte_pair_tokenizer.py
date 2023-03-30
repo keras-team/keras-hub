@@ -20,6 +20,7 @@ but is TF graph compatible.
 """
 
 import json
+import re
 import os
 from typing import Iterable
 from typing import List
@@ -87,8 +88,14 @@ def remove_strings_from_inputs(tensor, string_to_remove):
     )
     return result
 
-
-def split_strings_for_bpe(inputs):
+# def mask_special_tokens(inputs, special_tokens):
+#     alts = [" IGuessIamAValidWord" + "d" * i for i in range(len(special_tokens))]
+#     for token, alt in zip(special_tokens, alts):
+#         escaped_token = re.escape(token)
+#         inputs = tf.regex_replace(inputs, escaped_token, alt)
+#     return inputs, alts
+        
+def split_strings_for_bpe(inputs, special_tokens=None):
     # We need to recreate the exact behavior of token presplitting in the
     # original gpt2 tokenizer which uses a lookahead. As re2 does not
     # support lookahead match, we are using an alternative insert a special
@@ -100,6 +107,11 @@ def split_strings_for_bpe(inputs):
     inputs = tf.strings.regex_replace(
         inputs, rf"(\s{SPECIAL_WHITESPACES})$", r"\1६"
     )
+    if special_tokens:
+        for token in special_tokens:
+            escaped_token = re.escape(token)
+            inputs = tf_text.regex_split(inputs, escaped_token, escaped_token)
+
     raw_tokens = tf_text.regex_split(inputs, SPLIT_PATTERN_1, SPLIT_PATTERN_1)
     # Second pass splits out the last whilespace char or "६".
     raw_tokens = tf_text.regex_split(
@@ -239,6 +251,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         merges,
         sequence_length=None,
         add_prefix_space=False,
+        special_tokens=None,
         **kwargs,
     ) -> None:
         assert_tf_text_installed(self.__class__.__name__)
@@ -278,6 +291,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             )
         self.sequence_length = sequence_length
         self.add_prefix_space = add_prefix_space
+        self.special_tokens = special_tokens
 
         # Create byte <=> unicode mapping. This is useful for handling
         # whitespace tokens.
@@ -468,7 +482,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
 
-        raw_tokens = split_strings_for_bpe(inputs)
+        raw_tokens = split_strings_for_bpe(inputs, self.special_tokens)
         token_row_splits = raw_tokens.row_splits
         flat_tokens = raw_tokens.flat_values
 

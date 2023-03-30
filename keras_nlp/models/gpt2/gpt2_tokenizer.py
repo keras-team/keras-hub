@@ -97,6 +97,7 @@ class GPT2Tokenizer(BytePairTokenizer):
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
+            special_tokens=["<|endoftext|>"],
             **kwargs,
         )
 
