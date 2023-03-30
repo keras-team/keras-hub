@@ -99,10 +99,10 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
     ```python
     pad_id, cls_id, sep_id, mask_id = 0, 1, 2, 3
     batch = tf.constant([
-        [cls_id,     4,     5,      6, sep_id,    7,    8, sep_id, pad_id, pad_id],
-        [cls_id,     4,     5, sep_id,      6,    7,    8,      9, sep_id, pad_id],
+        [cls_id,   4,    5,      6, sep_id,    7,    8, sep_id, pad_id, pad_id],
+        [cls_id,   4,    5, sep_id,      6,    7,    8,      9, sep_id, pad_id],
     ])
-   
+
     masker = keras_nlp.layers.MaskedLMMaskGenerator(
         vocabulary_size = 10,
         mask_selection_rate = 0.2,
