@@ -79,6 +79,8 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
                 actual mask, 0 means it is a pad.
 
     Examples:
+
+    Basic usage.
     ```python
     masker = keras_nlp.layers.MaskedLMMaskGenerator(
         vocabulary_size=10,
@@ -86,12 +88,13 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         mask_token_id=0,
         mask_selection_length=5
     )
-    # Basic usage.
+    # Dense input.
     masker(tf.constant([1, 2, 3, 4, 5]))
 
-    # Ragged Input.
+    # Ragged input.
     masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
     ```
+
     An end-to-end masked language model training using masked language mask
     generator.
     ```python
@@ -102,68 +105,48 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         "Oh look, a whale.",
     ])
 
-    sequence_length = 20
-    mask_selection_length = 5
-    embedding_size = 32
+    # Create a dummy masked language model.
+    bert_mlm = keras_nlp.models.BertMaskedLM.from_preset(
+        "bert_tiny_en_uncased",
+        preprocessor=None,
+    )
 
-    # create tokenizer and masked language model generator instances
-    tokenizer = keras_nlp.models.RobertaTokenizer.from_preset(
-        "roberta_base_en"
+    # Create preprocessor and masked language model generator instances.
+    preprocessor = keras_nlp.models.BertPreprocessor.from_preset(
+        "bert_tiny_en_uncased"
     )
     masker = keras_nlp.layers.MaskedLMMaskGenerator(
-        vocabulary_size=tokenizer.vocabulary_size(),
-        mask_token_id=tokenizer.mask_token_id,
+        vocabulary_size=preprocessor.tokenizer.vocabulary_size(),
+        mask_token_id=preprocessor.tokenizer.mask_token_id,
         mask_selection_rate=0.2,
-        mask_selection_length=mask_selection_length
+        mask_selection_length=5,
+        unselectable_token_ids=[
+            preprocessor.tokenizer.cls_token_id,
+            preprocessor.tokenizer.sep_token_id,
+            preprocessor.tokenizer.pad_token_id,
+        ]
     )
 
-    # Create a dummy language model with masked language model head
-    tokens_ids = keras.layers.Input(
-        shape = (sequence_length),
-        name = 'tokens_ids'
+    # Preprocess training data.
+    preprocessed = preprocessor(train_data)
+    token_ids, padding_mask, segment_ids = (
+        preprocessed["token_ids"],
+        preprocessed["padding_mask"],
+        preprocessed["segment_ids"],
     )
-    mask_positions = keras.layers.Input(
-        shape = (mask_selection_length),
-        dtype = "int64",
-        name = 'mask_positions'
-    )
-    embeddings = keras.layers.Embedding(
-        input_dim = tokenizer.vocabulary_size(),
-        output_dim = embedding_size
-    )(tokens_ids)
-    dummy_LM = keras.layers.Dense(
-        embedding_size
-    )(embeddings)
-    MLM_head = keras_nlp.layers.MaskedLMHead(
-        vocabulary_size = tokenizer.vocabulary_size(),
-    )(dummy_LM, mask_positions)
-    dummy_MLM = keras.Model(
-        inputs=[tokens_ids, mask_positions],
-        outputs=MLM_head
-    )
-
-    dummy_MLM.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        optimizer=keras.optimizers.Adam(5e-5),
-        weighted_metrics=keras.metrics.SparseCategoricalAccuracy(),
-    )
-
-    # Preprocess training data
-    tokenized = tokenizer(train_data)
-    # Add padding to tokens
-    tokenized = tokenized.to_tensor(
-        shape = tf.cast([-1, sequence_length], tf.int64),
-        default_value=1
-    )
-    mask = masker(tokenized)
-    x = mask["token_ids"]
-    y = mask["mask_ids"]
-    sample_weight = mask["mask_weights"]
-    mask_positions = mask["mask_positions"]
+    masked = masker(token_ids)
+    x = {
+        "token_ids": masked["token_ids"],
+        "padding_mask": padding_mask,
+        "segment_ids": segment_ids,
+        "mask_positions": masked["mask_positions"],
+    }
+    y = masked["mask_ids"]
+    sample_weight = masked["mask_weights"]
 
     # Fit the data
-    dummy_MLM.fit(
-        x=[x, mask_positions],
+    bert_mlm.fit(
+        x=x,
         y=y,
         sample_weight=sample_weight,
     )
