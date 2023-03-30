@@ -29,12 +29,13 @@ from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 
 
 class BertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         # Setup model.
-        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
-        self.vocab += ["the", "quick", "brown", "fox", "."]
-        self.preprocessor = BertMaskedLMPreprocessor(
-            BertTokenizer(vocabulary=self.vocab),
+        cls.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        cls.vocab += ["the", "quick", "brown", "fox", "."]
+        cls.preprocessor = BertMaskedLMPreprocessor(
+            BertTokenizer(vocabulary=cls.vocab),
             # Simplify out testing by masking every available token.
             mask_selection_rate=1.0,
             mask_token_rate=1.0,
@@ -42,31 +43,31 @@ class BertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             mask_selection_length=2,
             sequence_length=5,
         )
-        self.backbone = BertBackbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+        cls.backbone = BertBackbone(
+            vocabulary_size=cls.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
             hidden_dim=2,
             intermediate_dim=4,
-            max_sequence_length=self.preprocessor.packer.sequence_length,
+            max_sequence_length=cls.preprocessor.packer.sequence_length,
         )
-        self.masked_lm = BertMaskedLM(
-            self.backbone,
-            preprocessor=self.preprocessor,
+        cls.masked_lm = BertMaskedLM(
+            cls.backbone,
+            preprocessor=cls.preprocessor,
         )
 
         # Setup data.
-        self.raw_batch = tf.constant(
+        cls.raw_batch = tf.constant(
             [
                 "the quick brown fox.",
                 "the slow brown fox.",
             ]
         )
-        self.preprocessed_batch = self.preprocessor(self.raw_batch)
-        self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            self.raw_batch
+        cls.preprocessed_batch = cls.preprocessor(cls.raw_batch)
+        cls.raw_dataset = tf.data.Dataset.from_tensor_slices(
+            cls.raw_batch
         ).batch(2)
-        self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
+        cls.preprocessed_dataset = cls.raw_dataset.map(cls.preprocessor)
 
     def test_valid_call_classifier(self):
         self.masked_lm(self.preprocessed_batch[0])
@@ -75,11 +76,13 @@ class BertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         self.masked_lm.predict(self.raw_batch)
         self.masked_lm.preprocessor = None
         self.masked_lm.predict(self.preprocessed_batch[0])
+        self.masked_lm.preprocessor = self.preprocessor
 
     def test_classifier_fit(self):
         self.masked_lm.fit(self.raw_dataset)
         self.masked_lm.preprocessor = None
         self.masked_lm.fit(self.preprocessed_dataset)
+        self.masked_lm.preprocessor = self.preprocessor
 
     def test_classifier_fit_no_xla(self):
         self.masked_lm.preprocessor = None
@@ -88,6 +91,7 @@ class BertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             jit_compile=False,
         )
         self.masked_lm.fit(self.preprocessed_dataset)
+        self.masked_lm.preprocessor = self.preprocessor
 
     def test_serialization(self):
         config = keras.utils.serialize_keras_object(self.masked_lm)

@@ -27,40 +27,41 @@ from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 
 
 class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         # Setup model.
-        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
-        self.vocab += ["the", "quick", "brown", "fox", "."]
-        self.preprocessor = BertPreprocessor(
-            BertTokenizer(vocabulary=self.vocab),
+        cls.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        cls.vocab += ["the", "quick", "brown", "fox", "."]
+        cls.preprocessor = BertPreprocessor(
+            BertTokenizer(vocabulary=cls.vocab),
             sequence_length=5,
         )
-        self.backbone = BertBackbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+        cls.backbone = BertBackbone(
+            vocabulary_size=cls.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
             hidden_dim=2,
             intermediate_dim=4,
-            max_sequence_length=self.preprocessor.packer.sequence_length,
+            max_sequence_length=cls.preprocessor.packer.sequence_length,
         )
-        self.classifier = BertClassifier(
-            self.backbone,
+        cls.classifier = BertClassifier(
+            cls.backbone,
             4,
-            preprocessor=self.preprocessor,
+            preprocessor=cls.preprocessor,
         )
 
         # Setup data.
-        self.raw_batch = tf.constant(
+        cls.raw_batch = tf.constant(
             [
                 "the quick brown fox.",
                 "the slow brown fox.",
             ]
         )
-        self.preprocessed_batch = self.preprocessor(self.raw_batch)
-        self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, tf.ones((2,)))
+        cls.preprocessed_batch = cls.preprocessor(cls.raw_batch)
+        cls.raw_dataset = tf.data.Dataset.from_tensor_slices(
+            (cls.raw_batch, tf.ones((2,)))
         ).batch(2)
-        self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
+        cls.preprocessed_dataset = cls.raw_dataset.map(cls.preprocessor)
 
     def test_valid_call_classifier(self):
         self.classifier(self.preprocessed_batch)
@@ -69,11 +70,13 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.classifier.predict(self.raw_batch)
         self.classifier.preprocessor = None
         self.classifier.predict(self.preprocessed_batch)
+        self.classifier.preprocessor = self.preprocessor
 
     def test_classifier_fit(self):
         self.classifier.fit(self.raw_dataset)
         self.classifier.preprocessor = None
         self.classifier.fit(self.preprocessed_dataset)
+        self.classifier.preprocessor = self.preprocessor
 
     def test_classifier_fit_no_xla(self):
         self.classifier.preprocessor = None
@@ -82,6 +85,7 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
             jit_compile=False,
         )
         self.classifier.fit(self.preprocessed_dataset)
+        self.classifier.preprocessor = self.preprocessor
 
     def test_serialization(self):
         config = keras.utils.serialize_keras_object(self.classifier)

@@ -24,8 +24,9 @@ from keras_nlp.models.bert.bert_backbone import BertBackbone
 
 
 class BertBackboneTest(tf.test.TestCase, parameterized.TestCase):
-    def setUp(self):
-        self.backbone = BertBackbone(
+    @classmethod
+    def setUpClass(cls):
+        cls.backbone = BertBackbone(
             vocabulary_size=10,
             num_layers=2,
             num_heads=2,
@@ -33,13 +34,13 @@ class BertBackboneTest(tf.test.TestCase, parameterized.TestCase):
             intermediate_dim=4,
             max_sequence_length=5,
         )
-        self.input_batch = {
+        cls.input_batch = {
             "token_ids": tf.ones((2, 5), dtype="int32"),
             "segment_ids": tf.ones((2, 5), dtype="int32"),
             "padding_mask": tf.ones((2, 5), dtype="int32"),
         }
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(
-            self.input_batch
+        cls.input_dataset = tf.data.Dataset.from_tensor_slices(
+            cls.input_batch
         ).batch(2)
 
     def test_valid_call_bert(self):
