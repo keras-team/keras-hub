@@ -52,7 +52,7 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         input_data = " airplane at airport"
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [1, 2, 3, 1, 4])
-        
+
     def test_tokenize_end_token(self):
         input_data = " airplane at airport<|endoftext|>"
         output = self.tokenizer(input_data)
@@ -79,7 +79,6 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
-    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant([" airplane at airport"])
 

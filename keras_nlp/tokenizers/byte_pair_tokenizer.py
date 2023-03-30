@@ -102,12 +102,12 @@ def split_strings_for_bpe(inputs, special_tokens=None):
         inputs, rf"(\s{SPECIAL_WHITESPACES})$", r"\1६"
     )
     if special_tokens:
+
         def build_alt(i):
             return " " + "I" * i + "IGuessIamAValidWord" + "d" * i
+
         # Alternate special tokens so that it won't be further split.
-        alts = [
-            build_alt(i) for i in range(len(special_tokens))
-        ]
+        alts = [build_alt(i) for i in range(len(special_tokens))]
         for token, alt in zip(special_tokens, alts):
             escaped_token = re.escape(token)
             inputs = tf_text.regex_split(inputs, escaped_token, escaped_token)

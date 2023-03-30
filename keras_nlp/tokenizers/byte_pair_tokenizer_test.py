@@ -64,7 +64,7 @@ class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             ]
         )
         self.assertAllEqual(call_output, expected)
-        
+
     def test_tokenize_with_special_tokens(self):
         vocab = {"sp": 0, "s": 1, "p": 2}
         merges = ["s p"]
@@ -75,7 +75,7 @@ class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         )
         output = tokenizer("sp")
         self.assertAllEqual(output, [1, 2])
-        
+
         # If not setting special tokens, "sp" is one token.
         tokenizer = BytePairTokenizer(
             vocabulary=vocab,
