@@ -20,11 +20,6 @@ import tensorflow as tf
 from tensorflow import keras
 
 import keras_nlp
-from keras_nlp.utils import beam_search
-from keras_nlp.utils import greedy_search
-from keras_nlp.utils import random_search
-from keras_nlp.utils import top_k_search
-from keras_nlp.utils import top_p_search
 
 SEED = 42
 
@@ -34,14 +29,8 @@ DATASET_ARGS = {
     "batch_size": 2,
 }
 
-TEXT_GEN_ARGS = {
-    "max_length": 64,
-    "end_token_id": 2,
-    "pad_token_id": 0,
-}
-
 MODEL_ARGS = {
-    "max_length": 300,
+    "max_length": 64,
     "embed_dim": 768,
     "num_layers": 8,
     "num_heads": 8,
@@ -50,55 +39,27 @@ MODEL_ARGS = {
 
 TEST_RUNS = [
     {
-        "decoding_fn": greedy_search,
+        "sampler": "greedy",
         "execution_methods": ["xla", "graph"],
-        "args": TEXT_GEN_ARGS,
     },
     {
-        "decoding_fn": beam_search,
+        "sampler": "beam",
         "execution_methods": ["xla", "graph"],
-        "args": {
-            "num_beams": 2,
-            "from_logits": True,
-            **TEXT_GEN_ARGS,
-        },
     },
     {
-        "decoding_fn": random_search,
+        "sampler": "top_k",
         "execution_methods": ["xla", "graph"],
-        "args": {
-            "seed": SEED,
-            "from_logits": True,
-            **TEXT_GEN_ARGS,
-        },
     },
     {
-        "decoding_fn": top_k_search,
+        "sampler": "top_p",
         "execution_methods": ["xla", "graph"],
-        "args": {
-            "k": 5,
-            "seed": SEED,
-            "from_logits": True,
-            **TEXT_GEN_ARGS,
-        },
-    },
-    {
-        "decoding_fn": top_p_search,
-        "execution_methods": ["xla", "graph"],
-        "args": {
-            "p": 0.9,
-            "seed": SEED,
-            "from_logits": True,
-            **TEXT_GEN_ARGS,
-        },
     },
 ]
 
 
-def generate_random_ds(vocab_size, num_samples, batch_size, seed):
-    prompt_length = 2
+def generate_random_ds(vocab_size, num_samples, batch_size, length, seed):
     inputs = tf.random.uniform(
-        shape=(num_samples, prompt_length),
+        shape=(num_samples, length),
         minval=0,
         maxval=vocab_size - 1,
         dtype=tf.dtypes.int32,
@@ -134,18 +95,16 @@ def build_model(
 
 
 def generate_text(
-    decoding_fn,
-    token_probability_fn,
+    sampler,
+    next,
     prompt,
-    text_gen_args,
     jit_compile,
 ):
     class TestModel(tf.keras.Model):
         def call(self, inputs):
-            generated = decoding_fn(
-                token_probability_fn=token_probability_fn,
+            generated = keras_nlp.samplers.get(sampler)(
+                next=next,
                 prompt=inputs,
-                **text_gen_args,
             )
             return generated
 
@@ -165,6 +124,7 @@ def main():
         vocab_size=DATASET_ARGS["vocab_size"],
         num_samples=DATASET_ARGS["num_samples"],
         batch_size=DATASET_ARGS["batch_size"],
+        length=MODEL_ARGS["max_length"],
         seed=SEED,
     )
 
@@ -177,20 +137,19 @@ def main():
         ff_dim=MODEL_ARGS["ff_dim"],
     )
 
-    def token_logits_fn(inputs):
-        output = model(inputs)
-        return output[:, -1, :]
+    def next(prompt, state, index):
+        output = model(prompt)
+        return output[:, index, :], state
 
     print("*************************************\n")
 
     with open(csv_path, "w") as res_handler:
         res_handler.write("decoding_strategy,execution_method,time\n")
         for test_run in TEST_RUNS:
-            decoding_fn = test_run["decoding_fn"]
-            decoding_strategy = decoding_fn.__name__
+            sampler = test_run["sampler"]
 
             for execution_method in test_run["execution_methods"]:
-                print(f"Running {decoding_strategy} in {execution_method} mode")
+                print(f"Running {sampler} in {execution_method} mode")
 
                 if execution_method == "graph":
                     jit_compile = False
@@ -198,15 +157,14 @@ def main():
                     jit_compile = True
 
                 time_taken = generate_text(
-                    decoding_fn=decoding_fn,
-                    token_probability_fn=token_logits_fn,
+                    sampler=sampler,
+                    next=next,
                     prompt=ds,
-                    text_gen_args=test_run["args"],
                     jit_compile=jit_compile,
                 )
                 print("Time taken: ", time_taken)
                 res_handler.write(
-                    f"{decoding_strategy},{execution_method}," f"{time_taken}\n"
+                    f"{sampler},{execution_method}," f"{time_taken}\n"
                 )
                 print()
             print("*************************************")
