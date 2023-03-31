@@ -48,7 +48,6 @@ class WhisperAudioFeatureExtractorTest(
 
         # Verify shape.
         self.assertEqual(outputs.shape, (1, 5, NUM_MELS))
-
         # Verify output.
         expected = [1.1656, 1.0151, -0.8343, -0.8343, -0.8343]
         self.assertAllClose(outputs[0, :, 0], expected, atol=0.01, rtol=0.01)
@@ -62,6 +61,11 @@ class WhisperAudioFeatureExtractorTest(
 
         # Verify shape.
         self.assertEqual(outputs.shape, (2, 5, NUM_MELS))
+        # Verify output.
+        expected_1 = [1.1656, 1.0151, -0.8343, -0.8343, -0.8343]
+        self.assertAllClose(outputs[0, :, 0], expected_1, atol=0.01, rtol=0.01)
+        expected_2 = [1.2299, 1.0970, 0.3997, -0.7700, -0.7700]
+        self.assertAllClose(outputs[1, :, 0], expected_2, atol=0.01, rtol=0.01)
 
     def test_serialization(self):
         config = keras.utils.serialize_keras_object(

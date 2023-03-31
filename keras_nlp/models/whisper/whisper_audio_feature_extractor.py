@@ -193,8 +193,19 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         # Calculate the log mel spectrogram.
         log_spec = tf_log10(mel_spec)
         # Dynamic range compression.
+        log_spec_shape = log_spec.shape.as_list()
         max_value_minus_eight = tf.math.subtract(
-            tf.math.reduce_max(log_spec), tf.cast(8, dtype=log_spec.dtype)
+            tf.math.reduce_max(log_spec, axis=[1, 2]),
+            tf.cast(8, dtype=log_spec.dtype),
+        )
+        max_value_minus_eight = tf.expand_dims(max_value_minus_eight, axis=1)
+        max_value_minus_eight = tf.repeat(
+            max_value_minus_eight,
+            repeats=log_spec_shape[1] * log_spec_shape[2],
+            axis=1,
+        )
+        max_value_minus_eight = tf.reshape(
+            max_value_minus_eight, shape=log_spec_shape
         )
         log_spec = tf.maximum(log_spec, max_value_minus_eight)
         # Normalization.
