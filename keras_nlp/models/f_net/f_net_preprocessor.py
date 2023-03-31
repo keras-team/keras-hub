@@ -95,7 +95,7 @@ class FNetPreprocessor(Preprocessor):
     preprocessor = keras_nlp.models.FNetPreprocessor(tokenizer)
     preprocessor("The quick brown fox jumped.")
     ```
-    
+
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_nlp.models.FNetPreprocessor.from_preset(
