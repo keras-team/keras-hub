@@ -27,19 +27,18 @@ from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaTokenizer")
 class XLMRobertaTokenizer(SentencePieceTokenizer):
-    """XLM-RoBERTa tokenizer layer based on SentencePiece.
+    """An XLM-RoBERTa tokenizer using SentencePiece subword segmentation.
 
     This tokenizer class will tokenize raw strings into integer sequences and
     is based on `keras_nlp.tokenizers.SentencePieceTokenizer`. Unlike the
     underlying tokenizer, it will check for all special tokens needed by
     XLM-RoBERTa models and provides a `from_preset()` method to automatically
-    download a matching vocabulary for a XLM-RoBERTa preset.
+    download a matching vocabulary for an XLM-RoBERTa preset.
 
-    The original fairseq implementation of XLM-RoBERTa modifies the indices of
-    the SentencePiece tokenizer output. To preserve compatibility, we make the
-    same changes, i.e., `"<s>"`, `"<pad>"`, `"</s>"` and `"<unk>"` are mapped to
-    0, 1, 2, 3, respectively, and non-special token indices are shifted right
-    by one.
+    Note: If you are providing your own custom SentencePiece model, the original
+    fairseq implementation of XLM-RoBERTa re-maps some token indices from the
+    underlying sentencepiece output. To preserve compatibility, we do the same
+    re-mapping here.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -48,14 +47,27 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     `tf.Tensor` with static shape `[None]`.
 
     Args:
-        proto: Either a `string` path to a SentencePiece proto file, or a
+        proto: Either a `string` path to a SentencePiece proto file or a
             `bytes` object with a serialized SentencePiece proto. See the
             [SentencePiece repository](https://github.com/google/sentencepiece)
             for more details on the format.
 
     Examples:
-
     ```python
+    tokenizer = keras_nlp.models.XLMRobertaTokenizer.from_preset(
+        "xlm_roberta_base_multi",
+    )
+
+    # Unbatched inputs.
+    tokenizer("the quick brown fox")
+
+    # Batched inputs.
+    tokenizer(["the quick brown fox", "الأرض كروية"])
+
+    # Detokenization.
+    tokenizer.detokenize(tokenizer("the quick brown fox"))
+
+    # Custom vocabulary
     def train_sentencepiece(ds, vocab_size):
         bytes_io = io.BytesIO()
         sentencepiece.SentencePieceTrainer.train(
@@ -72,18 +84,8 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     ds = tf.data.Dataset.from_tensor_slices(
         ["the quick brown fox", "the earth is round"]
     )
-
     proto = train_sentencepiece(ds, vocab_size=10)
     tokenizer = keras_nlp.models.XLMRobertaTokenizer(proto=proto)
-
-    # Batched inputs.
-    tokenizer(["the quick brown fox", "the earth is round"])
-
-    # Unbatched inputs.
-    tokenizer("the quick brown fox")
-
-    # Detokenization.
-    tokenizer.detokenize(tf.constant([[0, 4, 9, 5, 7, 2]]))
     ```
     """
 
