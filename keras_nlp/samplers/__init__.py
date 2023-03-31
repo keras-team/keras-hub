@@ -16,6 +16,7 @@ from tensorflow import keras
 
 from keras_nlp.samplers.beam_sampler import BeamSampler
 from keras_nlp.samplers.greedy_sampler import GreedySampler
+from keras_nlp.samplers.random_sampler import RandomSampler
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.top_k_sampler import TopKSampler
 from keras_nlp.samplers.top_p_sampler import TopPSampler
@@ -32,6 +33,7 @@ def deserialize(config, custom_objects=None):
         "greedy": GreedySampler,
         "top_k": TopKSampler,
         "top_p": TopPSampler,
+        "random": RandomSampler,
     }
     return keras.utils.deserialize_keras_object(
         config,
