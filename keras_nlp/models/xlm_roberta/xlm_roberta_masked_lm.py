@@ -26,6 +26,7 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import (
     XLMRobertaMaskedLMPreprocessor,
 )
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
+from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -62,21 +63,30 @@ class XLMRobertaMaskedLM(Task):
     # Create a dataset with raw string features. Labels are inferred.
     features = ["The quick brown fox jumped.", "I forgot my homework."]
 
-    # Create a XLMRobertaMaskedLM with a pretrained backbone and further train
+    # Pretrained language model
     # on an MLM task.
     masked_lm = keras_nlp.models.XLMRobertaMaskedLM.from_preset(
         "xlm_roberta_base_multi",
     )
-    masked_lm.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
     masked_lm.fit(x=features, batch_size=2)
     ```
 
-    Preprocessed inputs and custom backbone.
+    # Re-compile (e.g., with a new learning rate).
+    masked_lm.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        optimizer=keras.optimizers.Adam(5e-5),
+        jit_compile=True,
+    )
+    # Access backbone programatically (e.g., to change `trainable`).
+    masked_lm.backbone.trainable = False
+    # Fit again.
+    masked_lm.fit(x=features, batch_size=2)
+    ```
+
+    Preprocessed integer data.
     ```python
     # Create a preprocessed dataset where 0 is the mask token.
-    preprocessed_features = {
+    features = {
         "token_ids": tf.constant(
             [[1, 2, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
         ),
@@ -88,24 +98,12 @@ class XLMRobertaMaskedLM(Task):
     # Labels are the original masked values.
     labels = [[3, 5]] * 2
 
-    # Randomly initialize a XLM-RoBERTa encoder
-    backbone = keras_nlp.models.XLMRobertaBackbone(
-        vocabulary_size=50265,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
-    )
-    # Create a XLM-RoBERTa masked_lm and fit the data.
-    masked_lm = keras_nlp.models.XLMRobertaMaskedLM(
-        backbone,
+    masked_lm = keras_nlp.models.XLMRobertaMaskedLM.from_preset(
+        "xlm_roberta_base_multi",
         preprocessor=None,
     )
-    masked_lm.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    masked_lm.fit(x=preprocessed_features, y=labels, batch_size=2)
+
+    masked_lm.fit(x=features, y=labels, batch_size=2)
     ```
     """
 
@@ -140,6 +138,13 @@ class XLMRobertaMaskedLM(Task):
         # All references to `self` below this line
         self.backbone = backbone
         self.preprocessor = preprocessor
+
+        self.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            optimizer=keras.optimizers.Adam(5e-5),
+            weighted_metrics=keras.metrics.SparseCategoricalAccuracy(),
+            jit_compile=is_xla_compatible(self),
+        )
 
     @classproperty
     def backbone_cls(cls):
