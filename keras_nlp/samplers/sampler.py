@@ -45,33 +45,25 @@ call_args_docstring = """
 @keras_nlp_export("keras_nlp.samplers.Sampler")
 class Sampler:
     """Base sampler class.
-
     Call Args:
         {{call_args}}
-
     This base class can be extended to implement different auto-regressive
     sampling methods. Subclasses can either:
-
     - Override the `get_next_token()` method, which computes the next token
       based on a probability distribution over all possible vocab entries.
     - Override `__call__`, if the sampling method need additional state beyond
       the next tokens probability distribution to sample a sequence.
-
     Please check available subclass samplers for examples.
-
     Examples:
-
     ```python
     # Use a simple alphabet of lowercase characters to [0, 26).
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
-
     def next(prompt, state, index):
         # return a uniform distribution over our alphabet.
         logits = tf.ones((batch_size, vocab_size))
         return logits, state
-
     output = keras_nlp.samplers.GreedySampler()(
         next=next,
         prompt=tf.fill((batch_size, length,), char_lookup['z']),
@@ -81,10 +73,6 @@ class Sampler:
     # >>> "zzzzzaaaaaaa"
     ```
     """
-
-    def __init__(self, temperature=1.0):
-        super().__init__()
-        self.temperature = temperature
 
     def __call__(
         self,
@@ -138,11 +126,9 @@ class Sampler:
 
     def get_next_token(self, probabilities):
         """Get the next token.
-
         Args:
             probabilities: a Tensor, the probability distribution for next
                 token over all vocab tokens.
-
         Get the next token based on given probability distribution over tokens.
         Subclasses must implement this method.
         """
@@ -153,6 +139,4 @@ class Sampler:
         return cls(**config)
 
     def get_config(self):
-        config = super().get_config()
-        config.update({"temperature": self.temperature})
-        return config
+        return {}
