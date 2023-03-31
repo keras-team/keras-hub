@@ -21,10 +21,10 @@ but is TF graph compatible.
 
 import json
 import os
-import re
 from typing import Iterable
 from typing import List
 
+import regex as re
 import tensorflow as tf
 from tensorflow import keras
 
@@ -52,9 +52,18 @@ SPLIT_PATTERN_1 = (
 SPLIT_PATTERN_1 = SPLIT_PATTERN_1.replace(
     "{special_spaces}", SPECIAL_WHITESPACES
 )
-
-
 SPLIT_PATTERN_2 = rf"""[\s६{SPECIAL_WHITESPACES}]$"""
+
+
+def create_alts_for_special_tokens(special_tokens):
+    alts = []
+    prefix = "Ĵ"
+    # Trim out splitters.
+    replace_pattern = r"'|\s+|[^\p{L}\p{N}]+"
+    for token in special_tokens:
+        token = re.sub(replace_pattern, "", token)
+        alts.append(prefix + token)
+    return alts
 
 
 def bytes_to_unicode():
@@ -102,12 +111,7 @@ def split_strings_for_bpe(inputs, special_tokens=None):
         inputs, rf"(\s{SPECIAL_WHITESPACES})$", r"\1६"
     )
     if special_tokens:
-
-        def build_alt(i):
-            return " " + "I" * i + "IGuessIamAValidWord" + "d" * i
-
-        # Alternate special tokens so that it won't be further split.
-        alts = [build_alt(i) for i in range(len(special_tokens))]
+        alts = create_alts_for_special_tokens(special_tokens)
         for token, alt in zip(special_tokens, alts):
             escaped_token = re.escape(token)
             inputs = tf_text.regex_split(inputs, escaped_token, escaped_token)
