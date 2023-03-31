@@ -29,7 +29,7 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
         self.length = 13
         self.hidden_dim = 3
         self.vocab_size = len(self.int_lookup)
-        self.init_hidden_states = tf.ones(
+        self.hidden_states = tf.ones(
             [
                 self.batch_size,
                 self.length,
@@ -37,12 +37,12 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
             ]
         )
 
-        def next(prompt, state, index):
+        def next(prompt, cache, index):
             batch_size = tf.shape(prompt)[0]
-            # Return a distribution favoring the next char in state.
-            logits = tf.one_hot(state[:, index], self.vocab_size) * 1e9
+            # Return a distribution favoring the next char in cache.
+            logits = tf.one_hot(cache[:, index], self.vocab_size) * 1e9
             hidden_states = tf.ones([batch_size, 1, self.hidden_dim])
-            return logits, state, hidden_states
+            return logits, hidden_states, cache
 
         self.next = next
         self.sampler = ContrastiveSampler(k=5, alpha=0.2)
@@ -51,7 +51,7 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
         return ["".join([self.int_lookup[i] for i in s]) for s in x.numpy()]
 
     def test_stateless_call(self):
-        def next(prompt, state, index):
+        def next(prompt, cache, index):
             # Return a distribution favoring the first token in the vocab.
             batch_size = tf.shape(prompt)[0]
             logits = tf.one_hot(0, self.vocab_size) * 1e9
@@ -60,59 +60,59 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
                 [batch_size, -1],
             )
             hidden_states = tf.ones([batch_size, 1, self.hidden_dim])
-            return logits, state, hidden_states
+            return logits, hidden_states, cache
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
             next=next,
             prompt=prompt,
             index=5,
-            init_hidden_states=self.init_hidden_states,
+            hidden_states=self.hidden_states,
         )
         self.assertEqual(self.join_as_string(output), ["zzzzzaaaaaaaa"])
 
     def test_stateful_call(self):
-        state_chars = list("zsequentiallyy")
-        state = tf.constant([[self.char_lookup[c] for c in state_chars]])
+        cache_chars = list("zsequentiallyy")
+        cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
             next=self.next,
             prompt=prompt,
-            state=state,
+            cache=cache,
             index=1,
-            init_hidden_states=self.init_hidden_states,
+            hidden_states=self.hidden_states,
         )
         self.assertEqual(self.join_as_string(output[:, 1:]), ["sequentially"])
 
     def test_early_stopping(self):
-        state_chars = list("zsequentiallyy")
-        state = tf.constant([[self.char_lookup[c] for c in state_chars]])
+        cache_chars = list("zsequentiallyy")
+        cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
             next=self.next,
             prompt=prompt,
-            state=state,
+            cache=cache,
             end_token_id=self.char_lookup["t"],
             index=1,
-            init_hidden_states=self.init_hidden_states,
+            hidden_states=self.hidden_states,
         )
         self.assertEqual(self.join_as_string(output[:, 1:]), ["sequentzzzzz"])
 
     def test_outputs_in_top_k(self):
-        def next(prompt, state, index):
+        def next(prompt, cache, index):
             batch_size = tf.shape(prompt)[0]
             # Return a distribution where each id is progressively less likely.
             logits = tf.range(self.vocab_size, 0, -1, dtype="float32")
             logits = tf.repeat(logits[tf.newaxis, :], batch_size, axis=0)
             hidden_states = tf.ones([batch_size, 1, self.hidden_dim])
-            return logits, state, hidden_states
+            return logits, hidden_states, cache
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
             next=next,
             prompt=prompt,
             index=1,
-            init_hidden_states=self.init_hidden_states,
+            hidden_states=self.hidden_states,
         )
         output_ids = set(output[0, 1:].numpy())
         self.assertContainsSubset(output_ids, range(5))
@@ -121,19 +121,19 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_compilation(self, jit_compile):
-        state_chars = list("zsequentiallyy")
-        state = tf.constant([[self.char_lookup[c] for c in state_chars]])
+        cache_chars = list("zsequentiallyy")
+        cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
 
         @tf.function(jit_compile=jit_compile)
-        def generate(prompt, state):
+        def generate(prompt, cache):
             return self.sampler(
                 self.next,
                 prompt=prompt,
-                state=state,
+                cache=cache,
                 index=1,
-                init_hidden_states=self.init_hidden_states,
+                hidden_states=self.hidden_states,
             )
 
-        output = generate(prompt, state)
+        output = generate(prompt, cache)
         self.assertEqual(self.join_as_string(output[:, 1:]), ["sequentially"])

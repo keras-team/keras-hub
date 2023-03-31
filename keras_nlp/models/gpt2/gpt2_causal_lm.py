@@ -229,9 +229,9 @@ class GPT2CausalLM(Task):
                 whole sequence.
 
         Returns:
-            A (logits, hidden_states, cache) tuple. Where `logits` is the 
-            language model logits for the input token_ids, `hidden_states` is 
-            the hidden state of the input (the layer before embedding matrix 
+            A (logits, hidden_states, cache) tuple. Where `logits` is the
+            language model logits for the input token_ids, `hidden_states` is
+            the hidden state of the input (the layer before embedding matrix
             mapping), and `cache` is the decoding cache.
         """
         token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
