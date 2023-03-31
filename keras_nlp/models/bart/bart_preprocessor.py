@@ -34,7 +34,7 @@ class BartPreprocessor(Preprocessor):
     This preprocessing layer will do three things:
 
      1. Tokenize both encoder inputs and decoder inputs using the `tokenizer`.
-        Both inputs can contain any number of segments.
+        Both inputs can contain only one segment.
      2. Add the appropriate special tokens - `"<s>"`, `"</s>"` and `"<pad>"`.
      3. Construct a dictionary with keys `"encoder_token_ids"`,
         `"encoder_padding_mask"`, `"decoder_token_ids"`, `"decoder_padding_mask"`
@@ -56,12 +56,10 @@ class BartPreprocessor(Preprocessor):
                     out of budget. It supports an arbitrary number of segments.
 
     Call arguments:
-        x: A dictionary with `encoder_inputs` and `decoder_inputs` as its keys.
-            Each value in the dictionary can be a tensor of single string
-            sequences, or a tuple of multiple tensor sequences to be packed
-            together. Inputs may be batched or unbatched. For single sequences,
-            raw python inputs will be converted to tensors. For multiple
-            sequences, pass tensors directly.
+        x: A dictionary with `encoder_text` and `decoder_text` as its keys.
+            Each value in the dictionary should be a tensor of single string
+            sequences. Inputs may be batched or unbatched. Raw python inputs
+            will be converted to tensors.
         y: Any label data. Will be passed through unaltered.
         sample_weight: Any label weight data. Will be passed through unaltered.
 
@@ -71,14 +69,14 @@ class BartPreprocessor(Preprocessor):
     ```python
     preprocessor = keras_nlp.models.BartPreprocessor.from_preset("bart_base_en")
 
-    # Tokenize and pack unbatched inputs.
+    # Preprocess unbatched inputs.
     inputs = {
         "encoder_text": "The fox was sleeping.",
         "decoder_text": "The fox was awake."
     }
     preprocessor(inputs)
 
-    # Tokenize and pack batched inputs.
+    # Preprocess batched inputs.
     inputs = {
         "encoder_text": ["The fox was sleeping.", "The lion was quiet."],
         "decoder_text": ["The fox was awake.", "The lion was roaring."]

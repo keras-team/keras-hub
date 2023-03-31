@@ -51,12 +51,10 @@ class BartSeq2SeqPreprocessor(BartPreprocessor):
                     out of budget. It supports an arbitrary number of segments.
 
     Call arguments:
-        x: A dictionary with `encoder_inputs` and `decoder_inputs` as its keys.
-            Each value in the dictionary can be a tensor of single string
-            sequences, or a tuple of multiple tensor sequences to be packed
-            together. Inputs may be batched or unbatched. For single sequences,
-            raw python inputs will be converted to tensors. For multiple
-            sequences, pass tensors directly.
+        x: A dictionary with `encoder_text` and `decoder_text` as its keys.
+            Each value in the dictionary should be a tensor of single string
+            sequences. Inputs may be batched or unbatched. Raw python inputs
+            will be converted to tensors.
         y: Any label data. Any passed value will be ignored since this is
             calculated internally by shifting the decoder input sequence one
             step to the left.
@@ -70,17 +68,17 @@ class BartSeq2SeqPreprocessor(BartPreprocessor):
     ```python
     preprocessor = keras_nlp.models.BartPreprocessor.from_preset("bart_base_en")
 
-    # Tokenize and pack unbatched inputs.
+    # Preprocess unbatched inputs.
     inputs = {
-        "encoder_inputs": "The fox was sleeping.",
-        "decoder_inputs": "The fox was awake."
+        "encoder_text": "The fox was sleeping.",
+        "decoder_text": "The fox was awake."
     }
     preprocessor(inputs)
 
-    # Tokenize and pack batched inputs.
+    # Preprocess batched inputs.
     inputs = {
-        "encoder_inputs": ["The fox was sleeping.", "The lion was quiet."],
-        "decoder_inputs": ["The fox was awake.", "The lion was roaring."]
+        "encoder_text": ["The fox was sleeping.", "The lion was quiet."],
+        "decoder_text": ["The fox was awake.", "The lion was roaring."]
     }
     preprocessor(inputs)
 
@@ -106,8 +104,8 @@ class BartSeq2SeqPreprocessor(BartPreprocessor):
         decoder_sequence_length=10,
     )
     inputs = {
-        "encoder_inputs": "The fox was sleeping.",
-        "decoder_inputs": "The fox was awake."
+        "encoder_text": "The fox was sleeping.",
+        "decoder_text": "The fox was awake."
     }
     preprocessor(inputs)
     ```
@@ -118,10 +116,10 @@ class BartSeq2SeqPreprocessor(BartPreprocessor):
 
     # Map single sentences.
     features = {
-        "encoder_inputs": tf.constant(
+        "encoder_text": tf.constant(
             ["The fox was sleeping.", "The lion was quiet."]
         ),
-        "decoder_inputs": tf.constant(
+        "decoder_text": tf.constant(
             ["The fox was awake.", "The lion was roaring."]
         )
     }
