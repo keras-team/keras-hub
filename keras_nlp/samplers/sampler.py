@@ -153,4 +153,6 @@ class Sampler:
         return cls(**config)
 
     def get_config(self):
-        return {"temperature": self.temperature}
+        config = super().get_config()
+        config.update({"temperature": self.temperature})
+        return config
