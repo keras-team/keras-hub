@@ -86,7 +86,7 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
     preprocessor((first, second))
     ```
-    
+
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_nlp.models.FNetMaskedLMPreprocessor.from_preset(
