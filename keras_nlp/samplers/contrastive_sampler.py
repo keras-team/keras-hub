@@ -51,10 +51,10 @@ class ContrastiveSampler(Sampler):
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
-    def next(prompt, state, index):
+    def next(prompt, cache, index):
         # A uniform distribution over our alphabet.
         logits = tf.ones((batch_size, vocab_size))
-        return logits, state
+        return logits, None, cache
 
     output = keras_nlp.samplers.ContrastiveSampler()(
         next=next,
@@ -81,14 +81,13 @@ class ContrastiveSampler(Sampler):
         self,
         next,
         prompt,
-        state=None,
+        cache=None,
         index=0,
         mask=None,
         end_token_id=None,
-        init_hidden_states=None,
+        hidden_states=None,
     ):
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
-        hidden_states = init_hidden_states
         # Make sure max length and start index are the same dtype.
         index = tf.cast(index, max_length.dtype)
 
@@ -110,11 +109,11 @@ class ContrastiveSampler(Sampler):
 
         mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
         # Compute initial logits.
-        logits, state, _ = next(prompt, state, index)
+        logits, _, cache = next(prompt, cache, index)
         # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
-        state = () if state is None else state
+        cache = () if cache is None else cache
 
-        def cond(prompt, state, index, logits, hidden_states):
+        def cond(prompt, cache, index, logits, hidden_states):
             if end_token_id is None:
                 return True
             # Stop if all sequences have produced a *new* end_token_id.
@@ -122,7 +121,7 @@ class ContrastiveSampler(Sampler):
             prompt_done = tf.reduce_any(end_tokens, axis=-1)
             return not tf.reduce_all(prompt_done)
 
-        def body(prompt, state, index, logits, hidden_states):
+        def body(prompt, cache, index, logits, hidden_states):
             # Compute the softmax distribution for the next token.
             probabilities = keras.activations.softmax(logits)
 
@@ -131,7 +130,7 @@ class ContrastiveSampler(Sampler):
             prompt_beams = create_beams(prompt)
             mask_beams = create_beams(mask)
             hidden_states_beams = create_beams(hidden_states)
-            state_beams = tf.nest.map_structure(create_beams, state)
+            cache_beams = tf.nest.map_structure(create_beams, cache)
 
             # Get top-k candidate tokens and their probabilities.
             top_k_probabilities, top_k_indices = tf.math.top_k(
@@ -151,8 +150,8 @@ class ContrastiveSampler(Sampler):
             )
 
             # Compute the logits and hidden states for top-k candidate tokens.
-            next_logits, state_beams, next_hidden_states_beams = next(
-                prompt_beams, state_beams, index + 1
+            next_logits, next_hidden_states_beams, cache_beams = next(
+                prompt_beams, cache_beams, index + 1
             )
 
             # Compute the max similarity score for top-k candidate tokens
@@ -181,7 +180,7 @@ class ContrastiveSampler(Sampler):
             unflat_next_hidden_states = unflatten_beams(
                 next_hidden_states_beams
             )
-            unflat_state = tf.nest.map_structure(unflatten_beams, state_beams)
+            unflat_cache = tf.nest.map_structure(unflatten_beams, cache_beams)
             win_token_indices = tf.math.argmax(unflat_score, axis=1)
 
             def gather_win_token(beams):
@@ -189,21 +188,21 @@ class ContrastiveSampler(Sampler):
 
             prompt = gather_win_token(unflat_prompt)
             # We avoid recomputing forward pass for each token by updating the
-            # state/hidden_states using the output, and pass the logits to
+            # cache/hidden_states using the output, and pass the logits to
             # next iteration step.
             logits = gather_win_token(unflat_next_logits)
             next_hidden_states = gather_win_token(unflat_next_hidden_states)
-            state = tf.nest.map_structure(gather_win_token, unflat_state)
+            cache = tf.nest.map_structure(gather_win_token, unflat_cache)
 
             hidden_states = dynamic_update_slice(
                 hidden_states, next_hidden_states, [0, index, 0]
             )
-            return (prompt, state, index + 1, logits, hidden_states)
+            return (prompt, cache, index + 1, logits, hidden_states)
 
         prompt, _, _, _, _ = tf.while_loop(
             cond=cond,
             body=body,
-            loop_vars=(prompt, state, index, logits, hidden_states),
+            loop_vars=(prompt, cache, index, logits, hidden_states),
             maximum_iterations=(max_length - index),
         )
         return prompt

@@ -50,10 +50,10 @@ class BeamSampler(Sampler):
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
-    def next(prompt, state, index):
+    def next(prompt, cache, index):
         # A uniform distribution over our alphabet.
         logits = tf.ones((batch_size, vocab_size))
-        return logits, state
+        return logits, cache
 
     output = keras_nlp.samplers.BeamSampler()(
         next=next,
@@ -104,11 +104,11 @@ class BeamSampler(Sampler):
         self,
         next,
         prompt,
-        state=None,
+        cache=None,
         index=0,
         mask=None,
         end_token_id=None,
-        init_hidden_states=None,
+        hidden_states=None,
     ):
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         # Make sure max length and start index are the same dtype.
@@ -130,16 +130,16 @@ class BeamSampler(Sampler):
 
         mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
         # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
-        state = () if state is None else state
+        cache = () if cache is None else cache
         # Add extra sequences for each beam.
         prompt, mask = create_beams(prompt), create_beams(mask)
-        state = tf.nest.map_structure(create_beams, state)
+        cache = tf.nest.map_structure(create_beams, cache)
         # Setup the initial beam log-likelihoods.
         # On the first loop, make sure only the original beam is considered.
         log_probs = tf.constant([[0.0] + [-1e9] * (self.num_beams - 1)])
         log_probs = flatten_beams(tf.repeat(log_probs, batch_size, axis=0))
 
-        def cond(prompt, state, index, log_probs):
+        def cond(prompt, cache, index, log_probs):
             if end_token_id is None:
                 return True
             # Stop if all sequences have produced a *new* end_token_id.
@@ -147,9 +147,9 @@ class BeamSampler(Sampler):
             prompt_done = tf.reduce_any(end_tokens, axis=-1)
             return not tf.reduce_all(prompt_done)
 
-        def body(prompt, state, index, log_probs):
+        def body(prompt, cache, index, log_probs):
             # Compute the softmax distribution for the next token.
-            logits, state = next(prompt, state, index)
+            logits, _, cache = next(prompt, cache, index)
             vocab_size = tf.shape(logits)[-1]
             probs = keras.activations.softmax(logits)
 
@@ -177,7 +177,7 @@ class BeamSampler(Sampler):
                 return flatten_beams(x)
 
             prompt = gather_beams(prompt)
-            state = tf.nest.map_structure(gather_beams, state)
+            cache = tf.nest.map_structure(gather_beams, cache)
 
             # Update each beam with the next token.
             next_token = tf.cast(next_token, prompt.dtype)
@@ -187,12 +187,12 @@ class BeamSampler(Sampler):
             next_token = next_token[:, tf.newaxis]
             prompt = dynamic_update_slice(prompt, next_token, [0, index])
             # Return the iteration of the loop state.
-            return (prompt, state, index + 1, log_probs)
+            return (prompt, cache, index + 1, log_probs)
 
         prompt, _, _, log_probs = tf.while_loop(
             cond=cond,
             body=body,
-            loop_vars=(prompt, state, index, log_probs),
+            loop_vars=(prompt, cache, index, log_probs),
             maximum_iterations=(max_length - index),
         )
 
