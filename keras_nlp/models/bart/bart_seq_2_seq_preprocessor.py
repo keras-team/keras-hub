@@ -128,6 +128,40 @@ class BartSeq2SeqPreprocessor(BartPreprocessor):
     ```
     """
 
+    def __init__(
+        self,
+        tokenizer,
+        encoder_sequence_length,
+        decoder_sequence_length,
+        truncate="round_robin",
+        **kwargs
+    ):
+        # Since we truncate the last token from `decoder_token_ids`, we need to
+        # forcefully set the `decoder_sequence_length` to one greater than the
+        # value passed.
+        super().__init__(
+            tokenizer=tokenizer,
+            encoder_sequence_length=encoder_sequence_length,
+            decoder_sequence_length=decoder_sequence_length + 1,
+            truncate=truncate,
+            **kwargs
+        )
+
+        # Maintain a private copy of `decoder_sequence_length` for config
+        # purposes.
+        self._decoder_sequence_length = decoder_sequence_length
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "encoder_sequence_length": self.encoder_packer.sequence_length,
+                "decoder_sequence_length": self._decoder_sequence_length,
+                "truncate": self.encoder_packer.truncate,
+            }
+        )
+        return config
+
     def call(self, x, y=None, sample_weight=None):
         if y is not None or sample_weight is not None:
             logging.warning(
@@ -136,11 +170,6 @@ class BartSeq2SeqPreprocessor(BartPreprocessor):
                 "values have been passed for `y` or `sample_weight` or both. "
                 "These values will be ignored."
             )
-
-        # Since we truncate the last token from `decoder_token_ids`, we need to
-        # forcefully set the `decoder_sequence_length` to one greater than the
-        # value passed.
-        self.decoder_sequence_length += 1
 
         x = super().call(x)
         decoder_token_ids = x.pop("decoder_token_ids")
