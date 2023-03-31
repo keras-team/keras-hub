@@ -35,8 +35,7 @@ class BartPreprocessor(Preprocessor):
 
      1. Tokenize both encoder inputs and decoder inputs using the `tokenizer`.
         Both inputs can contain any number of segments.
-     2. Pack the inputs together using `keras_nlp.layers.MultiSegmentPacker`
-        with the appropriate special tokens - `"<s>"`, `"</s>"` and `"<pad>"`.
+     2. Add the appropriate special tokens - `"<s>"`, `"</s>"` and `"<pad>"`.
      3. Construct a dictionary with keys `"encoder_token_ids"`,
         `"encoder_padding_mask"`, `"decoder_token_ids"`, `"decoder_padding_mask"`
         that can be passed directly to a BART model.
@@ -72,30 +71,17 @@ class BartPreprocessor(Preprocessor):
     ```python
     preprocessor = keras_nlp.models.BartPreprocessor.from_preset("bart_base_en")
 
-    # Tokenize and pack a single sentence.
+    # Tokenize and pack unbatched inputs.
     inputs = {
-        "encoder_inputs": "The fox was sleeping.",
-        "decoder_inputs": "The fox was awake."
+        "encoder_text": "The fox was sleeping.",
+        "decoder_text": "The fox was awake."
     }
     preprocessor(inputs)
 
-    # Tokenize a batch of single sentences.
+    # Tokenize and pack batched inputs.
     inputs = {
-        "encoder_inputs": ["The fox was sleeping.", "The lion was quiet."],
-        "decoder_inputs": ["The fox was awake.", "The lion was roaring."]
-    }
-    preprocessor(inputs)
-
-    # Tokenize and pack a sentence pair.
-    inputs = {
-        "encoder_inputs": (
-            tf.constant("The fox was sleeping."),
-            tf.constant("The lion was quiet.")
-        ),
-        "decoder_inputs": (
-            tf.constant("The fox was awake."),
-            tf.constant("The lion was roaring.")
-        )
+        "encoder_text": ["The fox was sleeping.", "The lion was quiet."],
+        "decoder_text": ["The fox was awake.", "The lion was roaring."]
     }
     preprocessor(inputs)
 
@@ -121,8 +107,8 @@ class BartPreprocessor(Preprocessor):
         decoder_sequence_length=10,
     )
     inputs = {
-        "encoder_inputs": "The fox was sleeping.",
-        "decoder_inputs": "The fox was awake."
+        "encoder_text": "The fox was sleeping.",
+        "decoder_text": "The fox was awake."
     }
     preprocessor(inputs)
     ```
@@ -133,10 +119,10 @@ class BartPreprocessor(Preprocessor):
 
     # Map labeled single sentences.
     features = {
-        "encoder_inputs": tf.constant(
+        "encoder_text": tf.constant(
             ["The fox was sleeping.", "The lion was quiet."]
         ),
-        "decoder_inputs": tf.constant(
+        "decoder_text": tf.constant(
             ["The fox was awake.", "The lion was silent."]
         )
     }
@@ -146,59 +132,13 @@ class BartPreprocessor(Preprocessor):
 
     # Map unlabeled single sentences.
     features = {
-        "encoder_inputs": tf.constant(
+        "encoder_text": tf.constant(
             ["The fox was sleeping.", "The lion was quiet."]
         ),
-        "decoder_inputs": tf.constant(
+        "decoder_text": tf.constant(
             ["The fox was awake.", "The lion was roaring."]
         )
     }
-    ds = tf.data.Dataset.from_tensor_slices(features)
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map labeled sentence pairs.
-    features = {
-        "encoder_inputs": (
-            tf.constant(
-                ["The fox was sleeping.", "The lion was quiet."]
-            ),
-            tf.constant(
-                ["It wanted to get up.", "It wanted to roar."]
-            ),
-        ),
-        "decoder_inputs": (
-            tf.constant(
-                ["The fox was awake.", "The lion was roaring."]
-            ),
-            tf.constant(
-                ["It wanted to sleep.", "It wanted to shout."]
-            ),
-        ),
-    }
-    labels = tf.constant(["True", "False"])
-    ds = tf.data.Dataset.from_tensor_slices((features, labels))
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map unlabeled sentence pairs.
-    features = {
-        "encoder_inputs": (
-            tf.constant(
-                ["The fox was sleeping.", "The lion was quiet."]
-            ),
-            tf.constant(
-                ["It wanted to get up.", "It wanted to roar."]
-            ),
-        ),
-        "decoder_inputs": (
-            tf.constant(
-                ["The fox was awake.", "The lion was roaring."]
-            ),
-            tf.constant(
-                ["It wanted to sleep.", "It wanted to shout."]
-            ),
-        ),
-    }
-    labels = tf.constant(["True", "False"])
     ds = tf.data.Dataset.from_tensor_slices(features)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     ```
@@ -244,26 +184,30 @@ class BartPreprocessor(Preprocessor):
     def call(self, x, y=None, sample_weight=None):
         if not (
             isinstance(x, dict)
-            and ["encoder_inputs", "decoder_inputs"] == list(x.keys())
+            and ["encoder_text", "decoder_text"] == list(x.keys())
         ):
             raise ValueError(
-                '`x` must be a dictionary, containing the keys `"encoder_inputs"`'
-                f' and `"decoder_inputs"`. Received x={x}.'
+                '`x` must be a dictionary, containing the keys `"encoder_text"`'
+                f' and `"decoder_text"`. Received x={x}.'
             )
 
-        encoder_inputs = x["encoder_inputs"]
-        decoder_inputs = x["decoder_inputs"]
+        encoder_text = x["encoder_text"]
+        decoder_text = x["decoder_text"]
 
-        encoder_inputs = convert_inputs_to_list_of_tensor_segments(
-            encoder_inputs
-        )
-        encoder_inputs = [self.tokenizer(segment) for segment in encoder_inputs]
+        encoder_text = convert_inputs_to_list_of_tensor_segments(encoder_text)
+        decoder_text = convert_inputs_to_list_of_tensor_segments(decoder_text)
+
+        if len(encoder_text) > 1 or len(decoder_text) > 1:
+            raise ValueError(
+                '`BARTPreprocessor` requires both `"encoder_text"` and '
+                f'`"decoder_text"` to contain only one segment, but received '
+                f"{len(encoder_text)} and {len(decoder_text)}, respectively."
+            )
+
+        encoder_inputs = [self.tokenizer(segment) for segment in encoder_text]
         encoder_token_ids, _ = self.encoder_packer(encoder_inputs)
 
-        decoder_inputs = convert_inputs_to_list_of_tensor_segments(
-            decoder_inputs
-        )
-        decoder_inputs = [self.tokenizer(segment) for segment in decoder_inputs]
+        decoder_inputs = [self.tokenizer(segment) for segment in decoder_text]
         decoder_token_ids, _ = self.decoder_packer(decoder_inputs)
 
         x = {

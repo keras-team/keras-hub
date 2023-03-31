@@ -70,30 +70,17 @@ class BartSeq2SeqPreprocessor(BartPreprocessor):
     ```python
     preprocessor = keras_nlp.models.BartPreprocessor.from_preset("bart_base_en")
 
-    # Tokenize and pack a single sentence.
+    # Tokenize and pack unbatched inputs.
     inputs = {
         "encoder_inputs": "The fox was sleeping.",
         "decoder_inputs": "The fox was awake."
     }
     preprocessor(inputs)
 
-    # Tokenize a batch of single sentences.
+    # Tokenize and pack batched inputs.
     inputs = {
         "encoder_inputs": ["The fox was sleeping.", "The lion was quiet."],
         "decoder_inputs": ["The fox was awake.", "The lion was roaring."]
-    }
-    preprocessor(inputs)
-
-    # Tokenize and pack a sentence pair.
-    inputs = {
-        "encoder_inputs": (
-            tf.constant("The fox was sleeping."),
-            tf.constant("The lion was quiet.")
-        ),
-        "decoder_inputs": (
-            tf.constant("The fox was awake."),
-            tf.constant("The lion was roaring.")
-        )
     }
     preprocessor(inputs)
 
@@ -138,29 +125,6 @@ class BartSeq2SeqPreprocessor(BartPreprocessor):
             ["The fox was awake.", "The lion was roaring."]
         )
     }
-    ds = tf.data.Dataset.from_tensor_slices(features)
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map sentence pairs.
-    features = {
-        "encoder_inputs": (
-            tf.constant(
-                ["The fox was sleeping.", "The lion was quiet."]
-            ),
-            tf.constant(
-                ["It wanted to get up.", "It wanted to roar."]
-            ),
-        ),
-        "decoder_inputs": (
-            tf.constant(
-                ["The fox was awake.", "The lion was roaring."]
-            ),
-            tf.constant(
-                ["It wanted to sleep.", "It wanted to shout."]
-            ),
-        ),
-    }
-    labels = tf.constant(["True", "False"])
     ds = tf.data.Dataset.from_tensor_slices(features)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     ```
