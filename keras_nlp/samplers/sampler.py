@@ -82,6 +82,10 @@ class Sampler:
     ```
     """
 
+    def __init__(self, temperature=1.0):
+        super().__init__()
+        self.temperature = temperature
+
     def __call__(
         self,
         next,
@@ -109,7 +113,7 @@ class Sampler:
         def body(prompt, state, index):
             # Compute the softmax distribution for the next token.
             logits, state = next(prompt, state, index)
-            probabilities = keras.activations.softmax(logits)
+            probabilities = keras.activations.softmax(logits / self.temperature)
             # Compute the next token.
             next_token = self.get_next_token(probabilities)
             # Don't overwrite anywhere mask is True.
@@ -149,4 +153,4 @@ class Sampler:
         return cls(**config)
 
     def get_config(self):
-        return {}
+        return {"temperature": self.temperature}

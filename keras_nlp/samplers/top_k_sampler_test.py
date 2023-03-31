@@ -94,6 +94,14 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
         output_ids = set(output[0].numpy())
         self.assertContainsSubset(output_ids, range(5))
 
+        output_temperature_test = self.sampler(
+            next=next,
+            prompt=prompt,
+            temperature=0.00001,
+        )
+        output_ids_temperature_test = set(output_temperature_test[0].numpy())
+        self.assertTrue(all(id == 0 for id in output_ids_temperature_test))
+
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
