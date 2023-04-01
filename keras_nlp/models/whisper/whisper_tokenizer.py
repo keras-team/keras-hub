@@ -16,7 +16,6 @@
 import json
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.models.whisper.whisper_presets import LANGUAGE_TOKENS
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 
@@ -44,7 +43,9 @@ class WhisperTokenizer(BytePairTokenizer):
             merge entities separated by a space.
         special_tokens: string or dict, maps special tokens to integer IDs. If
             it is a string, it should be the path to a JSON file.
-        is_multilingual: bool, whether the tokenizer is multilingual.
+        language_tokens: string or dict, maps language tokens to integer IDs. If
+            non-None or empty, the tokenizer will be assumed to be a
+            multilingual tokenizer.
     """
 
     def __init__(
@@ -52,7 +53,7 @@ class WhisperTokenizer(BytePairTokenizer):
         vocabulary,
         merges,
         special_tokens,
-        is_multilingual,
+        language_tokens=None,
         **kwargs,
     ):
         vocabulary = _load_dict(vocabulary)
@@ -61,15 +62,16 @@ class WhisperTokenizer(BytePairTokenizer):
         bos_token = "<|startoftranscript|>"
         eos_token = "<|endoftext|>"
 
-        if is_multilingual:
+        if language_tokens:
             # Multilingual tokenizer.
             pad_token = ""
+            language_tokens = _load_dict(language_tokens)
 
             # Add language tokens to the vocabulary. This makes detokenization
             # easier for us.
             vocabulary = {
                 **vocabulary,
-                **LANGUAGE_TOKENS,
+                **language_tokens,
             }
         else:
             # English tokenizer.
@@ -112,3 +114,16 @@ class WhisperTokenizer(BytePairTokenizer):
         )
 
         self.is_multilingual = is_multilingual
+        self.special_tokens = special_tokens
+        self.language_tokens = language_tokens
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "is_multilingual": self.is_multilingual,
+                "special_tokens": self.special_tokens,
+                "language_tokens": self.language_tokens,
+            }
+        )
+        return config

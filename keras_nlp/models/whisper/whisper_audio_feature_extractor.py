@@ -45,7 +45,6 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
 
     Examples:
     ```python
-
     # Load an audio file.
     audio_tensor = keras_nlp.utils.audio_utils.load_audio("path/to/audio.mp3")
 
