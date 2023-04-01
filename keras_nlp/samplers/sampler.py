@@ -48,8 +48,8 @@ class Sampler:
 
     Args:
         temperature: float. optional. defaults to '1.0'. Used to control the
-        randomness of the sampling. The higher the temperature, the more diverse
-        the samples.
+            randomness of the sampling. The higher the temperature, the
+            more diverse the samples.
 
     Call Args:
         {{call_args}}

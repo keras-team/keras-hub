@@ -89,6 +89,25 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
             self.join_as_string(sorted_prompts[:, 0, :]), ["sequentially"]
         )
 
+    def test_temperature(self):
+        state_chars = list("sequentially")
+        state = tf.constant([[self.char_lookup[c] for c in state_chars]])
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        output_low_temperature = BeamSampler(num_beams=5, temperature=0.01)(
+            next=self.next,
+            prompt=prompt,
+            state=state,
+        )
+        output_high_temperature = BeamSampler(num_beams=5, temperature=100)(
+            next=self.next,
+            prompt=prompt,
+            state=state,
+        )
+        self.assertNotEqual(
+            self.join_as_string(output_low_temperature),
+            self.join_as_string(output_high_temperature),
+        )
+
     def test_early_stopping(self):
         state_chars = list("sequentially")
         state = tf.constant([[self.char_lookup[c] for c in state_chars]])

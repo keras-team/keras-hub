@@ -38,6 +38,9 @@ class BeamSampler(Sampler):
             time-step. `num_beams` should be strictly positive.
         return_all_beams: bool. When set to `True`, the sampler will return the top prompt,
             all prompts and their respective probabilities score.
+        temperature: float. optional. defaults to '1.0'. Used to control the
+            randomness of the sampling. The higher the temperature, the
+            more diverse the samples.
 
     Call Args:
         {{call_args}}
@@ -94,10 +97,12 @@ class BeamSampler(Sampler):
         self,
         num_beams=5,
         return_all_beams=False,
+        temperature=1.0,
     ):
         super().__init__()
         self.num_beams = num_beams
         self.return_all_beams = return_all_beams
+        self.temperature = temperature
 
     def __call__(
         self,
@@ -149,7 +154,7 @@ class BeamSampler(Sampler):
             # Compute the softmax distribution for the next token.
             logits, state = next(prompt, state, index)
             vocab_size = tf.shape(logits)[-1]
-            probs = keras.activations.softmax(logits)
+            probs = keras.activations.softmax(logits / self.temperature)
 
             # Compute the running log-likelihood of each new candidate.
             next_log_probs = tf.math.log(probs) + log_probs[..., tf.newaxis]
@@ -220,6 +225,7 @@ class BeamSampler(Sampler):
             {
                 "num_beams": self.num_beams,
                 "return_all_beams": self.return_all_beams,
+                "temperature": self.temperature,
             }
         )
         return config
