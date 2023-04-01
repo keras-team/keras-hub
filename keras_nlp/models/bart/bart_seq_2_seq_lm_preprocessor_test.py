@@ -20,7 +20,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.bart.bart_seq_2_seq_preprocessor import (
+from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
