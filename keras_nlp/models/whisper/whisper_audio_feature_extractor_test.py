@@ -20,7 +20,6 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.whisper.whisper_audio_feature_extractor import NUM_MELS
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
@@ -30,14 +29,16 @@ class WhisperAudioFeatureExtractorTest(
     tf.test.TestCase, parameterized.TestCase
 ):
     def setUp(self):
-        self.sample_rate = 100
+        self.num_mels = 80
         self.num_fft_bins = 400
         self.stride = 100
+        self.sampling_rate = 100
         self.max_audio_length = 5
         self.audio_feature_extractor = WhisperAudioFeatureExtractor(
-            sample_rate=self.sample_rate,
+            num_mels=self.num_mels,
             num_fft_bins=self.num_fft_bins,
             stride=self.stride,
+            sampling_rate=self.sampling_rate,
             max_audio_length=self.max_audio_length,
         )
 
@@ -47,7 +48,7 @@ class WhisperAudioFeatureExtractorTest(
         outputs = self.audio_feature_extractor(audio_tensor)
 
         # Verify shape.
-        self.assertEqual(outputs.shape, (1, 5, NUM_MELS))
+        self.assertEqual(outputs.shape, (1, 5, self.num_mels))
         # Verify output.
         expected = [1.1656, 1.0151, -0.8343, -0.8343, -0.8343]
         self.assertAllClose(outputs[0, :, 0], expected, atol=0.01, rtol=0.01)
@@ -60,7 +61,7 @@ class WhisperAudioFeatureExtractorTest(
         outputs = self.audio_feature_extractor(audio_tensor)
 
         # Verify shape.
-        self.assertEqual(outputs.shape, (2, 5, NUM_MELS))
+        self.assertEqual(outputs.shape, (2, 5, self.num_mels))
         # Verify output.
         expected_1 = [1.1656, 1.0151, -0.8343, -0.8343, -0.8343]
         self.assertAllClose(outputs[0, :, 0], expected_1, atol=0.01, rtol=0.01)

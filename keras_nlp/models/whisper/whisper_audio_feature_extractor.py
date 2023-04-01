@@ -18,8 +18,6 @@ from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
 
-NUM_MELS = 80
-
 
 @keras_nlp_export("keras_nlp.models.WhisperAudioFeatureExtractor")
 class WhisperAudioFeatureExtractor(keras.layers.Layer):
@@ -31,18 +29,19 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
 
     The input audio tensor can either be of shape `(length_of_audio,)` or
     `(batch_size, length_of_audio)`. The output is a tensor of shape
-    `(batch_size, num_frames, NUM_MELS)`, where `num_frames` is
-    `(max_audio_length * sample_rate) / stride` and `NUM_MELS` is 80.
+    `(batch_size, num_frames, num_mels)`, where `num_frames` is
+    `(max_audio_length * sampling_rate) / stride`.
 
     Args:
-        sample_rate: int, defaults to 16000. The sample rate of the audio.
+        num_mels: int, defaults to 80. The number of mel-frequency filters.
         num_fft_bins: int, defaults to 400. The size of the Fourier Transform in
             STFT.
         stride: int, defaults to 160. The distance between neighboring
             sliding window frames while computing STFT.
+        sampling_rate: int, defaults to 16000. The sample rate of the audio.
         max_audio_length: int, defaults to 30. The length of each audio chunk in
             seconds. The input audio tensor will be padded/trimmed to
-            `max_audio_length*sample_rate`.
+            `max_audio_length*sampling_rate`.
 
     Examples:
     ```python
@@ -64,9 +63,10 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
 
     def __init__(
         self,
-        sample_rate=16000,
+        num_mels=80,
         num_fft_bins=400,
         stride=160,
+        sampling_rate=16000,
         max_audio_length=30,
         **kwargs,
     ):
@@ -82,14 +82,15 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
 
         super().__init__(**kwargs)
 
-        self.sample_rate = sample_rate
+        self.num_mels = num_mels
         self.num_fft_bins = num_fft_bins
         self.stride = stride
+        self.sampling_rate = sampling_rate
         self.max_audio_length = max_audio_length
-        self.n_samples = self.sample_rate * self.max_audio_length
+        self.num_samples = self.sampling_rate * self.max_audio_length
 
         # After transposition, `self.mel_filters`'s shape is
-        # `(num_fft_bins // 2 + 1, NUM_MELS).`
+        # `(num_fft_bins // 2 + 1, num_mels).`
         self.mel_filters = self._get_mel_filters()
 
     def _get_mel_filters(self):
@@ -103,19 +104,19 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         dtype = np.float32
         # Initialize the weights
         weights = np.zeros(
-            (NUM_MELS, int(1 + self.num_fft_bins // 2)), dtype=dtype
+            (self.num_mels, int(1 + self.num_fft_bins // 2)), dtype=dtype
         )
 
         # Center freqs of each FFT bin
         fftfreqs = np.fft.rfftfreq(
-            n=self.num_fft_bins, d=1.0 / self.sample_rate
+            n=self.num_fft_bins, d=1.0 / self.sampling_rate
         )
 
         # 'Center freqs' of mel bands - uniformly spaced between limits
         min_mel = 0.0
         max_mel = 45.245640471924965
 
-        mels = np.linspace(min_mel, max_mel, NUM_MELS + 2)
+        mels = np.linspace(min_mel, max_mel, self.num_mels + 2)
 
         mels = np.asanyarray(mels)
 
@@ -140,7 +141,7 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         fdiff = np.diff(mel_f)
         ramps = np.subtract.outer(mel_f, fftfreqs)
 
-        for i in range(NUM_MELS):
+        for i in range(self.num_mels):
             # lower and upper slopes for all bins
             lower = -ramps[i] / fdiff[i]
             upper = ramps[i + 2] / fdiff[i + 1]
@@ -149,7 +150,7 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
             weights[i] = np.maximum(0, np.minimum(lower, upper))
 
         # Slaney-style mel is scaled to be approx constant energy per channel
-        enorm = 2.0 / (mel_f[2 : NUM_MELS + 2] - mel_f[:NUM_MELS])
+        enorm = 2.0 / (mel_f[2 : self.num_mels + 2] - mel_f[: self.num_mels])
         weights *= enorm[:, np.newaxis]
 
         weights = tf.transpose(tf.constant(weights))
@@ -231,7 +232,7 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
 
         # Pad audio.
         audio_shape = audio.shape.as_list()
-        audio_shape[-1] = self.n_samples
+        audio_shape[-1] = self.num_samples
         audio = audio.to_tensor(shape=audio_shape)
 
         # Find the log mel spectrogram.
@@ -242,9 +243,10 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "sample_rate": self.sample_rate,
+                "num_mels": self.num_mels,
                 "num_fft_bins": self.num_fft_bins,
                 "stride": self.stride,
+                "sampling_rate": self.sampling_rate,
                 "max_audio_length": self.max_audio_length,
             }
         )
