@@ -92,6 +92,29 @@ class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
         output_ids = set(output[0].numpy())
         self.assertContainsSubset(output_ids, range(3))
 
+    def test_outputs_in_top_p_with_temperature(self):
+        def next(prompt, state, index):
+            logits = np.zeros((self.batch_size, self.vocab_size))
+            return tf.constant(logits), state
+
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+
+        output = TopPSampler(p=(2.0 / self.vocab_size))(
+            next=next,
+            prompt=prompt,
+        )
+        output_ids = set(output[0].numpy())
+
+        output_with_temperature = TopPSampler(
+            p=(2.0 / self.vocab_size), temperature=0.01
+        )(
+            next=next,
+            prompt=prompt,
+        )
+        output_ids_with_temperature = set(output_with_temperature[0].numpy())
+
+        self.assertNotEqual(output_ids, output_ids_with_temperature)
+
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
