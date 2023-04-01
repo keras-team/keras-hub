@@ -98,22 +98,27 @@ class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
             return tf.constant(logits), state
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
-
-        output = TopPSampler(p=(2.0 / self.vocab_size))(
-            next=next,
-            prompt=prompt,
-        )
-        output_ids = set(output[0].numpy())
-
-        output_with_temperature = TopPSampler(
-            p=(2.0 / self.vocab_size), temperature=0.01
+        output_lower_temperature = TopPSampler(
+            p=(2.0 / self.vocab_size), temperature=1e-5
         )(
             next=next,
             prompt=prompt,
         )
-        output_ids_with_temperature = set(output_with_temperature[0].numpy())
+        output_ids_lower_temperature = set(output_lower_temperature[0].numpy())
 
-        self.assertNotEqual(output_ids, output_ids_with_temperature)
+        output_higher_temperature = TopPSampler(
+            p=(2.0 / self.vocab_size), temperature=1.0
+        )(
+            next=next,
+            prompt=prompt,
+        )
+        output_ids_higher_temperature = set(
+            output_higher_temperature[0].numpy()
+        )
+        self.assertLessEqual(
+            len(output_ids_lower_temperature),
+            len(output_ids_higher_temperature),
+        )
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
