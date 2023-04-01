@@ -113,7 +113,6 @@ class WhisperTokenizer(BytePairTokenizer):
             **kwargs,
         )
 
-        self.is_multilingual = is_multilingual
         self.special_tokens = special_tokens
         self.language_tokens = language_tokens
 
@@ -121,7 +120,6 @@ class WhisperTokenizer(BytePairTokenizer):
         config = super().get_config()
         config.update(
             {
-                "is_multilingual": self.is_multilingual,
                 "special_tokens": self.special_tokens,
                 "language_tokens": self.language_tokens,
             }
