@@ -19,11 +19,9 @@ import tensorflow as tf
 import transformers
 from absl import app
 from absl import flags
+from checkpoint_conversion_utils import get_md5_checksum
 
 import keras_nlp
-from tools.checkpoint_conversion.checkpoint_conversion_utils import (
-    get_md5_checksum,
-)
 
 PRESET_MAP = {
     "f_net_base_en": "google/fnet-base",

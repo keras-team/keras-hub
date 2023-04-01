@@ -16,7 +16,6 @@
 import tensorflow as tf
 
 import keras_nlp
-from keras_nlp.samplers.greedy_sampler import GreedySampler
 from keras_nlp.samplers.top_k_sampler import TopKSampler
 
 
@@ -30,12 +29,12 @@ class SamplerTest(tf.test.TestCase):
 
     def test_get(self):
         # Test get from string.
-        identifier = "greedy"
+        identifier = "top_k"
         sampler = keras_nlp.samplers.get(identifier)
-        self.assertIsInstance(sampler, GreedySampler)
+        self.assertIsInstance(sampler, TopKSampler)
 
         # Test dict identifier.
-        original_sampler = keras_nlp.samplers.GreedySampler(jit_compile=False)
+        original_sampler = keras_nlp.samplers.TopKSampler(k=7)
         config = keras_nlp.samplers.serialize(original_sampler)
         restored_sampler = keras_nlp.samplers.get(config)
         self.assertDictEqual(
@@ -44,6 +43,6 @@ class SamplerTest(tf.test.TestCase):
         )
 
         # Test identifier is already a sampler instance.
-        original_sampler = keras_nlp.samplers.GreedySampler(jit_compile=False)
+        original_sampler = keras_nlp.samplers.TopKSampler(k=7)
         restored_sampler = keras_nlp.samplers.get(original_sampler)
         self.assertEqual(original_sampler, restored_sampler)

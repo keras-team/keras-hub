@@ -20,19 +20,17 @@ import tensorflow as tf
 import transformers
 from absl import app
 from absl import flags
+from checkpoint_conversion_utils import get_md5_checksum
 
 # Temporarily directly import gpt2 until we expose it.
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
-from tools.checkpoint_conversion.checkpoint_conversion_utils import (
-    get_md5_checksum,
-)
 
 PRESET_MAP = {
-    "gpt2_base": ("124M", "gpt2"),
-    "gpt2_medium": ("355M", "gpt2-medium"),
-    "gpt2_large": ("774M", "gpt2-large"),
-    "gpt2_extra_large": ("1558M", "gpt2-xl"),
+    "gpt2_base_en": ("124M", "gpt2"),
+    "gpt2_medium_en": ("355M", "gpt2-medium"),
+    "gpt2_large_en": ("774M", "gpt2-large"),
+    "gpt2_extra_large_en": ("1558M", "gpt2-xl"),
 }
 
 DOWNLOAD_SCRIPT_URL = (
@@ -47,7 +45,7 @@ flags.DEFINE_string(
 )
 
 
-def download_model(preset, num_params):
+def download_model(num_params):
     print("-> Download original weights.")
     response = requests.get(DOWNLOAD_SCRIPT_URL)
     open("download_model.py", "wb").write(response.content)
@@ -55,7 +53,7 @@ def download_model(preset, num_params):
     os.system(f"python download_model.py {num_params}")
 
 
-def convert_checkpoints(preset, num_params):
+def convert_checkpoints(num_params):
     print("\n-> Convert original weights to KerasNLP format.")
     # GPT-2 paths.
     extract_dir = EXTRACT_DIR.format(num_params)
@@ -76,7 +74,7 @@ def convert_checkpoints(preset, num_params):
 
     # Temporary direct import, as we aren't exposing this quite yet.
     keras_nlp_model = GPT2Backbone.from_preset(
-        preset,
+        FLAGS.preset,
         load_weights=False,
     )
 
@@ -191,13 +189,13 @@ def convert_checkpoints(preset, num_params):
     keras_nlp_model.get_layer("layer_norm").beta.assign(weights["model/ln_f/b"])
 
     # Save the model.
-    print(f"\n-> Save KerasNLP model weights to `{preset}.h5`.")
-    keras_nlp_model.save_weights(f"{preset}.h5")
+    print(f"\n-> Save KerasNLP model weights to `{FLAGS.preset}.h5`.")
+    keras_nlp_model.save_weights(f"{FLAGS.preset}.h5")
 
     return keras_nlp_model
 
 
-def define_tokenizer(preset, num_params, hf_model_name):
+def define_tokenizer(num_params, hf_model_name):
     print("\n-> Define the tokenizers.")
     extract_dir = extract_dir = EXTRACT_DIR.format(num_params)
     merges_path = os.path.join(extract_dir, "vocab.bpe")
@@ -217,7 +215,6 @@ def define_tokenizer(preset, num_params, hf_model_name):
 
 
 def check_output(
-    preset,
     keras_nlp_model,
     keras_nlp_tokenizer,
     hf_model,
@@ -245,7 +242,7 @@ def check_output(
     print("Difference:", np.mean(keras_nlp_output - hf_output.detach().numpy()))
 
     # Show the MD5 checksum of the model weights.
-    print("Model md5sum: ", get_md5_checksum(f"./{preset}.h5"))
+    print("Model md5sum: ", get_md5_checksum(f"./{FLAGS.preset}.h5"))
 
     return keras_nlp_output
 
@@ -257,20 +254,19 @@ def main(_):
     num_params = PRESET_MAP[FLAGS.preset][0]
     hf_model_name = PRESET_MAP[FLAGS.preset][1]
 
-    download_model(FLAGS.preset, num_params)
+    download_model(num_params)
 
-    keras_nlp_model = convert_checkpoints(FLAGS.preset, num_params)
+    keras_nlp_model = convert_checkpoints(num_params)
 
     print("\n-> Load HF model.")
     hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
     hf_model.eval()
 
     keras_nlp_tokenizer, hf_tokenizer = define_tokenizer(
-        FLAGS.preset, num_params, hf_model_name
+        num_params, hf_model_name
     )
 
     check_output(
-        FLAGS.preset,
         keras_nlp_model,
         keras_nlp_tokenizer,
         hf_model,

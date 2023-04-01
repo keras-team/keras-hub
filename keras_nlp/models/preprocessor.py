@@ -22,6 +22,10 @@ from keras_nlp.utils.python_utils import format_docstring
 class Preprocessor(keras.layers.Layer):
     """Base class for model preprocessors."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._tokenizer = None
+
     @property
     def tokenizer(self):
         """The tokenizer used to tokenize strings."""

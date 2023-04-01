@@ -14,8 +14,10 @@
 
 
 import platform
+import sys
 
 import tensorflow as tf
+from absl import logging
 from tensorflow import keras
 
 from keras_nlp.utils.tf_utils import is_tensor_type
@@ -111,3 +113,60 @@ def is_xla_compatible(model):
             tf.distribute.TPUStrategy,
         ),
     )
+
+
+def print_msg(message, line_break=True):
+    """Print the message to absl logging or stdout."""
+    # Copied from core Keras.
+    if keras.utils.is_interactive_logging_enabled():
+        if line_break:
+            sys.stdout.write(message + "\n")
+        else:
+            sys.stdout.write(message)
+        sys.stdout.flush()
+    else:
+        logging.info(message)
+
+
+def print_row(fields, positions, print_fn, nested_level=0):
+    """Print a row of a summary message."""
+    # Copied from core Keras.
+    left_to_print = [str(x) for x in fields]
+    while any(left_to_print):
+        line = ""
+        for col in range(len(left_to_print)):
+            if col > 0:
+                start_pos = positions[col - 1]
+            else:
+                start_pos = 0
+            end_pos = positions[col]
+            # Leave room for 2 spaces to delineate columns
+            # we don't need any if we are printing the last column
+            space = 2 if col != len(positions) - 1 else 0
+            cutoff = end_pos - start_pos - space
+            fit_into_line = left_to_print[col][:cutoff]
+            # For nicer formatting we line-break on seeing end of
+            # tuple/dict etc.
+            line_break_conditions = ("),", "},", "],", "',")
+            candidate_cutoffs = [
+                fit_into_line.find(x) + len(x)
+                for x in line_break_conditions
+                if fit_into_line.find(x) >= 0
+            ]
+            if candidate_cutoffs:
+                cutoff = min(candidate_cutoffs)
+                fit_into_line = fit_into_line[:cutoff]
+
+            if col == 0:
+                line += "|" * nested_level + " "
+            line += fit_into_line
+            line += " " * space if space else ""
+            left_to_print[col] = left_to_print[col][cutoff:]
+
+            # Pad out to the next position
+            if nested_level:
+                line += " " * (positions[col] - len(line) - nested_level)
+            else:
+                line += " " * (positions[col] - len(line))
+        line += "|" * nested_level
+        print_fn(line)

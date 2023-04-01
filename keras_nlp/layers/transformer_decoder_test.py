@@ -332,7 +332,9 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model([decoder_sequence, encoder_sequence])
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
 
         loaded_model = keras.models.load_model(path)
         model_output = model([decoder_sequence, encoder_sequence])
@@ -358,7 +360,9 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model(decoder_sequence)
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
         loaded_model = keras.models.load_model(path)
 
         model_output = model(decoder_sequence)

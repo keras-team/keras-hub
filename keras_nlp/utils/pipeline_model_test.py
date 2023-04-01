@@ -140,10 +140,12 @@ class TestNoopPipelineModel(tf.test.TestCase, parameterized.TestCase):
         model = NoopPipeline()
         x = tf.random.uniform((8, 5))
         model_output = model.predict(x)
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        model.save(save_path, save_format=save_format)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
         restored_model = keras.models.load_model(
-            save_path, custom_objects={"NoopPipeline": NoopPipeline}
+            path, custom_objects={"NoopPipeline": NoopPipeline}
         )
 
         # Check we got the real object back.
@@ -256,10 +258,12 @@ class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model = FeaturePipeline()
         x = tf.strings.as_string(tf.random.uniform((8, 5)))
         model_output = model.predict(x)
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        model.save(save_path, save_format=save_format)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
         restored_model = keras.models.load_model(
-            save_path, custom_objects={"FeaturePipeline": FeaturePipeline}
+            path, custom_objects={"FeaturePipeline": FeaturePipeline}
         )
 
         # Check we got the real object back.
@@ -365,10 +369,12 @@ class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model = LabelPipeline()
         x = tf.random.uniform((8, 5))
         model_output = model.predict(x)
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        model.save(save_path, save_format=save_format)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
         restored_model = keras.models.load_model(
-            save_path, custom_objects={"LabelPipeline": LabelPipeline}
+            path, custom_objects={"LabelPipeline": LabelPipeline}
         )
 
         # Check we got the real object back.
@@ -457,10 +463,12 @@ class TestDataPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model = DataPipeline()
         data = tf.strings.as_string(tf.random.uniform((8, 1)))
         model_output = model.predict(data)
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        model.save(save_path, save_format=save_format)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
         restored_model = keras.models.load_model(
-            save_path, custom_objects={"DataPipeline": DataPipeline}
+            path, custom_objects={"DataPipeline": DataPipeline}
         )
 
         # Check we got the real object back.
@@ -506,10 +514,12 @@ class TestFunctional(tf.test.TestCase, parameterized.TestCase):
         model = FunctionalPipeline()
         x = tf.strings.as_string(tf.random.uniform((8, 5)))
         model_output = model.predict(x)
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        model.save(save_path, save_format=save_format)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
         restored_model = keras.models.load_model(
-            save_path, custom_objects={"FunctionalPipeline": FunctionalPipeline}
+            path, custom_objects={"FunctionalPipeline": FunctionalPipeline}
         )
 
         # Check we got the real object back.

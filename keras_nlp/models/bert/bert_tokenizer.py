@@ -52,30 +52,25 @@ class BertTokenizer(WordPieceTokenizer):
             tokenization.
 
     Examples:
+    ```python
+    # Unbatched input.
+    tokenizer = keras_nlp.models.BertTokenizer.from_preset(
+        "bert_base_en_uncased",
+    )
+    tokenizer("The quick brown fox jumped.")
 
-    Batched input.
-    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
-    >>> vocab += ["The", "quick", "brown", "fox.", "jumped", "over"]
-    >>> inputs = ["The quick brown fox.", "The fox."]
-    >>> tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
-    >>> tokenizer(inputs)
-    <tf.RaggedTensor [[5, 6, 7, 0, 0], [5, 0, 0]]>
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
 
-    Unbatched input.
-    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
-    >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
-    >>> inputs = "The fox."
-    >>> tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
-    >>> tokenizer(inputs)
-    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([ 5,  9, 10], dtype=int32)>
+    # Detokenization.
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
 
-    Detokenization.
-    >>> vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
-    >>> vocab += ["The", "qu", "##ick", "brown", "fox", "."]
-    >>> inputs = "The quick brown fox."
-    >>> tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
-    >>> tokenizer.detokenize(tokenizer.tokenize(inputs)).numpy().decode('utf-8')
-    'The quick brown fox .'
+    # Custom vocabulary.
+    vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
+    vocab += ["The", "quick", "brown", "fox", "jumped", "."]
+    tokenizer = keras_nlp.models.BertTokenizer(vocabulary=vocab)
+    tokenizer("The quick brown fox jumped.")
+    ```
     """
 
     def __init__(
