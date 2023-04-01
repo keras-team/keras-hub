@@ -16,6 +16,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -23,75 +24,68 @@ from tensorflow import keras
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 
 
-class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
+class XLMRobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = XLMRobertaBackbone(
-            vocabulary_size=1000,
+        self.backbone = XLMRobertaBackbone(
+            vocabulary_size=10,
             num_layers=2,
             num_heads=2,
-            hidden_dim=64,
-            intermediate_dim=128,
-            max_sequence_length=128,
+            hidden_dim=2,
+            intermediate_dim=4,
+            max_sequence_length=5,
         )
-        self.batch_size = 8
         self.input_batch = {
-            "token_ids": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-            "padding_mask": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
+            "token_ids": tf.ones((2, 5), dtype="int32"),
+            "padding_mask": tf.ones((2, 5), dtype="int32"),
         }
-
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch
         ).batch(2)
 
     def test_valid_call_xlm_roberta(self):
-        self.model(self.input_batch)
+        self.backbone(self.input_batch)
 
+    def test_token_embedding(self):
+        output = self.backbone.token_embedding(self.input_batch["token_ids"])
+        self.assertEqual(output.shape, (2, 5, 2))
+
+    def test_name(self):
         # Check default name passed through
-        self.assertRegexpMatches(self.model.name, "xlm_roberta_backbone")
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_xlm_roberta_compile(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_xlm_roberta_compile_batched_ds(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_dataset)
+        self.assertRegexpMatches(self.backbone.name, "xlm_roberta_backbone")
 
     def test_variable_sequence_length_call_xlm_roberta(self):
-        for seq_length in (25, 50, 75):
+        for seq_length in (2, 3, 4):
             input_data = {
-                "token_ids": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
-                "padding_mask": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
+                "token_ids": tf.ones((2, seq_length), dtype="int32"),
+                "padding_mask": tf.ones((2, seq_length), dtype="int32"),
             }
-            output = self.model(input_data)
+            output = self.backbone(input_data)
             self.assertAllEqual(
-                tf.shape(output),
-                [self.batch_size, seq_length, self.model.hidden_dim],
+                tf.shape(output), [2, seq_length, self.backbone.hidden_dim]
             )
+
+    def test_predict(self):
+        self.backbone.predict(self.input_batch)
+        self.backbone.predict(self.input_dataset)
+
+    def test_serialization(self):
+        new_backbone = keras.utils.deserialize_keras_object(
+            keras.utils.serialize_keras_object(self.backbone)
+        )
+        self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large  # Saving is slow, so mark these large.
     def test_saved_model(self, save_format, filename):
-        model_output = self.model(self.input_batch)
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        self.model.save(save_path, save_format=save_format)
-        restored_model = keras.models.load_model(save_path)
+        model_output = self.backbone(self.input_batch)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        self.backbone.save(path, save_format=save_format, **kwargs)
+        restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
         self.assertIsInstance(restored_model, XLMRobertaBackbone)
@@ -99,3 +93,29 @@ class XLMRobertaTest(tf.test.TestCase, parameterized.TestCase):
         # Check that output matches.
         restored_output = restored_model(self.input_batch)
         self.assertAllClose(model_output, restored_output)
+
+
+@pytest.mark.tpu
+@pytest.mark.usefixtures("tpu_test_class")
+class XLMRobertaBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+    def setUp(self):
+        with self.tpu_strategy.scope():
+            self.backbone = XLMRobertaBackbone(
+                vocabulary_size=1000,
+                num_layers=2,
+                num_heads=2,
+                hidden_dim=64,
+                intermediate_dim=128,
+                max_sequence_length=128,
+            )
+        self.input_batch = {
+            "token_ids": tf.ones((8, 128), dtype="int32"),
+            "padding_mask": tf.ones((8, 128), dtype="int32"),
+        }
+        self.input_dataset = tf.data.Dataset.from_tensor_slices(
+            self.input_batch
+        ).batch(2)
+
+    def test_predict(self):
+        self.backbone.compile()
+        self.backbone.predict(self.input_dataset)

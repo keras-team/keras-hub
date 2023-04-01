@@ -15,6 +15,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -84,9 +85,11 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
     )
     def test_saved_model(self, save_format, filename):
         model_output = self.model(self.input_batch)
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        self.model.save(save_path, save_format=save_format)
-        restored_model = keras.models.load_model(save_path)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        self.model.save(path, save_format=save_format, **kwargs)
+        restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
         self.assertIsInstance(restored_model, GPT2Backbone)
@@ -94,3 +97,29 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
         # Check that output matches.
         restored_output = restored_model(self.input_batch)
         self.assertAllClose(model_output, restored_output)
+
+
+@pytest.mark.tpu
+@pytest.mark.usefixtures("tpu_test_class")
+class GPT2BackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+    def setUp(self):
+        with self.tpu_strategy.scope():
+            self.model = GPT2Backbone(
+                vocabulary_size=1000,
+                num_layers=2,
+                num_heads=2,
+                hidden_dim=64,
+                intermediate_dim=128,
+                max_sequence_length=128,
+            )
+        self.input_batch = {
+            "token_ids": tf.ones((8, 128), dtype="int32"),
+            "padding_mask": tf.ones((8, 128), dtype="int32"),
+        }
+        self.input_dataset = tf.data.Dataset.from_tensor_slices(
+            self.input_batch
+        ).batch(2)
+
+    def test_predict(self):
+        self.model.compile()
+        self.model.predict(self.input_dataset)

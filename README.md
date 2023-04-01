@@ -14,7 +14,7 @@ easy productionization using the TensorFlow ecosystem.
 
 This library is an extension of the core Keras API; all high-level modules are 
 [`Layers`](https://keras.io/api/layers/) or 
-[`Models`](https://keras.io/api/models/) that recieve that same level of polish 
+[`Models`](https://keras.io/api/models/) that receive that same level of polish 
 as core Keras. If you are familiar with Keras, congratulations! You already 
 understand most of KerasNLP.
 
@@ -95,7 +95,7 @@ KerasNLP provides access to pre-trained models via the `keras_nlp.models` API.
 These pre-trained models are provided on an "as is" basis, without warranties
 or conditions of any kind. The following underlying models are provided by third
 parties, and subject to separate licenses:
-BART, DeBERTa, DistilBERT, GPT-2, OPT, RoBERTa, and XLM-RoBERTa.
+BART, DeBERTa, DistilBERT, GPT-2, OPT, RoBERTa, Whisper, and XLM-RoBERTa.
 
 ## Citing KerasNLP
 

@@ -148,7 +148,7 @@ are trying to explain to the reader.
 This will continue to be a key investment area for the library. If you have an
 idea for a guide or example, please open an issue to discuss.
 
-By the end of 2022, most new NLP examples on keras.io should be use
+By the end of 2022, most new NLP examples on keras.io should use
 KerasNLP library.
 
 ## Citation bar

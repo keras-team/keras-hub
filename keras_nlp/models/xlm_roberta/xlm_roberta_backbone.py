@@ -24,17 +24,16 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaBackbone")
 class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
-    """XLM-RoBERTa encoder.
+    """An XLM-RoBERTa encoder network.
 
-    This network implements a bi-directional Transformer-based encoder as
-    described in
-    ["Unsupervised Cross-lingual Representation Learning at Scale"](https://arxiv.org/abs/1911.02116).
-    It includes the embedding lookups and transformer layers, but does not
+    This class implements a bi-directional Transformer-based encoder as
+    described in ["Unsupervised Cross-lingual Representation Learning at Scale"](https://arxiv.org/abs/1911.02116).
+    It includes the embedding lookups and transformer layers, but it does not
     include the masked language modeling head used during pretraining.
 
     The default constructor gives a fully customizable, randomly initialized
-    RoBERTa encoder with any number of layers, heads, and embedding
-    dimensions. To load preset architectures and weights, use the `from_preset`
+    RoBERTa encoder with any number of layers, heads, and embedding dimensions.
+    To load preset architectures and weights, use the `from_preset()`
     constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
@@ -53,9 +52,10 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
         dropout: float. Dropout probability for the Transformer encoder.
         max_sequence_length: int. The maximum sequence length this encoder can
             consume. The sequence length of the input must be less than
-            `max_sequence_length`.
+            `max_sequence_length` default value. This determines the variable
+            shape for positional embeddings.
 
-    Example usage:
+    Examples:
     ```python
     input_data = {
         "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
@@ -63,24 +63,22 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
 
-    # Pretrained XLM-R encoder
+    # Pretrained XLM-R encoder.
     model = keras_nlp.models.XLMRobertaBackbone.from_preset(
         "xlm_roberta_base_multi",
     )
-    output = model(input_data)
+    model(input_data)
 
-    # Randomly initialized XLM-R model with custom config
+    # Randomly initialized XLM-R model with custom config.
     model = keras_nlp.models.XLMRobertaBackbone(
         vocabulary_size=250002,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        intermediate_dim=512,
+        max_sequence_length=128
     )
-
-    # Call the model on the input data.
-    output = model(input_data)
+    model(input_data)
     ```
     """
 

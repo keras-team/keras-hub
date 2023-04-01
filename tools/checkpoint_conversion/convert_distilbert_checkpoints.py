@@ -40,10 +40,10 @@ flags.DEFINE_string(
 )
 
 
-def download_files(preset, hf_model_name):
+def download_files(hf_model_name):
     print("-> Download original vocab and config.")
 
-    extract_dir = EXTRACT_DIR.format(preset)
+    extract_dir = EXTRACT_DIR.format(FLAGS.preset)
     if not os.path.exists(extract_dir):
         os.makedirs(extract_dir)
 
@@ -64,9 +64,9 @@ def download_files(preset, hf_model_name):
     print(f"`{vocab_path}`")
 
 
-def define_preprocessor(preset, hf_model_name):
+def define_preprocessor(hf_model_name):
     print("\n-> Define the tokenizers.")
-    extract_dir = EXTRACT_DIR.format(preset)
+    extract_dir = EXTRACT_DIR.format(FLAGS.preset)
     vocab_path = os.path.join(extract_dir, "vocab.txt")
 
     keras_nlp_tokenizer = keras_nlp.models.DistilBertTokenizer(
@@ -84,10 +84,10 @@ def define_preprocessor(preset, hf_model_name):
     return keras_nlp_preprocessor, hf_tokenizer
 
 
-def convert_checkpoints(preset, keras_nlp_model, hf_model):
+def convert_checkpoints(keras_nlp_model, hf_model):
     print("\n-> Convert original weights to KerasNLP format.")
 
-    extract_dir = EXTRACT_DIR.format(preset)
+    extract_dir = EXTRACT_DIR.format(FLAGS.preset)
     config_path = os.path.join(extract_dir, "config.json")
 
     # Build config.
@@ -244,14 +244,13 @@ def convert_checkpoints(preset, keras_nlp_model, hf_model):
         )
 
     # Save the model.
-    print(f"\n-> Save KerasNLP model weights to `{preset}.h5`.")
-    keras_nlp_model.save_weights(f"{preset}.h5")
+    print(f"\n-> Save KerasNLP model weights to `{FLAGS.preset}.h5`.")
+    keras_nlp_model.save_weights(f"{FLAGS.preset}.h5")
 
     return keras_nlp_model
 
 
 def check_output(
-    preset,
     keras_nlp_preprocessor,
     keras_nlp_model,
     hf_tokenizer,
@@ -275,17 +274,15 @@ def check_output(
     print("Difference:", np.mean(keras_nlp_output - hf_output.detach().numpy()))
 
     # Show the MD5 checksum of the model weights.
-    print("Model md5sum: ", get_md5_checksum(f"./{preset}.h5"))
+    print("Model md5sum: ", get_md5_checksum(f"./{FLAGS.preset}.h5"))
 
 
 def main(_):
     hf_model_name = PRESET_MAP[FLAGS.preset]
 
-    download_files(FLAGS.preset, hf_model_name)
+    download_files(hf_model_name)
 
-    keras_nlp_preprocessor, hf_tokenizer = define_preprocessor(
-        FLAGS.preset, hf_model_name
-    )
+    keras_nlp_preprocessor, hf_tokenizer = define_preprocessor(hf_model_name)
 
     print("\n-> Load KerasNLP model.")
     keras_nlp_model = keras_nlp.models.DistilBertBackbone.from_preset(
@@ -296,12 +293,9 @@ def main(_):
     hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
     hf_model.eval()
 
-    keras_nlp_model = convert_checkpoints(
-        FLAGS.preset, keras_nlp_model, hf_model
-    )
+    keras_nlp_model = convert_checkpoints(keras_nlp_model, hf_model)
 
     check_output(
-        FLAGS.preset,
         keras_nlp_preprocessor,
         keras_nlp_model,
         hf_tokenizer,

@@ -18,6 +18,26 @@ import tensorflow as tf
 from absl import logging
 
 
+def _check_masks_shapes(inputs, padding_mask, attention_mask):
+    mask = padding_mask
+    if hasattr(inputs, "_keras_mask") and mask is None:
+        mask = inputs._keras_mask
+    if mask is not None:
+        if mask._rank() != 2:
+            raise ValueError(
+                "`padding_mask` should have shape "
+                "(batch_size, target_length). "
+                f"Received shape `{mask.shape}`."
+            )
+    if attention_mask is not None:
+        if attention_mask._rank() != 3:
+            raise ValueError(
+                "`attention_mask` should have shape "
+                "(batch_size, target_length, source_length). "
+                f"Received shape `{mask.shape}`."
+            )
+
+
 def compute_causal_mask(batch_size, input_length, output_length, cache_index=0):
     """Compute a causal attention mask for a transformer decoder.
 
@@ -60,6 +80,7 @@ def merge_padding_and_attention_mask(
         A merged 2D mask or None. If only `padding_mask` is provided, the
         returned mask is padding_mask with one additional axis.
     """
+    _check_masks_shapes(inputs, padding_mask, attention_mask)
     mask = padding_mask
     if hasattr(inputs, "_keras_mask"):
         if mask is None:
@@ -80,8 +101,5 @@ def merge_padding_and_attention_mask(
         if mask is None:
             return attention_mask
         else:
-            return tf.minimum(
-                mask[:, tf.newaxis, :],
-                attention_mask,
-            )
+            return tf.minimum(mask, attention_mask)
     return mask
