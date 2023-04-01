@@ -91,7 +91,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         super().__init__(proto=proto, **kwargs)
 
         # List of special tokens.
-        self._vocabulary_prefix = ["<s>", "<pad>", "</s>", "<unk>", "[MASK]"]
+        self._vocabulary_prefix = ["<s>", "<pad>", "</s>", "<unk>"]
 
         # IDs of special tokens.
         self.start_token_id = 0  # <s>

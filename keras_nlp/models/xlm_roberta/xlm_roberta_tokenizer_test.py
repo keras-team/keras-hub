@@ -76,7 +76,6 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
                 "<pad>",
                 "</s>",
                 "<unk>",
-                "[MASK]",
                 "▁the",
                 "▁brown",
                 "▁earth",
