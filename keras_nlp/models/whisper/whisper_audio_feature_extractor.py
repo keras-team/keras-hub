@@ -152,7 +152,7 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         enorm = 2.0 / (mel_f[2 : self.num_mels + 2] - mel_f[: self.num_mels])
         weights *= enorm[:, np.newaxis]
 
-        weights = tf.transpose(tf.constant(weights))
+        weights = tf.transpose(tf.constant(weights, dtype=self.dtype))
         return weights
 
     def _extract_audio_features(self, audio):
