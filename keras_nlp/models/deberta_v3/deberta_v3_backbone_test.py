@@ -83,9 +83,11 @@ class DebertaV3BackboneTest(tf.test.TestCase, parameterized.TestCase):
     @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         model_output = self.backbone(self.input_batch)
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        self.backbone.save(save_path, save_format=save_format)
-        restored_model = keras.models.load_model(save_path)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        self.backbone.save(path, save_format=save_format, **kwargs)
+        restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
         self.assertIsInstance(restored_model, DebertaV3Backbone)
@@ -93,3 +95,30 @@ class DebertaV3BackboneTest(tf.test.TestCase, parameterized.TestCase):
         # Check that output matches.
         restored_output = restored_model(self.input_batch)
         self.assertAllClose(model_output, restored_output)
+
+
+@pytest.mark.tpu
+@pytest.mark.usefixtures("tpu_test_class")
+class DebertaV3BackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+    def setUp(self):
+        with self.tpu_strategy.scope():
+            self.backbone = DebertaV3Backbone(
+                vocabulary_size=10,
+                num_layers=2,
+                num_heads=2,
+                hidden_dim=2,
+                intermediate_dim=4,
+                max_sequence_length=5,
+                bucket_size=2,
+            )
+        self.input_batch = {
+            "token_ids": tf.ones((2, 5), dtype="int32"),
+            "padding_mask": tf.ones((2, 5), dtype="int32"),
+        }
+        self.input_dataset = tf.data.Dataset.from_tensor_slices(
+            self.input_batch
+        ).batch(2)
+
+    def test_predict(self):
+        self.backbone.compile()
+        self.backbone.predict(self.input_dataset)

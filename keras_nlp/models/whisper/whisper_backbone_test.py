@@ -104,9 +104,11 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
     @pytest.mark.large  # Saving is slow, so mark these large.
     def test_saved_model(self, save_format, filename):
         model_output = self.backbone(self.input_batch)
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        self.backbone.save(save_path, save_format=save_format)
-        restored_model = keras.models.load_model(save_path)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        self.backbone.save(path, save_format=save_format, **kwargs)
+        restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
         self.assertIsInstance(restored_model, WhisperBackbone)
@@ -142,16 +144,16 @@ class WhisperBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
             "encoder_features": tf.ones(
                 (
                     8,
-                    self.model.max_encoder_sequence_length,
+                    self.backbone.max_encoder_sequence_length,
                     NUM_MELS,
                 ),
                 dtype="int32",
             ),
             "decoder_token_ids": tf.ones(
-                (8, self.model.max_decoder_sequence_length), dtype="int32"
+                (8, self.backbone.max_decoder_sequence_length), dtype="int32"
             ),
             "decoder_padding_mask": tf.ones(
-                (8, self.model.max_decoder_sequence_length), dtype="int32"
+                (8, self.backbone.max_decoder_sequence_length), dtype="int32"
             ),
         }
 

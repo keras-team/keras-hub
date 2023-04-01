@@ -28,7 +28,7 @@ except ImportError:
 class MaskedLMMaskGenerator(keras.layers.Layer):
     """Layer that applies language model masking.
 
-    This layer is useful for preparing inputs for masked languaged modeling
+    This layer is useful for preparing inputs for masked language modeling
     (MaskedLM) tasks. It follows the masking strategy described in the [original BERT
     paper](https://arxiv.org/abs/1810.04805). Given tokenized text,
     it randomly selects certain number of tokens for masking. Then for each
@@ -81,16 +81,42 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
     Examples:
 
     Basic usage.
-    >>> masker = keras_nlp.layers.MaskedLMMaskGenerator(
-    ...     vocabulary_size=10, mask_selection_rate=0.2, mask_token_id=0,
-    ...     mask_selection_length=5)
-    >>> masker(tf.constant([1, 2, 3, 4, 5]))
+    ```python
+    masker = keras_nlp.layers.MaskedLMMaskGenerator(
+        vocabulary_size=10,
+        mask_selection_rate=0.2,
+        mask_token_id=0,
+        mask_selection_length=5
+    )
+    # Dense input.
+    masker(tf.constant([1, 2, 3, 4, 5]))
 
-    Ragged Input:
-    >>> masker = keras_nlp.layers.MaskedLMMaskGenerator(
-    ...     vocabulary_size=10, mask_selection_rate=0.5, mask_token_id=0,
-    ...     mask_selection_length=5)
-    >>> masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
+    # Ragged input.
+    masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
+    ```
+
+    Masking a batch that contains special tokens.
+    ```python
+    pad_id, cls_id, sep_id, mask_id = 0, 1, 2, 3
+    batch = tf.constant([
+        [cls_id,   4,    5,      6, sep_id,    7,    8, sep_id, pad_id, pad_id],
+        [cls_id,   4,    5, sep_id,      6,    7,    8,      9, sep_id, pad_id],
+    ])
+
+    masker = keras_nlp.layers.MaskedLMMaskGenerator(
+        vocabulary_size = 10,
+        mask_selection_rate = 0.2,
+        mask_selection_length = 5,
+        mask_token_id = mask_id,
+        unselectable_token_ids = [
+            cls_id,
+            sep_id,
+            pad_id,
+        ]
+    )
+
+    masker(batch)
+    ```
     """
 
     def __init__(
@@ -163,7 +189,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
             token_ids = token_ids.to_tensor()
 
         mask_weights = tf.ones_like(mask_positions, self.compute_dtype)
-        # If mask_selection_length is set, covert to raggeds to dense.
+        # If `mask_selection_length` is set, convert to dense.
         if self.mask_selection_length:
             target_shape = tf.cast([-1, self.mask_selection_length], tf.int64)
             mask_positions = mask_positions.to_tensor(shape=target_shape)

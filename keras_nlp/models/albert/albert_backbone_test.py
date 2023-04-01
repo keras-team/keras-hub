@@ -25,28 +25,22 @@ from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 
 class AlbertBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.model = AlbertBackbone(
-            vocabulary_size=1000,
+        self.backbone = AlbertBackbone(
+            vocabulary_size=10,
             num_layers=2,
             num_heads=2,
             num_groups=1,
             num_inner_repetitions=1,
             embedding_dim=16,
-            hidden_dim=64,
-            intermediate_dim=128,
-            max_sequence_length=128,
+            hidden_dim=2,
+            intermediate_dim=4,
+            max_sequence_length=5,
         )
         self.batch_size = 8
         self.input_batch = {
-            "token_ids": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-            "segment_ids": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-            "padding_mask": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
+            "token_ids": tf.ones((2, 5), dtype="int32"),
+            "segment_ids": tf.ones((2, 5), dtype="int32"),
+            "padding_mask": tf.ones((2, 5), dtype="int32"),
         }
 
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
@@ -54,49 +48,40 @@ class AlbertBackboneTest(tf.test.TestCase, parameterized.TestCase):
         ).batch(2)
 
     def test_valid_call_albert(self):
-        self.model(self.input_batch)
+        self.backbone(self.input_batch)
 
+    def test_name(self):
         # Check default name passed through
-        self.assertRegexpMatches(self.model.name, "albert_backbone")
+        self.assertRegexpMatches(self.backbone.name, "albert_backbone")
 
     def test_variable_sequence_length_call_albert(self):
-        for seq_length in (25, 50, 75):
+        for seq_length in (2, 3, 4):
             input_data = {
-                "token_ids": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
-                "segment_ids": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
-                "padding_mask": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
+                "token_ids": tf.ones((2, seq_length), dtype="int32"),
+                "segment_ids": tf.ones((2, seq_length), dtype="int32"),
+                "padding_mask": tf.ones((2, seq_length), dtype="int32"),
             }
-            self.model(input_data)
+            self.backbone(input_data)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_compile(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_batch)
+    def test_predict(self):
+        self.backbone.predict(self.input_batch)
+        self.backbone.predict(self.input_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_compile_batched_ds(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_dataset)
+    def test_serialization(self):
+        new_backbone = keras.utils.deserialize_keras_object(
+            keras.utils.serialize_keras_object(self.backbone)
+        )
+        self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 
     def test_error_for_invalid_num_groups(self):
         with self.assertRaises(ValueError):
             self.model = AlbertBackbone(
-                vocabulary_size=1000,
+                vocabulary_size=10,
                 num_layers=3,
                 num_heads=2,
                 num_groups=2,
                 num_inner_repetitions=1,
-                embedding_dim=16,
+                embedding_dim=4,
                 hidden_dim=64,
                 intermediate_dim=128,
             )
@@ -105,11 +90,14 @@ class AlbertBackboneTest(tf.test.TestCase, parameterized.TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
-        model_output = self.model(self.input_batch)
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        self.model.save(save_path, save_format=save_format)
-        restored_model = keras.models.load_model(save_path)
+        model_output = self.backbone(self.input_batch)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        self.backbone.save(path, save_format=save_format, **kwargs)
+        restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
         self.assertIsInstance(restored_model, AlbertBackbone)
@@ -126,16 +114,16 @@ class AlbertBackboneTest(tf.test.TestCase, parameterized.TestCase):
 class AlbertBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
-            self.model = AlbertBackbone(
-                vocabulary_size=1000,
+            self.backbone = AlbertBackbone(
+                vocabulary_size=10,
                 num_layers=2,
                 num_heads=2,
                 num_groups=1,
                 num_inner_repetitions=1,
                 embedding_dim=16,
-                hidden_dim=64,
-                intermediate_dim=128,
-                max_sequence_length=128,
+                hidden_dim=2,
+                intermediate_dim=2,
+                max_sequence_length=4,
             )
 
         self.input_batch = {
@@ -148,5 +136,5 @@ class AlbertBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
         ).batch(2)
 
     def test_predict(self):
-        self.model.compile()
-        self.model.predict(self.input_dataset)
+        self.backbone.compile()
+        self.backbone.predict(self.input_dataset)

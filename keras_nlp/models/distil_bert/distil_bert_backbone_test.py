@@ -37,7 +37,6 @@ class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
 
         self.input_batch = {
             "token_ids": tf.ones((2, 5), dtype="int32"),
-            "mask_positions": tf.ones((2, 5), dtype="int32"),
             "padding_mask": tf.ones((2, 5), dtype="int32"),
         }
 
@@ -75,11 +74,14 @@ class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         model_output = self.backbone(self.input_batch)
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        self.backbone.save(save_path, save_format=save_format)
-        restored_model = keras.models.load_model(save_path)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        self.backbone.save(path, save_format=save_format, **kwargs)
+        restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
         self.assertIsInstance(restored_model, DistilBertBackbone)
