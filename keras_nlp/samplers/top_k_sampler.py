@@ -63,12 +63,11 @@ class TopKSampler(Sampler):
         self,
         k=5,
         seed=None,
-        temperature=1.0,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.k = k
         self.seed = seed
-        self.temperature = temperature
 
     def get_next_token(self, probabilities):
         # Filter out top-k tokens.
@@ -89,7 +88,6 @@ class TopKSampler(Sampler):
             {
                 "k": self.k,
                 "seed": self.seed,
-                "temperature": self.temperature,
             }
         )
         return config

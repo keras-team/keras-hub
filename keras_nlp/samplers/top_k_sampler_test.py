@@ -37,7 +37,6 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
 
         self.next = next
         self.sampler = TopKSampler(k=5)
-        self.sampler_temperature = TopKSampler(k=5, temperature=1e-5)
 
     def join_as_string(self, x):
         return ["".join([self.int_lookup[i] for i in s]) for s in x.numpy()]
@@ -103,12 +102,12 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
             return logits, state
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
-        output = self.sampler_temperature(
+        sampler_temperature = TopKSampler(k=5, temperature=1e-5)
+        output = sampler_temperature(
             next=next,
             prompt=prompt,
         )
-        output_ids = set(output[0].numpy())
-        self.assertTrue(all(id == 0 for id in output_ids))
+        self.assertAllEqual(output[0].numpy(), [0] * self.length)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
