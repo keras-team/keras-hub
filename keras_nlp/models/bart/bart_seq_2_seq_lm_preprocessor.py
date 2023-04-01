@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BART Seq2Seq preprocessor layer."""
+"""BART Seq2Seq LM preprocessor layer."""
 
 from absl import logging
 
@@ -21,9 +21,9 @@ from keras_nlp.models.bart.bart_preprocessor import BartPreprocessor
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.BartSeq2SeqPreprocessor")
-class BartSeq2SeqPreprocessor(BartPreprocessor):
-    """BART Seq2Seq preprocessor.
+@keras_nlp_export("keras_nlp.models.BartSeq2SeqLMPreprocessor")
+class BartSeq2SeqLMPreprocessor(BartPreprocessor):
+    """BART Seq2Seq LM preprocessor.
 
     This layer is used as preprocessor for seq2seq tasks using the BART model.
     This class subclasses `keras_nlp.models.BartPreprocessor` and keeps most of
@@ -165,7 +165,7 @@ class BartSeq2SeqPreprocessor(BartPreprocessor):
     def call(self, x, y=None, sample_weight=None):
         if y is not None or sample_weight is not None:
             logging.warning(
-                "`BartSeq2SeqPreprocessor` infers `y` and `sample_weight` "
+                "`BartSeq2SeqLMPreprocessor` infers `y` and `sample_weight` "
                 "from the provided input data, i.e., `x`. However, non-`None`"
                 "values have been passed for `y` or `sample_weight` or both. "
                 "These values will be ignored."
