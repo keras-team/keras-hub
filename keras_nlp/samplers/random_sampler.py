@@ -27,8 +27,8 @@ class RandomSampler(Sampler):
     """Random Sampler class.
 
     This sampler implements random sampling. Briefly, random sampler randomly
-    selects a token from the vocabulary, with selection chance is determined by
-    the probability of each token.
+    selects a token from the entire distripution of the tokens, with selection
+    chance determined by the probability of each token.
 
     Args:
         seed: int, defaults to None. The random seed.
@@ -53,8 +53,8 @@ class RandomSampler(Sampler):
         prompt=tf.fill((batch_size, length,), char_lookup['z']),
         index=5,
     )
-    print(["".join([int_lookup[i] for i in batch]) for batch in output.numpy()])
-    # >>> "zzzzztxdazqs"
+    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
+    # >>> ['zzzzzcpnjqij']
     ```
     """
 
@@ -69,9 +69,9 @@ class RandomSampler(Sampler):
         # Sample the next token from the probability distribution.
         next_token_id = tf.random.categorical(
             tf.math.log(probabilities), 1, seed=self.seed, dtype="int32"
-        )[0]
+        )
 
-        return next_token_id
+        return tf.squeeze(next_token_id, axis=-1)
 
     def get_config(self):
         config = super().get_config()
