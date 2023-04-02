@@ -16,6 +16,7 @@
 import copy
 
 import tensorflow as tf
+from tensorflow import keras
 
 from keras_nlp import samplers
 from keras_nlp.api_export import keras_nlp_export
@@ -174,13 +175,14 @@ class GPT2CausalLM(Task):
     ):
         inputs = backbone.input
         x = backbone(inputs)
+
         # Use token embedding weights to project from the token representation
         # to vocabulary logits.
-        outputs = tf.matmul(
-            x,
-            backbone.token_embedding.embeddings,
-            transpose_b=True,
-        )
+        outputs = keras.layers.Dense(
+            units=tf.shape(backbone.token_embedding.embeddings)[0],
+            use_bias=False,
+            name="causal_lm_head",
+        )(x)
 
         # Instantiate using Functional API Model constructor.
         super().__init__(
@@ -188,6 +190,10 @@ class GPT2CausalLM(Task):
             outputs=outputs,
             include_preprocessing=preprocessor is not None,
             **kwargs,
+        )
+
+        self.get_layer("causal_lm_head").set_weights(
+            [tf.transpose(backbone.token_embedding.embeddings)]
         )
 
         self.backbone = backbone
