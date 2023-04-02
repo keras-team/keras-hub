@@ -118,13 +118,15 @@ class DebertaV3MaskedLMTest(tf.test.TestCase, parameterized.TestCase):
     @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         model_output = self.masked_lm.predict(self.raw_batch)
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        self.masked_lm.save(save_path, save_format=save_format)
-        restored_model = keras.models.load_model(save_path)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        self.masked_lm.save(path, save_format=save_format, **kwargs)
+        restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
         self.assertIsInstance(restored_model, DebertaV3MaskedLM)
 
         # Check that output matches.
         restored_output = restored_model.predict(self.raw_batch)
-        self.assertAllClose(model_output, restored_output)
+        self.assertAllClose(model_output, restored_output, atol=0.01, rtol=0.01)

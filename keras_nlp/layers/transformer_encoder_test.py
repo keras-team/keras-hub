@@ -176,7 +176,9 @@ class TransformerEncoderTest(tf.test.TestCase, parameterized.TestCase):
         data = tf.random.uniform(shape=[2, 4, 6])
         model_output = model(data)
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
 
         loaded_model = keras.models.load_model(path)
         loaded_model_output = loaded_model(data)
