@@ -41,7 +41,7 @@ class TopPSampler(Sampler):
 
     Examples:
     ```python
-    # Use a simple alphabet of lowercase characters to [0, 26).
+    # Use a simple alphabet of lowercase characters with ids in range [0, 25].
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
@@ -57,7 +57,7 @@ class TopPSampler(Sampler):
         index=5,
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
-    # >>> "zzzzzbabcccb"
+    # >>> ['zzzzzbabcccb']
     ```
     """
 

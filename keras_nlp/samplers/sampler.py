@@ -78,7 +78,7 @@ class Sampler:
         index=5,
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
-    # >>> "zzzzzaaaaaaa"
+    # >>> ['zzzzzaaaaaaa']
     ```
     """
 
