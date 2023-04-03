@@ -56,6 +56,8 @@ SPLIT_PATTERN_2 = rf"""[\s६{SPECIAL_WHITESPACES}]$"""
 
 
 def create_alts_for_special_tokens(special_tokens):
+    # Create alternates for all special tokens that will be not split during
+    # tokenization.
     alts = []
     prefix = "Ĵ"
     # Trim out splitters.
@@ -122,7 +124,7 @@ def split_strings_for_bpe(inputs, special_tokens=None):
         raw_tokens, SPLIT_PATTERN_2, SPLIT_PATTERN_2
     )
     if special_tokens:
-        # Alternate special tokens back.
+        # Replace special tokens alternate with originals.
         for token, alt in zip(special_tokens, alts):
             escaped_alt = re.escape(alt)
             raw_tokens = tf.strings.regex_replace(
