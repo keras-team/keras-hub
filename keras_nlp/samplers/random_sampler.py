@@ -27,7 +27,7 @@ class RandomSampler(Sampler):
     """Random Sampler class.
 
     This sampler implements random sampling. Briefly, random sampler randomly
-    selects a token from the entire distripution of the tokens, with selection
+    selects a token from the entire distribution of the tokens, with selection
     chance determined by the probability of each token.
 
     Args:
@@ -70,7 +70,6 @@ class RandomSampler(Sampler):
         next_token_id = tf.random.categorical(
             tf.math.log(probabilities), 1, seed=self.seed, dtype="int32"
         )
-
         return tf.squeeze(next_token_id, axis=-1)
 
     def get_config(self):
