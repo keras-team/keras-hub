@@ -27,17 +27,21 @@ from keras_nlp.utils.python_utils import format_docstring
 @keras_nlp_export("keras_nlp.samplers.BeamSampler")
 class BeamSampler(Sampler):
     """Beam Sampler class.
+
     This sampler implements beam search algorithm. At each time-step, beam
     search keeps the beams (sequences) of the top `num_beams` highest
     accumulated probabilities, and uses each one of the beams to predict
     candidate next tokens.
+
     Args:
         num_beams: int. The number of beams that should be kept at each
             time-step. `num_beams` should be strictly positive.
         return_all_beams: bool. When set to `True`, the sampler will return the top prompt,
             all prompts and their respective probabilities score.
+
     Call Args:
         {{call_args}}
+
     Examples:
     Return only the beam with the highest accumulated probability.
     ```python
@@ -45,10 +49,12 @@ class BeamSampler(Sampler):
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
+
     def next(prompt, state, index):
         # A uniform distribution over our alphabet.
         logits = tf.ones((batch_size, vocab_size))
         return logits, state
+
     output = keras_nlp.samplers.BeamSampler()(
         next=next,
         prompt=tf.fill((batch_size, length,), char_lookup['z']),
@@ -63,15 +69,18 @@ class BeamSampler(Sampler):
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
+
     def next(prompt, state, index):
         # A uniform distribution over our alphabet.
         logits = tf.ones((batch_size, vocab_size))
         return logits, state
+
     output = keras_nlp.samplers.BeamSampler(return_all_beams=True)(
         next=next,
         prompt=tf.fill((batch_size, length,), char_lookup['z']),
         index=5,
     )
+
     print(output[0].shape)
     # >>> (1, 5, 12)
     print(output[1].shape)

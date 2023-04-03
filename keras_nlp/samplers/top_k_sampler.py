@@ -25,24 +25,30 @@ from keras_nlp.utils.python_utils import format_docstring
 @keras_nlp_export("keras_nlp.samplers.TopKSampler")
 class TopKSampler(Sampler):
     """Top-K Sampler class.
+
     This sampler implements top-k search algorithm. Briefly top-k algorithm
     randomly selects a token from the tokens of top K probability, with
     selection chance determined by the probability.
+
     Args:
         k: int, the `k` value of top-k.
         seed: int, defaults to None. The random seed.
+
     Call Args:
         {{call_args}}
+
     Examples:
     ```python
     # Use a simple alphabet of lowercase characters to [0, 26).
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
+
     def next(prompt, state, index):
         # A uniform distribution over our alphabet.
         logits = tf.ones((batch_size, vocab_size))
         return logits, state
+
     output = keras_nlp.samplers.TopKSampler(k=3)(
         next=next,
         prompt=tf.fill((batch_size, length,), char_lookup['z']),

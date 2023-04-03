@@ -25,26 +25,32 @@ from keras_nlp.utils.python_utils import format_docstring
 @keras_nlp_export("keras_nlp.samplers.TopPSampler")
 class TopPSampler(Sampler):
     """Top-P Sampler class.
+
     This sampler implements top-p search algorithm. Top-p search selects tokens
     from the smallest subset of output probabilities that sum to greater than
     `p`. Put in another way, top-p will first order token predictions by
     likelihood, and ignore all tokens after the cumulative probability of
     selected tokens exceeds `p`, then select a token from the remaining tokens.
+
     Args:
         p: float, the `p` value of top-p.
         seed: int, defaults to None. The random seed.
+
     Call Args:
         {{call_args}}
+
     Examples:
     ```python
     # Use a simple alphabet of lowercase characters to [0, 26).
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
+
     def next(prompt, state, index):
         # A uniform distribution over our alphabet.
         logits = tf.ones((batch_size, vocab_size))
         return logits, state
+
     output = keras_nlp.samplers.TopPSampler(p=0.1)(
         next=next,
         prompt=tf.fill((batch_size, length,), char_lookup['z']),
