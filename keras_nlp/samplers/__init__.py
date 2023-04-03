@@ -31,9 +31,9 @@ def deserialize(config, custom_objects=None):
     all_classes = {
         "beam": BeamSampler,
         "greedy": GreedySampler,
+        "random": RandomSampler,
         "top_k": TopKSampler,
         "top_p": TopPSampler,
-        "random": RandomSampler,
     }
     return keras.utils.deserialize_keras_object(
         config,
