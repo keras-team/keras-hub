@@ -70,6 +70,7 @@ class WhisperBackbone(Backbone):
             text decoder can consume.
 
     Examples:
+
     ```python
     input_data = {
         "encoder_features": tf.ones(shape=(1, 12, 80), dtype=tf.int64),

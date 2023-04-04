@@ -44,17 +44,17 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
             `max_audio_length*sampling_rate`.
 
     Examples:
+
     ```python
-    # Load an audio file.
-    audio_tensor = keras_nlp.utils.audio_utils.load_audio("path/to/audio.mp3")
+    audio_tensor = tf.ones((8000,), dtype=tf.float32)
 
     # Compute the log-mel spectrogram.
     whisper_audio_feature_extractor = keras_nlp.models.WhisperAudioFeatureExtractor()
     whisper_audio_feature_extractor(audio_tensor)
 
     # Compute the log-mel spectrogram for a batch of audio tensors.
-    audio_tensor_1 = load_audio("path/to/audio_1.mp3")
-    audio_tensor_2 = load_audio("path/to/audio_2.mp3")
+    audio_tensor_1 = tf.ones((8000,), dtype=tf.float32)
+    audio_tensor_2 = tf.ones((10000,), dtype=tf.float32
     audio_tensor = tf.ragged.stack([audio_tensor_1, audio_tensor_2], axis=0)
     whisper_audio_feature_extractor(audio_tensor)
     ```
