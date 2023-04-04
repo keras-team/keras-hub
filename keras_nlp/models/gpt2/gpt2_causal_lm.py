@@ -17,7 +17,6 @@ import copy
 
 import tensorflow as tf
 
-from keras_nlp import samplers
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
@@ -25,6 +24,7 @@ from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
 )
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.task import Task
+from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.tf_utils import truncate_at_token
@@ -194,7 +194,7 @@ class GPT2CausalLM(Task):
         self.preprocessor = preprocessor
         self.generate_function = None
         # Private sampler set by compile.
-        self._sampler = samplers.get("top_k")
+        self._sampler = get_sampler("top_k")
 
     @classproperty
     def presets(cls):
@@ -282,7 +282,7 @@ class GPT2CausalLM(Task):
             jit_compile=jit_compile and xla_compatible and not run_eagerly,
             **kwargs,
         )
-        self._sampler = samplers.get(sampler)
+        self._sampler = get_sampler(sampler)
         # Clear the compiled generate function.
         self.generate_function = None
 
