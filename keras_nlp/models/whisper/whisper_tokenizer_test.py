@@ -83,7 +83,10 @@ class WhisperTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         input_tokens = [9, 15, 12, 11, 0, 1, 2, 0, 3, 10]
         output = self.tokenizer.detokenize(input_tokens)
         print(output)
-        self.assertEqual(output, "<|startoftranscript|><|en|><|transcribe|><|notimestamps|> airplane at airport<|endoftext|>")
+        self.assertEqual(
+            output,
+            "<|startoftranscript|><|en|><|transcribe|><|notimestamps|> airplane at airport<|endoftext|>",
+        )
 
     def test_vocabulary_size(self):
         self.assertEqual(self.tokenizer.vocabulary_size(), 17)
