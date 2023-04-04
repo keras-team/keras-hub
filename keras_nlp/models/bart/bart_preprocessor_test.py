@@ -16,6 +16,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -159,10 +160,19 @@ class BartPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         with self.assertRaises(ValueError):
             self.preprocessor(input_data)
 
+    def test_serialization(self):
+        new_preprocessor = keras.utils.deserialize_keras_object(
+            keras.utils.serialize_keras_object(self.preprocessor)
+        )
+        self.assertEqual(
+            new_preprocessor.get_config(), self.preprocessor.get_config()
+        )
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         input_data = {
             "encoder_text": tf.constant(" airplane at airport"),
@@ -177,18 +187,16 @@ class BartPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         model = keras.Model(inputs=inputs, outputs=outputs)
 
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
 
         restored_model = keras.models.load_model(path)
 
         model_output = model(input_data)
         restored_model_output = restored_model(input_data)
 
-        self.assertAllEqual(
-            model_output["encoder_token_ids"],
-            restored_model_output["encoder_token_ids"],
-        )
-        self.assertAllEqual(
-            model_output["decoder_token_ids"],
-            restored_model_output["decoder_token_ids"],
+        self.assertAllClose(
+            model_output,
+            restored_model_output,
         )

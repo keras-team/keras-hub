@@ -16,6 +16,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -64,21 +65,21 @@ class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             "decoder_text": " kohli is the best",
         }
 
-        output = self.preprocessor(input_data)
+        x_out, y_out, sw_out = self.preprocessor(input_data)
         self.assertAllEqual(
-            output[0]["encoder_token_ids"], [0, 3, 4, 5, 3, 6, 2, 1, 1, 1]
+            x_out["encoder_token_ids"], [0, 3, 4, 5, 3, 6, 2, 1, 1, 1]
         )
         self.assertAllEqual(
-            output[0]["encoder_padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0]
+            x_out["encoder_padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0]
         )
         self.assertAllEqual(
-            output[0]["decoder_token_ids"], [0, 7, 8, 9, 10, 11, 2, 1]
+            x_out["decoder_token_ids"], [0, 7, 8, 9, 10, 11, 2, 1]
         )
         self.assertAllEqual(
-            output[0]["decoder_padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0]
+            x_out["decoder_padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0]
         )
-        self.assertAllEqual(output[1], [7, 8, 9, 10, 11, 2, 1, 1])
-        self.assertAllEqual(output[2], [1, 1, 1, 1, 1, 1, 0, 0])
+        self.assertAllEqual(y_out, [7, 8, 9, 10, 11, 2, 1, 1])
+        self.assertAllEqual(sw_out, [1, 1, 1, 1, 1, 1, 0, 0])
 
     def test_tokenize_list_of_strings(self):
         input_data = {
@@ -86,22 +87,22 @@ class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             "decoder_text": [" kohli is the best"] * 4,
         }
 
-        output = self.preprocessor(input_data)
+        x_out, y_out, sw_out = self.preprocessor(input_data)
         self.assertAllEqual(
-            output[0]["encoder_token_ids"], [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1]] * 4
+            x_out["encoder_token_ids"], [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1]] * 4
         )
         self.assertAllEqual(
-            output[0]["encoder_padding_mask"],
+            x_out["encoder_padding_mask"],
             [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0]] * 4,
         )
         self.assertAllEqual(
-            output[0]["decoder_token_ids"], [[0, 7, 8, 9, 10, 11, 2, 1]] * 4
+            x_out["decoder_token_ids"], [[0, 7, 8, 9, 10, 11, 2, 1]] * 4
         )
         self.assertAllEqual(
-            output[0]["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
+            x_out["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
         )
-        self.assertAllEqual(output[1], [[7, 8, 9, 10, 11, 2, 1, 1]] * 4)
-        self.assertAllEqual(output[2], [[1, 1, 1, 1, 1, 1, 0, 0]] * 4)
+        self.assertAllEqual(y_out, [[7, 8, 9, 10, 11, 2, 1, 1]] * 4)
+        self.assertAllEqual(sw_out, [[1, 1, 1, 1, 1, 1, 0, 0]] * 4)
 
     def test_error_multi_segment_input(self):
         input_data = {
@@ -118,10 +119,19 @@ class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         with self.assertRaises(ValueError):
             self.preprocessor(input_data)
 
+    def test_serialization(self):
+        new_preprocessor = keras.utils.deserialize_keras_object(
+            keras.utils.serialize_keras_object(self.preprocessor)
+        )
+        self.assertEqual(
+            new_preprocessor.get_config(), self.preprocessor.get_config()
+        )
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         input_data = {
             "encoder_text": tf.constant(" airplane at airport"),
@@ -136,26 +146,16 @@ class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         model = keras.Model(inputs=inputs, outputs=outputs)
 
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
 
         restored_model = keras.models.load_model(path)
 
         model_output = model(input_data)
         restored_model_output = restored_model(input_data)
 
-        self.assertAllEqual(
-            model_output[0]["encoder_token_ids"],
-            restored_model_output[0]["encoder_token_ids"],
-        )
-        self.assertAllEqual(
-            model_output[0]["decoder_token_ids"],
-            restored_model_output[0]["decoder_token_ids"],
-        )
-        self.assertAllEqual(
-            model_output[1],
-            restored_model_output[1],
-        )
-        self.assertAllEqual(
-            model_output[2],
-            restored_model_output[2],
+        self.assertAllClose(
+            model_output,
+            restored_model_output,
         )

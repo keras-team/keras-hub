@@ -55,11 +55,10 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             Each value in the dictionary should be a tensor of single string
             sequences. Inputs may be batched or unbatched. Raw python inputs
             will be converted to tensors.
-        y: Any label data. Any passed value will be ignored since this is
-            calculated internally by shifting the decoder input sequence one
-            step to the left.
-        sample_weight: Any label weight data. Will be ignored since this is
-            calculated internally by shifting the padding mask one step to the
+        y: Label data. Should always be `None` as the layer generates labels by
+            shifting the decoder input sequence one step to the left.
+        sample_weight: Label weights. Should always be `None` as the layer
+            generates label weights by shifting the padding mask one step to the
             left.
 
     Examples:
