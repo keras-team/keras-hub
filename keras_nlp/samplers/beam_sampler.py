@@ -36,8 +36,8 @@ class BeamSampler(Sampler):
     Args:
         num_beams: int. The number of beams that should be kept at each
             time-step. `num_beams` should be strictly positive.
-        return_all_beams: bool. When set to `True`, the sampler will return the top prompt,
-            all prompts and their respective probabilities score.
+        return_all_beams: bool. When set to `True`, the sampler will return all
+            beams and their respective probabilities score.
 
     Call Args:
         {{call_args}}
@@ -45,7 +45,7 @@ class BeamSampler(Sampler):
     Examples:
     Return only the beam with the highest accumulated probability.
     ```python
-    # Use a simple alphabet of lowercase characters to [0, 26).
+    # Use a simple alphabet of lowercase characters with ids in range [0, 25].
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
@@ -61,14 +61,15 @@ class BeamSampler(Sampler):
         index=5,
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
-    # >>> "zzzzzaaaaaaa"
+    # >>> ['zzzzzeeeeeee']
     ```
+
     Return all beams and their probabilities.
     ```python
-    # Use a simple alphabet of lowercase characters to [0, 26).
+    # Use a simple alphabet of lowercase characters with ids in range [0, 25].
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
     char_lookup = {v: k for k, v in int_lookup.items()}
-    batch_size, length, vocab_size = 1, 12, len(int_lookup)
+    batch_size, length, vocab_size = 1, 8, len(int_lookup)
 
     def next(prompt, state, index):
         # A uniform distribution over our alphabet.
@@ -82,11 +83,11 @@ class BeamSampler(Sampler):
     )
 
     print(output[0].shape)
-    # >>> (1, 5, 12)
+    # >>> (1, 5, 8)
     print(output[1].shape)
     # >>> (1, 5)
-    print(["".join([int_lookup[i] for i in s]) for s in output[0][0].numpy()])
-    # >>> "zzzzzaaaaaaa"
+    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
+    # >>> ['zzzzzeee', 'zzzzzeed', 'zzzzzeec', 'zzzzzeea', 'zzzzzeeb']
     ```
     """
 
