@@ -20,8 +20,10 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers import TokenAndPositionEmbedding
-from keras_nlp.layers import TransformerEncoder
+from keras_nlp.layers.token_and_position_embedding import (
+    TokenAndPositionEmbedding,
+)
+from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.roberta.roberta_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
