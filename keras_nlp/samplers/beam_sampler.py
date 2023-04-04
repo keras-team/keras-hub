@@ -69,7 +69,7 @@ class BeamSampler(Sampler):
     # Use a simple alphabet of lowercase characters with ids in range [0, 25].
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
     char_lookup = {v: k for k, v in int_lookup.items()}
-    batch_size, length, vocab_size = 1, 12, len(int_lookup)
+    batch_size, length, vocab_size = 1, 8, len(int_lookup)
 
     def next(prompt, state, index):
         # A uniform distribution over our alphabet.
@@ -83,12 +83,11 @@ class BeamSampler(Sampler):
     )
 
     print(output[0].shape)
-    # >>> (1, 5, 12)
+    # >>> (1, 5, 8)
     print(output[1].shape)
     # >>> (1, 5)
-    print(["".join([int_lookup[i] for i in s]) for s in output[0][0].numpy()])
-    # >>> ['zzzzzeeeeeee', 'zzzzzeeeeeed', 'zzzzzeeeeeec', 'zzzzzeeeeeea',
-    #      'zzzzzeeeeeeb']
+    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
+    # >>> ['zzzzzeee', 'zzzzzeed', 'zzzzzeec', 'zzzzzeea', 'zzzzzeeb']
     ```
     """
 
