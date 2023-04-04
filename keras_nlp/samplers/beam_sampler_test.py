@@ -13,7 +13,6 @@
 # limitations under the License.
 """Tests for Beam sampler."""
 
-import numpy as np
 import tensorflow as tf
 from absl.testing import parameterized
 
@@ -31,9 +30,11 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
         self.vocab_size = len(self.int_lookup)
 
         def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([10])
             # Return a distribution favoring the next char in cache.
             logits = tf.one_hot(cache[:, index], self.vocab_size) * 1e9
-            return logits, None, cache
+            return logits, hidden_states, cache
 
         self.next = next
         self.sampler = BeamSampler(num_beams=5)
@@ -44,10 +45,17 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_stateless_call(self):
         def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([10])
             # Return a distribution favoring the first token in the vocab.
-            logits = np.zeros((self.batch_size, self.vocab_size))
-            logits[:, 0] = 1e9
-            return tf.constant(logits, dtype="float32"), None, cache
+            logits = (
+                tf.one_hot(
+                    tf.zeros(self.batch_size, dtype=tf.int32),
+                    self.vocab_size,
+                )
+                * 1e9
+            )
+            return logits, hidden_states, cache
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(

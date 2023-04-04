@@ -47,19 +47,24 @@ class ContrastiveSampler(Sampler):
     Examples:
     ```python
     # Use a simple alphabet of lowercase characters to [0, 26).
-    int_lookup = {i: chr(i + ord('a')) for i in range(26)}
+    int_lookup = {i: chr(i + ord("a")) for i in range(26)}
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
+    hidden_size = 5
+    index = 5
 
     def next(prompt, cache, index):
+        prompt_batch_size = tf.shape(prompt)[0]
+        hidden_states = tf.ones((prompt_batch_size, 1, hidden_size))
         # A uniform distribution over our alphabet.
-        logits = tf.ones((batch_size, vocab_size))
-        return logits, None, cache
+        logits = tf.ones((prompt_batch_size, vocab_size))
+        return logits, hidden_states, cache
 
     output = keras_nlp.samplers.ContrastiveSampler()(
         next=next,
-        prompt=tf.fill((batch_size, length,), char_lookup['z']),
-        index=5,
+        prompt=tf.fill((batch_size, length), char_lookup["z"]),
+        index=index,
+        hidden_states=tf.ones([batch_size, index, hidden_size]),
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
     # >>> "zzzzzaaaaaaa"
@@ -81,11 +86,11 @@ class ContrastiveSampler(Sampler):
         self,
         next,
         prompt,
+        hidden_states,
         cache=None,
         index=0,
         mask=None,
         end_token_id=None,
-        hidden_states=None,
     ):
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         # Make sure max length and start index are the same dtype.
@@ -165,13 +170,16 @@ class ContrastiveSampler(Sampler):
                 tf.reduce_max(similarity_scores, axis=1),
                 dtype=next_token_probabilities.dtype,
             )
+            if index == 0:
+                # If the index is 0, there is no previous states so we set
+                # `max_similarity_scores` the same for all beams.
+                max_similarity_scores = tf.zeros_like(max_similarity_scores)
             # The final score of each candidate token is weighted sum of
             # probability and similarity against previous tokens.
             accumulated_scores = (
                 (1 - self.alpha) * next_token_probabilities
                 - self.alpha * max_similarity_scores
             )
-
             # Unflatten varibles to shape [batch_size, self.k, ...] for
             # gather purpose.
             unflat_score = unflatten_beams(accumulated_scores)

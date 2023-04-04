@@ -31,9 +31,11 @@ class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
         self.vocab_size = len(self.int_lookup)
 
         def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([10])
             # Return a distribution favoring the next char in cache.
             logits = tf.one_hot(cache[:, index], self.vocab_size) * 1e9
-            return logits, None, cache
+            return logits, hidden_states, cache
 
         self.next = next
         self.sampler = TopPSampler(p=0.1)
@@ -43,10 +45,17 @@ class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_stateless_call(self):
         def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([10])
             # Return a distribution favoring the first token in the vocab.
-            logits = np.zeros((self.batch_size, self.vocab_size))
-            logits[:, 0] = 1e9
-            return tf.constant(logits), None, cache
+            logits = (
+                tf.one_hot(
+                    tf.zeros(self.batch_size, dtype=tf.int32),
+                    self.vocab_size,
+                )
+                * 1e9
+            )
+            return logits, hidden_states, cache
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
@@ -81,8 +90,10 @@ class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_outputs_in_top_p(self):
         def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([10])
             logits = np.zeros((self.batch_size, self.vocab_size))
-            return tf.constant(logits), None, cache
+            return tf.constant(logits), hidden_states, cache
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = TopPSampler(p=(2.0 / self.vocab_size))(

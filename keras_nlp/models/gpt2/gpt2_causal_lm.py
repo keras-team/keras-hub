@@ -303,10 +303,9 @@ class GPT2CausalLM(Task):
             # Create and seed cache with a single forward pass.
             hidden_states, cache = self._build_cache(prompt)
 
-            def next(prompt, state, index):
+            def next(prompt, cache, index):
                 # The cache index is the index of our previous token.
                 cache_index = index - 1
-                cache = state
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
                 logits, hidden_states, cache = self.call_with_cache(
                     prompt,

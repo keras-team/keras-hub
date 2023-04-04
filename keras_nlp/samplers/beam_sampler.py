@@ -51,13 +51,15 @@ class BeamSampler(Sampler):
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
     def next(prompt, cache, index):
+        prompt_batch_size = tf.shape(prompt)[0]
+        hidden_states = tf.ones((prompt_batch_size, 1, 10))
         # A uniform distribution over our alphabet.
-        logits = tf.ones((batch_size, vocab_size))
-        return logits, cache
+        logits = tf.ones((prompt_batch_size, vocab_size))
+        return logits, hidden_states, cache
 
     output = keras_nlp.samplers.BeamSampler()(
         next=next,
-        prompt=tf.fill((batch_size, length,), char_lookup['z']),
+        prompt=tf.fill((batch_size, length), char_lookup["z"]),
         index=5,
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])

@@ -13,7 +13,6 @@
 # limitations under the License.
 """Tests for Top-K sampler."""
 
-import numpy as np
 import tensorflow as tf
 from absl.testing import parameterized
 
@@ -31,9 +30,11 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
         self.vocab_size = len(self.int_lookup)
 
         def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([10])
             # Return a distribution favoring the next char in cache.
             logits = tf.one_hot(cache[:, index], self.vocab_size) * 1e9
-            return logits, None, cache
+            return logits, hidden_states, cache
 
         self.next = next
         self.sampler = TopKSampler(k=5)
@@ -43,10 +44,17 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_stateless_call(self):
         def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([10])
             # Return a distribution favoring the first token in the vocab.
-            logits = np.zeros((self.batch_size, self.vocab_size))
-            logits[:, 0] = 1e9
-            return tf.constant(logits), None, cache
+            logits = (
+                tf.one_hot(
+                    tf.zeros(self.batch_size, dtype=tf.int32),
+                    self.vocab_size,
+                )
+                * 1e9
+            )
+            return logits, hidden_states, cache
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
@@ -81,10 +89,12 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_outputs_in_top_k(self):
         def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([10])
             # Return a distribution where each id is progressively less likely.
             logits = tf.range(self.vocab_size, 0, -1, dtype="float32")
             logits = tf.repeat(logits[tf.newaxis, :], self.batch_size, axis=0)
-            return logits, None, cache
+            return logits, hidden_states, cache
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
