@@ -132,9 +132,9 @@ class FNetEncoder(keras.layers.Layer):
             # Apply FFT on the input and take the real part.
             # Before we apply fourier transform, let's convert the dtype of the
             # input tensor to complex64.
-            input = tf.cast(input, tf.complex64)
-            mixing_output = tf.math.real(tf.signal.fft2d(input))
-            return mixing_output
+            x = tf.cast(input, tf.complex64)
+            mixing_output = tf.math.real(tf.signal.fft2d(x))
+            return tf.cast(mixing_output, input.dtype)
 
         def add_and_norm(input1, input2, norm_layer):
             return norm_layer(input1 + input2)
