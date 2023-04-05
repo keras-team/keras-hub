@@ -52,7 +52,7 @@ class FNetTokenizer(SentencePieceTokenizer):
     ```python
     # Unbatched input.
     tokenizer = keras_nlp.models.FNetTokenizer.from_preset(
-        "bert_base_en_uncased",
+        "f_net_base_en",
     )
     tokenizer("The quick brown fox jumped.")
 
