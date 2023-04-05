@@ -153,9 +153,11 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
     def test_saved_model(self, save_format, filename):
         keras.utils.set_random_seed(42)
         model_output = self.causal_lm.predict(self.raw_batch)
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        self.causal_lm.save(save_path, save_format=save_format)
-        restored_model = keras.models.load_model(save_path)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        self.causal_lm.save(path, save_format=save_format, **kwargs)
+        restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
         self.assertIsInstance(restored_model, GPT2CausalLM)

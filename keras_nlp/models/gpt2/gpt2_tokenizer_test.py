@@ -53,6 +53,11 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [1, 2, 3, 1, 4])
 
+    def test_tokenize_end_token(self):
+        input_data = " airplane at airport<|endoftext|>"
+        output = self.tokenizer(input_data)
+        self.assertAllEqual(output, [1, 2, 3, 1, 4, 0])
+
     def test_tokenize_batch(self):
         input_data = tf.constant([" airplane at airport", " kohli is the best"])
         output = self.tokenizer(input_data)
@@ -82,7 +87,9 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         model = keras.Model(inputs, outputs)
 
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
 
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(

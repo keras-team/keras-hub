@@ -15,6 +15,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -59,10 +60,19 @@ class DistilBertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         with self.assertRaises(ValueError):
             DistilBertTokenizer(vocabulary=["a", "b", "c"])
 
+    def test_serialization(self):
+        config = keras.utils.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.utils.deserialize_keras_object(config)
+        self.assertEqual(
+            new_tokenizer.get_config(),
+            self.tokenizer.get_config(),
+        )
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["THE QUICK BROWN FOX."])
         tokenizer = DistilBertTokenizer(vocabulary=self.vocab)
@@ -70,7 +80,9 @@ class DistilBertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),

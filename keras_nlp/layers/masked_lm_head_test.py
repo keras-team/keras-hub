@@ -16,12 +16,13 @@
 import os
 
 import tensorflow as tf
+from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.layers import masked_lm_head
 
 
-class MaskedLMHeadTest(tf.test.TestCase):
+class MaskedLMHeadTest(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call(self):
         head = masked_lm_head.MaskedLMHead(
             vocabulary_size=100,
@@ -156,7 +157,11 @@ class MaskedLMHeadTest(tf.test.TestCase):
         head2_output = head2(token_data, mask_positions=position_data)
         self.assertAllClose(head1_output, head2_output)
 
-    def test_saving_model(self):
+    @parameterized.named_parameters(
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
+    )
+    def test_saved_model(self, save_format, filename):
         head = masked_lm_head.MaskedLMHead(
             vocabulary_size=100,
             activation="softmax",
@@ -171,9 +176,11 @@ class MaskedLMHeadTest(tf.test.TestCase):
             shape=(4, 5), maxval=10, dtype="int32"
         )
         model_output = model((token_data, position_data))
-        save_path = os.path.join(self.get_temp_dir(), "model")
-        model.save(save_path)
-        restored = keras.models.load_model(save_path)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
+        restored_model = keras.models.load_model(path)
 
-        restored_output = restored((token_data, position_data))
+        restored_output = restored_model((token_data, position_data))
         self.assertAllClose(model_output, restored_output)

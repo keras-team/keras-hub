@@ -17,7 +17,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.metrics import RougeL
+from keras_nlp.metrics.rouge_l import RougeL
 
 
 class RougeLTest(tf.test.TestCase):
