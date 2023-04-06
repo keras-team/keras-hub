@@ -31,7 +31,7 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
 
         def next(prompt, cache, index):
             # Dummy hidden states.
-            hidden_states = tf.ones([10])
+            hidden_states = tf.ones([self.batch_size, 5])
             # Return a distribution favoring the next char in cache.
             logits = tf.one_hot(cache[:, index], self.vocab_size) * 1e9
             return logits, hidden_states, cache
@@ -45,7 +45,7 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
     def test_stateless_call(self):
         def next(prompt, cache, index):
             # Dummy hidden states.
-            hidden_states = tf.ones([10])
+            hidden_states = tf.ones([self.batch_size, 5])
             # Return a distribution favoring the first token in the vocab.
             logits = (
                 tf.one_hot(
@@ -90,7 +90,7 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
     def test_outputs_in_top_k(self):
         def next(prompt, cache, index):
             # Dummy hidden states.
-            hidden_states = tf.ones([10])
+            hidden_states = tf.ones([self.batch_size, 5])
             # Return a distribution where each id is progressively less likely.
             logits = tf.range(self.vocab_size, 0, -1, dtype="float32")
             logits = tf.repeat(logits[tf.newaxis, :], self.batch_size, axis=0)

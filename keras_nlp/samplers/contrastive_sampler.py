@@ -86,12 +86,17 @@ class ContrastiveSampler(Sampler):
         self,
         next,
         prompt,
-        hidden_states,
         cache=None,
         index=0,
         mask=None,
         end_token_id=None,
+        hidden_states=None,
     ):
+        if hidden_states is None:
+            raise ValueError(
+                "`ContrastiveSampler` requires passing a `hidden_states`, but"
+                "received `None`."
+            )
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         # Make sure max length and start index are the same dtype.
         index = tf.cast(index, max_length.dtype)
@@ -162,12 +167,11 @@ class ContrastiveSampler(Sampler):
             # Compute the max similarity score for top-k candidate tokens
             # against previous tokens.
             last_token_state = next_hidden_states_beams
-            previous_states = hidden_states_beams[:, :index, :]
             similarity_scores = self.similarity(
-                previous_states, last_token_state
+                hidden_states_beams, last_token_state
             )
             max_similarity_scores = tf.cast(
-                tf.reduce_max(similarity_scores, axis=1),
+                tf.reduce_max(similarity_scores[:, :index], axis=1),
                 dtype=next_token_probabilities.dtype,
             )
             if index == 0:
@@ -189,21 +193,28 @@ class ContrastiveSampler(Sampler):
                 next_hidden_states_beams
             )
             unflat_cache = tf.nest.map_structure(unflatten_beams, cache_beams)
-            win_token_indices = tf.math.argmax(unflat_score, axis=1)
+            best_token_indices = tf.math.argmax(unflat_score, axis=1)
 
-            def gather_win_token(beams):
-                return tf.gather(beams, win_token_indices, axis=1, batch_dims=1)
+            def gather_best_token(beams):
+                return tf.gather(
+                    beams,
+                    best_token_indices,
+                    axis=1,
+                    batch_dims=1,
+                )
 
-            prompt = gather_win_token(unflat_prompt)
+            prompt = gather_best_token(unflat_prompt)
             # We avoid recomputing forward pass for each token by updating the
             # cache/hidden_states using the output, and pass the logits to
             # next iteration step.
-            logits = gather_win_token(unflat_next_logits)
-            next_hidden_states = gather_win_token(unflat_next_hidden_states)
-            cache = tf.nest.map_structure(gather_win_token, unflat_cache)
+            logits = gather_best_token(unflat_next_logits)
+            next_hidden_states = gather_best_token(unflat_next_hidden_states)
+            cache = tf.nest.map_structure(gather_best_token, unflat_cache)
 
             hidden_states = dynamic_update_slice(
-                hidden_states, next_hidden_states, [0, index, 0]
+                hidden_states,
+                next_hidden_states[:, tf.newaxis, :],
+                [0, index, 0],
             )
             return (prompt, cache, index + 1, logits, hidden_states)
 
@@ -216,8 +227,9 @@ class ContrastiveSampler(Sampler):
         return prompt
 
     def similarity(self, h1, h2):
-        return tf.squeeze(tf.matmul(h1, h2, transpose_b=True), axis=-1) / (
-            tf.norm(h1, axis=-1) * tf.norm(h2, axis=-1)
+        h2 = h2[..., tf.newaxis]
+        return tf.squeeze(tf.matmul(h1, h2), axis=-1) / (
+            tf.norm(h1, axis=-1) * tf.norm(h2, axis=-2)
         )
 
     def get_config(self):

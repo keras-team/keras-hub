@@ -30,8 +30,9 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
         self.vocab_size = len(self.int_lookup)
 
         def next(prompt, cache, index):
+            batch_size = tf.shape(prompt)[0]
             # Dummy hidden states.
-            hidden_states = tf.ones([10])
+            hidden_states = tf.ones([batch_size, 5])
             # Return a distribution favoring the next char in cache.
             logits = tf.one_hot(cache[:, index], self.vocab_size) * 1e9
             return logits, hidden_states, cache
@@ -45,8 +46,9 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_stateless_call(self):
         def next(prompt, cache, index):
+            batch_size = tf.shape(prompt)[0]
             # Dummy hidden states.
-            hidden_states = tf.ones([10])
+            hidden_states = tf.ones([batch_size, 5])
             # Return a distribution favoring the first token in the vocab.
             logits = (
                 tf.one_hot(

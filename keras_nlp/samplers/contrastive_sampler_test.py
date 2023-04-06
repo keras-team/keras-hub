@@ -41,7 +41,7 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
             batch_size = tf.shape(prompt)[0]
             # Return a distribution favoring the next char in cache.
             logits = tf.one_hot(cache[:, index], self.vocab_size) * 1e9
-            hidden_states = tf.ones([batch_size, 1, self.hidden_dim])
+            hidden_states = tf.ones([batch_size, self.hidden_dim])
             return logits, hidden_states, cache
 
         self.next = next
@@ -61,7 +61,7 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
                 )
                 * 1e9
             )
-            hidden_states = tf.ones([batch_size, 1, self.hidden_dim])
+            hidden_states = tf.ones([batch_size, self.hidden_dim])
             return logits, hidden_states, cache
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
@@ -106,7 +106,7 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
             # Return a distribution where each id is progressively less likely.
             logits = tf.range(self.vocab_size, 0, -1, dtype="float32")
             logits = tf.repeat(logits[tf.newaxis, :], batch_size, axis=0)
-            hidden_states = tf.ones([batch_size, 1, self.hidden_dim])
+            hidden_states = tf.ones([batch_size, self.hidden_dim])
             return logits, hidden_states, cache
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
@@ -118,6 +118,52 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
         )
         output_ids = set(output[0, 1:].numpy())
         self.assertContainsSubset(output_ids, range(5))
+
+    def test_alpha_penalty_work(self):
+        def next(prompt, cache, index):
+            batch_size = tf.shape(prompt)[0]
+            best_token_id = 7
+            logits = tf.ones([batch_size, self.vocab_size])
+            # Favoring `best_token_id` in the logits.
+            logits += (
+                tf.one_hot(
+                    tf.zeros(self.batch_size, dtype=tf.int32) + best_token_id,
+                    self.vocab_size,
+                )
+                * 1e9
+            )
+
+            # Set the hidden states for `best_token_id` as [1, 1, ..., 1], so it
+            # gets the max similarity penality score.
+            mask_of_best_token = prompt[:, index - 1] == best_token_id
+            random_states = tf.random.uniform([batch_size, self.hidden_dim]) * (
+                1 - tf.cast(mask_of_best_token, dtype=tf.float32)[:, tf.newaxis]
+            )
+            hidden_states = (
+                tf.ones([batch_size, self.hidden_dim])
+                * tf.cast(mask_of_best_token, dtype=tf.float32)[:, tf.newaxis]
+            )
+            hidden_states = hidden_states + random_states
+            return logits, hidden_states, cache
+
+        prompt = tf.fill((1, self.length), self.char_lookup["z"])
+        hidden_states = tf.ones([1, self.length, self.hidden_dim]) + 1e-5
+        output = self.sampler(
+            next=next,
+            prompt=prompt,
+            index=5,
+            hidden_states=hidden_states,
+        )
+        self.assertEqual(self.join_as_string(output), ["zzzzzhhhhhhh"])
+
+        sampler = ContrastiveSampler(k=5, alpha=1.0)
+        output = sampler(
+            next=next,
+            prompt=prompt,
+            index=5,
+            hidden_states=hidden_states,
+        )
+        self.assertTrue("h" not in self.join_as_string(output))
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)

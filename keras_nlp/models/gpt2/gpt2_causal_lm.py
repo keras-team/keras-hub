@@ -231,8 +231,8 @@ class GPT2CausalLM(Task):
         Returns:
             A (logits, hidden_states, cache) tuple. Where `logits` is the
             language model logits for the input token_ids, `hidden_states` is
-            the hidden state of the input (the layer before embedding matrix
-            mapping), and `cache` is the decoding cache.
+            the final hidden representation of the input tokens, and `cache` is
+            the decoding cache.
         """
         token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
         position_embedding = self.backbone.get_layer("position_embedding")(
@@ -255,12 +255,12 @@ class GPT2CausalLM(Task):
         cache = tf.stack(caches, axis=1)
         x = self.backbone.get_layer("layer_norm")(x)
         hidden_states = x
-        x = tf.matmul(
-            x,
+        logits = tf.matmul(
+            hidden_states,
             self.backbone.get_layer("token_embedding").embeddings,
             transpose_b=True,
         )
-        return x, hidden_states, cache
+        return logits, hidden_states, cache
 
     def _build_cache(self, prompt):
         """Build an empty cache for use with `call_with_cache()`."""
@@ -312,7 +312,11 @@ class GPT2CausalLM(Task):
                     cache,
                     cache_index,
                 )
-                return tf.squeeze(logits, axis=1), hidden_states, cache
+                return (
+                    tf.squeeze(logits, axis=1),
+                    tf.squeeze(hidden_states, axis=1),
+                    cache,
+                )
 
             return self._sampler(
                 next=next,
