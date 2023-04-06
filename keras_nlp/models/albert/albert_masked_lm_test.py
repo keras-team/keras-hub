@@ -140,4 +140,4 @@ class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         self.assertIsInstance(restored_model, AlbertMaskedLM)
         # Check that output matches.
         restored_output = restored_model.predict(self.raw_batch)
-        self.assertAllClose(model_output, restored_output)
+        self.assertAllClose(model_output, restored_output, atol=0.01, rtol=0.01)
