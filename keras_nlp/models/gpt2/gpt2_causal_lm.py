@@ -332,7 +332,7 @@ class GPT2CausalLM(Task):
         This method generates text based on given `prompt`. Generation will
         continue until `max_length` is met, and all tokens generated after
         `end_token` will be truncated. The sampling strategy can be set in
-        the `compile` method. 
+        the `compile` method.
 
         Args:
             prompt: a string, string Tensor or string RaggedTensor. The prompt
