@@ -273,7 +273,8 @@ class T5MultiHeadAttention(keras.layers.Layer):
         if position_bias is None:
             if not self.use_relative_attention_bias:
                 position_bias = tf.zeros(
-                    (1, self.num_heads, real_seq_length, key_length)
+                    (1, self.num_heads, real_seq_length, key_length),
+                    self.compute_dtype,
                 )
             else:
                 position_bias = self.compute_bias(real_seq_length, key_length)

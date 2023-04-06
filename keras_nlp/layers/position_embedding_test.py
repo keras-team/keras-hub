@@ -44,8 +44,8 @@ class PositionEmbeddingLayerTest(tf.test.TestCase, parameterized.TestCase):
         # to be the same as the input shape in all dimensions save batch.
         expected_output_shape = [None, sequence_length, feature_size]
         self.assertEqual(expected_output_shape, output_tensor.shape.as_list())
-        # The default output dtype for this layer should be tf.float32.
-        self.assertEqual(tf.float32, output_tensor.dtype)
+        # The output dtype for this layer should match the compute dtype.
+        self.assertEqual(test_layer.compute_dtype, output_tensor.dtype)
 
     def test_more_than_3_dimensions_static(self):
         # Create a 4-dimensional input (the first dimension is implicit).
@@ -68,8 +68,8 @@ class PositionEmbeddingLayerTest(tf.test.TestCase, parameterized.TestCase):
             feature_size,
         ]
         self.assertEqual(expected_output_shape, output_tensor.shape.as_list())
-        # The default output dtype for this layer should be tf.float32.
-        self.assertEqual(tf.float32, output_tensor.dtype)
+        # The output dtype for this layer should match the compute dtype.
+        self.assertEqual(test_layer.compute_dtype, output_tensor.dtype)
 
     def test_float16_dtype(self):
         # Create a 3-dimensional input (the first dimension is implicit).

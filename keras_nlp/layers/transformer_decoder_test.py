@@ -280,8 +280,13 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
             intermediate_dim=4,
             num_heads=num_heads,
         )
-        x = tf.random.uniform(shape=[batch_size, seq_len, num_heads * head_dim])
-        cache = tf.zeros([batch_size, 2, seq_len, num_heads, head_dim])
+        dtype = layer.compute_dtype
+        x = tf.random.uniform(
+            shape=[batch_size, seq_len, num_heads * head_dim], dtype=dtype
+        )
+        cache = tf.zeros(
+            [batch_size, 2, seq_len, num_heads, head_dim], dtype=dtype
+        )
         outputs = tf.zeros_like(x)
 
         def call(outputs, cache):
