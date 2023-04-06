@@ -55,14 +55,14 @@ SPLIT_PATTERN_1 = SPLIT_PATTERN_1.replace(
 SPLIT_PATTERN_2 = rf"""[\s६{SPECIAL_WHITESPACES}]$"""
 
 
-def create_alts_for_special_tokens(special_tokens):
+def create_alts_for_special_tokens(special_tokens_lst):
     # Create alternates for all special tokens that will be not split during
     # tokenization.
     alts = []
     prefix = "Ĵ"
     # Trim out splitters.
     replace_pattern = r"'|\s+|[^\p{L}\p{N}]+"
-    for token in special_tokens:
+    for token in special_tokens_lst:
         token = re.sub(replace_pattern, "", token)
         alts.append(prefix + token)
     return alts
@@ -100,7 +100,7 @@ def remove_strings_from_inputs(tensor, string_to_remove):
     return result
 
 
-def split_strings_for_bpe(inputs, special_tokens=None):
+def split_strings_for_bpe(inputs, special_tokens_lst=None):
     # We need to recreate the exact behavior of token presplitting in the
     # original gpt2 tokenizer which uses a lookahead. As re2 does not
     # support lookahead match, we are using an alternative insert a special
@@ -112,9 +112,9 @@ def split_strings_for_bpe(inputs, special_tokens=None):
     inputs = tf.strings.regex_replace(
         inputs, rf"(\s{SPECIAL_WHITESPACES})$", r"\1६"
     )
-    if special_tokens:
-        alts = create_alts_for_special_tokens(special_tokens)
-        for token, alt in zip(special_tokens, alts):
+    if special_tokens_lst:
+        alts = create_alts_for_special_tokens(special_tokens_lst)
+        for token, alt in zip(special_tokens_lst, alts):
             escaped_token = re.escape(token)
             inputs = tf_text.regex_split(inputs, escaped_token, escaped_token)
             inputs = tf.strings.regex_replace(inputs, escaped_token, alt)
@@ -123,9 +123,9 @@ def split_strings_for_bpe(inputs, special_tokens=None):
     raw_tokens = tf_text.regex_split(
         raw_tokens, SPLIT_PATTERN_2, SPLIT_PATTERN_2
     )
-    if special_tokens:
+    if special_tokens_lst:
         # Replace special tokens alternate with originals.
-        for token, alt in zip(special_tokens, alts):
+        for token, alt in zip(special_tokens_lst, alts):
             escaped_alt = re.escape(alt)
             raw_tokens = tf.strings.regex_replace(
                 raw_tokens, escaped_alt, token
@@ -229,6 +229,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             and will tokenize a word with a leading space differently. Adding
             a prefix space to the first word will cause it to be tokenized
             equivalently to all subsequent words in the sequence.
+        special_tokens_lst: list, defaults to None. List of special tokens.
+            These tokens will not be split before tokenization, and will be
+            treated as a whole.
 
     Examples:
 
@@ -264,7 +267,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         merges,
         sequence_length=None,
         add_prefix_space=False,
-        special_tokens=None,
+        special_tokens_lst=None,
         **kwargs,
     ) -> None:
         assert_tf_text_installed(self.__class__.__name__)
@@ -304,7 +307,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             )
         self.sequence_length = sequence_length
         self.add_prefix_space = add_prefix_space
-        self.special_tokens = special_tokens
+        self.special_tokens_lst = special_tokens_lst
 
         # Create byte <=> unicode mapping. This is useful for handling
         # whitespace tokens.
@@ -317,10 +320,10 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         )
 
         self.cache = BytePairTokenizerCache()
-        if special_tokens:
+        if special_tokens_lst:
             # Put special tokens into cache, so it won't be further split and
             # merged.
-            self.cache.insert(special_tokens, special_tokens)
+            self.cache.insert(special_tokens_lst, special_tokens_lst)
 
         # Create mapping between string tokens to int ids, and vice versa.
         byte_pairs = [x[0] for x in self.vocabulary.items()]
@@ -379,6 +382,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 "vocabulary": self.vocabulary,
                 "merges": self.merges,
                 "sequence_length": self.sequence_length,
+                "add_prefix_space": self.add_prefix_space,
+                "special_tokens_lst": self.special_tokens_lst,
             }
         )
         return config
@@ -499,7 +504,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
 
-        raw_tokens = split_strings_for_bpe(inputs, self.special_tokens)
+        raw_tokens = split_strings_for_bpe(inputs, self.special_tokens_lst)
         token_row_splits = raw_tokens.row_splits
         flat_tokens = raw_tokens.flat_values
 

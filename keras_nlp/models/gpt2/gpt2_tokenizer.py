@@ -100,7 +100,7 @@ class GPT2Tokenizer(BytePairTokenizer):
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            special_tokens=[end_token],
+            special_tokens_lst=[end_token],
             **kwargs,
         )
 

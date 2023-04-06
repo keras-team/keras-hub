@@ -71,7 +71,7 @@ class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         tokenizer = BytePairTokenizer(
             vocabulary=vocab,
             merges=merges,
-            special_tokens=["s", "p"],
+            special_tokens_lst=["s", "p"],
         )
         output = tokenizer("sp")
         self.assertAllEqual(output, [1, 2])
