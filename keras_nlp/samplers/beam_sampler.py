@@ -97,12 +97,13 @@ class BeamSampler(Sampler):
         self,
         num_beams=5,
         return_all_beams=False,
-        temperature=1.0,
+        **kwargs
+        # temperature=1.0,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.num_beams = num_beams
         self.return_all_beams = return_all_beams
-        self.temperature = temperature
+        # self.temperature = temperature
 
     def __call__(
         self,
