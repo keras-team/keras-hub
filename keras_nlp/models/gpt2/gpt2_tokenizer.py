@@ -96,11 +96,12 @@ class GPT2Tokenizer(BytePairTokenizer):
     ):
         # Check for necessary special tokens.
         end_token = "<|endoftext|>"
-
+        other_special_tokens = kwargs.pop("special_tokens_list", [])
+ 
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            special_tokens_lst=[end_token],
+            special_tokens_lst=[end_token] + other_special_tokens,
             **kwargs,
         )
 
