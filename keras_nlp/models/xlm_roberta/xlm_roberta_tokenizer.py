@@ -126,6 +126,10 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         if token in self._vocabulary_prefix:
             return self._vocabulary_prefix.index(token)
 
+        # OOV token
+        if token not in self.get_vocabulary():
+            return self.unk_token_id
+
         return int(self._sentence_piece.string_to_id(token).numpy()) + 1
 
     def tokenize(self, inputs):
