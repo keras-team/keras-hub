@@ -88,10 +88,6 @@ class FNetPreprocessor(Preprocessor):
     preprocessor((first, second))
 
 
-    # Custom vocabulary.
-    vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
-    vocab += ["The", "quick", "brown", "fox", "jumped", "."]
-    tokenizer = keras_nlp.models.FNetTokenizer(vocabulary=vocab)
     preprocessor = keras_nlp.models.FNetPreprocessor(tokenizer)
     preprocessor("The quick brown fox jumped.")
     ```
