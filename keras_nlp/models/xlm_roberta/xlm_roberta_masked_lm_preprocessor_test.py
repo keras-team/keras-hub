@@ -72,7 +72,7 @@ class XLMRobertaMaskedLMPreprocessorTest(
 
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [0, 4, 4, 4, 2, 1, 1, 1, 1, 1, 1, 1]
+            x["token_ids"], [0, 13, 13, 13, 2, 1, 1, 1, 1, 1, 1, 1]
         )
         self.assertAllEqual(
             x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
@@ -82,33 +82,33 @@ class XLMRobertaMaskedLMPreprocessorTest(
         self.assertAllEqual(sw, [1.0, 1.0, 1.0, 0.0, 0.0])
 
     def test_preprocess_list_of_strings(self):
-        input_data = [" brown fox quick"] * 4
+        input_data = [" brown fox quick"] * 13
 
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(
-            x["token_ids"], [[0, 4, 4, 4, 2, 1, 1, 1, 1, 1, 1, 1]] * 4
+            x["token_ids"], [[0, 13, 13, 13, 2, 1, 1, 1, 1, 1, 1, 1]] * 13
         )
         self.assertAllEqual(
-            x["padding_mask"], [[1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]] * 4
+            x["padding_mask"], [[1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]] * 13
         )
-        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 0, 0]] * 4)
-        self.assertAllEqual(y, [[7, 9, 11, 0, 0]] * 4)
-        self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 0.0, 0.0]] * 4)
+        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 0, 0]] * 13)
+        self.assertAllEqual(y, [[7, 9, 11, 0, 0]] * 13)
+        self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 0.0, 0.0]] * 13)
 
     def test_preprocess_dataset(self):
-        sentences = tf.constant([" brown fox quick"] * 4)
+        sentences = tf.constant([" brown fox quick"] * 13)
         ds = tf.data.Dataset.from_tensor_slices(sentences)
         ds = ds.map(self.preprocessor)
-        x, y, sw = ds.batch(4).take(1).get_single_element()
+        x, y, sw = ds.batch(13).take(1).get_single_element()
         self.assertAllEqual(
-            x["token_ids"], [[0, 4, 4, 4, 2, 1, 1, 1, 1, 1, 1, 1]] * 4
+            x["token_ids"], [[0, 13, 13, 13, 2, 1, 1, 1, 1, 1, 1, 1]] * 13
         )
         self.assertAllEqual(
-            x["padding_mask"], [[1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]] * 4
+            x["padding_mask"], [[1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]] * 13
         )
-        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 0, 0]] * 4)
-        self.assertAllEqual(y, [[7, 9, 11, 0, 0]] * 4)
-        self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 0.0, 0.0]] * 4)
+        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 0, 0]] * 13)
+        self.assertAllEqual(y, [[7, 9, 11, 0, 0]] * 13)
+        self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 0.0, 0.0]] * 13)
 
     def test_mask_multiple_sentences(self):
         sentence_one = tf.constant(" airplane")
@@ -116,7 +116,7 @@ class XLMRobertaMaskedLMPreprocessorTest(
 
         x, y, sw = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(
-            x["token_ids"], [0, 2, 2, 2, 4, 2, 1, 1, 1, 1, 1, 1]
+            x["token_ids"], [0, 2, 2, 2, 13, 2, 1, 1, 1, 1, 1, 1]
         )
         self.assertAllEqual(
             x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]

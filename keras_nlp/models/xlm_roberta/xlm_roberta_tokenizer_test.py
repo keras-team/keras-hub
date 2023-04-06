@@ -84,9 +84,10 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
                 "▁is",
                 "▁quick",
                 "▁round",
+                "<mask>",
             ],
         )
-        self.assertEqual(self.tokenizer.vocabulary_size(), 11)
+        self.assertEqual(self.tokenizer.vocabulary_size(), 12)
 
     def test_id_to_token(self):
         print(self.tokenizer.id_to_token(9))
