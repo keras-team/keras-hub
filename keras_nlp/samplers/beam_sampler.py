@@ -93,17 +93,10 @@ class BeamSampler(Sampler):
     ```
     """
 
-    def __init__(
-        self,
-        num_beams=5,
-        return_all_beams=False,
-        **kwargs
-        # temperature=1.0,
-    ):
+    def __init__(self, num_beams=5, return_all_beams=False, **kwargs):
         super().__init__(**kwargs)
         self.num_beams = num_beams
         self.return_all_beams = return_all_beams
-        # self.temperature = temperature
 
     def __call__(
         self,
@@ -226,7 +219,6 @@ class BeamSampler(Sampler):
             {
                 "num_beams": self.num_beams,
                 "return_all_beams": self.return_all_beams,
-                "temperature": self.temperature,
             }
         )
         return config
