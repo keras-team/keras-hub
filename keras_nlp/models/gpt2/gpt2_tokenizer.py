@@ -94,7 +94,7 @@ class GPT2Tokenizer(BytePairTokenizer):
         merges,
         **kwargs,
     ):
-        # Check for necessary special tokens.
+        # Special tokens.
         end_token = "<|endoftext|>"
 
         # GPT-2 does not have any other special tokens. So, we ignore any
@@ -108,12 +108,14 @@ class GPT2Tokenizer(BytePairTokenizer):
             **kwargs,
         )
 
+        # Check whether special tokens are present in the vocabulary.
         if end_token not in self.get_vocabulary():
             raise ValueError(
                 f"Cannot find token `'{end_token}'` in the provided "
                 f"`vocabulary`. Please provide `'{end_token}'` in your "
                 "`vocabulary` or use a pretrained `vocabulary` name."
             )
+
         self.end_token_id = self.token_to_id(end_token)
         # GPT2 uses the same start and pad token as end token, i.e.,
         # "<|endoftext|>".

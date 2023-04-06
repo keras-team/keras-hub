@@ -92,16 +92,23 @@ class BartTokenizer(BytePairTokenizer):
         merges,
         **kwargs,
     ):
-        super().__init__(
-            vocabulary=vocabulary,
-            merges=merges,
-            **kwargs,
-        )
-
-        # Check for necessary special tokens.
+        # Special tokens.
         start_token = "<s>"
         pad_token = "<pad>"
         end_token = "</s>"
+
+        # BART does not have any other special tokens. So, we ignore any
+        # passed special tokens.
+        kwargs.pop("special_tokens_lst", None)
+
+        super().__init__(
+            vocabulary=vocabulary,
+            merges=merges,
+            special_tokens_lst=[start_token, pad_token, end_token],
+            **kwargs,
+        )
+
+        # Check whether special tokens are present in the vocabulary.
         for token in [start_token, pad_token, end_token]:
             if token not in self.get_vocabulary():
                 raise ValueError(
@@ -117,3 +124,8 @@ class BartTokenizer(BytePairTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    def get_config(self):
+        config = super().get_config()
+        del config["special_tokens_lst"]
+        return config

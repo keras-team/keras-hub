@@ -89,17 +89,22 @@ class OPTTokenizer(BytePairTokenizer):
         merges,
         **kwargs,
     ):
-        super().__init__(
-            vocabulary=vocabulary,
-            merges=merges,
-            **kwargs,
-        )
-
-        # We use `"</s>"` as both a start and end token, as OPT was only
-        # pre-trained with `"</s>"` marking document boundaries.
+        # Special tokens.We use `"</s>"` as both a start and end token, as OPT
+        # was only pre-trained with `"</s>"` marking document boundaries.
         start_token = "</s>"
         pad_token = "<pad>"
         end_token = "</s>"
+
+        kwargs.pop("special_tokens_lst", None)
+
+        super().__init__(
+            vocabulary=vocabulary,
+            merges=merges,
+            special_tokens_lst=[start_token, pad_token, end_token],
+            **kwargs,
+        )
+
+        # Check whether special tokens are present in the vocabulary.
         for token in [start_token, pad_token, end_token]:
             if token not in self.get_vocabulary():
                 raise ValueError(
@@ -115,3 +120,8 @@ class OPTTokenizer(BytePairTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    def get_config(self):
+        config = super().get_config()
+        del config["special_tokens_lst"]
+        return config
