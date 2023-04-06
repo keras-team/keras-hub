@@ -108,11 +108,13 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
             state=state,
         )
 
-        self.assertGreater(
-            sorted_log_probs_low_temp[0, 0], sorted_log_probs_high_temp[0, 0]
+        self.assertEqual(
+            self.join_as_string(sorted_prompts_low_temp[:, 0, :]),
+            ["sequentially"],
         )
-        self.assertGreater(
-            sorted_log_probs_high_temp[0, -1], sorted_log_probs_low_temp[0, -1]
+        self.assertEqual(
+            self.join_as_string(sorted_prompts_high_temp[:, 0, :]),
+            ["sequentially"],
         )
 
     def test_early_stopping(self):
