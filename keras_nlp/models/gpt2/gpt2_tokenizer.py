@@ -99,7 +99,7 @@ class GPT2Tokenizer(BytePairTokenizer):
 
         # GPT-2 does not have any other special tokens. So, we ignore any
         # passed special tokens.
-        kwargs.pop("special_tokens_list", None)
+        kwargs.pop("special_tokens_lst", None)
 
         super().__init__(
             vocabulary=vocabulary,
@@ -125,8 +125,3 @@ class GPT2Tokenizer(BytePairTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    def get_config(self):
-        config = super().get_config()
-        del config["special_tokens_lst"]
-        return config

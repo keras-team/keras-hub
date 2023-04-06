@@ -117,8 +117,3 @@ class RobertaTokenizer(BytePairTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    def get_config(self):
-        config = super().get_config()
-        del config["special_tokens_lst"]
-        return config
