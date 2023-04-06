@@ -96,12 +96,15 @@ class GPT2Tokenizer(BytePairTokenizer):
     ):
         # Check for necessary special tokens.
         end_token = "<|endoftext|>"
-        other_special_tokens = kwargs.pop("special_tokens_list", [])
- 
+
+        # GPT-2 does not have any other special tokens. So, we ignore any
+        # passed special tokens.
+        kwargs.pop("special_tokens_list", None)
+
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            special_tokens_lst=[end_token] + other_special_tokens,
+            special_tokens_lst=[end_token],
             **kwargs,
         )
 
