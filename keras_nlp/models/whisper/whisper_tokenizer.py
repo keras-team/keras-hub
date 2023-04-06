@@ -161,7 +161,8 @@ class WhisperTokenizer(BytePairTokenizer):
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            special_tokens_lst=list(special_tokens.keys()) ** kwargs,
+            special_tokens_lst=list(special_tokens.keys()),
+            **kwargs,
         )
 
         self.special_tokens = special_tokens
