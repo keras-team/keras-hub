@@ -38,9 +38,6 @@ class BeamSampler(Sampler):
             time-step. `num_beams` should be strictly positive.
         return_all_beams: bool. When set to `True`, the sampler will return the top prompt,
             all prompts and their respective probabilities score.
-        temperature: float. optional. defaults to '1.0'. Used to control the
-            randomness of the sampling. The higher the temperature, the
-            more diverse the samples.
 
     Call Args:
         {{call_args}}
