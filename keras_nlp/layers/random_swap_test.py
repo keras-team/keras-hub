@@ -16,7 +16,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers import RandomSwap
+from keras_nlp.layers.random_swap import RandomSwap
 
 
 class RandomSwapTest(tf.test.TestCase):

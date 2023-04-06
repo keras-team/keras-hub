@@ -17,7 +17,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.metrics import EditDistance
+from keras_nlp.metrics.edit_distance import EditDistance
 
 
 class EditDistanceTest(tf.test.TestCase):

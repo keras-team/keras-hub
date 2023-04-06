@@ -15,6 +15,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -33,29 +34,26 @@ from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
 
 class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.backbone = DistilBertBackbone(
-            vocabulary_size=1000,
-            num_layers=2,
-            num_heads=2,
-            hidden_dim=64,
-            intermediate_dim=128,
-            max_sequence_length=128,
-        )
+        # Setup model
+
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["the", "quick", "brown", "fox", "."]
         self.preprocessor = DistilBertPreprocessor(
             DistilBertTokenizer(vocabulary=self.vocab),
             sequence_length=8,
         )
+        self.backbone = DistilBertBackbone(
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=2,
+            intermediate_dim=4,
+            max_sequence_length=self.preprocessor.packer.sequence_length,
+        )
         self.classifier = DistilBertClassifier(
             self.backbone,
             4,
             preprocessor=self.preprocessor,
-        )
-        self.classifier_no_preprocessing = DistilBertClassifier(
-            self.backbone,
-            4,
-            preprocessor=None,
         )
 
         self.raw_batch = tf.constant(
@@ -75,47 +73,32 @@ class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call_classifier(self):
         self.classifier(self.preprocessed_batch)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_classifier_predict(self, jit_compile):
-        self.classifier.compile(jit_compile=jit_compile)
+    def test_classifier_predict(self):
         self.classifier.predict(self.raw_batch)
+        self.classifier.preprocessor = None
+        self.classifier.predict(self.preprocessed_batch)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_classifier_predict_no_preprocessing(self, jit_compile):
-        self.classifier_no_preprocessing.compile(jit_compile=jit_compile)
-        self.classifier_no_preprocessing.predict(self.preprocessed_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_classifier_fit(self, jit_compile):
-        self.classifier.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
-        )
+    def test_classifier_fit(self):
         self.classifier.fit(self.raw_dataset)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_classifier_fit_no_preprocessing(self, jit_compile):
-        self.classifier_no_preprocessing.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
-        )
-        self.classifier_no_preprocessing.fit(self.preprocessed_dataset)
+        self.classifier.preprocessor = None
+        self.classifier.fit(self.preprocessed_dataset)
 
     def test_distilbert_classifier_fit_default_compile(self):
         self.classifier.fit(self.raw_dataset)
+
+    def test_serialization(self):
+        config = keras.utils.serialize_keras_object(self.classifier)
+        new_classifier = keras.utils.deserialize_keras_object(config)
+        self.assertEqual(
+            new_classifier.get_config(),
+            self.classifier.get_config(),
+        )
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saving_model(self, save_format, filename):
         model_output = self.classifier.predict(self.raw_batch)
         path = os.path.join(self.get_temp_dir(), filename)

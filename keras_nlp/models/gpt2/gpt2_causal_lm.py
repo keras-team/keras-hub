@@ -17,7 +17,6 @@ import copy
 
 import tensorflow as tf
 
-from keras_nlp import samplers
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
@@ -25,6 +24,7 @@ from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
 )
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.task import Task
+from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.tf_utils import truncate_at_token
@@ -79,7 +79,7 @@ class GPT2CausalLM(Task):
     gpt2_lm.generate("I want to say", max_length=30)
 
     gpt2_lm.compile(sampler=keras_nlp.samplers.BeamSampler(num_beams=2))
-    gpt2_lm.generate("I want to say", max_length=30, sampler=sampler)
+    gpt2_lm.generate("I want to say", max_length=30)
     ```
 
     Map raw string to languages model logit predictions.
@@ -194,7 +194,7 @@ class GPT2CausalLM(Task):
         self.preprocessor = preprocessor
         self.generate_function = None
         # Private sampler set by compile.
-        self._sampler = samplers.get("top_k")
+        self._sampler = get_sampler("top_k")
 
     @classproperty
     def presets(cls):
@@ -282,7 +282,7 @@ class GPT2CausalLM(Task):
             jit_compile=jit_compile and xla_compatible and not run_eagerly,
             **kwargs,
         )
-        self._sampler = samplers.get(sampler)
+        self._sampler = get_sampler(sampler)
         # Clear the compiled generate function.
         self.generate_function = None
 
@@ -331,15 +331,13 @@ class GPT2CausalLM(Task):
 
         This method generates text based on given `prompt`. Generation will
         continue until `max_length` is met, and all tokens generated after
-        `end_token` will be truncated. The sampling approach used can be
-        controlled via the sampler argument.
+        `end_token` will be truncated. The sampling strategy can be set in
+        the `compile` method.
 
         Args:
             prompt: a string, string Tensor or string RaggedTensor. The prompt
                 text for generation.
             max_length: int. The max length of generated sequence.
-            sampler: a string or `keras_nlp.samplers.Sampler` instance. The
-                sampler to be used for text generation.
         """
         if self.preprocessor is None:
             raise ValueError(

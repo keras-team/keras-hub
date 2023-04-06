@@ -17,8 +17,8 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.metrics import Bleu
-from keras_nlp.tokenizers import ByteTokenizer
+from keras_nlp.metrics.bleu import Bleu
+from keras_nlp.tokenizers.byte_tokenizer import ByteTokenizer
 
 
 class BleuTest(tf.test.TestCase):

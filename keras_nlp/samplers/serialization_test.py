@@ -15,34 +15,34 @@
 
 import tensorflow as tf
 
-import keras_nlp
+from keras_nlp.samplers.serialization import deserialize
+from keras_nlp.samplers.serialization import get
+from keras_nlp.samplers.serialization import serialize
 from keras_nlp.samplers.top_k_sampler import TopKSampler
 
 
-class SamplerTest(tf.test.TestCase):
+class SerializationTest(tf.test.TestCase):
     def test_serialization(self):
         sampler = TopKSampler(k=5)
-        restored = keras_nlp.samplers.deserialize(
-            keras_nlp.samplers.serialize(sampler)
-        )
+        restored = deserialize(serialize(sampler))
         self.assertDictEqual(sampler.get_config(), restored.get_config())
 
     def test_get(self):
         # Test get from string.
         identifier = "top_k"
-        sampler = keras_nlp.samplers.get(identifier)
+        sampler = get(identifier)
         self.assertIsInstance(sampler, TopKSampler)
 
         # Test dict identifier.
-        original_sampler = keras_nlp.samplers.TopKSampler(k=7)
-        config = keras_nlp.samplers.serialize(original_sampler)
-        restored_sampler = keras_nlp.samplers.get(config)
+        original_sampler = TopKSampler(k=7)
+        config = serialize(original_sampler)
+        restored_sampler = get(config)
         self.assertDictEqual(
-            keras_nlp.samplers.serialize(restored_sampler),
-            keras_nlp.samplers.serialize(original_sampler),
+            serialize(restored_sampler),
+            serialize(original_sampler),
         )
 
         # Test identifier is already a sampler instance.
-        original_sampler = keras_nlp.samplers.TopKSampler(k=7)
-        restored_sampler = keras_nlp.samplers.get(original_sampler)
+        original_sampler = TopKSampler(k=7)
+        restored_sampler = get(original_sampler)
         self.assertEqual(original_sampler, restored_sampler)
