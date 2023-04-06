@@ -107,9 +107,9 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
             prompt=prompt,
             state=state,
         )
-        self.assertNotEqual(
-            tf.reduce_sum(sorted_log_probs_low_temp),
-            tf.reduce_sum(sorted_log_probs_high_temp),
+        self.assertGreater(
+            tf.reduce_mean(sorted_log_probs_high_temp[:, 0]),
+            tf.reduce_mean(sorted_log_probs_low_temp[:, 0]),
         )
 
     def test_early_stopping(self):
