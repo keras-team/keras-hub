@@ -90,9 +90,9 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
         )
 
     def test_temperature(self):
-        state_chars = list("sequentially")
+        state_chars = list("the quick brown fox jumps over the lazy dog")
         state = tf.constant([[self.char_lookup[c] for c in state_chars]])
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup[" "])
         sorted_prompts_low_temp, sorted_log_probs_low_temp = BeamSampler(
             num_beams=5, return_all_beams=True, temperature=0.5
         )(
