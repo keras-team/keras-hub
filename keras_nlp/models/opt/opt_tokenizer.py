@@ -89,7 +89,7 @@ class OPTTokenizer(BytePairTokenizer):
         merges,
         **kwargs,
     ):
-        # Special tokens.We use `"</s>"` as both a start and end token, as OPT
+        # Special tokens. We use `"</s>"` as both a start and end token, as OPT
         # was only pre-trained with `"</s>"` marking document boundaries.
         start_token = "</s>"
         pad_token = "<pad>"
