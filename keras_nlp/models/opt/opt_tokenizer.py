@@ -16,8 +16,6 @@
 
 import copy
 
-from absl import logging
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.opt.opt_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
@@ -96,13 +94,6 @@ class OPTTokenizer(BytePairTokenizer):
         start_token = "</s>"
         pad_token = "<pad>"
         end_token = "</s>"
-
-        if "unsplittable_tokens" in kwargs:
-            logging.warning(
-                "`unsplittable_tokens` is set to the list of special tokens, "
-                "and any passed value will be ignored."
-            )
-            del kwargs["unsplittable_tokens"]
 
         super().__init__(
             vocabulary=vocabulary,
