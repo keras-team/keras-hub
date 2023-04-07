@@ -233,7 +233,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             never be split during the word-level splitting applied before the
             byte-pair encoding. This can be used to ensure special tokens map to
             unique indices in the vocabulary, even if these special tokens
-            contain splittable characters such as punctuation.
+            contain splittable characters such as punctuation. Special tokens
+            must still be included in `vocabulary`.
 
     Examples:
 
