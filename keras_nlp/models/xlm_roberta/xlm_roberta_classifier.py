@@ -152,7 +152,7 @@ class XLMRobertaClassifier(Task):
     def __init__(
         self,
         backbone,
-        num_classes=2,
+        num_classes,
         hidden_dim=None,
         dropout=0.0,
         preprocessor=None,
@@ -220,3 +220,18 @@ class XLMRobertaClassifier(Task):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        num_classes,
+        load_weights=True,
+        **kwargs,
+    ):
+        return super().from_preset(
+            preset,
+            num_classes=num_classes,
+            load_weights=load_weights,
+            **kwargs,
+        )

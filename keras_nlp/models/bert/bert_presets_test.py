@@ -80,6 +80,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         input_data = tf.constant(["The quick brown fox."])
         model = BertClassifier.from_preset(
             "bert_tiny_en_uncased",
+            num_classes=2,
             load_weights=load_weights,
         )
         # We don't assert output values, as the head weights are random.
@@ -96,6 +97,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         }
         model = BertClassifier.from_preset(
             "bert_tiny_en_uncased",
+            num_classes=2,
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -201,6 +203,7 @@ class BertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in BertClassifier.presets:
             classifier = BertClassifier.from_preset(
                 preset,
+                num_classes=2,
                 load_weights=load_weights,
             )
             input_data = tf.constant(["This quick brown fox"])
@@ -213,6 +216,7 @@ class BertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in BertClassifier.presets:
             classifier = BertClassifier.from_preset(
                 preset,
+                num_classes=2,
                 preprocessor=None,
                 load_weights=load_weights,
             )

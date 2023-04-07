@@ -80,6 +80,7 @@ class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         input_data = tf.constant(["The quick brown fox."])
         model = FNetClassifier.from_preset(
             "f_net_base_en",
+            num_classes=2,
             load_weights=load_weights,
         )
         # We don't assert output values, as the head weights are random.
@@ -141,6 +142,7 @@ class FNetPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in FNetClassifier.presets:
             classifier = FNetClassifier.from_preset(
                 preset,
+                num_classes=2,
                 load_weights=load_weights,
             )
             input_data = tf.constant(["This quick brown fox"])
@@ -153,6 +155,7 @@ class FNetPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in FNetClassifier.presets:
             classifier = FNetClassifier.from_preset(
                 preset,
+                num_classes=2,
                 preprocessor=None,
                 load_weights=load_weights,
             )

@@ -55,6 +55,7 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         input_data = tf.constant(["The quick brown fox."])
         model = AlbertClassifier.from_preset(
             "albert_base_en_uncased",
+            num_classes=2,
             load_weights=load_weights,
         )
         # We don't assert output values, as the head weights are random.
@@ -71,6 +72,7 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         }
         model = AlbertClassifier.from_preset(
             "albert_base_en_uncased",
+            num_classes=2,
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -153,6 +155,7 @@ class AlbertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in AlbertClassifier.presets:
             classifier = AlbertClassifier.from_preset(
                 preset,
+                num_classes=2,
                 load_weights=load_weights,
             )
             input_data = tf.constant(["This quick brown fox"])
@@ -165,6 +168,7 @@ class AlbertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in AlbertClassifier.presets:
             classifier = AlbertClassifier.from_preset(
                 preset,
+                num_classes=2,
                 preprocessor=None,
                 load_weights=load_weights,
             )

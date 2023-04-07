@@ -78,7 +78,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_classifier_output(self, load_weights):
         input_data = tf.constant(["The quick brown fox."])
         model = XLMRobertaClassifier.from_preset(
-            "xlm_roberta_base_multi", load_weights=load_weights
+            "xlm_roberta_base_multi", num_classes=2, load_weights=load_weights
         )
         # Never assert output values, as the head weights are random.
         model.predict(input_data)
@@ -93,6 +93,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         }
         model = XLMRobertaClassifier.from_preset(
             "xlm_roberta_base_multi",
+            num_classes=2,
             load_weights=load_weights,
             preprocessor=None,
         )

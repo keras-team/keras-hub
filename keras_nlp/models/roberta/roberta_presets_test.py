@@ -73,7 +73,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_classifier_output(self, load_weights):
         input_data = ["Let's rock!"]
         model = RobertaClassifier.from_preset(
-            "roberta_base_en", load_weights=load_weights
+            "roberta_base_en", num_classes=2, load_weights=load_weights
         )
         # Never assert output values, as the head weights are random.
         model.predict(input_data)
@@ -88,6 +88,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         }
         model = RobertaClassifier.from_preset(
             "roberta_base_en",
+            num_classes=2,
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -191,6 +192,7 @@ class RobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in RobertaClassifier.presets:
             classifier = RobertaClassifier.from_preset(
                 preset,
+                num_classes=2,
                 preprocessor=None,
                 load_weights=load_weights,
             )
