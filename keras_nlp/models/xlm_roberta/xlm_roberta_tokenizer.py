@@ -130,7 +130,9 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         spm_token_id = int(self._sentence_piece.string_to_id(token).numpy())
 
         # OOV token
-        spm_unk_token_id = int(self._sentence_piece.string_to_id("<unk>").numpy())
+        spm_unk_token_id = int(
+            self._sentence_piece.string_to_id("<unk>").numpy()
+        )
         if spm_token_id == spm_unk_token_id:
             return self.unk_token_id
 
