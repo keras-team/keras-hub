@@ -133,7 +133,7 @@ class BartTokenizer(BytePairTokenizer):
     def get_config(self):
         config = super().get_config()
         # In the constructor, we pass the list of special tokens to the
-        # `unsplittable_tokens` arg of the superclass. Hence, we delete it
-        # from the config here.
+        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # delete it from the config here.
         del config["unsplittable_tokens"]
         return config
