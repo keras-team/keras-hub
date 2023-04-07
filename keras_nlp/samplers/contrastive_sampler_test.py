@@ -122,7 +122,7 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
     def test_alpha_penalty(self):
         def next(prompt, cache, index):
             batch_size = tf.shape(prompt)[0]
-            best_token_id = self.int_lookup("h")
+            best_token_id = self.char_lookup["h"]
             logits = tf.ones([batch_size, self.vocab_size])
             # Favoring `best_token_id` in the logits.
             logits += (
