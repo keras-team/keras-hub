@@ -92,16 +92,19 @@ class BartTokenizer(BytePairTokenizer):
         merges,
         **kwargs,
     ):
-        super().__init__(
-            vocabulary=vocabulary,
-            merges=merges,
-            **kwargs,
-        )
-
-        # Check for necessary special tokens.
+        # Special tokens.
         start_token = "<s>"
         pad_token = "<pad>"
         end_token = "</s>"
+
+        super().__init__(
+            vocabulary=vocabulary,
+            merges=merges,
+            unsplittable_tokens=[start_token, pad_token, end_token],
+            **kwargs,
+        )
+
+        # Check whether special tokens are present in the vocabulary.
         for token in [start_token, pad_token, end_token]:
             if token not in self.get_vocabulary():
                 raise ValueError(
@@ -117,3 +120,11 @@ class BartTokenizer(BytePairTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    def get_config(self):
+        config = super().get_config()
+        # In the constructor, we pass the list of special tokens to the
+        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # delete it from the config here.
+        del config["unsplittable_tokens"]
+        return config
