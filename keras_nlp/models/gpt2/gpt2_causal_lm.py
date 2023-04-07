@@ -268,7 +268,7 @@ class GPT2CausalLM(Task):
         num_heads = self.backbone.num_heads
         head_dim = self.backbone.hidden_dim // self.backbone.num_heads
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
-        cache = tf.zeros(shape)
+        cache = tf.zeros(shape, dtype=self.compute_dtype)
         # Seed the cache.
         _, hidden_states, cache = self.call_with_cache(prompt, cache, 0)
         return hidden_states, cache
