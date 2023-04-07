@@ -16,6 +16,8 @@
 
 import copy
 
+from absl import logging
+
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.opt.opt_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
@@ -95,12 +97,17 @@ class OPTTokenizer(BytePairTokenizer):
         pad_token = "<pad>"
         end_token = "</s>"
 
-        kwargs.pop("special_tokens_lst", None)
+        if "unsplittable_tokens" in kwargs:
+            logging.warning(
+                "`unsplittable_tokens` is set to the list of special tokens, "
+                "and any passed value will be ignored."
+            )
+            del kwargs["unsplittable_tokens"]
 
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            special_tokens_lst=[start_token, pad_token, end_token],
+            unsplittable_tokens=[start_token, pad_token, end_token],
             **kwargs,
         )
 
@@ -120,3 +127,11 @@ class OPTTokenizer(BytePairTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    def get_config(self):
+        config = super().get_config()
+        # In the constructor, we pass the list of special tokens to the
+        # `unsplittable_tokens` arg of the superclass. Hence, we delete it
+        # from the config here.
+        del config["unsplittable_tokens"]
+        return config
