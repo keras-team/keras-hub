@@ -21,13 +21,15 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.python_utils import format_docstring
 
 call_args_docstring = """
-    next: A function which takes in the `prompt, state, index` of the
-        current generation loop, and outputs a tuple `(logits, state)` with the
-        probability for the next token and state for the next iteration.
+    next: A function which takes in the `prompt, cache, index` of the
+        current generation loop, and outputs a tuple
+        `(logits, cache, hidden_states)` with `logits` being the logits of next
+        token, `cache` for next iteration, and `hidden_states` being the
+        representation of the token.
     prompt: A 2D integer tensor with shape `(batch_size, max_length)`. This
         tensor will be iteratively updated column by column with new sampled
         values, starting at `index`.
-    state: Optional. A tensor or nested structure of tensors that will be
+    cache: Optional. A tensor or nested structure of tensors that will be
         updated by each call to `next`. This can be used to cache computations
         from early iterations of the generative loop.
     index: Optional. The first index to start sampling at.
@@ -54,7 +56,7 @@ class Sampler:
 
     - Override the `get_next_token()` method, which computes the next token
       based on a probability distribution over all possible vocab entries.
-    - Override `__call__`, if the sampling method need additional state beyond
+    - Override `__call__`, if the sampling method need additional cache beyond
       the next tokens probability distribution to sample a sequence.
 
     Please check available subclass samplers for examples.
@@ -67,10 +69,10 @@ class Sampler:
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
-    def next(prompt, state, index):
+    def next(prompt, cache, index):
         # return a uniform distribution over our alphabet.
         logits = tf.ones((batch_size, vocab_size))
-        return logits, state
+        return logits, None, cache
 
     output = keras_nlp.samplers.GreedySampler()(
         next=next,
@@ -86,19 +88,20 @@ class Sampler:
         self,
         next,
         prompt,
-        state=None,
+        cache=None,
         index=0,
         mask=None,
         end_token_id=None,
+        hidden_states=None,
     ):
         max_length = tf.shape(prompt)[-1]
         # Make sure `max_length` and `index` are the same dtype.
         index = tf.cast(index, max_length.dtype)
         mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
         # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
-        state = () if state is None else state
+        cache = () if cache is None else cache
 
-        def cond(prompt, state, index):
+        def cond(prompt, cache, index):
             if end_token_id is None:
                 return True
             # Stop if all sequences have produced a *new* end_token_id.
@@ -106,9 +109,9 @@ class Sampler:
             prompt_done = tf.reduce_any(end_tokens, axis=-1)
             return not tf.reduce_all(prompt_done)
 
-        def body(prompt, state, index):
+        def body(prompt, cache, index):
             # Compute the softmax distribution for the next token.
-            logits, state = next(prompt, state, index)
+            logits, _, cache = next(prompt, cache, index)
             probabilities = keras.activations.softmax(logits)
             # Compute the next token.
             next_token = self.get_next_token(probabilities)
@@ -121,13 +124,13 @@ class Sampler:
             # Update the prompt with the next token.
             next_token = next_token[:, tf.newaxis]
             prompt = dynamic_update_slice(prompt, next_token, [0, index])
-            # Return the next prompt, state and incremented index.
-            return (prompt, state, index + 1)
+            # Return the next prompt, cache and incremented index.
+            return (prompt, cache, index + 1)
 
         prompt, _, _ = tf.while_loop(
             cond=cond,
             body=body,
-            loop_vars=(prompt, state, index),
+            loop_vars=(prompt, cache, index),
             maximum_iterations=(max_length - index),
         )
         return prompt
