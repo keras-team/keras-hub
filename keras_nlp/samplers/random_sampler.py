@@ -44,9 +44,10 @@ class RandomSampler(Sampler):
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
     def next(prompt, state, index):
+        hidden_states = tf.ones((batch_size, 10))
         # A uniform distribution over our alphabet.
         logits = tf.ones((batch_size, vocab_size))
-        return logits, state
+        return logits, hidden_states, state
 
     output = keras_nlp.samplers.RandomSampler()(
         next=next,

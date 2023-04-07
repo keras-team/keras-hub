@@ -45,7 +45,7 @@ class TopKSampler(Sampler):
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
     def next(prompt, cache, index):
-        hidden_states = tf.ones((batch_size, 1, 10))
+        hidden_states = tf.ones((batch_size, 10))
         # A uniform distribution over our alphabet.
         logits = tf.ones((batch_size, vocab_size))
         return logits, hidden_states, cache

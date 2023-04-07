@@ -55,7 +55,7 @@ class ContrastiveSampler(Sampler):
 
     def next(prompt, cache, index):
         prompt_batch_size = tf.shape(prompt)[0]
-        hidden_states = tf.ones((prompt_batch_size, 1, hidden_size))
+        hidden_states = tf.ones((prompt_batch_size, hidden_size))
         # A uniform distribution over our alphabet.
         logits = tf.ones((prompt_batch_size, vocab_size))
         return logits, hidden_states, cache
@@ -67,14 +67,14 @@ class ContrastiveSampler(Sampler):
         hidden_states=tf.ones([batch_size, index, hidden_size]),
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
-    # >>> "zzzzzaaaaaaa"
+    # >>> "zzzzzeeeeeee"
     ```
     """
 
     def __init__(
         self,
         k=5,
-        alpha=0.2,
+        alpha=0.6,
         seed=None,
     ):
         super().__init__()
@@ -166,9 +166,8 @@ class ContrastiveSampler(Sampler):
 
             # Compute the max similarity score for top-k candidate tokens
             # against previous tokens.
-            last_token_state = next_hidden_states_beams
             similarity_scores = self.similarity(
-                hidden_states_beams, last_token_state
+                hidden_states_beams, next_hidden_states_beams
             )
             max_similarity_scores = tf.cast(
                 tf.reduce_max(similarity_scores[:, :index], axis=1),

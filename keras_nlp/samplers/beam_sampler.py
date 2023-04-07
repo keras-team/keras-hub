@@ -52,7 +52,7 @@ class BeamSampler(Sampler):
 
     def next(prompt, cache, index):
         prompt_batch_size = tf.shape(prompt)[0]
-        hidden_states = tf.ones((prompt_batch_size, 1, 10))
+        hidden_states = tf.ones((prompt_batch_size, 10))
         # A uniform distribution over our alphabet.
         logits = tf.ones((prompt_batch_size, vocab_size))
         return logits, hidden_states, cache
