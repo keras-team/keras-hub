@@ -158,10 +158,14 @@ class WhisperTokenizer(BytePairTokenizer):
         self.translate_token_id = special_tokens[translate_token]
         self.transcribe_token_id = special_tokens[transcribe_token]
 
+        unsplittable_tokens = list(special_tokens.keys())
+        if language_tokens:
+            unsplittable_tokens = list(language_tokens.keys())
+
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            special_tokens_lst=list(special_tokens.keys()),
+            unsplittable_tokens=unsplittable_tokens,
             **kwargs,
         )
 
@@ -170,6 +174,12 @@ class WhisperTokenizer(BytePairTokenizer):
 
     def get_config(self):
         config = super().get_config()
+
+        # In the constructor, we pass the list of special tokens to the
+        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # delete it from the config here.
+        del config["unsplittable_tokens"]
+
         config.update(
             {
                 "special_tokens": self.special_tokens,
