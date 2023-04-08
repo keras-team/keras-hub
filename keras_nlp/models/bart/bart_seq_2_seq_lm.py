@@ -32,17 +32,18 @@ from keras_nlp.utils.tf_utils import truncate_at_token
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLM")
 class BartSeq2SeqLM(Task):
-    """An end-to-end BART model for causal langauge modeling.
+    """An end-to-end BART model for seq2seq language modeling.
 
-    A causal language model (LM) predicts the next token based on previous
-    tokens the next token based on previous tokens, which is the way BART gets
-    pretrained. You can finetune `BartSeq2SeqLM` to generate text similar to
-    the custom dataset.
+    A seq2seq language model (LM) is an encoder-decoder model which is used for
+    conditional text generation. The encoder is given a "context" text, and the
+    decoder predicts the next token based on both the encoder inputs and the
+    previous tokens. You can finetune `BartSeq2SeqLM` to generate text similar
+    to the custom dataset.
 
     This model has a `generate()` method, which generates text based on a
-    prompt. The generation strategy used is controlled by an additional
-    `sampler` argument on `compile()`. You can recompile the model with
-    different `keras_nlp.samplers` objects to control the generation. By
+    encoder inputs and a prompt. The generation strategy used is controlled by
+    an additional `sampler` argument on `compile()`. You can recompile the model
+    with different `keras_nlp.samplers` objects to control the generation. By
     default, `"top_k"` sampling will be used.
 
     This model can optionally be configured with a `preprocessor` layer, in
@@ -53,7 +54,7 @@ class BartSeq2SeqLM(Task):
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
     third party and subject to a separate license, available
-    [here](https://github.com/openai/gpt-2).
+    [here](https://github.com/facebookresearch/fairseq/).
 
     Args:
         backbone: A `keras_nlp.models.BartBackbone` instance.
@@ -113,21 +114,29 @@ class BartSeq2SeqLM(Task):
     ):
         """Forward pass of `BartSeq2SeqLM` with `encoder_cache` and `decoder_cache`.
 
-        `call_with_cache` adds an additional forward pass for the model for
-        autoregressive inference. Unlike calling the model directly, this method
-        allows caching previous key/value Tensors in multi-head attention layer,
-        and avoids recomputing the outputs of seen tokens.
+        `call_with_cache` adds an additional inference-time forward pass for the
+        model for seq2seq text generation. Unlike calling the model directly,
+        this method does two things to optimize text generation:
+
+        - Uses the cached encoder output to avoid doing a forward pass on the
+          encoder repeatedly.
+        - Allows caching previous key/value tensors in the decoder's
+          self-attention layer to avoid recomputing the outputs of seen tokens.
 
         Args:
-            decoder_token_ids: a dense int Tensor, input token ids.
-            decoder_cache: a dense float Tensor, the decoder_cache of key and value.
-            decoder_cache_index: int, or int Tensor. The index of current inputs in the
-                whole sequence.
+            encoder_cache: a dense float Tensor. The cached encoder output.
+            decoder_token_ids: a dense int Tensor, input token ids to be fed to
+                the decoder.
+            decoder_cache: a dense float Tensor, the cached key and value
+                tensors of previously seen tokens in the decoder's self-attention
+                layer.
+            decoder_cache_index: int, or int Tensor. The index of current inputs
+                in the whole sequence.
 
         Returns:
-            A (logits, decoder_cache) tuple. Where the first output is the language
-            model logits for the input decoder_token_ids and the second output is the
-            decoder_cache.
+            A (logits, decoder_cache) tuple. The first output is the language
+            model logits for the input `decoder_token_ids` and the second output
+            is the updated decoder key/value cache.
         """
         # Embedding layers.
         token_embedding = self.backbone.get_layer("token_embedding")(
@@ -167,9 +176,7 @@ class BartSeq2SeqLM(Task):
         return x, decoder_cache
 
     def _build_encoder_cache(self, token_ids, padding_mask):
-        """Builds a cache for the encoder outputs to avoid doing a forward pass
-        on the encoder at every time step.
-        """
+        """Builds a cache for the encoder outputs by doing a forward pass on the encoder."""
 
         # Embedding layers.
         token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
@@ -194,7 +201,7 @@ class BartSeq2SeqLM(Task):
         return cache
 
     def _initialize_decoder_cache(self, prompt):
-        """Build an empty cache for use with `call_with_cache()`."""
+        """Build an empty decoder cache for use with `call_with_cache()`."""
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_heads
@@ -204,6 +211,7 @@ class BartSeq2SeqLM(Task):
         return cache
 
     def _build_cache(self, encoder_token_ids, encoder_padding_mask, prompt):
+        """Builds the encoder output cache and the decoder key/value cache."""
         encoder_cache = self._build_encoder_cache(
             encoder_token_ids, encoder_padding_mask
         )
@@ -252,7 +260,7 @@ class BartSeq2SeqLM(Task):
                 encoder_token_ids, encoder_padding_mask, prompt
             )
 
-            def next(prompt, state, index):
+            def next_token(prompt, state, index):
                 # The cache index is the index of our previous token.
                 cache_index = index - 1
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
@@ -262,7 +270,7 @@ class BartSeq2SeqLM(Task):
                 return tf.squeeze(logits, axis=1), state
 
             return self._sampler(
-                next=next,
+                next=next_token,
                 prompt=prompt,
                 state=decoder_cache,
                 index=min_length,
@@ -286,8 +294,9 @@ class BartSeq2SeqLM(Task):
         encoder_text,
         prompt,
         max_length,
+        add_start_token=True,
     ):
-        """Generate text.
+        """Generates text conditioned on the encoder inputs.
 
         This method generates text based on given `encoder_text` and `prompt`.
         Generation will continue until `max_length` is met, and all tokens
@@ -299,8 +308,9 @@ class BartSeq2SeqLM(Task):
                 input to the encoder, i.e., the context. The generated text is
                 conditioned on this input.
             prompt: a string, string Tensor or string RaggedTensor. The prompt
-                text for generation.
+                text for generation. This is fed as input to the decoder.
             max_length: int. The max length of generated sequence.
+            add_start_token: bool. Whether to add the start token to `prompt`.
         """
         if self.preprocessor is None:
             raise ValueError(
@@ -326,7 +336,7 @@ class BartSeq2SeqLM(Task):
 
         # Tokenize the prompt. We cannot use the preprocessor directly since
         # the `max_length` might be different. Moreover, the
-        # `BartSeq2SeqLMPreprocessor` handles the training case.
+        # `BartSeq2SeqLMPreprocessor` layer handles the training case.
         prompt = tf.convert_to_tensor(prompt)
         input_is_scalar = prompt.shape.rank == 0
         prompt = prompt[tf.newaxis] if input_is_scalar else prompt
@@ -334,11 +344,12 @@ class BartSeq2SeqLM(Task):
         prompt = self.preprocessor.tokenizer(prompt)
 
         # Add the start token to the prompt.
-        start_tokens = tf.fill(
-            (tf.shape(prompt)[0], 1),
-            value=self.preprocessor.tokenizer.start_token_id,
-        )
-        prompt = tf.concat([start_tokens, prompt], axis=1)
+        if add_start_token:
+            start_tokens = tf.fill(
+                (tf.shape(prompt)[0], 1),
+                value=self.preprocessor.tokenizer.start_token_id,
+            )
+            prompt = tf.concat([start_tokens, prompt], axis=1)
 
         # Pad ragged to dense tensors.
         padded_shape = (None, max_length)
