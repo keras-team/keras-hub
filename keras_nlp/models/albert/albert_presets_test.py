@@ -117,7 +117,13 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_unknown_preset_error(self, cls):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("albert_base_en_uncased_clowntown")
+            if cls == AlbertClassifier:
+                cls.from_preset(
+                    "albert_base_en_uncased_clowntown",
+                    num_classes=2,
+                )
+            else:
+                cls.from_preset("albert_base_en_uncased_clowntown")
 
 
 @pytest.mark.extra_large

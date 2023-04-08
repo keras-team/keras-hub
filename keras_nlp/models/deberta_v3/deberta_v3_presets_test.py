@@ -125,7 +125,13 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_unknown_preset_error(self, cls):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("deberta_v3_extra_small_en_clowntown")
+            if cls == DebertaV3Classifier:
+                cls.from_preset(
+                    "deberta_v3_extra_small_en_clowntown",
+                    num_classes=2,
+                )
+            else:
+                cls.from_preset("deberta_v3_extra_small_en_clowntown")
 
 
 @pytest.mark.extra_large

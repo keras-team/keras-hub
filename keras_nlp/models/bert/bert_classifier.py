@@ -192,18 +192,3 @@ class BertClassifier(Task):
     @classproperty
     def presets(cls):
         return copy.deepcopy({**backbone_presets, **classifier_presets})
-
-    @classmethod
-    def from_preset(
-        cls,
-        preset,
-        num_classes,
-        load_weights=True,
-        **kwargs,
-    ):
-        return super().from_preset(
-            preset,
-            num_classes=num_classes,
-            load_weights=load_weights,
-            **kwargs,
-        )

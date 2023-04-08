@@ -120,7 +120,10 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_unknown_preset_error(self, cls):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("xlm_roberta_base_clowntown")
+            if cls == XLMRobertaClassifier:
+                cls.from_preset("xlm_roberta_base_clowntown", num_classes=2)
+            else:
+                cls.from_preset("xlm_roberta_base_clowntown")
 
 
 @pytest.mark.extra_large

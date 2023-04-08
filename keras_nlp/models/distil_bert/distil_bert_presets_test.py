@@ -117,7 +117,13 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_unknown_preset_error(self, cls):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("distilbert_base_uncased_clowntown")
+            if cls == DistilBertClassifier:
+                cls.from_preset(
+                    "distilbert_base_uncased_clowntown",
+                    num_classes=2,
+                )
+            else:
+                cls.from_preset("distilbert_base_uncased_clowntown")
 
 
 @pytest.mark.extra_large

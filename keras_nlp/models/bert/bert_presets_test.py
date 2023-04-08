@@ -149,7 +149,10 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_unknown_preset_error(self, cls):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("bert_base_uncased_clowntown")
+            if cls == BertClassifier:
+                cls.from_preset("bert_base_uncased_clowntown", num_classes=2)
+            else:
+                cls.from_preset("bert_base_uncased_clowntown")
 
     def test_override_preprocessor_sequence_length(self):
         """Override sequence length longer than model's maximum."""
