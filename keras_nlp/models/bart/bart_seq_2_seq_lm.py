@@ -142,7 +142,7 @@ class BartSeq2SeqLM(Task):
             (token_embedding, position_embedding)
         )
         x = self.backbone.get_layer("decoder_embeddings_layer_norm")(x)
-        # x = self.backbone.get_layer("decoder_embeddings_dropout")(x)
+        x = self.backbone.get_layer("decoder_embeddings_dropout")(x)
 
         # Each decoder layer has a decoder_cache; we update them separately.
         decoder_caches = tf.unstack(decoder_cache, axis=1)
@@ -182,7 +182,7 @@ class BartSeq2SeqLM(Task):
             (token_embedding, position_embedding)
         )
         x = self.backbone.get_layer("encoder_embeddings_layer_norm")(x)
-        # x = self.backbone.get_layer("encoder_embeddings_dropout")(x)
+        x = self.backbone.get_layer("encoder_embeddings_dropout")(x)
 
         # Transformer encoder layers.
         for i in range(self.backbone.num_layers):
@@ -210,8 +210,11 @@ class BartSeq2SeqLM(Task):
         decoder_cache = self._initialize_decoder_cache(prompt)
 
         # Seed the decoder cache.
-        decoder_cache = self.call_with_cache(
+        _, decoder_cache = self.call_with_cache(
             encoder_cache, prompt, decoder_cache, 0
+        )
+        tf.print(
+            "Cache Shapes: ", tf.shape(encoder_cache), tf.shape(decoder_cache)
         )
         return encoder_cache, decoder_cache
 
