@@ -173,7 +173,7 @@ class BartSeq2SeqLM(Task):
 
         # Embedding layers.
         token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
-        position_embedding = self.backbone.get_layer("position_embedding")(
+        position_embedding = self.backbone.get_layer("encoder_position_embedding")(
             token_embedding
         )
 
