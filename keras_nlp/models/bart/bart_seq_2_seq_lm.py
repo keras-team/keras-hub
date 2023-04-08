@@ -193,7 +193,7 @@ class BartSeq2SeqLM(Task):
         cache = x
         return cache
 
-    def _build_decoder_cache(self, prompt):
+    def _initialize_decoder_cache(self, prompt):
         """Build an empty cache for use with `call_with_cache()`."""
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         num_layers = self.backbone.num_layers
@@ -201,9 +201,19 @@ class BartSeq2SeqLM(Task):
         head_dim = self.backbone.hidden_dim // self.backbone.num_heads
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
         cache = tf.zeros(shape, dtype=self.compute_dtype)
-        # Seed the cache.
-        _, cache = self.call_with_cache(prompt, cache, 0)
         return cache
+
+    def _build_cache(self, encoder_token_ids, encoder_padding_mask, prompt):
+        encoder_cache = self._build_encoder_cache(
+            encoder_token_ids, encoder_padding_mask
+        )
+        decoder_cache = self._initialize_decoder_cache(prompt)
+
+        # Seed the decoder cache.
+        decoder_cache = self.call_with_cache(
+            encoder_cache, prompt, decoder_cache, 0
+        )
+        return encoder_cache, decoder_cache
 
     def compile(
         self,
@@ -238,10 +248,9 @@ class BartSeq2SeqLM(Task):
             min_length,
         ):
             # Create and seed cache with a single forward pass.
-            encoder_cache = self._build_encoder_cache(
-                encoder_token_ids, encoder_padding_mask
+            encoder_cache, decoder_cache = self._build_cache(
+                encoder_token_ids, encoder_padding_mask, prompt
             )
-            decoder_cache = self._build_decoder_cache(prompt)
 
             def next(prompt, state, index):
                 # The cache index is the index of our previous token.
