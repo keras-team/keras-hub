@@ -306,7 +306,12 @@ class BartSeq2SeqLM(Task):
         encoder_text = (
             encoder_text[tf.newaxis] if encoder_text_is_scalar else encoder_text
         )
-        preprocessed_inputs = self.preprocessor(encoder_text)
+        preprocessed_inputs = self.preprocessor(
+            {
+                "encoder_text": encoder_text,
+                "decoder_text": "dummy text",
+            }
+        )
         encoder_token_ids = preprocessed_inputs["encoder_token_ids"]
         encoder_padding_mask = preprocessed_inputs["encoder_padding_mask"]
 
