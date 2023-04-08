@@ -30,10 +30,12 @@ class RandomSamplerTest(tf.test.TestCase, parameterized.TestCase):
         self.length = 12
         self.vocab_size = len(self.int_lookup)
 
-        def next(prompt, state, index):
+        def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([self.batch_size, 5])
             # Return a distribution favoring the next char in state.
-            logits = tf.one_hot(state[:, index], self.vocab_size) * 1e9
-            return logits, state
+            logits = tf.one_hot(cache[:, index], self.vocab_size) * 1e9
+            return logits, hidden_states, cache
 
         self.next = next
         self.sampler = RandomSampler()
@@ -42,11 +44,13 @@ class RandomSamplerTest(tf.test.TestCase, parameterized.TestCase):
         return ["".join([self.int_lookup[i] for i in s]) for s in x.numpy()]
 
     def test_stateless_call(self):
-        def next(prompt, state, index):
+        def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([self.batch_size, 5])
             # Return a distribution favoring the first token in the vocab.
             logits = np.zeros((self.batch_size, self.vocab_size))
             logits[:, 0] = 1e9
-            return tf.constant(logits), state
+            return tf.constant(logits), hidden_states, cache
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
@@ -57,24 +61,24 @@ class RandomSamplerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(self.join_as_string(output), ["zzzzzaaaaaaa"])
 
     def test_stateful_call(self):
-        state_chars = list("sequentially")
-        state = tf.constant([[self.char_lookup[c] for c in state_chars]])
+        cache_chars = list("sequentially")
+        cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
             next=self.next,
             prompt=prompt,
-            state=state,
+            cache=cache,
         )
         self.assertEqual(self.join_as_string(output), ["sequentially"])
 
     def test_early_stopping(self):
-        state_chars = list("sequentially")
-        state = tf.constant([[self.char_lookup[c] for c in state_chars]])
+        cache_chars = list("sequentially")
+        cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
             next=self.next,
             prompt=prompt,
-            state=state,
+            cache=cache,
             end_token_id=self.char_lookup["t"],
         )
         self.assertEqual(self.join_as_string(output), ["sequentzzzzz"])
@@ -83,13 +87,13 @@ class RandomSamplerTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_compilation(self, jit_compile):
-        state_chars = list("sequentially")
-        state = tf.constant([[self.char_lookup[c] for c in state_chars]])
+        cache_chars = list("sequentially")
+        cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
 
         @tf.function(jit_compile=jit_compile)
-        def generate(prompt, state):
-            return self.sampler(self.next, prompt=prompt, state=state)
+        def generate(prompt, cache):
+            return self.sampler(self.next, prompt=prompt, cache=cache)
 
-        output = generate(prompt, state)
+        output = generate(prompt, cache)
         self.assertEqual(self.join_as_string(output), ["sequentially"])

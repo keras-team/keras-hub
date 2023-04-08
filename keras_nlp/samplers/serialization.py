@@ -16,6 +16,7 @@ from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.samplers.beam_sampler import BeamSampler
+from keras_nlp.samplers.contrastive_sampler import ContrastiveSampler
 from keras_nlp.samplers.greedy_sampler import GreedySampler
 from keras_nlp.samplers.random_sampler import RandomSampler
 from keras_nlp.samplers.top_k_sampler import TopKSampler
@@ -32,6 +33,7 @@ def deserialize(config, custom_objects=None):
     """Return a `Sampler` object from its config."""
     all_classes = {
         "beam": BeamSampler,
+        "contrastive": ContrastiveSampler,
         "greedy": GreedySampler,
         "random": RandomSampler,
         "top_k": TopKSampler,

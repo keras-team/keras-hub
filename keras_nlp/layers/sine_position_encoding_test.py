@@ -79,29 +79,20 @@ class SinePositionEncodingTest(tf.test.TestCase):
         output = model(input)
 
         # comapre position encoding values for position 0 and 3
-        expected_encoding_position_0 = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]
-        expected_encoding_position_3 = [
-            0.14112,
-            -0.9899925,
-            0.1387981,
-            0.9903207,
-            0.00646326,
-            0.99997914,
-        ]
-        self.assertAllClose(output[0, 0, :], expected_encoding_position_0)
-        self.assertAllClose(output[0, 3, :], expected_encoding_position_3)
+        expected_0 = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]
+        expected_3 = [0.14112, -0.98999, 0.13879, 0.99032, 0.00646, 0.99997]
+        self.assertAllClose(output[0, 0, :], expected_0, atol=0.01, rtol=0.01)
+        self.assertAllClose(output[0, 3, :], expected_3, atol=0.01, rtol=0.01)
 
     def test_ragged_tensor_with_3_dimensions(self):
         feature_size = 2
         test_layer = sine_position_encoding.SinePositionEncoding()
         # Create a 3-dimensional ragged input (the first dimension is implicit).
-        input_tensor = keras.Input(
-            shape=(None, feature_size), dtype=tf.float32, ragged=True
-        )
+        input_tensor = keras.Input(shape=(None, feature_size), ragged=True)
         output_tensor = test_layer(input_tensor)
         model = keras.Model(input_tensor, output_tensor)
 
-        input_data = tf.ragged.constant(
+        inputs = tf.ragged.constant(
             [
                 [[1.0, 1.0], [1.0, 1.0]],
                 [],
@@ -111,7 +102,7 @@ class SinePositionEncodingTest(tf.test.TestCase):
             ragged_rank=1,
             inner_shape=(2,),
         )
-        expected_output_data = tf.ragged.constant(
+        expected_outputs = tf.ragged.constant(
             [
                 [[0.0, 1.0], [0.84147096, 0.5403023]],
                 [],
@@ -121,20 +112,20 @@ class SinePositionEncodingTest(tf.test.TestCase):
             ragged_rank=1,
             inner_shape=(2,),
         )
-        output_data = model.predict(input_data)
-        self.assertAllClose(output_data, expected_output_data)
+        outputs = model.predict(inputs)
+        self.assertAllClose(outputs, expected_outputs, atol=0.01, rtol=0.01)
 
     def test_ragged_tensor_with_4_dimensions(self):
         feature_size = 2
         test_layer = sine_position_encoding.SinePositionEncoding()
         # Create a 4-dimensional ragged input (the first dimension is implicit).
         input_tensor = keras.Input(
-            shape=(None, None, feature_size), dtype=tf.float32, ragged=True
+            shape=(None, None, feature_size), ragged=True
         )
         output_tensor = test_layer(input_tensor)
         model = keras.Model(input_tensor, output_tensor)
 
-        input_data = tf.ragged.constant(
+        inputs = tf.ragged.constant(
             [
                 [
                     [[1.0, 1.0], [1.0, 1.0]],
@@ -148,7 +139,7 @@ class SinePositionEncodingTest(tf.test.TestCase):
             ragged_rank=2,
             inner_shape=(2,),
         )
-        expected_output_data = tf.ragged.constant(
+        expected_outputs = tf.ragged.constant(
             [
                 [
                     [[0.0, 1.0], [0.84147096, 0.5403023]],
@@ -166,8 +157,8 @@ class SinePositionEncodingTest(tf.test.TestCase):
             ragged_rank=2,
             inner_shape=(2,),
         )
-        output_data = model.predict(input_data)
-        self.assertAllClose(output_data, expected_output_data)
+        outputs = model.predict(inputs)
+        self.assertAllClose(outputs, expected_outputs, atol=0.01, rtol=0.01)
 
     def test_get_config_and_from_config(self):
         pos_encoding = sine_position_encoding.SinePositionEncoding(

@@ -89,17 +89,20 @@ class OPTTokenizer(BytePairTokenizer):
         merges,
         **kwargs,
     ):
-        super().__init__(
-            vocabulary=vocabulary,
-            merges=merges,
-            **kwargs,
-        )
-
-        # We use `"</s>"` as both a start and end token, as OPT was only
-        # pre-trained with `"</s>"` marking document boundaries.
+        # Special tokens. We use `"</s>"` as both a start and end token, as OPT
+        # was only pre-trained with `"</s>"` marking document boundaries.
         start_token = "</s>"
         pad_token = "<pad>"
         end_token = "</s>"
+
+        super().__init__(
+            vocabulary=vocabulary,
+            merges=merges,
+            unsplittable_tokens=[start_token, pad_token, end_token],
+            **kwargs,
+        )
+
+        # Check whether special tokens are present in the vocabulary.
         for token in [start_token, pad_token, end_token]:
             if token not in self.get_vocabulary():
                 raise ValueError(
@@ -115,3 +118,11 @@ class OPTTokenizer(BytePairTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    def get_config(self):
+        config = super().get_config()
+        # In the constructor, we pass the list of special tokens to the
+        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # delete it from the config here.
+        del config["unsplittable_tokens"]
+        return config
