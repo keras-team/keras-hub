@@ -158,7 +158,7 @@ class AlbertBackbone(Backbone):
         )(segment_id_input)
 
         # Sum, normalize and apply dropout to embeddings.
-        x = keras.layers.Add()(
+        x = keras.layers.Add(name="embedding_add")(
             (token_embedding, position_embedding, segment_embedding)
         )
         x = keras.layers.LayerNormalization(
