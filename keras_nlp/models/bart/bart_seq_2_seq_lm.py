@@ -347,7 +347,10 @@ class BartSeq2SeqLM(Task):
         padded_shape = (None, max_length)
         min_length = tf.reduce_min(prompt.row_lengths())
         input_mask = tf.ones_like(prompt, tf.bool).to_tensor(shape=padded_shape)
-        prompt = prompt.to_tensor(shape=padded_shape)
+        prompt = prompt.to_tensor(
+            shape=padded_shape,
+            default_value=self.preprocessor.tokenizer.pad_token_id,
+        )
 
         # Run the (possibly compiled) generate function on dense inputs.
         generate_function = self.make_generate_function()
