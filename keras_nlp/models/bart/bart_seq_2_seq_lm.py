@@ -173,13 +173,13 @@ class BartSeq2SeqLM(Task):
 
         # Embedding layers.
         token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
-        position_embedding = self.backbone.get_layer("encoder_position_embedding")(
-            token_embedding
-        )
+        position_embedding = self.backbone.get_layer(
+            "encoder_position_embedding"
+        )(token_embedding)
 
         # Sum, normalize and apply dropout to embeddings.
         x = self.backbone.get_layer("encoder_embeddings_add")(
-            token_embedding, position_embedding
+            (token_embedding, position_embedding)
         )
         x = self.backbone.get_layer("encoder_embeddings_layer_norm")(x)
         # x = self.backbone.get_layer("encoder_embeddings_dropout")(x)
