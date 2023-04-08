@@ -213,9 +213,6 @@ class BartSeq2SeqLM(Task):
         _, decoder_cache = self.call_with_cache(
             encoder_cache, prompt, decoder_cache, 0
         )
-        tf.print(
-            "Cache Shapes: ", tf.shape(encoder_cache), tf.shape(decoder_cache)
-        )
         return encoder_cache, decoder_cache
 
     def compile(
