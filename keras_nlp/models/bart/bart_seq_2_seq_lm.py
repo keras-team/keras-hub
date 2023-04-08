@@ -312,8 +312,8 @@ class BartSeq2SeqLM(Task):
                 "decoder_text": "dummy text",
             }
         )
-        encoder_token_ids = preprocessed_inputs["encoder_token_ids"]
-        encoder_padding_mask = preprocessed_inputs["encoder_padding_mask"]
+        encoder_token_ids = preprocessed_inputs[0]["encoder_token_ids"]
+        encoder_padding_mask = preprocessed_inputs[0]["encoder_padding_mask"]
 
         # Tokenize the prompt. We cannot use the preprocessor directly since
         # the `max_length` might be different. Moreover, the
