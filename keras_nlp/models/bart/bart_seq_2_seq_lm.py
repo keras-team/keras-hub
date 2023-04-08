@@ -336,6 +336,13 @@ class BartSeq2SeqLM(Task):
 
         prompt = self.preprocessor.tokenizer(prompt)
 
+        # Add the start token to the prompt.
+        start_tokens = tf.fill(
+            (tf.shape(prompt)[0], 1),
+            value=self.preprocessor.tokenizer.start_token_id,
+        )
+        prompt = tf.concat([start_tokens, prompt], axis=1)
+
         # Pad ragged to dense tensors.
         padded_shape = (None, max_length)
         min_length = tf.reduce_min(prompt.row_lengths())
