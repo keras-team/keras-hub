@@ -160,7 +160,7 @@ class WhisperTokenizer(BytePairTokenizer):
 
         unsplittable_tokens = list(special_tokens.keys())
         if language_tokens:
-            unsplittable_tokens = list(language_tokens.keys())
+            unsplittable_tokens += list(language_tokens.keys())
 
         super().__init__(
             vocabulary=vocabulary,
