@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ class XLMRobertaMaskedLMPreprocessor(XLMRobertaPreprocessor):
       `keras_nlp.models.XLMRobertaMaskedLM` task model.
 
     Args:
-        tokenizer: A `keras_nlp.models.RobertaTokenizer` instance.
+        tokenizer: A `keras_nlp.models.XLMRobertaTokenizer` instance.
         sequence_length: int. The length of the packed inputs.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either

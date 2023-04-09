@@ -90,7 +90,7 @@ class XLMRobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         self.masked_lm(self.preprocessed_batch)
 
     def test_classifier_predict(self):
-        # self.masked_lm.predict(self.raw_batch)
+        self.masked_lm.predict(self.raw_batch)
         self.masked_lm.preprocessor = None
         self.masked_lm.predict(self.preprocessed_batch)
 

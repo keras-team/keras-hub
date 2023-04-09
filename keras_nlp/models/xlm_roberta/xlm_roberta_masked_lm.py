@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -128,7 +128,7 @@ class XLMRobertaMaskedLM(Task):
             name="mlm_head",
         )(backbone_outputs, inputs["mask_positions"])
 
-        # Instantiate using Functional API Model constructor
+        # Instantiate using Functional API Model constructor.
         super().__init__(
             inputs=inputs,
             outputs=outputs,
