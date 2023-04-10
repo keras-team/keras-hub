@@ -38,6 +38,8 @@ class BeamSampler(Sampler):
             time-step. `num_beams` should be strictly positive.
         return_all_beams: bool. When set to `True`, the sampler will return all
             beams and their respective probabilities score.
+        token_ids_to_suppress: list, defaults to None. A list of token IDs which
+            will not be generated.
 
     Call Args:
         {{call_args}}
@@ -97,8 +99,9 @@ class BeamSampler(Sampler):
         self,
         num_beams=5,
         return_all_beams=False,
+        token_ids_to_suppress=None,
     ):
-        super().__init__()
+        super().__init__(token_ids_to_suppress=token_ids_to_suppress)
         self.num_beams = num_beams
         self.return_all_beams = return_all_beams
 
@@ -152,6 +155,11 @@ class BeamSampler(Sampler):
         def body(prompt, cache, index, log_probs):
             # Compute the softmax distribution for the next token.
             logits, _, cache = next(prompt, cache, index)
+
+            # Suppress specified token IDs from being generated.
+            if self.token_ids_to_suppress:
+                logits = self._suppress_token_ids(self, logits)
+
             vocab_size = tf.shape(logits)[-1]
             probs = keras.activations.softmax(logits)
 

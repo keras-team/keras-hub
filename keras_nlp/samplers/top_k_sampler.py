@@ -32,6 +32,8 @@ class TopKSampler(Sampler):
 
     Args:
         k: int, the `k` value of top-k.
+        token_ids_to_suppress: list, defaults to None. A list of token IDs which
+            will not be generated.
         seed: int, defaults to None. The random seed.
 
     Call Args:
@@ -63,9 +65,10 @@ class TopKSampler(Sampler):
     def __init__(
         self,
         k=5,
+        token_ids_to_suppress=None,
         seed=None,
     ):
-        super().__init__()
+        super().__init__(token_ids_to_suppress=token_ids_to_suppress)
         self.k = k
         self.seed = seed
 

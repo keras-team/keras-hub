@@ -29,6 +29,10 @@ class GreedySampler(Sampler):
     This sampler is implemented on greedy search, i.e., always picking up the
     token of the largest probability as the next token.
 
+    Args:
+        token_ids_to_suppress: list, defaults to None. A list of token IDs which
+            will not be generated.
+
     Call Args:
         {{call_args}}
 
@@ -55,8 +59,8 @@ class GreedySampler(Sampler):
     ```
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, token_ids_to_suppress=None):
+        super().__init__(token_ids_to_suppress=token_ids_to_suppress)
 
     def get_next_token(self, probabilities):
         return tf.argmax(probabilities, axis=-1)

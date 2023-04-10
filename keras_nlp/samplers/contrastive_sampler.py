@@ -39,6 +39,8 @@ class ContrastiveSampler(Sampler):
         alpha: float, the weight of minus max similarity in joint score
             computation. The larger the value of `alpha`, the score relies more
             on the similarity than the token probability.
+        token_ids_to_suppress: list, defaults to None. A list of token IDs which
+            will not be generated.
         seed: int, defaults to None. The random seed.
 
     Call Args:
@@ -75,9 +77,10 @@ class ContrastiveSampler(Sampler):
         self,
         k=5,
         alpha=0.6,
+        token_ids_to_suppress=None,
         seed=None,
     ):
-        super().__init__()
+        super().__init__(token_ids_to_suppress=token_ids_to_suppress)
         self.k = k
         self.alpha = alpha
         self.seed = seed
@@ -132,6 +135,10 @@ class ContrastiveSampler(Sampler):
             return not tf.reduce_all(prompt_done)
 
         def body(prompt, cache, index, logits, hidden_states):
+            # Suppress specified token IDs from being generated.
+            if self.token_ids_to_suppress:
+                logits = self._suppress_token_ids(self, logits)
+
             # Compute the softmax distribution for the next token.
             probabilities = keras.activations.softmax(logits)
 

@@ -31,6 +31,8 @@ class RandomSampler(Sampler):
     chance determined by the probability of each token.
 
     Args:
+        token_ids_to_suppress: list, defaults to None. A list of token IDs which
+            will not be generated.
         seed: int, defaults to None. The random seed.
 
     Call Args:
@@ -61,9 +63,10 @@ class RandomSampler(Sampler):
 
     def __init__(
         self,
+        token_ids_to_suppress=None,
         seed=None,
     ):
-        super().__init__()
+        super().__init__(token_ids_to_suppress=token_ids_to_suppress)
         self.seed = seed
 
     def get_next_token(self, probabilities):
