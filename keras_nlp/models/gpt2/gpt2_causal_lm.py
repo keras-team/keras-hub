@@ -208,7 +208,12 @@ class GPT2CausalLM(Task):
     def preprocessor_cls(cls):
         return GPT2CausalLMPreprocessor
 
-    def call_with_cache(self, token_ids, cache, cache_index):
+    def call_with_cache(
+        self,
+        token_ids,
+        cache,
+        cache_index,
+    ):
         """Forward pass of `GPT2CausalLM` with cache.
 
         `call_with_cache` adds an additional forward pass for the model for
@@ -223,9 +228,10 @@ class GPT2CausalLM(Task):
                 whole sequence.
 
         Returns:
-            A (logits, cache) tuple. Where the first output is the language
-            model logits for the input token_ids and the second output is the
-            cache.
+            A (logits, hidden_states, cache) tuple. Where `logits` is the
+            language model logits for the input token_ids, `hidden_states` is
+            the final hidden representation of the input tokens, and `cache` is
+            the decoding cache.
         """
         token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
         position_embedding = self.backbone.get_layer("position_embedding")(
@@ -247,12 +253,13 @@ class GPT2CausalLM(Task):
             caches[i] = next_cache
         cache = tf.stack(caches, axis=1)
         x = self.backbone.get_layer("layer_norm")(x)
-        x = tf.matmul(
-            x,
+        hidden_states = x
+        logits = tf.matmul(
+            hidden_states,
             self.backbone.get_layer("token_embedding").embeddings,
             transpose_b=True,
         )
-        return x, cache
+        return logits, hidden_states, cache
 
     def _build_cache(self, prompt):
         """Build an empty cache for use with `call_with_cache()`."""
@@ -263,8 +270,8 @@ class GPT2CausalLM(Task):
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
         cache = tf.zeros(shape, dtype=self.compute_dtype)
         # Seed the cache.
-        _, cache = self.call_with_cache(prompt, cache, 0)
-        return cache
+        _, hidden_states, cache = self.call_with_cache(prompt, cache, 0)
+        return hidden_states, cache
 
     def compile(
         self,
@@ -293,22 +300,31 @@ class GPT2CausalLM(Task):
 
         def generate_function(prompt, input_mask, min_length):
             # Create and seed cache with a single forward pass.
-            cache = self._build_cache(prompt)
+            hidden_states, cache = self._build_cache(prompt)
 
-            def next(prompt, state, index):
+            def next(prompt, cache, index):
                 # The cache index is the index of our previous token.
                 cache_index = index - 1
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
-                logits, state = self.call_with_cache(prompt, state, cache_index)
-                return tf.squeeze(logits, axis=1), state
+                logits, hidden_states, cache = self.call_with_cache(
+                    prompt,
+                    cache,
+                    cache_index,
+                )
+                return (
+                    tf.squeeze(logits, axis=1),
+                    tf.squeeze(hidden_states, axis=1),
+                    cache,
+                )
 
             return self._sampler(
                 next=next,
                 prompt=prompt,
-                state=cache,
+                cache=cache,
                 index=min_length,
                 mask=input_mask,
                 end_token_id=self.preprocessor.tokenizer.end_token_id,
+                hidden_states=hidden_states,
             )
 
         if self.run_eagerly:

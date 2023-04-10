@@ -46,10 +46,11 @@ class TopPSampler(Sampler):
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
-    def next(prompt, state, index):
+    def next(prompt, cache, index):
+        hidden_states = tf.ones((batch_size, 10))
         # A uniform distribution over our alphabet.
         logits = tf.ones((batch_size, vocab_size))
-        return logits, state
+        return logits, hidden_states, cache
 
     output = keras_nlp.samplers.TopPSampler(p=0.1)(
         next=next,

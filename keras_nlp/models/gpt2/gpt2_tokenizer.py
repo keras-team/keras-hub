@@ -94,22 +94,24 @@ class GPT2Tokenizer(BytePairTokenizer):
         merges,
         **kwargs,
     ):
-        # Check for necessary special tokens.
+        # Special tokens.
         end_token = "<|endoftext|>"
 
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            special_tokens=[end_token],
+            unsplittable_tokens=[end_token],
             **kwargs,
         )
 
+        # Check whether special tokens are present in the vocabulary.
         if end_token not in self.get_vocabulary():
             raise ValueError(
                 f"Cannot find token `'{end_token}'` in the provided "
                 f"`vocabulary`. Please provide `'{end_token}'` in your "
                 "`vocabulary` or use a pretrained `vocabulary` name."
             )
+
         self.end_token_id = self.token_to_id(end_token)
         # GPT2 uses the same start and pad token as end token, i.e.,
         # "<|endoftext|>".
@@ -119,3 +121,11 @@ class GPT2Tokenizer(BytePairTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    def get_config(self):
+        config = super().get_config()
+        # In the constructor, we pass the list of special tokens to the
+        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # delete it from the config here.
+        del config["unsplittable_tokens"]
+        return config
