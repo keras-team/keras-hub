@@ -93,11 +93,17 @@ class Sampler:
 
     def _suppress_token_ids(self, logits):
         """Suppresses specified token IDs from being generated."""
-        mask = tf.ones_like(logits, dtype=tf.bool)
-        mask = tf.tensor_scatter_nd_update(
-            mask, tf.expand_dims(self.token_ids_to_suppress, axis=1), False
+        vocabulary_size = tf.shape(logits)[-1]
+
+        # Build mask.
+        mask = tf.equal(
+            tf.expand_dims(tf.range(vocabulary_size), axis=0),
+            tf.expand_dims(self.token_ids_to_suppress, axis=1),
         )
-        logits = tf.where(mask, logits, -1e9)
+        mask = tf.logical_not(tf.reduce_any(mask, axis=0))
+
+        # Set logits to -inf for masked tokens.
+        logits = tf.where(mask, logits, tf.fill(tf.shape(logits), -1e9))
         return logits
 
     def __call__(
@@ -131,7 +137,7 @@ class Sampler:
 
             # Suppress specified token IDs from being generated.
             if self.token_ids_to_suppress:
-                logits = self._suppress_token_ids(self, logits)
+                logits = self._suppress_token_ids(logits)
 
             probabilities = keras.activations.softmax(logits)
             # Compute the next token.

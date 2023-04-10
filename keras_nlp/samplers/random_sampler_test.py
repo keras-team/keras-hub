@@ -71,6 +71,22 @@ class RandomSamplerTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.assertEqual(self.join_as_string(output), ["sequentially"])
 
+    def test_suppress_tokens(self):
+        cache_chars = list("sequentially")
+        cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+
+        sampler = RandomSampler(token_ids_to_suppress=[4, 24])
+        output = sampler(
+            next=self.next,
+            prompt=prompt,
+            cache=cache,
+        )
+        output = self.join_as_string(output)
+
+        self.assertNotIn("e", output)
+        self.assertNotIn("y", output)
+
     def test_early_stopping(self):
         cache_chars = list("sequentially")
         cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])

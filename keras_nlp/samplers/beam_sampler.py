@@ -158,7 +158,7 @@ class BeamSampler(Sampler):
 
             # Suppress specified token IDs from being generated.
             if self.token_ids_to_suppress:
-                logits = self._suppress_token_ids(self, logits)
+                logits = self._suppress_token_ids(logits)
 
             vocab_size = tf.shape(logits)[-1]
             probs = keras.activations.softmax(logits)

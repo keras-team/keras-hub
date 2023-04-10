@@ -137,7 +137,7 @@ class ContrastiveSampler(Sampler):
         def body(prompt, cache, index, logits, hidden_states):
             # Suppress specified token IDs from being generated.
             if self.token_ids_to_suppress:
-                logits = self._suppress_token_ids(self, logits)
+                logits = self._suppress_token_ids(logits)
 
             # Compute the softmax distribution for the next token.
             probabilities = keras.activations.softmax(logits)
