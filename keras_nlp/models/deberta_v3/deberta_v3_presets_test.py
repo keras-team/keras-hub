@@ -84,7 +84,9 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_classifier_output(self, load_weights):
         input_data = tf.constant(["The quick brown fox."])
         model = DebertaV3Classifier.from_preset(
-            "deberta_v3_extra_small_en", load_weights=load_weights
+            "deberta_v3_extra_small_en",
+            num_classes=2,
+            load_weights=load_weights,
         )
         # Never assert output values, as the head weights are random.
         model.predict(input_data)
@@ -99,6 +101,7 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         }
         model = DebertaV3Classifier.from_preset(
             "deberta_v3_extra_small_en",
+            num_classes=2,
             load_weights=load_weights,
             preprocessor=None,
         )
