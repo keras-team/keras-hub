@@ -34,6 +34,8 @@ class TopPSampler(Sampler):
 
     Args:
         p: float, the `p` value of top-p.
+        sample_from_top_k: int, defaults to None. If set, only sample from top
+            `sample_from_top_k` tokens. This makes top-p sampler faster.
         seed: int, defaults to None. The random seed.
 
     Call Args:
@@ -65,17 +67,28 @@ class TopPSampler(Sampler):
     def __init__(
         self,
         p=0.1,
+        sample_from_top_k=40,
         seed=None,
     ):
         super().__init__()
         self.p = p
+        self.sample_from_top_k = sample_from_top_k
         self.seed = seed
 
     def get_next_token(self, probabilities):
-        # Sort preds in descending order.
-        sorted_preds, sorted_indices = tf.math.top_k(
-            probabilities, k=tf.shape(probabilities)[1], sorted=True
-        )
+        if self.sample_from_top_k is not None:
+            k = tf.math.minimum(
+                self.sample_from_top_k, tf.shape(probabilities)[1]
+            )
+            # Filter out top-k tokens.
+            sorted_preds, sorted_indices = tf.math.top_k(
+                probabilities, k=k, sorted=True
+            )
+        else:
+            # Sort preds in descending order.
+            sorted_preds, sorted_indices = tf.math.top_k(
+                probabilities, k=tf.shape(probabilities)[1], sorted=True
+            )
         # Calculate cumulative probability distribution.
         cumulative_probabilities = tf.math.cumsum(sorted_preds, axis=-1)
         # Create a mask for the tokens to keep.
@@ -88,7 +101,7 @@ class TopPSampler(Sampler):
         probabilities = tf.where(
             shifted_keep_mask,
             sorted_preds,
-            tf.zeros(tf.shape(probabilities), dtype=sorted_preds.dtype),
+            tf.zeros(tf.shape(sorted_preds), dtype=sorted_preds.dtype),
         )
         sorted_next_token = tf.random.categorical(
             tf.math.log(probabilities), 1, seed=self.seed
@@ -100,6 +113,7 @@ class TopPSampler(Sampler):
         config.update(
             {
                 "p": self.p,
+                "sample_from_top_k": self.sample_from_top_k,
                 "seed": self.seed,
             }
         )
