@@ -243,7 +243,7 @@ class BartSeq2SeqLM(Task):
             self_attention_cache_index=0,
             encoder_outputs=encoder_outputs,
         )
-        return self_attention_cache, cross_attention_cache
+        return encoder_outputs, self_attention_cache, cross_attention_cache
 
     def compile(
         self,
@@ -278,7 +278,11 @@ class BartSeq2SeqLM(Task):
             min_length,
         ):
             # Create and seed cache with a single forward pass.
-            self_attention_cache, cross_attention_cache = self._build_cache(
+            (
+                encoder_outputs,
+                self_attention_cache,
+                cross_attention_cache,
+            ) = self._build_cache(
                 encoder_token_ids, encoder_padding_mask, prompt
             )
 
@@ -290,6 +294,7 @@ class BartSeq2SeqLM(Task):
                     decoder_token_ids=prompt,
                     self_attention_cache=cache,
                     self_attention_cache_index=cache_index,
+                    encoder_outputs=encoder_outputs,
                     cross_attention_cache=cross_attention_cache,
                 )
                 return tf.squeeze(logits, axis=1), cache
