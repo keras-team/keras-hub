@@ -311,6 +311,7 @@ class BartSeq2SeqLM(Task):
                 cache_index = index - 1
                 tf.print(cache_index)
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
+                tf.print(prompt)
                 logits, hidden_states, cache, _ = self.call_with_cache(
                     decoder_token_ids=prompt,
                     self_attention_cache=cache,
