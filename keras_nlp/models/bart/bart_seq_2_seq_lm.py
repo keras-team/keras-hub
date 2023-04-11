@@ -243,8 +243,6 @@ class BartSeq2SeqLM(Task):
         )
         self_attention_cache = self._initialize_self_attention_cache(prompt)
 
-        tf.print(prompt)
-
         # Seed the self-attention cache and the cross-attention cache.
         (
             _,
@@ -309,10 +307,12 @@ class BartSeq2SeqLM(Task):
             def next_token(prompt, cache, index):
                 # The cache index is the index of our previous token.
                 cache_index = index - 1
-                tf.print(cache_index)
-                tf.print(prompt)
+                tf.print("===")
+                tf.print("CACHE IDX: ", cache_index)
+                tf.print("PROMPT: ", prompt)
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
-                tf.print(prompt)
+                tf.print("SLICED PROMPT: ", prompt)
+                tf.print("===")
                 logits, hidden_states, cache, _ = self.call_with_cache(
                     decoder_token_ids=prompt,
                     self_attention_cache=cache,
