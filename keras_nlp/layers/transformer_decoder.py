@@ -21,6 +21,9 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
+from keras_nlp.layers.cached_multi_head_cross_attention import (
+    CachedMultiHeadCrossAttention,
+)
 from keras_nlp.utils.keras_utils import clone_initializer
 
 from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
@@ -166,7 +169,7 @@ class TransformerDecoder(keras.layers.Layer):
         # Cross attention layers are optional.
         self._cross_attention_layer = None
         if has_cross_attention:
-            self._cross_attention_layer = keras.layers.MultiHeadAttention(
+            self._cross_attention_layer = CachedMultiHeadCrossAttention(
                 num_heads=self.num_heads,
                 key_dim=head_dim,
                 value_dim=head_dim,
@@ -212,8 +215,10 @@ class TransformerDecoder(keras.layers.Layer):
         decoder_attention_mask=None,
         encoder_padding_mask=None,
         encoder_attention_mask=None,
-        cache=None,
+        self_attention_cache=None,
         cache_index=0,
+        cross_attention_cache=None,
+        compute_cross_attention_cache=False,
     ):
         """Forward pass of the TransformerDecoder.
 
@@ -233,7 +238,7 @@ class TransformerDecoder(keras.layers.Layer):
             encoder_attention_mask: a boolean Tensor. Customized encoder
                 sequence mask, must of shape
                 [batch_size, encoder_sequence_length, encoder_sequence_length].
-            cache: a dense float Tensor. The cache of key/value of leading
+            self_attention_cache: a dense float Tensor. The cache of key/value of leading
                 tokens. `cache` is of shape [B, 2, max_seq_len, num_heads,
                 key_dims].
             cache_index: a int or int Tensor, the index of the current token
@@ -277,8 +282,8 @@ class TransformerDecoder(keras.layers.Layer):
         # We need to handle a rectangular causal mask when doing cached
         # decoding. For generative inference, `decoder_sequence` will
         # generally be length 1, and `cache` will be the full generation length.
-        if cache is not None:
-            input_length = tf.shape(cache)[2]
+        if self_attention_cache is not None:
+            input_length = tf.shape(self_attention_cache)[2]
         self_attention_mask = compute_causal_mask(
             batch_size,
             input_length,
@@ -295,10 +300,10 @@ class TransformerDecoder(keras.layers.Layer):
         residual = x
         if self.normalize_first:
             x = self._self_attention_layernorm(x)
-        x, cache = self._self_attention_layer(
+        x, self_attention_cache = self._self_attention_layer(
             query=x,
             value=x,
-            cache=cache,
+            cache=self_attention_cache,
             cache_index=cache_index,
             attention_mask=self_attention_mask,
         )
@@ -318,10 +323,12 @@ class TransformerDecoder(keras.layers.Layer):
             residual = x
             if self.normalize_first:
                 x = self._cross_attention_layernorm(x)
-            x = self._cross_attention_layer(
+            x, cross_attention_cache = self._cross_attention_layer(
                 query=x,
                 value=encoder_sequence,
                 attention_mask=cross_attention_mask,
+                cache=cross_attention_cache,
+                compute_cache=compute_cross_attention_cache,
             )
             x = self._cross_attention_dropout(x)
             x = x + residual
@@ -339,9 +346,25 @@ class TransformerDecoder(keras.layers.Layer):
         if not self.normalize_first:
             x = self._feedforward_layernorm(x)
 
-        if cache is None:
-            return x
-        return (x, cache)
+        if self._cross_attention_layer is None:
+            if self_attention_cache is None:
+                return x
+            return (x, self_attention_cache)
+        else:
+            if self_attention_cache is None and cross_attention_cache is None:
+                return x
+            elif (
+                self_attention_cache is not None
+                and cross_attention_cache is None
+            ):
+                return (x, self_attention_cache)
+            elif (
+                self_attention_cache is None
+                and cross_attention_cache is not None
+            ):
+                return (x, cross_attention_cache)
+            else:
+                return (x, self_attention_cache, cross_attention_cache)
 
     def get_config(self):
         config = super().get_config()
