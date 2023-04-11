@@ -188,12 +188,19 @@ class BartSeq2SeqLM(Task):
         if compute_cross_attention_cache:
             cross_attention_cache = tf.stack(cross_attention_caches, axis=1)
 
-        x = tf.matmul(
-            x,
+        hidden_states = x
+
+        logits = tf.matmul(
+            hidden_states,
             self.backbone.get_layer("token_embedding").embeddings,
             transpose_b=True,
         )
-        return x, self_attention_cache, cross_attention_cache
+        return (
+            logits,
+            hidden_states,
+            self_attention_cache,
+            cross_attention_cache,
+        )
 
     def _get_encoder_outputs(self, token_ids, padding_mask):
         """Does a forward pass on the encoder and returns the encoder output."""
@@ -237,13 +244,23 @@ class BartSeq2SeqLM(Task):
         self_attention_cache = self._initialize_self_attention_cache(prompt)
 
         # Seed the self-attention cache and the cross-attention cache.
-        _, self_attention_cache, cross_attention_cache = self.call_with_cache(
+        (
+            _,
+            hidden_states,
+            self_attention_cache,
+            cross_attention_cache,
+        ) = self.call_with_cache(
             decoder_token_ids=prompt,
             self_attention_cache=self_attention_cache,
             self_attention_cache_index=0,
             encoder_outputs=encoder_outputs,
         )
-        return encoder_outputs, self_attention_cache, cross_attention_cache
+        return (
+            hidden_states,
+            encoder_outputs,
+            self_attention_cache,
+            cross_attention_cache,
+        )
 
     def compile(
         self,
@@ -279,6 +296,7 @@ class BartSeq2SeqLM(Task):
         ):
             # Create and seed cache with a single forward pass.
             (
+                hidden_states,
                 encoder_outputs,
                 self_attention_cache,
                 cross_attention_cache,
@@ -290,14 +308,18 @@ class BartSeq2SeqLM(Task):
                 # The cache index is the index of our previous token.
                 cache_index = index - 1
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
-                logits, cache = self.call_with_cache(
+                logits, hidden_states, cache, _ = self.call_with_cache(
                     decoder_token_ids=prompt,
                     self_attention_cache=cache,
                     self_attention_cache_index=cache_index,
                     encoder_outputs=encoder_outputs,
                     cross_attention_cache=cross_attention_cache,
                 )
-                return tf.squeeze(logits, axis=1), cache
+                return (
+                    tf.squeeze(logits, axis=1),
+                    tf.squeeze(hidden_states, axis=1),
+                    cache,
+                )
 
             return self._sampler(
                 next=next_token,
@@ -306,6 +328,7 @@ class BartSeq2SeqLM(Task):
                 index=min_length,
                 mask=input_mask,
                 end_token_id=self.preprocessor.tokenizer.end_token_id,
+                hidden_states=hidden_states,
             )
 
         if self.run_eagerly:
