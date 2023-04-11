@@ -310,6 +310,7 @@ class BartSeq2SeqLM(Task):
                 # The cache index is the index of our previous token.
                 cache_index = index - 1
                 tf.print(cache_index)
+                tf.print(prompt)
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
                 tf.print(prompt)
                 logits, hidden_states, cache, _ = self.call_with_cache(
