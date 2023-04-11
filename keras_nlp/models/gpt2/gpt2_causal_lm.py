@@ -360,9 +360,9 @@ class GPT2CausalLM(Task):
         This method generates text based on given `prompt`. The sampling used
         for generation can be set in the `compile` method.
 
-        If `inputs` are a batched `tf.data.Dataset` or `batch_size` is provided,
-        outputs will be generated "batch-by-batch" and concatenated. Otherwise,
-        all inputs will be handled in a single generation pass.
+        If `inputs` are a `tf.data.Dataset`, outputs will be generated
+        "batch-by-batch" and concatenated. Otherwise, all inputs will be handled
+        as a single batch.
 
         If a `preprocessor` is attached to the model, `inputs` should be
         strings and returned sequences will be strings. Otherwise, inputs should
