@@ -163,7 +163,6 @@ class BartSeq2SeqLM(Task):
         else:
             cross_attention_caches = tf.unstack(cross_attention_cache, axis=1)
             compute_cross_attention_cache = False
-        tf.print(cross_attention_caches)
         for i in range(self.backbone.num_layers):
             current_self_attention_cache = self_attention_caches[i]
             current_cross_attention_cache = cross_attention_caches[i]
