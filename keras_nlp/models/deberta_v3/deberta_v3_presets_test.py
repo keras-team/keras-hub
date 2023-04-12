@@ -84,7 +84,9 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_classifier_output(self, load_weights):
         input_data = tf.constant(["The quick brown fox."])
         model = DebertaV3Classifier.from_preset(
-            "deberta_v3_extra_small_en", load_weights=load_weights
+            "deberta_v3_extra_small_en",
+            num_classes=2,
+            load_weights=load_weights,
         )
         # Never assert output values, as the head weights are random.
         model.predict(input_data)
@@ -99,6 +101,7 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         }
         model = DebertaV3Classifier.from_preset(
             "deberta_v3_extra_small_en",
+            num_classes=2,
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -117,15 +120,15 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("deberta_tokenizer", DebertaV3Tokenizer),
-        ("deberta_preprocessor", DebertaV3Preprocessor),
-        ("deberta", DebertaV3Backbone),
-        ("deberta_classifier", DebertaV3Classifier),
+        ("deberta_tokenizer", DebertaV3Tokenizer, {}),
+        ("deberta_preprocessor", DebertaV3Preprocessor, {}),
+        ("deberta", DebertaV3Backbone, {}),
+        ("deberta_classifier", DebertaV3Classifier, {"num_classes": 2}),
     )
-    def test_unknown_preset_error(self, cls):
+    def test_unknown_preset_error(self, cls, kwargs):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("deberta_v3_extra_small_en_clowntown")
+            cls.from_preset("deberta_v3_extra_small_en_clowntown", **kwargs)
 
 
 @pytest.mark.extra_large
