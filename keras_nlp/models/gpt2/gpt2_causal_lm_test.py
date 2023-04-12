@@ -98,10 +98,18 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
         output = self.causal_lm.generate(" airplane")
         self.assertTrue(prompt in output.numpy().decode("utf-8"))
         # String tensor input.
-        self.causal_lm.generate(self.raw_batch)
+        self.assertDTypeEqual(
+            self.causal_lm.generate(self.raw_batch), tf.string
+        )
+        # String dataset input.
+        self.assertDTypeEqual(
+            self.causal_lm.generate(self.raw_dataset), tf.string
+        )
         # Int tensor input.
         self.causal_lm.preprocessor = None
-        self.causal_lm.generate(self.preprocessed_batch)
+        self.assertDTypeEqual(
+            self.causal_lm.generate(self.preprocessed_batch), tf.int32
+        )
 
     def test_generate_compilation(self):
         # Assert we do not recompile with successive calls.

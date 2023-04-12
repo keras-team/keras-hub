@@ -149,7 +149,7 @@ class GPT2CausalLM(Task):
         backbone=backbone,
         preprocessor=preprocessor,
     )
-    gpt2_lm.generate("I want to say", max_length=30)
+    gpt2_lm.fit(x=features, batch_size=2)
     ```
     """
 
@@ -357,7 +357,7 @@ class GPT2CausalLM(Task):
     ):
         """Generate text given prompt `inputs`.
 
-        This method generates text based on given `prompt`. The sampling used
+        This method generates text based on given `inputs`. The sampling used
         for generation can be set in the `compile` method.
 
         If `inputs` are a `tf.data.Dataset`, outputs will be generated
@@ -376,12 +376,14 @@ class GPT2CausalLM(Task):
                 `tf.Tensor` or `tf.data.Dataset` with keys `"token_ids"` and
                 `"padding_mask"`.
             max_length: Optional. int. The max length of the generated sequence.
-                If `None` will default to the max configured length of the
-                preprocessor.
+                Will default to the max configured `sequence_length` of the
+                `preprocessor`. If `preprocessor is None`, `inputs` should be
+                padding to shape `(batch_size, max_length)` and this argument
+                will be ignored.
 
         Returns:
             A string or string list if `preprocessor` is set, and a integer
-            tensor of token IDs if `preprocessor` is `None`.
+            tensor of token IDs if `preprocessor is None`.
         """
         input_is_scalar = False
 
