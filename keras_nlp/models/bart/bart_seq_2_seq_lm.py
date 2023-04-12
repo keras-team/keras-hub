@@ -113,31 +113,37 @@ class BartSeq2SeqLM(Task):
         encoder_outputs=None,
         cross_attention_cache=None,
     ):
-        """Forward pass of `BartSeq2SeqLM` with `encoder_cache` and `decoder_cache`.
+        """Forward pass of `BartSeq2SeqLM` with `self_attention_cache` and `cross_attention_cache`.
 
         `call_with_cache` adds an additional inference-time forward pass for the
         model for seq2seq text generation. Unlike calling the model directly,
         this method does two things to optimize text generation:
 
-        - Uses the cached encoder output to avoid doing a forward pass on the
-          encoder repeatedly.
         - Allows caching previous key/value tensors in the decoder's
           self-attention layer to avoid recomputing the outputs of seen tokens.
+        - Allows caching the key/value tensors in the decoder's cross attention
+          layer to avoid recomputing the encoder outputs.
 
         Args:
-            encoder_cache: a dense float Tensor. The cached encoder output.
             decoder_token_ids: a dense int Tensor, input token ids to be fed to
                 the decoder.
-            decoder_cache: a dense float Tensor, the cached key and value
+            self_attention_cache: a dense float Tensor, the cached key and value
                 tensors of previously seen tokens in the decoder's self-attention
                 layer.
-            decoder_cache_index: int, or int Tensor. The index of current inputs
+            self_attention_cache_index: int, or int Tensor. The index of current inputs
                 in the whole sequence.
+            encoder_outputs: a dense float Tensor. The encoder output.
+            cross_attention_cache: a dense float Tensor, the cached key and value
+            tensors of the encoder outputs in the decoder's cross-attention layer.
 
         Returns:
-            A (logits, decoder_cache) tuple. The first output is the language
-            model logits for the input `decoder_token_ids` and the second output
-            is the updated decoder key/value cache.
+            A `(logits, hidden_states, self_attention_cache, cross_attention_cache,)`
+            tuple, where `logits` is the language model logits for the input
+            `decoder_token_ids`, `hidden_states` is the final hidden
+            representation of the input tokens, `self_attention_cache` is the
+            key/value cache in the decoder's self-attention layer and
+            `cross_attention_cache` is the key/value cache in the decoder's
+            cross-attention layer.
         """
         # Embedding layers.
         token_embedding = self.backbone.get_layer("token_embedding")(
