@@ -377,8 +377,8 @@ class GPT2CausalLM(Task):
                 `"padding_mask"`.
             max_length: Optional. int. The max length of the generated sequence.
                 Will default to the max configured `sequence_length` of the
-                `preprocessor`. If `preprocessor is None`, `inputs` should be
-                padding to shape `(batch_size, max_length)` and this argument
+                `preprocessor`. If `preprocessor` is `None`, `inputs` should be
+                should be padded to the desired maximum length and this argument
                 will be ignored.
 
         Returns:
