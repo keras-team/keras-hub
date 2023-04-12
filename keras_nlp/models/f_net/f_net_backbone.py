@@ -37,16 +37,16 @@ def f_net_bias_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.FNetBackbone")
 class FNetBackbone(Backbone):
-    """FNet encoder network.
+    """A FNet encoder network.
 
     This class implements a bi-directional Fourier Transform-based encoder as
     described in ["FNet: Mixing Tokens with Fourier Transforms"](https://arxiv.org/abs/2105.03824).
     It includes the embedding lookups and `keras_nlp.layers.FNetEncoder` layers,
     but not the masked language model or next sentence prediction heads.
 
-    The default constructor gives a fully customizable, randomly initialized FNet
-    encoder with any number of layers and embedding dimensions. To load
-    preset architectures and weights, use the `from_preset` constructor.
+    The default constructor gives a fully customizable, randomly initialized
+    FNet encoder with any number of layers and embedding dimensions. To
+    load preset architectures and weights, use the `from_preset()` constructor.
 
     Note: unlike other models, FNet does not take in a `"padding_mask"` input,
     the `"<pad>"` token is handled equivalently to all other tokens in the input
@@ -78,15 +78,19 @@ class FNetBackbone(Backbone):
         ),
     }
 
-    # Randomly initialized FNet encoder with a custom config
+    # Pretrained BERT encoder.
+    model = keras_nlp.models.FNetBackbone.from_preset("f_net_base_en")
+    model(input_data)
+
+    # Randomly initialized FNet encoder with a custom config.
     model = keras_nlp.models.FNetBackbone(
         vocabulary_size=32000,
-        num_layers=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12,
+        num_layers=4,
+        hidden_dim=256,
+        intermediate_dim=512,
+        max_sequence_length=128,
     )
-    output = model(input_data)
+    model(input_data)
     ```
     """
 
