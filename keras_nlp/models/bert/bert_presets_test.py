@@ -112,7 +112,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_preset_mutability(self, cls, kwargs):
         preset = "bert_tiny_en_uncased"
-        obj = cls.from_preset(preset, kwargs)
+        obj = cls.from_preset(preset, **kwargs)
         # Cannot overwrite the presents attribute in an object
         with self.assertRaises(AttributeError):
             obj.presets = {"my_model": "clowntown"}
