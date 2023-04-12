@@ -84,7 +84,10 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             value = dynamic_update_slice(value_cache, value, start)
             cache = tf.stack((key, value), axis=1)
 
-        tf.print("key cache: ", cache[0, 0, :3])
+        if cache is not None:
+            tf.print("key cache: ", cache[0, 0, :3])
+        else:
+            tf.print("key cache: ", cache)
 
         query = tf.multiply(
             query, 1.0 / tf.math.sqrt(tf.cast(self._key_dim, query.dtype))
