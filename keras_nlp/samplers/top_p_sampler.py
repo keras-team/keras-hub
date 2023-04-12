@@ -34,8 +34,8 @@ class TopPSampler(Sampler):
 
     Args:
         p: float, the `p` value of top-p.
-        sample_from_top_k: int, defaults to None. If set, only sample from top
-            `sample_from_top_k` tokens. This makes top-p sampler faster.
+        k: int, defaults to None. If set, only sample from top `k` tokens.
+            This makes top-p sampler faster by avoiding sorting all tokens.
         seed: int, defaults to None. The random seed.
 
     Call Args:
@@ -67,28 +67,22 @@ class TopPSampler(Sampler):
     def __init__(
         self,
         p=0.1,
-        sample_from_top_k=40,
+        k=None,
         seed=None,
     ):
         super().__init__()
         self.p = p
-        self.sample_from_top_k = sample_from_top_k
+        self.k = k
         self.seed = seed
 
     def get_next_token(self, probabilities):
-        if self.sample_from_top_k is not None:
-            k = tf.math.minimum(
-                self.sample_from_top_k, tf.shape(probabilities)[1]
-            )
-            # Filter out top-k tokens.
-            sorted_preds, sorted_indices = tf.math.top_k(
-                probabilities, k=k, sorted=True
-            )
-        else:
-            # Sort preds in descending order.
-            sorted_preds, sorted_indices = tf.math.top_k(
-                probabilities, k=tf.shape(probabilities)[1], sorted=True
-            )
+        cutoff = tf.shape(probabilities)[1]
+        if self.k is not None:
+            # If `k` is set, only sample from top `k` tokens.
+            cutoff = tf.math.minimum(cutoff, self.k)
+        sorted_preds, sorted_indices = tf.math.top_k(
+            probabilities, k=cutoff, sorted=True
+        )
         # Calculate cumulative probability distribution.
         cumulative_probabilities = tf.math.cumsum(sorted_preds, axis=-1)
         # Create a mask for the tokens to keep.
@@ -113,7 +107,7 @@ class TopPSampler(Sampler):
         config.update(
             {
                 "p": self.p,
-                "sample_from_top_k": self.sample_from_top_k,
+                "k": self.k,
                 "seed": self.seed,
             }
         )

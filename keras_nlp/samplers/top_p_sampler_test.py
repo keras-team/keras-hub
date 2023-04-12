@@ -88,27 +88,24 @@ class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.assertEqual(self.join_as_string(output), ["sequentzzzzz"])
 
-    def test_sample_from_all_tokens(self):
+    def test_only_sample_from_top_k_tokens(self):
         def next(prompt, cache, index):
             # Dummy hidden states.
             hidden_states = tf.ones([self.batch_size, 5])
-            # Return a distribution favoring the first token in the vocab.
-            logits = (
-                tf.one_hot(
-                    tf.zeros(self.batch_size, dtype=tf.int32),
-                    self.vocab_size,
-                )
-                * 1e9
-            )
+            # Return a distribution where each id is progressively less likely.
+            logits = tf.range(self.vocab_size, 0, -1, dtype="float32")
+            logits = tf.repeat(logits[tf.newaxis, :], self.batch_size, axis=0)
             return logits, hidden_states, cache
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
-        output = TopPSampler(p=0.1, sample_from_top_k=None)(
+        output = TopPSampler(p=1, k=5)(
             next=next,
             prompt=prompt,
             index=5,
         )
-        self.assertEqual(self.join_as_string(output), ["zzzzzaaaaaaa"])
+        generated_str = self.join_as_string(output[:, 5:])[0]
+        token_set = set(generated_str)
+        self.assertContainsSubset(token_set, set("abcde"))
 
     def test_outputs_in_top_p(self):
         def next(prompt, cache, index):
