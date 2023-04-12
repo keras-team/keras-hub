@@ -28,14 +28,14 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
     `keras_nlp.models.FNetMaskedLM` task model. Preprocessing will occur in
     multiple steps.
 
-    - Tokenize any number of input segments using the `tokenizer`.
-    - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
+    1. Tokenize any number of input segments using the `tokenizer`.
+    2. Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
       `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
       entire sequence, `"</s></s>"` between each segment,
       and a `"</s>"` at the end of the entire sequence.
-    - Randomly select non-special tokens to mask, controlled by
+    3. Randomly select non-special tokens to mask, controlled by
       `mask_selection_rate`.
-    - Construct a `(x, y, sample_weight)` tuple suitable for training with a
+    4. Construct a `(x, y, sample_weight)` tuple suitable for training with a
       `keras_nlp.models.FNetMaskedLM` task model.
 
     Args:
@@ -66,6 +66,8 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
                     out of budget. It supports an arbitrary number of segments.
 
     Examples:
+
+    Directly calling the layer on data.
     ```python
     # Load the preprocessor from a preset.
     preprocessor = keras_nlp.models.FNetMaskedLMPreprocessor.from_preset(
@@ -73,20 +75,29 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
     )
 
     # Tokenize and mask a single sentence.
-    sentence = tf.constant("The quick brown fox jumped.")
-    preprocessor(sentence)
+    preprocessor("The quick brown fox jumped.")
 
-    # Tokenize and mask a batch of sentences.
-    sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    preprocessor(sentences)
+    # Tokenize and mask a batch of single sentences.
+    preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
 
-    # Tokenize and mask a dataset of sentences.
-    features = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
+    # Tokenize and mask sentence pairs.
+    # In this case, always convert input to tensors before calling the layer.
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+    preprocessor((first, second))
+    ```
+
+    Mapping with `tf.data.Dataset`.
+    ```python
+    preprocessor = keras_nlp.models.FNetMaskedLMPreprocessor.from_preset(
+        "f_net_base_en"
     )
-    ds = tf.data.Dataset.from_tensor_slices((features))
+
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+
+    # Map single sentences.
+    ds = tf.data.Dataset.from_tensor_slices(first)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
     # Alternatively, you can create a preprocessor from your own vocabulary.
@@ -94,26 +105,14 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
         ["the quick brown fox", "the earth is round"]
     )
 
-    # Creating sentencepiece tokenizer for FNet LM preprocessor
-    bytes_io = io.BytesIO()
-    sentencepiece.SentencePieceTrainer.train(
-        sentence_iterator=vocab_data.as_numpy_iterator(),
-        model_writer=bytes_io,
-        vocab_size=12,
-        model_type="WORD",
-        pad_id=0,
-        bos_id=1,
-        eos_id=2,
-        unk_id=3,
-        pad_piece="<pad>",
-        unk_piece="<unk>",
-        bos_piece="[CLS]",
-        eos_piece="[SEP]",
-        user_defined_symbols="[MASK]",
+    # Map sentence pairs.
+    ds = tf.data.Dataset.from_tensor_slices((first, second))
+    # Watch out for tf.data's default unpacking of tuples here!
+    # Best to invoke the `preprocessor` directly in this case.
+    ds = ds.map(
+        lambda first, second: preprocessor(x=(first, second)),
+        num_parallel_calls=tf.data.AUTOTUNE,
     )
-    proto = bytes_io.getvalue()
-    tokenizer = keras_nlp.models.FNetTokenizer(proto=proto)
-    preprocessor = keras_nlp.models.FNetMaskedLMPreprocessor(tokenizer=tokenizer)
     ```
     """
 

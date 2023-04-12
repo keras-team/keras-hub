@@ -49,18 +49,18 @@ class FNetTokenizer(SentencePieceTokenizer):
             for more details on the format.
 
     Examples:
-
     ```python
-    tokenizer = keras_nlp.models.FNetTokenizer(proto="model.spm")
+    # Unbatched input.
+    tokenizer = keras_nlp.models.FNetTokenizer.from_preset(
+        "f_net_base_en",
+    )
+    tokenizer("The quick brown fox jumped.")
 
-    # Batched inputs.
-    tokenizer(["the quick brown fox", "the earth is round"])
-
-    # Unbatched inputs.
-    tokenizer("the quick brown fox")
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
 
     # Detokenization.
-    tokenizer.detokenize(tf.constant([[2, 14, 2231, 886, 2385, 3]]))
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
     ```
     """
 
