@@ -109,21 +109,15 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("albert_tokenizer", AlbertTokenizer),
-        ("albert_preprocessor", AlbertPreprocessor),
-        ("albert", AlbertBackbone),
-        ("albert_classifier", AlbertClassifier),
+        ("albert_tokenizer", AlbertTokenizer, {}),
+        ("albert_preprocessor", AlbertPreprocessor, {}),
+        ("albert", AlbertBackbone, {}),
+        ("albert_classifier", AlbertClassifier, {"num_classes": 2}),
     )
-    def test_unknown_preset_error(self, cls):
+    def test_unknown_preset_error(self, cls, kwargs):
         # Not a preset name
         with self.assertRaises(ValueError):
-            if cls == AlbertClassifier:
-                cls.from_preset(
-                    "albert_base_en_uncased_clowntown",
-                    num_classes=2,
-                )
-            else:
-                cls.from_preset("albert_base_en_uncased_clowntown")
+            cls.from_preset("albert_base_en_uncased_clowntown", **kwargs)
 
 
 @pytest.mark.extra_large

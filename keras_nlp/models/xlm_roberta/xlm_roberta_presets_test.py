@@ -112,18 +112,15 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("xlm_roberta_tokenizer", XLMRobertaTokenizer),
-        ("xlm_roberta_preprocessor", XLMRobertaPreprocessor),
-        ("xlm_roberta", XLMRobertaBackbone),
-        ("xlm_roberta_classifier", XLMRobertaClassifier),
+        ("xlm_roberta_tokenizer", XLMRobertaTokenizer, {}),
+        ("xlm_roberta_preprocessor", XLMRobertaPreprocessor, {}),
+        ("xlm_roberta", XLMRobertaBackbone, {}),
+        ("xlm_roberta_classifier", XLMRobertaClassifier, {"num_classes": 2}),
     )
-    def test_unknown_preset_error(self, cls):
+    def test_unknown_preset_error(self, cls, kwargs):
         # Not a preset name
         with self.assertRaises(ValueError):
-            if cls == XLMRobertaClassifier:
-                cls.from_preset("xlm_roberta_base_clowntown", num_classes=2)
-            else:
-                cls.from_preset("xlm_roberta_base_clowntown")
+            cls.from_preset("xlm_roberta_base_clowntown", **kwargs)
 
 
 @pytest.mark.extra_large

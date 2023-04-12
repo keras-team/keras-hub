@@ -120,21 +120,15 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("deberta_tokenizer", DebertaV3Tokenizer),
-        ("deberta_preprocessor", DebertaV3Preprocessor),
-        ("deberta", DebertaV3Backbone),
-        ("deberta_classifier", DebertaV3Classifier),
+        ("deberta_tokenizer", DebertaV3Tokenizer, {}),
+        ("deberta_preprocessor", DebertaV3Preprocessor, {}),
+        ("deberta", DebertaV3Backbone, {}),
+        ("deberta_classifier", DebertaV3Classifier, {"num_classes": 2}),
     )
-    def test_unknown_preset_error(self, cls):
+    def test_unknown_preset_error(self, cls, kwargs):
         # Not a preset name
         with self.assertRaises(ValueError):
-            if cls == DebertaV3Classifier:
-                cls.from_preset(
-                    "deberta_v3_extra_small_en_clowntown",
-                    num_classes=2,
-                )
-            else:
-                cls.from_preset("deberta_v3_extra_small_en_clowntown")
+            cls.from_preset("deberta_v3_extra_small_en_clowntown", **kwargs)
 
 
 @pytest.mark.extra_large

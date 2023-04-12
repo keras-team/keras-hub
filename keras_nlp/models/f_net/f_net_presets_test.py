@@ -98,18 +98,15 @@ class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("f_net_tokenizer", FNetTokenizer),
-        ("f_net_preprocessor", FNetPreprocessor),
-        ("f_net", FNetBackbone),
-        ("f_net_classifier", FNetClassifier),
+        ("f_net_tokenizer", FNetTokenizer, {}),
+        ("f_net_preprocessor", FNetPreprocessor, {}),
+        ("f_net", FNetBackbone, {}),
+        ("f_net_classifier", FNetClassifier, {"num_classes": 2}),
     )
-    def test_unknown_preset_error(self, cls):
+    def test_unknown_preset_error(self, cls, kwargs):
         # Not a preset name
         with self.assertRaises(ValueError):
-            if cls == FNetClassifier:
-                cls.from_preset("f_net_base_en_clowntown", num_classes=2)
-            else:
-                cls.from_preset("f_net_base_en_clowntown")
+            cls.from_preset("f_net_base_en_clowntown", **kwargs)
 
 
 @pytest.mark.extra_large

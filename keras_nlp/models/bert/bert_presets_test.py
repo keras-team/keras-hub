@@ -105,17 +105,14 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         model.predict(input_data)
 
     @parameterized.named_parameters(
-        ("bert_tokenizer", BertTokenizer),
-        ("bert_preprocessor", BertPreprocessor),
-        ("bert", BertBackbone),
-        ("bert_classifier", BertClassifier),
+        ("bert_tokenizer", BertTokenizer, {}),
+        ("bert_preprocessor", BertPreprocessor, {}),
+        ("bert", BertBackbone, {}),
+        ("bert_classifier", BertClassifier, {"num_classes": 2}),
     )
-    def test_preset_mutability(self, cls):
+    def test_preset_mutability(self, cls, kwargs):
         preset = "bert_tiny_en_uncased"
-        if cls == BertClassifier:
-            obj = cls.from_preset(preset, num_classes=2)
-        else:
-            obj = cls.from_preset(preset)
+        obj = cls.from_preset(preset, kwargs)
         # Cannot overwrite the presents attribute in an object
         with self.assertRaises(AttributeError):
             obj.presets = {"my_model": "clowntown"}
@@ -144,18 +141,15 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("bert_tokenizer", BertTokenizer),
-        ("bert_preprocessor", BertPreprocessor),
-        ("bert", BertBackbone),
-        ("bert_classifier", BertClassifier),
+        ("bert_tokenizer", BertTokenizer, {}),
+        ("bert_preprocessor", BertPreprocessor, {}),
+        ("bert", BertBackbone, {}),
+        ("bert_classifier", BertClassifier, {"num_classes": 2}),
     )
-    def test_unknown_preset_error(self, cls):
+    def test_unknown_preset_error(self, cls, kwargs):
         # Not a preset name
         with self.assertRaises(ValueError):
-            if cls == BertClassifier:
-                cls.from_preset("bert_base_uncased_clowntown", num_classes=2)
-            else:
-                cls.from_preset("bert_base_uncased_clowntown")
+            cls.from_preset("bert_base_uncased_clowntown", **kwargs)
 
     def test_override_preprocessor_sequence_length(self):
         """Override sequence length longer than model's maximum."""
