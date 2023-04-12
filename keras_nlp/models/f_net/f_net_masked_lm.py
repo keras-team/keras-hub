@@ -61,8 +61,10 @@ class FNetMaskedLM(Task):
 
     # Pretrained language model.
     masked_lm = keras_nlp.models.FNetMaskedLM.from_preset(
-        "f_net_base_en_uncased",
+        "f_net_base_en",
     )
+    masked_lm.fit(x=features, batch_size=2)
+
     # Re-compile (e.g., with a new learning rate).
     masked_lm.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -91,7 +93,7 @@ class FNetMaskedLM(Task):
     labels = [[3, 5]] * 2
 
     masked_lm = keras_nlp.models.FNetMaskedLM.from_preset(
-        "f_net_base_en_uncased",
+        "f_net_base_en",
         preprocessor=None,
     )
     masked_lm.fit(x=features, y=labels, batch_size=2)

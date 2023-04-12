@@ -78,6 +78,10 @@ class FNetBackbone(Backbone):
         ),
     }
 
+    # Pretrained BERT encoder.
+    model = keras_nlp.models.FNetBackbone.from_preset("f_net_base_en")
+    model(input_data)
+
     # Randomly initialized FNet encoder with a custom config.
     model = keras_nlp.models.FNetBackbone(
         vocabulary_size=32000,

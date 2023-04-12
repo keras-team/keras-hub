@@ -57,41 +57,48 @@ class FNetClassifier(Task):
 
     Examples:
 
-    Raw string data:
+    Raw string data.
     ```python
-    preprocessed_features = {
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    labels = [0, 3]
+
+    # Pretrained classifier.
+    classifier = keras_nlp.models.FNetClassifier.from_preset(
+        "f_net_base_en",
+        num_classes=4,
+    )
+    classifier.fit(x=features, y=labels, batch_size=2)
+    classifier.predict(x=features, batch_size=2)
+
+    # Re-compile (e.g., with a new learning rate).
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        optimizer=keras.optimizers.Adam(5e-5),
+        jit_compile=True,
+    )
+    # Access backbone programatically (e.g., to change `trainable`).
+    classifier.backbone.trainable = False
+    # Fit again.
+    classifier.fit(x=features, y=labels, batch_size=2)
+    ```
+
+    Preprocessed integer data.
+    ```python
+    features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
         "segment_ids": tf.constant(
             [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
         ),
-        "padding_mask": tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-        ),
     }
     labels = [0, 3]
 
-    # Randomly initialize a FNet backbone.
-    backbone = keras_nlp.models.FNetBackbone(
-        vocabulary_size=32000,
-        num_layers=4,
-        hidden_dim=256,
-        intermediate_dim=512,
-        max_sequence_length=128,
-    )
-
-    # Pretrained classifier.
-    classifier = keras_nlp.models.FNetClassifier(
-        backbone,
+    # Pretrained classifier without preprocessing.
+    classifier = keras_nlp.models.FNetClassifier.from_preset(
+        "f_net_base_en",
         num_classes=4,
         preprocessor=None,
     )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
-
-    # Access backbone programatically (e.g., to change `trainable`)
-    classifier.backbone.trainable = False
+    classifier.fit(x=features, y=labels, batch_size=2)
     ```
     """
 

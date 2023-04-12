@@ -93,7 +93,6 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
         "f_net_base_en"
     )
 
-
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
 
