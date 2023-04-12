@@ -313,11 +313,7 @@ class BartSeq2SeqLM(Task):
             def next_token(prompt, cache, index):
                 # The cache index is the index of our previous token.
                 cache_index = index - 1
-                tf.print("===")
-                tf.print("CACHE IDX: ", cache_index)
-                tf.print("PROMPT: ", prompt)
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
-                tf.print("SLICED PROMPT: ", prompt)
                 logits, hidden_states, cache, _ = self.call_with_cache(
                     decoder_token_ids=prompt,
                     self_attention_cache=cache,
@@ -325,8 +321,6 @@ class BartSeq2SeqLM(Task):
                     encoder_outputs=encoder_outputs,
                     cross_attention_cache=cross_attention_cache,
                 )
-                tf.print(tf.math.argmax(logits, axis=-1))
-                tf.print("===")
                 return (
                     tf.squeeze(logits, axis=1),
                     tf.squeeze(hidden_states, axis=1),
