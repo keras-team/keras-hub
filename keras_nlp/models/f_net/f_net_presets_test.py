@@ -80,6 +80,7 @@ class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         input_data = tf.constant(["The quick brown fox."])
         model = FNetClassifier.from_preset(
             "f_net_base_en",
+            num_classes=2,
             load_weights=load_weights,
         )
         # We don't assert output values, as the head weights are random.
@@ -97,15 +98,15 @@ class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("f_net_tokenizer", FNetTokenizer),
-        ("f_net_preprocessor", FNetPreprocessor),
-        ("f_net", FNetBackbone),
-        ("f_net_classifier", FNetClassifier),
+        ("f_net_tokenizer", FNetTokenizer, {}),
+        ("f_net_preprocessor", FNetPreprocessor, {}),
+        ("f_net", FNetBackbone, {}),
+        ("f_net_classifier", FNetClassifier, {"num_classes": 2}),
     )
-    def test_unknown_preset_error(self, cls):
+    def test_unknown_preset_error(self, cls, kwargs):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("f_net_base_en_clowntown")
+            cls.from_preset("f_net_base_en_clowntown", **kwargs)
 
 
 @pytest.mark.extra_large
@@ -141,6 +142,7 @@ class FNetPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in FNetClassifier.presets:
             classifier = FNetClassifier.from_preset(
                 preset,
+                num_classes=2,
                 load_weights=load_weights,
             )
             input_data = tf.constant(["This quick brown fox"])
@@ -153,6 +155,7 @@ class FNetPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in FNetClassifier.presets:
             classifier = FNetClassifier.from_preset(
                 preset,
+                num_classes=2,
                 preprocessor=None,
                 load_weights=load_weights,
             )
