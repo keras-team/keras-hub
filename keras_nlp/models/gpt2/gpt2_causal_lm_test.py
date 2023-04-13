@@ -96,15 +96,11 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
         # String input.
         prompt = " airplane"
         output = self.causal_lm.generate(" airplane")
-        self.assertTrue(prompt in output.numpy().decode("utf-8"))
+        self.assertTrue(prompt in output)
         # String tensor input.
-        self.assertDTypeEqual(
-            self.causal_lm.generate(self.raw_batch), tf.string
-        )
+        self.assertIsInstance(self.causal_lm.generate(self.raw_batch)[0], str)
         # String dataset input.
-        self.assertDTypeEqual(
-            self.causal_lm.generate(self.raw_dataset), tf.string
-        )
+        self.assertIsInstance(self.causal_lm.generate(self.raw_dataset)[0], str)
         # Int tensor input.
         self.causal_lm.preprocessor = None
         self.assertDTypeEqual(

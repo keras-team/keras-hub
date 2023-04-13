@@ -28,6 +28,7 @@ from keras_nlp.models.task import Task
 from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.tf_utils import tensor_to_string_list
 from keras_nlp.utils.tf_utils import truncate_at_token
 
 
@@ -437,4 +438,8 @@ class GPT2CausalLM(Task):
             outputs.append(output)
 
         outputs = tf.concat(outputs, axis=0)
-        return tf.squeeze(outputs, 0) if input_is_scalar else outputs
+        outputs = tf.squeeze(outputs, 0) if input_is_scalar else outputs
+        # Convert all string output to python string for ease of use.
+        if outputs.dtype == tf.string:
+            return tensor_to_string_list(outputs)
+        return outputs
