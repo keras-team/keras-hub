@@ -102,7 +102,7 @@ class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             x_out["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 0]] * 4
         )
         self.assertAllEqual(y_out, [[0, 7, 8, 9, 10, 11, 2, 1, 1]] * 4)
-        self.assertAllEqual(sw_out, [[1, 1, 1, 1, 1, 1, 1, 0,0]] * 4)
+        self.assertAllEqual(sw_out, [[1, 1, 1, 1, 1, 1, 1, 0, 0]] * 4)
 
     def test_error_multi_segment_input(self):
         input_data = {
