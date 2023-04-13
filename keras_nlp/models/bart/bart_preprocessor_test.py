@@ -54,7 +54,7 @@ class BartPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
                 merges=merges,
             ),
             encoder_sequence_length=10,
-            decoder_sequence_length=8,
+            decoder_sequence_length=9,
         )
 
     def test_tokenize_strings(self):
@@ -71,10 +71,10 @@ class BartPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             output["encoder_padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0]
         )
         self.assertAllEqual(
-            output["decoder_token_ids"], [0, 7, 8, 9, 10, 11, 2, 1]
+            output["decoder_token_ids"], [2, 0, 7, 8, 9, 10, 11, 2, 1]
         )
         self.assertAllEqual(
-            output["decoder_padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0]
+            output["decoder_padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 0]
         )
 
     def test_tokenize_list_of_strings(self):
@@ -91,10 +91,10 @@ class BartPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             output["encoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
-            output["decoder_token_ids"], [[0, 7, 8, 9, 10, 11, 2, 1]] * 4
+            output["decoder_token_ids"], [[2, 0, 7, 8, 9, 10, 11, 2, 1]] * 4
         )
         self.assertAllEqual(
-            output["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
+            output["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 0]] * 4
         )
 
     def test_tokenize_labeled_batch(self):
@@ -112,10 +112,10 @@ class BartPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             x_out["encoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
-            x_out["decoder_token_ids"], [[0, 7, 8, 9, 10, 11, 2, 1]] * 4
+            x_out["decoder_token_ids"], [[2, 0, 7, 8, 9, 10, 11, 2, 1]] * 4
         )
         self.assertAllEqual(
-            x_out["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
+            x_out["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 0]] * 4
         )
         self.assertAllEqual(y_out, y)
         self.assertAllEqual(sw_out, sw)
@@ -137,10 +137,10 @@ class BartPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             x_out["encoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0]] * 4
         )
         self.assertAllEqual(
-            x_out["decoder_token_ids"], [[0, 7, 8, 9, 10, 11, 2, 1]] * 4
+            x_out["decoder_token_ids"], [[2, 0, 7, 8, 9, 10, 11, 2, 1]] * 4
         )
         self.assertAllEqual(
-            x_out["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
+            x_out["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 0]] * 4
         )
         self.assertAllEqual(y_out, y)
         self.assertAllEqual(sw_out, sw)
