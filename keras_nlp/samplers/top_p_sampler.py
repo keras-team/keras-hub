@@ -34,6 +34,12 @@ class TopPSampler(Sampler):
 
     Args:
         p: float, the `p` value of top-p.
+        k: int, defaults to None. If set, this argument defines a
+            heuristic "top-k" cutoff applied before the "top-p" sampling. All
+            logits not in the top `k` will be discarded, and the remaining
+            logits will be sorted to find a cutoff point for `p`. Setting this
+            arg can significantly speed sampling up by reducing the number
+            of tokens to sort.
         seed: int, defaults to None. The random seed.
 
     Call Args:
@@ -65,16 +71,21 @@ class TopPSampler(Sampler):
     def __init__(
         self,
         p=0.1,
+        k=None,
         seed=None,
     ):
         super().__init__()
         self.p = p
+        self.k = k
         self.seed = seed
 
     def get_next_token(self, probabilities):
-        # Sort preds in descending order.
+        cutoff = tf.shape(probabilities)[1]
+        if self.k is not None:
+            # If `k` is set, only sample from top `k` tokens.
+            cutoff = tf.math.minimum(cutoff, self.k)
         sorted_preds, sorted_indices = tf.math.top_k(
-            probabilities, k=tf.shape(probabilities)[1], sorted=True
+            probabilities, k=cutoff, sorted=True
         )
         # Calculate cumulative probability distribution.
         cumulative_probabilities = tf.math.cumsum(sorted_preds, axis=-1)
@@ -88,7 +99,7 @@ class TopPSampler(Sampler):
         probabilities = tf.where(
             shifted_keep_mask,
             sorted_preds,
-            tf.zeros(tf.shape(probabilities), dtype=sorted_preds.dtype),
+            tf.zeros(tf.shape(sorted_preds), dtype=sorted_preds.dtype),
         )
         sorted_next_token = tf.random.categorical(
             tf.math.log(probabilities), 1, seed=self.seed
@@ -100,6 +111,7 @@ class TopPSampler(Sampler):
         config.update(
             {
                 "p": self.p,
+                "k": self.k,
                 "seed": self.seed,
             }
         )
