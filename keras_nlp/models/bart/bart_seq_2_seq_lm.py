@@ -310,6 +310,8 @@ class BartSeq2SeqLM(Task):
                 encoder_token_ids, encoder_padding_mask, prompt
             )
 
+            tf.print("CA cache: ", cross_attention_cache)
+
             def next_token(prompt, cache, index):
                 # The cache index is the index of our previous token.
                 cache_index = index - 1
