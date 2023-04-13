@@ -54,7 +54,10 @@ class GreedySampler(Sampler):
     ```
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        **kwargs,
+    ):
         super().__init__()
 
     def get_next_token(self, probabilities):

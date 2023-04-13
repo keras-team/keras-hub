@@ -95,7 +95,7 @@ class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
     def test_temperature(self):
         def next(prompt, state, index):
             logits = tf.range(self.vocab_size, 0, -1, dtype=tf.float32)
-            logits = tf.reshape(logits[tf.newaxis, :], self.batch_size, axis=0)
+            logits = tf.reshape(logits[tf.newaxis, :], self.batch_size, -1)
             return tf.constant(logits), state
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
