@@ -402,13 +402,18 @@ class BartSeq2SeqLM(Task):
 
         prompt = self.preprocessor.tokenizer(prompt)
 
-        # Add the start token to the prompt.
+        # Add the end token and the start token to the prompt. This is how
+        # the decoder input is packed.
         if add_start_token:
             start_tokens = tf.fill(
                 (tf.shape(prompt)[0], 1),
                 value=self.preprocessor.tokenizer.start_token_id,
             )
-            prompt = tf.concat([start_tokens, prompt], axis=1)
+            end_tokens = tf.fill(
+                (tf.shape(prompt)[0], 1),
+                value=self.preprocessor.tokenizer.end_token_id,
+            )
+            prompt = tf.concat([end_tokens, start_tokens, prompt], axis=1)
 
         # Pad ragged to dense tensors.
         padded_shape = (None, max_length)
