@@ -58,7 +58,7 @@ class GreedySampler(Sampler):
         self,
         **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
 
     def get_next_token(self, probabilities):
         return tf.argmax(probabilities, axis=-1)
