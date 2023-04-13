@@ -130,7 +130,10 @@ class BeamSampler(Sampler):
             unflat_shape = [batch_size, self.num_beams] + x.shape.as_list()[1:]
             return tf.reshape(x, shape=unflat_shape)
 
-        mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
+        if mask is None:
+            mask = tf.zeros_like(prompt, dtype=tf.bool)
+        else:
+            mask = tf.cast(mask, dtype=tf.bool)
         # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
         cache = () if cache is None else cache
         # Add extra sequences for each beam.

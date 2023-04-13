@@ -98,10 +98,6 @@ def test_fenced_docstrings():
     runner = unittest.TextTestRunner()
     suite = unittest.TestSuite()
     for module in keras_nlp_modules:
-        # Temporarily stop testing gpt2 & deberta docstrings until we are
-        # exporting the symbols.
-        if "gpt2" in module.__name__ or "deberta_v3" in module.__name__:
-            continue
         # Do not test certain modules.
         if module.__name__ in [
             # Base classes.
