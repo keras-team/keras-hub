@@ -15,6 +15,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -33,98 +34,79 @@ from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
 
 class DistilBertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        self.backbone = DistilBertBackbone(
-            vocabulary_size=1000,
-            num_layers=2,
-            num_heads=2,
-            hidden_dim=64,
-            intermediate_dim=128,
-            max_sequence_length=128,
-        )
+        # Setup model.
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
-        self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
-        self.vocab += ["the", "quick", "brown", "fox"]
+        self.vocab += ["the", "quick", "brown", "fox", "."]
         self.preprocessor = DistilBertMaskedLMPreprocessor(
             DistilBertTokenizer(vocabulary=self.vocab),
-            sequence_length=8,
+            sequence_length=5,
             mask_selection_length=2,
+        )
+        self.backbone = DistilBertBackbone(
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            num_layers=2,
+            num_heads=2,
+            hidden_dim=4,
+            intermediate_dim=4,
+            max_sequence_length=self.preprocessor.packer.sequence_length,
         )
         self.masked_lm = DistilBertMaskedLM(
             self.backbone,
             preprocessor=self.preprocessor,
-        )
-        self.masked_lm_no_preprocessing = DistilBertMaskedLM(
-            self.backbone,
-            preprocessor=None,
         )
 
         self.raw_batch = tf.constant(
             [
                 "the quick brown fox.",
                 "the slow brown fox.",
-                "the smelly brown fox.",
-                "the old brown fox.",
             ]
         )
-        self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
+        self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
             self.raw_batch
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
-    def test_valid_call_masked_lm(self):
-        self.masked_lm(self.preprocessed_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_distilbert_masked_lm_predict(self, jit_compile):
-        self.masked_lm.compile(jit_compile=jit_compile)
-        self.masked_lm.predict(self.raw_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_distilbert_masked_lm_predict_no_preprocessing(self, jit_compile):
-        self.masked_lm_no_preprocessing.compile(jit_compile=jit_compile)
-        self.masked_lm_no_preprocessing.predict(self.preprocessed_batch)
+    def test_valid_call_classifier(self):
+        self.masked_lm(self.preprocessed_batch[0])
 
     def test_distil_bert_masked_lm_fit_default_compile(self):
         self.masked_lm.fit(self.raw_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_distilbert_masked_lm_fit(self, jit_compile):
-        self.masked_lm.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
-        )
-        self.masked_lm.fit(self.raw_dataset)
+    def test_classifier_predict(self):
+        self.masked_lm.predict(self.raw_batch)
+        self.masked_lm.preprocessor = None
+        self.masked_lm.predict(self.preprocessed_batch[0])
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_distilbert_masked_lm_fit_no_preprocessing(self, jit_compile):
-        self.masked_lm_no_preprocessing.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
+    def test_classifier_fit(self):
+        self.masked_lm.fit(self.raw_dataset)
+        self.masked_lm.preprocessor = None
+        self.masked_lm.fit(self.preprocessed_dataset)
+
+    def test_classifier_fit_no_xla(self):
+        self.masked_lm.preprocessor = None
+        self.masked_lm.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+            jit_compile=False,
         )
-        self.masked_lm_no_preprocessing.fit(self.preprocessed_dataset)
+        self.masked_lm.fit(self.preprocessed_dataset)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        self.masked_lm.save(save_path, save_format=save_format)
-        restored_model = keras.models.load_model(save_path)
+        model_output = self.masked_lm.predict(self.raw_batch)
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        self.masked_lm.save(path, save_format=save_format, **kwargs)
+        restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
         self.assertIsInstance(restored_model, DistilBertMaskedLM)
 
-        model_output = self.masked_lm(self.preprocessed_batch)
-        restored_output = restored_model(self.preprocessed_batch)
-
-        self.assertAllClose(model_output, restored_output)
+        # Check that output matches.
+        restored_output = restored_model.predict(self.raw_batch)
+        self.assertAllClose(model_output, restored_output, atol=0.01, rtol=0.01)

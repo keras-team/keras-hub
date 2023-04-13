@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Top-p Sampler."""
+"""Random Sampler."""
 
 import tensorflow as tf
 
@@ -22,18 +22,15 @@ from keras_nlp.utils.python_utils import format_docstring
 
 
 @format_docstring(call_args=call_args_docstring)
-@keras_nlp_export("keras_nlp.samplers.TopPSampler")
-class TopPSampler(Sampler):
-    """Top-P Sampler class.
+@keras_nlp_export("keras_nlp.samplers.RandomSampler")
+class RandomSampler(Sampler):
+    """Random Sampler class.
 
-    This sampler implements top-p search algorithm. Top-p search selects tokens
-    from the smallest subset of output probabilities that sum to greater than
-    `p`. Put in another way, top-p will first order token predictions by
-    likelihood, and ignore all tokens after the cumulative probability of
-    selected tokens exceeds `p`, then select a token from the remaining tokens.
+    This sampler implements random sampling. Briefly, random sampler randomly
+    selects a token from the entire distribution of the tokens, with selection
+    chance determined by the probability of each token.
 
     Args:
-        p: float, the `p` value of top-p.
         seed: int, defaults to None. The random seed.
 
     Call Args:
@@ -51,55 +48,34 @@ class TopPSampler(Sampler):
         logits = tf.ones((batch_size, vocab_size))
         return logits, state
 
-    output = keras_nlp.samplers.TopPSampler(p=0.1)(
+    output = keras_nlp.samplers.RandomSampler()(
         next=next,
         prompt=tf.fill((batch_size, length,), char_lookup['z']),
         index=5,
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
-    # >>> ['zzzzzbabcccb']
+    # >>> ['zzzzzcpnjqij']
     ```
     """
 
     def __init__(
         self,
-        p=0.1,
         seed=None,
-        **kwargs,
     ):
-        super().__init__(**kwargs)
-        self.p = p
+        super().__init__()
         self.seed = seed
 
     def get_next_token(self, probabilities):
-        # Sort preds in descending order.
-        sorted_preds, sorted_indices = tf.math.top_k(
-            probabilities, k=tf.shape(probabilities)[1], sorted=True
+        # Sample the next token from the probability distribution.
+        next_token_id = tf.random.categorical(
+            tf.math.log(probabilities), 1, seed=self.seed, dtype="int32"
         )
-        # Calculate cumulative probability distribution.
-        cumulative_probabilities = tf.math.cumsum(sorted_preds, axis=-1)
-        # Create a mask for the tokens to keep.
-        keep_mask = cumulative_probabilities <= self.p
-        # Shift to include the last token that exceed p.
-        shifted_keep_mask = tf.concat(
-            [tf.ones_like(keep_mask[:, :1]), keep_mask[:, :-1]], axis=-1
-        )
-        # Filter out unmasked tokens and sample from filtered distribution.
-        probabilities = tf.where(
-            shifted_keep_mask,
-            sorted_preds,
-            tf.zeros(tf.shape(probabilities), dtype=sorted_preds.dtype),
-        )
-        sorted_next_token = tf.random.categorical(
-            tf.math.log(probabilities), 1, seed=self.seed
-        )
-        return tf.gather_nd(sorted_indices, sorted_next_token, batch_dims=1)
+        return tf.squeeze(next_token_id, axis=-1)
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "p": self.p,
                 "seed": self.seed,
             }
         )

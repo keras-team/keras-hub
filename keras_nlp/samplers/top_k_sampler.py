@@ -26,7 +26,7 @@ from keras_nlp.utils.python_utils import format_docstring
 class TopKSampler(Sampler):
     """Top-K Sampler class.
 
-    This sampler implements top-k search algorithm. Briefly top-k algorithm
+    This sampler implements top-k search algorithm. Briefly, top-k algorithm
     randomly selects a token from the tokens of top K probability, with
     selection chance determined by the probability.
 
@@ -39,7 +39,7 @@ class TopKSampler(Sampler):
 
     Examples:
     ```python
-    # Use a simple alphabet of lowercase characters to [0, 26).
+    # Use a simple alphabet of lowercase characters with ids in range [0, 25].
     int_lookup = {i: chr(i + ord('a')) for i in range(26)}
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
@@ -55,7 +55,7 @@ class TopKSampler(Sampler):
         index=5,
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
-    # >>> "zzzzzacbbcaa"
+    # >>> ['zzzzzacbbcaa']
     ```
     """
 

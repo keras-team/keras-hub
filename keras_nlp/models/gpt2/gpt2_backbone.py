@@ -20,8 +20,8 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers import PositionEmbedding
-from keras_nlp.layers import TransformerDecoder
+from keras_nlp.layers.position_embedding import PositionEmbedding
+from keras_nlp.layers.transformer_decoder import TransformerDecoder
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
