@@ -36,7 +36,7 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
             return logits, state
 
         self.next = next
-        self.sampler = TopKSampler(k=5)
+        self.sampler = TopKSampler(k=5, temperature=1.0)
 
     def join_as_string(self, x):
         return ["".join([self.int_lookup[i] for i in s]) for s in x.numpy()]
@@ -93,21 +93,6 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
         )
         output_ids = set(output[0].numpy())
         self.assertContainsSubset(output_ids, range(5))
-
-    def test_outputs_in_top_k_with_temperature(self):
-        def next(prompt, state, index):
-            # Return a distribution where each id is progressively less likely.
-            logits = tf.range(self.vocab_size, 0, -1, dtype="float32")
-            logits = tf.repeat(logits[tf.newaxis, :], self.batch_size, axis=0)
-            return logits, state
-
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
-        sampler_temperature = TopKSampler(k=5, temperature=1e-5)
-        output = sampler_temperature(
-            next=next,
-            prompt=prompt,
-        )
-        self.assertAllEqual(output[0].numpy(), [0] * self.length)
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)

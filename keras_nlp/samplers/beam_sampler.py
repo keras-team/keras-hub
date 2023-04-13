@@ -90,7 +90,12 @@ class BeamSampler(Sampler):
     ```
     """
 
-    def __init__(self, num_beams=5, return_all_beams=False, **kwargs):
+    def __init__(
+        self,
+        num_beams=5,
+        return_all_beams=False,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.num_beams = num_beams
         self.return_all_beams = return_all_beams
