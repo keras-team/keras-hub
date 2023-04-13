@@ -75,7 +75,7 @@ class RandomSamplerTest(tf.test.TestCase, parameterized.TestCase):
 
         prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
 
-        output = RandomSampler(temperature=1e-9)(
+        output = RandomSampler(temperature=1e-5)(
             next=next,
             prompt=prompt,
             index=5, 
