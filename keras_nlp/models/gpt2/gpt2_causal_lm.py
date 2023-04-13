@@ -281,6 +281,7 @@ class GPT2CausalLM(Task):
         sampler="top_k",
         **kwargs,
     ):
+        tf.print("#1")
         xla_compatible = is_xla_compatible(self)
         super().compile(
             *args,
@@ -295,10 +296,12 @@ class GPT2CausalLM(Task):
 
     def make_generate_function(self):
         """Create or return the compiled generation function."""
+        tf.print("#2")
         if self.generate_function is not None:
             return self.generate_function
 
         def generate_function(prompt, input_mask, min_length):
+            tf.print("#3")
             # Create and seed cache with a single forward pass.
             hidden_states, cache = self._build_cache(prompt)
 
