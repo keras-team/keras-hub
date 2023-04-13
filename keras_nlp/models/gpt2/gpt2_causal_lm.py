@@ -291,64 +291,74 @@ class GPT2CausalLM(Task):
         if self.generate_function is not None:
             return self.generate_function
 
-        def generate_function(token_ids, padding_mask, end_token_id=None):
-            """Auto-regressively generate token ids.
-
-            Args:
-                token_ids: A dense int Tensor, with shape
-                    `(batch_size, max_length)`. The user provided token ids
-                    padded to `max_length`.
-                padding_mask: A dense boolean Tensor, with the same shape as
-                    `token_ids`. Positions that are True in the `padding_mask`
-                    are assumed to be user input and never updated.
-                end_token_id: The id of the end token to stop on. If all
-                    sequences have produced a new `end_token_id`, generation
-                    will stop.
-            """
-            # Create and seed cache with a single forward pass.
-            hidden_states, cache = self._build_cache(token_ids)
-            # Compute the lengths of all user inputted tokens ids.
-            row_lengths = tf.math.reduce_sum(
-                tf.cast(padding_mask, tf.int32), axis=-1
-            )
-            # Start at the first index that has no user inputted id.
-            index = tf.math.reduce_min(row_lengths)
-
-            def next(prompt, cache, index):
-                # The cache index is the index of our previous token.
-                cache_index = index - 1
-                prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
-                logits, hidden_states, cache = self.call_with_cache(
-                    prompt,
-                    cache,
-                    cache_index,
-                )
-                return (
-                    tf.squeeze(logits, axis=1),
-                    tf.squeeze(hidden_states, axis=1),
-                    cache,
-                )
-
-            return self._sampler(
-                next=next,
-                prompt=token_ids,
-                cache=cache,
-                index=index,
-                mask=padding_mask,
-                end_token_id=end_token_id,
-                hidden_states=hidden_states,
-            )
-
         if self.run_eagerly:
-            self.generate_function = generate_function
+            self.generate_function = self.generate_step
         else:
             # `jit_compile` is a property of keras.Model after TF 2.12.
             # Use `getattr()` for backwards compatibility.
             jit_compile = getattr(self, "jit_compile", True)
             self.generate_function = tf.function(
-                generate_function, jit_compile=jit_compile
+                self.generate_step, jit_compile=jit_compile
             )
         return self.generate_function
+
+    def generate_step(
+        self,
+        token_ids,
+        padding_mask,
+        end_token_id=None,
+    ):
+        """A compilable generation function for a single batch of inputs.
+
+        This function represents the inner, XLA-compilable, generation function
+        for a single batch of inputs. It takes in a dense `tf.Tensor` of token
+        ids, and return a dense `tf.Tensor` of token ids, and includes no
+        preprocessing. This function is wrapped by the `generate()` method.
+
+        Args:
+            token_ids: A dense int Tensor, with shape
+                `(batch_size, max_length)`. The user provided token ids
+                padded to `max_length`.
+            padding_mask: A dense boolean Tensor, with the same shape as
+                `token_ids`. Positions that are True in the `padding_mask`
+                are assumed to be user input and never updated.
+            end_token_id: The id of the end token to stop on. If all
+                sequences have produced a new `end_token_id`, generation
+                will stop.
+        """
+        # Create and seed cache with a single forward pass.
+        hidden_states, cache = self._build_cache(token_ids)
+        # Compute the lengths of all user inputted tokens ids.
+        row_lengths = tf.math.reduce_sum(
+            tf.cast(padding_mask, tf.int32), axis=-1
+        )
+        # Start at the first index that has no user inputted id.
+        index = tf.math.reduce_min(row_lengths)
+
+        def next(prompt, cache, index):
+            # The cache index is the index of our previous token.
+            cache_index = index - 1
+            prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
+            logits, hidden_states, cache = self.call_with_cache(
+                prompt,
+                cache,
+                cache_index,
+            )
+            return (
+                tf.squeeze(logits, axis=1),
+                tf.squeeze(hidden_states, axis=1),
+                cache,
+            )
+
+        return self._sampler(
+            next=next,
+            prompt=token_ids,
+            cache=cache,
+            index=index,
+            mask=padding_mask,
+            end_token_id=end_token_id,
+            hidden_states=hidden_states,
+        )
 
     def generate(
         self,
