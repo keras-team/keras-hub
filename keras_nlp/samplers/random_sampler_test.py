@@ -36,7 +36,7 @@ class RandomSamplerTest(tf.test.TestCase, parameterized.TestCase):
             return logits, state
 
         self.next = next
-        self.sampler = RandomSampler()
+        self.sampler = RandomSampler(temperature=1.0)
 
     def join_as_string(self, x):
         return ["".join([self.int_lookup[i] for i in s]) for s in x.numpy()]
@@ -66,6 +66,20 @@ class RandomSamplerTest(tf.test.TestCase, parameterized.TestCase):
             state=state,
         )
         self.assertEqual(self.join_as_string(output), ["sequentially"])
+
+    def test_temperature(self):
+        def next(prompt, state, index):
+            logits = tf.range(self.vocab_size, 0, -1, dtype=tf.float32)
+            logits = tf.reshape(logits[tf.newaxis, :], (self.batch_size, -1))
+            return tf.constant(logits), state
+
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+
+        output = RandomSampler(temperature=1e-9)(
+            next=next,
+            prompt=prompt,
+        )
+        self.assertAllEqual(output, tf.zeros_like(output))
 
     def test_early_stopping(self):
         state_chars = list("sequentially")

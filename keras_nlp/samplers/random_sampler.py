@@ -61,6 +61,7 @@ class RandomSampler(Sampler):
     def __init__(
         self,
         seed=None,
+        **kwargs,
     ):
         super().__init__()
         self.seed = seed
