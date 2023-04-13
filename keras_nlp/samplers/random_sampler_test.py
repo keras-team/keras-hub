@@ -78,6 +78,7 @@ class RandomSamplerTest(tf.test.TestCase, parameterized.TestCase):
         output = RandomSampler(temperature=1e-9)(
             next=next,
             prompt=prompt,
+            index=5, 
         )
         self.assertAllEqual(output, tf.zeros_like(output))
 
