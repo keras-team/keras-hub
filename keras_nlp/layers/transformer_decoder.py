@@ -353,16 +353,6 @@ class TransformerDecoder(keras.layers.Layer):
         else:
             if self_attention_cache is None and cross_attention_cache is None:
                 return x
-            elif (
-                self_attention_cache is not None
-                and cross_attention_cache is None
-            ):
-                return (x, self_attention_cache)
-            elif (
-                self_attention_cache is None
-                and cross_attention_cache is not None
-            ):
-                return (x, cross_attention_cache)
             else:
                 return (x, self_attention_cache, cross_attention_cache)
 
