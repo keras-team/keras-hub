@@ -163,7 +163,7 @@ class BartPreprocessor(Preprocessor):
             sequence_length=encoder_sequence_length,
         )
         # The decoder is packed a bit differently; the format is as follows:
-        # `[end_token_id, start_token_id, decoder_input_ids, end_token_id, pad_token_ids]`.
+        # `[end_token_id, start_token_id, tokens..., end_token_id, padding...]`.
         # Hence, we pass `sequence_length - 1` to the packer.
         self.decoder_packer = MultiSegmentPacker(
             start_value=self.tokenizer.start_token_id,
