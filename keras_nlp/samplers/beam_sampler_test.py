@@ -38,7 +38,7 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
             return logits, hidden_states, cache
 
         self.next = next
-        self.sampler = BeamSampler(num_beams=5)
+        self.sampler = BeamSampler(num_beams=5, temperature=1.0)
         self.sampler_all_beams = BeamSampler(num_beams=5, return_all_beams=True)
 
     def join_as_string(self, x):

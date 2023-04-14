@@ -48,6 +48,11 @@ call_args_docstring = """
 class Sampler:
     """Base sampler class.
 
+    Args:
+        temperature: float. optional. defaults to '1.0'. Used to control the
+            randomness of the sampling. The higher the temperature, the
+            more diverse the samples.
+
     Call Args:
         {{call_args}}
 
@@ -84,6 +89,12 @@ class Sampler:
     ```
     """
 
+    def __init__(
+        self,
+        temperature=1.0,
+    ):
+        self.temperature = temperature
+
     def __call__(
         self,
         next,
@@ -115,7 +126,7 @@ class Sampler:
         def body(prompt, cache, index):
             # Compute the softmax distribution for the next token.
             logits, _, cache = next(prompt, cache, index)
-            probabilities = keras.activations.softmax(logits)
+            probabilities = keras.activations.softmax(logits / self.temperature)
             # Compute the next token.
             next_token = self.get_next_token(probabilities)
             # Don't overwrite anywhere mask is True.
@@ -140,11 +151,9 @@ class Sampler:
 
     def get_next_token(self, probabilities):
         """Get the next token.
-
         Args:
             probabilities: a Tensor, the probability distribution for next
                 token over all vocab tokens.
-
         Get the next token based on given probability distribution over tokens.
         Subclasses must implement this method.
         """
@@ -155,4 +164,4 @@ class Sampler:
         return cls(**config)
 
     def get_config(self):
-        return {}
+        return {"temperature": self.temperature}
