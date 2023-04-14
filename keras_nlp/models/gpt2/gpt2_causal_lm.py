@@ -439,7 +439,8 @@ class GPT2CausalLM(Task):
 
         outputs = tf.concat(outputs, axis=0)
         outputs = tf.squeeze(outputs, 0) if input_is_scalar else outputs
-        # Convert all string output to python string for ease of use.
+        # Convert outputs to a friendly pythonic type. For numerical outputs
+        # that is numpy, for string outputs that is `list` and `str`.
         if outputs.dtype == tf.string:
             return tensor_to_string_list(outputs)
-        return outputs
+        return outputs.numpy()
