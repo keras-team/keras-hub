@@ -77,9 +77,7 @@ class CachedMultiHeadCrossAttention(keras.layers.MultiHeadAttention):
             if compute_cache:
                 cache = tf.stack([key, value], axis=1)
         else:
-            key_cache, value_cache = tf.unstack(cache, axis=1)
-            key = key_cache
-            value = value_cache
+            key, value = tf.unstack(cache, axis=1)
 
         query = tf.multiply(
             query, 1.0 / tf.math.sqrt(tf.cast(self._key_dim, query.dtype))
