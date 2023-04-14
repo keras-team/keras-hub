@@ -78,7 +78,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_classifier_output(self, load_weights):
         input_data = tf.constant(["The quick brown fox."])
         model = XLMRobertaClassifier.from_preset(
-            "xlm_roberta_base_multi", load_weights=load_weights
+            "xlm_roberta_base_multi", num_classes=2, load_weights=load_weights
         )
         # Never assert output values, as the head weights are random.
         model.predict(input_data)
@@ -93,6 +93,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         }
         model = XLMRobertaClassifier.from_preset(
             "xlm_roberta_base_multi",
+            num_classes=2,
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -111,15 +112,15 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("xlm_roberta_tokenizer", XLMRobertaTokenizer),
-        ("xlm_roberta_preprocessor", XLMRobertaPreprocessor),
-        ("xlm_roberta", XLMRobertaBackbone),
-        ("xlm_roberta_classifier", XLMRobertaClassifier),
+        ("xlm_roberta_tokenizer", XLMRobertaTokenizer, {}),
+        ("xlm_roberta_preprocessor", XLMRobertaPreprocessor, {}),
+        ("xlm_roberta", XLMRobertaBackbone, {}),
+        ("xlm_roberta_classifier", XLMRobertaClassifier, {"num_classes": 2}),
     )
-    def test_unknown_preset_error(self, cls):
+    def test_unknown_preset_error(self, cls, kwargs):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("xlm_roberta_base_clowntown")
+            cls.from_preset("xlm_roberta_base_clowntown", **kwargs)
 
 
 @pytest.mark.extra_large

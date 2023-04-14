@@ -96,6 +96,10 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_token_to_id(self):
         self.assertEqual(self.tokenizer.token_to_id("▁the"), 4)
         self.assertEqual(self.tokenizer.token_to_id("▁round"), 10)
+        # Test any random OOV token.
+        self.assertEqual(self.tokenizer.token_to_id("<oov-token>"), 3)
+        # Test a special token.
+        self.assertEqual(self.tokenizer.token_to_id("<pad>"), 1)
 
     def test_serialization(self):
         config = keras.utils.serialize_keras_object(self.tokenizer)

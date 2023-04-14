@@ -137,7 +137,7 @@ class BertClassifier(Task):
     def __init__(
         self,
         backbone,
-        num_classes=2,
+        num_classes,
         dropout=0.1,
         preprocessor=None,
         **kwargs,

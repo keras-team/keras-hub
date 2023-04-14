@@ -152,7 +152,7 @@ class XLMRobertaClassifier(Task):
     def __init__(
         self,
         backbone,
-        num_classes=2,
+        num_classes,
         hidden_dim=None,
         dropout=0.0,
         preprocessor=None,

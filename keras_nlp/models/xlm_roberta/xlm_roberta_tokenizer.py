@@ -123,10 +123,18 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
+
         if token in self._vocabulary_prefix:
             return self._vocabulary_prefix.index(token)
 
-        return int(self._sentence_piece.string_to_id(token).numpy()) + 1
+        spm_token_id = self._sentence_piece.string_to_id(token)
+
+        # OOV token
+        spm_unk_token_id = self._sentence_piece.string_to_id("<unk>")
+        if spm_token_id == spm_unk_token_id:
+            return self.unk_token_id
+
+        return int(spm_token_id.numpy()) + 1
 
     def tokenize(self, inputs):
         tokens = super().tokenize(inputs)

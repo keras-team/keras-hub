@@ -39,8 +39,13 @@ class CachedMultiHeadAttentionTest(tf.test.TestCase, parameterized.TestCase):
         key_dim = 4
 
         layer = CachedMultiHeadAttention(num_heads=num_heads, key_dim=key_dim)
-        x = tf.random.uniform(shape=[batch_size, seq_len, num_heads * key_dim])
-        cache = tf.zeros([batch_size, 2, seq_len, num_heads, key_dim])
+        dtype = layer.compute_dtype
+        x = tf.random.uniform(
+            shape=[batch_size, seq_len, num_heads * key_dim], dtype=dtype
+        )
+        cache = tf.zeros(
+            [batch_size, 2, seq_len, num_heads, key_dim], dtype=dtype
+        )
         # Use a causal mask.
         mask = tf.linalg.band_part(tf.ones((seq_len, seq_len)), -1, 0)
         outputs = tf.zeros_like(x)

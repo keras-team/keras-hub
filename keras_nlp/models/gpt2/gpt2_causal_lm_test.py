@@ -15,6 +15,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -29,53 +30,39 @@ from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 
 class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        backbone = GPT2Backbone(
-            vocabulary_size=1000,
+        self.vocab = {
+            "!": 0,
+            "air": 1,
+            "Ġair": 2,
+            "plane": 3,
+            "Ġat": 4,
+            "port": 5,
+            "<|endoftext|>": 6,
+        }
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.preprocessor = GPT2CausalLMPreprocessor(
+            GPT2Tokenizer(vocabulary=self.vocab, merges=self.merges),
+            sequence_length=8,
+        )
+        self.backbone = GPT2Backbone(
+            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
             hidden_dim=64,
             intermediate_dim=128,
-            max_sequence_length=128,
-        )
-        vocab = {
-            "<|endoftext|>": 0,
-            "!": 1,
-            "air": 2,
-            "Ġair": 3,
-            "plane": 4,
-            "Ġat": 5,
-            "port": 6,
-            "Ġkoh": 7,
-            "li": 8,
-            "Ġis": 9,
-            "Ġthe": 10,
-            "Ġbest": 11,
-        }
-
-        merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "a i", "p l", "n e"]
-        merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
-        merges += ["Ġt h", "ai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
-        merges += ["Ġai r", "Ġa i", "pla ne"]
-
-        self.preprocessor = GPT2CausalLMPreprocessor(
-            GPT2Tokenizer(vocabulary=vocab, merges=merges),
-            sequence_length=8,
+            max_sequence_length=self.preprocessor.packer.sequence_length,
         )
         self.causal_lm = GPT2CausalLM(
-            backbone,
+            backbone=self.backbone,
             preprocessor=self.preprocessor,
-        )
-        self.causal_lm_no_preprocessing = GPT2CausalLM(
-            backbone,
-            preprocessor=None,
         )
 
         self.raw_batch = tf.constant(
             [
                 " airplane at airport",
-                " the airplane is the best",
-                " the best airport",
-                " kohli is the best",
+                " airplane at airport",
             ]
         )
         self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
@@ -87,69 +74,67 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
     def test_valid_call_causal_lm(self):
         self.causal_lm(self.preprocessed_batch)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_gpt2_causal_lm_predict(self, jit_compile):
-        self.causal_lm.compile(jit_compile=jit_compile)
+    def test_predict(self):
         self.causal_lm.predict(self.raw_batch)
+        self.causal_lm.preprocessor = None
+        self.causal_lm.predict(self.preprocessed_batch)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_gpt2_causal_lm_predict_no_preprocessing(self, jit_compile):
-        self.causal_lm_no_preprocessing.compile(jit_compile=jit_compile)
-        self.causal_lm_no_preprocessing.predict(self.preprocessed_batch)
-
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_gpt2_causal_lm_fit(self, jit_compile):
-        self.causal_lm.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
-        )
+    def test_fit(self):
         self.causal_lm.fit(self.raw_dataset)
+        self.causal_lm.preprocessor = None
+        self.causal_lm.fit(self.preprocessed_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_gpt2_causal_lm_fit_no_preprocessing(self, jit_compile):
-        self.causal_lm_no_preprocessing.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            jit_compile=jit_compile,
+    def test_fit_no_xla(self):
+        self.causal_lm.preprocessor = None
+        self.causal_lm.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+            jit_compile=False,
         )
-        self.causal_lm_no_preprocessing.fit(self.preprocessed_dataset)
+        self.causal_lm.fit(self.preprocessed_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_generate(self, jit_compile):
-        # Tensor input.
-        self.causal_lm.compile(jit_compile=jit_compile)
-        self.causal_lm.generate(
-            self.raw_batch,
-            max_length=10,
-        )
-        first_fn = self.causal_lm.generate_function
+    def test_generate(self):
         # String input.
         prompt = " airplane"
-        generated = self.causal_lm.generate(
-            prompt,
-            max_length=10,
+        output = self.causal_lm.generate(" airplane")
+        self.assertTrue(prompt in output.numpy().decode("utf-8"))
+        # String tensor input.
+        self.assertDTypeEqual(
+            self.causal_lm.generate(self.raw_batch), tf.string
         )
-        generated = generated.numpy().decode("utf-8")
-        self.assertTrue(prompt in generated)
+        # String dataset input.
+        self.assertDTypeEqual(
+            self.causal_lm.generate(self.raw_dataset), tf.string
+        )
+        # Int tensor input.
+        self.causal_lm.preprocessor = None
+        self.assertDTypeEqual(
+            self.causal_lm.generate(self.preprocessed_batch), tf.int32
+        )
+
+    def test_generate_compilation(self):
+        # Assert we do not recompile with successive calls.
+        self.causal_lm.generate(self.raw_batch)
+        first_fn = self.causal_lm.generate_function
+        self.causal_lm.generate(self.raw_batch)
         second_fn = self.causal_lm.generate_function
-        # Assert we did not recompile.
         self.assertEqual(first_fn, second_fn)
+        # Assert we do recompile after compile is called.
         self.causal_lm.compile(sampler="greedy")
         self.assertIsNone(self.causal_lm.generate_function)
+
+    def test_serialization(self):
+        new_causal_lm = keras.utils.deserialize_keras_object(
+            keras.utils.serialize_keras_object(self.causal_lm)
+        )
+        self.assertEqual(
+            new_causal_lm.get_config(), self.causal_lm.get_config()
+        )
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         keras.utils.set_random_seed(42)
         model_output = self.causal_lm.predict(self.raw_batch)
