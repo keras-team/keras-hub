@@ -111,6 +111,7 @@ class BartSeq2SeqLM(Task):
         self_attention_cache,
         self_attention_cache_index,
         encoder_outputs=None,
+        encoder_padding_mask=None,
         cross_attention_cache=None,
     ):
         """Forward pass of `BartSeq2SeqLM` with `self_attention_cache` and `cross_attention_cache`.
@@ -180,6 +181,7 @@ class BartSeq2SeqLM(Task):
             ) = self.backbone.get_layer(f"transformer_decoder_layer_{i}")(
                 x,
                 encoder_sequence=encoder_outputs,
+                encoder_padding_mask=encoder_padding_mask,
                 self_attention_cache=current_self_attention_cache,
                 cache_index=self_attention_cache_index,
                 cross_attention_cache=current_cross_attention_cache,
@@ -260,6 +262,7 @@ class BartSeq2SeqLM(Task):
             self_attention_cache=self_attention_cache,
             self_attention_cache_index=0,
             encoder_outputs=encoder_outputs,
+            encoder_padding_mask=encoder_padding_mask,
         )
         return (
             hidden_states,
@@ -319,6 +322,7 @@ class BartSeq2SeqLM(Task):
                     self_attention_cache=cache,
                     self_attention_cache_index=cache_index,
                     encoder_outputs=encoder_outputs,
+                    encoder_padding_mask=encoder_padding_mask,
                     cross_attention_cache=cross_attention_cache,
                 )
                 return (
