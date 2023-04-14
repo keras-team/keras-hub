@@ -122,6 +122,22 @@ class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
         output_ids = set(output[0].numpy())
         self.assertContainsSubset(output_ids, range(3))
 
+    def test_temperature(self):
+        def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([self.batch_size, 5])
+            logits = tf.range(self.vocab_size, 0, -1, dtype=tf.float32)
+            logits = tf.reshape(logits[tf.newaxis, :], (self.batch_size, -1))
+            return tf.constant(logits), hidden_states, cache
+
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+
+        output = TopPSampler(p=0.5, temperature=1e-9)(
+            next=next,
+            prompt=prompt,
+        )
+        self.assertAllEqual(output, tf.zeros_like(output))
+
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )

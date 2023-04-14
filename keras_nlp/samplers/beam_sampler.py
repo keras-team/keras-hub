@@ -97,8 +97,9 @@ class BeamSampler(Sampler):
         self,
         num_beams=5,
         return_all_beams=False,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.num_beams = num_beams
         self.return_all_beams = return_all_beams
 
@@ -156,7 +157,7 @@ class BeamSampler(Sampler):
             # Compute the softmax distribution for the next token.
             logits, _, cache = next(prompt, cache, index)
             vocab_size = tf.shape(logits)[-1]
-            probs = keras.activations.softmax(logits)
+            probs = keras.activations.softmax(logits / self.temperature)
 
             # Compute the running log-likelihood of each new candidate.
             next_log_probs = tf.math.log(probs) + log_probs[..., tf.newaxis]

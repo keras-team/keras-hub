@@ -62,8 +62,9 @@ class RandomSampler(Sampler):
     def __init__(
         self,
         seed=None,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.seed = seed
 
     def get_next_token(self, probabilities):

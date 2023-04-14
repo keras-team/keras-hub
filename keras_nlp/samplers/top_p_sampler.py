@@ -73,8 +73,9 @@ class TopPSampler(Sampler):
         p=0.1,
         k=None,
         seed=None,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.p = p
         self.k = k
         self.seed = seed
