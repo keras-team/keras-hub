@@ -215,19 +215,18 @@ class BartPreprocessor(Preprocessor):
 
         decoder_inputs = [self.tokenizer(segment) for segment in decoder_text]
         decoder_token_ids, _ = self.decoder_packer(decoder_inputs)
+
         # Append `end_token_id` to the beginning of `decoder_token_ids`.
-        if decoder_token_ids.shape.rank == 2:
-            batch_size = tf.shape(decoder_token_ids)[0]
-            end_token_ids = tf.fill(
-                (batch_size, 1), self.tokenizer.end_token_id
-            )
-            decoder_token_ids = tf.concat(
-                [end_token_ids, decoder_token_ids], axis=1
-            )
-        else:
-            decoder_token_ids = tf.concat(
-                [[self.tokenizer.end_token_id], decoder_token_ids], axis=0
-            )
+        input_is_1d = decoder_token_ids.shape.rank == 1
+        if input_is_1d:
+            decoder_token_ids = decoder_token_ids[tf.newaxis, :]
+        batch_size = tf.shape(decoder_token_ids)[0]
+        end_token_ids = tf.fill((batch_size, 1), self.tokenizer.end_token_id)
+        decoder_token_ids = tf.concat(
+            [end_token_ids, decoder_token_ids], axis=1
+        )
+        if input_is_1d:
+            decoder_token_ids = tf.squeeze(decoder_token_ids, axis=0)
 
         x = {
             "encoder_token_ids": encoder_token_ids,
