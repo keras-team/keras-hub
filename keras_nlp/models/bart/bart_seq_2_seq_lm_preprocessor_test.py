@@ -56,7 +56,7 @@ class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
                 merges=merges,
             ),
             encoder_sequence_length=10,
-            decoder_sequence_length=8,
+            decoder_sequence_length=9,
         )
 
     def test_tokenize_strings(self):
@@ -73,13 +73,13 @@ class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             x_out["encoder_padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0]
         )
         self.assertAllEqual(
-            x_out["decoder_token_ids"], [0, 7, 8, 9, 10, 11, 2, 1]
+            x_out["decoder_token_ids"], [2, 0, 7, 8, 9, 10, 11, 2, 1]
         )
         self.assertAllEqual(
-            x_out["decoder_padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0]
+            x_out["decoder_padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 0]
         )
-        self.assertAllEqual(y_out, [7, 8, 9, 10, 11, 2, 1, 1])
-        self.assertAllEqual(sw_out, [1, 1, 1, 1, 1, 1, 0, 0])
+        self.assertAllEqual(y_out, [0, 7, 8, 9, 10, 11, 2, 1, 1])
+        self.assertAllEqual(sw_out, [1, 1, 1, 1, 1, 1, 1, 0, 0])
 
     def test_tokenize_list_of_strings(self):
         input_data = {
@@ -96,13 +96,13 @@ class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0]] * 4,
         )
         self.assertAllEqual(
-            x_out["decoder_token_ids"], [[0, 7, 8, 9, 10, 11, 2, 1]] * 4
+            x_out["decoder_token_ids"], [[2, 0, 7, 8, 9, 10, 11, 2, 1]] * 4
         )
         self.assertAllEqual(
-            x_out["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4
+            x_out["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 0]] * 4
         )
-        self.assertAllEqual(y_out, [[7, 8, 9, 10, 11, 2, 1, 1]] * 4)
-        self.assertAllEqual(sw_out, [[1, 1, 1, 1, 1, 1, 0, 0]] * 4)
+        self.assertAllEqual(y_out, [[0, 7, 8, 9, 10, 11, 2, 1, 1]] * 4)
+        self.assertAllEqual(sw_out, [[1, 1, 1, 1, 1, 1, 1, 0, 0]] * 4)
 
     def test_error_multi_segment_input(self):
         input_data = {
