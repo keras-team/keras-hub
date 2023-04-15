@@ -73,11 +73,11 @@ class GPT2Backbone(Backbone):
         ),
     }
 
-    # Pretrained GPT-2 decoder
-    model = GPT2Backbone.from_preset("gpt2_base_en")
-    output = model(input_data)
+    # Pretrained GPT-2 decoder.
+    model = keras_nlp.models.GPT2Backbone.from_preset("gpt2_base_en")
+    model(input_data)
 
-    # Randomly initialized GPT-2 decoder with custom config
+    # Randomly initialized GPT-2 decoder with custom config.
     model = keras_nlp.models.GPT2Backbone(
         vocabulary_size=50257,
         num_layers=12,
@@ -86,9 +86,7 @@ class GPT2Backbone(Backbone):
         intermediate_dim=3072,
         max_sequence_length=1024,
     )
-
-    # Call the model on the input data.
-    output = model(input_data)
+    model(input_data)
     ```
     """
 

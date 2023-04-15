@@ -127,6 +127,14 @@ class StartEndPackerTest(tf.test.TestCase):
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
+    def test_call_overrides(self):
+        x = tf.constant([5, 6, 7])
+        packer = StartEndPacker(start_value=1, end_value=2, sequence_length=4)
+        self.assertAllEqual(packer(x), [1, 5, 6, 2])
+        self.assertAllEqual(packer(x, add_start_value=False), [5, 6, 7, 2])
+        self.assertAllEqual(packer(x, add_end_value=False), [1, 5, 6, 7])
+        self.assertAllEqual(packer(x, sequence_length=2), [1, 2])
+
     def test_get_config(self):
         start_end_packer = StartEndPacker(
             sequence_length=512,

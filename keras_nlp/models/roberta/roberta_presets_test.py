@@ -73,7 +73,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     def test_classifier_output(self, load_weights):
         input_data = ["Let's rock!"]
         model = RobertaClassifier.from_preset(
-            "roberta_base_en", load_weights=load_weights
+            "roberta_base_en", num_classes=2, load_weights=load_weights
         )
         # Never assert output values, as the head weights are random.
         model.predict(input_data)
@@ -88,6 +88,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         }
         model = RobertaClassifier.from_preset(
             "roberta_base_en",
+            num_classes=2,
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -135,16 +136,16 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("roberta_tokenizer", RobertaTokenizer),
-        ("roberta_preprocessor", RobertaPreprocessor),
-        ("roberta", RobertaBackbone),
-        ("roberta_classifier", RobertaClassifier),
-        ("roberta_masked_lm", RobertaMaskedLM),
+        ("roberta_tokenizer", RobertaTokenizer, {}),
+        ("roberta_preprocessor", RobertaPreprocessor, {}),
+        ("roberta", RobertaBackbone, {}),
+        ("roberta_classifier", RobertaClassifier, {"num_classes": 2}),
+        ("roberta_masked_lm", RobertaMaskedLM, {}),
     )
-    def test_unknown_preset_error(self, cls):
+    def test_unknown_preset_error(self, cls, kwargs):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("roberta_base_en_clowntown")
+            cls.from_preset("roberta_base_en_clowntown", **kwargs)
 
 
 @pytest.mark.extra_large
@@ -191,6 +192,7 @@ class RobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in RobertaClassifier.presets:
             classifier = RobertaClassifier.from_preset(
                 preset,
+                num_classes=2,
                 preprocessor=None,
                 load_weights=load_weights,
             )

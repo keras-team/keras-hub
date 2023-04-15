@@ -64,8 +64,9 @@ class TopKSampler(Sampler):
         self,
         k=5,
         seed=None,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.k = k
         self.seed = seed
 
