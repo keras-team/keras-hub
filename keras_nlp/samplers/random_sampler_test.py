@@ -38,7 +38,7 @@ class RandomSamplerTest(tf.test.TestCase, parameterized.TestCase):
             return logits, hidden_states, cache
 
         self.next = next
-        self.sampler = RandomSampler()
+        self.sampler = RandomSampler(temperature=1.0)
 
     def join_as_string(self, x):
         return ["".join([self.int_lookup[i] for i in s]) for s in x.numpy()]
@@ -70,6 +70,22 @@ class RandomSamplerTest(tf.test.TestCase, parameterized.TestCase):
             cache=cache,
         )
         self.assertEqual(self.join_as_string(output), ["sequentially"])
+
+    def test_temperature(self):
+        def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([self.batch_size, 5])
+            logits = tf.range(self.vocab_size, 0, -1, dtype=tf.float32)
+            logits = tf.reshape(logits[tf.newaxis, :], (self.batch_size, -1))
+            return tf.constant(logits), hidden_states, cache
+
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+
+        output = RandomSampler(temperature=1e-5)(
+            next=next,
+            prompt=prompt,
+        )
+        self.assertAllEqual(output, tf.zeros_like(output))
 
     def test_early_stopping(self):
         cache_chars = list("sequentially")

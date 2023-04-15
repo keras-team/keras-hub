@@ -25,19 +25,34 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     """GPT2 Causal LM preprocessor.
 
-    This preprocessor is majorly used as the preprocesor for `GPT2CausalLM`.
-    This class subclasses `keras_nlp.models.GPT2Preprocessor` and keeps most of
-    its functionality. The only change is `GPT2CausalLMPreprocessor` sets
-    `y` (label) and `sample_weights` field by shifting the input sequence one
-    step towards left, and drop the last token as it does not have a successor,
-    e.g., if the tokenized input is `[1, 2, 3, 0, 0]` with
-    `padding_mask = [1, 1, 1, 0, 0]`, then after preprocessing, we
-    will have `x = [1, 2, 3, 0]` and `y = [2, 3, 0, 0]`, with
-    `padding_mask = [1, 1, 1, 0]` and `sample_weights = [1, 1, 0, 0]`.
+    This preprocessing layer is primarily meant to be used with
+    `keras_nlp.models.GPT2CausalLM`. By default, it will take in batches of
+    strings, and return outputs in a `(x, y, sample_weight)` format, where the
+    `y` label is the next token id in the `x` sequence. For use with generation,
+    pass `return_labels=False` in which case the output will simply be the
+    encoded string features.
 
     Args:
         tokenizer: A `keras_nlp.models.GPT2Tokenizer` instance.
         sequence_length: The length of the packed inputs.
+        add_start_token: If true, the preprocessor will append the tokenizer
+            start token to each input sequence.
+        add_end_token: If true, the preprocessor will append the tokenizer
+            end token to each input sequence.
+
+    Call arguments:
+        x: A string `tf.Tensor` or list of python strings.
+        y: Label data. Should always be `None` as the layer generates labels.
+        sample_weight: Label weights. Should always be `None` as the layer
+            generates label weights.
+        sequence_length: Pass to override the configured `sequence_length` of
+            the layer.
+        add_start_token: Pass to override the configured value of
+            `add_start_token` on the layer.
+        add_end_token: Pass to override the configured value of
+            `add_end_token` on the layer.
+        return_labels: If `True`, the output `"token_ids"` will be offset by one
+            and returned as labels. If `False` only features will be returned.
 
     Examples:
     ```python
@@ -74,7 +89,16 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     """
 
-    def call(self, x, y=None, sample_weight=None):
+    def call(
+        self,
+        x,
+        y=None,
+        sample_weight=None,
+        sequence_length=None,
+        add_start_token=None,
+        add_end_token=None,
+        return_labels=True,
+    ):
         if y is not None or sample_weight is not None:
             logging.warning(
                 "`GPT2CausalLMPreprocessor` generates `y` and `sample_weight` "
@@ -82,15 +106,25 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
                 "or `sample_weight`. Your `y` and `sample_weight` will be "
                 "ignored."
             )
-
-        x = super().call(x)
-        token_ids, padding_mask = x["token_ids"], x["padding_mask"]
-        # The last token does not have a next token, so we truncate it out.
-        x = {
-            "token_ids": token_ids[..., :-1],
-            "padding_mask": padding_mask[..., :-1],
-        }
-        # Target `y` will be the next token.
-        y = token_ids[..., 1:]
-        sample_weight = padding_mask[..., 1:]
-        return pack_x_y_sample_weight(x, y, sample_weight)
+        if return_labels:
+            # Tokenize with one extra token to account for the truncation below.
+            sequence_length = (sequence_length or self.sequence_length) + 1
+        x = super().call(
+            x,
+            sequence_length=sequence_length,
+            add_start_token=add_start_token,
+            add_end_token=add_end_token,
+        )
+        if return_labels:
+            token_ids, padding_mask = x["token_ids"], x["padding_mask"]
+            # The last token does not have a next token, so we truncate it out.
+            x = {
+                "token_ids": token_ids[..., :-1],
+                "padding_mask": padding_mask[..., :-1],
+            }
+            # Target `y` will be the next token.
+            y = token_ids[..., 1:]
+            sample_weight = padding_mask[..., 1:]
+            return pack_x_y_sample_weight(x, y, sample_weight)
+        else:
+            return x

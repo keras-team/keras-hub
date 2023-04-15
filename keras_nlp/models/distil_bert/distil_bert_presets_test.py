@@ -109,15 +109,15 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("distilbert_tokenizer", DistilBertTokenizer),
-        ("distilbert_preprocessor", DistilBertPreprocessor),
-        ("distilbert", DistilBertBackbone),
-        ("distilbert_classifier", DistilBertClassifier),
+        ("distilbert_tokenizer", DistilBertTokenizer, {}),
+        ("distilbert_preprocessor", DistilBertPreprocessor, {}),
+        ("distilbert", DistilBertBackbone, {}),
+        ("distilbert_classifier", DistilBertClassifier, {"num_classes": 2}),
     )
-    def test_unknown_preset_error(self, cls):
+    def test_unknown_preset_error(self, cls, kwargs):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("distilbert_base_uncased_clowntown")
+            cls.from_preset("distilbert_base_uncased", **kwargs)
 
 
 @pytest.mark.extra_large
