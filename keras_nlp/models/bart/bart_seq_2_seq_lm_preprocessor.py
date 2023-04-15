@@ -142,21 +142,19 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             tokenizer=tokenizer,
             encoder_sequence_length=encoder_sequence_length,
             decoder_sequence_length=decoder_sequence_length + 1,
-            truncate=truncate,
             **kwargs
         )
 
-        # Maintain a private copy of `decoder_sequence_length` for config
-        # purposes.
+        # Maintain a private copy of the sequence lengths for config purposes.
+        self._encoder_sequence_length = encoder_sequence_length
         self._decoder_sequence_length = decoder_sequence_length
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "encoder_sequence_length": self.encoder_packer.sequence_length,
+                "encoder_sequence_length": self._encoder_sequence_length,
                 "decoder_sequence_length": self._decoder_sequence_length,
-                "truncate": self.encoder_packer.truncate,
             }
         )
         return config

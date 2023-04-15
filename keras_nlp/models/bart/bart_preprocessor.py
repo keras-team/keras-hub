@@ -18,7 +18,7 @@ import copy
 import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
+from keras_nlp.layers.start_end_packer import StartEndPacker
 from keras_nlp.models.bart.bart_presets import backbone_presets
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
@@ -46,16 +46,6 @@ class BartPreprocessor(Preprocessor):
         tokenizer: A `keras_nlp.models.BartTokenizer` instance.
         encoder_sequence_length: The length of the packed encoder inputs.
         decoder_sequence_length: The length of the packed decoder inputs.
-        truncate: string. The algorithm to truncate a list of batched segments
-            to fit within `sequence_length`. The value can be either
-            `round_robin` or `waterfall`:
-                - `"round_robin"`: Available space is assigned one token at a
-                    time in a round-robin fashion to the inputs that still need
-                    some, until the limit is reached.
-                - `"waterfall"`: The allocation of the budget is done using a
-                    "waterfall" algorithm that allocates quota in a
-                    left-to-right manner and fills up the buckets until we run
-                    out of budget. It supports an arbitrary number of segments.
 
     Call arguments:
         x: A dictionary with `encoder_text` and `decoder_text` as its keys.
@@ -149,40 +139,42 @@ class BartPreprocessor(Preprocessor):
         tokenizer,
         encoder_sequence_length=1024,
         decoder_sequence_length=1024,
-        truncate="round_robin",
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
 
-        self.encoder_packer = MultiSegmentPacker(
-            start_value=self.tokenizer.start_token_id,
-            end_value=self.tokenizer.end_token_id,
-            pad_value=self.tokenizer.pad_token_id,
-            truncate=truncate,
+        # TODO: Use `MultiSegmentPacker` instead of `StartEndPacker` once we
+        # want to move to multi-segment packing and have improved
+        # `MultiSegmentPacker`'s performance.
+        self.encoder_packer = StartEndPacker(
+            start_value=tokenizer.start_token_id,
+            end_value=tokenizer.end_token_id,
+            pad_value=tokenizer.pad_token_id,
             sequence_length=encoder_sequence_length,
+            return_padding_mask=True,
         )
+
         # The decoder is packed a bit differently; the format is as follows:
         # `[end_token_id, start_token_id, tokens..., end_token_id, padding...]`.
         # Hence, we pass `sequence_length - 1` to the packer.
-        self.decoder_packer = MultiSegmentPacker(
+        self.decoder_packer = StartEndPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
             pad_value=self.tokenizer.pad_token_id,
-            truncate=truncate,
             sequence_length=decoder_sequence_length - 1,
         )
-        # Maintain a private copy of `decoder_sequence_length` for config
-        # purposes.
+
+        # Maintain a private copy of the sequence lengths for config purposes.
+        self._encoder_sequence_length = encoder_sequence_length
         self._decoder_sequence_length = decoder_sequence_length
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "encoder_sequence_length": self.encoder_packer.sequence_length,
+                "encoder_sequence_length": self._encoder_sequence_length,
                 "decoder_sequence_length": self._decoder_sequence_length,
-                "truncate": self.encoder_packer.truncate,
             }
         )
         return config
@@ -210,11 +202,13 @@ class BartPreprocessor(Preprocessor):
                 f"{len(encoder_text)} and {len(decoder_text)}, respectively."
             )
 
-        encoder_inputs = [self.tokenizer(segment) for segment in encoder_text]
-        encoder_token_ids, _ = self.encoder_packer(encoder_inputs)
+        encoder_inputs = self.tokenizer(encoder_text[0])
+        encoder_token_ids, encoder_padding_mask = self.encoder_packer(
+            encoder_inputs
+        )
 
-        decoder_inputs = [self.tokenizer(segment) for segment in decoder_text]
-        decoder_token_ids, _ = self.decoder_packer(decoder_inputs)
+        decoder_inputs = self.tokenizer(decoder_text[0])
+        decoder_token_ids = self.decoder_packer(decoder_inputs)
 
         # Append `end_token_id` to the beginning of `decoder_token_ids`.
         input_is_1d = decoder_token_ids.shape.rank == 1
@@ -230,8 +224,7 @@ class BartPreprocessor(Preprocessor):
 
         x = {
             "encoder_token_ids": encoder_token_ids,
-            "encoder_padding_mask": encoder_token_ids
-            != self.tokenizer.pad_token_id,
+            "encoder_padding_mask": encoder_padding_mask,
             "decoder_token_ids": decoder_token_ids,
             "decoder_padding_mask": decoder_token_ids
             != self.tokenizer.pad_token_id,
