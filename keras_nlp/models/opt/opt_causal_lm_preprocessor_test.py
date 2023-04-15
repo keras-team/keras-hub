@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for OPT preprocessor layer."""
+"""Tests for OPT causal LM preprocessor layer."""
 
 import os
 
@@ -21,11 +21,13 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.opt.opt_preprocessor import OPTPreprocessor
+from keras_nlp.models.opt.opt_causal_lm_preprocessor import (
+    OPTCausalLMPreprocessor,
+)
 from keras_nlp.models.opt.opt_tokenizer import OPTTokenizer
 
 
-class OPTPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class OPTCausalLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.vocab = {
             "<pad>": 0,
@@ -43,7 +45,7 @@ class OPTPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         merges += ["pla ne"]
         self.merges = merges
 
-        self.preprocessor = OPTPreprocessor(
+        self.preprocessor = OPTCausalLMPreprocessor(
             tokenizer=OPTTokenizer(
                 vocabulary=self.vocab,
                 merges=self.merges,
@@ -51,24 +53,28 @@ class OPTPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             sequence_length=8,
         )
 
-    def test_tokenize_strings(self):
+    def test_strings(self):
         input_data = " airplane at airport"
 
-        x = self.preprocessor(input_data)
+        x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(x["token_ids"], [1, 3, 4, 5, 3, 6, 1, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0])
+        self.assertAllEqual(y, [3, 4, 5, 3, 6, 1, 0, 0])
+        self.assertAllEqual(sw, [1, 1, 1, 1, 1, 1, 0, 0])
 
-    def test_tokenize_list_of_strings(self):
+    def test_list_of_strings(self):
         input_data = [" airplane at airport"] * 4
 
-        x = self.preprocessor(input_data)
+        x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(x["token_ids"], [[1, 3, 4, 5, 3, 6, 1, 0]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4)
+        self.assertAllEqual(y, [[3, 4, 5, 3, 6, 1, 0, 0]] * 4)
+        self.assertAllEqual(sw, [[1, 1, 1, 1, 1, 1, 0, 0]] * 4)
 
     def test_no_start_end_token(self):
         input_data = [" airplane at airport"] * 4
 
-        preprocessor = OPTPreprocessor(
+        preprocessor = OPTCausalLMPreprocessor(
             tokenizer=OPTTokenizer(
                 vocabulary=self.vocab,
                 merges=self.merges,
@@ -77,36 +83,42 @@ class OPTPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             add_start_token=False,
             add_end_token=False,
         )
-        x = preprocessor(input_data)
+        x, y, sw = preprocessor(input_data)
         self.assertAllEqual(x["token_ids"], [[3, 4, 5, 3, 6, 0, 0, 0]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 1, 0, 0, 0]] * 4)
+        self.assertAllEqual(y, [[4, 5, 3, 6, 0, 0, 0, 0]] * 4)
+        self.assertAllEqual(sw, [[1, 1, 1, 1, 0, 0, 0, 0]] * 4)
 
-    def test_tokenize_labeled_batch(self):
+    def test_labeled_batch(self):
         x = tf.constant([" airplane at airport"] * 4)
-        y_in = tf.constant([1] * 4)
-        sw_in = tf.constant([1.0] * 4)
-        x, y, sw = self.preprocessor(x, y_in, sw_in)
+        y = tf.constant([1] * 4)  # Ignored.
+        sw = tf.constant([1.0] * 4)  # Ignored.
+        x, y, sw = self.preprocessor(x, y, sw)
         self.assertAllEqual(x["token_ids"], [[1, 3, 4, 5, 3, 6, 1, 0]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4)
-        self.assertAllEqual(y, y_in)
-        self.assertAllEqual(sw, sw_in)
+        self.assertAllEqual(y, [[3, 4, 5, 3, 6, 1, 0, 0]] * 4)
+        self.assertAllEqual(sw, [[1, 1, 1, 1, 1, 1, 0, 0]] * 4)
 
-    def test_tokenize_labeled_dataset(self):
+    def test_dataset(self):
         x = tf.constant([" airplane at airport"] * 4)
         ds = tf.data.Dataset.from_tensor_slices(x)
         ds = ds.map(self.preprocessor)
-        x = ds.batch(4).take(1).get_single_element()
+        x, y, sw = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(x["token_ids"], [[1, 3, 4, 5, 3, 6, 1, 0]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4)
+        self.assertAllEqual(y, [[3, 4, 5, 3, 6, 1, 0, 0]] * 4)
+        self.assertAllEqual(sw, [[1, 1, 1, 1, 1, 1, 0, 0]] * 4)
 
     def test_call_overrides(self):
         input_data = " airplane at airport"
-        x = self.preprocessor(input_data, add_start_token=False)
+        x, _, _ = self.preprocessor(input_data, add_start_token=False)
         self.assertAllEqual(x["token_ids"], [3, 4, 5, 3, 6, 1, 0, 0])
-        x = self.preprocessor(input_data, add_end_token=False)
+        x, _, _ = self.preprocessor(input_data, add_end_token=False)
         self.assertAllEqual(x["token_ids"], [1, 3, 4, 5, 3, 6, 0, 0])
-        x = self.preprocessor(input_data, sequence_length=4)
-        self.assertAllEqual(x["token_ids"], [1, 3, 4, 1])
+        x, _, _ = self.preprocessor(input_data, sequence_length=4)
+        self.assertAllEqual(x["token_ids"], [1, 3, 4, 5])
+        x = self.preprocessor(input_data, return_labels=False)
+        self.assertAllEqual(x["token_ids"], [1, 3, 4, 5, 3, 6, 1, 0])
 
     def test_serialization(self):
         config = keras.utils.serialize_keras_object(self.preprocessor)
@@ -125,7 +137,7 @@ class OPTPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         input_data = tf.constant([" airplane at airport"])
 
         inputs = keras.Input(dtype="string", shape=())
-        outputs = self.preprocessor(inputs)
+        outputs, y, sw = self.preprocessor(inputs)
         model = keras.Model(inputs, outputs)
 
         path = os.path.join(self.get_temp_dir(), filename)

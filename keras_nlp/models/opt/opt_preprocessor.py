@@ -161,7 +161,7 @@ class OPTPreprocessor(Preprocessor):
         if len(x) != 1:
             raise ValueError(
                 "OPT requires each input feature to contain only "
-                f"one segment, but received {len(x)}. If you are using GPT2 "
+                f"one segment, but received {len(x)}. If you are using OPT "
                 "for a multi-segment classification task, please refer to "
                 "classification models like BERT or RoBERTa."
             )
