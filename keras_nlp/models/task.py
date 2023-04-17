@@ -15,7 +15,6 @@
 
 import os
 
-import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.utils.keras_utils import print_msg
@@ -30,9 +29,9 @@ class Task(PipelineModel):
     """Base class for Task models."""
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
         self._backbone = None
         self._preprocessor = None
+        super().__init__(*args, **kwargs)
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
         return self.preprocessor(x, y=y, sample_weight=sample_weight)
@@ -52,7 +51,6 @@ class Task(PipelineModel):
         return self._preprocessor
 
     @preprocessor.setter
-    @tf.__internal__.tracking.no_automatic_dependency_tracking
     def preprocessor(self, value):
         self.include_preprocessing = value is not None
         self._preprocessor = value
@@ -177,6 +175,14 @@ class Task(PipelineModel):
                 example_preset_name=next(iter(cls.presets), ""),
                 preset_names='", "'.join(cls.presets),
             )(cls.from_preset.__func__)
+
+    @property
+    def layers(self):
+        # Remove preprocessor from layers so it does not show up in the summary.
+        layers = super().layers
+        if self.preprocessor and self.preprocessor in layers:
+            layers.remove(self.preprocessor)
+        return layers
 
     def summary(
         self,
