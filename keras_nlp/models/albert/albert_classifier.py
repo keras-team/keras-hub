@@ -52,7 +52,7 @@ class AlbertClassifier(Task):
             be preprocessed before calling the model.
         activation: Optional `str` or callable, defaults to `None`. The
             activation function to use on the model outputs. Set
-            `activation=`"softmax"`` to return output probabilities.
+            `activation="softmax"` to return output probabilities.
         dropout: float. The dropout probability value, applied after the dense
             layer.
 

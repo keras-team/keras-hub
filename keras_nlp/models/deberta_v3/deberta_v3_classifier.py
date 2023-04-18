@@ -61,7 +61,7 @@ class DebertaV3Classifier(Task):
             be preprocessed before calling the model.
         activation: Optional `str` or callable, defaults to `None`. The
             activation function to use on the model outputs. Set
-            `activation=`"softmax"`` to return output probabilities.
+            `activation="softmax"` to return output probabilities.
         hidden_dim: int. The size of the pooler layer.
         dropout: float. Dropout probability applied to the pooled output. For
             the second dropout layer, `backbone.dropout` is used.
