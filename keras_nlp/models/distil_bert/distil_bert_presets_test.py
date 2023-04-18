@@ -78,6 +78,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         input_data = tf.constant(["The quick brown fox."])
         model = DistilBertClassifier.from_preset(
             "distil_bert_base_en_uncased",
+            num_classes=2,
             load_weights=load_weights,
         )
         model.predict(input_data)
@@ -92,6 +93,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         }
         model = DistilBertClassifier.from_preset(
             "distil_bert_base_en_uncased",
+            num_classes=2,
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -153,7 +155,7 @@ class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in DistilBertClassifier.presets:
             classifier = DistilBertClassifier.from_preset(
                 preset,
-                num_classes=4,
+                num_classes=2,
                 load_weights=load_weights,
             )
             input_data = tf.constant(["This quick brown fox"])
@@ -166,7 +168,7 @@ class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in DistilBertClassifier.presets:
             classifier = DistilBertClassifier.from_preset(
                 preset,
-                num_classes=4,
+                num_classes=2,
                 load_weights=load_weights,
                 preprocessor=None,
             )
