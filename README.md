@@ -76,7 +76,6 @@ imdb_train, imdb_test = tfds.load(
 classifier = keras_nlp.models.BertClassifier.from_preset(
     "bert_base_en_uncased", 
     num_classes=2,
-    activation="softmax",
 )
 # Fine-tune on IMDb movie reviews.
 classifier.fit(imdb_train, validation_data=imdb_test)
