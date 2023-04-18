@@ -45,8 +45,9 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.classifier = BertClassifier(
             self.backbone,
-            4,
+            num_classes=4,
             preprocessor=self.preprocessor,
+            activation="softmax",
         )
 
         # Setup data.
@@ -66,9 +67,13 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.classifier(self.preprocessed_batch)
 
     def test_classifier_predict(self):
-        self.classifier.predict(self.raw_batch)
+        preds1 = self.classifier.predict(self.raw_batch)
         self.classifier.preprocessor = None
-        self.classifier.predict(self.preprocessed_batch)
+        preds2 = self.classifier.predict(self.preprocessed_batch)
+        # Assert predictions match.
+        self.assertAllClose(preds1, preds2)
+        # Assert valid softmax output.
+        self.assertAllClose(tf.reduce_sum(preds2, axis=-1), [1.0, 1.0])
 
     def test_classifier_fit(self):
         self.classifier.fit(self.raw_dataset)
@@ -78,7 +83,7 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
     def test_classifier_fit_no_xla(self):
         self.classifier.preprocessor = None
         self.classifier.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+            loss="sparse_categorical_crossentropy",
             jit_compile=False,
         )
         self.classifier.fit(self.preprocessed_dataset)

@@ -71,26 +71,20 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
 
         self.classifier = AlbertClassifier(
             self.backbone,
-            4,
+            num_classes=4,
             preprocessor=self.preprocessor,
-        )
-        self.classifier_no_preprocessing = AlbertClassifier(
-            self.backbone,
-            4,
-            preprocessor=None,
+            activation="softmax",
         )
 
         self.raw_batch = tf.constant(
             [
                 "the quick brown fox.",
                 "the slow brown fox.",
-                "the smelly brown fox.",
-                "the old brown fox.",
             ]
         )
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, tf.ones((4,)))
+            (self.raw_batch, tf.ones((2,)))
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
@@ -98,17 +92,26 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.classifier(self.preprocessed_batch)
 
     def test_classifier_predict(self):
-        self.classifier.predict(self.raw_batch)
+        preds1 = self.classifier.predict(self.raw_batch)
         self.classifier.preprocessor = None
-        self.classifier.predict(self.preprocessed_batch)
+        preds2 = self.classifier.predict(self.preprocessed_batch)
+        # Assert predictions match.
+        self.assertAllClose(preds1, preds2)
+        # Assert valid softmax output.
+        self.assertAllClose(tf.reduce_sum(preds2, axis=-1), [1.0, 1.0])
 
     def test_classifier_fit(self):
         self.classifier.fit(self.raw_dataset)
         self.classifier.preprocessor = None
         self.classifier.fit(self.preprocessed_dataset)
 
-    def test_distilbert_classifier_fit_default_compile(self):
-        self.classifier.fit(self.raw_dataset)
+    def test_classifier_fit_no_xla(self):
+        self.classifier.preprocessor = None
+        self.classifier.compile(
+            loss="sparse_categorical_crossentropy",
+            jit_compile=False,
+        )
+        self.classifier.fit(self.preprocessed_dataset)
 
     def test_serialization(self):
         config = keras.utils.serialize_keras_object(self.classifier)
