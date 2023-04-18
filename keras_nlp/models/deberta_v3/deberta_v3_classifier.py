@@ -56,12 +56,15 @@ class DebertaV3Classifier(Task):
     Args:
         backbone: A `keras_nlp.models.DebertaV3` instance.
         num_classes: int. Number of classes to predict.
-        hidden_dim: int. The size of the pooler layer.
-        dropout: float. Dropout probability applied to the pooled output. For
-            the second dropout layer, `backbone.dropout` is used.
         preprocessor: A `keras_nlp.models.DebertaV3Preprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
+        activation: Optional `str` or callable, defaults to `None`. The
+            activation function to use on the model outputs. Set
+            `activation="softmax"` to return output probabilities.
+        hidden_dim: int. The size of the pooler layer.
+        dropout: float. Dropout probability applied to the pooled output. For
+            the second dropout layer, `backbone.dropout` is used.
 
     Examples:
 
@@ -167,14 +170,14 @@ class DebertaV3Classifier(Task):
         self,
         backbone,
         num_classes,
+        preprocessor=None,
+        activation=None,
         hidden_dim=None,
         dropout=0.0,
-        preprocessor=None,
         **kwargs,
     ):
         inputs = backbone.input
-        if hidden_dim is None:
-            hidden_dim = backbone.hidden_dim
+        hidden_dim = hidden_dim or backbone.hidden_dim
 
         x = backbone(inputs)[:, backbone.start_token_index, :]
         x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
@@ -187,6 +190,7 @@ class DebertaV3Classifier(Task):
         outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=deberta_kernel_initializer(),
+            activation=activation,
             name="logits",
         )(x)
 
@@ -201,12 +205,15 @@ class DebertaV3Classifier(Task):
         self.backbone = backbone
         self.preprocessor = preprocessor
         self.num_classes = num_classes
+        self.activation = activation
         self.hidden_dim = hidden_dim
         self.dropout = dropout
 
         # Default compilation
         self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            loss=keras.losses.SparseCategoricalCrossentropy(
+                from_logits=activation is None
+            ),
             optimizer=keras.optimizers.Adam(5e-5),
             metrics=keras.metrics.SparseCategoricalAccuracy(),
             jit_compile=is_xla_compatible(self),
@@ -217,6 +224,7 @@ class DebertaV3Classifier(Task):
         config.update(
             {
                 "num_classes": self.num_classes,
+                "activation": self.activation,
                 "hidden_dim": self.hidden_dim,
                 "dropout": self.dropout,
             }

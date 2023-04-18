@@ -48,12 +48,15 @@ class FNetClassifier(Task):
     Args:
         backbone: A `keras_nlp.models.FNetBackbone` instance.
         num_classes: int. Number of classes to predict.
-        hidden_dim: int. The size of the pooler layer.
-        dropout: float. The dropout probability value, applied after the dense
-            layer.
         preprocessor: A `keras_nlp.models.FNetPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
+        activation: Optional `str` or callable, defaults to `None`. The
+            activation function to use on the model outputs. Set
+            `activation="softmax"` to return output probabilities.
+        hidden_dim: int. The size of the pooler layer.
+        dropout: float. The dropout probability value, applied after the dense
+            layer.
 
     Examples:
 
@@ -106,8 +109,9 @@ class FNetClassifier(Task):
         self,
         backbone,
         num_classes,
-        dropout=0.1,
         preprocessor=None,
+        activation=None,
+        dropout=0.1,
         **kwargs,
     ):
         inputs = backbone.input
@@ -116,6 +120,7 @@ class FNetClassifier(Task):
         outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=f_net_kernel_initializer(),
+            activation=activation,
             name="logits",
         )(pooled)
         # Instantiate using Functional API Model constructor
@@ -129,10 +134,13 @@ class FNetClassifier(Task):
         self.backbone = backbone
         self.preprocessor = preprocessor
         self.num_classes = num_classes
+        self.activation = activation
         self.dropout = dropout
 
         self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            loss=keras.losses.SparseCategoricalCrossentropy(
+                from_logits=activation is None
+            ),
             optimizer=keras.optimizers.Adam(5e-5),
             metrics=keras.metrics.SparseCategoricalAccuracy(),
             jit_compile=is_xla_compatible(self),
@@ -144,6 +152,7 @@ class FNetClassifier(Task):
             {
                 "num_classes": self.num_classes,
                 "dropout": self.dropout,
+                "activation": self.activation,
             }
         )
         return config

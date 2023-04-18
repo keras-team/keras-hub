@@ -47,11 +47,14 @@ class AlbertClassifier(Task):
     Args:
         backbone: A `keras_nlp.models.AlertBackbone` instance.
         num_classes: int. Number of classes to predict.
-        dropout: float. The dropout probability value, applied after the dense
-            layer.
         preprocessor: A `keras_nlp.models.AlbertPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
+        activation: Optional `str` or callable, defaults to `None`. The
+            activation function to use on the model outputs. Set
+            `activation="softmax"` to return output probabilities.
+        dropout: float. The dropout probability value, applied after the dense
+            layer.
 
     Examples:
 
@@ -150,8 +153,9 @@ class AlbertClassifier(Task):
         self,
         backbone,
         num_classes,
-        dropout=0.1,
         preprocessor=None,
+        activation=None,
+        dropout=0.1,
         **kwargs,
     ):
         inputs = backbone.input
@@ -160,6 +164,7 @@ class AlbertClassifier(Task):
         outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=albert_kernel_initializer(),
+            activation=activation,
             name="logits",
         )(pooled)
         # Instantiate using Functional API Model constructor
@@ -173,11 +178,14 @@ class AlbertClassifier(Task):
         self._backbone = backbone
         self._preprocessor = preprocessor
         self.num_classes = num_classes
+        self.activation = activation
         self.dropout = dropout
 
         # Default compilation
         self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            loss=keras.losses.SparseCategoricalCrossentropy(
+                from_logits=activation is None
+            ),
             optimizer=keras.optimizers.Adam(5e-5),
             metrics=keras.metrics.SparseCategoricalAccuracy(),
             jit_compile=is_xla_compatible(self),
@@ -188,6 +196,7 @@ class AlbertClassifier(Task):
         config.update(
             {
                 "num_classes": self.num_classes,
+                "activation": self.activation,
                 "dropout": self.dropout,
             }
         )
