@@ -66,7 +66,7 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_detokenize(self):
         input_data = tf.constant([[4, 9, 5, 7]])
         output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, tf.constant(["the quick brown fox"]))
+        self.assertEqual(output, tf.constant(["brown round earth is"]))
 
     def test_vocabulary(self):
         vocabulary = self.tokenizer.get_vocabulary()
@@ -84,9 +84,10 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
                 "▁is",
                 "▁quick",
                 "▁round",
+                "<mask>",
             ],
         )
-        self.assertEqual(self.tokenizer.vocabulary_size(), 11)
+        self.assertEqual(self.tokenizer.vocabulary_size(), 12)
 
     def test_id_to_token(self):
         print(self.tokenizer.id_to_token(9))
