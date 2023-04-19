@@ -227,7 +227,9 @@ class OPTCausalLM(Task):
             the final hidden representation of the input tokens, and `cache` is
             the decoding cache.
         """
-        x = self.backbone.get_layer("embeddings")(token_ids)
+        x = self.backbone.get_layer("embeddings")(
+            token_ids, start_index=cache_index
+        )
         # Each decoder layer has a cache; we update them separately.
         caches = tf.unstack(cache, axis=1)
         for i in range(self.backbone.num_layers):
