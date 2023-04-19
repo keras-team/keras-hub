@@ -368,8 +368,8 @@ class GPT2CausalLM(Task):
     ):
         """Generate text given prompt `inputs`.
 
-        This method generates text based on given `inputs`. The sampling used
-        for generation can be set in the `compile` method.
+        This method generates text based on given `inputs`. The sampling method
+        used for generation can be set in the `compile` method.
 
         If `inputs` are a `tf.data.Dataset`, outputs will be generated
         "batch-by-batch" and concatenated. Otherwise, all inputs will be handled
@@ -438,7 +438,8 @@ class GPT2CausalLM(Task):
             output = generate_function(token_ids, padding_mask, end_token_id)
 
             if self.preprocessor is not None:
-                # Truncate to ragged by removing tokens after a new end token.
+                # Truncate to ragged by removing tokens after the first
+                # generated `end_token_id`.
                 output = truncate_at_token(output, end_token_id, padding_mask)
                 # Strip start token if added.
                 if self.preprocessor.add_start_token:
