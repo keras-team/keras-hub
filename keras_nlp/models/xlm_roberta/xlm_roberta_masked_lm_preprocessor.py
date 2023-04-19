@@ -77,6 +77,8 @@ class XLMRobertaMaskedLMPreprocessor(XLMRobertaPreprocessor):
             generates label weights.
 
     Examples:
+
+    Directly calling the layer on data.
     ```python
     # Load the preprocessor from a preset.
     preprocessor = keras_nlp.models.XLMRobertaMaskedLMPreprocessor.from_preset(
