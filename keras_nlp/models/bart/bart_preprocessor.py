@@ -67,7 +67,7 @@ class BartPreprocessor(Preprocessor):
 
     Examples:
 
-    Directly calling the layer on data
+    Directly calling the layer on data.
     ```python
     preprocessor = keras_nlp.models.BartPreprocessor.from_preset("bart_base_en")
 
