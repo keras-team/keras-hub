@@ -111,8 +111,6 @@ def test_fenced_docstrings():
             "keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor",
             "keras_nlp.models.f_net.f_net_preprocessor",
             "keras_nlp.models.f_net.f_net_tokenizer",
-            "keras_nlp.models.albert.albert_preprocessor",
-            "keras_nlp.models.albert.albert_tokenizer",
             "keras_nlp.models.t5.t5_tokenizer",
         ]:
             continue
