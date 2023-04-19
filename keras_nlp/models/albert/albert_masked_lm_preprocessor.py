@@ -69,61 +69,47 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
                     out of budget. It supports an arbitrary number of segments.
 
     Examples:
+
+    Directly calling the layer on data.
     ```python
-    # Load the preprocessor from a preset.
     preprocessor = keras_nlp.models.AlbertMaskedLMPreprocessor.from_preset(
         "albert_base_en_uncased"
     )
 
     # Tokenize and mask a single sentence.
-    sentence = tf.constant("The quick brown fox jumped.")
-    preprocessor(sentence)
+    preprocessor("The quick brown fox jumped.")
 
-    # Tokenize and mask a batch of sentences.
-    sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    preprocessor(sentences)
+    # Tokenize and mask a batch of single sentences.
+    preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
 
-    # Tokenize and mask a dataset of sentences.
-    features = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
+    # Tokenize and mask sentence pairs.
+    # In this case, always convert input to tensors before calling the layer.
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+    preprocessor((first, second))
+    ```
+
+    Mapping with `tf.data.Dataset`.
+    ```python
+    preprocessor = keras_nlp.models.AlbertMaskedLMPreprocessor.from_preset(
+        "albert_base_en_uncased"
     )
-    ds = tf.data.Dataset.from_tensor_slices((features))
+
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+
+    # Map single sentences.
+    ds = tf.data.Dataset.from_tensor_slices(first)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
-    # Alternatively, you can create a preprocessor from your own vocabulary.
-    vocab_data = tf.data.Dataset.from_tensor_slices(
-        ["the quick brown fox", "the earth is round"]
+    # Map sentence pairs.
+    ds = tf.data.Dataset.from_tensor_slices((first, second))
+    # Watch out for tf.data's default unpacking of tuples here!
+    # Best to invoke the `preprocessor` directly in this case.
+    ds = ds.map(
+        lambda first, second: preprocessor(x=(first, second)),
+        num_parallel_calls=tf.data.AUTOTUNE,
     )
-
-    # Creating sentencepiece tokenizer for ALBERT LM preprocessor
-    bytes_io = io.BytesIO()
-
-    sentencepiece.SentencePieceTrainer.train(
-        sentence_iterator=vocab_data.as_numpy_iterator(),
-        model_writer=bytes_io,
-        vocab_size=12,
-        model_type="WORD",
-        pad_id=0,
-        unk_id=1,
-        bos_id=2,
-        eos_id=3,
-        pad_piece="<pad>",
-        unk_piece="<unk>",
-        bos_piece="[CLS]",
-        eos_piece="[SEP]",
-        user_defined_symbols="[MASK]"
-    )
-
-    proto = bytes_io.getvalue()
-
-    tokenizer = keras_nlp.models.AlbertTokenizer(proto=proto)
-
-    preprocessor = keras_nlp.models.AlbertMaskedLMPreprocessor(
-        tokenizer=tokenizer
-    )
-
     ```
     """
 
