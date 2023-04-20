@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""GPT2 Causal LM (Language Model)."""
+"""OPT Causal LM (Language Model)."""
 
 import copy
 
@@ -19,11 +19,11 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
-from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
-    GPT2CausalLMPreprocessor,
+from keras_nlp.models.opt.opt_backbone import OPTBackbone
+from keras_nlp.models.opt.opt_causal_lm_preprocessor import (
+    OPTCausalLMPreprocessor,
 )
-from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
+from keras_nlp.models.opt.opt_presets import backbone_presets
 from keras_nlp.models.task import Task
 from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.keras_utils import is_xla_compatible
@@ -32,13 +32,13 @@ from keras_nlp.utils.tf_utils import tensor_to_string_list
 from keras_nlp.utils.tf_utils import truncate_at_token
 
 
-@keras_nlp_export("keras_nlp.models.GPT2CausalLM")
-class GPT2CausalLM(Task):
-    """An end-to-end GPT2 model for causal langauge modeling.
+@keras_nlp_export("keras_nlp.models.OPTCausalLM")
+class OPTCausalLM(Task):
+    """An end-to-end OPT model for causal langauge modeling.
 
     A causal language model (LM) predicts the next token based on previous
-    tokens the next token based on previous tokens, which is the way GPT2 gets
-    pretrained. You can finetune `GPT2CausalLM` to generate text similar to
+    tokens the next token based on previous tokens, which is the way OPT gets
+    pretrained. You can finetune `OPTCausalLM` to generate text similar to
     the custom dataset.
 
     This model has a `generate()` method, which generates text based on a
@@ -55,11 +55,11 @@ class GPT2CausalLM(Task):
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
     third party and subject to a separate license, available
-    [here](https://github.com/openai/gpt-2).
+    [here](https://github.com/facebookresearch/fairseq/).
 
     Args:
-        backbone: A `keras_nlp.models.GPT2Backbone` instance.
-        preprocessor: A `keras_nlp.models.GPT2CausalLMPreprocessor` or `None`.
+        backbone: A `keras_nlp.models.OPTBackbone` instance.
+        preprocessor: A `keras_nlp.models.OPTCausalLMPreprocessor` or `None`.
             If `None`, this model will not apply preprocessing, and inputs
             should be preprocessed before calling the model.
 
@@ -67,21 +67,21 @@ class GPT2CausalLM(Task):
 
     Use `generate()` to do text generation.
     ```python
-    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
-    gpt2_lm.generate("I want to say", max_length=30)
+    opt_lm = keras_nlp.models.OPTCausalLM.from_preset("opt_125m_en")
+    opt_lm.generate("I want to say", max_length=30)
 
     # Generate with batched prompts.
-    gpt2_lm.generate(["This is a", "Where are you"], max_length=30)
+    opt_lm.generate(["This is a", "Where are you"], max_length=30)
     ```
 
     Compile the `generate()` function with a custom sampler.
     ```python
-    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
-    gpt2_lm.compile(sampler="greedy")
-    gpt2_lm.generate("I want to say", max_length=30)
+    opt_lm = keras_nlp.models.OPTCausalLM.from_preset("opt_125m_en")
+    opt_lm.compile(sampler="greedy")
+    opt_lm.generate("I want to say", max_length=30)
 
-    gpt2_lm.compile(sampler=keras_nlp.samplers.BeamSampler(num_beams=2))
-    gpt2_lm.generate("I want to say", max_length=30)
+    opt_lm.compile(sampler=keras_nlp.samplers.BeamSampler(num_beams=2))
+    opt_lm.generate("I want to say", max_length=30)
     ```
 
     Use `generate()` without preprocessing.
@@ -93,34 +93,34 @@ class GPT2CausalLM(Task):
         "padding_mask": tf.constant([[1, 1, 0, 0, 0]] * 2),
     }
 
-    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset(
-        "gpt2_base_en",
+    opt_lm = keras_nlp.models.OPTCausalLM.from_preset(
+        "opt_125m_en",
         preprocessor=None,
     )
-    gpt2_lm.generate(prompt)
+    opt_lm.generate(prompt)
     ```
 
     Call `fit()` on a single batch.
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]
-    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
-    gpt2_lm.fit(x=features, batch_size=2)
+    opt_lm = keras_nlp.models.OPTCausalLM.from_preset("opt_125m_en")
+    opt_lm.fit(x=features, batch_size=2)
     ```
 
     Call `fit()` without preprocessing.
     ```python
     x = {
-        "token_ids": tf.constant([[50256, 1, 2, 3, 4]] * 2),
+        "token_ids": tf.constant([[1, 2, 3, 4, 5]] * 2),
         "padding_mask": tf.constant([[1, 1, 1, 1, 1]] * 2),
     }
-    y = tf.constant([[1, 2, 3, 4, 50256]] * 2)
+    y = tf.constant([[2, 3, 4, 5, 0]] * 2)
     sw = tf.constant([[1, 1, 1, 1, 1]] * 2)
 
-    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset(
-        "gpt2_base_en",
+    opt_lm = keras_nlp.models.OPTCausalLM.from_preset(
+        "opt_base_en",
         preprocessor=None,
     )
-    gpt2_lm.fit(x=x, y=y, sample_weight=sw, batch_size=2)
+    opt_lm.fit(x=x, y=y, sample_weight=sw, batch_size=2)
     ```
 
     Custom backbone and vocabulary.
@@ -130,27 +130,27 @@ class GPT2CausalLM(Task):
     merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
     merges += ["Ġ f", "o x", "Ġf ox"]
 
-    tokenizer = keras_nlp.models.GPT2Tokenizer(
+    tokenizer = keras_nlp.models.OPTTokenizer(
         vocabulary=vocab,
         merges=merges,
     )
-    preprocessor = keras_nlp.models.GPT2CausalLMPreprocessor(
+    preprocessor = keras_nlp.models.OPTCausalLMPreprocessor(
         tokenizer=tokenizer,
         sequence_length=128,
     )
-    backbone = keras_nlp.models.GPT2Backbone(
-        vocabulary_size=30552,
+    model = keras_nlp.models.OPTBackbone(
+        vocabulary_size=50265,
         num_layers=4,
         num_heads=4,
         hidden_dim=256,
         intermediate_dim=512,
         max_sequence_length=128,
     )
-    gpt2_lm = keras_nlp.models.GPT2CausalLM(
+    opt_lm = keras_nlp.models.OPTCausalLM(
         backbone=backbone,
         preprocessor=preprocessor,
     )
-    gpt2_lm.fit(x=features, batch_size=2)
+    opt_lm.fit(x=features, batch_size=2)
     ```
     """
 
@@ -196,11 +196,11 @@ class GPT2CausalLM(Task):
 
     @classproperty
     def backbone_cls(cls):
-        return GPT2Backbone
+        return OPTBackbone
 
     @classproperty
     def preprocessor_cls(cls):
-        return GPT2CausalLMPreprocessor
+        return OPTCausalLMPreprocessor
 
     def call_with_cache(
         self,
@@ -208,7 +208,7 @@ class GPT2CausalLM(Task):
         cache,
         cache_index,
     ):
-        """Forward pass of `GPT2CausalLM` with cache.
+        """Forward pass of `OPTCausalLM` with cache.
 
         `call_with_cache` adds an additional forward pass for the model for
         autoregressive inference. Unlike calling the model directly, this method
@@ -227,14 +227,9 @@ class GPT2CausalLM(Task):
             the final hidden representation of the input tokens, and `cache` is
             the decoding cache.
         """
-        token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
-        position_embedding = self.backbone.get_layer("position_embedding")(
-            token_embedding, start_index=cache_index
+        x = self.backbone.get_layer("embeddings")(
+            token_ids, start_index=cache_index
         )
-        x = self.backbone.get_layer("embeddings_add")(
-            (token_embedding, position_embedding)
-        )
-        x = self.backbone.get_layer("embeddings_dropout")(x)
         # Each decoder layer has a cache; we update them separately.
         caches = tf.unstack(cache, axis=1)
         for i in range(self.backbone.num_layers):
@@ -250,7 +245,7 @@ class GPT2CausalLM(Task):
         hidden_states = x
         logits = tf.matmul(
             hidden_states,
-            self.backbone.get_layer("token_embedding").embeddings,
+            self.backbone.token_embedding.embeddings,
             transpose_b=True,
         )
         return logits, hidden_states, cache
@@ -371,14 +366,14 @@ class GPT2CausalLM(Task):
         This method generates text based on given `inputs`. The sampling method
         used for generation can be set in the `compile` method.
 
-        If `inputs` are a `tf.data.Dataset`, outputs will be generated
+        If `inputs` is a `tf.data.Dataset`, outputs will be generated
         "batch-by-batch" and concatenated. Otherwise, all inputs will be handled
         as a single batch.
 
         If a `preprocessor` is attached to the model, `inputs` should be
         strings and returned sequences will be strings. Otherwise, inputs should
-        be preprocessed before calling `generate()`, and returned sequences will
-        be token ids.
+        be preprocessed into token ids before calling `generate()`, and returned
+        sequences will also be token ids.
 
         Args:
             inputs: a string `tf.Tensor`, a `tf.data.Dataset` of strings, a
@@ -387,14 +382,13 @@ class GPT2CausalLM(Task):
                 `tf.Tensor` or `tf.data.Dataset` with keys `"token_ids"` and
                 `"padding_mask"`.
             max_length: Optional. int. The max length of the generated sequence.
-                Will default to the max configured `sequence_length` of the
+                Will default to the configured `sequence_length` of the
                 `preprocessor`. If `preprocessor` is `None`, `inputs` should be
-                should be padded to the desired maximum length and this argument
-                will be ignored.
+                padded to the desired max length and this argument is ignored.
 
         Returns:
             A string or string list if `preprocessor` is set, and a integer
-            tensor of token IDs if `preprocessor is None`.
+            tensor of token ids if `preprocessor is None`.
         """
         input_is_scalar = False
 
@@ -430,7 +424,7 @@ class GPT2CausalLM(Task):
         outputs = []
         for batch in inputs:
             token_ids, padding_mask = batch["token_ids"], batch["padding_mask"]
-            # If `preprocessor` is attached, we can stop after end_token_id.
+            # If `preprocessor` is attached, we can stop after `end_token_id``.
             end_token_id = None
             if self.preprocessor is not None:
                 end_token_id = self.preprocessor.tokenizer.end_token_id
