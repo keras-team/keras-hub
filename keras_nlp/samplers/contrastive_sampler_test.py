@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Top-K sampler."""
+"""Tests for Contrastive Sampler."""
 
 import tensorflow as tf
 from absl.testing import parameterized
@@ -45,7 +45,7 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
             return logits, hidden_states, cache
 
         self.next = next
-        self.sampler = ContrastiveSampler(k=5, alpha=0.2)
+        self.sampler = ContrastiveSampler(k=5, alpha=0.2, temperature=1.0)
 
     def join_as_string(self, x):
         return ["".join([self.int_lookup[i] for i in s]) for s in x.numpy()]
