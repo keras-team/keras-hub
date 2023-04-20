@@ -52,10 +52,6 @@ def test_docstrings():
     runner = unittest.TextTestRunner()
     suite = unittest.TestSuite()
     for module in keras_nlp_modules:
-        # Temporarily stop testing gpt2 & deberta docstrings until we are
-        # exporting the symbols.
-        if "gpt2" in module.__name__ or "deberta_v3" in module.__name__:
-            continue
         suite.addTest(
             doctest.DocTestSuite(
                 module,
@@ -98,23 +94,6 @@ def test_fenced_docstrings():
     runner = unittest.TextTestRunner()
     suite = unittest.TestSuite()
     for module in keras_nlp_modules:
-        # Do not test certain modules.
-        if module.__name__ in [
-            # Base classes.
-            "keras_nlp.models.backbone",
-            "keras_nlp.models.preprocessor",
-            "keras_nlp.models.task",
-            "keras_nlp.tokenizers.byte_pair_tokenizer",
-            "keras_nlp.tokenizers.sentence_piece_tokenizer",
-            "keras_nlp.tokenizers.word_piece_tokenizer",
-            # Preprocessors and tokenizers which use `model.spm` (temporary).
-            "keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor",
-            "keras_nlp.models.f_net.f_net_preprocessor",
-            "keras_nlp.models.f_net.f_net_tokenizer",
-            "keras_nlp.models.t5.t5_tokenizer",
-        ]:
-            continue
-
         suite.addTest(
             doctest.DocTestSuite(
                 module,
