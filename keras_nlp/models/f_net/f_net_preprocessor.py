@@ -69,10 +69,8 @@ class FNetPreprocessor(Preprocessor):
 
     Directly calling the from_preset().
     ```python
-    tokenizer = keras_nlp.models.FNetTokenizer(proto="model.spm")
-    preprocessor = keras_nlp.models.FNetPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=10,
+    preprocessor = keras_nlp.models.FNetPreprocessor.from_preset(
+        "f_net_base_en"
     )
 
     # Tokenize and pack a single sentence.
@@ -86,10 +84,6 @@ class FNetPreprocessor(Preprocessor):
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
     preprocessor((first, second))
-
-
-    preprocessor = keras_nlp.models.FNetPreprocessor(tokenizer)
-    preprocessor("The quick brown fox jumped.")
     ```
 
     Mapping with `tf.data.Dataset`.

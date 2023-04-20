@@ -74,6 +74,8 @@ class XLMRobertaPreprocessor(Preprocessor):
         sample_weight: Any label weight data. Will be passed through unaltered.
 
     Examples:
+
+    Directly calling the layer on data.
     ```python
     preprocessor = keras_nlp.models.XLMRobertaPreprocessor.from_preset(
         "xlm_roberta_base_multi"

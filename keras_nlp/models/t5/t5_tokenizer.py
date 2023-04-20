@@ -43,7 +43,25 @@ class T5Tokenizer(SentencePieceTokenizer):
     Examples:
 
     ```python
-    tokenizer = keras_nlp.models.T5Tokenizer(proto="model.spm")
+    bytes_io = io.BytesIO()
+    ds = tf.data.Dataset.from_tensor_slices(["The quick brown fox jumped."])
+    sentencepiece.SentencePieceTrainer.train(
+        sentence_iterator=ds.as_numpy_iterator(),
+        model_writer=bytes_io,
+        vocab_size=8,
+        model_type="WORD",
+        bos_id=-1,
+        pad_id=0,
+        eos_id=1,
+        unk_id=2,
+        pad_piece="<pad>",
+        eos_piece="</s>",
+        unk_piece="<unk>",
+    )
+    tokenizer = keras_nlp.models.T5Tokenizer(
+        proto=bytes_io.getvalue(),
+    )
+    tokenizer("The quick brown fox jumped.")
 
     # Batched inputs.
     tokenizer(["the quick brown fox", "the earth is round"])
@@ -52,7 +70,7 @@ class T5Tokenizer(SentencePieceTokenizer):
     tokenizer("the quick brown fox")
 
     # Detokenization.
-    tokenizer.detokenize(tf.constant([[2, 14, 2231, 886, 2385, 3]]))
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
     ```
     """
 

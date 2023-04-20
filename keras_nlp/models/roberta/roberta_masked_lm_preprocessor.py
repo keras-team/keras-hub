@@ -75,6 +75,8 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
             generates label weights.
 
     Examples:
+
+    Directly calling the layer on data.
     ```python
     # Load the preprocessor from a preset.
     preprocessor = keras_nlp.models.RobertaMaskedLMPreprocessor.from_preset(
