@@ -30,6 +30,10 @@ from keras_nlp.models.opt.opt_tokenizer import OPTTokenizer
 
 class OPTCausalLMTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
+        # For DTensor.
+        keras.backend.experimental.enable_tf_random_generator()
+        keras.utils.set_random_seed(1337)
+
         self.vocab = {
             "<pad>": 0,
             "</s>": 1,
@@ -153,3 +157,8 @@ class OPTCausalLMTest(tf.test.TestCase, parameterized.TestCase):
         keras.utils.set_random_seed(42)
         restored_output = restored_model.predict(self.raw_batch)
         self.assertAllClose(model_output, restored_output)
+
+    def test_create_layout_map(self):
+        mesh = tf.experimental.dtensor.create_mesh([("batch", 1), ("model", 1)])
+        with OPTCausalLM.create_layout_map(mesh).scope():
+            OPTCausalLM(backbone=self.backbone)
