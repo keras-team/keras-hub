@@ -241,7 +241,7 @@ class GPT2CausalLM(Task):
             current_cache = caches[i]
             x, next_cache = self.backbone.get_layer(f"transformer_layer_{i}")(
                 x,
-                cache=current_cache,
+                self_attention_cache=current_cache,
                 cache_index=cache_index,
             )
             caches[i] = next_cache
