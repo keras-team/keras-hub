@@ -77,6 +77,10 @@ class BartBackbone(Backbone):
         ),
     }
 
+    # Pretrained BART encoder.
+    model = keras_nlp.models.BartBackbone.from_preset("bart_base_en")
+    model(input_data)
+
     # Randomly initialized BART encoder-decoder model with a custom config
     model = keras_nlp.models.BartBackbone(
         vocabulary_size=50265,

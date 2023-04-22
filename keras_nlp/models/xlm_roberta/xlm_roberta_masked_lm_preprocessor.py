@@ -1,4 +1,4 @@
-# Copyright 2022 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,23 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""RoBERTa masked language model preprocessor layer."""
+"""XLM-RoBERTa masked language model preprocessor layer."""
 
 from absl import logging
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
-from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
+from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
+    XLMRobertaPreprocessor,
+)
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.RobertaMaskedLMPreprocessor")
-class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
-    """RoBERTa preprocessing for the masked language modeling task.
+@keras_nlp_export("keras_nlp.models.XLMRobertaMaskedLMPreprocessor")
+class XLMRobertaMaskedLMPreprocessor(XLMRobertaPreprocessor):
+    """XLM-RoBERTa preprocessing for the masked language modeling task.
 
     This preprocessing layer will prepare inputs for a masked language modeling
     task. It is primarily intended for use with the
-    `keras_nlp.models.RobertaMaskedLM` task model. Preprocessing will occur in
+    `keras_nlp.models.XLMRobertaMaskedLM` task model. Preprocessing will occur in
     multiple steps.
 
     1. Tokenize any number of input segments using the `tokenizer`.
@@ -39,10 +41,10 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
     3. Randomly select non-special tokens to mask, controlled by
       `mask_selection_rate`.
     4. Construct a `(x, y, sample_weight)` tuple suitable for training with a
-      `keras_nlp.models.RobertaMaskedLM` task model.
+      `keras_nlp.models.XLMRobertaMaskedLM` task model.
 
     Args:
-        tokenizer: A `keras_nlp.models.RobertaTokenizer` instance.
+        tokenizer: A `keras_nlp.models.XLMRobertaTokenizer` instance.
         sequence_length: int. The length of the packed inputs.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
@@ -79,16 +81,14 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
     Directly calling the layer on data.
     ```python
     # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.RobertaMaskedLMPreprocessor.from_preset(
-        "roberta_base_en"
+    preprocessor = keras_nlp.models.XLMRobertaMaskedLMPreprocessor.from_preset(
+        "xlm_roberta_base_multi"
     )
 
     # Tokenize and mask a single sentence.
     preprocessor("The quick brown fox jumped.")
-
     # Tokenize and mask a batch of single sentences.
     preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
-
     # Tokenize and mask sentence pairs.
     # In this case, always convert input to tensors before calling the layer.
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
@@ -98,10 +98,9 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
 
     Mapping with `tf.data.Dataset`.
     ```python
-    preprocessor = keras_nlp.models.RobertaMaskedLMPreprocessor.from_preset(
-        "roberta_base_en"
+    preprocessor = keras_nlp.models.XLMRobertaMaskedLMPreprocessor.from_preset(
+        "xlm_roberta_base_multi"
     )
-
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     second = tf.constant(["The fox tripped.", "Oh look, a whale."])
 
@@ -117,6 +116,7 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
         lambda first, second: preprocessor(x=(first, second)),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
+    ```
     ```
     """
 

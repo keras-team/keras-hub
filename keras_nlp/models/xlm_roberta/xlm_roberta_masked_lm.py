@@ -11,8 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-"""ALBERT masked LM model."""
+"""XLM-RoBERTa masked lm model."""
 
 import copy
 
@@ -20,22 +19,22 @@ from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.masked_lm_head import MaskedLMHead
-from keras_nlp.models.albert.albert_backbone import AlbertBackbone
-from keras_nlp.models.albert.albert_backbone import albert_kernel_initializer
-from keras_nlp.models.albert.albert_masked_lm_preprocessor import (
-    AlbertMaskedLMPreprocessor,
-)
-from keras_nlp.models.albert.albert_presets import backbone_presets
+from keras_nlp.models.roberta.roberta_backbone import roberta_kernel_initializer
 from keras_nlp.models.task import Task
+from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
+from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import (
+    XLMRobertaMaskedLMPreprocessor,
+)
+from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
 from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.AlbertMaskedLM")
-class AlbertMaskedLM(Task):
-    """An end-to-end ALBERT model for the masked language modeling task.
+@keras_nlp_export("keras_nlp.models.XLMRobertaMaskedLM")
+class XLMRobertaMaskedLM(Task):
+    """An end-to-end XLM-RoBERTa model for the masked language modeling task.
 
-    This model will train ALBERT on a masked language modeling task.
+    This model will train XLM-RoBERTa on a masked language modeling task.
     The model will predict labels for a number of masked tokens in the
     input data. For usage of this model with pre-trained weights, see the
     `from_preset()` method.
@@ -47,25 +46,30 @@ class AlbertMaskedLM(Task):
     with `from_preset()`.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
-    warranties or conditions of any kind.
+    warranties or conditions of any kind. The underlying model is provided by a
+    third party and subject to a separate license, available
+    [here](https://github.com/facebookresearch/fairseq).
 
     Args:
-        backbone: A `keras_nlp.models.AlbertBackbone` instance.
-        preprocessor: A `keras_nlp.models.AlbertMaskedLMPreprocessor` or
+        backbone: A `keras_nlp.models.XLMRobertaBackbone` instance.
+        preprocessor: A `keras_nlp.models.XLMRobertaMaskedLMPreprocessor` or
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
 
     Example usage:
 
-    Raw string data.
+    Raw string inputs and pretrained backbone.
     ```python
+    # Create a dataset with raw string features. Labels are inferred.
     features = ["The quick brown fox jumped.", "I forgot my homework."]
 
-    # Pretrained language model.
-    masked_lm = keras_nlp.models.AlbertMaskedLM.from_preset(
-        "albert_base_en_uncased",
+    # Pretrained language model
+    # on an MLM task.
+    masked_lm = keras_nlp.models.XLMRobertaMaskedLM.from_preset(
+        "xlm_roberta_base_multi",
     )
     masked_lm.fit(x=features, batch_size=2)
+    ```
 
     # Re-compile (e.g., with a new learning rate).
     masked_lm.compile(
@@ -81,7 +85,7 @@ class AlbertMaskedLM(Task):
 
     Preprocessed integer data.
     ```python
-    # Create preprocessed batch where 0 is the mask token.
+    # Create a preprocessed dataset where 0 is the mask token.
     features = {
         "token_ids": tf.constant(
             [[1, 2, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
@@ -89,46 +93,49 @@ class AlbertMaskedLM(Task):
         "padding_mask": tf.constant(
             [[1, 1, 1, 1, 1, 1, 1, 1]] * 2, shape=(2, 8)
         ),
-        "mask_positions": tf.constant([[2, 4]] * 2, shape=(2, 2)),
-        "segment_ids": tf.constant([[0, 0, 0, 0, 0, 0, 0, 0]] * 2, shape=(2, 8))
+        "mask_positions": tf.constant([[2, 4]] * 2, shape=(2, 2))
     }
     # Labels are the original masked values.
     labels = [[3, 5]] * 2
 
-    masked_lm = keras_nlp.models.AlbertMaskedLM.from_preset(
-        "albert_base_en_uncased",
+    masked_lm = keras_nlp.models.XLMRobertaMaskedLM.from_preset(
+        "xlm_roberta_base_multi",
         preprocessor=None,
     )
+
     masked_lm.fit(x=features, y=labels, batch_size=2)
     ```
     """
 
-    def __init__(self, backbone, preprocessor=None, **kwargs):
+    def __init__(
+        self,
+        backbone,
+        preprocessor=None,
+        **kwargs,
+    ):
         inputs = {
             **backbone.input,
             "mask_positions": keras.Input(
                 shape=(None,), dtype="int32", name="mask_positions"
             ),
         }
-
         backbone_outputs = backbone(backbone.input)
         outputs = MaskedLMHead(
             vocabulary_size=backbone.vocabulary_size,
             embedding_weights=backbone.token_embedding.embeddings,
-            intermediate_activation=lambda x: keras.activations.gelu(
-                x, approximate=True
-            ),
-            kernel_initializer=albert_kernel_initializer(),
+            intermediate_activation="gelu",
+            kernel_initializer=roberta_kernel_initializer(),
             name="mlm_head",
-        )(backbone_outputs["sequence_output"], inputs["mask_positions"])
+        )(backbone_outputs, inputs["mask_positions"])
 
+        # Instantiate using Functional API Model constructor.
         super().__init__(
             inputs=inputs,
             outputs=outputs,
             include_preprocessing=preprocessor is not None,
-            **kwargs
+            **kwargs,
         )
-
+        # All references to `self` below this line
         self.backbone = backbone
         self.preprocessor = preprocessor
 
@@ -141,11 +148,11 @@ class AlbertMaskedLM(Task):
 
     @classproperty
     def backbone_cls(cls):
-        return AlbertBackbone
+        return XLMRobertaBackbone
 
     @classproperty
     def preprocessor_cls(cls):
-        return AlbertMaskedLMPreprocessor
+        return XLMRobertaMaskedLMPreprocessor
 
     @classproperty
     def presets(cls):

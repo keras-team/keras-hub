@@ -67,18 +67,10 @@ class Preprocessor(keras.layers.Layer):
 
         Examples:
         ```python
-        # Load preprocessor from preset
+        # Load a preprocessor layer from a preset.
         preprocessor = keras_nlp.models.{{preprocessor_name}}.from_preset(
             "{{example_preset_name}}",
         )
-        preprocessor("The quick brown fox jumped.")
-
-        # Override sequence_length
-        preprocessor = keras_nlp.models.{{preprocessor_name}}.from_preset(
-            "{{example_preset_name}}",
-            sequence_length=64
-        )
-        preprocessor("The quick brown fox jumped.")
         ```
         """
         if not cls.presets:

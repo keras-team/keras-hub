@@ -52,38 +52,30 @@ class BartTokenizer(BytePairTokenizer):
 
     Examples:
 
-    Batched inputs.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab, merges=merges
-    ... )
-    >>> tokenizer(["a quick fox", "a fox quick"])
-    <tf.RaggedTensor [[4, 5, 6], [4, 6, 5]]>
+    ```python
+    # Unbatched input.
+    tokenizer = keras_nlp.models.BartTokenizer.from_preset(
+        "bart_base_en",
+    )
+    tokenizer("The quick brown fox jumped.")
 
-    Unbatched input.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab, merges=merges
-    ... )
-    >>> tokenizer("a quick fox")
-    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([4, 5, 6], dtype=int32)>
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
 
-    Detokenization.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab, merges=merges
-    ... )
-    >>> tokenizer.detokenize(tokenizer("a quick fox")).numpy().decode('utf-8')
-    'a quick fox'
+    # Detokenization.
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
+
+    # Custom vocabulary.
+    vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    merges += ["Ġ f", "o x", "Ġf ox"]
+    tokenizer = keras_nlp.models.BartTokenizer(
+        vocabulary=vocab,
+        merges=merges,
+    )
+    tokenizer("The quick brown fox jumped.")
+    ```
     """
 
     def __init__(

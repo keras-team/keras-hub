@@ -71,75 +71,77 @@ class DebertaV3Preprocessor(Preprocessor):
                     out of budget. It supports an arbitrary number of segments.
 
     Examples:
+    Directly calling the layer on data.
     ```python
-    # Load the preprocessor from a preset.
-    preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset("deberta_v3_base_en")
+    preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset(
+        "deberta_v3_base_en"
+    )
 
     # Tokenize and pack a single sentence.
-    sentence = tf.constant("The quick brown fox jumped.")
-    preprocessor(sentence)
-    # Same output.
     preprocessor("The quick brown fox jumped.")
 
-    # Tokenize and a batch of single sentences.
-    sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
+    # Tokenize a batch of single sentences.
+    preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
+
+    # Preprocess a batch of sentence pairs.
+    # When handling multiple sequences, always convert to tensors first!
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+    preprocessor((first, second))
+
+    # Custom vocabulary.
+    bytes_io = io.BytesIO()
+    ds = tf.data.Dataset.from_tensor_slices(["The quick brown fox jumped."])
+    sentencepiece.SentencePieceTrainer.train(
+        sentence_iterator=ds.as_numpy_iterator(),
+        model_writer=bytes_io,
+        vocab_size=9,
+        model_type="WORD",
+        pad_id=0,
+        bos_id=1,
+        eos_id=2,
+        unk_id=3,
+        pad_piece="[PAD]",
+        bos_piece="[CLS]",
+        eos_piece="[SEP]",
+        unk_piece="[UNK]",
     )
-    preprocessor(sentences)
-    # Same output.
-    preprocessor(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
+    tokenizer = keras_nlp.models.DebertaV3Tokenizer(
+        proto=bytes_io.getvalue(),
+    )
+    preprocessor = keras_nlp.models.DebertaV3Preprocessor(tokenizer)
+    preprocessor("The quick brown fox jumped.")
+    ```
+
+    Mapping with `tf.data.Dataset`.
+    ```python
+    preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset(
+        "deberta_v3_base_en"
     )
 
-    # Tokenize and pack a sentence pair.
-    first_sentence = tf.constant("The quick brown fox jumped.")
-    second_sentence = tf.constant("The fox tripped.")
-    preprocessor((first_sentence, second_sentence))
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+    label = tf.constant([1, 1])
 
-    # Map a dataset to preprocess a single sentence.
-    features = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    labels = tf.constant([0, 1])
-    ds = tf.data.Dataset.from_tensor_slices((features, labels))
+    # Map labeled single sentences.
+    ds = tf.data.Dataset.from_tensor_slices((first, label))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
-    # Map a dataset to preprocess sentence pairs.
-    first_sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    second_sentences = tf.constant(
-        ["The fox tripped.", "Oh look, a whale."]
-    )
-    labels = tf.constant([1, 1])
-    ds = tf.data.Dataset.from_tensor_slices(
-        (
-            (first_sentences, second_sentences), labels
-        )
-    )
+    # Map unlabeled single sentences.
+    ds = tf.data.Dataset.from_tensor_slices(first)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
-    # Map a dataset to preprocess unlabeled sentence pairs.
-    first_sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    second_sentences = tf.constant(
-        ["The fox tripped.", "Oh look, a whale."]
-    )
-    ds = tf.data.Dataset.from_tensor_slices((first_sentences, second_sentences))
+    # Map labeled sentence pairs.
+    ds = tf.data.Dataset.from_tensor_slices(((first, second), label))
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map unlabeled sentence pairs.
+    ds = tf.data.Dataset.from_tensor_slices((first, second))
     # Watch out for tf.data's default unpacking of tuples here!
     # Best to invoke the `preprocessor` directly in this case.
     ds = ds.map(
-        lambda s1, s2: preprocessor(x=(s1, s2)),
+        lambda first, second: preprocessor(x=(first, second)),
         num_parallel_calls=tf.data.AUTOTUNE,
-    )
-
-    # Alternatively, you can create a preprocessor from your own vocabulary.
-    # The usage is the exactly same as above.
-    tokenizer = keras_nlp.models.DebertaV3Tokenizer(proto="model.spm")
-    preprocessor = keras_nlp.models.DebertaV3Preprocessor(
-        tokenizer=tokenizer,
-        sequence_length=10,
     )
     ```
     """
