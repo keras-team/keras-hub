@@ -23,12 +23,13 @@ from keras_nlp.api_export import keras_nlp_export
 class CachedMultiHeadCrossAttention(keras.layers.MultiHeadAttention):
     """Multi-head cross-attention layer with cache support.
 
-    In autoregressive decoding, it's a common practice to cache the key/value in
-    multi-head attention of previously seen tokens in order to make the
-    computation faster. With cached K and V, we can compute the attention output
-    of the last token without recomputing the forward pass for previously seen
-    tokens. This caching method is only useful during decoding, and should not
-    be used during training.
+
+    In seq2seq text generation, it is common practice to cache the key/value
+    pairs of the encoder outputs in the cross-attention layer of the decoder.
+    With cached key/ value pairs, we only need to do one forward pass on the
+    encoder and don't have to recompute the encoder key/value pairs for every
+    decoder step. Caching is only useful during decoding, and should not be used
+    during training.
 
     Call arguments:
         query: Query `Tensor` of shape `(B, T, dim)` if `cache=None`,
@@ -44,8 +45,12 @@ class CachedMultiHeadCrossAttention(keras.layers.MultiHeadAttention):
             query elements can attend to which key elements, 1 indicates
             attention and 0 indicates no attention. Broadcasting can happen for
             the missing batch dimensions and the head dimension.
-        cache: a dense float Tensor. The cache of key/value of leading tokens.
-            `cache` is of shape [B, 2, max_seq_len, num_heads, key_dims].
+        cache: a dense float Tensor. The key/value cache of encoder outputs.
+            `cache` is of shape `[B, 2, S, num_heads, key_dims]`.
+        compute_cache: boolean. Whether to compute the cache. This is useful
+        when `cache = None` and `compute_cache = True` for the first decoder
+        forward pass. If `cache` is not `None` and `compute_cache` is `True`,
+        we do not recompute the cache.
 
     Returns:
         An (attention_output, cache) tuple. `attention_output` is the result of

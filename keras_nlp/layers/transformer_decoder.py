@@ -225,7 +225,7 @@ class TransformerDecoder(keras.layers.Layer):
         Args:
             decoder_sequence: a Tensor. The decoder input sequence.
             encoder_sequence: a Tensor. The encoder input sequence. For decoder
-                only models (like GPT2), this should be left None. Once the
+                only models (like GPT2), this should be left `None`. Once the
                 model is called once without an encoder_sequence, you cannot
                 call it again with encoder_sequence.
             decoder_padding_mask: a boolean Tensor, the padding mask of decoder
@@ -241,11 +241,26 @@ class TransformerDecoder(keras.layers.Layer):
             self_attention_cache: a dense float Tensor. The cache of key/value of leading
                 tokens. `cache` is of shape [B, 2, max_seq_len, num_heads,
                 key_dims].
-            cache_index: a int or int Tensor, the index of the current token
+            cache_index: an int or int Tensor, the index of the current token
                 being processed.
+            cross_attention_cache: a dense float Tensor. The cache of
+                key/value pairs of encoder outputs. `cache` is of shape
+                `[B, 2, S, num_heads, key_dims]`.
+            compute_cross_attention_cache: a boolean. Whether to compute the
+                cross-attention cache. This is useful when
+                `cross_attention_cache = None` and
+                `compute_cross_attention_cache = True` for the first decoder
+                forward pass. If `cross_attention_cache` is not `None` and
+                `compute_cross_attention_cache` is `True`, we do not recompute
+                the cache.
         Returns:
-            Either a tuple of (outputs, cache) if a cache was passed, or a
-            single value outputs if a cache was not passed.
+            If the layer does not have a cross-attention layer, returns a tuple
+            of `(outputs, self_attention_cache)` if `self_attention_cache` is
+            not `None`, or single value `outputs` if `self_attention_cache`
+            is `None`. If the layer has a cross-attention layer, returns a
+            tuple of `(outputs, self_attention_cache, cross_attention_cache)`
+            if either/both `self_attention_cache` or `cross_attention_cache`
+            is/are not `None`; otherwise, returns single value `outputs`.
         """
 
         has_encoder_sequence = encoder_sequence is not None
