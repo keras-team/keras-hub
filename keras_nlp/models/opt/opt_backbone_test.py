@@ -106,6 +106,11 @@ class OPTTest(tf.test.TestCase, parameterized.TestCase):
                 intermediate_dim=4,
                 max_sequence_length=5,
             )
+        # Using DTensor enables the mlir bridge as a side effect. Eventually
+        # this will be default, but for now we have compile errors with the
+        # bridge elsewhere and must disable. See
+        # https://github.com/keras-team/keras-nlp/issues/1001
+        tf.config.experimental.disable_mlir_bridge()
 
 
 @pytest.mark.tpu
