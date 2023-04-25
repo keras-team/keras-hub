@@ -27,4 +27,4 @@ from keras_nlp import samplers
 from keras_nlp import tokenizers
 from keras_nlp import utils
 
-__version__ = "0.5.0"
+__version__ = "0.5.0.dev0"
