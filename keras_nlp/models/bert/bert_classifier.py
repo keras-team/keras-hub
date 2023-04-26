@@ -166,7 +166,7 @@ class BertClassifier(Task):
         self.backbone = backbone
         self.preprocessor = preprocessor
         self.num_classes = num_classes
-        self.activation = activation
+        self.activation = keras.activations.get(activation)
         self.dropout = dropout
 
         # Default compilation
@@ -184,7 +184,7 @@ class BertClassifier(Task):
         config.update(
             {
                 "num_classes": self.num_classes,
-                "activation": self.activation,
+                "activation": keras.activations.serialize(self.activation),
                 "dropout": self.dropout,
             }
         )

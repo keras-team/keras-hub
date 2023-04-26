@@ -189,7 +189,7 @@ class XLMRobertaClassifier(Task):
         self.backbone = backbone
         self.preprocessor = preprocessor
         self.num_classes = num_classes
-        self.activation = activation
+        self.activation = keras.activations.get(activation)
         self.hidden_dim = hidden_dim
         self.dropout = dropout
 
@@ -210,7 +210,7 @@ class XLMRobertaClassifier(Task):
         config.update(
             {
                 "num_classes": self.num_classes,
-                "activation": self.activation,
+                "activation": keras.activations.serialize(self.activation),
                 "hidden_dim": self.hidden_dim,
                 "dropout": self.dropout,
             }
