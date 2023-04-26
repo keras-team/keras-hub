@@ -29,7 +29,7 @@ class GreedySampler(Sampler):
     This sampler is implemented on greedy search, i.e., always picking up the
     token of the largest probability as the next token.
 
-    Call Args:
+    Call arguments:
         {{call_args}}
 
     Examples:

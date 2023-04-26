@@ -34,7 +34,7 @@ class TopKSampler(Sampler):
         k: int, the `k` value of top-k.
         seed: int, defaults to None. The random seed.
 
-    Call Args:
+    Call arguments:
         {{call_args}}
 
     Examples:
