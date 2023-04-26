@@ -64,7 +64,7 @@ def pytest_addoption(parser):
         "--docstring_module",
         action="store",
         default="",
-        help="restrict docs testing to modules who's name matches this flag",
+        help="restrict docs testing to modules whose name matches this flag",
     )
 
 
