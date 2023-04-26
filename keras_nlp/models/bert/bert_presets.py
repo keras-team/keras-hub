@@ -304,6 +304,7 @@ classifier_presets = {
             },
             "num_classes": 2,
             "dropout": 0.1,
+            "activation": None,
         },
         "preprocessor_config": {
             "lowercase": True,

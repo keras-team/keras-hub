@@ -139,6 +139,19 @@ class Task(PipelineModel):
         # Otherwise must be one of class presets
         metadata = cls.presets[preset]
         config = metadata["config"]
+        if (
+            "activation" in config
+            and "activation" in kwargs
+            and config["activation"] != kwargs["activation"]
+        ):
+            config_activation = config["activation"]
+            kwargs_activation = kwargs["activation"]
+            raise ValueError(
+                f"`activation` cannot be changed for preset '{preset}' which "
+                f"was trained with `activation` of `{config_activation}`. "
+                "Please do not specify the argument. Received `activation` of "
+                f"`{kwargs_activation}`"
+            )
         model = cls.from_config({**config, **kwargs})
 
         if not load_weights:
