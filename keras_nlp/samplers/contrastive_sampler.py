@@ -41,7 +41,7 @@ class ContrastiveSampler(Sampler):
             on the similarity than the token probability.
         seed: int, defaults to None. The random seed.
 
-    Call Args:
+    Call arguments:
         {{call_args}}
 
     Examples:
