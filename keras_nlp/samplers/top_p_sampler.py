@@ -42,7 +42,7 @@ class TopPSampler(Sampler):
             of tokens to sort.
         seed: int, defaults to None. The random seed.
 
-    Call Args:
+    Call arguments:
         {{call_args}}
 
     Examples:
