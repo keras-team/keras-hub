@@ -134,7 +134,7 @@ class FNetClassifier(Task):
         self.backbone = backbone
         self.preprocessor = preprocessor
         self.num_classes = num_classes
-        self.activation = activation
+        self.activation = keras.activations.get(activation)
         self.dropout = dropout
 
         self.compile(
@@ -152,7 +152,7 @@ class FNetClassifier(Task):
             {
                 "num_classes": self.num_classes,
                 "dropout": self.dropout,
-                "activation": self.activation,
+                "activation": keras.activations.serialize(self.activation),
             }
         )
         return config

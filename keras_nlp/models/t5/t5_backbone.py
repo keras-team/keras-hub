@@ -211,7 +211,7 @@ class T5Backbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
-        self.activation = activation
+        self.activation = keras.activations.get(activation)
         self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
 
@@ -224,7 +224,7 @@ class T5Backbone(Backbone):
                 "intermediate_dim": self.intermediate_dim,
                 "num_layers": self.num_layers,
                 "num_heads": self.num_heads,
-                "activation": self.activation,
+                "activation": keras.activations.serialize(self.activation),
                 "dropout": self.dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
             }

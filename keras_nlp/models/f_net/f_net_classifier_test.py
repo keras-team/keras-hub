@@ -69,7 +69,8 @@ class FNetClassifierTest(tf.test.TestCase, parameterized.TestCase):
             self.backbone,
             num_classes=4,
             preprocessor=self.preprocessor,
-            activation="softmax",
+            # Check we handle serialization correctly.
+            activation=keras.activations.softmax,
         )
 
         # Setup data.
