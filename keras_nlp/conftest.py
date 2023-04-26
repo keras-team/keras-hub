@@ -60,6 +60,12 @@ def pytest_addoption(parser):
         default=False,
         help="run with mixed precision",
     )
+    parser.addoption(
+        "--docstring_module",
+        action="store",
+        default="",
+        help="restrict docs testing to modules whose name matches this flag",
+    )
 
 
 def pytest_configure(config):
