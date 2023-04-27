@@ -14,11 +14,12 @@
 
 """T5 tokenizer."""
 
-from keras_nlp.api_export import keras_nlp_export
+from tensorflow import keras
+
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.T5Tokenizer")
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class T5Tokenizer(SentencePieceTokenizer):
     """T5 tokenizer layer based on SentencePiece.
 
