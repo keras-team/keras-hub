@@ -15,13 +15,13 @@
 """BART Seq2Seq LM preprocessor layer."""
 
 from absl import logging
+from tensorflow import keras
 
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.bart.bart_preprocessor import BartPreprocessor
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.BartSeq2SeqLMPreprocessor")
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class BartSeq2SeqLMPreprocessor(BartPreprocessor):
     """BART Seq2Seq LM preprocessor.
 
