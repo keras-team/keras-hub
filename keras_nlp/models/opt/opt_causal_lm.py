@@ -453,10 +453,10 @@ class OPTCausalLM(Task):
 
     @classmethod
     def create_layout_map(cls, mesh):
-        """Create a DTensor layout map for an OPTCasualLM.
+        """Create a DTensor layout map for an OPTCausalLM.
 
         Given a DTensor mesh describing a list of devices, this method returns a
-        DTensor layout map for creating a `keras_nlp.models.OPTCasualLM`
+        DTensor layout map for creating a `keras_nlp.models.OPTCausalLM`
         instance. This mapping describes how to distribute all model weights
         across multiple devices. For an overview of DTensor concepts, see
         [this guide](https://www.tensorflow.org/guide/dtensor_overview).
@@ -477,11 +477,11 @@ class OPTCausalLM(Task):
         keras.utils.set_random_seed(1337)
 
         # Update both dimensions below for a multi-device setting.
-        mesh = dtensor.create_mesh([("batch", 1), ("model", 1)])
-        layout_map = keras_nlp.models.OPTCasualLM.create_layout_map(mesh)
+        mesh = tf.experimental.dtensor.create_mesh([("batch", 1), ("model", 1)])
+        layout_map = keras_nlp.models.OPTCausalLM.create_layout_map(mesh)
 
         with layout_map.scope():
-            opt_lm = keras_nlp.models.OPTCasualLM.from_preset("opt_125m_en")
+            opt_lm = keras_nlp.models.OPTCausalLM.from_preset("opt_125m_en")
         ```
         """
         # As this task has no new variables, we just re-use the backbone method.

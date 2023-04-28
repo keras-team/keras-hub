@@ -205,7 +205,7 @@ class OPTBackbone(Backbone):
         layout_map = keras_nlp.models.OPTBackbone.create_layout_map(mesh)
 
         with layout_map.scope():
-            opt_lm = keras_nlp.models.OPTBackbone.from_preset("opt_125m_en")
+            model = keras_nlp.models.OPTBackbone.from_preset("opt_125m_en")
         ```
         """
         # We assert the mesh is 2D, and assume the first mesh dim is for data
