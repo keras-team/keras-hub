@@ -34,7 +34,7 @@ class GPT2Preprocessor(Preprocessor):
 
     This preprocessing layer will do 2 things:
 
-    - Tokenize the input using the `tokenizer`.
+    - Tokenize the inputs using the `tokenizer`.
     - Construct a dictionary with keys `"token_ids"`, `"padding_mask"`, that can
         be passed directly to a `keras_nlp.models.GPT2Backbone`.
 
@@ -57,20 +57,20 @@ class GPT2Preprocessor(Preprocessor):
     Args:
         tokenizer: A `keras_nlp.models.GPT2Tokenizer` instance.
         sequence_length: The length of the packed inputs.
-        add_start_token: If true, the preprocessor will append the tokenizer
+        add_start_token: If true, the preprocessor will prepend the tokenizer
             start token to each input sequence.
         add_end_token: If true, the preprocessor will append the tokenizer
             end token to each input sequence.
 
     Call arguments:
-        x: A string `tf.Tensor` or list of python strings.
+        x: A string, `tf.Tensor` or list of python strings.
         y: Any label data. Will be passed through unaltered.
         sample_weight: Any label weight data. Will be passed through unaltered.
         sequence_length: Pass to override the configured `sequence_length` of
             the layer.
-        add_start_token: Pass to override the configure value of
+        add_start_token: Pass to override the configured value of
             `add_start_token` on the layer.
-        add_end_token: Pass to override the configure value of
+        add_end_token: Pass to override the configured value of
             `add_end_token` on the layer.
 
     Examples:

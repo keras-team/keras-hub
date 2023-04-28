@@ -37,9 +37,8 @@ class OPTCausalLM(Task):
     """An end-to-end OPT model for causal langauge modeling.
 
     A causal language model (LM) predicts the next token based on previous
-    tokens the next token based on previous tokens, which is the way OPT gets
-    pretrained. You can finetune `OPTCausalLM` to generate text similar to
-    the custom dataset.
+    tokens, which is the way OPT gets pretrained. You can finetune
+    `OPTCausalLM` to generate text similar to the custom dataset.
 
     This model has a `generate()` method, which generates text based on a
     prompt. The generation strategy used is controlled by an additional
