@@ -36,7 +36,8 @@ call_args_docstring = """next: A function which takes in the
             sequence in `prompt`.
         mask: Optional. A 2D integer tensor with the same shape as `prompt`.
             Locations which are `True` in the mask are never updated during
-            sampling. Often non-padding tokens in `prompt` are `True` in `mask`.
+            sampling. Usually used to mark all locations in the dense prompt
+            tensor which were present in a user input.
         end_token_id: Optional. The token marking the end of the sequence. If
             specified, sampling will stop as soon as all sequences in the prompt
             produce a `end_token_id` in a location where `mask` is `False`.
@@ -61,7 +62,7 @@ class Sampler:
 
     - Override the `get_next_token()` method, which computes the next token
       based on a probability distribution over all possible vocab entries.
-    - Override `__call__`, if the sampling method need additional information
+    - Override `__call__`, if the sampling method needs additional information
       beyond the next tokens probability distribution to sample a sequence.
 
     Please check available subclass samplers for examples.
