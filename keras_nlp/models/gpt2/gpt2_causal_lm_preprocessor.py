@@ -29,19 +29,19 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     `keras_nlp.models.GPT2CausalLM`. By default, it will take in batches of
     strings, and return outputs in a `(x, y, sample_weight)` format, where the
     `y` label is the next token id in the `x` sequence. For use with generation,
-    pass `return_labels=False` in which case the output will simply be the
+    pass `return_labels=False`, in which case the output will simply be the
     encoded string features.
 
     Args:
         tokenizer: A `keras_nlp.models.GPT2Tokenizer` instance.
         sequence_length: The length of the packed inputs.
-        add_start_token: If true, the preprocessor will append the tokenizer
+        add_start_token: If true, the preprocessor will prepend the tokenizer
             start token to each input sequence.
         add_end_token: If true, the preprocessor will append the tokenizer
             end token to each input sequence.
 
     Call arguments:
-        x: A string `tf.Tensor` or list of python strings.
+        x: A string, `tf.Tensor` or list of python strings.
         y: Label data. Should always be `None` as the layer generates labels.
         sample_weight: Label weights. Should always be `None` as the layer
             generates label weights.

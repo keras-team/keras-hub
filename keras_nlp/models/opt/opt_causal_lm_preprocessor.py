@@ -35,13 +35,13 @@ class OPTCausalLMPreprocessor(OPTPreprocessor):
     Args:
         tokenizer: A `keras_nlp.models.OPTTokenizer` instance.
         sequence_length: The length of the packed inputs.
-        add_start_token: If true, the preprocessor will append the tokenizer
+        add_start_token: If true, the preprocessor will prepend the tokenizer
             start token to each input sequence.
         add_end_token: If true, the preprocessor will append the tokenizer
             end token to each input sequence.
 
     Call arguments:
-        x: A string `tf.Tensor` or list of python strings.
+        x: A string, `tf.Tensor` or list of python strings.
         y: Label data. Should always be `None` as the layer generates labels.
         sample_weight: Label weights. Should always be `None` as the layer
             generates label weights.
