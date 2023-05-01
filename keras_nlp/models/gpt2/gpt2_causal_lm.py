@@ -37,9 +37,10 @@ class GPT2CausalLM(Task):
     """An end-to-end GPT2 model for causal langauge modeling.
 
     A causal language model (LM) predicts the next token based on previous
-    tokens the next token based on previous tokens, which is the way GPT2 gets
-    pretrained. You can finetune `GPT2CausalLM` to generate text similar to
-    the custom dataset.
+    tokens. This task setup can be used to train the model unsupervised on
+    plain text input, or to autoregressively generate plain text similar to
+    the data used for training. This task can be used for pre-training or
+    fine-tuning a GPT-2 model, simply by calling `fit()`.
 
     This model has a `generate()` method, which generates text based on a
     prompt. The generation strategy used is controlled by an additional

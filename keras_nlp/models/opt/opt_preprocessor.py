@@ -63,7 +63,7 @@ class OPTPreprocessor(Preprocessor):
             end token to each input sequence.
 
     Call arguments:
-        x: A string `tf.Tensor` or list of python strings.
+        x: A string, `tf.Tensor` or list of python strings.
         y: Any label data. Will be passed through unaltered.
         sample_weight: Any label weight data. Will be passed through unaltered.
         sequence_length: Pass to override the configured `sequence_length` of
