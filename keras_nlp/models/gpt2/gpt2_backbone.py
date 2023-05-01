@@ -60,7 +60,7 @@ class GPT2Backbone(Backbone):
             a two-layer feedforward network for each transformer.
         dropout: float. Dropout probability for the Transformer encoder.
         max_sequence_length: int. The maximum sequence length that this encoder
-            can consume. If None, `max_sequence_length` uses the value from
+            can consume. If `None`, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
 

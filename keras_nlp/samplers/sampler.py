@@ -31,15 +31,17 @@ call_args_docstring = """next: A function which takes in the
         cache: Optional. A tensor or nested structure of tensors that will be
             updated by each call to `next`. This can be used to cache
             computations from early iterations of the generative loop.
-        index: Optional. The first index to start sampling at.
+        index: Optional. The first index of `prompt` to start sampling at.
+            Usually this is set as the length of the shortest non-padding
+            sequence in `prompt`.
         mask: Optional. A 2D integer tensor with the same shape as `prompt`.
             Locations which are `True` in the mask are never updated during
-            sampling. Often this will mark all ids in `prompt` which were
-            present in the original input.
+            sampling. Usually used to mark all locations in the dense prompt
+            tensor which were present in a user input.
         end_token_id: Optional. The token marking the end of the sequence. If
             specified, sampling will stop as soon as all sequences in the prompt
             produce a `end_token_id` in a location where `mask` is `False`.
-    """
+"""
 
 
 @format_docstring(call_args=call_args_docstring)
@@ -60,8 +62,8 @@ class Sampler:
 
     - Override the `get_next_token()` method, which computes the next token
       based on a probability distribution over all possible vocab entries.
-    - Override `__call__`, if the sampling method need additional cache beyond
-      the next tokens probability distribution to sample a sequence.
+    - Override `__call__`, if the sampling method needs additional information
+      beyond the next tokens probability distribution to sample a sequence.
 
     Please check available subclass samplers for examples.
 
