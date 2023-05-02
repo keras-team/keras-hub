@@ -119,7 +119,7 @@ class Tokenizer(keras.layers.Layer):
         )
 
     def token_to_id(self, token: str) -> int:
-        """Convert an integer id to a string token."""
+        """Convert a string token to an integer id."""
         raise NotImplementedError(
             "No implementation of `id_to_token()` was found for "
             f"{self.__class__.__name__}."
