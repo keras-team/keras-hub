@@ -20,6 +20,7 @@ import pathlib
 from setuptools import find_packages
 from setuptools import setup
 
+
 def read(rel_path):
     here = os.path.abspath(os.path.dirname(__file__))
     with open(os.path.join(here, rel_path)) as fp:
@@ -32,6 +33,7 @@ def get_version(rel_path):
             delim = '"' if '"' in line else "'"
             return line.split(delim)[1]
     raise RuntimeError("Unable to find version string.")
+
 
 HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
