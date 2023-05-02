@@ -74,13 +74,6 @@ def build():
         with open(os.path.join(package, "__init__.py"), "w") as f:
             f.write(init_contents + "\n\n" + f'__version__ = "{__version__}"\n')
 
-        # Insert the version string in setup.py
-        with open("setup.py") as f:
-            setup_contents = f.read()
-            setup_contents = setup_contents.replace("{{VERSION}}", __version__)
-        with open("setup.py", "w") as f:
-            f.write(setup_contents)
-
         # Build the package
         os.system("python3 -m build")
 
