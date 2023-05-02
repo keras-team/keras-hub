@@ -85,17 +85,29 @@ class RobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
-    def test_valid_call_classifier(self):
+    def test_valid_call(self):
         self.masked_lm(self.preprocessed_batch[0])
 
-    def test_classifier_predict(self):
+    def test_predict(self):
         self.masked_lm.predict(self.raw_batch)
         self.masked_lm.preprocessor = None
         self.masked_lm.predict(self.preprocessed_batch[0])
 
-    def test_classifier_fit(self):
+    def test_fit(self):
+        self.masked_lm.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            jit_compile=True,
+        )
         self.masked_lm.fit(self.raw_dataset)
         self.masked_lm.preprocessor = None
+        self.masked_lm.fit(self.preprocessed_dataset)
+
+    def test_fit_no_xla(self):
+        self.masked_lm.preprocessor = None
+        self.masked_lm.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            jit_compile=False,
+        )
         self.masked_lm.fit(self.preprocessed_dataset)
 
     def test_serialization(self):
@@ -105,14 +117,6 @@ class RobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             new_classifier.get_config(),
             self.masked_lm.get_config(),
         )
-
-    def test_classifier_fit_no_xla(self):
-        self.masked_lm.preprocessor = None
-        self.masked_lm.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),
-            jit_compile=False,
-        )
-        self.masked_lm.fit(self.preprocessed_dataset)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),

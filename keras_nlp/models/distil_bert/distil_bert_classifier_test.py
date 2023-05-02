@@ -71,10 +71,10 @@ class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
-    def test_valid_call_classifier(self):
+    def test_valid_call(self):
         self.classifier(self.preprocessed_batch)
 
-    def test_classifier_predict(self):
+    def test_predict(self):
         preds1 = self.classifier.predict(self.raw_batch)
         self.classifier.preprocessor = None
         preds2 = self.classifier.predict(self.preprocessed_batch)
@@ -83,12 +83,16 @@ class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         # Assert valid softmax output.
         self.assertAllClose(tf.reduce_sum(preds2, axis=-1), [1.0, 1.0])
 
-    def test_classifier_fit(self):
+    def test_fit(self):
+        self.classifier.compile(
+            loss="sparse_categorical_crossentropy",
+            jit_compile=True,
+        )
         self.classifier.fit(self.raw_dataset)
         self.classifier.preprocessor = None
         self.classifier.fit(self.preprocessed_dataset)
 
-    def test_classifier_fit_no_xla(self):
+    def test_fit_no_xla(self):
         self.classifier.preprocessor = None
         self.classifier.compile(
             loss="sparse_categorical_crossentropy",

@@ -77,6 +77,10 @@ class BertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(tf.reduce_sum(preds2, axis=-1), [1.0, 1.0])
 
     def test_classifier_fit(self):
+        self.classifier.compile(
+            loss="sparse_categorical_crossentropy",
+            jit_compile=True,
+        )
         self.classifier.fit(self.raw_dataset)
         self.classifier.preprocessor = None
         self.classifier.fit(self.preprocessed_dataset)

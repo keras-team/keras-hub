@@ -77,6 +77,10 @@ class BertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         self.masked_lm.predict(self.preprocessed_batch[0])
 
     def test_classifier_fit(self):
+        self.masked_lm.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+            jit_compile=True,
+        )
         self.masked_lm.fit(self.raw_dataset)
         self.masked_lm.preprocessor = None
         self.masked_lm.fit(self.preprocessed_dataset)

@@ -24,7 +24,6 @@ from keras_nlp.models.f_net.f_net_backbone import f_net_kernel_initializer
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.models.f_net.f_net_presets import backbone_presets
 from keras_nlp.models.task import Task
-from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -136,15 +135,6 @@ class FNetClassifier(Task):
         self.num_classes = num_classes
         self.activation = keras.activations.get(activation)
         self.dropout = dropout
-
-        self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(
-                from_logits=activation is None
-            ),
-            optimizer=keras.optimizers.Adam(5e-5),
-            metrics=keras.metrics.SparseCategoricalAccuracy(),
-            jit_compile=is_xla_compatible(self),
-        )
 
     def get_config(self):
         config = super().get_config()

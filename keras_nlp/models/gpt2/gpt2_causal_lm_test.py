@@ -80,6 +80,10 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
         self.causal_lm.predict(self.preprocessed_batch)
 
     def test_fit(self):
+        self.causal_lm.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            jit_compile=True,
+        )
         self.causal_lm.fit(self.raw_dataset)
         self.causal_lm.preprocessor = None
         self.causal_lm.fit(self.preprocessed_dataset)
@@ -87,12 +91,13 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
     def test_fit_no_xla(self):
         self.causal_lm.preprocessor = None
         self.causal_lm.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             jit_compile=False,
         )
         self.causal_lm.fit(self.preprocessed_dataset)
 
     def test_generate(self):
+        self.causal_lm.compile(sampler="top_k")
         # String input.
         prompt = " airplane"
         output = self.causal_lm.generate(" airplane")
@@ -108,6 +113,7 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
         )
 
     def test_generate_compilation(self):
+        self.causal_lm.compile(sampler="top_k")
         # Assert we do not recompile with successive calls.
         self.causal_lm.generate(self.raw_batch)
         first_fn = self.causal_lm.generate_function

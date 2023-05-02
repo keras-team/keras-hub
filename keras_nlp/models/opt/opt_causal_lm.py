@@ -16,7 +16,6 @@
 import copy
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.opt.opt_backbone import OPTBackbone
@@ -182,14 +181,6 @@ class OPTCausalLM(Task):
         self.preprocessor = preprocessor
         self.generate_function = None
         self._sampler = None
-
-        # Default compilation
-        self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            optimizer=keras.optimizers.Adam(2e-5),
-            metrics=keras.metrics.SparseCategoricalAccuracy(),
-            jit_compile=is_xla_compatible(self),
-        )
 
     @classproperty
     def presets(cls):

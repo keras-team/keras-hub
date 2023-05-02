@@ -23,7 +23,6 @@ from keras_nlp.models.roberta.roberta_backbone import roberta_kernel_initializer
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_presets import backbone_presets
 from keras_nlp.models.task import Task
-from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -179,16 +178,6 @@ class RobertaClassifier(Task):
         self.activation = keras.activations.get(activation)
         self.hidden_dim = hidden_dim
         self.dropout = dropout
-
-        # Default compilation
-        self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(
-                from_logits=activation is None
-            ),
-            optimizer=keras.optimizers.Adam(2e-5),
-            metrics=keras.metrics.SparseCategoricalAccuracy(),
-            jit_compile=is_xla_compatible(self),
-        )
 
     def get_config(self):
         config = super().get_config()
