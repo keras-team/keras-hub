@@ -52,38 +52,30 @@ class BartTokenizer(BytePairTokenizer):
 
     Examples:
 
-    Batched inputs.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab, merges=merges
-    ... )
-    >>> tokenizer(["a quick fox", "a fox quick"])
-    <tf.RaggedTensor [[4, 5, 6], [4, 6, 5]]>
+    ```python
+    # Unbatched input.
+    tokenizer = keras_nlp.models.BartTokenizer.from_preset(
+        "bart_base_en",
+    )
+    tokenizer("The quick brown fox jumped.")
 
-    Unbatched input.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab, merges=merges
-    ... )
-    >>> tokenizer("a quick fox")
-    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([4, 5, 6], dtype=int32)>
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
 
-    Detokenization.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab, merges=merges
-    ... )
-    >>> tokenizer.detokenize(tokenizer("a quick fox")).numpy().decode('utf-8')
-    'a quick fox'
+    # Detokenization.
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
+
+    # Custom vocabulary.
+    vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    merges += ["Ġ f", "o x", "Ġf ox"]
+    tokenizer = keras_nlp.models.BartTokenizer(
+        vocabulary=vocab,
+        merges=merges,
+    )
+    tokenizer("The quick brown fox jumped.")
+    ```
     """
 
     def __init__(
@@ -92,16 +84,19 @@ class BartTokenizer(BytePairTokenizer):
         merges,
         **kwargs,
     ):
-        super().__init__(
-            vocabulary=vocabulary,
-            merges=merges,
-            **kwargs,
-        )
-
-        # Check for necessary special tokens.
+        # Special tokens.
         start_token = "<s>"
         pad_token = "<pad>"
         end_token = "</s>"
+
+        super().__init__(
+            vocabulary=vocabulary,
+            merges=merges,
+            unsplittable_tokens=[start_token, pad_token, end_token],
+            **kwargs,
+        )
+
+        # Check whether special tokens are present in the vocabulary.
         for token in [start_token, pad_token, end_token]:
             if token not in self.get_vocabulary():
                 raise ValueError(
@@ -117,3 +112,11 @@ class BartTokenizer(BytePairTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    def get_config(self):
+        config = super().get_config()
+        # In the constructor, we pass the list of special tokens to the
+        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # delete it from the config here.
+        del config["unsplittable_tokens"]
+        return config

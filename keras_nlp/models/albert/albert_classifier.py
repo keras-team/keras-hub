@@ -47,18 +47,45 @@ class AlbertClassifier(Task):
     Args:
         backbone: A `keras_nlp.models.AlertBackbone` instance.
         num_classes: int. Number of classes to predict.
-        dropout: float. The dropout probability value, applied after the dense
-            layer.
         preprocessor: A `keras_nlp.models.AlbertPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
+        activation: Optional `str` or callable, defaults to `None`. The
+            activation function to use on the model outputs. Set
+            `activation="softmax"` to return output probabilities.
+        dropout: float. The dropout probability value, applied after the dense
+            layer.
 
     Examples:
 
-    Example usage.
+     Raw string data.
     ```python
-    # Define the preprocessed inputs.
-    preprocessed_features = {
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    labels = [0, 3]
+
+    # Pretrained classifier.
+    classifier = keras_nlp.models.AlbertClassifier.from_preset(
+        "albert_base_en_uncased",
+        num_classes=4,
+    )
+    classifier.fit(x=features, y=labels, batch_size=2)
+    classifier.predict(x=features, batch_size=2)
+
+    # Re-compile (e.g., with a new learning rate).
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        optimizer=keras.optimizers.Adam(5e-5),
+        jit_compile=True,
+    )
+    # Access backbone programatically (e.g., to change `trainable`).
+    classifier.backbone.trainable = False
+    # Fit again.
+    classifier.fit(x=features, y=labels, batch_size=2)
+    ```
+
+    Preprocessed integer data.
+    ```python
+    features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
         "segment_ids": tf.constant(
             [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
@@ -69,89 +96,69 @@ class AlbertClassifier(Task):
     }
     labels = [0, 3]
 
-    # Randomly initialize a ALBERT backbone.
-    backbone = AlbertBackbone(
-        vocabulary_size=1000,
-        num_layers=2,
-        num_heads=2,
-        embedding_dim=8,
-        hidden_dim=64,
-        intermediate_dim=128,
-        max_sequence_length=128,
-        name="encoder",
-    )
-
-    # Create a ALBERT classifier and fit your data.
-    classifier = keras_nlp.models.AlbertClassifier(
-        backbone,
-        num_classes=4,
-        preprocessor=None,
-    )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
-
-    # Access backbone programatically (e.g., to change `trainable`)
-    classifier.backbone.trainable = False
-
-    Raw string inputs with customized preprocessing.
-    ```python
-    # Create a dataset with raw string features in an `(x, y)` format.
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
-    labels = [0, 3]
-
-    # Use a shorter sequence length.
-    preprocessor = keras_nlp.models.AlbertPreprocessor.from_preset(
-        "albert_base_en_uncased",
-        sequence_length=128,
-    )
-
-    # Create a AlbertClassifier and fit your data.
+    # Pretrained classifier without preprocessing.
     classifier = keras_nlp.models.AlbertClassifier.from_preset(
         "albert_base_en_uncased",
         num_classes=4,
-        preprocessor=preprocessor,
-    )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        preprocessor=None,
     )
     classifier.fit(x=features, y=labels, batch_size=2)
     ```
 
-    Preprocessed inputs.
+    Custom backbone and vocabulary.
     ```python
-    # Create a dataset with preprocessed features in an `(x, y)` format.
-    preprocessed_features = {
-        "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
-        "segment_ids": tf.constant(
-            [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-        ),
-        "padding_mask": tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-        ),
-    }
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
     labels = [0, 3]
 
-    # Create a ALBERT classifier and fit your data.
-    classifier = keras_nlp.models.AlbertClassifier.from_preset(
-        "albert_base_en_uncased",
+    bytes_io = io.BytesIO()
+    ds = tf.data.Dataset.from_tensor_slices(features)
+    sentencepiece.SentencePieceTrainer.train(
+        sentence_iterator=ds.as_numpy_iterator(),
+        model_writer=bytes_io,
+        vocab_size=10,
+        model_type="WORD",
+        pad_id=0,
+        unk_id=1,
+        bos_id=2,
+        eos_id=3,
+        pad_piece="<pad>",
+        unk_piece="<unk>",
+        bos_piece="[CLS]",
+        eos_piece="[SEP]",
+        user_defined_symbols="[MASK]",
+    )
+    tokenizer = keras_nlp.models.AlbertTokenizer(
+        proto=bytes_io.getvalue(),
+    )
+    preprocessor = keras_nlp.models.AlbertPreprocessor(
+        tokenizer=tokenizer,
+        sequence_length=128,
+    )
+    backbone = keras_nlp.models.AlbertBackbone(
+        vocabulary_size=tokenizer.vocabulary_size(),
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        embedding_dim=128,
+        intermediate_dim=512,
+        max_sequence_length=128,
+    )
+    classifier = keras_nlp.models.AlbertClassifier(
+        backbone=backbone,
+        preprocessor=preprocessor,
         num_classes=4,
-        preprocessor=None,
     )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
+    classifier.fit(x=features, y=labels, batch_size=2)
     ```
     """
 
     def __init__(
         self,
         backbone,
-        num_classes=2,
-        dropout=0.1,
+        num_classes,
         preprocessor=None,
+        activation=None,
+        dropout=0.1,
         **kwargs,
     ):
         inputs = backbone.input
@@ -160,6 +167,7 @@ class AlbertClassifier(Task):
         outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=albert_kernel_initializer(),
+            activation=activation,
             name="logits",
         )(pooled)
         # Instantiate using Functional API Model constructor
@@ -173,11 +181,14 @@ class AlbertClassifier(Task):
         self._backbone = backbone
         self._preprocessor = preprocessor
         self.num_classes = num_classes
+        self.activation = keras.activations.get(activation)
         self.dropout = dropout
 
         # Default compilation
         self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            loss=keras.losses.SparseCategoricalCrossentropy(
+                from_logits=activation is None
+            ),
             optimizer=keras.optimizers.Adam(5e-5),
             metrics=keras.metrics.SparseCategoricalAccuracy(),
             jit_compile=is_xla_compatible(self),
@@ -188,6 +199,7 @@ class AlbertClassifier(Task):
         config.update(
             {
                 "num_classes": self.num_classes,
+                "activation": keras.activations.serialize(self.activation),
                 "dropout": self.dropout,
             }
         )

@@ -15,17 +15,71 @@
 
 import os
 
+import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.utils.keras_utils import print_msg
+from keras_nlp.utils.keras_utils import print_row
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras_nlp_export("keras_nlp.models.Task")
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class Task(PipelineModel):
     """Base class for Task models."""
+
+    def __init__(self, *args, **kwargs):
+        self._backbone = None
+        self._preprocessor = None
+        super().__init__(*args, **kwargs)
+
+    def _check_for_loss_mismatch(self):
+        """Check for a softmax/from_logits mismatch after compile.
+
+        We cannot handle this in the general case, but we can handle this for
+        the extremely common case of a single `SparseCategoricalCrossentropy`
+        loss, and a `None` or `"softmax"` activation.
+        """
+        # Only handle a single loss.
+        if tf.nest.is_nested(self.loss):
+            return
+        # Only handle tasks with activation.
+        if not hasattr(self, "activation"):
+            return
+
+        loss = keras.losses.get(self.loss)
+        activation = keras.activations.get(self.activation)
+        if isinstance(loss, keras.losses.SparseCategoricalCrossentropy):
+            from_logits = loss.get_config()["from_logits"]
+        elif loss == keras.losses.sparse_categorical_crossentropy:
+            from_logits = False
+        else:
+            # Only handle sparse categorical crossentropy.
+            return
+
+        is_softmax = activation == keras.activations.softmax
+        is_linear = activation == keras.activations.linear
+        if is_softmax and from_logits:
+            raise ValueError(
+                "The `loss` passed to `compile()` expects logit output, but "
+                "the model is configured to output softmax probabilities "
+                "(`activation='softmax'`). This will not converge! Pass "
+                "`from_logits=False` to your loss, e.g. "
+                "`loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False)`. "
+            )
+        if is_linear and not from_logits:
+            raise ValueError(
+                "The `loss` passed to `compile()` expects softmax probability "
+                "output, but the model is configured to output logits "
+                "(`activation=None`). This will not converge! Pass "
+                "`from_logits=True` to your loss, e.g. "
+                "`loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True)`. "
+            )
+
+    def compile(self, *args, **kwargs):
+        super().compile(*args, **kwargs)
+        self._check_for_loss_mismatch()
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
         return self.preprocessor(x, y=y, sample_weight=sample_weight)
@@ -169,3 +223,50 @@ class Task(PipelineModel):
                 example_preset_name=next(iter(cls.presets), ""),
                 preset_names='", "'.join(cls.presets),
             )(cls.from_preset.__func__)
+
+    @property
+    def layers(self):
+        # Remove preprocessor from layers so it does not show up in the summary.
+        layers = super().layers
+        if self.preprocessor and self.preprocessor in layers:
+            layers.remove(self.preprocessor)
+        return layers
+
+    def summary(
+        self,
+        line_length=None,
+        positions=None,
+        print_fn=None,
+        **kwargs,
+    ):
+        """Override `model.summary()` to show a preprocessor if set."""
+        # Defaults are copied from core Keras; we should try to stay in sync.
+        line_length = line_length or 98
+        positions = positions or [0.33, 0.55, 0.67, 1.0]
+        if positions[-1] <= 1:
+            positions = [int(line_length * p) for p in positions]
+        if print_fn is None:
+            print_fn = print_msg
+
+        if self.preprocessor:
+            column_names = ["Tokenizer (type)", "Vocab #"]
+            tokenizer = self.preprocessor.tokenizer
+            column_values = [
+                f"{tokenizer.name} ({tokenizer.__class__.__name__})",
+                f"{tokenizer.vocabulary_size()}",
+            ]
+
+            print_fn(f'Preprocessor: "{self.preprocessor.name}"')
+            print_fn("_" * line_length)
+            print_row(column_names, positions[1:3], print_fn)
+            print_fn("=" * line_length)
+            print_row(column_values, positions[1:3], print_fn)
+            print_fn("_" * line_length)
+            print_fn(" " * line_length)
+
+        super().summary(
+            line_length=line_length,
+            positions=positions,
+            print_fn=print_fn,
+            **kwargs,
+        )

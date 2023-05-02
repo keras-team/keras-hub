@@ -16,6 +16,8 @@
 
 import copy
 
+import tensorflow as tf
+
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
@@ -56,16 +58,39 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     Examples:
 
     ```python
-    tokenizer = keras_nlp.models.DebertaV3Tokenizer(proto="model.spm")
+    # Unbatched input.
+    tokenizer = keras_nlp.models.DebertaV3Tokenizer.from_preset(
+        "deberta_v3_base_en",
+    )
+    tokenizer("The quick brown fox jumped.")
 
     # Batched inputs.
     tokenizer(["the quick brown fox", "the earth is round"])
 
-    # Unbatched inputs.
-    tokenizer("the quick brown fox")
-
     # Detokenization.
-    tokenizer.detokenize(tf.constant([[1, 4, 9, 5, 7, 2]]))
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
+
+    # Custom vocabulary.
+    bytes_io = io.BytesIO()
+    ds = tf.data.Dataset.from_tensor_slices(["The quick brown fox jumped."])
+    sentencepiece.SentencePieceTrainer.train(
+        sentence_iterator=ds.as_numpy_iterator(),
+        model_writer=bytes_io,
+        vocab_size=9,
+        model_type="WORD",
+        pad_id=0,
+        bos_id=1,
+        eos_id=2,
+        unk_id=3,
+        pad_piece="[PAD]",
+        bos_piece="[CLS]",
+        eos_piece="[SEP]",
+        unk_piece="[UNK]",
+    )
+    tokenizer = keras_nlp.models.DebertaV3Tokenizer(
+        proto=bytes_io.getvalue(),
+    )
+    tokenizer("The quick brown fox jumped.")
     ```
     """
 
@@ -119,6 +144,10 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         if token == "[MASK]":
             return self.mask_token_id
         return super().token_to_id(token)
+
+    def detokenize(self, ids):
+        ids = tf.ragged.boolean_mask(ids, tf.not_equal(ids, self.mask_token_id))
+        return super().detokenize(ids)
 
     @classproperty
     def presets(cls):

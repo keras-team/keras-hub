@@ -17,6 +17,7 @@ import sys
 import pytest
 import tensorflow as tf
 from packaging import version
+from tensorflow import keras
 
 
 @pytest.fixture(scope="session")
@@ -53,9 +54,23 @@ def pytest_addoption(parser):
         default=False,
         help="run tpu tests",
     )
+    parser.addoption(
+        "--mixed_precision",
+        action="store_true",
+        default=False,
+        help="run with mixed precision",
+    )
+    parser.addoption(
+        "--docstring_module",
+        action="store",
+        default="",
+        help="restrict docs testing to modules whose name matches this flag",
+    )
 
 
 def pytest_configure(config):
+    if config.getoption("--mixed_precision"):
+        keras.mixed_precision.set_global_policy("mixed_float16")
     config.addinivalue_line(
         "markers", "large: mark test as being slow or requiring a network"
     )

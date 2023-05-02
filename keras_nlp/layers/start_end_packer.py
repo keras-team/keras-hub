@@ -43,6 +43,17 @@ class StartEndPacker(keras.layers.Layer):
         pad_value: int/str. The ID or token that is to be placed into the
             unused positions after the last segment in the sequence. If None,
             0 or "" will be added depending on the dtype of the input tensor.
+        return_padding_mask: bool. Whether to return a boolean padding mask of
+            all locations that are filled in with the `pad_value`.
+
+    Call arguments:
+        inputs: A `tf.Tensor`, `tf.RaggedTensor`, or list of python strings.
+        sequence_length: Pass to override the configured `sequence_length` of
+            the layer.
+        add_start_value: Pass `False` to not append a start value for this
+            input.
+        add_end_value: Pass `False` to not append an end value for this
+            input.
 
     Examples:
 
@@ -94,6 +105,7 @@ class StartEndPacker(keras.layers.Layer):
         start_value=None,
         end_value=None,
         pad_value=None,
+        return_padding_mask=False,
         name=None,
         **kwargs,
     ):
@@ -103,48 +115,60 @@ class StartEndPacker(keras.layers.Layer):
         self.start_value = start_value
         self.end_value = end_value
         self.pad_value = pad_value
+        self.return_padding_mask = return_padding_mask
 
-    def call(self, inputs):
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
+    def call(
+        self,
+        inputs,
+        sequence_length=None,
+        add_start_value=True,
+        add_end_value=True,
+    ):
+        x = inputs  # Intermediate result.
 
-        input_is_1d = False
-        if inputs.shape.rank < 1 or inputs.shape.rank > 2:
+        if not isinstance(x, (tf.Tensor, tf.RaggedTensor)):
+            x = tf.convert_to_tensor(x)
+
+        input_is_1d = x.shape.rank == 1
+        if x.shape.rank < 1 or x.shape.rank > 2:
             raise ValueError(
                 "Input must either be rank 1 or rank 2. Received input with "
-                f"rank={inputs.shape.rank}"
+                f"rank={x.shape.rank}"
             )
-        elif inputs.shape.rank == 1:
-            input_is_1d = True
+        if input_is_1d:
             # Add a new axis at the beginning.
-            inputs = tf.expand_dims(inputs, axis=0)
-        if isinstance(inputs, tf.Tensor):
+            x = tf.expand_dims(x, axis=0)
+        if isinstance(x, tf.Tensor):
             # Convert to ragged tensor.
-            inputs = tf.RaggedTensor.from_tensor(inputs)
+            x = tf.RaggedTensor.from_tensor(x)
 
-        batch_size = tf.shape(inputs)[0]
+        batch_size = tf.shape(x)[0]
+        sequence_length = sequence_length or self.sequence_length
 
         # Concatenate start and end tokens.
-        if self.start_value is not None:
+        if add_start_value and self.start_value is not None:
             start_token_id_tensor = tf.fill((batch_size, 1), self.start_value)
-            inputs = tf.concat([start_token_id_tensor, inputs], axis=-1)
-        if self.end_value is not None:
+            x = tf.concat([start_token_id_tensor, x], axis=-1)
+        if add_end_value and self.end_value is not None:
             end_token_id_tensor = tf.fill((batch_size, 1), self.end_value)
-
             # Trim to leave room for end token.
-            inputs = inputs[..., : self.sequence_length - 1]
-            inputs = tf.concat([inputs, end_token_id_tensor], axis=-1)
+            x = x[..., : sequence_length - 1]
+            x = tf.concat([x, end_token_id_tensor], axis=-1)
 
         # Pad to desired length.
-        inputs = inputs.to_tensor(
+        outputs = x.to_tensor(
             default_value=self.pad_value,
-            shape=(batch_size, self.sequence_length),
+            shape=(batch_size, sequence_length),
         )
+        outputs = tf.squeeze(outputs, axis=0) if input_is_1d else outputs
 
-        if input_is_1d:
-            inputs = tf.squeeze(inputs, axis=0)
+        if self.return_padding_mask:
+            mask = tf.ones_like(x, dtype=tf.bool)
+            mask = mask.to_tensor(shape=(batch_size, sequence_length))
+            mask = tf.squeeze(mask, axis=0) if input_is_1d else mask
+            return outputs, mask
 
-        return inputs
+        return outputs
 
     def get_config(self):
         config = super().get_config()
@@ -154,6 +178,7 @@ class StartEndPacker(keras.layers.Layer):
                 "start_value": self.start_value,
                 "end_value": self.end_value,
                 "pad_value": self.pad_value,
+                "return_padding_mask": self.return_padding_mask,
             }
         )
         return config

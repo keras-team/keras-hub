@@ -16,6 +16,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -37,12 +38,27 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
             "Ġthe": 8,
             "Ġbest": 9,
         }
-
-        merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
-        merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
-        merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
-        merges += ["pla ne"]
-        self.merges = merges
+        self.merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
+        self.merges += [
+            "Ġa t",
+            "p o",
+            "r t",
+            "o h",
+            "l i",
+            "Ġi s",
+            "Ġb e",
+            "s t",
+        ]
+        self.merges += [
+            "Ġt h",
+            "Ġai r",
+            "pl a",
+            "Ġk oh",
+            "Ġth e",
+            "Ġbe st",
+            "po rt",
+        ]
+        self.merges += ["pla ne"]
 
         self.tokenizer = GPT2Tokenizer(
             vocabulary=self.vocab, merges=self.merges
@@ -52,6 +68,11 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         input_data = " airplane at airport"
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [1, 2, 3, 1, 4])
+
+    def test_tokenize_end_token(self):
+        input_data = " airplane at airport<|endoftext|>"
+        output = self.tokenizer(input_data)
+        self.assertAllEqual(output, [1, 2, 3, 1, 4, 0])
 
     def test_tokenize_batch(self):
         input_data = tf.constant([" airplane at airport", " kohli is the best"])
@@ -70,10 +91,19 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         with self.assertRaises(ValueError):
             GPT2Tokenizer(vocabulary=["a", "b", "c"], merges=[])
 
+    def test_serialization(self):
+        config = keras.utils.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.utils.deserialize_keras_object(config)
+        self.assertEqual(
+            new_tokenizer.get_config(),
+            self.tokenizer.get_config(),
+        )
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant([" airplane at airport"])
 
@@ -82,7 +112,9 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         model = keras.Model(inputs, outputs)
 
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
 
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(

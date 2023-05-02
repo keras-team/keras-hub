@@ -16,6 +16,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -26,18 +27,17 @@ from keras_nlp.models.opt.opt_tokenizer import OPTTokenizer
 class OPTTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.vocab = {
-            "<s>": 0,
-            "<pad>": 1,
-            "</s>": 2,
-            "Ġair": 3,
-            "plane": 4,
-            "Ġat": 5,
-            "port": 6,
-            "Ġkoh": 7,
-            "li": 8,
-            "Ġis": 9,
-            "Ġthe": 10,
-            "Ġbest": 11,
+            "<pad>": 0,
+            "</s>": 1,
+            "Ġair": 2,
+            "plane": 3,
+            "Ġat": 4,
+            "port": 5,
+            "Ġkoh": 6,
+            "li": 7,
+            "Ġis": 8,
+            "Ġthe": 9,
+            "Ġbest": 10,
         }
 
         merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
@@ -51,29 +51,43 @@ class OPTTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_tokenize(self):
         input_data = " airplane at airport"
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [3, 4, 5, 3, 6])
+        self.assertAllEqual(output, [2, 3, 4, 2, 5])
+
+    def test_tokenize_special_tokens(self):
+        input_data = "</s> airplane at airport</s><pad>"
+        output = self.tokenizer(input_data)
+        self.assertAllEqual(output, [1, 2, 3, 4, 2, 5, 1, 0])
 
     def test_tokenize_batch(self):
         input_data = tf.constant([" airplane at airport", " kohli is the best"])
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[3, 4, 5, 3, 6], [7, 8, 9, 10, 11]])
+        self.assertAllEqual(output, [[2, 3, 4, 2, 5], [6, 7, 8, 9, 10]])
 
     def test_detokenize(self):
-        input_tokens = [3, 4, 5, 3, 6]
+        input_tokens = [2, 3, 4, 2, 5]
         output = self.tokenizer.detokenize(input_tokens)
         self.assertEqual(output, " airplane at airport")
 
     def test_vocabulary_size(self):
-        self.assertEqual(self.tokenizer.vocabulary_size(), 12)
+        self.assertEqual(self.tokenizer.vocabulary_size(), 11)
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             OPTTokenizer(vocabulary=["a", "b", "c"], merges=[])
 
+    def test_serialization(self):
+        config = keras.utils.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.utils.deserialize_keras_object(config)
+        self.assertEqual(
+            new_tokenizer.get_config(),
+            self.tokenizer.get_config(),
+        )
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large  # Saving is slow, so mark these large.
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant([" airplane at airport"])
 
@@ -82,7 +96,9 @@ class OPTTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         model = keras.Model(inputs, outputs)
 
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
 
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(

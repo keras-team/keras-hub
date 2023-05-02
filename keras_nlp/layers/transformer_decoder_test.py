@@ -280,8 +280,13 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
             intermediate_dim=4,
             num_heads=num_heads,
         )
-        x = tf.random.uniform(shape=[batch_size, seq_len, num_heads * head_dim])
-        cache = tf.zeros([batch_size, 2, seq_len, num_heads, head_dim])
+        dtype = layer.compute_dtype
+        x = tf.random.uniform(
+            shape=[batch_size, seq_len, num_heads * head_dim], dtype=dtype
+        )
+        cache = tf.zeros(
+            [batch_size, 2, seq_len, num_heads, head_dim], dtype=dtype
+        )
         outputs = tf.zeros_like(x)
 
         def call(outputs, cache):
@@ -332,7 +337,9 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model([decoder_sequence, encoder_sequence])
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
 
         loaded_model = keras.models.load_model(path)
         model_output = model([decoder_sequence, encoder_sequence])
@@ -358,7 +365,9 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         model(decoder_sequence)
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
         loaded_model = keras.models.load_model(path)
 
         model_output = model(decoder_sequence)

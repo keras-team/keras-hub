@@ -79,11 +79,11 @@ class DebertaV3Backbone(Backbone):
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
 
-    # Pretrained DeBERTa encoder
+    # Pretrained DeBERTa encoder.
     model = keras_nlp.models.DebertaV3Backbone.from_preset(
-        "deberta_base_en",
+        "deberta_v3_base_en",
     )
-    output = model(input_data)
+    model(input_data)
 
     # Randomly initialized DeBERTa encoder with custom config
     model = keras_nlp.models.DebertaV3Backbone(
@@ -96,7 +96,7 @@ class DebertaV3Backbone(Backbone):
         bucket_size=256,
     )
     # Call the model on the input data.
-    output = model(input_data)
+    model(input_data)
     ```
     """
 

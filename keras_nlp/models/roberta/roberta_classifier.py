@@ -32,9 +32,9 @@ class RobertaClassifier(Task):
     """An end-to-end RoBERTa model for classification tasks.
 
     This model attaches a classification head to a
-    `keras_nlp.model.RobertaBackbone`, mapping from the backbone outputs to
-    logit output suitable for a classification task. For usage of this model
-    with pre-trained weights, see the `from_preset()` method.
+    `keras_nlp.model.RobertaBackbone` instance, mapping from the backbone
+    outputs to logits suitable for a classification task. For usage of this
+    model with pre-trained weights, see the `from_preset()` constructor.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
@@ -49,18 +49,46 @@ class RobertaClassifier(Task):
     Args:
         backbone: A `keras_nlp.models.RobertaBackbone` instance.
         num_classes: int. Number of classes to predict.
+        preprocessor: A `keras_nlp.models.RobertaPreprocessor` or `None`. If
+            `None`, this model will not apply preprocessing, and inputs should
+            be preprocessed before calling the model.
+        activation: Optional `str` or callable, defaults to `None`. The
+            activation function to use on the model outputs. Set
+            `activation="softmax"` to return output probabilities.
         hidden_dim: int. The size of the pooler layer.
         dropout: float. The dropout probability value, applied to the pooled
             output, and after the first dense layer.
-        preprocessor: A `keras_nlp.models.BertPreprocessor` or `None`. If
-            `None`, this model will not apply preprocessing, and inputs should
-            be preprocessed before calling the model.
 
     Examples:
 
-    Example usage.
+    Raw string data.
     ```python
-    preprocessed_features = {
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    labels = [0, 3]
+
+    # Pretrained classifier.
+    classifier = keras_nlp.models.RobertaClassifier.from_preset(
+        "roberta_base_en",
+        num_classes=4,
+    )
+    classifier.fit(x=features, y=labels, batch_size=2)
+    classifier.predict(x=features, batch_size=2)
+
+    # Re-compile (e.g., with a new learning rate).
+    classifier.compile(
+        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        optimizer=keras.optimizers.Adam(5e-5),
+        jit_compile=True,
+    )
+    # Access backbone programatically (e.g., to change `trainable`).
+    classifier.backbone.trainable = False
+    # Fit again.
+    classifier.fit(x=features, y=labels, batch_size=2)
+    ```
+
+    Preprocessed integer data.
+    ```python
+    features = {
         "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
         "padding_mask": tf.constant(
             [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
@@ -68,107 +96,61 @@ class RobertaClassifier(Task):
     }
     labels = [0, 3]
 
-    # Randomly initialize a RoBERTa encoder
-    backbone = keras_nlp.models.RobertaBackbone(
-        vocabulary_size=50265,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
-    )
-    # Create a RoBERTa classifier and fit the data.
-    classifier = keras_nlp.models.RobertaClassifier(
-        backbone,
-        4,
-        preprocessor=None,
-    )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
-
-    # Access backbone programatically (e.g., to change `trainable`)
-    classifier.backbone.trainable = False
-    ```
-
-    Raw string inputs.
-    ```python
-    # Create a dataset with raw string features in an `(x, y)` format.
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
-    labels = [0, 3]
-
-    # Create a RobertaClassifier and fit your data.
+    # Pretrained classifier without preprocessing.
     classifier = keras_nlp.models.RobertaClassifier.from_preset(
         "roberta_base_en",
         num_classes=4,
-    )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        preprocessor=None,
     )
     classifier.fit(x=features, y=labels, batch_size=2)
     ```
 
-    Raw string inputs with customized preprocessing.
+    Custom backbone and vocabulary.
     ```python
-    # Create a dataset with raw string features in an `(x, y)` format.
-    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    features = ["a quick fox", "a fox quick"]
     labels = [0, 3]
 
-    # Use a shorter sequence length.
-    preprocessor = keras_nlp.models.RobertaPreprocessor.from_preset(
-        "roberta_base_en",
+    vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    merges += ["Ġ f", "o x", "Ġf ox"]
+    tokenizer = keras_nlp.models.RobertaTokenizer(
+        vocabulary=vocab,
+        merges=merges
+    )
+    preprocessor = keras_nlp.models.RobertaPreprocessor(
+        tokenizer=tokenizer,
         sequence_length=128,
     )
-
-    # Create a RobertaClassifier and fit your data.
-    classifier = keras_nlp.models.RobertaClassifier.from_preset(
-        "roberta_base_en",
-        num_classes=4,
-        preprocessor=preprocessor,
+    backbone = keras_nlp.models.RobertaBackbone(
+        vocabulary_size=20,
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        intermediate_dim=512,
+        max_sequence_length=128
     )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    classifier = keras_nlp.models.RobertaClassifier(
+        backbone=backbone,
+        preprocessor=preprocessor,
+        num_classes=4,
     )
     classifier.fit(x=features, y=labels, batch_size=2)
-    ```
-
-    Preprocessed inputs.
-    ```python
-    # Create a dataset with preprocessed features in an `(x, y)` format.
-    preprocessed_features = {
-        "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
-        "padding_mask": tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-        ),
-    }
-    labels = [0, 3]
-
-    # Create a RoBERTa classifier and fit your data.
-    classifier = keras_nlp.models.RobertaClassifier.from_preset(
-        "roberta_base_en",
-        num_classes=4,
-        preprocessor=None,
-    )
-    classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    classifier.fit(x=preprocessed_features, y=labels, batch_size=2)
     ```
     """
 
     def __init__(
         self,
         backbone,
-        num_classes=2,
+        num_classes,
+        preprocessor=None,
+        activation=None,
         hidden_dim=None,
         dropout=0.0,
-        preprocessor=None,
         **kwargs,
     ):
         inputs = backbone.input
-        if hidden_dim is None:
-            hidden_dim = backbone.hidden_dim
+        hidden_dim = hidden_dim or backbone.hidden_dim
 
         x = backbone(inputs)[:, backbone.start_token_index, :]
         x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
@@ -179,6 +161,7 @@ class RobertaClassifier(Task):
         outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=roberta_kernel_initializer(),
+            activation=activation,
             name="logits",
         )(x)
 
@@ -193,12 +176,15 @@ class RobertaClassifier(Task):
         self.backbone = backbone
         self.preprocessor = preprocessor
         self.num_classes = num_classes
+        self.activation = keras.activations.get(activation)
         self.hidden_dim = hidden_dim
         self.dropout = dropout
 
         # Default compilation
         self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            loss=keras.losses.SparseCategoricalCrossentropy(
+                from_logits=activation is None
+            ),
             optimizer=keras.optimizers.Adam(2e-5),
             metrics=keras.metrics.SparseCategoricalAccuracy(),
             jit_compile=is_xla_compatible(self),
@@ -209,6 +195,7 @@ class RobertaClassifier(Task):
         config.update(
             {
                 "num_classes": self.num_classes,
+                "activation": keras.activations.serialize(self.activation),
                 "hidden_dim": self.hidden_dim,
                 "dropout": self.dropout,
             }

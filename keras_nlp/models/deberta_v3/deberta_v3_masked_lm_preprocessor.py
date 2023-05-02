@@ -71,78 +71,47 @@ class DebertaV3MaskedLMPreprocessor(DebertaV3Preprocessor):
                     out of budget. It supports an arbitrary number of segments.
 
     Examples:
+    Directly calling the layer on data.
     ```python
-    # Load the preprocessor from a preset.
     preprocessor = keras_nlp.models.DebertaV3MaskedLMPreprocessor.from_preset(
         "deberta_v3_base_en"
     )
 
-    # Tokenize and pack a single sentence.
-    sentence = tf.constant("The quick brown fox jumped.")
-    preprocessor(sentence)
-    # Same output.
+    # Tokenize and mask a single sentence.
     preprocessor("The quick brown fox jumped.")
 
-    # Tokenize and a batch of single sentences.
-    sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    preprocessor(sentences)
-    # Same output.
-    preprocessor(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
+    # Tokenize and mask a batch of single sentences.
+    preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
+
+    # Tokenize and mask sentence pairs.
+    # In this case, always convert input to tensors before calling the layer.
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+    preprocessor((first, second))
+    ```
+
+    Mapping with `tf.data.Dataset`.
+    ```python
+    preprocessor = keras_nlp.models.DebertaV3MaskedLMPreprocessor.from_preset(
+        "deberta_v3_base_en"
     )
 
-    # Tokenize and pack a sentence pair.
-    first_sentence = tf.constant("The quick brown fox jumped.")
-    second_sentence = tf.constant("The fox tripped.")
-    preprocessor((first_sentence, second_sentence))
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
 
-    # Map a dataset to preprocess a single sentence.
-    features = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    labels = tf.constant([0, 1])
-    ds = tf.data.Dataset.from_tensor_slices((features, labels))
+    # Map single sentences.
+    ds = tf.data.Dataset.from_tensor_slices(first)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
-    # Map a dataset to preprocess sentence pairs.
-    first_sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    second_sentences = tf.constant(
-        ["The fox tripped.", "Oh look, a whale."]
-    )
-    labels = tf.constant([1, 1])
-    ds = tf.data.Dataset.from_tensor_slices(
-        (
-            (first_sentences, second_sentences), labels
-        )
-    )
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map a dataset to preprocess unlabeled sentence pairs.
-    first_sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    second_sentences = tf.constant(
-        ["The fox tripped.", "Oh look, a whale."]
-    )
-    ds = tf.data.Dataset.from_tensor_slices((first_sentences, second_sentences))
+    # Map sentence pairs.
+    ds = tf.data.Dataset.from_tensor_slices((first, second))
     # Watch out for tf.data's default unpacking of tuples here!
     # Best to invoke the `preprocessor` directly in this case.
     ds = ds.map(
-        lambda s1, s2: preprocessor(x=(s1, s2)),
+        lambda first, second: preprocessor(x=(first, second)),
         num_parallel_calls=tf.data.AUTOTUNE,
     )
-
-    # Alternatively, you can create a preprocessor from your own vocabulary.
-    # The usage is the exactly same as above.
-    tokenizer = keras_nlp.models.DebertaV3MaskedLMTokenizer(proto="model.spm")
-    preprocessor = keras_nlp.models.DebertaV3MaskedLMPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=10,
-    )
+    ```
     """
 
     def __init__(

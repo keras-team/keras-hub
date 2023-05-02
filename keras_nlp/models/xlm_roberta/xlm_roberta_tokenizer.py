@@ -27,19 +27,18 @@ from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaTokenizer")
 class XLMRobertaTokenizer(SentencePieceTokenizer):
-    """XLM-RoBERTa tokenizer layer based on SentencePiece.
+    """An XLM-RoBERTa tokenizer using SentencePiece subword segmentation.
 
     This tokenizer class will tokenize raw strings into integer sequences and
     is based on `keras_nlp.tokenizers.SentencePieceTokenizer`. Unlike the
     underlying tokenizer, it will check for all special tokens needed by
     XLM-RoBERTa models and provides a `from_preset()` method to automatically
-    download a matching vocabulary for a XLM-RoBERTa preset.
+    download a matching vocabulary for an XLM-RoBERTa preset.
 
-    The original fairseq implementation of XLM-RoBERTa modifies the indices of
-    the SentencePiece tokenizer output. To preserve compatibility, we make the
-    same changes, i.e., `"<s>"`, `"<pad>"`, `"</s>"` and `"<unk>"` are mapped to
-    0, 1, 2, 3, respectively, and non-special token indices are shifted right
-    by one.
+    Note: If you are providing your own custom SentencePiece model, the original
+    fairseq implementation of XLM-RoBERTa re-maps some token indices from the
+    underlying sentencepiece output. To preserve compatibility, we do the same
+    re-mapping here.
 
     If input is a batch of strings (rank > 0), the layer will output a
     `tf.RaggedTensor` where the last dimension of the output is ragged.
@@ -48,14 +47,27 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     `tf.Tensor` with static shape `[None]`.
 
     Args:
-        proto: Either a `string` path to a SentencePiece proto file, or a
+        proto: Either a `string` path to a SentencePiece proto file or a
             `bytes` object with a serialized SentencePiece proto. See the
             [SentencePiece repository](https://github.com/google/sentencepiece)
             for more details on the format.
 
     Examples:
-
     ```python
+    tokenizer = keras_nlp.models.XLMRobertaTokenizer.from_preset(
+        "xlm_roberta_base_multi",
+    )
+
+    # Unbatched inputs.
+    tokenizer("the quick brown fox")
+
+    # Batched inputs.
+    tokenizer(["the quick brown fox", "الأرض كروية"])
+
+    # Detokenization.
+    tokenizer.detokenize(tokenizer("the quick brown fox"))
+
+    # Custom vocabulary
     def train_sentencepiece(ds, vocab_size):
         bytes_io = io.BytesIO()
         sentencepiece.SentencePieceTrainer.train(
@@ -72,18 +84,8 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     ds = tf.data.Dataset.from_tensor_slices(
         ["the quick brown fox", "the earth is round"]
     )
-
     proto = train_sentencepiece(ds, vocab_size=10)
     tokenizer = keras_nlp.models.XLMRobertaTokenizer(proto=proto)
-
-    # Batched inputs.
-    tokenizer(["the quick brown fox", "the earth is round"])
-
-    # Unbatched inputs.
-    tokenizer("the quick brown fox")
-
-    # Detokenization.
-    tokenizer.detokenize(tf.constant([[0, 4, 9, 5, 7, 2]]))
     ```
     """
 
@@ -98,10 +100,11 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         self.pad_token_id = 1  # <pad>
         self.end_token_id = 2  # </s>
         self.unk_token_id = 3  # <unk>
+        self.mask_token_id = self.vocabulary_size() - 1  # <mask>
 
     def vocabulary_size(self):
         """Get the size of the tokenizer vocabulary."""
-        return super().vocabulary_size() + 1
+        return super().vocabulary_size() + 2
 
     def get_vocabulary(self):
         """Get the size of the tokenizer vocabulary."""
@@ -110,10 +113,14 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
                 tf.range(super().vocabulary_size())
             )
         )
-        return self._vocabulary_prefix + vocabulary[3:]
+        return self._vocabulary_prefix + vocabulary[3:] + ["<mask>"]
 
     def id_to_token(self, id):
         """Convert an integer id to a string token."""
+
+        if id == self.mask_token_id:
+            return "<mask>"
+
         if id < len(self._vocabulary_prefix):
             return self._vocabulary_prefix[id]
 
@@ -121,10 +128,18 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
+
         if token in self._vocabulary_prefix:
             return self._vocabulary_prefix.index(token)
 
-        return int(self._sentence_piece.string_to_id(token).numpy()) + 1
+        spm_token_id = self._sentence_piece.string_to_id(token)
+
+        # OOV token
+        spm_unk_token_id = self._sentence_piece.string_to_id("<unk>")
+        if spm_token_id == spm_unk_token_id:
+            return self.unk_token_id
+
+        return int(spm_token_id.numpy()) + 1
 
     def tokenize(self, inputs):
         tokens = super().tokenize(inputs)
@@ -137,25 +152,9 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         # Shift the tokens IDs right by one.
         return tf.add(tokens, 1)
 
-    def detokenize(self, inputs):
-        if inputs.dtype == tf.string:
-            return super().detokenize(inputs)
-
-        # Shift the tokens IDs left by one.
-        tokens = tf.subtract(inputs, 1)
-
-        # Correct `unk_token_id`, `end_token_id`, `start_token_id`, respectively.
-        # Note: The `pad_token_id` is taken as 0 (`unk_token_id`) since the
-        # proto does not contain `pad_token_id`. This mapping of the pad token
-        # is done automatically by the above subtraction.
-        tokens = tf.where(tf.equal(tokens, self.unk_token_id - 1), 0, tokens)
-        tokens = tf.where(tf.equal(tokens, self.end_token_id - 1), 2, tokens)
-        tokens = tf.where(tf.equal(tokens, self.start_token_id - 1), 1, tokens)
-
-        # Note: Even though we map `"<s>" and `"</s>"` to the correct IDs,
-        # the `detokenize` method will return empty strings for these tokens.
-        # This is a vagary of the `sentencepiece` library.
-        return super().detokenize(tokens)
+    def detokenize(self, ids):
+        ids = tf.ragged.boolean_mask(ids, tf.not_equal(ids, self.mask_token_id))
+        return super().detokenize(ids)
 
     @classproperty
     def presets(cls):

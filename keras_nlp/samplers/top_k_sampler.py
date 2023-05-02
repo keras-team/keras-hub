@@ -17,56 +17,46 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.samplers.sampler import Sampler
-from keras_nlp.samplers.sampler import base_sampler_args_docstring
 from keras_nlp.samplers.sampler import call_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@format_docstring(
-    base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
-)
+@format_docstring(call_args=call_args_docstring)
 @keras_nlp_export("keras_nlp.samplers.TopKSampler")
 class TopKSampler(Sampler):
     """Top-K Sampler class.
 
-    This sampler implements top-k search algorithm. Briefly top-k algorithm
+    This sampler implements top-k search algorithm. Briefly, top-k algorithm
     randomly selects a token from the tokens of top K probability, with
     selection chance determined by the probability.
 
     Args:
         k: int, the `k` value of top-k.
         seed: int, defaults to None. The random seed.
-        {{base_sampler_args}}
 
-    Call Args:
+    Call arguments:
         {{call_args}}
 
     Examples:
     ```python
-    VOCAB_SIZE = 10
+    # Use a simple alphabet of lowercase characters with ids in range [0, 25].
+    int_lookup = {i: chr(i + ord('a')) for i in range(26)}
+    char_lookup = {v: k for k, v in int_lookup.items()}
+    batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
-    # Create a dummy model to predict the next token.
-    model = keras.Sequential(
-        [
-            keras.Input(shape=[None]),
-            keras.layers.Embedding(
-                input_dim=VOCAB_SIZE,
-                output_dim=16,
-            ),
-            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
-        ]
+    def next(prompt, cache, index):
+        hidden_states = tf.ones((batch_size, 10))
+        # A uniform distribution over our alphabet.
+        logits = tf.ones((batch_size, vocab_size))
+        return logits, hidden_states, cache
+
+    output = keras_nlp.samplers.TopKSampler(k=3)(
+        next=next,
+        prompt=tf.fill((batch_size, length,), char_lookup['z']),
+        index=5,
     )
-
-    # Define a function that outputs the next token's probability for each token
-    # in the input sequence.
-    def token_probability_fn(inputs, mask):
-        return model(inputs)
-
-    prompt = tf.fill((8, 1), 1)
-
-    sampler = keras_nlp.samplers.TopKSampler(k=5)
-    # Print the generated sequence (token ids).
-    print(sampler(prompt, token_probability_fn, max_length=10))
+    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
+    # >>> ['zzzzzacbbcaa']
     ```
     """
 
@@ -74,17 +64,16 @@ class TopKSampler(Sampler):
         self,
         k=5,
         seed=None,
-        jit_compile=True,
-        run_eagerly=False,
+        **kwargs,
     ):
+        super().__init__(**kwargs)
         self.k = k
         self.seed = seed
-        super().__init__(jit_compile=jit_compile, run_eagerly=run_eagerly)
 
-    def get_next_token(self, next_token_probs):
+    def get_next_token(self, probabilities):
         # Filter out top-k tokens.
         top_k_pred, top_k_indices = tf.math.top_k(
-            next_token_probs, k=self.k, sorted=False
+            probabilities, k=self.k, sorted=False
         )
         # Sample the next token from the probability distribution.
         next_token = tf.random.categorical(
@@ -96,7 +85,6 @@ class TopKSampler(Sampler):
 
     def get_config(self):
         config = super().get_config()
-
         config.update(
             {
                 "k": self.k,

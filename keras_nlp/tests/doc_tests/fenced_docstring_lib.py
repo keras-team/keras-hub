@@ -91,6 +91,11 @@ class FencedCellParser(doctest.DocTestParser):
             if re.search("doctest.*skip", match.group(0), re.IGNORECASE):
                 continue
 
+            # Do not test any docstring with our format string markers.
+            # These will not run until formatted.
+            if re.search("{{", match.group(0)):
+                continue
+
             groups = match.groupdict()
 
             source = textwrap.dedent(groups["doctest"])

@@ -16,8 +16,8 @@
 import copy
 
 import tensorflow as tf
+from tensorflow import keras
 
-import keras_nlp
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
@@ -25,25 +25,33 @@ from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
 )
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.task import Task
-from keras_nlp.samplers import BeamSampler
-from keras_nlp.samplers import serialize
+from keras_nlp.samplers.serialization import get as get_sampler
+from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.tf_utils import tensor_to_string_list
+from keras_nlp.utils.tf_utils import truncate_at_token
 
 
-@keras_nlp_export("keras_nlp.models.GPT2CasualLM")
+@keras_nlp_export("keras_nlp.models.GPT2CausalLM")
 class GPT2CausalLM(Task):
     """An end-to-end GPT2 model for causal langauge modeling.
 
     A causal language model (LM) predicts the next token based on previous
-    tokens the next token based on previous tokens, which is the way GPT2 gets
-    pretrained. You can finetune `GPT2CausalLM` to generate text similar to
-    the custom dataset. `GPT2CausalLM` also has a method `generate()`, which
-    generates text based on given prompt.
+    tokens. This task setup can be used to train the model unsupervised on
+    plain text input, or to autoregressively generate plain text similar to
+    the data used for training. This task can be used for pre-training or
+    fine-tuning a GPT-2 model, simply by calling `fit()`.
+
+    This model has a `generate()` method, which generates text based on a
+    prompt. The generation strategy used is controlled by an additional
+    `sampler` argument on `compile()`. You can recompile the model with
+    different `keras_nlp.samplers` objects to control the generation. By
+    default, `"top_k"` sampling will be used.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to raw inputs during
-    `fit()`, `predict()`, and `evaluate()`. This is done by default when
-    creating the model with `from_preset()`.
+    `fit()`, `predict()`, `evaluate()` and `generate()`. This is done by default
+    when creating the model with `from_preset()`.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
@@ -58,7 +66,7 @@ class GPT2CausalLM(Task):
 
     Examples:
 
-    Use `generate()` method to do text generation.
+    Use `generate()` to do text generation.
     ```python
     gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
     gpt2_lm.generate("I want to say", max_length=30)
@@ -67,100 +75,84 @@ class GPT2CausalLM(Task):
     gpt2_lm.generate(["This is a", "Where are you"], max_length=30)
     ```
 
-    Use a custom sampler for text generation.
+    Compile the `generate()` function with a custom sampler.
     ```python
     gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
+    gpt2_lm.compile(sampler="greedy")
+    gpt2_lm.generate("I want to say", max_length=30)
 
-    # Use string identifier to set sampler.
-    gpt2_lm.generate("I want to say", max_length=30, sampler="top_p")
-
-    # Construct a sampler instance.
-    sampler = keras_nlp.samplers.BeamSampler(num_beams=2)
-    gpt2_lm.generate("I want to say", max_length=30, sampler=sampler)
+    gpt2_lm.compile(sampler=keras_nlp.samplers.BeamSampler(num_beams=2))
+    gpt2_lm.generate("I want to say", max_length=30)
     ```
 
-    Map raw string to languages model logit predictions.
+    Use `generate()` without preprocessing.
     ```python
-    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
-    gpt2_lm.predict(["You know this is just a test string"])
-    ```
+    # Prompt the model with `5338, 318` (the token ids for `"Who is"`).
+    # Use `"padding_mask"` to indicate values that should not be overridden.
+    prompt = {
+        "token_ids": tf.constant([[5338, 318, 0, 0, 0]] * 2),
+        "padding_mask": tf.constant([[1, 1, 0, 0, 0]] * 2),
+    }
 
-    Load a pretrained GPT2 and fit on a string dataset.
-    ```python
-    features = [
-        "I don't listen to music while coding.",
-        "But I watch youtube while coding!",
-    ]
-    ds = tf.data.Dataset.from_tensor_slices(features)
-
-    # Create a `GPT2CausalLM` and fit your data.
     gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset(
         "gpt2_base_en",
+        preprocessor=None,
     )
-    gpt2_lm.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    gpt2_lm.fit(ds, batch_size=2)
+    gpt2_lm.generate(prompt)
     ```
 
-    Load a pretrained `GPT2CausalLM` with custom preprocessor, and predict on
-    string inputs.
+    Call `fit()` on a single batch.
     ```python
-    # Use a shorter sequence length.
-    preprocessor = keras_nlp.models.GPT2CausalLMPreprocessor.from_preset(
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
+    gpt2_lm.fit(x=features, batch_size=2)
+    ```
+
+    Call `fit()` without preprocessing.
+    ```python
+    x = {
+        "token_ids": tf.constant([[50256, 1, 2, 3, 4]] * 2),
+        "padding_mask": tf.constant([[1, 1, 1, 1, 1]] * 2),
+    }
+    y = tf.constant([[1, 2, 3, 4, 50256]] * 2)
+    sw = tf.constant([[1, 1, 1, 1, 1]] * 2)
+
+    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset(
         "gpt2_base_en",
+        preprocessor=None,
+    )
+    gpt2_lm.fit(x=x, y=y, sample_weight=sw, batch_size=2)
+    ```
+
+    Custom backbone and vocabulary.
+    ```python
+    features = ["a quick fox.", "a fox quick."]
+    vocab = {"<|endoftext|>": 0, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    merges += ["Ġ f", "o x", "Ġf ox"]
+
+    tokenizer = keras_nlp.models.GPT2Tokenizer(
+        vocabulary=vocab,
+        merges=merges,
+    )
+    preprocessor = keras_nlp.models.GPT2CausalLMPreprocessor(
+        tokenizer=tokenizer,
         sequence_length=128,
     )
-
-    # Create a `GPT2CausalLM`, using pretrained GPT2 and custom preprocessor.
-    gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset(
-        "gpt2_base_en",
-        preprocessor=preprocessor,
-    )
-    gpt2_lm.predict(["You know this is still a test string"])
-    ```
-
-    Fit your preprocessed data with randomly initialized GPT2. This is useful
-    when you want to do data preprocessing inside `tf.data` pipeline.
-    ```python
-    # Define preprocessed input.
-    features = {
-        "token_ids": tf.constant(
-            [[1, 2, 3, 4, 0, 0]] * 2, shape=(2, 6)
-        ),
-        "padding_mask": tf.constant(
-            [[1, 1, 1, 1, 0, 0]] * 2, shape=(2, 6)
-        ),
-    }
-    labels = tf.constant(
-        [[2, 3, 4, 0, 0, 0]] * 2, shape=(2, 6)
-    )
-    sample_weight = tf.constant(
-        [[1, 1, 1, 0, 0, 0]] * 2, shape=(2, 6)
-    )
-
-    # Randomly initialize a GPT2 backbone.
     backbone = keras_nlp.models.GPT2Backbone(
-        vocabulary_size=50257,
-        num_layers=2,
-        num_heads=2,
-        hidden_dim=128,
-        intermediate_dim=256,
+        vocabulary_size=30552,
+        num_layers=4,
+        num_heads=4,
+        hidden_dim=256,
+        intermediate_dim=512,
         max_sequence_length=128,
     )
-    # Create a `GPT2CausalLM` without preprocessor and fit the data.
-    gpt2_lm = keras_nlp.models.GPT2CausalLM(backbone, preprocessor=None)
-    gpt2_lm.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    gpt2_lm = keras_nlp.models.GPT2CausalLM(
+        backbone=backbone,
+        preprocessor=preprocessor,
     )
-    gpt2_lm.fit(
-        x=features,
-        y=labels,
-        sample_weight=sample_weight,
-        batch_size=2,
-    )
+    gpt2_lm.fit(x=features, batch_size=2)
     ```
-
     """
 
     def __init__(
@@ -186,10 +178,18 @@ class GPT2CausalLM(Task):
             include_preprocessing=preprocessor is not None,
             **kwargs,
         )
-
         self.backbone = backbone
         self.preprocessor = preprocessor
-        self.sampler = None
+        self.generate_function = None
+        self._sampler = None
+
+        # Default compilation
+        self.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            optimizer=keras.optimizers.Adam(2e-5),
+            metrics=keras.metrics.SparseCategoricalAccuracy(),
+            jit_compile=is_xla_compatible(self),
+        )
 
     @classproperty
     def presets(cls):
@@ -203,7 +203,12 @@ class GPT2CausalLM(Task):
     def preprocessor_cls(cls):
         return GPT2CausalLMPreprocessor
 
-    def call_with_cache(self, token_ids, padding_mask, cache, cache_index):
+    def call_with_cache(
+        self,
+        token_ids,
+        cache,
+        cache_index,
+    ):
         """Forward pass of `GPT2CausalLM` with cache.
 
         `call_with_cache` adds an additional forward pass for the model for
@@ -212,16 +217,16 @@ class GPT2CausalLM(Task):
         and avoids recomputing the outputs of seen tokens.
 
         Args:
-            token_ids: a dense int Tensor, input token ids.
-            padding_mask: a dense bool Tensor, input padding mask.
+            token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
             cache: a dense float Tensor, the cache of key and value.
             cache_index: int, or int Tensor. The index of current inputs in the
                 whole sequence.
 
         Returns:
-            A (logits, cache) tuple. Where the first output is the language
-            model logits for the input token_ids and the second output is the
-            cache.
+            A (logits, hidden_states, cache) tuple. Where `logits` is the
+            language model logits for the input token_ids, `hidden_states` is
+            the final hidden representation of the input tokens, and `cache` is
+            the decoding cache.
         """
         token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
         position_embedding = self.backbone.get_layer("position_embedding")(
@@ -237,104 +242,217 @@ class GPT2CausalLM(Task):
             current_cache = caches[i]
             x, next_cache = self.backbone.get_layer(f"transformer_layer_{i}")(
                 x,
-                decoder_padding_mask=padding_mask,
                 cache=current_cache,
                 cache_index=cache_index,
             )
             caches[i] = next_cache
         cache = tf.stack(caches, axis=1)
         x = self.backbone.get_layer("layer_norm")(x)
-        x = tf.matmul(
-            x,
+        hidden_states = x
+        logits = tf.matmul(
+            hidden_states,
             self.backbone.get_layer("token_embedding").embeddings,
             transpose_b=True,
         )
-        return x, cache
+        return logits, hidden_states, cache
 
-    def build_empty_cache(self, batch_size, max_length):
+    def _build_cache(self, token_ids):
         """Build an empty cache for use with `call_with_cache()`."""
+        batch_size, max_length = tf.shape(token_ids)[0], tf.shape(token_ids)[1]
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_heads
         head_dim = self.backbone.hidden_dim // self.backbone.num_heads
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
-        return tf.zeros(shape)
+        cache = tf.zeros(shape, dtype=self.compute_dtype)
+        # Seed the cache.
+        _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
+        return hidden_states, cache
 
-    def _get_token_probability(
+    def compile(
         self,
-        prompt,
-        mask,
-        cache=None,
-        cache_index=None,
+        *args,
+        run_eagerly=False,
+        jit_compile=True,
+        sampler="top_k",
+        **kwargs,
     ):
-        batch_size = tf.shape(prompt)[0]
-        prompt = tf.slice(prompt, [0, cache_index], [batch_size, 1])
-        return self.call_with_cache(prompt, mask, cache, cache_index)
+        xla_compatible = is_xla_compatible(self)
+        super().compile(
+            *args,
+            run_eagerly=run_eagerly,
+            # Only `jit_compile` if not eager and in a compatible environment.
+            jit_compile=jit_compile and xla_compatible and not run_eagerly,
+            **kwargs,
+        )
+        self._sampler = get_sampler(sampler)
+        # Clear the compiled generate function.
+        self.generate_function = None
+
+    def make_generate_function(self):
+        """Create or return the compiled generation function."""
+        if self.generate_function is not None:
+            return self.generate_function
+
+        if self.run_eagerly:
+            self.generate_function = self.generate_step
+        else:
+            # `jit_compile` is a property of keras.Model after TF 2.12.
+            # Use `getattr()` for backwards compatibility.
+            jit_compile = getattr(self, "jit_compile", True)
+            self.generate_function = tf.function(
+                self.generate_step, jit_compile=jit_compile
+            )
+        return self.generate_function
+
+    def generate_step(
+        self,
+        token_ids,
+        padding_mask,
+        end_token_id=None,
+    ):
+        """A compilable generation function for a single batch of inputs.
+
+        This function represents the inner, XLA-compilable, generation function
+        for a single batch of inputs. It takes in a dense `tf.Tensor` of token
+        ids, and return a dense `tf.Tensor` of token ids, and includes no
+        preprocessing. This function is wrapped by the `generate()` method.
+
+        Args:
+            token_ids: A dense int Tensor, with shape
+                `(batch_size, max_length)`. The user provided token ids
+                padded to `max_length`.
+            padding_mask: A dense boolean Tensor, with the same shape as
+                `token_ids`. Positions that are True in the `padding_mask`
+                are assumed to be user input and never updated.
+            end_token_id: The id of the end token to stop on. If all
+                sequences have produced a new `end_token_id`, generation
+                will stop.
+        """
+        # Create and seed cache with a single forward pass.
+        hidden_states, cache = self._build_cache(token_ids)
+        # Compute the lengths of all user inputted tokens ids.
+        row_lengths = tf.math.reduce_sum(
+            tf.cast(padding_mask, tf.int32), axis=-1
+        )
+        # Start at the first index that has no user inputted id.
+        index = tf.math.reduce_min(row_lengths)
+
+        def next(prompt, cache, index):
+            # The cache index is the index of our previous token.
+            cache_index = index - 1
+            prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
+            logits, hidden_states, cache = self.call_with_cache(
+                prompt,
+                cache,
+                cache_index,
+            )
+            return (
+                tf.squeeze(logits, axis=1),
+                tf.squeeze(hidden_states, axis=1),
+                cache,
+            )
+
+        return self._sampler(
+            next=next,
+            prompt=token_ids,
+            cache=cache,
+            index=index,
+            mask=padding_mask,
+            end_token_id=end_token_id,
+            hidden_states=hidden_states,
+        )
 
     def generate(
         self,
-        prompt,
-        max_length,
-        sampler="top_k",
+        inputs,
+        max_length=None,
     ):
-        """Generate text.
+        """Generate text given prompt `inputs`.
 
-        This method generates text based on given `prompt`. Generation will
-        continue until `max_length` is met, and all tokens generated after
-        `end_token` will be truncated. The sampling approach used can be
-        controlled via the sampler argument.
+        This method generates text based on given `inputs`. The sampling method
+        used for generation can be set in the `compile` method.
+
+        If `inputs` are a `tf.data.Dataset`, outputs will be generated
+        "batch-by-batch" and concatenated. Otherwise, all inputs will be handled
+        as a single batch.
+
+        If a `preprocessor` is attached to the model, `inputs` should be
+        strings and returned sequences will be strings. Otherwise, inputs should
+        be preprocessed before calling `generate()`, and returned sequences will
+        be token ids.
 
         Args:
-            prompt: a string, string Tensor or string RaggedTensor. The prompt
-                text for generation.
-            max_length: int. The max length of generated sequence.
-            sampler: a string or `keras_nlp.samplers.Sampler` instance. The
-                sampler to be used for text generation.
+            inputs: a string `tf.Tensor`, a `tf.data.Dataset` of strings, a
+                python string or a list of python strings. If no `preprocessor`
+                is attached to the model, inputs should instead be a nested
+                `tf.Tensor` or `tf.data.Dataset` with keys `"token_ids"` and
+                `"padding_mask"`.
+            max_length: Optional. int. The max length of the generated sequence.
+                Will default to the max configured `sequence_length` of the
+                `preprocessor`. If `preprocessor` is `None`, `inputs` should be
+                should be padded to the desired maximum length and this argument
+                will be ignored.
+
+        Returns:
+            A string or string list if `preprocessor` is set, and a integer
+            tensor of token IDs if `preprocessor is None`.
         """
-        if self.preprocessor is None:
-            raise ValueError(
-                "`self.preprocessor` is `None`, please make sure "
-                "`preprocessor` is set before calling `generate`."
-            )
-        sampler = keras_nlp.samplers.get(sampler)
-        if sampler.__class__ == BeamSampler:
-            raise ValueError(
-                "`BeamSampler` is not supported right now, please choose "
-                "another sampler, e.g., `TopPSampler`."
-            )
-        if hasattr(self, "jit_compile"):
-            # `jit_compile` is a public property as of tf 2.12. hasattr is for
-            # backward compat.
-            sampler.jit_compile = self.jit_compile
-        sampler.run_eagerly = self.run_eagerly
-        if self.sampler and serialize(sampler) == serialize(self.sampler):
-            # If the new sampler is the same as the older one, we reuse the old
-            # sampler to avoid recompile.
-            sampler = self.sampler
+        input_is_scalar = False
+
+        if self.preprocessor is not None:
+
+            def preprocess(x):
+                return self.preprocessor(
+                    x,
+                    sequence_length=max_length,
+                    return_labels=False,
+                    # We do not append an end token by default during
+                    # generation, as generating directly in the same sequence is
+                    # the most common workflow. If an end token directly after
+                    # a prompt is desired, it can be added to the prompt string.
+                    add_end_token=False,
+                )
+
+            if not isinstance(inputs, tf.data.Dataset):
+                inputs = tf.convert_to_tensor(inputs)
+                input_is_scalar = inputs.shape.rank == 0
+                inputs = inputs[tf.newaxis] if input_is_scalar else inputs
+                # Wrap a list to avoid the overhead of converting to dataset.
+                inputs = [preprocess(inputs)]
+            else:
+                inputs = inputs.map(preprocess, tf.data.AUTOTUNE)
+                inputs = inputs.prefetch(tf.data.AUTOTUNE)
         else:
-            self.sampler = sampler
+            if not isinstance(inputs, tf.data.Dataset):
+                # Wrap a list to avoid the overhead of converting to dataset.
+                inputs = [inputs]
 
-        # Tokenize.
-        prompt = self.preprocessor.tokenizer(prompt)
+        generate_function = self.make_generate_function()
+        outputs = []
+        for batch in inputs:
+            token_ids, padding_mask = batch["token_ids"], batch["padding_mask"]
+            # If `preprocessor` is attached, we can stop after end_token_id.
+            end_token_id = None
+            if self.preprocessor is not None:
+                end_token_id = self.preprocessor.tokenizer.end_token_id
+            # Run the compiled generate function.
+            output = generate_function(token_ids, padding_mask, end_token_id)
 
-        # Create and seed the cache before generation.
-        token_ids = prompt
-        if prompt.shape.rank == 1:
-            token_ids = tf.RaggedTensor.from_tensor(prompt[tf.newaxis, :])
-        token_ids = token_ids.to_tensor(shape=(None, max_length))
-        # Pass a padding mask of all ones when seeing the cache. The mask will
-        # not affect cached key/values for input tokens we care about.
-        padding_mask = tf.ones_like(token_ids, dtype=tf.bool)
-        batch_size = tf.shape(token_ids)[0]
-        cache = self.build_empty_cache(batch_size, max_length)
-        _, cache = self.call_with_cache(token_ids, padding_mask, cache, 0)
-        # Run generation.
-        generated = sampler(
-            prompt,
-            self._get_token_probability,
-            max_length=max_length,
-            end_token_id=self.preprocessor.tokenizer.end_token_id,
-            cache=cache,
-        )
+            if self.preprocessor is not None:
+                # Truncate to ragged by removing tokens after the first
+                # generated `end_token_id`.
+                output = truncate_at_token(output, end_token_id, padding_mask)
+                # Strip start token if added.
+                if self.preprocessor.add_start_token:
+                    output = output[:, 1:]
+                # Detokenize.
+                output = self.preprocessor.tokenizer.detokenize(output)
+            outputs.append(output)
 
-        # Detokenize.
-        return self.preprocessor.tokenizer.detokenize(generated)
+        outputs = tf.concat(outputs, axis=0)
+        outputs = tf.squeeze(outputs, 0) if input_is_scalar else outputs
+        # Convert outputs to a friendly pythonic type. For numerical outputs
+        # that is numpy, for string outputs that is `list` and `str`.
+        if outputs.dtype == tf.string:
+            return tensor_to_string_list(outputs)
+        return outputs.numpy()

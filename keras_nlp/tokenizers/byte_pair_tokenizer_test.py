@@ -35,7 +35,6 @@ MERGE_PATH = keras.utils.get_file(
 class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
-
         self.tokenizer = BytePairTokenizer(
             vocabulary=VOCAB_PATH, merges=MERGE_PATH
         )
@@ -65,6 +64,25 @@ class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             ]
         )
         self.assertAllEqual(call_output, expected)
+
+    def test_tokenize_with_special_tokens(self):
+        vocab = {"sp": 0, "s": 1, "p": 2}
+        merges = ["s p"]
+        tokenizer = BytePairTokenizer(
+            vocabulary=vocab,
+            merges=merges,
+            unsplittable_tokens=["s", "p"],
+        )
+        output = tokenizer("sp")
+        self.assertAllEqual(output, [1, 2])
+
+        # If not setting special tokens, "sp" is one token.
+        tokenizer = BytePairTokenizer(
+            vocabulary=vocab,
+            merges=merges,
+        )
+        output = tokenizer("sp")
+        self.assertEqual(output, [0])
 
     def test_tokenize_prefix_space(self):
         input_data = ["brown.", "black."]
@@ -164,7 +182,9 @@ class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),

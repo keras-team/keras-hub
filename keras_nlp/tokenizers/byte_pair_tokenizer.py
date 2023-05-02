@@ -24,6 +24,7 @@ import os
 from typing import Iterable
 from typing import List
 
+import regex as re
 import tensorflow as tf
 from tensorflow import keras
 
@@ -51,9 +52,20 @@ SPLIT_PATTERN_1 = (
 SPLIT_PATTERN_1 = SPLIT_PATTERN_1.replace(
     "{special_spaces}", SPECIAL_WHITESPACES
 )
-
-
 SPLIT_PATTERN_2 = rf"""[\s६{SPECIAL_WHITESPACES}]$"""
+
+
+def create_alts_for_unsplittable_tokens(unsplittable_tokens):
+    # Create alternates for all special tokens that will be not split during
+    # tokenization.
+    alts = []
+    prefix = "Ĵ"
+    # Trim out splitters.
+    replace_pattern = r"'|\s+|[^\p{L}\p{N}]+"
+    for token in unsplittable_tokens:
+        token = re.sub(replace_pattern, "", token)
+        alts.append(prefix + token)
+    return alts
 
 
 def bytes_to_unicode():
@@ -88,7 +100,7 @@ def remove_strings_from_inputs(tensor, string_to_remove):
     return result
 
 
-def split_strings_for_bpe(inputs):
+def split_strings_for_bpe(inputs, unsplittable_tokens=None):
     # We need to recreate the exact behavior of token presplitting in the
     # original gpt2 tokenizer which uses a lookahead. As re2 does not
     # support lookahead match, we are using an alternative insert a special
@@ -100,12 +112,25 @@ def split_strings_for_bpe(inputs):
     inputs = tf.strings.regex_replace(
         inputs, rf"(\s{SPECIAL_WHITESPACES})$", r"\1६"
     )
+    if unsplittable_tokens:
+        alts = create_alts_for_unsplittable_tokens(unsplittable_tokens)
+        for token, alt in zip(unsplittable_tokens, alts):
+            escaped_token = re.escape(token)
+            inputs = tf_text.regex_split(inputs, escaped_token, escaped_token)
+            inputs = tf.strings.regex_replace(inputs, escaped_token, alt)
     raw_tokens = tf_text.regex_split(inputs, SPLIT_PATTERN_1, SPLIT_PATTERN_1)
     # Second pass splits out the last whilespace char or "६".
     raw_tokens = tf_text.regex_split(
         raw_tokens, SPLIT_PATTERN_2, SPLIT_PATTERN_2
     )
-    if raw_tokens.shape.rank > 2:
+    if unsplittable_tokens:
+        # Replace special tokens alternate with originals.
+        for token, alt in zip(unsplittable_tokens, alts):
+            escaped_alt = re.escape(alt)
+            raw_tokens = tf.strings.regex_replace(
+                raw_tokens, escaped_alt, token
+            )
+    while raw_tokens.shape.rank > 2:
         raw_tokens = raw_tokens.merge_dims(1, 2)
     return remove_strings_from_inputs(raw_tokens, "६")
 
@@ -128,7 +153,9 @@ class BytePairTokenizerCache(tf.Module):
         # `tf.lookup.experimental.MutableHashTable` does not support string to
         # string mapping. So we first convert to string to an integer key, and
         # use the integer key to find the value.
-        self.factors = tf.pow(256, tf.range(0, 8, dtype=tf.int64))
+        self.factors = tf.pow(
+            tf.constant(256, dtype=tf.int64), tf.range(0, 8, dtype=tf.int64)
+        )
         self.id2value = tf.lookup.experimental.MutableHashTable(
             tf.int64, tf.string, ""
         )
@@ -202,6 +229,12 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             and will tokenize a word with a leading space differently. Adding
             a prefix space to the first word will cause it to be tokenized
             equivalently to all subsequent words in the sequence.
+        unsplittable_tokens: list, defaults to None. A list of strings that will
+            never be split during the word-level splitting applied before the
+            byte-pair encoding. This can be used to ensure special tokens map to
+            unique indices in the vocabulary, even if these special tokens
+            contain splittable characters such as punctuation. Special tokens
+            must still be included in `vocabulary`.
 
     Examples:
 
@@ -237,6 +270,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         merges,
         sequence_length=None,
         add_prefix_space=False,
+        unsplittable_tokens=None,
         **kwargs,
     ) -> None:
         assert_tf_text_installed(self.__class__.__name__)
@@ -276,6 +310,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             )
         self.sequence_length = sequence_length
         self.add_prefix_space = add_prefix_space
+        self.unsplittable_tokens = unsplittable_tokens
 
         # Create byte <=> unicode mapping. This is useful for handling
         # whitespace tokens.
@@ -288,6 +323,10 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         )
 
         self.cache = BytePairTokenizerCache()
+        if unsplittable_tokens:
+            # Put special tokens into cache, so it won't be further split and
+            # merged.
+            self.cache.insert(unsplittable_tokens, unsplittable_tokens)
 
         # Create mapping between string tokens to int ids, and vice versa.
         byte_pairs = [x[0] for x in self.vocabulary.items()]
@@ -346,6 +385,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 "vocabulary": self.vocabulary,
                 "merges": self.merges,
                 "sequence_length": self.sequence_length,
+                "add_prefix_space": self.add_prefix_space,
+                "unsplittable_tokens": self.unsplittable_tokens,
             }
         )
         return config
@@ -466,7 +507,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
 
-        raw_tokens = split_strings_for_bpe(inputs)
+        raw_tokens = split_strings_for_bpe(inputs, self.unsplittable_tokens)
         token_row_splits = raw_tokens.row_splits
         flat_tokens = raw_tokens.flat_values
 

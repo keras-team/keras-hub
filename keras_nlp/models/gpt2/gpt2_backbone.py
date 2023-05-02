@@ -20,8 +20,8 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers import PositionEmbedding
-from keras_nlp.layers import TransformerDecoder
+from keras_nlp.layers.position_embedding import PositionEmbedding
+from keras_nlp.layers.transformer_decoder import TransformerDecoder
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
@@ -60,7 +60,7 @@ class GPT2Backbone(Backbone):
             a two-layer feedforward network for each transformer.
         dropout: float. Dropout probability for the Transformer encoder.
         max_sequence_length: int. The maximum sequence length that this encoder
-            can consume. If None, `max_sequence_length` uses the value from
+            can consume. If `None`, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
 
@@ -73,11 +73,11 @@ class GPT2Backbone(Backbone):
         ),
     }
 
-    # Pretrained GPT-2 decoder
-    model = GPT2Backbone.from_preset("gpt2_base_en")
-    output = model(input_data)
+    # Pretrained GPT-2 decoder.
+    model = keras_nlp.models.GPT2Backbone.from_preset("gpt2_base_en")
+    model(input_data)
 
-    # Randomly initialized GPT-2 decoder with custom config
+    # Randomly initialized GPT-2 decoder with custom config.
     model = keras_nlp.models.GPT2Backbone(
         vocabulary_size=50257,
         num_layers=12,
@@ -86,9 +86,7 @@ class GPT2Backbone(Backbone):
         intermediate_dim=3072,
         max_sequence_length=1024,
     )
-
-    # Call the model on the input data.
-    output = model(input_data)
+    model(input_data)
     ```
     """
 

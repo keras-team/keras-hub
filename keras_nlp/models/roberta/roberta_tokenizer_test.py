@@ -16,6 +16,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
@@ -53,6 +54,11 @@ class RobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [3, 4, 5, 3, 6])
 
+    def test_tokenize_special_tokens(self):
+        input_data = "<s> airplane at airport</s><pad>"
+        output = self.tokenizer(input_data)
+        self.assertAllEqual(output, [0, 3, 4, 5, 3, 6, 0, 1])
+
     def test_tokenize_batch(self):
         input_data = tf.constant([" airplane at airport", " kohli is the best"])
         output = self.tokenizer(input_data)
@@ -70,10 +76,19 @@ class RobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         with self.assertRaises(ValueError):
             RobertaTokenizer(vocabulary=["a", "b", "c"], merges=[])
 
+    def test_serialization(self):
+        config = keras.utils.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.utils.deserialize_keras_object(config)
+        self.assertEqual(
+            new_tokenizer.get_config(),
+            self.tokenizer.get_config(),
+        )
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant([" airplane at airport"])
 
@@ -82,7 +97,9 @@ class RobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         model = keras.Model(inputs, outputs)
 
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
 
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(

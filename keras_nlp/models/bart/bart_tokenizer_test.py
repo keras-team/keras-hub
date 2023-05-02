@@ -52,6 +52,11 @@ class BartTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [3, 4, 5, 3, 6])
 
+    def test_tokenize_special_tokens(self):
+        input_data = "<s> airplane at airport</s><pad>"
+        output = self.tokenizer(input_data)
+        self.assertAllEqual(output, [0, 3, 4, 5, 3, 6, 0, 1])
+
     def test_tokenize_batch(self):
         input_data = tf.constant([" airplane at airport", " kohli is the best"])
         output = self.tokenizer(input_data)
@@ -81,7 +86,9 @@ class BartTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         model = keras.Model(inputs, outputs)
 
         path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
 
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(

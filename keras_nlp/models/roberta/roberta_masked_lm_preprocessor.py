@@ -31,32 +31,19 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
     `keras_nlp.models.RobertaMaskedLM` task model. Preprocessing will occur in
     multiple steps.
 
-    - Tokenize any number of input segments using the `tokenizer`.
-    - Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
+    1. Tokenize any number of input segments using the `tokenizer`.
+    2. Pack the inputs together with the appropriate `"<s>"`, `"</s>"` and
       `"<pad>"` tokens, i.e., adding a single `"<s>"` at the start of the
       entire sequence, `"</s></s>"` between each segment,
       and a `"</s>"` at the end of the entire sequence.
-    - Randomly select non-special tokens to mask, controlled by
+    3. Randomly select non-special tokens to mask, controlled by
       `mask_selection_rate`.
-    - Construct a `(x, y, sample_weight)` tuple suitable for training with a
+    4. Construct a `(x, y, sample_weight)` tuple suitable for training with a
       `keras_nlp.models.RobertaMaskedLM` task model.
 
     Args:
         tokenizer: A `keras_nlp.models.RobertaTokenizer` instance.
-        sequence_length: The length of the packed inputs.
-        mask_selection_rate: The probability an input token will be dynamically
-            masked.
-        mask_selection_length: The maximum number of masked tokens supported
-            by the layer.
-        mask_token_rate: float, defaults to 0.8. `mask_token_rate` must be
-            between 0 and 1 which indicates how often the mask_token is
-            substituted for tokens selected for masking.
-        random_token_rate: float, defaults to 0.1. `random_token_rate` must be
-            between 0 and 1 which indicates how often a random token is
-            substituted for tokens selected for masking. Default is 0.1.
-            Note: mask_token_rate + random_token_rate <= 1,  and for
-            (1 - mask_token_rate - random_token_rate), the token will not be
-            changed.
+        sequence_length: int. The length of the packed inputs.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
             `round_robin` or `waterfall`:
@@ -67,8 +54,29 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
                     "waterfall" algorithm that allocates quota in a
                     left-to-right manner and fills up the buckets until we run
                     out of budget. It supports an arbitrary number of segments.
+        mask_selection_rate: float. The probability an input token will be
+            dynamically masked.
+        mask_selection_length: int. The maximum number of masked tokens
+            in a given sample.
+        mask_token_rate: float. The probability the a selected token will be
+            replaced with the mask token.
+        random_token_rate: float. The probability the a selected token will be
+            replaced with a random token from the vocabulary. A selected token
+            will be left as is with probability
+            `1 - mask_token_rate - random_token_rate`.
+
+    Call arguments:
+        x: A tensor of single string sequences, or a tuple of multiple
+            tensor sequences to be packed together. Inputs may be batched or
+            unbatched. For single sequences, raw python inputs will be converted
+            to tensors. For multiple sequences, pass tensors directly.
+        y: Label data. Should always be `None` as the layer generates labels.
+        sample_weight: Label weights. Should always be `None` as the layer
+            generates label weights.
 
     Examples:
+
+    Directly calling the layer on data.
     ```python
     # Load the preprocessor from a preset.
     preprocessor = keras_nlp.models.RobertaMaskedLMPreprocessor.from_preset(
@@ -76,36 +84,39 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
     )
 
     # Tokenize and mask a single sentence.
-    sentence = tf.constant("The quick brown fox jumped.")
-    preprocessor(sentence)
+    preprocessor("The quick brown fox jumped.")
 
-    # Tokenize and mask a batch of sentences.
-    sentences = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
-    )
-    preprocessor(sentences)
+    # Tokenize and mask a batch of single sentences.
+    preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
 
-    # Tokenize and mask a dataset of sentences.
-    features = tf.constant(
-        ["The quick brown fox jumped.", "Call me Ishmael."]
+    # Tokenize and mask sentence pairs.
+    # In this case, always convert input to tensors before calling the layer.
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+    preprocessor((first, second))
+    ```
+
+    Mapping with `tf.data.Dataset`.
+    ```python
+    preprocessor = keras_nlp.models.RobertaMaskedLMPreprocessor.from_preset(
+        "roberta_base_en"
     )
-    ds = tf.data.Dataset.from_tensor_slices((features))
+
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+
+    # Map single sentences.
+    ds = tf.data.Dataset.from_tensor_slices(first)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
-    # Alternatively, you can create a preprocessor from your own vocabulary.
-    # The usage is exactly the same as above.
-    vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick", "Ġ f", "o x", "Ġf ox"]
-    tokenizer = keras_nlp.models.RobertaTokenizer(
-        vocabulary=vocab,
-        merges=merges,
+    # Map sentence pairs.
+    ds = tf.data.Dataset.from_tensor_slices((first, second))
+    # Watch out for tf.data's default unpacking of tuples here!
+    # Best to invoke the `preprocessor` directly in this case.
+    ds = ds.map(
+        lambda first, second: preprocessor(x=(first, second)),
+        num_parallel_calls=tf.data.AUTOTUNE,
     )
-    preprocessor = keras_nlp.models.RobertaMaskedLMPreprocessor(
-        tokenizer=tokenizer,
-        sequence_length=8,
-    )
-    preprocessor("a quick fox")
     ```
     """
 

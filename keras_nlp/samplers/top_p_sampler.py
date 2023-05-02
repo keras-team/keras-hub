@@ -17,14 +17,11 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.samplers.sampler import Sampler
-from keras_nlp.samplers.sampler import base_sampler_args_docstring
 from keras_nlp.samplers.sampler import call_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@format_docstring(
-    base_sampler_args=base_sampler_args_docstring, call_args=call_args_docstring
-)
+@format_docstring(call_args=call_args_docstring)
 @keras_nlp_export("keras_nlp.samplers.TopPSampler")
 class TopPSampler(Sampler):
     """Top-P Sampler class.
@@ -37,82 +34,85 @@ class TopPSampler(Sampler):
 
     Args:
         p: float, the `p` value of top-p.
+        k: int, defaults to None. If set, this argument defines a
+            heuristic "top-k" cutoff applied before the "top-p" sampling. All
+            logits not in the top `k` will be discarded, and the remaining
+            logits will be sorted to find a cutoff point for `p`. Setting this
+            arg can significantly speed sampling up by reducing the number
+            of tokens to sort.
         seed: int, defaults to None. The random seed.
-        {{base_sampler_args}}
 
-    Call Args:
+    Call arguments:
         {{call_args}}
 
     Examples:
     ```python
-    VOCAB_SIZE = 10
+    # Use a simple alphabet of lowercase characters with ids in range [0, 25].
+    int_lookup = {i: chr(i + ord('a')) for i in range(26)}
+    char_lookup = {v: k for k, v in int_lookup.items()}
+    batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
-    # Create a dummy model to predict the next token.
-    model = keras.Sequential(
-        [
-            keras.Input(shape=[None]),
-            keras.layers.Embedding(
-                input_dim=VOCAB_SIZE,
-                output_dim=16,
-            ),
-            keras.layers.Dense(VOCAB_SIZE, activation="softmax"),
-        ]
+    def next(prompt, cache, index):
+        hidden_states = tf.ones((batch_size, 10))
+        # A uniform distribution over our alphabet.
+        logits = tf.ones((batch_size, vocab_size))
+        return logits, hidden_states, cache
+
+    output = keras_nlp.samplers.TopPSampler(p=0.1)(
+        next=next,
+        prompt=tf.fill((batch_size, length,), char_lookup['z']),
+        index=5,
     )
-
-    # Define a function that outputs the next token's probability for each token
-    # in the input sequence.
-    def token_probability_fn(inputs, mask):
-        return model(inputs)
-
-    prompt = tf.fill((8, 1), 1)
-
-    sampler = keras_nlp.samplers.TopPSampler(p=0.1)
-    # Print the generated sequence (token ids).
-    print(sampler(prompt, token_probability_fn, max_length=10))
+    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
+    # >>> ['zzzzzbabcccb']
     ```
     """
 
     def __init__(
         self,
         p=0.1,
+        k=None,
         seed=None,
-        jit_compile=True,
-        run_eagerly=False,
+        **kwargs,
     ):
+        super().__init__(**kwargs)
         self.p = p
+        self.k = k
         self.seed = seed
-        super().__init__(jit_compile=jit_compile, run_eagerly=run_eagerly)
 
-    def get_next_token(self, next_token_probs):
-        # Sort preds in descending order.
+    def get_next_token(self, probabilities):
+        cutoff = tf.shape(probabilities)[1]
+        if self.k is not None:
+            # If `k` is set, only sample from top `k` tokens.
+            cutoff = tf.math.minimum(cutoff, self.k)
         sorted_preds, sorted_indices = tf.math.top_k(
-            next_token_probs, k=tf.shape(next_token_probs)[1], sorted=True
+            probabilities, k=cutoff, sorted=True
         )
         # Calculate cumulative probability distribution.
-        cumulative_probs = tf.math.cumsum(sorted_preds, axis=-1)
+        cumulative_probabilities = tf.math.cumsum(sorted_preds, axis=-1)
         # Create a mask for the tokens to keep.
-        keep_mask = cumulative_probs <= self.p
+        keep_mask = cumulative_probabilities <= self.p
         # Shift to include the last token that exceed p.
         shifted_keep_mask = tf.concat(
             [tf.ones_like(keep_mask[:, :1]), keep_mask[:, :-1]], axis=-1
         )
         # Filter out unmasked tokens and sample from filtered distribution.
-        probs = tf.where(
+        probabilities = tf.where(
             shifted_keep_mask,
             sorted_preds,
-            tf.zeros(tf.shape(next_token_probs), dtype=sorted_preds.dtype),
+            tf.zeros(tf.shape(sorted_preds), dtype=sorted_preds.dtype),
         )
         sorted_next_token = tf.random.categorical(
-            tf.math.log(probs), 1, seed=self.seed
+            tf.math.log(probabilities), 1, seed=self.seed
         )
         return tf.gather_nd(sorted_indices, sorted_next_token, batch_dims=1)
 
     def get_config(self):
         config = super().get_config()
-
         config.update(
             {
                 "p": self.p,
+                "k": self.k,
                 "seed": self.seed,
             }
         )

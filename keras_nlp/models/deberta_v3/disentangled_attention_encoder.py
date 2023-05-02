@@ -58,23 +58,6 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
         bias_initializer: string or `keras.initializers` initializer,
             defaults to "zeros". The bias initializer for
             the dense and disentangled self-attention layers.
-
-    Examples:
-
-    ```python
-    # Create a single disentangled attention encoder layer.
-    encoder = keras_nlp.layers.DisentangledAttentionEncoder(
-        intermediate_dim=64, num_heads=8)
-
-    # Create a simple model containing the encoder.
-    input = keras.Input(shape=[10, 64])
-    output = encoder(input)
-    model = keras.Model(inputs=input, outputs=output)
-
-    # Call encoder on the inputs.
-    input_data = tf.random.uniform(shape=[2, 10, 64])
-    output = model(input_data)
-    ```
     """
 
     def __init__(

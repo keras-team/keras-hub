@@ -55,6 +55,7 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         input_data = tf.constant(["The quick brown fox."])
         model = AlbertClassifier.from_preset(
             "albert_base_en_uncased",
+            num_classes=2,
             load_weights=load_weights,
         )
         # We don't assert output values, as the head weights are random.
@@ -71,6 +72,7 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         }
         model = AlbertClassifier.from_preset(
             "albert_base_en_uncased",
+            num_classes=2,
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -107,15 +109,15 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("albert_tokenizer", AlbertTokenizer),
-        ("albert_preprocessor", AlbertPreprocessor),
-        ("albert", AlbertBackbone),
-        ("albert_classifier", AlbertClassifier),
+        ("albert_tokenizer", AlbertTokenizer, {}),
+        ("albert_preprocessor", AlbertPreprocessor, {}),
+        ("albert", AlbertBackbone, {}),
+        ("albert_classifier", AlbertClassifier, {"num_classes": 2}),
     )
-    def test_unknown_preset_error(self, cls):
+    def test_unknown_preset_error(self, cls, kwargs):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("albert_base_en_uncased_clowntown")
+            cls.from_preset("albert_base_en_uncased_clowntown", **kwargs)
 
 
 @pytest.mark.extra_large
@@ -153,6 +155,7 @@ class AlbertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in AlbertClassifier.presets:
             classifier = AlbertClassifier.from_preset(
                 preset,
+                num_classes=2,
                 load_weights=load_weights,
             )
             input_data = tf.constant(["This quick brown fox"])
@@ -165,6 +168,7 @@ class AlbertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in AlbertClassifier.presets:
             classifier = AlbertClassifier.from_preset(
                 preset,
+                num_classes=2,
                 preprocessor=None,
                 load_weights=load_weights,
             )

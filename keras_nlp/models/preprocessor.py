@@ -14,14 +14,17 @@
 
 from tensorflow import keras
 
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras_nlp_export("keras_nlp.models.Preprocessor")
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class Preprocessor(keras.layers.Layer):
     """Base class for model preprocessors."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._tokenizer = None
 
     @property
     def tokenizer(self):
@@ -64,18 +67,10 @@ class Preprocessor(keras.layers.Layer):
 
         Examples:
         ```python
-        # Load preprocessor from preset
+        # Load a preprocessor layer from a preset.
         preprocessor = keras_nlp.models.{{preprocessor_name}}.from_preset(
             "{{example_preset_name}}",
         )
-        preprocessor("The quick brown fox jumped.")
-
-        # Override sequence_length
-        preprocessor = keras_nlp.models.{{preprocessor_name}}.from_preset(
-            "{{example_preset_name}}",
-            sequence_length=64
-        )
-        preprocessor("The quick brown fox jumped.")
         ```
         """
         if not cls.presets:

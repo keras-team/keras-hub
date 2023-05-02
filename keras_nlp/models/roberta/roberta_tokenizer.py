@@ -43,48 +43,38 @@ class RobertaTokenizer(BytePairTokenizer):
     `tf.Tensor` with static shape `[None]`.
 
     Args:
-        vocabulary: string or dict, maps token to integer ids. If it is a
-            string, it should be the file path to a json file.
-        merges: string or list, contains the merge rule. If it is a string,
-            it should be the file path to merge rules. The merge rule file
-            should have one merge rule per line. Every merge rule contains
-            merge entities separated by a space.
+        vocabulary: A dictionary mapping tokens to integer ids, or file path
+            to a json file containing the token to id mapping.
+        merges: A list of merge rules or a string file path, If passing a file
+            path. the file should have one merge rule per line. Every merge
+            rule contains merge entities separated by a space.
 
     Examples:
+    ```python
+    # Unbatched input.
+    tokenizer = keras_nlp.models.RobertaTokenizer.from_preset(
+        "roberta_base_en",
+    )
+    tokenizer("The quick brown fox jumped.")
 
-    Batched inputs.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab, merges=merges
-    ... )
-    >>> tokenizer(["a quick fox", "a fox quick"])
-    <tf.RaggedTensor [[4, 5, 6], [4, 6, 5]]>
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
 
+    # Detokenization.
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
 
-    Unbatched input.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab, merges=merges
-    ... )
-    >>> tokenizer("a quick fox")
-    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([4, 5, 6], dtype=int32)>
-
-    Detokenization.
-    >>> vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
-    >>> vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.RobertaTokenizer(
-    ...     vocabulary=vocab, merges=merges
-    ... )
-    >>> tokenizer.detokenize(tokenizer("a quick fox")).numpy().decode('utf-8')
-    'a quick fox'
+    # Custom vocabulary.
+    # Note: 'Ġ' is space
+    vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<mask>": 3}
+    vocab = {**vocab, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    merges += ["Ġ f", "o x", "Ġf ox"]
+    tokenizer = keras_nlp.models.RobertaTokenizer(
+        vocabulary=vocab,
+        merges=merges
+    )
+    tokenizer(["a quick fox", "a fox quick"])
+    ```
     """
 
     def __init__(
@@ -93,17 +83,20 @@ class RobertaTokenizer(BytePairTokenizer):
         merges,
         **kwargs,
     ):
-        super().__init__(
-            vocabulary=vocabulary,
-            merges=merges,
-            **kwargs,
-        )
-
-        # Check for necessary special tokens.
+        # Special tokens.
         start_token = "<s>"
         pad_token = "<pad>"
         end_token = "</s>"
         mask_token = "<mask>"
+
+        super().__init__(
+            vocabulary=vocabulary,
+            merges=merges,
+            unsplittable_tokens=[start_token, pad_token, end_token, mask_token],
+            **kwargs,
+        )
+
+        # Check whether special tokens are present in the vocabulary.
         for token in [start_token, pad_token, end_token, mask_token]:
             if token not in self.get_vocabulary():
                 raise ValueError(
@@ -120,3 +113,11 @@ class RobertaTokenizer(BytePairTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    def get_config(self):
+        config = super().get_config()
+        # In the constructor, we pass the list of special tokens to the
+        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # delete it from the config here.
+        del config["unsplittable_tokens"]
+        return config

@@ -49,43 +49,24 @@ class GPT2Tokenizer(BytePairTokenizer):
 
     Examples:
 
-    Batched inputs.
-    >>> vocab = {"<|endoftext|>": 0, "reful":1, "gent": 2, "Ġafter": 3}
-    >>> vocab = {**vocab, **{"noon": 4, "Ġsun": 5}}
-    >>> merges = ["Ġ a", "Ġ s", "r e", "f u", "g e", "n t", "e r", "n o", "o n"]
-    >>> merges += ["i g", "h t", "Ġs u", "Ġa f", "ge nt", "no on", "re fu"]
-    >>> merges += ["Ġsu n", "Ġaf t", "refu l", "Ġaft er"] # Ġ for whitespace
-    >>> inputs = [" afternoon sun", "refulgent sun"]
-    >>> tokenizer = keras_nlp.models.GPT2Tokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
-    ... )
-    >>> tokenizer(inputs)
-    <tf.RaggedTensor [[3, 4, 5], [1, 2, 5]]>
+    ```python
+    # Unbatched input.
+    tokenizer = keras_nlp.models.GPT2Tokenizer.from_preset("gpt2_base_en")
+    tokenizer("The quick brown fox jumped.")
 
-    Unbatched input.
-    >>> vocab = {"<|endoftext|>": 0, "Ġafter": 1, "noon": 2, "Ġsun": 3}
-    >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
-    >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
-    >>> inputs = " afternoon sun"
-    >>> tokenizer = keras_nlp.models.GPT2Tokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
-    ... )
-    >>> tokenizer(inputs)
-    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([1, 2, 3], dtype=int32)>
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
 
-    Detokenization.
-    >>> vocab = {"<|endoftext|>": 0, "Ġafter": 1, "noon": 2, "Ġsun": 3}
-    >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
-    >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
-    >>> inputs = " afternoon sun"
-    >>> tokenizer = keras_nlp.models.GPT2Tokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
-    ... )
-    >>> tokenizer.detokenize(tokenizer.tokenize(inputs)).numpy().decode('utf-8')
-    ' afternoon sun'
+    # Detokenization.
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
+
+    # Custom vocabulary.
+    vocab = {"<|endoftext|>": 0, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    merges += ["Ġ f", "o x", "Ġf ox"]
+    tokenizer = keras_nlp.models.GPT2Tokenizer(vocabulary=vocab, merges=merges)
+    tokenizer("a quick fox.")
+    ```
     """
 
     def __init__(
@@ -94,15 +75,17 @@ class GPT2Tokenizer(BytePairTokenizer):
         merges,
         **kwargs,
     ):
+        # Special tokens.
+        end_token = "<|endoftext|>"
+
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
+            unsplittable_tokens=[end_token],
             **kwargs,
         )
 
-        # Check for necessary special tokens.
-        end_token = "<|endoftext|>"
-
+        # Check whether special tokens are present in the vocabulary.
         if end_token not in self.get_vocabulary():
             raise ValueError(
                 f"Cannot find token `'{end_token}'` in the provided "
@@ -111,11 +94,18 @@ class GPT2Tokenizer(BytePairTokenizer):
             )
 
         self.end_token_id = self.token_to_id(end_token)
-        # GPT2 uses the same start and pad token as end token, i.e.,
-        # "<|endoftext|>".
+        # GPT2 uses the same start as end token, i.e., "<|endoftext|>".
         self.start_token_id = self.end_token_id
-        self.pad_token_id = self.end_token_id
+        self.pad_token_id = 0
 
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    def get_config(self):
+        config = super().get_config()
+        # In the constructor, we pass the list of special tokens to the
+        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # delete it from the config here.
+        del config["unsplittable_tokens"]
+        return config

@@ -19,16 +19,15 @@ import torch
 import transformers
 from absl import app
 from absl import flags
+from checkpoint_conversion_utils import extract_files_from_archive
+from checkpoint_conversion_utils import get_md5_checksum
 from tensorflow import keras
 
 import keras_nlp
-from tools.checkpoint_conversion.checkpoint_conversion_utils import (
-    get_md5_checksum,
-)
 
 PRESET_MAP = {
-    "xlm_roberta_base": ("xlmr.base", "xlm-roberta-base"),
-    "xlm_roberta_large": ("xlmr.large", "xlm-roberta-large"),
+    "xlm_roberta_base_multi": ("xlmr.base", "xlm-roberta-base"),
+    "xlm_roberta_large_multi": ("xlmr.large", "xlm-roberta-large"),
 }
 
 DOWNLOAD_SCRIPT_URL = "https://dl.fbaipublicfiles.com/fairseq/models/{}.tar.gz"
@@ -41,18 +40,18 @@ flags.DEFINE_string(
 )
 
 
-def download_model(preset, size):
+def download_model(size):
     print("-> Download original weights.")
     archive_file_path = keras.utils.get_file(
         fname=None,
         origin=DOWNLOAD_SCRIPT_URL.format(size),
-        cache_subdir=os.path.join("checkpoint_conversion", preset),
+        cache_subdir=os.path.join("checkpoint_conversion", FLAGS.preset),
     )
 
-    os.system(f"tar -xvf {archive_file_path}")
+    extract_files_from_archive(archive_file_path)
 
 
-def convert_checkpoints(preset, size):
+def convert_checkpoints(size):
     print("\n-> Convert original weights to KerasNLP format.")
     # XLM-RoBERTa paths.
     extract_dir = EXTRACT_DIR.format(size)
@@ -79,7 +78,7 @@ def convert_checkpoints(preset, size):
     print("Config:", cfg)
 
     keras_nlp_model = keras_nlp.models.XLMRobertaBackbone.from_preset(
-        preset, load_weights=False
+        FLAGS.preset, load_weights=False
     )
 
     # Embedding Layer.
@@ -246,13 +245,13 @@ def convert_checkpoints(preset, size):
         )
 
     # Save the model.
-    print(f"\n-> Save KerasNLP model weights to `{preset}.h5`.")
-    keras_nlp_model.save_weights(f"{preset}.h5")
+    print(f"\n-> Save KerasNLP model weights to `{FLAGS.preset}.h5`.")
+    keras_nlp_model.save_weights(f"{FLAGS.preset}.h5")
 
     return keras_nlp_model
 
 
-def define_preprocessor(preset, hf_model_name, size):
+def define_preprocessor(hf_model_name, size):
     print("\n-> Define the tokenizers.")
     extract_dir = EXTRACT_DIR.format(size)
     spm_path = os.path.join(extract_dir, "sentencepiece.bpe.model")
@@ -273,7 +272,6 @@ def define_preprocessor(preset, hf_model_name, size):
 
 
 def check_output(
-    preset,
     keras_nlp_model,
     keras_nlp_preprocessor,
     hf_model,
@@ -297,7 +295,7 @@ def check_output(
     print("Difference:", np.mean(keras_nlp_output - hf_output.detach().numpy()))
 
     # Show the MD5 checksum of the model weights.
-    print("Model md5sum: ", get_md5_checksum(f"./{preset}.h5"))
+    print("Model md5sum: ", get_md5_checksum(f"./{FLAGS.preset}.h5"))
 
     return keras_nlp_output
 
@@ -309,20 +307,19 @@ def main(_):
     size = PRESET_MAP[FLAGS.preset][0]
     hf_model_name = PRESET_MAP[FLAGS.preset][1]
 
-    download_model(FLAGS.preset, size)
+    download_model(size)
 
-    keras_nlp_model = convert_checkpoints(FLAGS.preset, size)
+    keras_nlp_model = convert_checkpoints(size)
 
     print("\n-> Load HF model.")
     hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
     hf_model.eval()
 
     keras_nlp_preprocessor, hf_tokenizer = define_preprocessor(
-        FLAGS.preset, hf_model_name, size
+        hf_model_name, size
     )
 
     check_output(
-        FLAGS.preset,
         keras_nlp_model,
         keras_nlp_preprocessor,
         hf_model,

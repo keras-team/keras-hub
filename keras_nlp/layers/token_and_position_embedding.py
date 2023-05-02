@@ -16,8 +16,8 @@
 
 from tensorflow import keras
 
-import keras_nlp.layers
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
@@ -96,7 +96,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
             name="token_embedding"
             + str(keras.backend.get_uid("token_embedding")),
         )
-        self.position_embedding = keras_nlp.layers.PositionEmbedding(
+        self.position_embedding = PositionEmbedding(
             sequence_length=sequence_length,
             initializer=clone_initializer(self.embeddings_initializer),
             name="position_embedding"
@@ -119,9 +119,12 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         )
         return config
 
-    def call(self, inputs):
+    def call(self, inputs, start_index=0):
         embedded_tokens = self.token_embedding(inputs)
-        embedded_positions = self.position_embedding(embedded_tokens)
+        embedded_positions = self.position_embedding(
+            embedded_tokens,
+            start_index=start_index,
+        )
         outputs = embedded_tokens + embedded_positions
         return outputs
 

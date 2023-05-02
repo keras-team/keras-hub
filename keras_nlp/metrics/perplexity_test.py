@@ -16,7 +16,7 @@
 
 import tensorflow as tf
 
-from keras_nlp.metrics import Perplexity
+from keras_nlp.metrics.perplexity import Perplexity
 
 
 class PerplexityTest(tf.test.TestCase):
