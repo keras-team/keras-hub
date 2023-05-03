@@ -315,8 +315,8 @@ class GPT2CausalLM(Task):
         model inputs, a dictionary with keys `"token_ids"` and `"padding_mask"`.
 
         Args:
-            inputs: A dictionary with two batched tensor keys `"token_ids"`
-                and `"padding_mask"`.
+            inputs: A dictionary with two keys `"token_ids"` and
+                `"padding_mask"` and batched tensor values.
             end_token_id: The id of the end token to stop on. If all
                 sequences have produced a new `end_token_id`, generation
                 will stop.
@@ -382,7 +382,7 @@ class GPT2CausalLM(Task):
 
         This function coverts all inputs to tensors, adds a batch dimension if
         necessary, and returns a iterable "dataset like" object (either an
-        actually dataset or a list with a single element).
+        actual `tf.data.Dataset` or a list with a single batch element).
         """
         input_is_scalar = False
 
