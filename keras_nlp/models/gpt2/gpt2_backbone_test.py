@@ -25,6 +25,10 @@ from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 
 class GPT2Test(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
+        # For DTensor.
+        keras.backend.experimental.enable_tf_random_generator()
+        keras.utils.set_random_seed(1337)
+
         self.backbone = GPT2Backbone(
             vocabulary_size=10,
             num_layers=2,
@@ -90,6 +94,23 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
         # Check that output matches.
         restored_output = restored_model(self.input_batch)
         self.assertAllClose(model_output, restored_output)
+
+    def test_create_layout_map(self):
+        mesh = tf.experimental.dtensor.create_mesh([("batch", 1), ("model", 1)])
+        with GPT2Backbone.create_layout_map(mesh).scope():
+            GPT2Backbone(
+                vocabulary_size=10,
+                num_layers=2,
+                num_heads=2,
+                hidden_dim=2,
+                intermediate_dim=4,
+                max_sequence_length=5,
+            )
+        # Using DTensor enables the mlir bridge as a side effect. Eventually
+        # this will be default, but for now we have compile errors with the
+        # bridge elsewhere and must disable. See
+        # https://github.com/keras-team/keras-nlp/issues/1001
+        tf.config.experimental.disable_mlir_bridge()
 
 
 @pytest.mark.tpu
