@@ -536,4 +536,3 @@ class GPT2CausalLM(Task):
         """
         # As this task has no new variables, we just re-use the backbone method.
         return cls.backbone_cls.create_layout_map(mesh)
-        return self._normalize_generate_outputs(outputs, input_is_scalar)
