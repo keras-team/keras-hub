@@ -235,14 +235,20 @@ class TransformerDecoder(keras.layers.Layer):
             encoder_attention_mask: a boolean Tensor. Customized encoder
                 sequence mask, must of shape
                 [batch_size, encoder_sequence_length, encoder_sequence_length].
-            self_attention_cache: a dense float Tensor. The cache of key/value of leading
-                tokens. `cache` is of shape [B, 2, max_seq_len, num_heads,
-                key_dims].
-            cache_index: an int or int Tensor, the index of the current token
-                being processed.
+            self_attention_cache: a dense float Tensor. The cache of key/value
+                of leading tokens in the self-attention layer. Of shape
+                `[B, 2, max_seq_len, num_heads, key_dims]`.
+            self_attention_cache_update_index: an int or int Tensor, the index
+                of the current token (in `decoder_sequence`) being processed.
             cross_attention_cache: a dense float Tensor. The cache of
                 key/value pairs of encoder outputs. `cache` is of shape
                 `[B, 2, S, num_heads, key_dims]`.
+            cross_attention_cache_update_index: an int or int Tensor, the index
+                of the current token (in `encoder_sequence`) being processed.
+                Since we don't actually process `encoder_sequence`
+                token-by-token, `cross_attention_cache_update_index` is given
+                a value of 0 so that the cache can be updated for all encoder
+                tokens in one go.
             compute_cross_attention_cache: a boolean. Whether to compute the
                 cross-attention cache. This is useful when
                 `cross_attention_cache = None` and

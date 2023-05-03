@@ -123,20 +123,30 @@ class BartSeq2SeqLM(Task):
 
         - Allows caching previous key/value tensors in the decoder's
           self-attention layer to avoid recomputing the outputs of seen tokens.
-        - Allows caching the key/value tensors in the decoder's cross attention
+        - Allows caching the key/value tensors in the decoder's cross-attention
           layer to avoid recomputing the encoder outputs.
 
         Args:
+            encoder_outputs: a dense float Tensor. The encoder output.
+            encoder_padding_mask: a dense float Tensor. The padding mask for
+                the encoder input.
             decoder_token_ids: a dense int Tensor, input token ids to be fed to
                 the decoder.
-            self_attention_cache: a dense float Tensor, the cached key and value
+            self_attention_cache: a dense float Tensor, the cached key/value
                 tensors of previously seen tokens in the decoder's self-attention
                 layer.
-            self_attention_cache_update_index: int, or int Tensor. The index of current inputs
-                in the whole sequence.
-            encoder_outputs: a dense float Tensor. The encoder output.
-            cross_attention_cache: a dense float Tensor, the cached key and value
-            tensors of the encoder outputs in the decoder's cross-attention layer.
+            self_attention_cache_update_index: int, or int Tensor. The index of
+                current inputs in the whole decoder sequence.
+            cross_attention_cache: a dense float Tensor, the cached key/value
+                tensors of the encoder outputs in the decoder's cross-attention
+                layer.
+            cross_attention_cache_update_index: int, or int Tensor. The index of
+                current inputs in the whole encoder sequence. This either takes
+                value 0, or None. The former means that the entire
+                cross-attention cache is updated in one go (since we don't need
+                to update it token-by-token), while the latter means that
+                `cross_attention_cache` will be passed through without any
+                changes.
 
         Returns:
             A `(logits, hidden_states, self_attention_cache, cross_attention_cache,)`

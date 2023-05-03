@@ -50,8 +50,12 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             query elements can attend to which key elements, 1 indicates
             attention and 0 indicates no attention. Broadcasting can happen for
             the missing batch dimensions and the head dimension.
-        cache: a dense float Tensor. The cache of key/value of leading tokens.
-            `cache` is of shape [B, 2, max_seq_len, num_heads, key_dims].
+        cache: a dense float Tensor. Either the self-attention cache or the
+            cross-attention cache, containing the key/value pairs. Of shape
+            `[B, 2, seq_len, num_heads, key_dims]`, where `seq_len` can either
+            be `S` (in case of cross-attention) or the maximum text generation
+            length (in case of self-attention). This argument should only be
+            used during inference-time decoding.
         cache_update_index: a int or int Tensor, the index of the current token
             being processed. If `cache_update_index=None` while `cache` is set,
             the cache will not be updated.
