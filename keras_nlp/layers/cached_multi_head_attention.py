@@ -82,7 +82,10 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
 
         if cache is not None:
             key_cache, value_cache = tf.unstack(cache, axis=1)
-            if cache_update_index is not None:
+            if cache_update_index is None:
+                key = key_cache
+                value = value_cache
+            else:
                 key_update = self._key_dense(key)
                 value_update = self._value_dense(value)
                 start = [0, cache_update_index, 0, 0]
