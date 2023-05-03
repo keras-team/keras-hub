@@ -24,12 +24,17 @@ from keras_nlp.api_export import keras_nlp_export
 class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
     """MutliHeadAttention layer with cache support.
 
-    In autoregressive decoding, it's a common practice to cache the key/value in
-    multi-head attention of previously seen tokens in order to make the
-    computation faster. With cached K and V, we can compute the attention output
+    In autoregressive decoding, it's common practice to cache the key/value
+    pairs in both the self-attention layer and the cross-attention layer. In
+    the self-attention layer, we cache the key/value pairs of previously seen
+    tokens. With cached key and value, we can compute the attention output
     of the last token without recomputing the forward pass for previously seen
-    tokens. This caching method is only useful during decoding, and should not
-    be used during training.
+    tokens. Secondly, in the cross-attention layer, we cache the key/value
+    pairs obtained from the encoder outputs. This way, we only need to do one
+    forward pass on the encoder and don't have to recompute the encoder
+    key/value pairs for every decoder step. Caching in both the layers makes
+    computation faster. This caching method is only useful during decoding, and
+    should not be used during training.
 
     Call arguments:
         query: Query `Tensor` of shape `(B, T, dim)` if `cache=None`,
@@ -47,9 +52,9 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             the missing batch dimensions and the head dimension.
         cache: a dense float Tensor. The cache of key/value of leading tokens.
             `cache` is of shape [B, 2, max_seq_len, num_heads, key_dims].
-        cache_index: a int or int Tensor, the index of the current token being
-            processed. If `cache_index=None` while `cache` is set, it means
-            it's the first pass to build the cache.
+        cache_update_index: a int or int Tensor, the index of the current token
+            being processed. If `cache_update_index=None` while `cache` is set,
+            the cache will not be updated.
 
     Returns:
         An (attention_output, cache) tuple. `attention_output` is the result of
@@ -66,7 +71,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         key=None,
         attention_mask=None,
         cache=None,
-        cache_index=0,
+        cache_update_index=None,
     ):
         if not self._built_from_signature:
             self._build_from_signature(query=query, value=value, key=key)
@@ -74,15 +79,19 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             key = value
 
         query = self._query_dense(query)
-        key = self._key_dense(key)
-        value = self._value_dense(value)
 
         if cache is not None:
             key_cache, value_cache = tf.unstack(cache, axis=1)
-            start = [0, cache_index, 0, 0]
-            key = dynamic_update_slice(key_cache, key, start)
-            value = dynamic_update_slice(value_cache, value, start)
-            cache = tf.stack((key, value), axis=1)
+            if cache_update_index is not None:
+                key_update = self._key_dense(key)
+                value_update = self._value_dense(value)
+                start = [0, cache_update_index, 0, 0]
+                key = dynamic_update_slice(key_cache, key_update, start)
+                value = dynamic_update_slice(value_cache, value_update, start)
+                cache = tf.stack((key, value), axis=1)
+        else:
+            key = self._key_dense(key)
+            value = self._value_dense(value)
 
         query = tf.multiply(
             query, 1.0 / tf.math.sqrt(tf.cast(self._key_dim, query.dtype))

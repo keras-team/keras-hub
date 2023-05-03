@@ -107,12 +107,13 @@ class BartSeq2SeqLM(Task):
 
     def call_with_cache(
         self,
+        encoder_outputs,
+        encoder_padding_mask,
         decoder_token_ids,
-        self_attention_cache,
-        self_attention_cache_index,
-        encoder_outputs=None,
-        encoder_padding_mask=None,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
         cross_attention_cache=None,
+        cross_attention_cache_update_index=None,
     ):
         """Forward pass of `BartSeq2SeqLM` with `self_attention_cache` and `cross_attention_cache`.
 
@@ -131,7 +132,7 @@ class BartSeq2SeqLM(Task):
             self_attention_cache: a dense float Tensor, the cached key and value
                 tensors of previously seen tokens in the decoder's self-attention
                 layer.
-            self_attention_cache_index: int, or int Tensor. The index of current inputs
+            self_attention_cache_update_index: int, or int Tensor. The index of current inputs
                 in the whole sequence.
             encoder_outputs: a dense float Tensor. The encoder output.
             cross_attention_cache: a dense float Tensor, the cached key and value
@@ -152,7 +153,7 @@ class BartSeq2SeqLM(Task):
         )
         position_embedding = self.backbone.get_layer(
             "decoder_position_embedding"
-        )(token_embedding, start_index=self_attention_cache_index)
+        )(token_embedding, start_index=self_attention_cache_update_index)
 
         # Sum, normalize and apply dropout to embeddings.
         x = self.backbone.get_layer("decoder_embeddings_add")(
@@ -164,12 +165,7 @@ class BartSeq2SeqLM(Task):
         # Every decoder layer has a separate cache for the self-attention layer
         # and the cross-attention layer. We update all of them separately.
         self_attention_caches = tf.unstack(self_attention_cache, axis=1)
-        if cross_attention_cache is None:
-            cross_attention_caches = [None] * self.backbone.num_layers
-            compute_cross_attention_cache = True
-        else:
-            cross_attention_caches = tf.unstack(cross_attention_cache, axis=1)
-            compute_cross_attention_cache = False
+        cross_attention_caches = tf.unstack(cross_attention_cache, axis=1)
         for i in range(self.backbone.num_layers):
             current_self_attention_cache = self_attention_caches[i]
             current_cross_attention_cache = cross_attention_caches[i]
@@ -177,23 +173,23 @@ class BartSeq2SeqLM(Task):
             (
                 x,
                 next_self_attention_cache,
-                current_cross_attention_cache,
+                next_cross_attention_cache,
             ) = self.backbone.get_layer(f"transformer_decoder_layer_{i}")(
-                x,
+                decoder_sequence=x,
                 encoder_sequence=encoder_outputs,
                 encoder_padding_mask=encoder_padding_mask,
                 self_attention_cache=current_self_attention_cache,
-                cache_index=self_attention_cache_index,
+                self_attention_cache_update_index=self_attention_cache_update_index,
                 cross_attention_cache=current_cross_attention_cache,
-                compute_cross_attention_cache=compute_cross_attention_cache,
+                cross_attention_cache_update_index=cross_attention_cache_update_index,
             )
 
             self_attention_caches[i] = next_self_attention_cache
-            if compute_cross_attention_cache:
-                cross_attention_caches[i] = current_cross_attention_cache
+            if cross_attention_cache_update_index is not None:
+                cross_attention_caches[i] = next_cross_attention_cache
 
         self_attention_cache = tf.stack(self_attention_caches, axis=1)
-        if compute_cross_attention_cache:
+        if cross_attention_cache_update_index is not None:
             cross_attention_cache = tf.stack(cross_attention_caches, axis=1)
 
         hidden_states = x
@@ -234,22 +230,41 @@ class BartSeq2SeqLM(Task):
 
         return x
 
-    def _initialize_self_attention_cache(self, prompt):
-        """Initializes an empty self-attention cache for use with `call_with_cache()`."""
-        batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
+    def _initialize_cache(self, encoder_token_ids, decoder_token_ids):
+        """Initializes empty self-attention cache and cross-attention cache."""
+        batch_size = tf.shape(encoder_token_ids)[0]
+        encoder_max_length = tf.shape(encoder_token_ids)[1]
+        decoder_max_length = tf.shape(decoder_token_ids)[1]
+
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_heads
         head_dim = self.backbone.hidden_dim // self.backbone.num_heads
-        shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
-        cache = tf.zeros(shape, dtype=self.compute_dtype)
-        return cache
 
-    def _build_cache(self, encoder_token_ids, encoder_padding_mask, prompt):
+        shape = [
+            batch_size,
+            num_layers,
+            2,
+            decoder_max_length,
+            num_heads,
+            head_dim,
+        ]
+        self_attention_cache = tf.zeros(shape, dtype=self.compute_dtype)
+
+        shape[3] = encoder_max_length
+        cross_attention_cache = tf.zeros(shape, dtype=self.compute_dtype)
+
+        return (self_attention_cache, cross_attention_cache)
+
+    def _build_cache(
+        self, encoder_token_ids, encoder_padding_mask, decoder_token_ids
+    ):
         """Builds the self-attention cache and the cross-attention cache (key/value pairs)."""
         encoder_outputs = self._get_encoder_outputs(
             token_ids=encoder_token_ids, padding_mask=encoder_padding_mask
         )
-        self_attention_cache = self._initialize_self_attention_cache(prompt)
+        self_attention_cache, cross_attention_cache = self._initialize_cache(
+            encoder_token_ids, decoder_token_ids
+        )
 
         # Seed the self-attention cache and the cross-attention cache.
         (
@@ -258,11 +273,13 @@ class BartSeq2SeqLM(Task):
             self_attention_cache,
             cross_attention_cache,
         ) = self.call_with_cache(
-            decoder_token_ids=prompt,
-            self_attention_cache=self_attention_cache,
-            self_attention_cache_index=0,
             encoder_outputs=encoder_outputs,
             encoder_padding_mask=encoder_padding_mask,
+            decoder_token_ids=decoder_token_ids,
+            self_attention_cache=self_attention_cache,
+            self_attention_cache_update_index=0,
+            cross_attention_cache=cross_attention_cache,
+            cross_attention_cache_update_index=0,
         )
         return (
             hidden_states,
@@ -299,8 +316,8 @@ class BartSeq2SeqLM(Task):
         def generate_function(
             encoder_token_ids,
             encoder_padding_mask,
-            prompt,
-            input_mask,
+            decoder_token_ids,
+            decoder_padding_mask,
             min_length,
         ):
             # Create and seed cache with a single forward pass.
@@ -310,20 +327,22 @@ class BartSeq2SeqLM(Task):
                 self_attention_cache,
                 cross_attention_cache,
             ) = self._build_cache(
-                encoder_token_ids, encoder_padding_mask, prompt
+                encoder_token_ids, encoder_padding_mask, decoder_token_ids
             )
 
             def next_token(prompt, cache, index):
                 # The cache index is the index of our previous token.
                 cache_index = index - 1
                 prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
+
                 logits, hidden_states, cache, _ = self.call_with_cache(
-                    decoder_token_ids=prompt,
-                    self_attention_cache=cache,
-                    self_attention_cache_index=cache_index,
                     encoder_outputs=encoder_outputs,
                     encoder_padding_mask=encoder_padding_mask,
+                    decoder_token_ids=prompt,
+                    self_attention_cache=cache,
+                    self_attention_cache_update_index=cache_index,
                     cross_attention_cache=cross_attention_cache,
+                    cross_attention_cache_update_index=None,
                 )
                 return (
                     tf.squeeze(logits, axis=1),
@@ -333,10 +352,10 @@ class BartSeq2SeqLM(Task):
 
             return self._sampler(
                 next=next_token,
-                prompt=prompt,
+                prompt=decoder_token_ids,
                 cache=self_attention_cache,
                 index=min_length,
-                mask=input_mask,
+                mask=decoder_padding_mask,
                 end_token_id=self.preprocessor.tokenizer.end_token_id,
                 hidden_states=hidden_states,
             )
@@ -354,8 +373,7 @@ class BartSeq2SeqLM(Task):
 
     def generate(
         self,
-        encoder_text,
-        prompt,
+        inputs,
         max_length,
         add_start_token=True,
     ):
@@ -381,6 +399,9 @@ class BartSeq2SeqLM(Task):
                 "`preprocessor` is set before calling `generate`."
             )
 
+        encoder_text = inputs["encoder_text"]
+        decoder_text = inputs["decoder_text"]
+
         # Tokenize the encoder inputs. We can use the preprocessor directly
         # here.
         encoder_text = tf.convert_to_tensor(encoder_text)
@@ -400,30 +421,36 @@ class BartSeq2SeqLM(Task):
         # Tokenize the prompt. We cannot use the preprocessor directly since
         # the `max_length` might be different. Moreover, the
         # `BartSeq2SeqLMPreprocessor` layer handles the training case.
-        prompt = tf.convert_to_tensor(prompt)
-        input_is_scalar = prompt.shape.rank == 0
-        prompt = prompt[tf.newaxis] if input_is_scalar else prompt
+        decoder_text = tf.convert_to_tensor(decoder_text)
+        input_is_scalar = decoder_text.shape.rank == 0
+        decoder_text = (
+            decoder_text[tf.newaxis] if input_is_scalar else decoder_text
+        )
 
-        prompt = self.preprocessor.tokenizer(prompt)
+        decoder_token_ids = self.preprocessor.tokenizer(decoder_text)
 
         # Add the end token and the start token to the prompt. This is how
         # the decoder input is packed.
         if add_start_token:
             start_tokens = tf.fill(
-                (tf.shape(prompt)[0], 1),
+                (tf.shape(decoder_token_ids)[0], 1),
                 value=self.preprocessor.tokenizer.start_token_id,
             )
             end_tokens = tf.fill(
-                (tf.shape(prompt)[0], 1),
+                (tf.shape(decoder_token_ids)[0], 1),
                 value=self.preprocessor.tokenizer.end_token_id,
             )
-            prompt = tf.concat([end_tokens, start_tokens, prompt], axis=1)
+            decoder_token_ids = tf.concat(
+                [end_tokens, start_tokens, decoder_token_ids], axis=1
+            )
 
         # Pad ragged to dense tensors.
         padded_shape = (None, max_length)
-        min_length = tf.reduce_min(prompt.row_lengths())
-        input_mask = tf.ones_like(prompt, tf.bool).to_tensor(shape=padded_shape)
-        prompt = prompt.to_tensor(
+        min_length = tf.reduce_min(decoder_token_ids.row_lengths())
+        decoder_padding_mask = tf.ones_like(
+            decoder_token_ids, tf.bool
+        ).to_tensor(shape=padded_shape)
+        decoder_token_ids = decoder_token_ids.to_tensor(
             shape=padded_shape,
             default_value=self.preprocessor.tokenizer.pad_token_id,
         )
@@ -433,14 +460,14 @@ class BartSeq2SeqLM(Task):
         output = generate_function(
             encoder_token_ids,
             encoder_padding_mask,
-            prompt,
-            input_mask,
+            decoder_token_ids,
+            decoder_padding_mask,
             min_length,
         )
 
         # Truncate to ragged by removing tokens after the first end token.
         end_token_id = self.preprocessor.tokenizer.end_token_id
-        output = truncate_at_token(output, end_token_id, input_mask)
+        output = truncate_at_token(output, end_token_id, decoder_padding_mask)
 
         # Detokenize.
         output = self.preprocessor.tokenizer.detokenize(output)
