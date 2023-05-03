@@ -287,7 +287,7 @@ class TransformerDecoder(keras.layers.Layer):
             )
 
         if is_cross_attention and (
-            self_attention_cache is None ^ cross_attention_cache is None
+            (self_attention_cache is None) ^ (cross_attention_cache is None)
         ):
             raise ValueError(
                 "Since the layer has a cross-attention layer, both "
