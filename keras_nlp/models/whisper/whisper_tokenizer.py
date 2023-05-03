@@ -115,7 +115,7 @@ class WhisperTokenizer(BytePairTokenizer):
 
         if language_tokens:
             # Multilingual tokenizer.
-            pad_token = ""
+            pad_token = "<endoftext>"
             language_tokens = _load_dict(language_tokens)
 
             # Add language tokens to the vocabulary. This makes detokenization
