@@ -98,8 +98,8 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_generate(self):
         # String input.
-        prompt = " airplane"
-        output = self.causal_lm.generate(" airplane")
+        prompt = " airplane at airport"
+        output = self.causal_lm.generate(" airplane at airport")
         self.assertTrue(prompt in output)
         # String tensor input.
         self.assertIsInstance(self.causal_lm.generate(self.raw_batch)[0], str)
@@ -107,8 +107,15 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
         self.assertIsInstance(self.causal_lm.generate(self.raw_dataset)[0], str)
         # Int tensor input.
         self.causal_lm.preprocessor = None
-        self.assertDTypeEqual(
-            self.causal_lm.generate(self.preprocessed_batch), tf.int32
+        outputs = self.causal_lm.generate(self.preprocessed_batch)
+        # Assert prompt is in output in token id space.
+        self.assertAllEqual(
+            outputs["token_ids"][:, :5],
+            self.preprocessed_batch["token_ids"][:, :5],
+        )
+        self.assertAllEqual(
+            outputs["padding_mask"][:, :5],
+            self.preprocessed_batch["padding_mask"][:, :5],
         )
 
     def test_generate_compilation(self):
