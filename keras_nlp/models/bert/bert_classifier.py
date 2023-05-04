@@ -19,12 +19,11 @@ from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.bert.bert_backbone import BertBackbone
-from keras_nlp.models.bert.bert_backbone import bert_kernel_initializer
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.bert.bert_presets import classifier_presets
 from keras_nlp.models.task import Task
-from keras_nlp.utils.keras_utils import is_xla_compatible
+from keras_nlp.utils.keras_utils import clone_initializer
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -72,11 +71,10 @@ class BertClassifier(Task):
     classifier.fit(x=features, y=labels, batch_size=2)
     classifier.predict(x=features, batch_size=2)
 
-    # Re-compile (e.g., with a new learning rate).
+    # Re-compile (e.g., with a learning rate schedule).
+    schedule = keras.optimizers.schedules.CosineDecay(5e-5, decay_steps=10_000)
     classifier.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        optimizer=keras.optimizers.Adam(5e-5),
-        jit_compile=True,
+        optimizer=keras_nlp.models.BertOptimizer(schedule),
     )
     # Access backbone programatically (e.g., to change `trainable`).
     classifier.backbone.trainable = False
@@ -142,16 +140,20 @@ class BertClassifier(Task):
         backbone,
         num_classes,
         preprocessor=None,
-        activation=None,
+        activation="softmax",
+        initializer="keras_nlp>BertInitializer",
         dropout=0.1,
         **kwargs,
     ):
+        initializer = keras.initializers.get(initializer)
+        activation = keras.activations.get(activation)
+
         inputs = backbone.input
         pooled = backbone(inputs)["pooled_output"]
         pooled = keras.layers.Dropout(dropout)(pooled)
         outputs = keras.layers.Dense(
             num_classes,
-            kernel_initializer=bert_kernel_initializer(),
+            kernel_initializer=clone_initializer(initializer),
             activation=activation,
             name="logits",
         )(pooled)
@@ -166,17 +168,27 @@ class BertClassifier(Task):
         self.backbone = backbone
         self.preprocessor = preprocessor
         self.num_classes = num_classes
-        self.activation = keras.activations.get(activation)
+        self.activation = activation
+        self.initializer = initializer
         self.dropout = dropout
 
-        # Default compilation
-        self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(
-                from_logits=activation is None
-            ),
-            optimizer=keras.optimizers.Adam(5e-5),
-            metrics=keras.metrics.SparseCategoricalAccuracy(),
-            jit_compile=is_xla_compatible(self),
+        # Compile with defaults.
+        self.compile()
+
+    def compile(
+        self,
+        optimizer="keras_nlp>BertOptimizer",
+        loss="sparse_categorical_crossentropy",
+        metrics="sparse_categorical_accuracy",
+        jit_compile=True,
+        **kwargs,
+    ):
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            metrics=metrics,
+            jit_compile=jit_compile,
+            **kwargs,
         )
 
     def get_config(self):
@@ -185,6 +197,7 @@ class BertClassifier(Task):
             {
                 "num_classes": self.num_classes,
                 "activation": keras.activations.serialize(self.activation),
+                "initializer": keras.initializers.serialize(self.initializer),
                 "dropout": self.dropout,
             }
         )

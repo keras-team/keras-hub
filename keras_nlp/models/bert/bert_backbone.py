@@ -24,11 +24,8 @@ from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.bert.bert_presets import backbone_presets
+from keras_nlp.utils.keras_utils import clone_initializer
 from keras_nlp.utils.python_utils import classproperty
-
-
-def bert_kernel_initializer(stddev=0.02):
-    return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
 @keras_nlp_export("keras_nlp.models.BertBackbone")
@@ -103,10 +100,13 @@ class BertBackbone(Backbone):
         dropout=0.1,
         max_sequence_length=512,
         num_segments=2,
+        initializer="keras_nlp>BertInitializer",
         **kwargs,
     ):
+        initializer = keras.initializers.get(initializer)
         # Index of classification token in the vocabulary
         cls_token_index = 0
+
         # Inputs
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"
@@ -122,19 +122,19 @@ class BertBackbone(Backbone):
         token_embedding_layer = keras.layers.Embedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            embeddings_initializer=bert_kernel_initializer(),
+            embeddings_initializer=clone_initializer(initializer),
             name="token_embedding",
         )
         token_embedding = token_embedding_layer(token_id_input)
         position_embedding = PositionEmbedding(
-            initializer=bert_kernel_initializer(),
+            initializer=clone_initializer(initializer),
             sequence_length=max_sequence_length,
             name="position_embedding",
         )(token_embedding)
         segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
             output_dim=hidden_dim,
-            embeddings_initializer=bert_kernel_initializer(),
+            embeddings_initializer=clone_initializer(initializer),
             name="segment_embedding",
         )(segment_id_input)
 
@@ -163,7 +163,7 @@ class BertBackbone(Backbone):
                 ),
                 dropout=dropout,
                 layer_norm_epsilon=1e-12,
-                kernel_initializer=bert_kernel_initializer(),
+                kernel_initializer=clone_initializer(initializer),
                 name=f"transformer_layer_{i}",
             )(x, padding_mask=padding_mask)
 
@@ -172,7 +172,7 @@ class BertBackbone(Backbone):
         sequence_output = x
         pooled_output = keras.layers.Dense(
             hidden_dim,
-            kernel_initializer=bert_kernel_initializer(),
+            kernel_initializer=clone_initializer(initializer),
             activation="tanh",
             name="pooled_dense",
         )(x[:, cls_token_index, :])
@@ -201,6 +201,7 @@ class BertBackbone(Backbone):
         self.max_sequence_length = max_sequence_length
         self.num_segments = num_segments
         self.cls_token_index = cls_token_index
+        self.initializer = initializer
 
     def get_config(self):
         config = super().get_config()
@@ -214,6 +215,7 @@ class BertBackbone(Backbone):
                 "dropout": self.dropout,
                 "max_sequence_length": self.max_sequence_length,
                 "num_segments": self.num_segments,
+                "initializer": keras.initializers.serialize(self.initializer),
             }
         )
         return config

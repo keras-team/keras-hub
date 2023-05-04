@@ -20,13 +20,12 @@ from tensorflow import keras
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.masked_lm_head import MaskedLMHead
 from keras_nlp.models.bert.bert_backbone import BertBackbone
-from keras_nlp.models.bert.bert_backbone import bert_kernel_initializer
 from keras_nlp.models.bert.bert_masked_lm_preprocessor import (
     BertMaskedLMPreprocessor,
 )
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.task import Task
-from keras_nlp.utils.keras_utils import is_xla_compatible
+from keras_nlp.utils.keras_utils import clone_initializer
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -66,11 +65,10 @@ class BertMaskedLM(Task):
     )
     masked_lm.fit(x=features, batch_size=2)
 
-    # Re-compile (e.g., with a new learning rate).
-    masked_lm.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        optimizer=keras.optimizers.Adam(5e-5),
-        jit_compile=True,
+    # Re-compile (e.g., with a learning rate schedule).
+    schedule = keras.optimizers.schedules.CosineDecay(5e-5, decay_steps=10_000)
+    classifier.compile(
+        optimizer=keras_nlp.models.BertOptimizer(schedule),
     )
     # Access backbone programatically (e.g., to change `trainable`).
     masked_lm.backbone.trainable = False
@@ -106,8 +104,13 @@ class BertMaskedLM(Task):
         self,
         backbone,
         preprocessor=None,
+        activation="softmax",
+        initializer="keras_nlp>BertInitializer",
         **kwargs,
     ):
+        initializer = keras.initializers.get(initializer)
+        activation = keras.activations.get(activation)
+
         inputs = {
             **backbone.input,
             "mask_positions": keras.Input(
@@ -115,11 +118,13 @@ class BertMaskedLM(Task):
             ),
         }
         backbone_outputs = backbone(backbone.input)
+        initializer = keras.initializers.get(initializer)
         outputs = MaskedLMHead(
             vocabulary_size=backbone.vocabulary_size,
             embedding_weights=backbone.token_embedding.embeddings,
+            activation="gelu",
             intermediate_activation="gelu",
-            kernel_initializer=bert_kernel_initializer(),
+            kernel_initializer=clone_initializer(initializer),
             name="mlm_head",
         )(backbone_outputs["sequence_output"], inputs["mask_positions"])
 
@@ -133,11 +138,26 @@ class BertMaskedLM(Task):
         # All references to `self` below this line
         self.backbone = backbone
         self.preprocessor = preprocessor
-        self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            optimizer=keras.optimizers.Adam(5e-5),
-            weighted_metrics=keras.metrics.SparseCategoricalAccuracy(),
-            jit_compile=is_xla_compatible(self),
+        self.activation = activation
+        self.initializer = initializer
+
+        # Compile with defaults.
+        self.compile()
+
+    def compile(
+        self,
+        optimizer="keras_nlp>BertOptimizer",
+        loss="sparse_categorical_crossentropy",
+        metrics="sparse_categorical_accuracy",
+        jit_compile=True,
+        **kwargs,
+    ):
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            metrics=metrics,
+            jit_compile=jit_compile,
+            **kwargs,
         )
 
     @classproperty
@@ -151,3 +171,13 @@ class BertMaskedLM(Task):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "activation": keras.activations.serialize(self.activation),
+                "initializer": keras.initializers.serialize(self.initializer),
+            }
+        )
+        return config
