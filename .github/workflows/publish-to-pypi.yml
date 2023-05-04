@@ -13,11 +13,9 @@ jobs:
         pip install
         build
         --user
-    - name: Install namex
-      run: >-
-        python -m
-        pip install
-        namex
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt --progress-bar off
     - name: Build a binary wheel and a source tarball
       run: >-
         python pip_build.py
