@@ -109,16 +109,19 @@ class OPTCausalLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(y, [[3, 4, 5, 3, 6, 1, 0, 0]] * 4)
         self.assertAllEqual(sw, [[1, 1, 1, 1, 1, 1, 0, 0]] * 4)
 
-    def test_call_overrides(self):
+    def test_generate_preprocess(self):
         input_data = " airplane at airport"
-        x, _, _ = self.preprocessor(input_data, add_start_token=False)
-        self.assertAllEqual(x["token_ids"], [3, 4, 5, 3, 6, 1, 0, 0])
-        x, _, _ = self.preprocessor(input_data, add_end_token=False)
+        x = self.preprocessor.generate_preprocess(input_data)
         self.assertAllEqual(x["token_ids"], [1, 3, 4, 5, 3, 6, 0, 0])
-        x, _, _ = self.preprocessor(input_data, sequence_length=4)
-        self.assertAllEqual(x["token_ids"], [1, 3, 4, 5])
-        x = self.preprocessor(input_data, return_labels=False)
-        self.assertAllEqual(x["token_ids"], [1, 3, 4, 5, 3, 6, 1, 0])
+        self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0])
+
+    def test_generate_postprocess(self):
+        input_data = {
+            "token_ids": tf.constant([1, 3, 4, 5, 3, 6, 0, 0]),
+            "padding_mask": tf.cast([1, 1, 1, 1, 1, 1, 0, 0], dtype="bool"),
+        }
+        x = self.preprocessor.generate_postprocess(input_data)
+        self.assertAllEqual(x, " airplane at airport")
 
     def test_serialization(self):
         config = keras.utils.serialize_keras_object(self.preprocessor)

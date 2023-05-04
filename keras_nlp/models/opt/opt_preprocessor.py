@@ -68,10 +68,6 @@ class OPTPreprocessor(Preprocessor):
         sample_weight: Any label weight data. Will be passed through unaltered.
         sequence_length: Pass to override the configured `sequence_length` of
             the layer.
-        add_start_token: Pass to override the configure value of
-            `add_start_token` on the layer.
-        add_end_token: Pass to override the configure value of
-            `add_end_token` on the layer.
 
     Examples:
 
@@ -154,8 +150,6 @@ class OPTPreprocessor(Preprocessor):
         y=None,
         sample_weight=None,
         sequence_length=None,
-        add_start_token=None,
-        add_end_token=None,
     ):
         x = convert_inputs_to_list_of_tensor_segments(x)
         if len(x) != 1:
@@ -165,17 +159,12 @@ class OPTPreprocessor(Preprocessor):
                 "for a multi-segment classification task, please refer to "
                 "classification models like BERT or RoBERTa."
             )
-        if sequence_length is None:
-            sequence_length = self.sequence_length
-        if add_start_token is None:
-            add_start_token = self.add_start_token
-        if add_end_token is None:
-            add_end_token = self.add_end_token
+        sequence_length = sequence_length or self.sequence_length
         token_ids, padding_mask = self.packer(
             self.tokenizer(x[0]),
             sequence_length=sequence_length,
-            add_start_value=add_start_token,
-            add_end_value=add_end_token,
+            add_start_value=self.add_start_token,
+            add_end_value=self.add_end_token,
         )
         x = {
             "token_ids": token_ids,
