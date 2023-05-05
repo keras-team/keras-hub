@@ -21,7 +21,10 @@ try:
 except ImportError:
     spm = None
 
+from keras_nlp.api_export import keras_nlp_export
 
+
+@keras_nlp_export("keras_nlp.tokenizers.compute_sentence_piece_proto")
 def compute_sentence_piece_proto(
     data,
     vocabulary_size,

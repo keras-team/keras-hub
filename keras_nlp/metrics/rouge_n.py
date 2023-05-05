@@ -18,7 +18,7 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.metrics.rouge_base import RougeBase
 
 
-@keras_nlp_export("keras_nlp.metrics.RogueN")
+@keras_nlp_export("keras_nlp.metrics.RougeN")
 class RougeN(RougeBase):
     """ROUGE-N metric.
 
