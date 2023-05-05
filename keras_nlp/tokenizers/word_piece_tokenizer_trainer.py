@@ -15,6 +15,7 @@
 
 import tensorflow as tf
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers.word_piece_tokenizer import pretokenize
 from keras_nlp.utils.tf_utils import assert_tf_text_installed
 
@@ -26,6 +27,7 @@ except ImportError:
     learner = None
 
 
+@keras_nlp_export("keras_nlp.tokenizers.compute_word_piece_vocabulary")
 def compute_word_piece_vocabulary(
     data,
     vocabulary_size,
