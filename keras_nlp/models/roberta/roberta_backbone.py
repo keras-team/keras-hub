@@ -33,7 +33,7 @@ def roberta_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.RobertBackbone")
+@keras_nlp_export("keras_nlp.models.RobertaBackbone")
 class RobertaBackbone(Backbone):
     """A RoBERTa encoder network.
 
