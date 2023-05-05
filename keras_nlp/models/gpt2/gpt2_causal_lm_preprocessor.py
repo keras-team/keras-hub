@@ -90,6 +90,7 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     # Map a dataset to preprocess unlabled sentences.
     ds = tf.data.Dataset.from_tensor_slices(features)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+    ```
     """
 
     def call(
