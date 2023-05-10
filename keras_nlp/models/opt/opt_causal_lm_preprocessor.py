@@ -128,6 +128,7 @@ class OPTCausalLMPreprocessor(OPTPreprocessor):
         y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
         return pack_x_y_sample_weight(x, y, sample_weight)
 
+    @tf.function
     def generate_preprocess(
         self,
         x,
@@ -154,6 +155,7 @@ class OPTCausalLMPreprocessor(OPTPreprocessor):
             "padding_mask": padding_mask,
         }
 
+    @tf.function
     def generate_postprocess(
         self,
         x,

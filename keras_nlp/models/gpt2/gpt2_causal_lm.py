@@ -483,23 +483,27 @@ class GPT2CausalLM(Task):
         def postprocess(x):
             return self.preprocessor.generate_postprocess(x)
 
-        # Normalize inputs, apply our three passes, and normalize outputs.
-        inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
+        # Run preprocessing on CPU only.
+        with tf.device("cpu"):
+            # Normalize inputs, apply our three passes, and normalize outputs.
+            inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
 
-        if self.preprocessor is not None:
-            if isinstance(inputs, tf.data.Dataset):
-                inputs = inputs.map(preprocess, tf.data.AUTOTUNE)
-                inputs = inputs.prefetch(tf.data.AUTOTUNE)
-            else:
-                # Fast path for non-dataset, single-batch input.
-                inputs = [preprocess(x) for x in inputs]
+            if self.preprocessor is not None:
+                if isinstance(inputs, tf.data.Dataset):
+                    inputs = inputs.map(preprocess, tf.data.AUTOTUNE)
+                    inputs = inputs.prefetch(tf.data.AUTOTUNE)
+                else:
+                    # Fast path for non-dataset, single-batch input.
+                    inputs = [preprocess(x) for x in inputs]
 
         outputs = [generate(x) for x in inputs]
 
-        if self.preprocessor is not None:
-            outputs = [postprocess(x) for x in outputs]
+        # Run postprocessing on CPU only.
+        with tf.device("cpu"):
+            if self.preprocessor is not None:
+                outputs = [postprocess(x) for x in outputs]
 
-        return self._normalize_generate_outputs(outputs, input_is_scalar)
+            return self._normalize_generate_outputs(outputs, input_is_scalar)
 
     @classmethod
     def create_layout_map(cls, mesh):
