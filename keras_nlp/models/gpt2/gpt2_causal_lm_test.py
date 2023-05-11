@@ -14,7 +14,9 @@
 """Tests for GPT2 causal LM model."""
 
 import os
+from unittest.mock import patch
 
+import numpy as np
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
@@ -54,8 +56,8 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
-            hidden_dim=64,
-            intermediate_dim=128,
+            hidden_dim=4,
+            intermediate_dim=8,
             max_sequence_length=self.preprocessor.packer.sequence_length,
         )
         self.causal_lm = GPT2CausalLM(
@@ -117,6 +119,23 @@ class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
             outputs["padding_mask"][:, :5],
             self.preprocessed_batch["padding_mask"][:, :5],
         )
+
+    def test_early_stopping(self):
+        call_with_cache = self.causal_lm.call_with_cache
+
+        def wrapper(*args, **kwargs):
+            """Modify output logits to always favor end_token_id"""
+            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
+            logits = np.zeros(logits.shape.as_list())
+            logits[:, :, self.preprocessor.tokenizer.end_token_id] = 1.0e9
+            return logits, hidden_states, cache
+
+        with patch.object(self.causal_lm, "call_with_cache", wraps=wrapper):
+            prompt = [" airplane at airport", " airplane"]
+            output = self.causal_lm.generate(prompt)
+            # We should immediately abort and output the prompt.
+            self.assertEqual(prompt, output)
+            self.assertEqual(self.causal_lm.call_with_cache.call_count, 2)
 
     def test_generate_compilation(self):
         # Assert we do not recompile with successive calls.
