@@ -345,7 +345,7 @@ class BartSeq2SeqLM(Task):
     def generate_step(
         self,
         inputs,
-        end_token_id,
+        end_token_id=None,
     ):
         """A compilable generation function.
 
@@ -417,7 +417,7 @@ class BartSeq2SeqLM(Task):
             cache=self_attention_cache,
             index=index,
             mask=decoder_padding_mask,
-            end_token_id=self.preprocessor.tokenizer.end_token_id,
+            end_token_id=end_token_id,
             hidden_states=hidden_states,
         )
 
