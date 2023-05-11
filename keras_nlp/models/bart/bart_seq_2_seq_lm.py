@@ -29,7 +29,6 @@ from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.tf_utils import tensor_to_string_list
-from keras_nlp.utils.tf_utils import truncate_at_token
 
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLM")
@@ -459,14 +458,21 @@ class BartSeq2SeqLM(Task):
         if isinstance(inputs, tf.data.Dataset):
             return inputs, input_is_scalar
 
-        if isinstance(inputs, str) or isinstance(inputs, list):
-            inputs = tf.convert_to_tensor(inputs)
+        def normalize(x):
+            x_is_scalar = False
+            if isinstance(x, str) or isinstance(x, list):
+                x = tf.convert_to_tensor(x)
 
-        if isinstance(inputs, tf.Tensor) and inputs.shape.rank == 0:
-            input_is_scalar = True
-            inputs = inputs[tf.newaxis]
+            if isinstance(x, tf.Tensor) and x.shape.rank == 0:
+                x_is_scalar = True
+                x = x[tf.newaxis]
 
-        # We avoid coverting to a dataset purely for speed, for a single batch
+            return x, x_is_scalar
+
+        for key in inputs:
+            inputs[key], input_is_scalar = normalize(inputs[key])
+
+        # We avoid converting to a dataset purely for speed, for a single batch
         # of input, creating a dataset would add significant overhead.
         return [inputs], input_is_scalar
 
@@ -532,82 +538,31 @@ class BartSeq2SeqLM(Task):
         if self.preprocessor is not None:
             end_token_id = self.preprocessor.tokenizer.end_token_id
 
-        if self.preprocessor is None:
-            raise ValueError(
-                "`self.preprocessor` is `None`, please make sure "
-                "`preprocessor` is set before calling `generate`."
+        def preprocess(x):
+            return self.preprocessor.generate_preprocess(
+                x, sequence_length=max_length
             )
 
-        encoder_text = inputs["encoder_text"]
-        decoder_text = inputs["decoder_text"]
+        def generate(x):
+            return generate_function(x, end_token_id=end_token_id)
 
-        # Tokenize the encoder inputs. We can use the preprocessor directly
-        # here.
-        encoder_text = tf.convert_to_tensor(encoder_text)
-        encoder_text_is_scalar = encoder_text.shape.rank == 0
-        encoder_text = (
-            encoder_text[tf.newaxis] if encoder_text_is_scalar else encoder_text
-        )
-        preprocessed_inputs = self.preprocessor(
-            {
-                "encoder_text": encoder_text,
-                "decoder_text": "dummy text",
-            }
-        )
-        encoder_token_ids = preprocessed_inputs[0]["encoder_token_ids"]
-        encoder_padding_mask = preprocessed_inputs[0]["encoder_padding_mask"]
+        def postprocess(x):
+            return self.preprocessor.generate_postprocess(x)
 
-        # Tokenize the prompt. We cannot use the preprocessor directly since
-        # the `max_length` might be different. Moreover, the
-        # `BartSeq2SeqLMPreprocessor` layer handles the training case.
-        decoder_text = tf.convert_to_tensor(decoder_text)
-        input_is_scalar = decoder_text.shape.rank == 0
-        decoder_text = (
-            decoder_text[tf.newaxis] if input_is_scalar else decoder_text
-        )
+        # Normalize inputs, apply our three passes, and normalize outputs.
+        inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
 
-        decoder_token_ids = self.preprocessor.tokenizer(decoder_text)
+        if self.preprocessor is not None:
+            if isinstance(inputs, tf.data.Dataset):
+                inputs = inputs.map(preprocess, tf.data.AUTOTUNE)
+                inputs = inputs.prefetch(tf.data.AUTOTUNE)
+            else:
+                # Fast path for non-dataset, single-batch input.
+                inputs = [preprocess(x) for x in inputs]
 
-        # Add the end token and the start token to the prompt. This is how
-        # the decoder input is packed.
-        if add_start_token:
-            start_tokens = tf.fill(
-                (tf.shape(decoder_token_ids)[0], 1),
-                value=self.preprocessor.tokenizer.start_token_id,
-            )
-            end_tokens = tf.fill(
-                (tf.shape(decoder_token_ids)[0], 1),
-                value=self.preprocessor.tokenizer.end_token_id,
-            )
-            decoder_token_ids = tf.concat(
-                [end_tokens, start_tokens, decoder_token_ids], axis=1
-            )
+        outputs = [generate(x) for x in inputs]
 
-        # Pad ragged to dense tensors.
-        padded_shape = (None, max_length)
-        min_length = tf.reduce_min(decoder_token_ids.row_lengths())
-        decoder_padding_mask = tf.ones_like(
-            decoder_token_ids, tf.bool
-        ).to_tensor(shape=padded_shape)
-        decoder_token_ids = decoder_token_ids.to_tensor(
-            shape=padded_shape,
-            default_value=self.preprocessor.tokenizer.pad_token_id,
-        )
+        if self.preprocessor is not None:
+            outputs = [postprocess(x) for x in outputs]
 
-        # Run the (possibly compiled) generate function on dense inputs.
-        generate_function = self.make_generate_function()
-        output = generate_function(
-            encoder_token_ids,
-            encoder_padding_mask,
-            decoder_token_ids,
-            decoder_padding_mask,
-            min_length,
-        )
-
-        # Truncate to ragged by removing tokens after the first end token.
-        end_token_id = self.preprocessor.tokenizer.end_token_id
-        output = truncate_at_token(output, end_token_id, decoder_padding_mask)
-
-        # Detokenize.
-        output = self.preprocessor.tokenizer.detokenize(output)
-        return tf.squeeze(output, 0) if input_is_scalar else output
+        return self._normalize_generate_outputs(outputs, input_is_scalar)
