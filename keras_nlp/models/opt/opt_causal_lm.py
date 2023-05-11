@@ -358,7 +358,7 @@ class OPTCausalLM(Task):
             end_locations = (token_ids == end_token_id) & (~padding_mask)
             end_locations = tf.cast(end_locations, tf.int32)
             # Use cumsum to get ones in all locations after end_locations.
-            overflow = tf.math.cumsum(end_locations, exclusive=True)
+            overflow = tf.math.cumsum(end_locations, exclusive=True, axis=-1)
             # Our padding mask is the inverse of these overflow locations.
             padding_mask = ~tf.cast(overflow, tf.bool)
         else:
