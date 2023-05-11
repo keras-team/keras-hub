@@ -99,12 +99,8 @@ class OPTPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(x["token_ids"], [[1, 3, 4, 5, 3, 6, 1, 0]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4)
 
-    def test_call_overrides(self):
+    def test_sequence_length_override(self):
         input_data = " airplane at airport"
-        x = self.preprocessor(input_data, add_start_token=False)
-        self.assertAllEqual(x["token_ids"], [3, 4, 5, 3, 6, 1, 0, 0])
-        x = self.preprocessor(input_data, add_end_token=False)
-        self.assertAllEqual(x["token_ids"], [1, 3, 4, 5, 3, 6, 0, 0])
         x = self.preprocessor(input_data, sequence_length=4)
         self.assertAllEqual(x["token_ids"], [1, 3, 4, 1])
 

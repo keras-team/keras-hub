@@ -14,7 +14,9 @@
 """Tests for OPT causal LM model."""
 
 import os
+from unittest.mock import patch
 
+import numpy as np
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
@@ -30,6 +32,10 @@ from keras_nlp.models.opt.opt_tokenizer import OPTTokenizer
 
 class OPTCausalLMTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
+        # For DTensor.
+        keras.backend.experimental.enable_tf_random_generator()
+        keras.utils.set_random_seed(1337)
+
         self.vocab = {
             "<pad>": 0,
             "</s>": 1,
@@ -56,8 +62,8 @@ class OPTCausalLMTest(tf.test.TestCase, parameterized.TestCase):
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
             num_heads=2,
-            hidden_dim=64,
-            intermediate_dim=128,
+            hidden_dim=4,
+            intermediate_dim=8,
             max_sequence_length=self.preprocessor.packer.sequence_length,
         )
         self.causal_lm = OPTCausalLM(
@@ -100,8 +106,8 @@ class OPTCausalLMTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_generate(self):
         # String input.
-        prompt = " airplane"
-        output = self.causal_lm.generate(" airplane")
+        prompt = " airplane at airport"
+        output = self.causal_lm.generate(" airplane at airport")
         self.assertTrue(prompt in output)
         # String tensor input.
         self.assertIsInstance(self.causal_lm.generate(self.raw_batch)[0], str)
@@ -109,9 +115,33 @@ class OPTCausalLMTest(tf.test.TestCase, parameterized.TestCase):
         self.assertIsInstance(self.causal_lm.generate(self.raw_dataset)[0], str)
         # Int tensor input.
         self.causal_lm.preprocessor = None
-        self.assertDTypeEqual(
-            self.causal_lm.generate(self.preprocessed_batch), tf.int32
+        outputs = self.causal_lm.generate(self.preprocessed_batch)
+        # Assert prompt is in output in token id space.
+        self.assertAllEqual(
+            outputs["token_ids"][:, :5],
+            self.preprocessed_batch["token_ids"][:, :5],
         )
+        self.assertAllEqual(
+            outputs["padding_mask"][:, :5],
+            self.preprocessed_batch["padding_mask"][:, :5],
+        )
+
+    def test_early_stopping(self):
+        call_with_cache = self.causal_lm.call_with_cache
+
+        def wrapper(*args, **kwargs):
+            """Modify output logits to always favor end_token_id"""
+            logits, hidden_states, cache = call_with_cache(*args, **kwargs)
+            logits = np.zeros(logits.shape.as_list())
+            logits[:, :, self.preprocessor.tokenizer.end_token_id] = 1.0e9
+            return logits, hidden_states, cache
+
+        with patch.object(self.causal_lm, "call_with_cache", wraps=wrapper):
+            prompt = [" airplane at airport", " airplane"]
+            output = self.causal_lm.generate(prompt)
+            # We should immediately abort and output the prompt.
+            self.assertEqual(prompt, output)
+            self.assertEqual(self.causal_lm.call_with_cache.call_count, 2)
 
     def test_generate_compilation(self):
         # Assert we do not recompile with successive calls.
@@ -153,3 +183,13 @@ class OPTCausalLMTest(tf.test.TestCase, parameterized.TestCase):
         keras.utils.set_random_seed(42)
         restored_output = restored_model.predict(self.raw_batch)
         self.assertAllClose(model_output, restored_output)
+
+    def test_create_layout_map(self):
+        mesh = tf.experimental.dtensor.create_mesh([("batch", 1), ("model", 1)])
+        with OPTCausalLM.create_layout_map(mesh).scope():
+            OPTCausalLM(backbone=self.backbone)
+        # Using DTensor enables the mlir bridge as a side effect. Eventually
+        # this will be default, but for now we have compile errors with the
+        # bridge elsewhere and must disable. See
+        # https://github.com/keras-team/keras-nlp/issues/1001
+        tf.config.experimental.disable_mlir_bridge()

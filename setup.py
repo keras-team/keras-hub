@@ -14,10 +14,26 @@
 
 """Setup script."""
 
+import os
 import pathlib
 
 from setuptools import find_packages
 from setuptools import setup
+
+
+def read(rel_path):
+    here = os.path.abspath(os.path.dirname(__file__))
+    with open(os.path.join(here, rel_path)) as fp:
+        return fp.read()
+
+
+def get_version(rel_path):
+    for line in read(rel_path).splitlines():
+        if line.startswith("__version__"):
+            delim = '"' if '"' in line else "'"
+            return line.split(delim)[1]
+    raise RuntimeError("Unable to find version string.")
+
 
 HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
@@ -29,7 +45,7 @@ setup(
     ),
     long_description=README,
     long_description_content_type="text/markdown",
-    version="0.5.0",
+    version=get_version("keras_nlp/__init__.py"),
     url="https://github.com/keras-team/keras-nlp",
     author="Keras team",
     author_email="keras-nlp@google.com",

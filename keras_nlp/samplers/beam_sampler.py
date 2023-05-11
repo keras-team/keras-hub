@@ -39,7 +39,7 @@ class BeamSampler(Sampler):
         return_all_beams: bool. When set to `True`, the sampler will return all
             beams and their respective probabilities score.
 
-    Call Args:
+    Call arguments:
         {{call_args}}
 
     Examples:

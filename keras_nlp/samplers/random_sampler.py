@@ -33,7 +33,7 @@ class RandomSampler(Sampler):
     Args:
         seed: int, defaults to None. The random seed.
 
-    Call Args:
+    Call arguments:
         {{call_args}}
 
     Examples:
