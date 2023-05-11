@@ -16,6 +16,7 @@
 import copy
 
 import tensorflow as tf
+from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.bart.bart_backbone import BartBackbone
@@ -27,6 +28,7 @@ from keras_nlp.models.task import Task
 from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.tf_utils import tensor_to_string_list
 from keras_nlp.utils.tf_utils import truncate_at_token
 
 
@@ -47,9 +49,9 @@ class BartSeq2SeqLM(Task):
     default, `"top_k"` sampling will be used.
 
     This model can optionally be configured with a `preprocessor` layer, in
-    which case it will automatically apply preprocessing to raw inputs during
-    `fit()`, `predict()`, and `evaluate()`. This is done by default when
-    creating the model with `from_preset()`.
+    which case it will automatically apply preprocessing to string inputs during
+    `fit()`, `predict()`, `evaluate()` and `generate()`. This is done by default
+    when creating the model with `from_preset()`.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
@@ -90,8 +92,15 @@ class BartSeq2SeqLM(Task):
         self.backbone = backbone
         self.preprocessor = preprocessor
         self.generate_function = None
-        # Private sampler set by compile.
-        self._sampler = get_sampler("top_k")
+        self._sampler = None
+
+        # Default compilation
+        self.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            optimizer=keras.optimizers.Adam(2e-5),
+            metrics=keras.metrics.SparseCategoricalAccuracy(),
+            jit_compile=is_xla_compatible(self),
+        )
 
     @classproperty
     def presets(cls):
@@ -323,69 +332,180 @@ class BartSeq2SeqLM(Task):
         if self.generate_function is not None:
             return self.generate_function
 
-        def generate_function(
-            encoder_token_ids,
-            encoder_padding_mask,
-            decoder_token_ids,
-            decoder_padding_mask,
-            min_length,
-        ):
-            # Create and seed cache with a single forward pass.
-            (
-                hidden_states,
-                encoder_outputs,
-                self_attention_cache,
-                cross_attention_cache,
-            ) = self._build_cache(
-                encoder_token_ids, encoder_padding_mask, decoder_token_ids
-            )
-
-            def next_token(prompt, cache, index):
-                # The cache index is the index of our previous token.
-                cache_index = index - 1
-                prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
-
-                logits, hidden_states, cache, _ = self.call_with_cache(
-                    encoder_outputs=encoder_outputs,
-                    encoder_padding_mask=encoder_padding_mask,
-                    decoder_token_ids=prompt,
-                    self_attention_cache=cache,
-                    self_attention_cache_update_index=cache_index,
-                    cross_attention_cache=cross_attention_cache,
-                    cross_attention_cache_update_index=None,
-                )
-                return (
-                    tf.squeeze(logits, axis=1),
-                    tf.squeeze(hidden_states, axis=1),
-                    cache,
-                )
-
-            return self._sampler(
-                next=next_token,
-                prompt=decoder_token_ids,
-                cache=self_attention_cache,
-                index=min_length,
-                mask=decoder_padding_mask,
-                end_token_id=self.preprocessor.tokenizer.end_token_id,
-                hidden_states=hidden_states,
-            )
-
         if self.run_eagerly:
-            self.generate_function = generate_function
+            self.generate_function = self.generate_step
         else:
             # `jit_compile` is a property of keras.Model after TF 2.12.
             # Use `getattr()` for backwards compatibility.
             jit_compile = getattr(self, "jit_compile", True)
             self.generate_function = tf.function(
-                generate_function, jit_compile=jit_compile
+                self.generate_step, jit_compile=jit_compile
             )
         return self.generate_function
+
+    def generate_step(
+        self,
+        inputs,
+        end_token_id,
+    ):
+        """A compilable generation function.
+
+        This function represents the inner, XLA-compilable, generation function
+        for a single batch of inputs. Inputs should have the same structure as
+        model inputs, a dictionary with keys `"encoder_token_ids"`,
+        `"encoder_padding_mask"`, `"decoder_token_ids"` and
+        `"decoder_padding_mask"`.
+
+        Args:
+            inputs: A dictionary with four keys - `"encoder_token_ids"`,
+                `"encoder_padding_mask"`, `"decoder_token_ids"` and
+                `"decoder_padding_mask"`, with batched tensor values.
+            end_token_id: The id of the end token to stop on. If all
+                sequences have produced a new `end_token_id`, generation
+                will stop.
+        """
+        (
+            encoder_token_ids,
+            encoder_padding_mask,
+            decoder_token_ids,
+            decoder_padding_mask,
+        ) = (
+            inputs["encoder_token_ids"],
+            inputs["encoder_padding_mask"],
+            inputs["decoder_token_ids"],
+            inputs["decoder_padding_mask"],
+        )
+
+        # Create and seed cache with a single forward pass.
+        (
+            hidden_states,
+            encoder_outputs,
+            self_attention_cache,
+            cross_attention_cache,
+        ) = self._build_cache(
+            encoder_token_ids, encoder_padding_mask, decoder_token_ids
+        )
+        # Compute the lengths of all user inputted tokens ids.
+        row_lengths = tf.math.reduce_sum(
+            tf.cast(decoder_padding_mask, tf.int32), axis=-1
+        )
+        # Start at the first index that has no user inputted id.
+        index = tf.math.reduce_min(row_lengths)
+
+        def next_token(prompt, cache, index):
+            # The cache index is the index of our previous token.
+            cache_index = index - 1
+            prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
+
+            logits, hidden_states, cache, _ = self.call_with_cache(
+                encoder_outputs=encoder_outputs,
+                encoder_padding_mask=encoder_padding_mask,
+                decoder_token_ids=prompt,
+                self_attention_cache=cache,
+                self_attention_cache_update_index=cache_index,
+                cross_attention_cache=cross_attention_cache,
+                cross_attention_cache_update_index=None,
+            )
+            return (
+                tf.squeeze(logits, axis=1),
+                tf.squeeze(hidden_states, axis=1),
+                cache,
+            )
+
+        decoder_token_ids = self._sampler(
+            next=next_token,
+            prompt=decoder_token_ids,
+            cache=self_attention_cache,
+            index=index,
+            mask=decoder_padding_mask,
+            end_token_id=self.preprocessor.tokenizer.end_token_id,
+            hidden_states=hidden_states,
+        )
+
+        # Compute an output padding mask with the token ids we updated.
+        if end_token_id is not None:
+            # Build a mask of `end_token_id` locations not in the original
+            # prompt (not in locations where `decoder_padding_mask` is True).
+            end_locations = (decoder_token_ids == end_token_id) & (
+                ~decoder_padding_mask
+            )
+            end_locations = tf.cast(end_locations, tf.int32)
+            # Use cumsum to get ones in all locations after end_locations.
+            overflow = tf.math.cumsum(end_locations, exclusive=True)
+            # Our padding mask is the inverse of these overflow locations.
+            decoder_padding_mask = ~tf.cast(overflow, tf.bool)
+        else:
+            # Without early stopping, all locations will have been updated.
+            decoder_padding_mask = tf.ones_like(
+                decoder_token_ids, dtype=tf.bool
+            )
+        return {
+            "decoder_token_ids": decoder_token_ids,
+            "decoder_padding_mask": decoder_padding_mask,
+        }
+
+    def _normalize_generate_inputs(
+        self,
+        inputs,
+    ):
+        """Normalize user input to the generate function.
+
+        This function coverts all inputs to tensors, adds a batch dimension if
+        necessary, and returns a iterable "dataset like" object (either an
+        actual `tf.data.Dataset` or a list with a single batch element).
+        """
+        input_is_scalar = False
+
+        if isinstance(inputs, tf.data.Dataset):
+            return inputs, input_is_scalar
+
+        if isinstance(inputs, str) or isinstance(inputs, list):
+            inputs = tf.convert_to_tensor(inputs)
+
+        if isinstance(inputs, tf.Tensor) and inputs.shape.rank == 0:
+            input_is_scalar = True
+            inputs = inputs[tf.newaxis]
+
+        # We avoid coverting to a dataset purely for speed, for a single batch
+        # of input, creating a dataset would add significant overhead.
+        return [inputs], input_is_scalar
+
+    def _normalize_generate_outputs(
+        self,
+        outputs,
+        input_is_scalar,
+    ):
+        """Normalize user output from the generate function.
+
+        This function converts all output to numpy (for integer output), or
+        python strings (for string output). If a batch dimension was added to
+        the input, it is removed from the output (so generate can be string in,
+        string out).
+        """
+
+        def normalize(x):
+            x = tf.concat(x, axis=0)
+            x = tf.squeeze(x, 0) if input_is_scalar else x
+            is_string = x.dtype == tf.string
+            # Convert outputs to a friendly pythonic type. For numerical outputs
+            # that is numpy, for string outputs that is `list` and `str`.
+            return tensor_to_string_list(x) if is_string else x.numpy()
+
+        if isinstance(outputs[0], dict):
+            return {
+                "decoder_token_ids": normalize(
+                    [x["decoder_token_ids"] for x in outputs]
+                ),
+                "decoder_padding_mask": normalize(
+                    [x["decoder_padding_mask"] for x in outputs]
+                ),
+            }
+        return normalize([x for x in outputs])
 
     def generate(
         self,
         inputs,
-        max_length,
-        add_start_token=True,
+        max_length=None,
     ):
         """Generates text conditioned on the encoder inputs.
 
@@ -403,6 +523,15 @@ class BartSeq2SeqLM(Task):
             max_length: int. The max length of generated sequence.
             add_start_token: bool. Whether to add the start token to `prompt`.
         """
+        # Setup our three main passes.
+        # 1. Optionally preprocessing strings to dense integer tensors.
+        # 2. Generate new tokens via a compiled function on dense tensors.
+        # 3. Optionally postprocess dense integer tensors back to string.
+        generate_function = self.make_generate_function()
+        end_token_id = None
+        if self.preprocessor is not None:
+            end_token_id = self.preprocessor.tokenizer.end_token_id
+
         if self.preprocessor is None:
             raise ValueError(
                 "`self.preprocessor` is `None`, please make sure "
