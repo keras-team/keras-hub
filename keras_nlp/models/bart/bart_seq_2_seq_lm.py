@@ -424,7 +424,7 @@ class BartSeq2SeqLM(Task):
         # Compute an output padding mask with the token ids we updated.
         if end_token_id is not None:
             # Build a mask of `end_token_id` locations not in the original
-            # prompt (not in locations where `decoder_padding_mask` is True).
+            # prompt (not in locations where `padding_mask` is True).
             end_locations = (decoder_token_ids == end_token_id) & (
                 ~decoder_padding_mask
             )
@@ -438,6 +438,7 @@ class BartSeq2SeqLM(Task):
             decoder_padding_mask = tf.ones_like(
                 decoder_token_ids, dtype=tf.bool
             )
+
         return {
             "decoder_token_ids": decoder_token_ids,
             "decoder_padding_mask": decoder_padding_mask,
