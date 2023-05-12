@@ -88,6 +88,25 @@ class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.assertEqual(self.join_as_string(output), ["sequentzzzzz"])
 
+    def test_only_sample_from_top_k_tokens(self):
+        def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([self.batch_size, 5])
+            # Return a distribution where each id is progressively less likely.
+            logits = tf.range(self.vocab_size, 0, -1, dtype="float32")
+            logits = tf.repeat(logits[tf.newaxis, :], self.batch_size, axis=0)
+            return logits, hidden_states, cache
+
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        output = TopPSampler(p=1, k=5)(
+            next=next,
+            prompt=prompt,
+            index=5,
+        )
+        generated_str = self.join_as_string(output[:, 5:])[0]
+        token_set = set(generated_str)
+        self.assertContainsSubset(token_set, set("abcde"))
+
     def test_outputs_in_top_p(self):
         def next(prompt, cache, index):
             # Dummy hidden states.
@@ -102,6 +121,22 @@ class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
         )
         output_ids = set(output[0].numpy())
         self.assertContainsSubset(output_ids, range(3))
+
+    def test_temperature(self):
+        def next(prompt, cache, index):
+            # Dummy hidden states.
+            hidden_states = tf.ones([self.batch_size, 5])
+            logits = tf.range(self.vocab_size, 0, -1, dtype=tf.float32)
+            logits = tf.reshape(logits[tf.newaxis, :], (self.batch_size, -1))
+            return tf.constant(logits), hidden_states, cache
+
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+
+        output = TopPSampler(p=0.5, temperature=1e-9)(
+            next=next,
+            prompt=prompt,
+        )
+        self.assertAllEqual(output, tf.zeros_like(output))
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)

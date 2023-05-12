@@ -34,7 +34,7 @@ class TopKSampler(Sampler):
         k: int, the `k` value of top-k.
         seed: int, defaults to None. The random seed.
 
-    Call Args:
+    Call arguments:
         {{call_args}}
 
     Examples:
@@ -64,8 +64,9 @@ class TopKSampler(Sampler):
         self,
         k=5,
         seed=None,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.k = k
         self.seed = seed
 

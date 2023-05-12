@@ -29,7 +29,7 @@ class GreedySampler(Sampler):
     This sampler is implemented on greedy search, i.e., always picking up the
     token of the largest probability as the next token.
 
-    Call Args:
+    Call arguments:
         {{call_args}}
 
     Examples:
@@ -55,8 +55,11 @@ class GreedySampler(Sampler):
     ```
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(
+        self,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
 
     def get_next_token(self, probabilities):
         return tf.argmax(probabilities, axis=-1)

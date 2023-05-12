@@ -43,7 +43,12 @@ def find_modules():
     return keras_nlp_modules
 
 
-def test_docstrings():
+@pytest.fixture(scope="session")
+def docstring_module(pytestconfig):
+    return pytestconfig.getoption("docstring_module")
+
+
+def test_docstrings(docstring_module):
     keras_nlp_modules = find_modules()
     # As of this writing, it doesn't seem like pytest support load_tests
     # protocol for unittest:
@@ -52,10 +57,9 @@ def test_docstrings():
     runner = unittest.TextTestRunner()
     suite = unittest.TestSuite()
     for module in keras_nlp_modules:
-        # Temporarily stop testing gpt2 & deberta docstrings until we are
-        # exporting the symbols.
-        if "gpt2" in module.__name__ or "deberta_v3" in module.__name__:
+        if docstring_module and docstring_module not in module.__name__:
             continue
+        print(f"Adding tests for docstrings in {module.__name__}")
         suite.addTest(
             doctest.DocTestSuite(
                 module,
@@ -87,40 +91,24 @@ def test_docstrings():
     astor is None,
     reason="This test requires `astor`. Please `pip install astor` to run.",
 )
-def test_fenced_docstrings():
+def test_fenced_docstrings(docstring_module):
     """Tests fenced code blocks in docstrings.
 
-    This can only be run manually. Run with:
+    This can only be run manually and will take many minutes. Run with:
     `pytest keras_nlp/tests/doc_tests/docstring_test.py --run_extra_large`
+
+    To restrict the docstring you test, you can pass an additional
+    --docstring_module flag. For example, to run only "bert" module tests:
+    `pytest keras_nlp/tests/doc_tests/docstring_test.py --run_extra_large --docstring_module "models.bert"`
     """
     keras_nlp_modules = find_modules()
 
     runner = unittest.TextTestRunner()
     suite = unittest.TestSuite()
     for module in keras_nlp_modules:
-        # Temporarily stop testing gpt2 & deberta docstrings until we are
-        # exporting the symbols.
-        if "gpt2" in module.__name__ or "deberta_v3" in module.__name__:
+        if docstring_module and docstring_module not in module.__name__:
             continue
-        # Do not test certain modules.
-        if module.__name__ in [
-            # Base classes.
-            "keras_nlp.models.backbone",
-            "keras_nlp.models.preprocessor",
-            "keras_nlp.models.task",
-            "keras_nlp.tokenizers.byte_pair_tokenizer",
-            "keras_nlp.tokenizers.sentence_piece_tokenizer",
-            "keras_nlp.tokenizers.word_piece_tokenizer",
-            # Preprocessors and tokenizers which use `model.spm` (temporary).
-            "keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor",
-            "keras_nlp.models.f_net.f_net_preprocessor",
-            "keras_nlp.models.f_net.f_net_tokenizer",
-            "keras_nlp.models.albert.albert_preprocessor",
-            "keras_nlp.models.albert.albert_tokenizer",
-            "keras_nlp.models.t5.t5_tokenizer",
-        ]:
-            continue
-
+        print(f"Adding tests for fenced docstrings in {module.__name__}")
         suite.addTest(
             doctest.DocTestSuite(
                 module,

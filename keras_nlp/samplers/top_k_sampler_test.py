@@ -37,7 +37,7 @@ class TopKSamplerTest(tf.test.TestCase, parameterized.TestCase):
             return logits, hidden_states, cache
 
         self.next = next
-        self.sampler = TopKSampler(k=5)
+        self.sampler = TopKSampler(k=5, temperature=1.0)
 
     def join_as_string(self, x):
         return ["".join([self.int_lookup[i] for i in s]) for s in x.numpy()]

@@ -80,6 +80,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         input_data = tf.constant(["The quick brown fox."])
         model = BertClassifier.from_preset(
             "bert_tiny_en_uncased",
+            num_classes=2,
             load_weights=load_weights,
         )
         # We don't assert output values, as the head weights are random.
@@ -96,6 +97,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         }
         model = BertClassifier.from_preset(
             "bert_tiny_en_uncased",
+            num_classes=2,
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -103,14 +105,14 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         model.predict(input_data)
 
     @parameterized.named_parameters(
-        ("bert_tokenizer", BertTokenizer),
-        ("bert_preprocessor", BertPreprocessor),
-        ("bert", BertBackbone),
-        ("bert_classifier", BertClassifier),
+        ("bert_tokenizer", BertTokenizer, {}),
+        ("bert_preprocessor", BertPreprocessor, {}),
+        ("bert", BertBackbone, {}),
+        ("bert_classifier", BertClassifier, {"num_classes": 2}),
     )
-    def test_preset_mutability(self, cls):
+    def test_preset_mutability(self, cls, kwargs):
         preset = "bert_tiny_en_uncased"
-        obj = cls.from_preset(preset)
+        obj = cls.from_preset(preset, **kwargs)
         # Cannot overwrite the presents attribute in an object
         with self.assertRaises(AttributeError):
             obj.presets = {"my_model": "clowntown"}
@@ -139,15 +141,15 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("bert_tokenizer", BertTokenizer),
-        ("bert_preprocessor", BertPreprocessor),
-        ("bert", BertBackbone),
-        ("bert_classifier", BertClassifier),
+        ("bert_tokenizer", BertTokenizer, {}),
+        ("bert_preprocessor", BertPreprocessor, {}),
+        ("bert", BertBackbone, {}),
+        ("bert_classifier", BertClassifier, {"num_classes": 2}),
     )
-    def test_unknown_preset_error(self, cls):
+    def test_unknown_preset_error(self, cls, kwargs):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("bert_base_uncased_clowntown")
+            cls.from_preset("bert_base_uncased_clowntown", **kwargs)
 
     def test_override_preprocessor_sequence_length(self):
         """Override sequence length longer than model's maximum."""
@@ -201,6 +203,7 @@ class BertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in BertClassifier.presets:
             classifier = BertClassifier.from_preset(
                 preset,
+                num_classes=2,
                 load_weights=load_weights,
             )
             input_data = tf.constant(["This quick brown fox"])
@@ -213,6 +216,7 @@ class BertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in BertClassifier.presets:
             classifier = BertClassifier.from_preset(
                 preset,
+                num_classes=2,
                 preprocessor=None,
                 load_weights=load_weights,
             )

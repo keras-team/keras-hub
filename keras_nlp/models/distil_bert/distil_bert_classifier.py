@@ -53,12 +53,15 @@ class DistilBertClassifier(Task):
     Args:
         backbone: A `keras_nlp.models.DistilBert` instance.
         num_classes: int. Number of classes to predict.
-        hidden_dim: int. The size of the pooler layer.
-        dropout: float. The dropout probability value, applied after the first
-            dense layer.
         preprocessor: A `keras_nlp.models.DistilBertPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
+        activation: Optional `str` or callable, defaults to `None`. The
+            activation function to use on the model outputs. Set
+            `activation="softmax"` to return output probabilities.
+        hidden_dim: int. The size of the pooler layer.
+        dropout: float. The dropout probability value, applied after the first
+            dense layer.
 
     Examples:
 
@@ -143,15 +146,15 @@ class DistilBertClassifier(Task):
     def __init__(
         self,
         backbone,
-        num_classes=2,
+        num_classes,
+        preprocessor=None,
+        activation=None,
         hidden_dim=None,
         dropout=0.2,
-        preprocessor=None,
         **kwargs,
     ):
         inputs = backbone.input
-        if hidden_dim is None:
-            hidden_dim = backbone.hidden_dim
+        hidden_dim = hidden_dim or backbone.hidden_dim
 
         x = backbone(inputs)[:, backbone.cls_token_index, :]
         x = keras.layers.Dense(
@@ -164,6 +167,7 @@ class DistilBertClassifier(Task):
         outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=distilbert_kernel_initializer(),
+            activation=activation,
             name="logits",
         )(x)
 
@@ -178,11 +182,14 @@ class DistilBertClassifier(Task):
         self.backbone = backbone
         self.preprocessor = preprocessor
         self.num_classes = num_classes
+        self.activation = keras.activations.get(activation)
         self.hidden_dim = hidden_dim
         self.dropout = dropout
 
         self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            loss=keras.losses.SparseCategoricalCrossentropy(
+                from_logits=activation is None
+            ),
             optimizer=keras.optimizers.Adam(5e-5),
             metrics=keras.metrics.SparseCategoricalAccuracy(),
             jit_compile=is_xla_compatible(self),
@@ -193,6 +200,7 @@ class DistilBertClassifier(Task):
         config.update(
             {
                 "num_classes": self.num_classes,
+                "activation": keras.activations.serialize(self.activation),
                 "hidden_dim": self.hidden_dim,
                 "dropout": self.dropout,
             }

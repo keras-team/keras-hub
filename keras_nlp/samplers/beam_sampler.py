@@ -39,7 +39,7 @@ class BeamSampler(Sampler):
         return_all_beams: bool. When set to `True`, the sampler will return all
             beams and their respective probabilities score.
 
-    Call Args:
+    Call arguments:
         {{call_args}}
 
     Examples:
@@ -73,22 +73,24 @@ class BeamSampler(Sampler):
     char_lookup = {v: k for k, v in int_lookup.items()}
     batch_size, length, vocab_size = 1, 8, len(int_lookup)
 
-    def next(prompt, state, index):
+    def next(prompt, cache, index):
+        prompt_batch_size = tf.shape(prompt)[0]
+        hidden_states = tf.ones((prompt_batch_size, 10))
         # A uniform distribution over our alphabet.
         logits = tf.ones((batch_size, vocab_size))
-        return logits, state
+        return logits, hidden_states, cache
 
-    output = keras_nlp.samplers.BeamSampler(return_all_beams=True)(
+    beams, probs = keras_nlp.samplers.BeamSampler(return_all_beams=True)(
         next=next,
         prompt=tf.fill((batch_size, length,), char_lookup['z']),
         index=5,
     )
 
-    print(output[0].shape)
+    print(beams.shape)
     # >>> (1, 5, 8)
-    print(output[1].shape)
+    print(probs.shape)
     # >>> (1, 5)
-    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
+    print(["".join([int_lookup[i] for i in s]) for s in beams[0].numpy()])
     # >>> ['zzzzzeee', 'zzzzzeed', 'zzzzzeec', 'zzzzzeea', 'zzzzzeeb']
     ```
     """
@@ -97,8 +99,9 @@ class BeamSampler(Sampler):
         self,
         num_beams=5,
         return_all_beams=False,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.num_beams = num_beams
         self.return_all_beams = return_all_beams
 
@@ -130,7 +133,10 @@ class BeamSampler(Sampler):
             unflat_shape = [batch_size, self.num_beams] + x.shape.as_list()[1:]
             return tf.reshape(x, shape=unflat_shape)
 
-        mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
+        if mask is None:
+            mask = tf.zeros_like(prompt, dtype=tf.bool)
+        else:
+            mask = tf.cast(mask, dtype=tf.bool)
         # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
         cache = () if cache is None else cache
         # Add extra sequences for each beam.
@@ -153,7 +159,7 @@ class BeamSampler(Sampler):
             # Compute the softmax distribution for the next token.
             logits, _, cache = next(prompt, cache, index)
             vocab_size = tf.shape(logits)[-1]
-            probs = keras.activations.softmax(logits)
+            probs = keras.activations.softmax(logits / self.temperature)
 
             # Compute the running log-likelihood of each new candidate.
             next_log_probs = tf.math.log(probs) + log_probs[..., tf.newaxis]

@@ -66,7 +66,7 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_detokenize(self):
         input_data = tf.constant([[4, 9, 5, 7]])
         output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, tf.constant(["the quick brown fox"]))
+        self.assertEqual(output, tf.constant(["brown round earth is"]))
 
     def test_vocabulary(self):
         vocabulary = self.tokenizer.get_vocabulary()
@@ -84,9 +84,10 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
                 "▁is",
                 "▁quick",
                 "▁round",
+                "<mask>",
             ],
         )
-        self.assertEqual(self.tokenizer.vocabulary_size(), 11)
+        self.assertEqual(self.tokenizer.vocabulary_size(), 12)
 
     def test_id_to_token(self):
         print(self.tokenizer.id_to_token(9))
@@ -96,6 +97,10 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_token_to_id(self):
         self.assertEqual(self.tokenizer.token_to_id("▁the"), 4)
         self.assertEqual(self.tokenizer.token_to_id("▁round"), 10)
+        # Test any random OOV token.
+        self.assertEqual(self.tokenizer.token_to_id("<oov-token>"), 3)
+        # Test a special token.
+        self.assertEqual(self.tokenizer.token_to_id("<pad>"), 1)
 
     def test_serialization(self):
         config = keras.utils.serialize_keras_object(self.tokenizer)

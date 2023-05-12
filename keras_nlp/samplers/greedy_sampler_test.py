@@ -37,7 +37,7 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
             return logits, hidden_states, cache
 
         self.next = next
-        self.sampler = GreedySampler()
+        self.sampler = GreedySampler(temperature=1.0)
 
     def join_as_string(self, x):
         return ["".join([self.int_lookup[i] for i in s]) for s in x.numpy()]

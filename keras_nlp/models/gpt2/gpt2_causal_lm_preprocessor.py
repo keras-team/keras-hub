@@ -14,10 +14,14 @@
 
 """GPT2 Causal LM preprocessor layer."""
 
+import tensorflow as tf
 from absl import logging
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.gpt2.gpt2_preprocessor import GPT2Preprocessor
+from keras_nlp.utils.keras_utils import (
+    convert_inputs_to_list_of_tensor_segments,
+)
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
@@ -25,19 +29,33 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     """GPT2 Causal LM preprocessor.
 
-    This preprocessor is majorly used as the preprocesor for `GPT2CausalLM`.
-    This class subclasses `keras_nlp.models.GPT2Preprocessor` and keeps most of
-    its functionality. The only change is `GPT2CausalLMPreprocessor` sets
-    `y` (label) and `sample_weights` field by shifting the input sequence one
-    step towards left, and drop the last token as it does not have a successor,
-    e.g., if the tokenized input is `[1, 2, 3, 0, 0]` with
-    `padding_mask = [1, 1, 1, 0, 0]`, then after preprocessing, we
-    will have `x = [1, 2, 3, 0]` and `y = [2, 3, 0, 0]`, with
-    `padding_mask = [1, 1, 1, 0]` and `sample_weights = [1, 1, 0, 0]`.
+    This preprocessing layer is meant for use with
+    `keras_nlp.models.GPT2CausalLM`. By default, it will take in batches of
+    strings, and return outputs in a `(x, y, sample_weight)` format, where the
+    `y` label is the next token id in the `x` sequence.
+
+    For use with generation, the layer also exposes two methods
+    `generate_preprocess()` and `generate_postprocess()`. When this preprocessor
+    is attached to a `keras_nlp.models.GPT2CausalLM` instance, these methods
+    will be called implicitly in `generate()`. They can also be called
+    standalone (e.g. to precompute preprocessing inputs for generation in a
+    separate process).
 
     Args:
         tokenizer: A `keras_nlp.models.GPT2Tokenizer` instance.
         sequence_length: The length of the packed inputs.
+        add_start_token: If true, the preprocessor will prepend the tokenizer
+            start token to each input sequence.
+        add_end_token: If true, the preprocessor will append the tokenizer
+            end token to each input sequence.
+
+    Call arguments:
+        x: A string, `tf.Tensor` or list of python strings.
+        y: Label data. Should always be `None` as the layer generates labels.
+        sample_weight: Label weights. Should always be `None` as the layer
+            generates label weights.
+        sequence_length: Pass to override the configured `sequence_length` of
+            the layer.
 
     Examples:
     ```python
@@ -72,9 +90,16 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     # Map a dataset to preprocess unlabled sentences.
     ds = tf.data.Dataset.from_tensor_slices(features)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+    ```
     """
 
-    def call(self, x, y=None, sample_weight=None):
+    def call(
+        self,
+        x,
+        y=None,
+        sample_weight=None,
+        sequence_length=None,
+    ):
         if y is not None or sample_weight is not None:
             logging.warning(
                 "`GPT2CausalLMPreprocessor` generates `y` and `sample_weight` "
@@ -82,15 +107,65 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
                 "or `sample_weight`. Your `y` and `sample_weight` will be "
                 "ignored."
             )
+        sequence_length = sequence_length or self.sequence_length
 
-        x = super().call(x)
-        token_ids, padding_mask = x["token_ids"], x["padding_mask"]
+        x = convert_inputs_to_list_of_tensor_segments(x)[0]
+        x = self.tokenizer(x)
+        # Pad with one extra token to account for the truncation below.
+        token_ids, padding_mask = self.packer(
+            x,
+            sequence_length=sequence_length + 1,
+            add_start_value=self.add_start_token,
+            add_end_value=self.add_end_token,
+        )
         # The last token does not have a next token, so we truncate it out.
         x = {
             "token_ids": token_ids[..., :-1],
             "padding_mask": padding_mask[..., :-1],
         }
         # Target `y` will be the next token.
-        y = token_ids[..., 1:]
-        sample_weight = padding_mask[..., 1:]
+        y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
         return pack_x_y_sample_weight(x, y, sample_weight)
+
+    def generate_preprocess(
+        self,
+        x,
+        sequence_length=None,
+    ):
+        """Covert strings to integer token input for generation.
+
+        Similar to calling the layer for training, this method takes in strings
+        or tensor strings, tokenizes and packs the input, and computes a padding
+        mask masking all inputs not filled in with a padded value.
+
+        Unlike calling the the layer for training, this method does not compute
+        labels and will never append a `tokenizer.end_token_id` to the end of
+        the sequence (as generation is expected to continue at the end of the
+        inputted prompt).
+        """
+        x = convert_inputs_to_list_of_tensor_segments(x)[0]
+        x = self.tokenizer(x)
+        token_ids, padding_mask = self.packer(
+            x, sequence_length=sequence_length, add_end_value=False
+        )
+        return {
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+        }
+
+    def generate_postprocess(
+        self,
+        x,
+    ):
+        """Covert integer token output to strings for generation.
+
+        This method reverses `generate_preprocess()`, by first removing all
+        padding and start/end tokens, and then converting the interger sequence
+        back to a string.
+        """
+        token_ids, padding_mask = x["token_ids"], x["padding_mask"]
+        # Strip any special tokens during detokenization (e.g. the start and
+        # end markers). In the future we could make this configurable.
+        padding_mask = padding_mask & (token_ids != self.tokenizer.end_token_id)
+        token_ids = tf.ragged.boolean_mask(token_ids, padding_mask)
+        return self.tokenizer.detokenize(token_ids)

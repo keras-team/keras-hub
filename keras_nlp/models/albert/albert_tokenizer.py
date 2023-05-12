@@ -51,16 +51,40 @@ class AlbertTokenizer(SentencePieceTokenizer):
     Examples:
 
     ```python
-    tokenizer = keras_nlp.models.AlbertTokenizer(proto="model.spm")
+    # Unbatched input.
+    tokenizer = keras_nlp.models.AlbertTokenizer.from_preset(
+        "albert_base_en_uncased",
+    )
+    tokenizer("The quick brown fox jumped.")
 
-    # Batched inputs.
-    tokenizer(["the quick brown fox", "the earth is round"])
-
-    # Unbatched inputs.
-    tokenizer("the quick brown fox")
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
 
     # Detokenization.
-    tokenizer.detokenize(tf.constant([[2, 14, 2231, 886, 2385, 3]]))
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
+
+    # Custom vocabulary.
+    bytes_io = io.BytesIO()
+    ds = tf.data.Dataset.from_tensor_slices(["The quick brown fox jumped."])
+    sentencepiece.SentencePieceTrainer.train(
+        sentence_iterator=ds.as_numpy_iterator(),
+        model_writer=bytes_io,
+        vocab_size=10,
+        model_type="WORD",
+        pad_id=0,
+        unk_id=1,
+        bos_id=2,
+        eos_id=3,
+        pad_piece="<pad>",
+        unk_piece="<unk>",
+        bos_piece="[CLS]",
+        eos_piece="[SEP]",
+        user_defined_symbols="[MASK]",
+    )
+    tokenizer = keras_nlp.models.AlbertTokenizer(
+        proto=bytes_io.getvalue(),
+    )
+    tokenizer("The quick brown fox jumped.")
     ```
     """
 

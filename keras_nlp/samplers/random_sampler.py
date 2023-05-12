@@ -33,7 +33,7 @@ class RandomSampler(Sampler):
     Args:
         seed: int, defaults to None. The random seed.
 
-    Call Args:
+    Call arguments:
         {{call_args}}
 
     Examples:
@@ -62,8 +62,9 @@ class RandomSampler(Sampler):
     def __init__(
         self,
         seed=None,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.seed = seed
 
     def get_next_token(self, probabilities):

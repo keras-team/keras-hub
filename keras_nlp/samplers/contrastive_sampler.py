@@ -41,7 +41,7 @@ class ContrastiveSampler(Sampler):
             on the similarity than the token probability.
         seed: int, defaults to None. The random seed.
 
-    Call Args:
+    Call arguments:
         {{call_args}}
 
     Examples:
@@ -76,8 +76,9 @@ class ContrastiveSampler(Sampler):
         k=5,
         alpha=0.6,
         seed=None,
+        **kwargs,
     ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.k = k
         self.alpha = alpha
         self.seed = seed
@@ -133,7 +134,7 @@ class ContrastiveSampler(Sampler):
 
         def body(prompt, cache, index, logits, hidden_states):
             # Compute the softmax distribution for the next token.
-            probabilities = keras.activations.softmax(logits)
+            probabilities = keras.activations.softmax(logits / self.temperature)
 
             # Replicate for `self.k` times to find the best token in top-k
             # candidates.

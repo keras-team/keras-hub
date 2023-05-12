@@ -13,14 +13,12 @@ jobs:
         pip install
         build
         --user
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt --progress-bar off
     - name: Build a binary wheel and a source tarball
       run: >-
-        python -m
-        build
-        --sdist
-        --wheel
-        --outdir dist/
-        .
+        python pip_build.py
     - name: Publish distribution to PyPI
       if: startsWith(github.ref, 'refs/tags')
       uses: pypa/gh-action-pypi-publish@master

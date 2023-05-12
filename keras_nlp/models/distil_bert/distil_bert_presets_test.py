@@ -78,6 +78,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         input_data = tf.constant(["The quick brown fox."])
         model = DistilBertClassifier.from_preset(
             "distil_bert_base_en_uncased",
+            num_classes=2,
             load_weights=load_weights,
         )
         model.predict(input_data)
@@ -92,6 +93,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         }
         model = DistilBertClassifier.from_preset(
             "distil_bert_base_en_uncased",
+            num_classes=2,
             load_weights=load_weights,
             preprocessor=None,
         )
@@ -109,15 +111,15 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
             self.assertRegex(cls.from_preset.__doc__, name)
 
     @parameterized.named_parameters(
-        ("distilbert_tokenizer", DistilBertTokenizer),
-        ("distilbert_preprocessor", DistilBertPreprocessor),
-        ("distilbert", DistilBertBackbone),
-        ("distilbert_classifier", DistilBertClassifier),
+        ("distilbert_tokenizer", DistilBertTokenizer, {}),
+        ("distilbert_preprocessor", DistilBertPreprocessor, {}),
+        ("distilbert", DistilBertBackbone, {}),
+        ("distilbert_classifier", DistilBertClassifier, {"num_classes": 2}),
     )
-    def test_unknown_preset_error(self, cls):
+    def test_unknown_preset_error(self, cls, kwargs):
         # Not a preset name
         with self.assertRaises(ValueError):
-            cls.from_preset("distilbert_base_uncased_clowntown")
+            cls.from_preset("distilbert_base_uncased", **kwargs)
 
 
 @pytest.mark.extra_large
@@ -153,7 +155,7 @@ class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in DistilBertClassifier.presets:
             classifier = DistilBertClassifier.from_preset(
                 preset,
-                num_classes=4,
+                num_classes=2,
                 load_weights=load_weights,
             )
             input_data = tf.constant(["This quick brown fox"])
@@ -166,7 +168,7 @@ class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in DistilBertClassifier.presets:
             classifier = DistilBertClassifier.from_preset(
                 preset,
-                num_classes=4,
+                num_classes=2,
                 load_weights=load_weights,
                 preprocessor=None,
             )

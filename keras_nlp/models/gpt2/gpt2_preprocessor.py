@@ -16,9 +16,8 @@
 
 import copy
 
-import tensorflow as tf
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.layers.start_end_packer import StartEndPacker
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.models.preprocessor import Preprocessor
@@ -35,7 +34,7 @@ class GPT2Preprocessor(Preprocessor):
 
     This preprocessing layer will do 2 things:
 
-    - Tokenize the input using the `tokenizer`.
+    - Tokenize the inputs using the `tokenizer`.
     - Construct a dictionary with keys `"token_ids"`, `"padding_mask"`, that can
         be passed directly to a `keras_nlp.models.GPT2Backbone`.
 
@@ -58,73 +57,66 @@ class GPT2Preprocessor(Preprocessor):
     Args:
         tokenizer: A `keras_nlp.models.GPT2Tokenizer` instance.
         sequence_length: The length of the packed inputs.
-        add_start_token: If true, the preprocessor will append the tokenizer
+        add_start_token: If true, the preprocessor will prepend the tokenizer
             start token to each input sequence.
         add_end_token: If true, the preprocessor will append the tokenizer
             end token to each input sequence.
 
+    Call arguments:
+        x: A string, `tf.Tensor` or list of python strings.
+        y: Any label data. Will be passed through unaltered.
+        sample_weight: Any label weight data. Will be passed through unaltered.
+        sequence_length: Pass to override the configured `sequence_length` of
+            the layer.
+
     Examples:
+
+    Directly calling the layer on data.
     ```python
-    # Load the preprocessor from a preset.
     preprocessor = keras_nlp.models.GPT2Preprocessor.from_preset("gpt2_base_en")
 
     # Tokenize and pack a single sentence.
-    sentence = tf.constant("League of legends")
-    preprocessor(sentence)
-    # Same output.
-    preprocessor("League of legends")
+    preprocessor("The quick brown fox jumped.")
 
-    # Tokenize a batch of sentences.
-    sentences = tf.constant(["Taco tuesday", "Fish taco!"])
-    preprocessor(sentences)
-    # Same output.
-    preprocessor(["Taco tuesday", "Fish taco!"])
+    # Tokenize a batch of single sentences.
+    preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
 
-    # Map a dataset to preprocess a single sentence.
-    features = tf.constant(
-        [
-            "Avatar 2 is amazing!",
-            "Well, I am not sure.",
-        ]
-    )
-    labels = tf.constant([1, 0])
-    ds = tf.data.Dataset.from_tensor_slices((features, labels))
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map a dataset to preprocess unlabled sentences.
-    ds = tf.data.Dataset.from_tensor_slices(features)
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Alternatively, you can create a preprocessor from your own vocabulary.
-    # The usage is exactly the same as above.
-    vocab = {
-        "<s>": 0,
-        "<pad>": 1,
-        "</s>": 2,
-        "Ġafter": 5,
-        "noon": 6,
-        "Ġsun": 7,
-    }
-    merges = ["Ġ a", "Ġ s", "Ġ n", "e r", "n o", "o n", "Ġs u", "Ġa f", "no on"]
-    merges += ["Ġsu n", "Ġaf t", "Ġaft er"]
-
+    # Custom vocabulary.
+    features = ["a quick fox.", "a fox quick."]
+    vocab = {"<|endoftext|>": 0, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    merges += ["Ġ f", "o x", "Ġf ox"]
     tokenizer = keras_nlp.models.GPT2Tokenizer(
         vocabulary=vocab,
         merges=merges,
     )
-    preprocessor = keras_nlp.models.GPT2Preprocessor(
-        tokenizer=tokenizer,
-        sequence_length=20,
-    )
+    preprocessor = keras_nlp.models.GPT2Preprocessor(tokenizer=tokenizer)
+    preprocessor("The quick brown fox jumped.")
+    ```
+
+    Mapping with `tf.data.Dataset`.
+    ```python
+    preprocessor = keras_nlp.models.GPT2Preprocessor.from_preset("gpt2_base_en")
+
+    text = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    label = tf.constant([1, 1])
+
+    # Map labeled single sentences.
+    ds = tf.data.Dataset.from_tensor_slices((text, label))
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map unlabeled single sentences.
+    ds = tf.data.Dataset.from_tensor_slices(text)
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     ```
     """
 
     def __init__(
         self,
         tokenizer,
-        sequence_length,
-        add_start_token=False,
-        add_end_token=False,
+        sequence_length=1024,
+        add_start_token=True,
+        add_end_token=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -133,60 +125,51 @@ class GPT2Preprocessor(Preprocessor):
         self.sequence_length = sequence_length
         self.add_start_token = add_start_token
         self.add_end_token = add_end_token
+        self.packer = StartEndPacker(
+            start_value=tokenizer.start_token_id,
+            end_value=tokenizer.end_token_id,
+            pad_value=tokenizer.pad_token_id,
+            sequence_length=sequence_length,
+            return_padding_mask=True,
+        )
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
                 "sequence_length": self.sequence_length,
+                "add_start_token": self.add_start_token,
+                "add_end_token": self.add_end_token,
             }
         )
         return config
 
-    def call(self, x, y=None, sample_weight=None):
+    def call(
+        self,
+        x,
+        y=None,
+        sample_weight=None,
+        sequence_length=None,
+    ):
         x = convert_inputs_to_list_of_tensor_segments(x)
-        if len(x) > 1:
+        if len(x) != 1:
             raise ValueError(
                 "GPT2 requires each input feature to contain only "
                 f"one segment, but received {len(x)}. If you are using GPT2 "
                 "for a multi-segment classification task, please refer to "
                 "classification models like BERT or RoBERTa."
             )
-        token_ids = self.tokenizer(x[0])
-        input_is_1d = len(token_ids.shape) == 1
-        if input_is_1d:
-            token_ids = tf.RaggedTensor.from_tensor([token_ids])
-        if self.add_start_token:
-            start_tokens = tf.fill(
-                [tf.shape(token_ids)[0], 1],
-                self.tokenizer.start_token_id,
-            )
-            token_ids = tf.concat([start_tokens, token_ids], axis=1)
-        if self.add_end_token:
-            end_tokens = tf.fill(
-                [tf.shape(token_ids)[0], 1],
-                self.tokenizer.end_token_id,
-            )
-            token_ids = tf.concat([token_ids, end_tokens], axis=1)
-        mask = tf.ones_like(token_ids, dtype=tf.bool)
-        shape_after_padding = tf.stack(
-            [tf.constant(-1), self.sequence_length],
-            axis=0,
+        sequence_length = sequence_length or self.sequence_length
+        token_ids, padding_mask = self.packer(
+            self.tokenizer(x[0]),
+            sequence_length=sequence_length,
+            add_start_value=self.add_start_token,
+            add_end_value=self.add_end_token,
         )
-        mask = mask.to_tensor(shape=shape_after_padding)
-        token_ids = token_ids.to_tensor(
-            shape=shape_after_padding,
-            default_value=self.tokenizer.pad_token_id,
-        )
-        if input_is_1d:
-            # If the input is a single string, we let the output be a 1D tensor.
-            token_ids = tf.squeeze(token_ids, axis=0)
-            mask = tf.squeeze(mask, axis=0)
         x = {
             "token_ids": token_ids,
-            "padding_mask": mask,
+            "padding_mask": padding_mask,
         }
-
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty

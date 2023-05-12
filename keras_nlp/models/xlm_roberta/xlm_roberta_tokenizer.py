@@ -100,10 +100,11 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         self.pad_token_id = 1  # <pad>
         self.end_token_id = 2  # </s>
         self.unk_token_id = 3  # <unk>
+        self.mask_token_id = self.vocabulary_size() - 1  # <mask>
 
     def vocabulary_size(self):
         """Get the size of the tokenizer vocabulary."""
-        return super().vocabulary_size() + 1
+        return super().vocabulary_size() + 2
 
     def get_vocabulary(self):
         """Get the size of the tokenizer vocabulary."""
@@ -112,10 +113,14 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
                 tf.range(super().vocabulary_size())
             )
         )
-        return self._vocabulary_prefix + vocabulary[3:]
+        return self._vocabulary_prefix + vocabulary[3:] + ["<mask>"]
 
     def id_to_token(self, id):
         """Convert an integer id to a string token."""
+
+        if id == self.mask_token_id:
+            return "<mask>"
+
         if id < len(self._vocabulary_prefix):
             return self._vocabulary_prefix[id]
 
@@ -123,10 +128,18 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
+
         if token in self._vocabulary_prefix:
             return self._vocabulary_prefix.index(token)
 
-        return int(self._sentence_piece.string_to_id(token).numpy()) + 1
+        spm_token_id = self._sentence_piece.string_to_id(token)
+
+        # OOV token
+        spm_unk_token_id = self._sentence_piece.string_to_id("<unk>")
+        if spm_token_id == spm_unk_token_id:
+            return self.unk_token_id
+
+        return int(spm_token_id.numpy()) + 1
 
     def tokenize(self, inputs):
         tokens = super().tokenize(inputs)
@@ -139,25 +152,9 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         # Shift the tokens IDs right by one.
         return tf.add(tokens, 1)
 
-    def detokenize(self, inputs):
-        if inputs.dtype == tf.string:
-            return super().detokenize(inputs)
-
-        # Shift the tokens IDs left by one.
-        tokens = tf.subtract(inputs, 1)
-
-        # Correct `unk_token_id`, `end_token_id`, `start_token_id`, respectively.
-        # Note: The `pad_token_id` is taken as 0 (`unk_token_id`) since the
-        # proto does not contain `pad_token_id`. This mapping of the pad token
-        # is done automatically by the above subtraction.
-        tokens = tf.where(tf.equal(tokens, self.unk_token_id - 1), 0, tokens)
-        tokens = tf.where(tf.equal(tokens, self.end_token_id - 1), 2, tokens)
-        tokens = tf.where(tf.equal(tokens, self.start_token_id - 1), 1, tokens)
-
-        # Note: Even though we map `"<s>" and `"</s>"` to the correct IDs,
-        # the `detokenize` method will return empty strings for these tokens.
-        # This is a vagary of the `sentencepiece` library.
-        return super().detokenize(tokens)
+    def detokenize(self, ids):
+        ids = tf.ragged.boolean_mask(ids, tf.not_equal(ids, self.mask_token_id))
+        return super().detokenize(ids)
 
     @classproperty
     def presets(cls):

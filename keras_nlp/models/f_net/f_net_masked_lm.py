@@ -35,7 +35,7 @@ class FNetMaskedLM(Task):
     This model will train FNet on a masked language modeling task.
     The model will predict labels for a number of masked tokens in the
     input data. For usage of this model with pre-trained weights, see the
-    `from_preset()` method.
+    `from_preset()` constructor.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case inputs can be raw string features during `fit()`, `predict()`,
@@ -54,26 +54,33 @@ class FNetMaskedLM(Task):
 
     Example usage:
 
-    Raw string inputs and pretrained backbone.
+    Raw string data.
     ```python
-    # Create a dataset with raw string features. Labels are inferred.
+
     features = ["The quick brown fox jumped.", "I forgot my homework."]
 
-    # Create a FNetMaskedLM with a pretrained backbone and further train
-    # on an MLM task.
+    # Pretrained language model.
     masked_lm = keras_nlp.models.FNetMaskedLM.from_preset(
         "f_net_base_en",
     )
+    masked_lm.fit(x=features, batch_size=2)
+
+    # Re-compile (e.g., with a new learning rate).
     masked_lm.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        optimizer=keras.optimizers.Adam(5e-5),
+        jit_compile=True,
     )
+    # Access backbone programatically (e.g., to change `trainable`).
+    masked_lm.backbone.trainable = False
+    # Fit again.
     masked_lm.fit(x=features, batch_size=2)
     ```
 
-    Preprocessed inputs and custom backbone.
+    Preprocessed integer data.
     ```python
     # Create a preprocessed dataset where 0 is the mask token.
-    preprocessed_features = {
+    features = {
         "token_ids": tf.constant(
             [[1, 2, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
         ),
@@ -85,23 +92,11 @@ class FNetMaskedLM(Task):
     # Labels are the original masked values.
     labels = [[3, 5]] * 2
 
-    # Randomly initialize a FNet encoder
-    backbone = keras_nlp.models.FNetBackbone(
-        vocabulary_size=50265,
-        num_layers=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
-    )
-    # Create a FNet masked_lm and fit the data.
-    masked_lm = keras_nlp.models.FNetMaskedLM(
-        backbone,
+    masked_lm = keras_nlp.models.FNetMaskedLM.from_preset(
+        "f_net_base_en",
         preprocessor=None,
     )
-    masked_lm.compile(
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    )
-    masked_lm.fit(x=preprocessed_features, y=labels, batch_size=2)
+    masked_lm.fit(x=features, y=labels, batch_size=2)
     ```
     """
 
