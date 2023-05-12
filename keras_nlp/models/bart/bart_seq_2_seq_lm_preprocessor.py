@@ -193,17 +193,22 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         x,
         sequence_length=None,
     ):
-        """Convert strings to integer token input for generation.
+        """Convert encoder and decoder input strings to integer token inputs for generation.
 
-        Similar to calling the layer for training, this method takes in strings
-        or tensor strings, tokenizes and packs the input, and computes a padding
+        Similar to calling the layer for training, this method takes in a dict
+        containing `"encoder_text"` and `"decoder_text"`, with strings or tensor
+        strings for values, tokenizes and packs the input, and computes a padding
         mask masking all inputs not filled in with a padded value.
 
-        Unlike calling the the layer for training, this method does not compute
-        labels and will never append a `tokenizer.end_token_id` to the end of
-        the sequence (as generation is expected to continue at the end of the
+        For the encoder inputs, the above step is exactly the same as for
+        training. For the decoder inputs, this method does not compute labels
+        and will never append a `tokenizer.end_token_id` to the end of the
+        sequence (as generation is expected to continue at the end of the
         inputted prompt).
         """
+        # If `sequence_length` is not provided, we use the default value.
+        # We decrement this value by one since we need to add `end_token_id` to
+        # the *beginning* of the decoder sequence.
         sequence_length = (
             sequence_length - 1
             if sequence_length
@@ -219,7 +224,7 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         preprocessed_inputs = self(
             {
                 "encoder_text": encoder_text,
-                "decoder_text": "dummy text",
+                "decoder_text": "dummy",
             }
         )
         encoder_token_ids = preprocessed_inputs[0]["encoder_token_ids"]

@@ -36,16 +36,16 @@ class BartSeq2SeqLM(Task):
     """An end-to-end BART model for seq2seq language modeling.
 
     A seq2seq language model (LM) is an encoder-decoder model which is used for
-    conditional text generation. The encoder is given a "context" text, and the
-    decoder predicts the next token based on both the encoder inputs and the
-    previous tokens. You can finetune `BartSeq2SeqLM` to generate text similar
-    to the custom dataset.
+    conditional text generation. The encoder is given a "context" text (fed to
+    the encoder), and the decoder predicts the next token based on both the
+    encoder inputs and the previous tokens. You can finetune `BartSeq2SeqLM` to
+    generate text similar to the custom dataset.
 
-    This model has a `generate()` method, which generates text based on a
-    encoder inputs and a prompt. The generation strategy used is controlled by
-    an additional `sampler` argument on `compile()`. You can recompile the model
-    with different `keras_nlp.samplers` objects to control the generation. By
-    default, `"top_k"` sampling will be used.
+    This model has a `generate()` method, which generates text based on
+    encoder inputs and a prompt (decoder inputs). The generation strategy used
+    is controlled by an additional `sampler` argument on `compile()`. You can
+    recompile the model with different `keras_nlp.samplers` objects to control
+    the generation. By default, `"top_k"` sampling will be used.
 
     This model can optionally be configured with a `preprocessor` layer, in
     which case it will automatically apply preprocessing to string inputs during
@@ -131,23 +131,29 @@ class BartSeq2SeqLM(Task):
 
         - Allows caching previous key/value tensors in the decoder's
           self-attention layer to avoid recomputing the outputs of seen tokens.
-        - Allows caching the key/value tensors in the decoder's cross-attention
+        - Allows caching key/value tensors in the decoder's cross-attention
           layer to avoid recomputing the encoder outputs.
 
         Args:
-            encoder_outputs: a dense float Tensor. The encoder output.
-            encoder_padding_mask: a dense float Tensor. The padding mask for
+            encoder_outputs: a dense float Tensor of shape
+                `(batch_size, encoder_sequence_length, hidden_dim)`. The encoder
+                output.
+            encoder_padding_mask: a dense float Tensor of shape
+                `(batch_size, encoder_sequence_length)`. The padding mask for
                 the encoder input.
-            decoder_token_ids: a dense int Tensor, input token ids to be fed to
+            decoder_token_ids: a dense int Tensor of shape
+                `(batch_size, max_length)`. Input token ids to be fed to
                 the decoder.
-            self_attention_cache: a dense float Tensor, the cached key/value
-                tensors of previously seen tokens in the decoder's self-attention
-                layer.
+            self_attention_cache: a dense float Tensor of shape
+                `(batch_size, num_layers, 2, max_length, num_heads, key_dims)`.
+                The cached key/value tensors of previously seen tokens in the
+                decoder's self-attention layer.
             self_attention_cache_update_index: int, or int Tensor. The index of
                 current inputs in the whole decoder sequence.
-            cross_attention_cache: a dense float Tensor, the cached key/value
-                tensors of the encoder outputs in the decoder's cross-attention
-                layer.
+            cross_attention_cache: a dense float Tensor of shape
+                `(batch_size, num_layers, 2, encoder_sequence_length, num_heads, key_dims)`.
+                The cached key/value tensors of the encoder outputs in the
+                decoder's cross-attention layer.
             cross_attention_cache_update_index: int, or int Tensor. The index of
                 current inputs in the whole encoder sequence. This either takes
                 value 0, or None. The former means that the entire
@@ -347,7 +353,7 @@ class BartSeq2SeqLM(Task):
         inputs,
         end_token_id=None,
     ):
-        """A compilable generation function.
+        """A compilable generation function for a batch of inputs.
 
         This function represents the inner, XLA-compilable, generation function
         for a single batch of inputs. Inputs should have the same structure as
@@ -429,7 +435,7 @@ class BartSeq2SeqLM(Task):
                 ~decoder_padding_mask
             )
             end_locations = tf.cast(end_locations, tf.int32)
-            # Use cumsum to get ones in all locations after end_locations.
+            # Use cumsum to get ones in all locations after `end_locations`.
             overflow = tf.math.cumsum(end_locations, exclusive=True)
             # Our padding mask is the inverse of these overflow locations.
             decoder_padding_mask = ~tf.cast(overflow, tf.bool)
@@ -448,9 +454,9 @@ class BartSeq2SeqLM(Task):
         self,
         inputs,
     ):
-        """Normalize user input to the generate function.
+        """Normalizes user input to the generate function.
 
-        This function coverts all inputs to tensors, adds a batch dimension if
+        This function converts all inputs to tensors, adds a batch dimension if
         necessary, and returns a iterable "dataset like" object (either an
         actual `tf.data.Dataset` or a list with a single batch element).
         """
@@ -482,9 +488,9 @@ class BartSeq2SeqLM(Task):
         outputs,
         input_is_scalar,
     ):
-        """Normalize user output from the generate function.
+        """Normalizes user output from the generate function.
 
-        This function converts all output to numpy (for integer output), or
+        This function converts the output to numpy (for integer output), or
         python strings (for string output). If a batch dimension was added to
         the input, it is removed from the output (so generate can be string in,
         string out).
@@ -516,20 +522,34 @@ class BartSeq2SeqLM(Task):
     ):
         """Generates text conditioned on the encoder inputs.
 
-        This method generates text based on given `encoder_text` and `prompt`.
-        Generation will continue until `max_length` is met, and all tokens
-        generated after `end_token` will be truncated. The sampling strategy can
-        be set in the `compile` method.
+        This method generates text based on given `inputs`. The sampling method
+        used for generation can be set in the `compile` method.
+
+        If `inputs` is a `tf.data.Dataset`, outputs will be generated
+        "batch-by-batch" and concatenated. Otherwise, all inputs will be handled
+        as a single batch.
+
+        If a `preprocessor` is attached to the model, `inputs` is a dictionary
+        containing `encoder_text` and `decoder_text` keys, with strings for
+        values. The returned sequences will be strings. Otherwise, `inputs`
+        should be preprocessed before calling `generate()` - `inputs` will
+        contain key `encoder_token_ids`, `encoder_padding_mask`,
+        `decoder_token_ids` and `decoder_padding_mask`, and the returned
+        sequences will also be token IDs.
 
         Args:
-            encoder_text: a string, string Tensor or string RaggedTensor. The
-                input to the encoder, i.e., the context. The generated text is
-                conditioned on this input.
-            prompt: a string, string Tensor or string RaggedTensor. The prompt
-                text for generation. This is fed as input to the decoder.
+            inputs: a dict or a tf.data.Dataset of dicts. If a preprocessor is
+                attached, `inputs` should have keys `encoder_text` and
+                `decoder_text`. The value corresponding to every key can be a
+                python string, a list of Python strings or a `tf.Tensor` of
+                strings. If no `preprocessor` is attached to the model, inputs
+                should instead have keys `encoder_token_ids`,
+                `encoder_padding_mask`, `decoder_token_ids` and
+                `decoder_padding_mask`.
             max_length: int. The max length of generated sequence.
             add_start_token: bool. Whether to add the start token to `prompt`.
         """
+
         # Setup our three main passes.
         # 1. Optionally preprocessing strings to dense integer tensors.
         # 2. Generate new tokens via a compiled function on dense tensors.

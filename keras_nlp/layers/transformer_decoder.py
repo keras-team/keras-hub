@@ -226,44 +226,43 @@ class TransformerDecoder(keras.layers.Layer):
                 model is called once without an encoder_sequence, you cannot
                 call it again with encoder_sequence.
             decoder_padding_mask: a boolean Tensor, the padding mask of decoder
-                sequence, must of shape [batch_size, decoder_sequence_length].
+                sequence, must be of shape
+                `[batch_size, decoder_sequence_length]`.
             decoder_attention_mask: a boolean Tensor. Customized decoder
-                sequence mask, must of shape
-                [batch_size, decoder_sequence_length, decoder_sequence_length].
+                sequence mask, must be of shape
+                `[batch_size, decoder_sequence_length, decoder_sequence_length]`.
             encoder_padding_mask: a boolean Tensor, the padding mask of encoder
-                sequence, must of shape [batch_size, encoder_sequence_length].
+                sequence, must of shape `[batch_size, encoder_sequence_length]`.
             encoder_attention_mask: a boolean Tensor. Customized encoder
                 sequence mask, must of shape
-                [batch_size, encoder_sequence_length, encoder_sequence_length].
+                `[batch_size, encoder_sequence_length, encoder_sequence_length]`.
             self_attention_cache: a dense float Tensor. The cache of key/value
                 of leading tokens in the self-attention layer. Of shape
-                `[B, 2, max_seq_len, num_heads, key_dims]`.
+                `[batch_size, 2, max_seq_len, num_heads, key_dims]`.
             self_attention_cache_update_index: an int or int Tensor, the index
                 of the current token (in `decoder_sequence`) being processed.
+                Both `self_attention_cache` and
+                `self_attention_cache_update_index` have to be non-`None` for
+                the cache to be updated.
             cross_attention_cache: a dense float Tensor. The cache of
                 key/value pairs of encoder outputs. `cache` is of shape
-                `[B, 2, S, num_heads, key_dims]`.
+                `[batch_size, 2, S, num_heads, key_dims]`.
             cross_attention_cache_update_index: an int or int Tensor, the index
                 of the current token (in `encoder_sequence`) being processed.
                 Since we don't actually process `encoder_sequence`
                 token-by-token, `cross_attention_cache_update_index` is given
                 a value of 0 so that the cache can be updated for all encoder
-                tokens in one go.
-            compute_cross_attention_cache: a boolean. Whether to compute the
-                cross-attention cache. This is useful when
-                `cross_attention_cache = None` and
-                `compute_cross_attention_cache = True` for the first decoder
-                forward pass. If `cross_attention_cache` is not `None` and
-                `compute_cross_attention_cache` is `True`, we do not recompute
-                the cache.
+                tokens in one go. Both `cross_attention_cache` and
+                `cross_attention_cache_update_index` have to be non-`None` for
+                the cache to be updated.
         Returns:
             If the layer does not have a cross-attention layer, returns a tuple
             of `(outputs, self_attention_cache)` if `self_attention_cache` is
-            not `None`, or single value `outputs` if `self_attention_cache`
-            is `None`. If the layer has a cross-attention layer, returns a
-            tuple of `(outputs, self_attention_cache, cross_attention_cache)`
-            if either/both `self_attention_cache` or `cross_attention_cache`
-            is/are not `None`; otherwise, returns single value `outputs`.
+            not `None`; or just `outputs` if `self_attention_cache` is `None`.
+            If the layer has a cross-attention layer, returns a tuple of
+            `(outputs, self_attention_cache, cross_attention_cache)`
+            if `cross_attention_cache` is not `None`; otherwise, returns just
+            `outputs`.
         """
 
         has_encoder_sequence = encoder_sequence is not None

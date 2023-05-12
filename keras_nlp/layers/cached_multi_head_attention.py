@@ -84,6 +84,14 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
 
         query = self._query_dense(query)
 
+        # `cache` is `None`, `cache_update_index`` is either `None`/non-`None`:
+        # the cache will not be computed/updated. K/V tensors will be computed
+        # from scratch. This is the case for training.
+        # `cache` is non-`None`, `cache_update_index` is `None`: the cache will
+        # not be updated. K/V tensors will be obtained from the existing cache.
+        # `cache` is non-`None`, `cache_update_index` is non-`None`: the cache
+        # will be updated along `cache_update_index` position. K/V tensors will
+        # be derived from the updated cache.
         if cache is not None:
             key_cache, value_cache = tf.unstack(cache, axis=1)
             if cache_update_index is None:
