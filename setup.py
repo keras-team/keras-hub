@@ -14,12 +14,11 @@
 
 """Setup script."""
 
-import os
-import pathlib
-
 from setuptools import find_packages
 from setuptools import setup
 
+import os
+import pathlib
 
 def read(rel_path):
     here = os.path.abspath(os.path.dirname(__file__))
