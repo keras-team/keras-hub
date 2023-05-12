@@ -24,9 +24,15 @@ Use the following steps to create an `X.Y.0` release.
 1. Similar to the Keras and Tensorflow repositories, we keep a named branch
    `rX.Y` for each minor release. We need to set this up.
 
-   From the master branch, create a new branch with a name matching
-   the first two digits of the upcoming release. If the git remote for
-   `keras-team/keras-nlp` is called `upstream`, this should look as follows:
+   If you have not, please set
+   `upstream` as `keras-team/keras-nlp` by running:
+   
+   ```shell
+   git remote add upstream https://github.com/keras-team/keras-nlp.git
+   ```
+
+   From the master branch, create a new branch with a name matching the first
+   two digits of the upcoming release:
 
    ```shell
    git fetch --all
@@ -34,7 +40,8 @@ Use the following steps to create an `X.Y.0` release.
    git push -u upstream rX.Y
    ```
 
-   This branch will now be used for all subsequent `X.Y.Z` releases.
+   This branch will now be used for all subsequent `X.Y.Z` releases, e.g., `0.2.1` should
+   still use branch `r0.2` instead of creating `r0.2.1`.
 
 2. Before we officially push a new stable release to pypi, it is good practice to
    test out a [development release](https://pythonpackaging.info/07-Package-Release.html#Versioning-your-code)
@@ -43,7 +50,8 @@ Use the following steps to create an `X.Y.0` release.
 
    Make a PR following [this template](https://github.com/keras-team/keras-nlp/pull/456/files)
    to update the our version number fo look like `X.Y.0.dev0`. This PR should
-   base off our new release branch. You can use the following commands.
+   base off our new release branch instead of the master branch. You can use the
+   following commands:
 
    ```shell
    git fetch --all
@@ -53,8 +61,8 @@ Use the following steps to create an `X.Y.0` release.
    git push -u origin version-bump-X.Y.0.dev0
    ```
 
-   On github, make a PR targeting the new release branch, and ask someone to
-   review.
+   On github, make a PR targeting the new release branch instead of the master
+   branch, and ask someone to review.
 
 3. On github, we can now create the `X.Y.0.dev0` release. Use
    [this link](https://github.com/keras-team/keras-nlp/releases/new) to kick it
