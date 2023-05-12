@@ -146,7 +146,7 @@ class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             ),
         }
         x = self.preprocessor.generate_postprocess(input_data)
-        self.assertAllEqual(x, "<s> kohli is the best")
+        self.assertAllEqual(x, " kohli is the best")
 
     def test_serialization(self):
         new_preprocessor = keras.utils.deserialize_keras_object(
