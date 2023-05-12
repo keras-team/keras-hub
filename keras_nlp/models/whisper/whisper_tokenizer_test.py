@@ -96,12 +96,12 @@ class WhisperTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         )
 
     def test_vocabulary_size(self):
-        self.assertEqual(self.tokenizer.vocabulary_size(), 17)
+        self.assertEqual(self.tokenizer.vocabulary_size(), 16)
 
     def test_special_tokens(self):
         self.assertEqual(self.tokenizer.bos_token_id, 9)
         self.assertEqual(self.tokenizer.eos_token_id, 10)
-        self.assertEqual(self.tokenizer.pad_token_id, 14)
+        self.assertEqual(self.tokenizer.pad_token_id, 10)
         self.assertEqual(self.tokenizer.no_timestamps_token_id, 11)
         self.assertEqual(self.tokenizer.translate_token_id, 13)
         self.assertEqual(self.tokenizer.transcribe_token_id, 12)
