@@ -273,10 +273,12 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             x["decoder_token_ids"],
             x["decoder_padding_mask"],
         )
-        # Strip any special tokens during detokenization (e.g. the start and
-        # end markers). In the future we could make this configurable.
-        decoder_padding_mask = decoder_padding_mask & (
-            decoder_token_ids != self.tokenizer.end_token_id
+        # Strip any special tokens during detokenization, i.e., the start and
+        # end markers. In the future, we could make this configurable.
+        decoder_padding_mask = (
+            decoder_padding_mask
+            & (decoder_token_ids != self.tokenizer.end_token_id)
+            & (decoder_token_ids != self.tokenizer.start_token_id)
         )
         decoder_token_ids = tf.ragged.boolean_mask(
             decoder_token_ids, decoder_padding_mask

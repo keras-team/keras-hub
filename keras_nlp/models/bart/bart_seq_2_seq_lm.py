@@ -430,13 +430,13 @@ class BartSeq2SeqLM(Task):
         # Compute an output padding mask with the token ids we updated.
         if end_token_id is not None:
             # Build a mask of `end_token_id` locations not in the original
-            # prompt (not in locations where `padding_mask` is True).
+            # prompt (not in locations where `decoder_padding_mask` is True).
             end_locations = (decoder_token_ids == end_token_id) & (
                 ~decoder_padding_mask
             )
             end_locations = tf.cast(end_locations, tf.int32)
             # Use cumsum to get ones in all locations after `end_locations`.
-            overflow = tf.math.cumsum(end_locations, exclusive=True)
+            overflow = tf.math.cumsum(end_locations, exclusive=True, axis=-1)
             # Our padding mask is the inverse of these overflow locations.
             decoder_padding_mask = ~tf.cast(overflow, tf.bool)
         else:
