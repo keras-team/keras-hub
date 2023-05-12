@@ -115,6 +115,9 @@ class WhisperTokenizer(BytePairTokenizer):
 
         if language_tokens:
             # Multilingual tokenizer.
+            # TODO: The pad token for the multilingual tokenizer is actually
+            # "", but it errors out (OOM). After BPE is fixed, we can update
+            # this to "". For now, we will use `"<endoftext>"`.
             pad_token = "<endoftext>"
             language_tokens = _load_dict(language_tokens)
 

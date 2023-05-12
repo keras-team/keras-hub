@@ -49,12 +49,11 @@ class WhisperTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             "<|notimestamps|>": 11,
             "<|transcribe|>": 12,
             "<|translate|>": 13,
-            "": 14,
         }
 
         self.language_tokens = {
-            "<|en|>": 15,
-            "<|fr|>": 16,
+            "<|en|>": 14,
+            "<|fr|>": 15,
         }
 
         self.tokenizer = WhisperTokenizer(
@@ -75,7 +74,7 @@ class WhisperTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             "airplane at airport<|endoftext|>"
         )
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [9, 15, 12, 11, 0, 1, 2, 0, 3, 10])
+        self.assertAllEqual(output, [9, 14, 12, 11, 0, 1, 2, 0, 3, 10])
 
     def test_tokenize_batch(self):
         input_data = tf.constant([" airplane at airport", " kohli is the best"])
@@ -88,7 +87,7 @@ class WhisperTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(output, " airplane at airport")
 
     def test_detokenize_with_special_tokens(self):
-        input_tokens = [9, 15, 12, 11, 0, 1, 2, 0, 3, 10]
+        input_tokens = [9, 14, 12, 11, 0, 1, 2, 0, 3, 10]
         output = self.tokenizer.detokenize(input_tokens)
         print(output)
         self.assertEqual(
