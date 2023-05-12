@@ -296,7 +296,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
                 next_output, self_attention_cache = layer(
                     decoder_sequence=next_input,
                     self_attention_cache=self_attention_cache,
-                    cache_index=i,
+                    self_attention_cache_update_index=i,
                 )
                 outputs = dynamic_update_slice(outputs, next_output, [0, i, 0])
                 return i + 1, outputs, self_attention_cache
