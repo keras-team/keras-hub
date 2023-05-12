@@ -23,7 +23,7 @@ from keras_nlp.utils.python_utils import format_docstring
 call_args_docstring = """next: A function which takes in the
             `prompt, cache, index` of the current generation loop, and outputs
             a tuple `(logits, hidden_states, cache)` with `logits` being the
-            logits of next token, `hidden_states` being the representation of 
+            logits of next token, `hidden_states` being the representation of
             the next token, and `cache` for next iteration.
         prompt: A 2D integer tensor with shape `(batch_size, max_length)`. This
             tensor will be iteratively updated column by column with new sampled
