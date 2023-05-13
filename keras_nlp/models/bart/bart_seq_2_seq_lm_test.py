@@ -141,6 +141,25 @@ class BartSeq2SeqLMTest(tf.test.TestCase, parameterized.TestCase):
             preprocessed_batch["decoder_padding_mask"][:, :5],
         )
 
+    def test_generate_string_in_string_out(self):
+        # String input.
+        inputs = " airplane at airport"
+        self.seq_2_seq_lm.generate(inputs)
+
+        # String tensor input.
+        self.assertIsInstance(
+            self.seq_2_seq_lm.generate(
+                [" airplane at airport", " airplane at airport"]
+            )[0],
+            str,
+        )
+
+        # String dataset input.
+        raw_dataset = tf.data.Dataset.from_tensor_slices(
+            tf.constant([" airplane at airport", " airplane at airport"])
+        ).batch(2)
+        self.assertIsInstance(self.seq_2_seq_lm.generate(raw_dataset)[0], str)
+
     def test_early_stopping(self):
         call_with_cache = self.seq_2_seq_lm.call_with_cache
 

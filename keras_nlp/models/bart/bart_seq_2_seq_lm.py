@@ -481,7 +481,6 @@ class BartSeq2SeqLM(Task):
                 inputs[key], input_is_scalar = normalize(inputs[key])
         else:
             inputs, input_is_scalar = normalize(inputs)
-            return [inputs], input_is_scalar
 
         # We avoid converting to a dataset purely for speed, for a single batch
         # of input, creating a dataset would add significant overhead.
@@ -582,6 +581,7 @@ class BartSeq2SeqLM(Task):
 
         # Normalize inputs, apply our three passes, and normalize outputs.
         inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
+        print(inputs, input_is_scalar)
 
         if self.preprocessor is not None:
             if isinstance(inputs, tf.data.Dataset):
