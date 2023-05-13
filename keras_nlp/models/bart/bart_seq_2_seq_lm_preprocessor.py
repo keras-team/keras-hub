@@ -215,8 +215,12 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             else self._decoder_sequence_length - 1
         )
 
-        encoder_text = x["encoder_text"]
-        decoder_text = x["decoder_text"]
+        if isinstance(x, dict):
+            encoder_text = x["encoder_text"]
+            decoder_text = x["decoder_text"]
+        else:
+            encoder_text = x
+            decoder_text = tf.fill((tf.shape(encoder_text)[0]), "")
 
         # Tokenize the encoder inputs. We can use the preprocessor directly
         # here. At the same time, the preprocessor will also do pre-checks on

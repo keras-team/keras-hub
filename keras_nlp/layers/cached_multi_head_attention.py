@@ -22,19 +22,23 @@ from keras_nlp.api_export import keras_nlp_export
 
 @keras_nlp_export("keras_nlp.layers.CachedMultiHeadAttention")
 class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
-    """MutliHeadAttention layer with cache support.
+    """MultiHeadAttention layer with cache support.
 
-    In autoregressive decoding, it's common practice to cache the key/value
-    pairs in both the self-attention layer and the cross-attention layer. In
-    the self-attention layer, we cache the key/value pairs of previously seen
-    tokens. With cached key and value, we can compute the attention output
-    of the last token without recomputing the forward pass for previously seen
-    tokens. Secondly, in the cross-attention layer, we cache the key/value
-    pairs obtained from the encoder outputs. This way, we only need to do one
-    forward pass on the encoder and don't have to recompute the encoder
-    key/value pairs for every decoder step. Caching in both the layers makes
-    computation faster. This caching method is only useful during decoding, and
-    should not be used during training.
+
+    This layer is suitable for use in autoregressive decoding. It can be used
+    to cache decoder self-attention and/or cross-attention. The forward pass
+    can happen in one of three modes:
+
+        - No cache, same as regular multi-head attention.
+        - Static cache (`cache_update_index` is None). In this case, the
+          cached key/value projections will be used and the input values will
+          be ignored.
+        - Updated cache (`cache_update_index` is not None). In this case, new
+          key/value projections are computed using the input, and spliced into
+          the cache at the specified index.
+
+    Note that caching is useful only during inference and should not be used
+    during training.
 
     Call arguments:
         query: Query `Tensor` of shape `(B, T, dim)` if `cache=None`,
@@ -84,14 +88,12 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
 
         query = self._query_dense(query)
 
-        # `cache` is `None`, `cache_update_index`` is either `None`/non-`None`:
-        # the cache will not be computed/updated. K/V tensors will be computed
-        # from scratch. This is the case for training.
-        # `cache` is non-`None`, `cache_update_index` is `None`: the cache will
-        # not be updated. K/V tensors will be obtained from the existing cache.
-        # `cache` is non-`None`, `cache_update_index` is non-`None`: the cache
-        # will be updated along `cache_update_index` position. K/V tensors will
-        # be derived from the updated cache.
+        # If cache is not `None`, we will use the cache to compute the final key
+        # and value tensors. If `cache_update_index` is not None, we will first
+        # update the cache before use. To do this, we first call the
+        # `_key_dense` and `_value_dense` layers, and copy the outputs into the
+        # cache at the specified index. `cache = None` handles the training
+        # case, where we don't use the cache at all.
         if cache is not None:
             key_cache, value_cache = tf.unstack(cache, axis=1)
             if cache_update_index is None:

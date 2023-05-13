@@ -476,8 +476,12 @@ class BartSeq2SeqLM(Task):
 
             return x, x_is_scalar
 
-        for key in inputs:
-            inputs[key], input_is_scalar = normalize(inputs[key])
+        if isinstance(inputs, dict):
+            for key in inputs:
+                inputs[key], input_is_scalar = normalize(inputs[key])
+        else:
+            inputs, input_is_scalar = normalize(inputs)
+            return [inputs], input_is_scalar
 
         # We avoid converting to a dataset purely for speed, for a single batch
         # of input, creating a dataset would add significant overhead.
@@ -538,14 +542,20 @@ class BartSeq2SeqLM(Task):
         sequences will also be token IDs.
 
         Args:
-            inputs: a dict or a tf.data.Dataset of dicts. If a preprocessor is
-                attached, `inputs` should have keys `encoder_text` and
-                `decoder_text`. The value corresponding to every key can be a
-                python string, a list of Python strings or a `tf.Tensor` of
-                strings. If no `preprocessor` is attached to the model, inputs
-                should instead have keys `encoder_token_ids`,
-                `encoder_padding_mask`, `decoder_token_ids` and
-                `decoder_padding_mask`.
+            inputs: a Python string, a list of Python strings, a dense tensor of
+                strings, tf.data.Dataset of strings, dict or a
+                tf.data.Dataset of dicts. If a preprocessor is attached, and
+                `inputs` is a dict, then `inputs` should have keys
+                `encoder_text` and `decoder_text`. The value corresponding to
+                every key can be a Python string, a list of Python strings or a
+                `tf.Tensor` of strings. `inputs` can also be one of a Python
+                string, a list of Python strings, a dense tensor of strings or
+                tf.data.Dataset of strings. In this case, we allow a simple
+                string-in, string-out interface, where the text input to the
+                encoder is passed as `inputs`. If no `preprocessor` is attached
+                to the model, inputs should instead have keys
+                `encoder_token_ids`, `encoder_padding_mask`,
+                `decoder_token_ids` and `decoder_padding_mask`.
             max_length: int. The max length of generated sequence.
             add_start_token: bool. Whether to add the start token to `prompt`.
         """
