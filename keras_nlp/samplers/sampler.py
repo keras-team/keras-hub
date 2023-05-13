@@ -22,9 +22,9 @@ from keras_nlp.utils.python_utils import format_docstring
 
 call_args_docstring = """next: A function which takes in the
             `prompt, cache, index` of the current generation loop, and outputs
-            a tuple `(logits, cache, hidden_states)` with `logits` being the
-            logits of next token, `cache` for next iteration, and
-            `hidden_states` being the representation of the token.
+            a tuple `(logits, hidden_states, cache)` with `logits` being the
+            logits of next token, `hidden_states` being the representation of
+            the next token, and `cache` for next iteration.
         prompt: A 2D integer tensor with shape `(batch_size, max_length)`. This
             tensor will be iteratively updated column by column with new sampled
             values, starting at `index`.
@@ -32,7 +32,7 @@ call_args_docstring = """next: A function which takes in the
             updated by each call to `next`. This can be used to cache
             computations from early iterations of the generative loop.
         index: Optional. The first index of `prompt` to start sampling at.
-            Usually this is set as the length of the shortest non-padding
+            Usually this is set as the length of the shortest non-padded
             sequence in `prompt`.
         mask: Optional. A 2D integer tensor with the same shape as `prompt`.
             Locations which are `True` in the mask are never updated during
