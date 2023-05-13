@@ -26,7 +26,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
 
 
     This layer is suitable for use in autoregressive decoding. It can be used
-    to cache decoder self-attention and/or cross-attention. The forward pass
+    to cache decoder self-attention and cross-attention. The forward pass
     can happen in one of three modes:
 
         - No cache, same as regular multi-head attention.
