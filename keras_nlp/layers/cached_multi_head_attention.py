@@ -24,7 +24,6 @@ from keras_nlp.api_export import keras_nlp_export
 class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
     """MultiHeadAttention layer with cache support.
 
-
     This layer is suitable for use in autoregressive decoding. It can be used
     to cache decoder self-attention and cross-attention. The forward pass
     can happen in one of three modes:
