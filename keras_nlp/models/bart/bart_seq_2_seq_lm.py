@@ -581,7 +581,6 @@ class BartSeq2SeqLM(Task):
 
         # Normalize inputs, apply our three passes, and normalize outputs.
         inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
-        print(inputs, input_is_scalar)
 
         if self.preprocessor is not None:
             if isinstance(inputs, tf.data.Dataset):
