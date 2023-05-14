@@ -62,6 +62,125 @@ class BartSeq2SeqLM(Task):
         preprocessor: A `keras_nlp.models.BartSeq2SeqLMPreprocessor` or `None`.
             If `None`, this model will not apply preprocessing, and inputs
             should be preprocessed before calling the model.
+
+    Examples:
+
+    Use `generate()` to do text generation.
+    ```python
+    bart_lm = keras_nlp.models.BartSeq2SeqLM.from_preset("bart_base_en")
+    bart_lm.generate("The quick brown fox", max_length=30)
+
+    # Generate with batched inputs.
+    bart_lm.generate(["The quick brown fox", "The whale"], max_length=30)
+    ```
+
+    Compile the `generate()` function with a custom sampler.
+    ```python
+    bart_lm = keras_nlp.models.BartSeq2SeqLM.from_preset("bart_base_en")
+    bart_lm.compile(sampler="greedy")
+    bart_lm.generate("The quick brown fox", max_length=30)
+    ```
+
+    Use `generate()` with encoder inputs and an incomplete decoder input (prompt).
+    ```python
+    bart_lm = keras_nlp.models.BartSeq2SeqLM.from_preset("bart_base_en")
+    bart_lm.generate(
+        {
+            "encoder_text": "The quick brown fox",
+            "decoder_text": "The fast"
+        }
+    )
+    ```
+
+    Use `generate()` without preprocessing.
+    ```python
+    # Preprocessed inputs, with encoder inputs corresponding to
+    # "The quick brown fox", and the decoder inputs to "The fast". Use
+    # `"padding_mask"` to indicate values that should not be overridden.
+    prompt = {
+        "encoder_token_ids": tf.constant([[0, 133, 2119, 6219, 23602, 2, 1, 1]]),
+        "encoder_padding_mask": tf.constant(
+            [[True, True, True, True, True, True, False, False]]
+        ),
+        "decoder_token_ids": tf.constant([[2, 0, 133, 1769, 2, 1, 1]]),
+        "decoder_padding_mask": tf.constant([[True, True, True, True, False, False]])
+    }
+
+    bart_lm = keras_nlp.models.BartSeq2SeqLM.from_preset(
+        "bart_base_en",
+        preprocessor=None,
+    )
+    bart_lm.generate(prompt)
+    ```
+
+    Call `fit()` on a single batch.
+    ```python
+    features = {
+        "encoder_text": ["The quick brown fox jumped.", "I forgot my homework."],
+        "decoder_text": ["The fast hazel fox leapt.", "I forgot my assignment."]
+    }
+    bart_lm = keras_nlp.models.BartSeq2SeqLM.from_preset("bart_base_en")
+    bart_lm.fit(x=features, batch_size=2)
+    ```
+
+    Call `fit()` without preprocessing.
+    ```python
+    x = {
+        "encoder_token_ids": tf.constant([[0, 133, 2119, 2, 1]] * 2),
+        "encoder_padding_mask": tf.constant([[1, 1, 1, 1, 0]] * 2),
+        "decoder_token_ids": tf.constant([[2, 0, 133, 1769, 2]] * 2),
+        "encoder_padding_mask": tf.constant([[1, 1, 1, 1, 1]] * 2),
+    }
+    y = tf.constant([[0, 133, 1769, 2, 1]] * 2)
+    sw = tf.constant([[1, 1, 1, 1, 0]] * 2)
+
+    bart_lm = keras_nlp.models.BartSeq2SeqLM.from_preset(
+        "bart_base_en",
+        preprocessor=None,
+    )
+    bart_lm.fit(x=x, y=y, sample_weight=sw, batch_size=2)
+    ```
+
+    Custom backbone and vocabulary.
+    ```python
+    features = {
+        "encoder_text": ["The fox was sleeping."],
+        "decoder_text": ["The fox was awake."],
+    }
+    vocab = {
+        "<s>": 0,
+        "<pad>": 1,
+        "</s>": 2,
+        "Ġafter": 5,
+        "noon": 6,
+        "Ġsun": 7,
+    }
+    merges = ["Ġ a", "Ġ s", "Ġ n", "e r", "n o", "o n", "Ġs u", "Ġa f", "no on"]
+    merges += ["Ġsu n", "Ġaf t", "Ġaft er"]
+
+    tokenizer = keras_nlp.models.BartTokenizer(
+        vocabulary=vocab,
+        merges=merges,
+    )
+    preprocessor = keras_nlp.models.BartSeq2SeqLMPreprocessor(
+        tokenizer=tokenizer,
+        encoder_sequence_length=128,
+        decoder_sequence_length=128,
+    )
+    backbone = keras_nlp.models.BartBackbone(
+        vocabulary_size=50265,
+        num_layers=6,
+        num_heads=12,
+        hidden_dim=768,
+        intermediate_dim=3072,
+        max_sequence_length=128,
+    )
+    bart_lm = keras_nlp.models.BartSeq2SeqLM(
+        backbone=backbone,
+        preprocessor=preprocessor,
+    )
+    bart_lm.fit(x=features, batch_size=2)
+    ```
     """
 
     def __init__(
