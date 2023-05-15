@@ -161,7 +161,7 @@ class BartSeq2SeqLMTest(tf.test.TestCase, parameterized.TestCase):
         self.assertIsInstance(self.seq_2_seq_lm.generate(raw_dataset)[0], str)
 
     def test_early_stopping(self):
-        call_with_cache = self.seq_2_seq_lm.call_with_cache
+        call_decoder_with_cache = self.seq_2_seq_lm.call_decoder_with_cache
 
         def wrapper(*args, **kwargs):
             """Modify output logits to always favor end_token_id"""
@@ -170,7 +170,7 @@ class BartSeq2SeqLMTest(tf.test.TestCase, parameterized.TestCase):
                 hidden_states,
                 self_attention_cache,
                 cross_attention_cache,
-            ) = call_with_cache(*args, **kwargs)
+            ) = call_decoder_with_cache(*args, **kwargs)
             logits = np.zeros(logits.shape.as_list())
             logits[:, :, self.preprocessor.tokenizer.end_token_id] = 1.0e9
             return (
@@ -180,7 +180,7 @@ class BartSeq2SeqLMTest(tf.test.TestCase, parameterized.TestCase):
                 cross_attention_cache,
             )
 
-        with patch.object(self.seq_2_seq_lm, "call_with_cache", wraps=wrapper):
+        with patch.object(self.seq_2_seq_lm, "call_decoder_with_cache", wraps=wrapper):
             inputs = {
                 "encoder_text": [
                     " airplane at airport",
@@ -192,7 +192,7 @@ class BartSeq2SeqLMTest(tf.test.TestCase, parameterized.TestCase):
 
             # We should immediately abort and output the prompt.
             self.assertAllEqual(inputs["decoder_text"], output)
-            self.assertEqual(self.seq_2_seq_lm.call_with_cache.call_count, 2)
+            self.assertEqual(self.seq_2_seq_lm.call_decoder_with_cache.call_count, 2)
 
     def test_generate_compilation(self):
         # Assert we do not recompile with successive calls.
