@@ -213,9 +213,9 @@ class TransformerDecoder(keras.layers.Layer):
         encoder_padding_mask=None,
         encoder_attention_mask=None,
         self_attention_cache=None,
-        self_attention_cache_update_index=0,
+        self_attention_cache_update_index=None,
         cross_attention_cache=None,
-        cross_attention_cache_update_index=0,
+        cross_attention_cache_update_index=None,
     ):
         """Forward pass of the TransformerDecoder.
 
