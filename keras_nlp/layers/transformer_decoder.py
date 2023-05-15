@@ -232,28 +232,24 @@ class TransformerDecoder(keras.layers.Layer):
                 sequence mask, must be of shape
                 `[batch_size, decoder_sequence_length, decoder_sequence_length]`.
             encoder_padding_mask: a boolean Tensor, the padding mask of encoder
-                sequence, must of shape `[batch_size, encoder_sequence_length]`.
+                sequence, must be of shape
+                `[batch_size, encoder_sequence_length]`.
             encoder_attention_mask: a boolean Tensor. Customized encoder
-                sequence mask, must of shape
+                sequence mask, must be of shape
                 `[batch_size, encoder_sequence_length, encoder_sequence_length]`.
             self_attention_cache: a dense float Tensor. The cache of key/value
                 of leading tokens in the self-attention layer. Of shape
                 `[batch_size, 2, max_seq_len, num_heads, key_dims]`.
             self_attention_cache_update_index: an int or int Tensor, the index
-                of the current token (in `decoder_sequence`) being processed.
-                Both `self_attention_cache` and
-                `self_attention_cache_update_index` have to be non-`None` for
-                the cache to be updated.
+                at which to update the `self_attention_cache`. Usually, this is
+                the index of the current token being processed during decoding.
             cross_attention_cache: a dense float Tensor. The cache of
-                key/value pairs of encoder outputs. `cache` is of shape
+                key/value pairs of `encoder_sequence`. `cache` is of shape
                 `[batch_size, 2, S, num_heads, key_dims]`.
-            cross_attention_cache_update_index: an int or int Tensor, the index
-                at which to update the `cross_attention_cache`. As the
-                `cross_attention_cache` only needs to be computed once, this is
-                usually either 0 (update the whole cache) or `None` (no updates
-                needed). Both `cross_attention_cache` and
-                `cross_attention_cache_update_index` have to be non-`None` for
-                the cache to be updated.
+            cross_attention_cache_update_index:  an int or int Tensor, the index
+                at which to update the `cross_attention_cache`. Usually, this is
+                either `0` (compute the entire `cross_attention_cache`), or
+                `None` (reuse a previously computed `cross_attention_cache`).
         Returns:
             Returns either just `outputs` or a tuple of outputs and cache(s)
             based on the following conditions:

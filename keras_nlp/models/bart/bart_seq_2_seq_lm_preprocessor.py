@@ -197,14 +197,13 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
 
         Similar to calling the layer for training, this method takes in a dict
         containing `"encoder_text"` and `"decoder_text"`, with strings or tensor
-        strings for values, tokenizes and packs the input, and computes a padding
-        mask masking all inputs not filled in with a padded value.
+        strings for values, tokenizes and packs the input, and computes a
+        padding mask masking all inputs not filled in with a padded value.
 
-        For the encoder inputs, the above step is exactly the same as for
-        training. For the decoder inputs, this method does not compute labels
-        and will never append a `tokenizer.end_token_id` to the end of the
-        sequence (as generation is expected to continue at the end of the
-        inputted prompt).
+        Unlike calling the the layer for training, this method does not compute
+        labels and will never append a tokenizer.end_token_id to the end of
+        the decoder sequence (as generation is expected to continue at the end
+        of the inputted decoder prompt).
         """
         # If `sequence_length` is not provided, we use the default value.
         # We decrement this value by one since we need to add `end_token_id` to
@@ -220,19 +219,18 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             decoder_text = x["decoder_text"]
         else:
             encoder_text = x
+            # Initialize empty prompt for the decoder.
             decoder_text = tf.fill((tf.shape(encoder_text)[0],), "")
 
-        # Tokenize the encoder inputs. We can use the preprocessor directly
-        # here. At the same time, the preprocessor will also do pre-checks on
-        # the inputs.
-        preprocessed_inputs = self(
-            {
-                "encoder_text": encoder_text,
-                "decoder_text": "dummy",
-            }
+        # Tokenize and pack the encoder inputs.
+        # TODO: Remove `[0]` once we have shifted to `MultiSegmentPacker`.
+        encoder_text = convert_inputs_to_list_of_tensor_segments(encoder_text)[
+            0
+        ]
+        encoder_token_ids = self.tokenizer(encoder_text)
+        encoder_token_ids, encoder_padding_mask = self.encoder_packer(
+            encoder_token_ids
         )
-        encoder_token_ids = preprocessed_inputs[0]["encoder_token_ids"]
-        encoder_padding_mask = preprocessed_inputs[0]["encoder_padding_mask"]
 
         # Tokenize decoder inputs. We cannot use the preprocessor call directly
         # since the `max_length` might be different. Moreover, the

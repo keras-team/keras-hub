@@ -40,35 +40,37 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
     during training.
 
     Call arguments:
-        query: Query `Tensor` of shape `(B, T, dim)` if `cache=None`,
-            otherwise `(B, 1, dim)`.
-        value: Value `Tensor` of shape `(B, S, dim)` if `cache=None`,
-            otherwise `(B, 1, dim)`.
-        key: Optional key `Tensor` of shape `(B, S, dim)` if `cache=None`,
-            otherwise `(B, 1, dim)`. If not given, will use `value` for both
-            `key` and `value`, which is the most common case.
+        query: Query `Tensor` of shape `(B, T, dim)`.
+        value: Value `Tensor` of shape `(B, S*, dim)`. if `cache` is None`, `S*`
+            must equal `S` and match the shape of `attention_mask`. If cache` is
+            not `None`, `S*` can be any length less than `S`, and the computed
+            value will be spliced into `cache` at `cache_update_index`.
+        key: Optional key `Tensor` of shape `(B, S*, dim)`. If `cache` is
+            `None`, `S*` must equal `S` and match the shape of
+            `attention_mask`. If `cache` is not `None`, `S*` can be any length
+            less than `S`, and the computed value will be spliced into `cache`
+            at `cache_update_index`.
         attention_mask: a boolean mask of shape `(B, T, S)` if `cache=None`,
             otherwise `(B, 1, S)`. `attention_mask` prevents
             attention to certain positions. The boolean mask specifies which
             query elements can attend to which key elements, 1 indicates
             attention and 0 indicates no attention. Broadcasting can happen for
             the missing batch dimensions and the head dimension.
-        cache: a dense float Tensor. Either the self-attention cache or the
-            cross-attention cache, containing the key/value pairs. Of shape
-            `[B, 2, seq_len, num_heads, key_dims]`, where `seq_len` can either
-            be `S` (in case of cross-attention) or the maximum text generation
-            length (in case of self-attention). This argument should only be
-            used during inference-time decoding.
+        cache: a dense float Tensor. The key/value cache, of shape
+            `[B, 2, S, num_heads, key_dims]`, where `S` must agree with the
+            `attention_mask` shape. This argument should only be used during
+            inference-time decoding.
         cache_update_index: a int or int Tensor, the index of the current token
             being processed. If `cache_update_index=None` while `cache` is set,
             the cache will not be updated.
 
     Returns:
-        An (attention_output, cache) tuple. `attention_output` is the result of
-        the computation, of shape `(B, T, E)`, where `T` is for target sequence
-        shapes and `E` is the query input last dimension if  `output_shape` is
-        `None`. Otherwise, the multi-head outputs are projected to the shape
-        specified by `output_shape`. `cache` is the updated cache.
+        An `(attention_output, cache)` tuple. `attention_output` is the result
+        of the computation, of shape `(B, T, E)`, where `T` is for target
+        sequence shapes and `E` is the query input last dimension if
+        `output_shape` is `None`. Otherwise, the multi-head outputs are
+        projected to the shape specified by `output_shape`. `cache` is the
+        updated cache.
     """
 
     def call(
@@ -106,6 +108,12 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
                 value = dynamic_update_slice(value_cache, value_update, start)
                 cache = tf.stack((key, value), axis=1)
         else:
+            if cache_update_index is not None:
+                raise ValueError(
+                    "`cache` is `None`, whereas `cache_update_index` is not "
+                    "`None`. Received "
+                    f"`cache_update_index = {cache_update_index}`"
+                )
             key = self._key_dense(key)
             value = self._value_dense(value)
 
