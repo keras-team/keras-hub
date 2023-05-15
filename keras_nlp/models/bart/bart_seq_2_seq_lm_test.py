@@ -180,7 +180,9 @@ class BartSeq2SeqLMTest(tf.test.TestCase, parameterized.TestCase):
                 cross_attention_cache,
             )
 
-        with patch.object(self.seq_2_seq_lm, "call_decoder_with_cache", wraps=wrapper):
+        with patch.object(
+            self.seq_2_seq_lm, "call_decoder_with_cache", wraps=wrapper
+        ):
             inputs = {
                 "encoder_text": [
                     " airplane at airport",
@@ -192,7 +194,9 @@ class BartSeq2SeqLMTest(tf.test.TestCase, parameterized.TestCase):
 
             # We should immediately abort and output the prompt.
             self.assertAllEqual(inputs["decoder_text"], output)
-            self.assertEqual(self.seq_2_seq_lm.call_decoder_with_cache.call_count, 2)
+            self.assertEqual(
+                self.seq_2_seq_lm.call_decoder_with_cache.call_count, 2
+            )
 
     def test_generate_compilation(self):
         # Assert we do not recompile with successive calls.
