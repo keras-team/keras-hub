@@ -317,7 +317,9 @@ class TransformerDecoder(keras.layers.Layer):
             batch_size,
             input_length,
             output_length,
-            self_attention_cache_update_index,
+            0
+            if self_attention_cache_update_index is None
+            else self_attention_cache_update_index,
         )
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
