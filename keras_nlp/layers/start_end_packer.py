@@ -34,7 +34,7 @@ class StartEndPacker(keras.layers.Layer):
 
     Args:
         sequence_length: int. The desired output length.
-        start_value: int/str/list/tuple. The ID(s) or token(s) that is to be
+        start_value: int/str/list/tuple. The ID(s) or token(s) that is/are to be
             placed at the start of each sequence. The dtype must match the dtype
             of the input tensors to the layer. If None, no start value will be
             added.
