@@ -124,13 +124,13 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         if id < len(self._vocabulary_prefix) and id >= 0:
             return self._vocabulary_prefix[id]
 
-        if id-1 >= super().vocabulary_size() or id-1 < 0:
+        if id - 1 >= super().vocabulary_size() or id - 1 < 0:
             raise ValueError(
                 f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
-                f"Recieved: {id}"
+                f"Received: {id}"
             )
 
-        return tensor_to_string_list(self._sentence_piece.id_to_string(id-1))
+        return tensor_to_string_list(self._sentence_piece.id_to_string(id - 1))
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""

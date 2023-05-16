@@ -116,7 +116,7 @@ class SentencePieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             tokenizer.id_to_token(tokenizer.vocabulary_size())
         with self.assertRaises(ValueError):
             tokenizer.id_to_token(-1)
-            
+
     def test_functional_model(self):
         input_data = tf.constant(["the quick brown fox."])
         tokenizer = SentencePieceTokenizer(

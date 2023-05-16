@@ -362,7 +362,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         if id >= self.vocabulary_size() or id < 0:
             raise ValueError(
                 f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
-                f"Recieved: {id}"
+                f"Received: {id}"
             )
         return self.vocabulary[id]
 
