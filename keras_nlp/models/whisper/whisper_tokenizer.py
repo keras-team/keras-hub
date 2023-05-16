@@ -44,59 +44,8 @@ class WhisperTokenizer(BytePairTokenizer):
         special_tokens: string or dict, maps special tokens to integer IDs. If
             it is a string, it should be the path to a JSON file.
         language_tokens: string or dict, maps language tokens to integer IDs. If
-            non-None or empty, the tokenizer will be assumed to be a
-            multilingual tokenizer.
-
-    Examples:
-
-    Batched inputs.
-    >>> vocab = {"reful":0, "gent": 1, "Ġafter": 2, "noon": 3, "Ġsun": 4}
-    >>> merges = ["Ġ a", "Ġ s", "r e", "f u", "g e", "n t", "e r", "n o", "o n"]
-    >>> merges += ["i g", "h t", "Ġs u", "Ġa f", "ge nt", "no on", "re fu"]
-    >>> merges += ["Ġsu n", "Ġaf t", "refu l", "Ġaft er"] # Ġ for whitespace
-    >>> special_tokens = {"<|startoftranscript|>": 5, "<|endoftext|>": 6}
-    >>> special_tokens = {**special_tokens, "<|notimestamps|>": 7, "<|transcribe|>": 8}
-    >>> special_tokens = {**special_tokens, "<|translate|>": 9}
-    >>> inputs = [" afternoon sun", "refulgent sun"]
-    >>> tokenizer = keras_nlp.models.WhisperTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
-    ...     special_tokens=special_tokens,
-    ... )
-    >>> tokenizer(inputs)
-    <tf.RaggedTensor [[2, 3, 4], [0, 1, 4]]>
-
-    Unbatched input.
-    >>> vocab = {"Ġafter": 0, "noon": 1, "Ġsun": 2}
-    >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
-    >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
-    >>> special_tokens = {"<|startoftranscript|>": 3, "<|endoftext|>": 4}
-    >>> special_tokens = {**special_tokens, "<|notimestamps|>": 5, "<|transcribe|>": 6}
-    >>> special_tokens = {**special_tokens, "<|translate|>": 7}
-    >>> inputs = " afternoon sun"
-    >>> tokenizer = keras_nlp.models.WhisperTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
-    ...     special_tokens=special_tokens,
-    ... )
-    >>> tokenizer(inputs)
-    <tf.Tensor: shape=(3,), dtype=int32, numpy=array([0, 1, 2], dtype=int32)>
-
-    Detokenization.
-    >>> vocab = {"<|endoftext|>": 0, "Ġafter": 1, "noon": 2, "Ġsun": 3}
-    >>> merges = ["Ġ a", "Ġ s", "e r", "n o", "o n", "i g", "h t", "Ġs u"]
-    >>> merges += ["Ġa f", "no on", "Ġsu n", "Ġaf t", "Ġaft er"]
-    >>> special_tokens = {"<|startoftranscript|>": 4, "<|endoftext|>": 5}
-    >>> special_tokens = {**special_tokens, "<|notimestamps|>": 6, "<|transcribe|>": 7}
-    >>> special_tokens = {**special_tokens, "<|translate|>": 8}
-    >>> inputs = " afternoon sun"
-    >>> tokenizer = keras_nlp.models.WhisperTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
-    ...     special_tokens=special_tokens,
-    ... )
-    >>> tokenizer.detokenize(tokenizer.tokenize(inputs)).numpy().decode('utf-8')
-    ' afternoon sun'
+            not None, the tokenizer will be assumed to be a multilingual
+            tokenizer.
     """
 
     def __init__(
@@ -113,7 +62,7 @@ class WhisperTokenizer(BytePairTokenizer):
         bos_token = "<|startoftranscript|>"
         eos_token = "<|endoftext|>"
 
-        if language_tokens:
+        if language_tokens is not None:
             # Multilingual tokenizer.
             # TODO: The pad token for the multilingual tokenizer is actually
             # "", but it errors out (OOM). After BPE is fixed, we can update
@@ -162,7 +111,7 @@ class WhisperTokenizer(BytePairTokenizer):
         self.transcribe_token_id = special_tokens[transcribe_token]
 
         unsplittable_tokens = list(special_tokens.keys())
-        if language_tokens:
+        if language_tokens is not None:
             unsplittable_tokens += list(language_tokens.keys())
 
         super().__init__(

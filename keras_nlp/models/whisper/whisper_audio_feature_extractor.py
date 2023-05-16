@@ -41,7 +41,7 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         sampling_rate: int, defaults to 16000. The sample rate of the audio.
         max_audio_length: int, defaults to 30. The length of each audio chunk in
             seconds. The input audio tensor will be padded/trimmed to
-            `max_audio_length*sampling_rate`.
+            `max_audio_length * sampling_rate`.
 
     Examples:
 
@@ -152,8 +152,8 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         enorm = 2.0 / (mel_f[2 : self.num_mels + 2] - mel_f[: self.num_mels])
         weights *= enorm[:, np.newaxis]
 
-        weights = tf.transpose(tf.constant(weights, dtype=self.dtype))
-        return weights
+        weights = np.transpose(weights)
+        return tf.constant(weights, dtype=self.dtype)
 
     def _extract_audio_features(self, audio):
         # Use "reflection" padding - `tf.signal.stft` uses symmetric padding
