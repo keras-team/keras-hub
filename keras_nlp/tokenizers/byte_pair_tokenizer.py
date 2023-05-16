@@ -369,7 +369,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         for token in keys:
             if self.vocabulary[token] == id:
                 return token
-        return None
+        raise ValueError(f"`id` is out of the vocabulary. Received: {id}")
 
     def token_to_id(self, token: str) -> int:
         """Convert a string token to an integer id."""

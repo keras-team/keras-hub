@@ -72,6 +72,14 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(tokenizer.token_to_id("[UNK]"), 0)
         self.assertEqual(tokenizer.token_to_id("fox"), 6)
 
+    def test_error_id_out_of_vocabulary(self):
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+        with self.assertRaises(ValueError):
+            tokenizer.id_to_token(tokenizer.vocabulary_size())
+        with self.assertRaises(ValueError):
+            tokenizer.id_to_token(-1)
+
     def test_special_tokens(self):
         input_data = ["quick brown whale"]
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@own", "fox"]

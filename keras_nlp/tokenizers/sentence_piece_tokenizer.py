@@ -169,6 +169,11 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     def id_to_token(self, id: int) -> str:
         """Convert an integer id to a string token."""
+        if id >= self.vocabulary_size() or id < 0:
+            raise ValueError(
+                f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
+                f"Received: {id}"
+            )
         return tensor_to_string_list(self._sentence_piece.id_to_string(id))
 
     def token_to_id(self, token: str) -> int:
