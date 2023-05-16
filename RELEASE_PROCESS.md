@@ -98,7 +98,19 @@ Use the following steps to create an `X.Y.0` release.
    git push upstream rX.Y
    ```
 
-5. We are now ready to cut the official release! Make a PR similar to step 2,
+5. Before cutting the final release, we should try previewing our documentation
+   on keras.io. This will help catch bugs with our symbol export and docstrings.
+
+   The keras.io [README](https://github.com/keras-team/keras-io/)
+   contains instructions on building and previewing the site, and you can use
+   [this PR](https://github.com/keras-team/keras-io/pull/1134) as a reference
+   for what to change. Ask fchollet@ to review.
+
+   During development of the branch, you can pin the keras-nlp dev release in
+   the keras-io `requirements.txt` file. Remember to update this to the official
+   release before we merge the PR.
+
+6. We are now ready to cut the official release! Make a PR similar to step 2,
    but updating the release number to `X.Y.0` (no `.dev0` suffix). Land the PR.
 
    Confirm that the latest commit on our release branch is green before making
@@ -110,7 +122,7 @@ Use the following steps to create an `X.Y.0` release.
 
    Click "Publish release" when ready.
 
-6. Now that our release is done, we should bump the version number on our
+7. Now that our release is done, we should bump the version number on our
    master branch. Let `Ŷ = Y + 1`. Our new master branch version should look
    like `X.Ŷ.0`.
 
@@ -123,14 +135,6 @@ Use the following steps to create an `X.Y.0` release.
    ```
 
    Create a land a PR with this change to the master branch.
-
-7. As a final step, we to update our keras.io documentation to match the
-   release.
-
-   The keras.io [README](https://github.com/keras-team/keras-io/)
-   contains instructions on building and previewing the site, and you can use
-   [this PR](https://github.com/keras-team/keras-io/pull/1134) as a reference
-   for what to change. Ask fchollet@ to review.
 
 ## Creating a new patch release
 
@@ -191,7 +195,19 @@ to push certain fixes out to our users.
    2 and 3 with a new dev number (e.g. `X.Y.Z.dev1`) until you are confident in
    the release.
 
-5. We are now ready to cut the official release! Make a PR similar to step 2,
+5. Before cutting the final release, we should try previewing our documentation
+   on keras.io. This will help catch bugs with our symbol export and docstrings.
+
+   The keras.io [README](https://github.com/keras-team/keras-io/)
+   contains instructions on building and previewing the site, and you can use
+   [this PR](https://github.com/keras-team/keras-io/pull/1134) as a reference
+   for what to change. Ask fchollet@ to review.
+
+   During development of the branch, you can pin the keras-nlp dev release in
+   the keras-io `requirements.txt` file. Remember to update this to the official
+   release before we merge the PR.
+
+6. We are now ready to cut the official release! Make a PR similar to step 2,
    but updating the release number to `X.Y.Z` (no `.dev0` suffix). Land the PR.
 
    Confirm that the latest commit on our release branch is green before making
@@ -202,11 +218,3 @@ to push certain fixes out to our users.
    "Set as the latest release" if `X.Y` is the latest stable release series.
 
    Click "Publish release" when ready.
-
-6. As a final step, if `X.Y` is the latest stable release series, we need
-   to update our keras.io documentation to match the release.
-
-   The keras.io [README](https://github.com/keras-team/keras-io/)
-   contains instructions on building and previewing the site, and you can use
-   [this PR](https://github.com/keras-team/keras-io/pull/1134) as a reference
-   for what to change. Ask fchollet@ to review.
