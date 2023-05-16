@@ -518,7 +518,7 @@ class BartSeq2SeqLM(Task):
         # Start at the first index that has no user inputted id.
         index = tf.math.reduce_min(row_lengths)
 
-        def next_token(prompt, cache, index):
+        def next(prompt, cache, index):
             # The cache index is the index of our previous token.
             cache_index = index - 1
             prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
@@ -539,7 +539,7 @@ class BartSeq2SeqLM(Task):
             )
 
         decoder_token_ids = self._sampler(
-            next=next_token,
+            next=next,
             prompt=decoder_token_ids,
             cache=self_attention_cache,
             index=index,
