@@ -145,7 +145,7 @@ class BartSeq2SeqLM(Task):
     Custom backbone and vocabulary.
     ```python
     features = {
-        "encoder_text": ["afternoon sun"],
+        "encoder_text": [" afternoon sun"],
         "decoder_text": ["noon sun"],
     }
     vocab = {
