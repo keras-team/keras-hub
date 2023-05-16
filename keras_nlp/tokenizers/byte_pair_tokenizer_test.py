@@ -119,6 +119,12 @@ class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         decoded = self.tokenizer.detokenize(encoded)
         self.assertAllEqual(input_data, decoded)
 
+    def test_error_id_out_of_vocabulary(self):
+        with self.assertRaises(ValueError):
+            self.tokenizer.id_to_token(self.tokenizer.vocabulary_size())
+        with self.assertRaises(ValueError):
+            self.tokenizer.id_to_token(-1)
+
     def test_whitespace_split(self):
         input_data = "\n\n\n  s"
         encoded = self.tokenizer(input_data)

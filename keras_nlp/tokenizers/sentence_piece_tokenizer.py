@@ -171,8 +171,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         """Convert an integer id to a string token."""
         if id >= self.vocabulary_size() or id < 0:
             raise ValueError(
-                f"`id` must be in range [0, {self.vocabulary_size()-1}], "
-                f"recieved {id}"
+                f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
+                f"Recieved: {id}"
             )
         return tensor_to_string_list(self._sentence_piece.id_to_string(id))
 
