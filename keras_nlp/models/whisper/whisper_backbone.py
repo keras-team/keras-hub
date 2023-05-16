@@ -26,11 +26,6 @@ from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.whisper.whisper_decoder import WhisperDecoder
 from keras_nlp.models.whisper.whisper_encoder import WhisperEncoder
 
-# We hardcode the number of mel-frequency filters:
-# https://github.com/openai/whisper/blob/v20230124/whisper/audio.py#L101-L102.
-# TODO: If needed, we can make it configurable.
-NUM_MELS = 80
-
 
 def whisper_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
@@ -64,6 +59,7 @@ class WhisperBackbone(Backbone):
         hidden_dim: int. The size of the transformer encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
+        num_mels: int, defaults to 80. The number of mel-frequency filters.
         dropout: float. Dropout probability for the Transformer encoder.
         max_encoder_sequence_length: int. The maximum sequence length that the
             audio encoder can consume. Since the second convolutional layer in
@@ -74,6 +70,7 @@ class WhisperBackbone(Backbone):
             text decoder can consume.
 
     Examples:
+
     ```python
     input_data = {
         "encoder_features": tf.ones(shape=(1, 12, 80), dtype=tf.int64),
@@ -104,6 +101,7 @@ class WhisperBackbone(Backbone):
         num_heads,
         hidden_dim,
         intermediate_dim,
+        num_mels=80,
         dropout=0.0,
         max_encoder_sequence_length=3000,
         max_decoder_sequence_length=448,
@@ -112,7 +110,7 @@ class WhisperBackbone(Backbone):
         # Encoder inputs. Note that the encoder does not have a padding mask:
         # https://github.com/openai/whisper/blob/v20230124/whisper/model.py#L132.
         encoder_feature_input = keras.Input(
-            shape=(None, NUM_MELS), dtype="float32", name="encoder_features"
+            shape=(None, num_mels), dtype="float32", name="encoder_features"
         )
 
         # Decoder inputs.
@@ -266,6 +264,7 @@ class WhisperBackbone(Backbone):
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
+        self.num_mels = num_mels
         self.dropout = dropout
         self.max_encoder_sequence_length = max_encoder_sequence_length
         self.max_decoder_sequence_length = max_decoder_sequence_length
@@ -279,6 +278,7 @@ class WhisperBackbone(Backbone):
                 "num_heads": self.num_heads,
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
+                "num_mels": self.num_mels,
                 "dropout": self.dropout,
                 "max_encoder_sequence_length": self.max_encoder_sequence_length,
                 "max_decoder_sequence_length": self.max_decoder_sequence_length,
