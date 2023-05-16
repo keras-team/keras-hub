@@ -138,7 +138,6 @@ class StartEndPacker(keras.layers.Layer):
         add_start_value=True,
         add_end_value=True,
     ):
-        batch_size = tf.shape(inputs)[0]
         x = inputs  # Intermediate result.
 
         if not isinstance(x, (tf.Tensor, tf.RaggedTensor)):
