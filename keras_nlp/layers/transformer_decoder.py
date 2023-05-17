@@ -166,7 +166,7 @@ class TransformerDecoder(keras.layers.Layer):
         # Cross attention layers are optional.
         self._cross_attention_layer = None
         if has_cross_attention:
-            self._cross_attention_layer = keras.layers.MultiHeadAttention(
+            self._cross_attention_layer = CachedMultiHeadAttention(
                 num_heads=self.num_heads,
                 key_dim=head_dim,
                 value_dim=head_dim,
@@ -212,35 +212,52 @@ class TransformerDecoder(keras.layers.Layer):
         decoder_attention_mask=None,
         encoder_padding_mask=None,
         encoder_attention_mask=None,
-        cache=None,
-        cache_index=0,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
+        cross_attention_cache=None,
+        cross_attention_cache_update_index=None,
     ):
         """Forward pass of the TransformerDecoder.
 
         Args:
             decoder_sequence: a Tensor. The decoder input sequence.
             encoder_sequence: a Tensor. The encoder input sequence. For decoder
-                only models (like GPT2), this should be left None. Once the
+                only models (like GPT2), this should be left `None`. Once the
                 model is called once without an encoder_sequence, you cannot
                 call it again with encoder_sequence.
             decoder_padding_mask: a boolean Tensor, the padding mask of decoder
-                sequence, must of shape [batch_size, decoder_sequence_length].
+                sequence, must be of shape
+                `[batch_size, decoder_sequence_length]`.
             decoder_attention_mask: a boolean Tensor. Customized decoder
-                sequence mask, must of shape
-                [batch_size, decoder_sequence_length, decoder_sequence_length].
+                sequence mask, must be of shape
+                `[batch_size, decoder_sequence_length, decoder_sequence_length]`.
             encoder_padding_mask: a boolean Tensor, the padding mask of encoder
-                sequence, must of shape [batch_size, encoder_sequence_length].
+                sequence, must be of shape
+                `[batch_size, encoder_sequence_length]`.
             encoder_attention_mask: a boolean Tensor. Customized encoder
-                sequence mask, must of shape
-                [batch_size, encoder_sequence_length, encoder_sequence_length].
-            cache: a dense float Tensor. The cache of key/value of leading
-                tokens. `cache` is of shape [B, 2, max_seq_len, num_heads,
-                key_dims].
-            cache_index: a int or int Tensor, the index of the current token
-                being processed.
+                sequence mask, must be of shape
+                `[batch_size, encoder_sequence_length, encoder_sequence_length]`.
+            self_attention_cache: a dense float Tensor. The cache of key/values
+                pairs in the self-attention layer. Has shape
+                `[batch_size, 2, max_seq_len, num_heads, key_dims]`.
+            self_attention_cache_update_index: an int or int Tensor, the index
+                at which to update the `self_attention_cache`. Usually, this is
+                the index of the current token being processed during decoding.
+            cross_attention_cache: a dense float Tensor. The cache of
+                key/value pairs in the cross-attention layer. Has shape
+                `[batch_size, 2, S, num_heads, key_dims]`.
+            cross_attention_cache_update_index:  an int or int Tensor, the index
+                at which to update the `cross_attention_cache`. Usually, this is
+                either `0` (compute the entire `cross_attention_cache`), or
+                `None` (reuse a previously computed `cross_attention_cache`).
         Returns:
-            Either a tuple of (outputs, cache) if a cache was passed, or a
-            single value outputs if a cache was not passed.
+            One of three things, depending on call arguments:
+            - `outputs`, if `self_attention_cache` is `None.
+            - `(outputs, self_attention_cache)`, if `self_attention_cache` is
+              set and the layer has no cross-attention.
+            - `(outputs, self_attention_cache, cross_attention_cache)`, if
+              `self_attention_cache` and `cross_attention_cache` are set and
+              the layer has cross-attention.
         """
 
         has_encoder_sequence = encoder_sequence is not None
@@ -269,6 +286,21 @@ class TransformerDecoder(keras.layers.Layer):
                 "you did not provide encoder_sequence."
             )
 
+        has_self_attention_cache = self_attention_cache is not None
+        has_cross_attention_cache = cross_attention_cache is not None
+        if is_cross_attention and (
+            has_self_attention_cache != has_cross_attention_cache
+        ):
+            raise ValueError(
+                "When calling `keras_nlp.layers.TransformerDecoder` with "
+                "cross-attention (with both `encoder_sequence` and "
+                "`decoder_sequence`), `self_attention_cache` and "
+                "`cross_attention_cache` should both be set or both be `None`. "
+                "One cannot be `None` while the other is not. Received: "
+                f"self_attention_cache={self_attention_cache}, "
+                f"cross_attention_cache={cross_attention_cache}."
+            )
+
         x = decoder_sequence  # Intermediate result.
 
         # Compute self attention mask.
@@ -277,13 +309,15 @@ class TransformerDecoder(keras.layers.Layer):
         # We need to handle a rectangular causal mask when doing cached
         # decoding. For generative inference, `decoder_sequence` will
         # generally be length 1, and `cache` will be the full generation length.
-        if cache is not None:
-            input_length = tf.shape(cache)[2]
+        if self_attention_cache is not None:
+            input_length = tf.shape(self_attention_cache)[2]
         self_attention_mask = compute_causal_mask(
             batch_size,
             input_length,
             output_length,
-            cache_index,
+            0
+            if self_attention_cache_update_index is None
+            else self_attention_cache_update_index,
         )
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
@@ -295,12 +329,12 @@ class TransformerDecoder(keras.layers.Layer):
         residual = x
         if self.normalize_first:
             x = self._self_attention_layernorm(x)
-        x, cache = self._self_attention_layer(
+        x, self_attention_cache = self._self_attention_layer(
             query=x,
             value=x,
-            cache=cache,
-            cache_index=cache_index,
             attention_mask=self_attention_mask,
+            cache=self_attention_cache,
+            cache_update_index=self_attention_cache_update_index,
         )
         x = self._self_attention_dropout(x)
         x = x + residual
@@ -308,7 +342,7 @@ class TransformerDecoder(keras.layers.Layer):
             x = self._self_attention_layernorm(x)
 
         # Cross attention is optional.
-        if self._cross_attention_layer is not None:
+        if is_cross_attention:
             # Compute cross attention mask.
             cross_attention_mask = merge_padding_and_attention_mask(
                 encoder_sequence, encoder_padding_mask, encoder_attention_mask
@@ -318,10 +352,12 @@ class TransformerDecoder(keras.layers.Layer):
             residual = x
             if self.normalize_first:
                 x = self._cross_attention_layernorm(x)
-            x = self._cross_attention_layer(
+            x, cross_attention_cache = self._cross_attention_layer(
                 query=x,
                 value=encoder_sequence,
                 attention_mask=cross_attention_mask,
+                cache=cross_attention_cache,
+                cache_update_index=cross_attention_cache_update_index,
             )
             x = self._cross_attention_dropout(x)
             x = x + residual
@@ -339,9 +375,13 @@ class TransformerDecoder(keras.layers.Layer):
         if not self.normalize_first:
             x = self._feedforward_layernorm(x)
 
-        if cache is None:
+        if self_attention_cache is not None:
+            if is_cross_attention:
+                return (x, self_attention_cache, cross_attention_cache)
+            else:
+                return (x, self_attention_cache)
+        else:
             return x
-        return (x, cache)
 
     def get_config(self):
         config = super().get_config()

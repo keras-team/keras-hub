@@ -59,7 +59,7 @@ class CachedMultiHeadAttentionTest(tf.test.TestCase, parameterized.TestCase):
                     query=next_input,
                     value=next_input,
                     cache=cache,
-                    cache_index=i,
+                    cache_update_index=i,
                     attention_mask=next_mask,
                 )
                 outputs = dynamic_update_slice(outputs, next_output, [0, i, 0])

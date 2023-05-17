@@ -119,6 +119,35 @@ class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         with self.assertRaises(ValueError):
             self.preprocessor(input_data)
 
+    def test_generate_preprocess(self):
+        input_data = {
+            "encoder_text": tf.convert_to_tensor([" airplane at airport"]),
+            "decoder_text": tf.convert_to_tensor([" kohli is the best"]),
+        }
+        x_out = self.preprocessor.generate_preprocess(input_data)
+        self.assertAllEqual(
+            x_out["encoder_token_ids"], [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1]]
+        )
+        self.assertAllEqual(
+            x_out["encoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0]]
+        )
+        self.assertAllEqual(
+            x_out["decoder_token_ids"], [[2, 0, 7, 8, 9, 10, 11, 1, 1]]
+        )
+        self.assertAllEqual(
+            x_out["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0]]
+        )
+
+    def test_generate_postprocess(self):
+        input_data = {
+            "decoder_token_ids": tf.constant([2, 0, 7, 8, 9, 10, 11, 1, 1]),
+            "decoder_padding_mask": tf.cast(
+                [1, 1, 1, 1, 1, 1, 1, 0, 0], dtype="bool"
+            ),
+        }
+        x = self.preprocessor.generate_postprocess(input_data)
+        self.assertAllEqual(x, " kohli is the best")
+
     def test_serialization(self):
         new_preprocessor = keras.utils.deserialize_keras_object(
             keras.utils.serialize_keras_object(self.preprocessor)

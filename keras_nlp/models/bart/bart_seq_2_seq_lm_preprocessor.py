@@ -14,10 +14,14 @@
 
 """BART Seq2Seq LM preprocessor layer."""
 
+import tensorflow as tf
 from absl import logging
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.bart.bart_preprocessor import BartPreprocessor
+from keras_nlp.utils.keras_utils import (
+    convert_inputs_to_list_of_tensor_segments,
+)
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
@@ -142,21 +146,19 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             tokenizer=tokenizer,
             encoder_sequence_length=encoder_sequence_length,
             decoder_sequence_length=decoder_sequence_length + 1,
-            truncate=truncate,
             **kwargs
         )
 
-        # Maintain a private copy of `decoder_sequence_length` for config
-        # purposes.
+        # Maintain a private copy of the sequence lengths for config purposes.
+        self._encoder_sequence_length = encoder_sequence_length
         self._decoder_sequence_length = decoder_sequence_length
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "encoder_sequence_length": self.encoder_packer.sequence_length,
+                "encoder_sequence_length": self._encoder_sequence_length,
                 "decoder_sequence_length": self._decoder_sequence_length,
-                "truncate": self.encoder_packer.truncate,
             }
         )
         return config
@@ -185,3 +187,102 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         y = decoder_token_ids[..., 1:]
         sample_weight = decoder_padding_mask[..., 1:]
         return pack_x_y_sample_weight(x, y, sample_weight)
+
+    def generate_preprocess(
+        self,
+        x,
+        sequence_length=None,
+    ):
+        """Convert encoder and decoder input strings to integer token inputs for generation.
+
+        Similar to calling the layer for training, this method takes in a dict
+        containing `"encoder_text"` and `"decoder_text"`, with strings or tensor
+        strings for values, tokenizes and packs the input, and computes a
+        padding mask masking all inputs not filled in with a padded value.
+
+        Unlike calling the the layer for training, this method does not compute
+        labels and will never append a tokenizer.end_token_id to the end of
+        the decoder sequence (as generation is expected to continue at the end
+        of the inputted decoder prompt).
+        """
+        # If `sequence_length` is not provided, we use the default value.
+        # We decrement this value by one since we need to add `end_token_id` to
+        # the *beginning* of the decoder sequence.
+        sequence_length = (
+            sequence_length - 1
+            if sequence_length
+            else self._decoder_sequence_length - 1
+        )
+
+        if isinstance(x, dict):
+            encoder_text = x["encoder_text"]
+            decoder_text = x["decoder_text"]
+        else:
+            encoder_text = x
+            # Initialize empty prompt for the decoder.
+            decoder_text = tf.fill((tf.shape(encoder_text)[0],), "")
+
+        # Tokenize and pack the encoder inputs.
+        # TODO: Remove `[0]` once we have shifted to `MultiSegmentPacker`.
+        encoder_text = convert_inputs_to_list_of_tensor_segments(encoder_text)[
+            0
+        ]
+        encoder_token_ids = self.tokenizer(encoder_text)
+        encoder_token_ids, encoder_padding_mask = self.encoder_packer(
+            encoder_token_ids
+        )
+
+        # Tokenize decoder inputs. We cannot use the preprocessor call directly
+        # since the `max_length` might be different. Moreover, the
+        # `BartSeq2SeqLMPreprocessor` layer generates inputs to the model for
+        # training; this function handles text generation (inference).
+        decoder_text = convert_inputs_to_list_of_tensor_segments(decoder_text)[
+            0
+        ]
+        decoder_token_ids = self.tokenizer(decoder_text)
+        decoder_token_ids = self.decoder_packer(
+            decoder_token_ids,
+            sequence_length=sequence_length,
+            add_end_value=False,
+        )
+        # The decoder inputs have end token at the beginning of the sequence.
+        # We concatenate it here.
+        end_tokens = tf.fill(
+            (tf.shape(decoder_token_ids)[0], 1),
+            value=self.tokenizer.end_token_id,
+        )
+        decoder_token_ids = tf.concat([end_tokens, decoder_token_ids], axis=1)
+        decoder_padding_mask = decoder_token_ids != self.tokenizer.pad_token_id
+
+        return {
+            "encoder_token_ids": encoder_token_ids,
+            "encoder_padding_mask": encoder_padding_mask,
+            "decoder_token_ids": decoder_token_ids,
+            "decoder_padding_mask": decoder_padding_mask,
+        }
+
+    def generate_postprocess(
+        self,
+        x,
+    ):
+        """Convert integer token output to strings for generation.
+
+        This method reverses `generate_preprocess()`, by first removing all
+        padding and start/end tokens, and then converting the integer sequence
+        back to a string.
+        """
+        decoder_token_ids, decoder_padding_mask = (
+            x["decoder_token_ids"],
+            x["decoder_padding_mask"],
+        )
+        # Strip any special tokens during detokenization, i.e., the start and
+        # end markers. In the future, we could make this configurable.
+        decoder_padding_mask = (
+            decoder_padding_mask
+            & (decoder_token_ids != self.tokenizer.end_token_id)
+            & (decoder_token_ids != self.tokenizer.start_token_id)
+        )
+        decoder_token_ids = tf.ragged.boolean_mask(
+            decoder_token_ids, decoder_padding_mask
+        )
+        return self.tokenizer.detokenize(decoder_token_ids)
