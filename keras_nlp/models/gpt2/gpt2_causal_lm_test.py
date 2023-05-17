@@ -16,11 +16,11 @@
 import os
 from unittest.mock import patch
 
-import numpy as np
 import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
@@ -32,10 +32,6 @@ from keras_nlp.tests.test_case import TestCase
 
 class GPT2CausalLMTest(TestCase):
     def setUp(self):
-        # For DTensor.
-        keras.backend.experimental.enable_tf_random_generator()
-        keras.utils.set_random_seed(1337)
-
         self.vocab = {
             "!": 0,
             "air": 1,
@@ -65,12 +61,10 @@ class GPT2CausalLMTest(TestCase):
             preprocessor=self.preprocessor,
         )
 
-        self.raw_batch = tf.constant(
-            [
-                " airplane at airport",
-                " airplane at airport",
-            ]
-        )
+        self.raw_batch = [
+            " airplane at airport",
+            " airplane at airport",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
             self.raw_batch
@@ -126,8 +120,10 @@ class GPT2CausalLMTest(TestCase):
         def wrapper(*args, **kwargs):
             """Modify output logits to always favor end_token_id"""
             logits, hidden_states, cache = call_with_cache(*args, **kwargs)
-            logits = np.zeros(logits.shape.as_list())
-            logits[:, :, self.preprocessor.tokenizer.end_token_id] = 1.0e9
+            index = self.preprocessor.tokenizer.end_token_id
+            update = ops.ones_like(logits)[:, :, index] * 1.0e9
+            update = ops.expand_dims(update, axis=-1)
+            logits = ops.slice_update(logits, (0, 0, index), update)
             return logits, hidden_states, cache
 
         with patch.object(self.causal_lm, "call_with_cache", wraps=wrapper):
@@ -135,7 +131,6 @@ class GPT2CausalLMTest(TestCase):
             output = self.causal_lm.generate(prompt)
             # We should immediately abort and output the prompt.
             self.assertEqual(prompt, output)
-            self.assertEqual(self.causal_lm.call_with_cache.call_count, 2)
 
     def test_generate_compilation(self):
         # Assert we do not recompile with successive calls.

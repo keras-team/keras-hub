@@ -55,19 +55,19 @@ class DebertaV3TokenizerTest(TestCase):
         self.assertAllEqual(output, [4, 9, 5, 7])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant(["the quick brown fox", "the earth is round"])
+        input_data = ["the quick brown fox", "the earth is round"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[4, 9, 5, 7], [4, 6, 8, 3]])
 
     def test_detokenize(self):
-        input_data = tf.constant([[4, 9, 5, 7]])
+        input_data = [[4, 9, 5, 7]]
         output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, tf.constant(["the quick brown fox"]))
+        self.assertEqual(output, ["the quick brown fox"])
 
     def test_detokenize_mask_token(self):
-        input_data = tf.constant([[4, 9, 5, 7, self.tokenizer.mask_token_id]])
+        input_data = [[4, 9, 5, 7, self.tokenizer.mask_token_id]]
         output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, tf.constant(["the quick brown fox"]))
+        self.assertEqual(output, ["the quick brown fox"])
 
     def test_vocabulary_size(self):
         self.assertEqual(self.tokenizer.vocabulary_size(), 11)
@@ -103,6 +103,7 @@ class DebertaV3TokenizerTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self):
         input_data = tf.constant(["the quick brown fox"])
 

@@ -14,9 +14,9 @@
 """Tests for loading pretrained model presets."""
 
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 
+from keras_nlp.backend import ops
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
 from keras_nlp.models.roberta.roberta_masked_lm import RobertaMaskedLM
@@ -56,8 +56,8 @@ class RobertaPresetSmokeTest(TestCase):
     )
     def test_backbone_output(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[0, 133, 2119, 2]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+            "token_ids": ops.array([[0, 133, 2119, 2]]),
+            "padding_mask": ops.array([[1, 1, 1, 1]]),
         }
         model = RobertaBackbone.from_preset(
             "roberta_base_en", load_weights=load_weights
@@ -84,8 +84,8 @@ class RobertaPresetSmokeTest(TestCase):
     )
     def test_classifier_output_without_preprocessing(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[101, 1996, 4248, 102]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+            "token_ids": ops.array([[101, 1996, 4248, 102]]),
+            "padding_mask": ops.array([[1, 1, 1, 1]]),
         }
         model = RobertaClassifier.from_preset(
             "roberta_base_en",
@@ -112,9 +112,9 @@ class RobertaPresetSmokeTest(TestCase):
     )
     def test_masked_lm_output_without_preprocessing(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[101, 1996, 4248, 102]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
-            "mask_positions": tf.constant([[0, 0]]),
+            "token_ids": ops.array([[101, 1996, 4248, 102]]),
+            "padding_mask": ops.array([[1, 1, 1, 1]]),
+            "mask_positions": ops.array([[0, 0]]),
         }
         model = RobertaMaskedLM.from_preset(
             "roberta_base_en",
@@ -168,10 +168,10 @@ class RobertaPresetFullTest(TestCase):
                 preset, load_weights=load_weights
             )
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 512), dtype="int64", maxval=model.vocabulary_size
                 ),
-                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+                "padding_mask": ops.array([1] * 512, shape=(1, 512)),
             }
             model(input_data)
 
@@ -183,7 +183,7 @@ class RobertaPresetFullTest(TestCase):
             classifier = RobertaClassifier.from_preset(
                 preset, num_classes=4, load_weights=load_weights
             )
-            input_data = tf.constant(["The quick brown fox."])
+            input_data = ["The quick brown fox."]
             classifier.predict(input_data)
 
     @parameterized.named_parameters(
@@ -198,12 +198,12 @@ class RobertaPresetFullTest(TestCase):
                 load_weights=load_weights,
             )
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 512),
                     dtype="int64",
                     maxval=classifier.backbone.vocabulary_size,
                 ),
-                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+                "padding_mask": ops.array([1] * 512, shape=(1, 512)),
             }
             classifier.predict(input_data)
 
@@ -215,7 +215,7 @@ class RobertaPresetFullTest(TestCase):
             classifier = RobertaMaskedLM.from_preset(
                 preset, load_weights=load_weights
             )
-            input_data = tf.constant(["The quick brown fox."])
+            input_data = ["The quick brown fox."]
             classifier.predict(input_data)
 
     @parameterized.named_parameters(
@@ -229,13 +229,13 @@ class RobertaPresetFullTest(TestCase):
                 load_weights=load_weights,
             )
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 512),
                     dtype="int64",
                     maxval=classifier.backbone.vocabulary_size,
                 ),
-                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
-                "mask_positions": tf.constant([1] * 128, shape=(1, 128)),
+                "padding_mask": ops.array([1] * 512, shape=(1, 512)),
+                "mask_positions": ops.array([1] * 128, shape=(1, 128)),
             }
             classifier.predict(input_data)
 

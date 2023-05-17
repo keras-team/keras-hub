@@ -75,11 +75,7 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
         bias_initializer="zeros",
         **kwargs
     ):
-        # Work around for model saving
-        self._input_shape = kwargs.pop("build_input_shape", None)
-
         super().__init__(**kwargs)
-
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.max_position_embeddings = max_position_embeddings
@@ -92,15 +88,9 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
         self._built = False
         self.supports_masking = True
 
-        if self._input_shape is not None:
-            self._build(self._input_shape)
-
-    def _build(self, input_shape):
-        # Create layers based on input shape.
-        self._built = True
-        self._input_shape = input_shape
+    def build(self, inputs_shape):
         # Infer the dimension of our hidden feature size from the build shape.
-        hidden_dim = input_shape[-1]
+        hidden_dim = inputs_shape[-1]
 
         # Self attention layers.
         self._self_attention_layer = DisentangledSelfAttention(
@@ -112,9 +102,11 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
+        self._self_attention_layer.build(inputs_shape)
         self._self_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
+        self._self_attention_layernorm.build(inputs_shape)
         self._self_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,
         )
@@ -123,20 +115,26 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
         self._feedforward_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
+        self._feedforward_layernorm.build(inputs_shape)
         self._feedforward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
+        self._feedforward_intermediate_dense.build(inputs_shape)
         self._feedforward_output_dense = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
+        intermediate_shape = list(inputs_shape)
+        intermediate_shape[-1] = self.intermediate_dim
+        self._feedforward_output_dense.build(tuple(intermediate_shape))
         self._feedforward_dropout = keras.layers.Dropout(
             rate=self.dropout,
         )
+        self.built = True
 
     def call(
         self,
@@ -163,10 +161,6 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
         Returns:
             A Tensor of the same shape as the `inputs`.
         """
-
-        if not self._built:
-            self._build(inputs.shape)
-
         x = inputs
 
         # Compute self attention mask.
@@ -177,7 +171,7 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
         # Self attention block.
         residual = x
         x = self._self_attention_layer(
-            hidden_states=x,
+            x,
             rel_embeddings=rel_embeddings,
             attention_mask=self_attention_mask,
         )
@@ -212,7 +206,9 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
                 ),
-                "build_input_shape": self._input_shape,
             }
         )
         return config
+
+    def compute_output_shape(self, inputs_shape):
+        return inputs_shape

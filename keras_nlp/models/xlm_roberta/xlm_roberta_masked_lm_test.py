@@ -77,9 +77,10 @@ class XLMRobertaMaskedLMTest(TestCase):
             preprocessor=self.preprocessor,
         )
 
-        self.raw_batch = tf.constant(
-            ["the quick brown fox", "the slow brown fox"]
-        )
+        self.raw_batch = [
+            "the quick brown fox",
+            "the slow brown fox",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
             self.raw_batch

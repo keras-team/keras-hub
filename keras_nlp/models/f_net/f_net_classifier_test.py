@@ -21,6 +21,7 @@ import sentencepiece
 import tensorflow as tf
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_classifier import FNetClassifier
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
@@ -28,6 +29,7 @@ from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
+@pytest.mark.tf_only
 class FNetClassifierTest(TestCase):
     def setUp(self):
         # Setup Model
@@ -74,15 +76,13 @@ class FNetClassifierTest(TestCase):
         )
 
         # Setup data.
-        self.raw_batch = tf.constant(
-            [
-                "the quick brown fox.",
-                "the slow brown fox.",
-            ]
-        )
+        self.raw_batch = [
+            "the quick brown fox.",
+            "the slow brown fox.",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, tf.ones((2,)))
+            (self.raw_batch, ops.ones((2,)))
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
@@ -96,7 +96,7 @@ class FNetClassifierTest(TestCase):
         # Assert predictions match.
         self.assertAllClose(preds1, preds2)
         # Assert valid softmax output.
-        self.assertAllClose(tf.reduce_sum(preds2, axis=-1), [1.0, 1.0])
+        self.assertAllClose(ops.sum(preds2, axis=-1), [1.0, 1.0])
 
     def test_fnet_classifier_fit(self):
         self.classifier.fit(self.raw_dataset)

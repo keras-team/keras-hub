@@ -78,7 +78,7 @@ class TopPSampler(Sampler):
         super().__init__(**kwargs)
         self.p = p
         self.k = k
-        self.seed = seed
+        self.seed = random.SeedGenerator(seed)
 
     def get_next_token(self, probabilities):
         cutoff = ops.shape(probabilities)[1]

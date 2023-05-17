@@ -65,7 +65,7 @@ class RandomSampler(Sampler):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.seed = seed
+        self.seed = random.SeedGenerator(seed)
 
     def get_next_token(self, probabilities):
         # Sample the next token from the probability distribution.

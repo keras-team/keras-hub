@@ -15,7 +15,9 @@
 
 import tensorflow as tf
 
+from keras_nlp.backend import config
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.task import Task
 from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.tensor_utils import tensor_to_list
@@ -45,24 +47,63 @@ class GenerativeTask(Task):
         # Clear the compiled generate function.
         self.generate_function = None
 
-    def generate_step(self):
-        """Run generation on a single batch of input."""
-        raise NotImplementedError
-
     def make_generate_function(self):
         """Create or return the compiled generation function."""
         if self.generate_function is not None:
             return self.generate_function
 
-        if self.run_eagerly:
-            self.generate_function = self.generate_step
-        else:
+        self.generate_function = self.generate_step
+        if config.backend() == "torch":
+            import torch
+
+            def wrapped_generate_function(
+                inputs,
+                end_token_id=None,
+            ):
+                with torch.no_grad():
+                    return self.generate_step(inputs, end_token_id)
+
+            self.generate_function = wrapped_generate_function
+        elif config.backend() == "tensorflow" and not self.run_eagerly:
             # `jit_compile` is a property of keras.Model after TF 2.12.
             # Use `getattr()` for backwards compatibility.
             jit_compile = getattr(self, "jit_compile", True)
             self.generate_function = tf.function(
                 self.generate_step, jit_compile=jit_compile
             )
+        elif config.backend() == "jax" and not self.run_eagerly:
+            import jax
+
+            @jax.jit
+            def compiled_generate_function(state, inputs, end_token_id):
+                trainable_variables, non_trainable_variables = state
+
+                # Gather variable mapping
+                trainable_mapping = zip(
+                    self.trainable_variables, trainable_variables
+                )
+                non_trainable_mapping = zip(
+                    self.non_trainable_variables, non_trainable_variables
+                )
+                mapping = list(trainable_mapping) + list(non_trainable_mapping)
+
+                with keras.StatelessScope(state_mapping=mapping):
+                    return self.generate_step(inputs, end_token_id)
+
+            def wrapped_generate_function(
+                inputs,
+                end_token_id=None,
+            ):
+                trainable_variables = self.trainable_variables
+                non_trainable_variables = self.non_trainable_variables
+                state = (trainable_variables, non_trainable_variables)
+                inputs = tf.nest.map_structure(ops.convert_to_tensor, inputs)
+                return compiled_generate_function(state, inputs, end_token_id)
+
+            self.generate_function = wrapped_generate_function
+        else:
+            raise ValueError(f"Unkown backend {config.backend()}")
+
         return self.generate_function
 
     def _normalize_generate_inputs(
@@ -137,25 +178,19 @@ class GenerativeTask(Task):
         """Generate text given prompt `inputs`.
 
         This method generates text based on given `inputs`. The sampling method
-        used for generation can be set via the `compile()` method.
+        used for generation can be set in the `compile` method.
 
         If `inputs` are a `tf.data.Dataset`, outputs will be generated
         "batch-by-batch" and concatenated. Otherwise, all inputs will be handled
         as a single batch.
 
-        If a `preprocessor` is attached to the model, `inputs` will be
-        preprocessed inside the `generate()` function and should match the
-        structure expected by the `preprocessor` layer (usually raw strings).
-        If a `preprocessor` is not attached, inputs should match the structure
-        expected by the `backbone`. See the example usage above for a
-        demonstration of each.
+        If a `preprocessor` is attached to the model, `inputs` should be
+        strings and returned sequences will be strings. Otherwise, inputs should
+        be preprocessed before calling `generate()`, and returned sequences will
+        be token ids.
 
         Args:
-            inputs: python data, tensor data, or a `tf.data.Dataset`. If a
-                `preprocessor` is attached to the model, `inputs` should match
-                the structure expected by the `preprocessor` layer. If a
-                `preprocessor` is not attached, `inputs` should match the
-                structure expected the the `backbone` model.
+            inputs: python data, tensor data, or a dataset.
             max_length: Optional. int. The max length of the generated sequence.
                 Will default to the max configured `sequence_length` of the
                 `preprocessor`. If `preprocessor` is `None`, `inputs` should be

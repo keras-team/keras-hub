@@ -73,12 +73,10 @@ class RobertaMaskedLMTest(TestCase):
             preprocessor=None,
         )
 
-        self.raw_batch = tf.constant(
-            [
-                " airplane at airport",
-                " the airplane is the best",
-            ]
-        )
+        self.raw_batch = [
+            " airplane at airport",
+            " the airplane is the best",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
             self.raw_batch

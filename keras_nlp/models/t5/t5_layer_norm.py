@@ -27,6 +27,7 @@ class T5LayerNorm(keras.layers.Layer):
             shape=(input_shape[-1],),
             initializer="ones",
         )
+        self.built = True
 
     def call(self, hidden_states):
         variance = tf.math.reduce_mean(

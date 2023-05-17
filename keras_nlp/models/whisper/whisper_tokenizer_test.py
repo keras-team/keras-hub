@@ -23,6 +23,7 @@ from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
+@pytest.mark.tf_only
 class WhisperTokenizerTest(TestCase):
     def setUp(self):
         self.vocab = {
@@ -77,7 +78,7 @@ class WhisperTokenizerTest(TestCase):
         self.assertAllEqual(output, [9, 14, 12, 11, 0, 1, 2, 0, 3, 10])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant([" airplane at airport", " kohli is the best"])
+        input_data = [" airplane at airport", " kohli is the best"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[0, 1, 2, 0, 3], [4, 5, 6, 7, 8]])
 
@@ -113,6 +114,7 @@ class WhisperTokenizerTest(TestCase):
             )
 
     @pytest.mark.large  # Saving is slow, so mark these large.
+    @pytest.mark.tf_only
     def test_saved_model(self):
         input_data = tf.constant([" airplane at airport"])
 

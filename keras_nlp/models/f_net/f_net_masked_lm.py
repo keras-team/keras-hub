@@ -23,7 +23,6 @@ from keras_nlp.models.f_net.f_net_masked_lm_preprocessor import (
 )
 from keras_nlp.models.f_net.f_net_presets import backbone_presets
 from keras_nlp.models.task import Task
-from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -134,7 +133,7 @@ class FNetMaskedLM(Task):
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(5e-5),
             weighted_metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=is_xla_compatible(self),
+            jit_compile=True,
         )
 
     @classproperty

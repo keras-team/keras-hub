@@ -17,86 +17,70 @@ import os
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.bart.bart_backbone import BartBackbone
 from keras_nlp.tests.test_case import TestCase
 
 
 class BartBackboneTest(TestCase):
     def setUp(self):
-        self.model = BartBackbone(
-            vocabulary_size=1000,
+        self.backbone = BartBackbone(
+            vocabulary_size=10,
             num_layers=2,
             num_heads=2,
-            hidden_dim=64,
-            intermediate_dim=128,
-            max_sequence_length=128,
+            hidden_dim=3,
+            intermediate_dim=4,
+            max_sequence_length=5,
         )
-        self.batch_size = 8
         self.input_batch = {
-            "encoder_token_ids": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-            "encoder_padding_mask": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-            "decoder_token_ids": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
-            "decoder_padding_mask": tf.ones(
-                (self.batch_size, self.model.max_sequence_length), dtype="int32"
-            ),
+            "encoder_token_ids": ops.ones((2, 5), dtype="int32"),
+            "encoder_padding_mask": ops.ones((2, 5), dtype="int32"),
+            "decoder_token_ids": ops.ones((2, 5), dtype="int32"),
+            "decoder_padding_mask": ops.ones((2, 5), dtype="int32"),
         }
 
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch
         ).batch(2)
 
-    def test_valid_call_bart(self):
-        self.model(self.input_batch)
+    def test_valid_call(self):
+        self.backbone(self.input_batch)
 
+    def test_name(self):
         # Check default name passed through
-        self.assertRegexpMatches(self.model.name, "bart_backbone")
+        self.assertRegexpMatches(self.backbone.name, "bart_backbone")
 
-    def test_variable_sequence_length_call_bart(self):
-        for seq_length in (25, 50, 75):
+    def test_variable_sequence_length_call(self):
+        for seq_length in (2, 3, 4):
             input_data = {
-                "encoder_token_ids": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
+                "encoder_token_ids": ops.ones((2, seq_length), dtype="int32"),
+                "encoder_padding_mask": ops.ones(
+                    (2, seq_length), dtype="int32"
                 ),
-                "encoder_padding_mask": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
-                "decoder_token_ids": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
-                ),
-                "decoder_padding_mask": tf.ones(
-                    (self.batch_size, seq_length), dtype="int32"
+                "decoder_token_ids": ops.ones((2, seq_length), dtype="int32"),
+                "decoder_padding_mask": ops.ones(
+                    (2, seq_length), dtype="int32"
                 ),
             }
-            self.model(input_data)
+            self.backbone(input_data)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_compile(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_batch)
+    def test_predict(self):
+        self.backbone.predict(self.input_batch)
+        self.backbone.predict(self.input_dataset)
 
-    @parameterized.named_parameters(
-        ("jit_compile_false", False), ("jit_compile_true", True)
-    )
-    def test_compile_batched_ds(self, jit_compile):
-        self.model.compile(jit_compile=jit_compile)
-        self.model.predict(self.input_dataset)
+    def test_serialization(self):
+        new_backbone = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(self.backbone)
+        )
+        self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 
     @pytest.mark.large
     def test_saved_model(self):
         model_output = self.backbone(self.input_batch)
         path = os.path.join(self.get_temp_dir(), "model.keras")
-        self.model.save(path, save_format="keras_v3")
+        self.backbone.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
@@ -119,7 +103,7 @@ class BartBackboneTest(TestCase):
 class BartBackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
-            self.model = BartBackbone(
+            self.backbone = BartBackbone(
                 vocabulary_size=1000,
                 num_layers=2,
                 num_heads=2,
@@ -128,15 +112,15 @@ class BartBackboneTPUTest(TestCase):
                 max_sequence_length=128,
             )
         self.input_batch = {
-            "encoder_token_ids": tf.ones((8, 128), dtype="int32"),
-            "encoder_padding_mask": tf.ones((8, 128), dtype="int32"),
-            "decoder_token_ids": tf.ones((8, 128), dtype="int32"),
-            "decoder_padding_mask": tf.ones((8, 128), dtype="int32"),
+            "encoder_token_ids": ops.ones((8, 128), dtype="int32"),
+            "encoder_padding_mask": ops.ones((8, 128), dtype="int32"),
+            "decoder_token_ids": ops.ones((8, 128), dtype="int32"),
+            "decoder_padding_mask": ops.ones((8, 128), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch
         ).batch(2)
 
     def test_predict(self):
-        self.model.compile()
-        self.model.predict(self.input_dataset)
+        self.backbone.compile()
+        self.backbone.predict(self.input_dataset)

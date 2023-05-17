@@ -24,7 +24,6 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
     XLMRobertaPreprocessor,
 )
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
-from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -199,7 +198,7 @@ class XLMRobertaClassifier(Task):
             ),
             optimizer=keras.optimizers.Adam(5e-5),
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=is_xla_compatible(self),
+            jit_compile=True,
         )
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
