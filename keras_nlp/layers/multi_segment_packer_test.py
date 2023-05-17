@@ -148,14 +148,14 @@ class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
         )
 
     def test_list_special_tokens(self):
-        seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b", "c"]])
-        seq2 = tf.ragged.constant([["x", "y", "z"], ["x"]])
+        seq1 = tf.ragged.constant([["a", "b"], ["a", "b"]])
+        seq2 = tf.ragged.constant([["x", "y"], ["x"]])
         packer = MultiSegmentPacker(
-            9,
-            start_value="[CLS]",
-            end_value="[SEP]",
-            sep_value=["[SEP]", "[SEP]"],
-            pad_value="[PAD]",
+            8,
+            start_value="<s>",
+            end_value="</s>",
+            sep_value=["</s>", "</s>"],
+            pad_value="<pad>",
             truncate="round_robin",
         )
         output = packer([seq1, seq2])
@@ -163,32 +163,12 @@ class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
             output,
             (
                 [
-                    [
-                        "[CLS]",
-                        "a",
-                        "b",
-                        "c",
-                        "[SEP]",
-                        "[SEP]",
-                        "x",
-                        "y",
-                        "[SEP]",
-                    ],
-                    [
-                        "[CLS]",
-                        "a",
-                        "b",
-                        "c",
-                        "[SEP]",
-                        "[SEP]",
-                        "x",
-                        "[SEP]",
-                        "[PAD]",
-                    ],
+                    ["<s>", "a", "b", "</s>", "</s>", "x", "y", "</s>"],
+                    ["<s>", "a", "b", "</s>", "</s>", "x", "</s>", "<pad>"],
                 ],
                 [
-                    [0, 0, 0, 0, 0, 0, 1, 1, 1],
-                    [0, 0, 0, 0, 0, 0, 1, 1, 0],
+                    [0, 0, 0, 0, 0, 1, 1, 1],
+                    [0, 0, 0, 0, 0, 1, 1, 0],
                 ],
             ),
         )

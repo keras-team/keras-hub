@@ -52,23 +52,24 @@ class MultiSegmentPacker(keras.layers.Layer):
     either rank-1 or rank-2.
 
     Args:
-        sequence_length: The desired output length.
-        start_value: The id(s) or token(s) that are to be placed at the start of
-            each sequence (called "[CLS]" for BERT). The dtype must match the
-            dtype of the input tensors to the layer.
-        end_value: The id(s) or token(s) that is/are to be placed at the end of
-            the last input segment (called "[SEP]" for BERT). The dtype much
+        sequence_length: int. The desired output length.
+        start_value: int/str/list/tuple. The id(s) or token(s) that are to be
+            placed at the start of each sequence (called "[CLS]" for BERT). The
+            dtype must match the dtype of the input tensors to the layer.
+        end_value: int/str/list/tuple. The id(s) or token(s) that are to be
+            placed at the end of the last input segment (called "[SEP]" for
+            BERT). The dtype must match the dtype of the input tensors to the
+            layer.
+        sep_value: int/str/list/tuple. The id(s) or token(s) that are to be
+            placed at the end of every segment, except the last segment (called
+            "[SEP]" for BERT). If `None`, `end_value` is used. The dtype must
             match the dtype of the input tensors to the layer.
-        sep_value: The id(s) or token(s) that is/are to be placed at the end of
-            every segment, except the last segment (called "[SEP]" for BERT).
-            If `None`, `end_value` is used. The dtype much match the dtype of
-            the input tensors to the layer.
-        pad_value: The id or token that is to be placed into the unused
+        pad_value: int/str. The id or token that is to be placed into the unused
             positions after the last segment in the sequence
             (called "[PAD]" for BERT).
-        truncate: The algorithm to truncate a list of batched segments to fit a
-            per-example length limit. The value can be either `round_robin` or
-            `waterfall`:
+        truncate: str. The algorithm to truncate a list of batched segments to
+            fit a per-example length limit. The value can be either
+            `"round_robin"` or `"waterfall"`:
                 - `"round_robin"`: Available space is assigned one token at a
                     time in a round-robin fashion to the inputs that still need
                     some, until the limit is reached.
@@ -105,6 +106,17 @@ class MultiSegmentPacker(keras.layers.Layer):
      <tf.Tensor: shape=(8,), dtype=int32,
         numpy=array([0, 0, 0, 0, 0, 1, 1, 1], dtype=int32)>)
 
+    *Pack multiple inputs for classification with different sep tokens.*
+    >>> seq1 = tf.constant([1, 2, 3, 4])
+    >>> seq2 = tf.constant([11, 12, 13, 14])
+    >>> packer = keras_nlp.layers.MultiSegmentPacker(
+    ...     8, start_value=101, end_value=102, sep_value=[102, 102])
+    >>> packer((seq1, seq2))
+    (<tf.Tensor: shape=(8,), dtype=int32,
+        numpy=array([101,   1,   2, 102, 102,  11,  12, 102], dtype=int32)>,
+    <tf.Tensor: shape=(8,), dtype=int32,
+        numpy=array([0, 0, 0, 0, 0, 1, 1, 1], dtype=int32)>)
+
     Reference:
         [Devlin et al., 2018](https://arxiv.org/abs/1810.04805).
     """
@@ -135,16 +147,21 @@ class MultiSegmentPacker(keras.layers.Layer):
         self._sep_value = sep_value
         self._end_value = end_value
 
-        if not isinstance(start_value, (list, tuple)):
-            start_value = [start_value]
+        def check_special_value_type(value, value_name):
+            if isinstance(value, (int, str)):
+                return [value]
+            elif value and not isinstance(value, (list, tuple)):
+                raise ValueError(
+                    f"{value_name} should be of type int/str/list/tuple."
+                    f"Received type: `{type(value)}`."
+                )
+            return value
 
+        start_value = check_special_value_type(start_value, "start_value")
         if sep_value is None:
             sep_value = end_value
-        if not isinstance(sep_value, (list, tuple)):
-            sep_value = [sep_value]
-
-        if not isinstance(end_value, (list, tuple)):
-            end_value = [end_value]
+        sep_value = check_special_value_type(sep_value, "sep_value")
+        end_value = check_special_value_type(end_value, "end_value")
 
         self.start_value = start_value
         self.sep_value = sep_value
@@ -220,21 +237,21 @@ class MultiSegmentPacker(keras.layers.Layer):
         sep_value = tf.convert_to_tensor(self.sep_value, dtype=dtype)
         end_value = tf.convert_to_tensor(self.end_value, dtype=dtype)
 
-        start_values_tensor = tf.repeat(
+        start_columns = tf.repeat(
             start_value[tf.newaxis, :], repeats=batch_size, axis=0
         )
-        end_values_tensor = tf.repeat(
-            end_value[tf.newaxis, :], repeats=batch_size, axis=0
-        )
-        sep_values_tensor = tf.repeat(
+        sep_columns = tf.repeat(
             sep_value[tf.newaxis, :], repeats=batch_size, axis=0
         )
-        ones_sep_tensor = tf.ones_like(sep_values_tensor, dtype=tf.int32)
-        ones_end_tensor = tf.ones_like(end_values_tensor, dtype=tf.int32)
+        end_columns = tf.repeat(
+            end_value[tf.newaxis, :], repeats=batch_size, axis=0
+        )
+        ones_sep_columns = tf.ones_like(sep_columns, dtype=tf.int32)
+        ones_end_columns = tf.ones_like(end_columns, dtype=tf.int32)
 
-        segments_to_combine = [start_values_tensor]
+        segments_to_combine = [start_columns]
         segment_ids_to_combine = [
-            tf.ones_like(start_values_tensor, dtype=tf.int32) * 0
+            tf.ones_like(start_columns, dtype=tf.int32) * 0
         ]
 
         for i, seg in enumerate(segments):
@@ -246,11 +263,11 @@ class MultiSegmentPacker(keras.layers.Layer):
 
             # Account for the sep/end tokens here.
             if i == len(segments) - 1:
-                segments_to_combine.append(end_values_tensor)
-                segment_ids_to_combine.append(ones_end_tensor * i)
+                segments_to_combine.append(end_columns)
+                segment_ids_to_combine.append(ones_end_columns * i)
             else:
-                segments_to_combine.append(sep_values_tensor)
-                segment_ids_to_combine.append(ones_sep_tensor * i)
+                segments_to_combine.append(sep_columns)
+                segment_ids_to_combine.append(ones_sep_columns * i)
 
         token_ids = tf.concat(segments_to_combine, 1)
         segment_ids = tf.concat(segment_ids_to_combine, 1)
