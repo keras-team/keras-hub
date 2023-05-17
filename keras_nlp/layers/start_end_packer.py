@@ -34,14 +34,16 @@ class StartEndPacker(keras.layers.Layer):
 
     Args:
         sequence_length: int. The desired output length.
-        start_value: int/str. The ID or token that is to be placed at the start
-            of each sequence. The dtype must match the dtype of the input
-            tensors to the layer. If None, no start value will be added.
-        end_value: int/str. The ID or token that is to be placed at the end of
-            each input segment. The dtype must match the dtype of the input
-            tensors to the layer. If None, no end value will be added.
+        start_value: int/str/list/tuple. The ID(s) or token(s) that are to be
+            placed at the start of each sequence. The dtype must match the dtype
+            of the input tensors to the layer. If `None`, no start value will be
+            added.
+        end_value: int/str/list/tuple. The ID(s) or token(s) that are to be
+            placed at the end of each input segment. The dtype must match the
+            dtype of the input tensors to the layer. If `None`, no end value
+            will be added.
         pad_value: int/str. The ID or token that is to be placed into the
-            unused positions after the last segment in the sequence. If None,
+            unused positions after the last segment in the sequence. If `None`,
             0 or "" will be added depending on the dtype of the input tensor.
         return_padding_mask: bool. Whether to return a boolean padding mask of
             all locations that are filled in with the `pad_value`.
@@ -97,6 +99,18 @@ class StartEndPacker(keras.layers.Layer):
     array([[b'<s>', b'this', b'is', b'fun', b'</s>', b'<pad>'],
            [b'<s>', b'awesome', b'</s>', b'<pad>', b'<pad>', b'<pad>']],
           dtype=object)>
+
+    Multiple start tokens.
+    >>> input_data = tf.ragged.constant([["this", "is", "fun"], ["awesome"]])
+    >>> start_end_packer = keras_nlp.layers.StartEndPacker(
+    ...     sequence_length=6, start_value=["</s>", "<s>"], end_value="</s>",
+    ...     pad_value="<pad>"
+    ... )
+    >>> start_end_packer(input_data)
+    <tf.Tensor: shape=(2, 6), dtype=string, numpy=
+    array([[b'</s>', b'<s>', b'this', b'is', b'fun', b'</s>'],
+        [b'</s>', b'<s>', b'awesome', b'</s>', b'<pad>', b'<pad>']],
+        dtype=object)>
     """
 
     def __init__(
@@ -112,8 +126,27 @@ class StartEndPacker(keras.layers.Layer):
         super().__init__(name=name, **kwargs)
 
         self.sequence_length = sequence_length
+
+        # Maintain private copies for config purposes.
+        self._start_value = start_value
+        self._end_value = end_value
+
+        def check_special_value_type(value, value_name):
+            if isinstance(value, (int, str)):
+                return [value]
+            if value and not isinstance(value, (list, tuple)):
+                raise ValueError(
+                    f"{value_name} should be of type int/str/list/tuple."
+                    f"Received type: `{type(value)}`."
+                )
+            return value
+
+        start_value = check_special_value_type(start_value, "start_value")
+        end_value = check_special_value_type(end_value, "end_value")
+
         self.start_value = start_value
         self.end_value = end_value
+
         self.pad_value = pad_value
         self.return_padding_mask = return_padding_mask
 
@@ -128,6 +161,8 @@ class StartEndPacker(keras.layers.Layer):
 
         if not isinstance(x, (tf.Tensor, tf.RaggedTensor)):
             x = tf.convert_to_tensor(x)
+
+        dtype = x.dtype
 
         input_is_1d = x.shape.rank == 1
         if x.shape.rank < 1 or x.shape.rank > 2:
@@ -147,12 +182,18 @@ class StartEndPacker(keras.layers.Layer):
 
         # Concatenate start and end tokens.
         if add_start_value and self.start_value is not None:
-            start_token_id_tensor = tf.fill((batch_size, 1), self.start_value)
+            start_value = tf.convert_to_tensor(self.start_value, dtype=dtype)
+            start_token_id_tensor = tf.repeat(
+                start_value[tf.newaxis, :], repeats=batch_size, axis=0
+            )
             x = tf.concat([start_token_id_tensor, x], axis=-1)
         if add_end_value and self.end_value is not None:
-            end_token_id_tensor = tf.fill((batch_size, 1), self.end_value)
+            end_value = tf.convert_to_tensor(self.end_value, dtype=dtype)
+            end_token_id_tensor = tf.repeat(
+                end_value[tf.newaxis, :], repeats=batch_size, axis=0
+            )
             # Trim to leave room for end token.
-            x = x[..., : sequence_length - 1]
+            x = x[..., : sequence_length - len(self.end_value)]
             x = tf.concat([x, end_token_id_tensor], axis=-1)
 
         # Pad to desired length.
@@ -175,8 +216,8 @@ class StartEndPacker(keras.layers.Layer):
         config.update(
             {
                 "sequence_length": self.sequence_length,
-                "start_value": self.start_value,
-                "end_value": self.end_value,
+                "start_value": self._start_value,
+                "end_value": self._end_value,
                 "pad_value": self.pad_value,
                 "return_padding_mask": self.return_padding_mask,
             }

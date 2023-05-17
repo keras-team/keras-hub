@@ -62,6 +62,18 @@ class StartEndPackerTest(tf.test.TestCase):
         expected_output = [[1, 5, 6, 7, 2, 0], [1, 8, 9, 10, 11, 2]]
         self.assertAllEqual(output, expected_output)
 
+    def test_multiple_start_end_tokens(self):
+        input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11, 12, 13]])
+        start_end_packer = StartEndPacker(
+            sequence_length=8,
+            start_value=[1, 2],
+            end_value=[3, 4],
+            pad_value=0,
+        )
+        output = start_end_packer(input_data)
+        expected_output = [[1, 2, 5, 6, 7, 3, 4, 0], [1, 2, 8, 9, 10, 11, 3, 4]]
+        self.assertAllEqual(output, expected_output)
+
     def test_start_end_padding_value(self):
         input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]])
         start_end_packer = StartEndPacker(
@@ -96,6 +108,27 @@ class StartEndPackerTest(tf.test.TestCase):
             ["[START]", "amazing", "[END]", "[PAD]", "[PAD]"],
         ]
         self.assertAllEqual(output, expected_output)
+
+    def test_string_input_with_multiple_special_values(self):
+        input_data = tf.ragged.constant(
+            [["KerasNLP", "is", "awesome"], ["amazing"]]
+        )
+        start_end_packer = StartEndPacker(
+            sequence_length=6,
+            start_value=["[END]", "[START]"],
+            end_value="[END]",
+            pad_value="[PAD]",
+        )
+        output = start_end_packer(input_data)
+        expected_output = [
+            ["[END]", "[START]", "KerasNLP", "is", "awesome", "[END]"],
+            ["[END]", "[START]", "amazing", "[END]", "[PAD]", "[PAD]"],
+        ]
+        self.assertAllEqual(output, expected_output)
+
+    def test_special_token_dtype_error(self):
+        with self.assertRaises(ValueError):
+            StartEndPacker(sequence_length=5, start_value=1.0)
 
     def test_functional_model(self):
         input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]])
