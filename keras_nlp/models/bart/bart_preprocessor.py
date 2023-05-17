@@ -15,8 +15,6 @@
 
 import copy
 
-import tensorflow as tf
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.start_end_packer import StartEndPacker
 from keras_nlp.models.bart.bart_presets import backbone_presets
@@ -157,24 +155,23 @@ class BartPreprocessor(Preprocessor):
 
         # The decoder is packed a bit differently; the format is as follows:
         # `[end_token_id, start_token_id, tokens..., end_token_id, padding...]`.
-        # Hence, we pass `sequence_length - 1` to the packer.
         self.decoder_packer = StartEndPacker(
-            start_value=self.tokenizer.start_token_id,
+            start_value=[
+                self.tokenizer.end_token_id,
+                self.tokenizer.start_token_id,
+            ],
             end_value=self.tokenizer.end_token_id,
             pad_value=self.tokenizer.pad_token_id,
-            sequence_length=decoder_sequence_length - 1,
+            sequence_length=decoder_sequence_length,
+            return_padding_mask=True,
         )
-
-        # Maintain a private copy of the sequence lengths for config purposes.
-        self._encoder_sequence_length = encoder_sequence_length
-        self._decoder_sequence_length = decoder_sequence_length
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "encoder_sequence_length": self._encoder_sequence_length,
-                "decoder_sequence_length": self._decoder_sequence_length,
+                "encoder_sequence_length": self.encoder_packer.sequence_length,
+                "decoder_sequence_length": self.decoder_packer.sequence_length,
             }
         )
         return config
@@ -208,26 +205,15 @@ class BartPreprocessor(Preprocessor):
         )
 
         decoder_inputs = self.tokenizer(decoder_text[0])
-        decoder_token_ids = self.decoder_packer(decoder_inputs)
-
-        # Append `end_token_id` to the beginning of `decoder_token_ids`.
-        input_is_1d = decoder_token_ids.shape.rank == 1
-        if input_is_1d:
-            decoder_token_ids = decoder_token_ids[tf.newaxis, :]
-        batch_size = tf.shape(decoder_token_ids)[0]
-        end_token_ids = tf.fill((batch_size, 1), self.tokenizer.end_token_id)
-        decoder_token_ids = tf.concat(
-            [end_token_ids, decoder_token_ids], axis=1
+        decoder_token_ids, decoder_padding_mask = self.decoder_packer(
+            decoder_inputs
         )
-        if input_is_1d:
-            decoder_token_ids = tf.squeeze(decoder_token_ids, axis=0)
 
         x = {
             "encoder_token_ids": encoder_token_ids,
             "encoder_padding_mask": encoder_padding_mask,
             "decoder_token_ids": decoder_token_ids,
-            "decoder_padding_mask": decoder_token_ids
-            != self.tokenizer.pad_token_id,
+            "decoder_padding_mask": decoder_padding_mask,
         }
 
         return pack_x_y_sample_weight(x, y, sample_weight)
