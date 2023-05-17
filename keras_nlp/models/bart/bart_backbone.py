@@ -141,7 +141,9 @@ class BartBackbone(Backbone):
         )(token_embedding)
 
         # Sum, normalize and apply dropout to embeddings.
-        x = keras.layers.Add()((token_embedding, position_embedding))
+        x = keras.layers.Add(name="encoder_embeddings_add")(
+            (token_embedding, position_embedding)
+        )
         x = keras.layers.LayerNormalization(
             name="encoder_embeddings_layer_norm",
             axis=-1,
@@ -181,7 +183,9 @@ class BartBackbone(Backbone):
         )(token_embedding)
 
         # Sum, normalize and apply dropout to embeddings.
-        x = keras.layers.Add()((token_embedding, position_embedding))
+        x = keras.layers.Add(name="decoder_embeddings_add")(
+            (token_embedding, position_embedding)
+        )
         x = keras.layers.LayerNormalization(
             name="decoder_embeddings_layer_norm",
             axis=-1,

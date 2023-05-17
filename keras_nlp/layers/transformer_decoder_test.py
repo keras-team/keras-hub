@@ -284,37 +284,37 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         x = tf.random.uniform(
             shape=[batch_size, seq_len, num_heads * head_dim], dtype=dtype
         )
-        cache = tf.zeros(
+        self_attention_cache = tf.zeros(
             [batch_size, 2, seq_len, num_heads, head_dim], dtype=dtype
         )
         outputs = tf.zeros_like(x)
 
-        def call(outputs, cache):
-            def loop_body(i, outputs, cache):
+        def call(outputs, self_attention_cache):
+            def loop_body(i, outputs, self_attention_cache):
                 # Compute the rest tokens.
                 next_input = x[:, i : i + 1, :]
-                next_output, cache = layer(
+                next_output, self_attention_cache = layer(
                     decoder_sequence=next_input,
-                    cache=cache,
-                    cache_index=i,
+                    self_attention_cache=self_attention_cache,
+                    self_attention_cache_update_index=i,
                 )
                 outputs = dynamic_update_slice(outputs, next_output, [0, i, 0])
-                return i + 1, outputs, cache
+                return i + 1, outputs, self_attention_cache
 
-            _, outputs, cache = tf.while_loop(
-                cond=lambda i, outputs, cache: i < seq_len,
+            _, outputs, self_attention_cache = tf.while_loop(
+                cond=lambda i, outputs, self_attention_cache: i < seq_len,
                 body=loop_body,
-                loop_vars=[0, outputs, cache],
+                loop_vars=[0, outputs, self_attention_cache],
             )
-            return outputs, cache
+            return outputs, self_attention_cache
 
         call = call if eager else tf.function(call)
-        output, cache = call(outputs, cache)
+        output, self_attention_cache = call(outputs, self_attention_cache)
 
         no_loop_outputs = layer(x)
-        _, no_loop_cache = layer(x, cache=cache)
+        _, no_loop_cache = layer(x, self_attention_cache=self_attention_cache)
         self.assertAllClose(output, no_loop_outputs)
-        self.assertAllClose(cache, no_loop_cache)
+        self.assertAllClose(self_attention_cache, no_loop_cache)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),

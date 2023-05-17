@@ -206,7 +206,7 @@ class GPT2CausalLM(Task):
         self,
         token_ids,
         cache,
-        cache_index,
+        cache_update_index,
     ):
         """Forward pass of `GPT2CausalLM` with cache.
 
@@ -218,7 +218,7 @@ class GPT2CausalLM(Task):
         Args:
             token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
             cache: a dense float Tensor, the cache of key and value.
-            cache_index: int, or int Tensor. The index of current inputs in the
+            cache_update_index: int, or int Tensor. The index of current inputs in the
                 whole sequence.
 
         Returns:
@@ -229,7 +229,7 @@ class GPT2CausalLM(Task):
         """
         token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
         position_embedding = self.backbone.get_layer("position_embedding")(
-            token_embedding, start_index=cache_index
+            token_embedding, start_index=cache_update_index
         )
         x = self.backbone.get_layer("embeddings_add")(
             (token_embedding, position_embedding)
@@ -241,8 +241,8 @@ class GPT2CausalLM(Task):
             current_cache = caches[i]
             x, next_cache = self.backbone.get_layer(f"transformer_layer_{i}")(
                 x,
-                cache=current_cache,
-                cache_index=cache_index,
+                self_attention_cache=current_cache,
+                self_attention_cache_update_index=cache_update_index,
             )
             caches[i] = next_cache
         cache = tf.stack(caches, axis=1)
@@ -333,12 +333,12 @@ class GPT2CausalLM(Task):
 
         def next(prompt, cache, index):
             # The cache index is the index of our previous token.
-            cache_index = index - 1
-            prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
+            cache_update_index = index - 1
+            prompt = tf.slice(prompt, [0, cache_update_index], [-1, 1])
             logits, hidden_states, cache = self.call_with_cache(
                 prompt,
                 cache,
-                cache_index,
+                cache_update_index,
             )
             return (
                 tf.squeeze(logits, axis=1),
