@@ -143,6 +143,8 @@ class StartEndPacker(keras.layers.Layer):
         if not isinstance(x, (tf.Tensor, tf.RaggedTensor)):
             x = tf.convert_to_tensor(x)
 
+        dtype = x.dtype
+
         input_is_1d = x.shape.rank == 1
         if x.shape.rank < 1 or x.shape.rank > 2:
             raise ValueError(
@@ -161,13 +163,15 @@ class StartEndPacker(keras.layers.Layer):
 
         # Concatenate start and end tokens.
         if add_start_value and self.start_value is not None:
+            start_value = tf.convert_to_tensor(self.start_value, dtype=dtype)
             start_token_id_tensor = tf.repeat(
-                [self.start_value], repeats=batch_size, axis=0
+                start_value[tf.newaxis, :], repeats=batch_size, axis=0
             )
             x = tf.concat([start_token_id_tensor, x], axis=-1)
         if add_end_value and self.end_value is not None:
+            end_value = tf.convert_to_tensor(self.end_value, dtype=dtype)
             end_token_id_tensor = tf.repeat(
-                [self.end_value], repeats=batch_size, axis=0
+                end_value[tf.newaxis, :], repeats=batch_size, axis=0
             )
             # Trim to leave room for end token.
             x = x[..., : sequence_length - len(self.end_value)]
