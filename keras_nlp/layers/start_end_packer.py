@@ -134,7 +134,7 @@ class StartEndPacker(keras.layers.Layer):
         def check_special_value_type(value, value_name):
             if isinstance(value, (int, str)):
                 return [value]
-            elif value and not isinstance(value, (list, tuple)):
+            if value and not isinstance(value, (list, tuple)):
                 raise ValueError(
                     f"{value_name} should be of type int/str/list/tuple."
                     f"Received type: `{type(value)}`."
