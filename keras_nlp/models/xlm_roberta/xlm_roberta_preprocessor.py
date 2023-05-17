@@ -17,10 +17,8 @@
 import copy
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.preprocessor import Preprocessor
-from keras_nlp.models.roberta.roberta_preprocessor import (
-    RobertaMultiSegmentPacker,
-)
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
 from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
@@ -159,9 +157,10 @@ class XLMRobertaPreprocessor(Preprocessor):
 
         self.tokenizer = tokenizer
 
-        self.packer = RobertaMultiSegmentPacker(
+        self.packer = MultiSegmentPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
+            sep_value=[self.tokenizer.end_token_id] * 2,
             pad_value=self.tokenizer.pad_token_id,
             truncate=truncate,
             sequence_length=sequence_length,
@@ -180,7 +179,7 @@ class XLMRobertaPreprocessor(Preprocessor):
     def call(self, x, y=None, sample_weight=None):
         x = convert_inputs_to_list_of_tensor_segments(x)
         x = [self.tokenizer(segment) for segment in x]
-        token_ids = self.packer(x)
+        token_ids, _ = self.packer(x)
         x = {
             "token_ids": token_ids,
             "padding_mask": token_ids != self.tokenizer.pad_token_id,

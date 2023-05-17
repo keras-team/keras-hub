@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Transformer Decoder."""
+"""Tests for multi-segment packing."""
 
 import os
 
@@ -143,6 +143,52 @@ class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
                 [
                     [0, 0, 0, 1, 1, 0, 0],
                     [0, 0, 0, 1, 1, 1, 0],
+                ],
+            ),
+        )
+
+    def test_list_special_tokens(self):
+        seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b", "c"]])
+        seq2 = tf.ragged.constant([["x", "y", "z"], ["x"]])
+        packer = MultiSegmentPacker(
+            9,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            sep_value=["[SEP]", "[SEP]"],
+            pad_value="[PAD]",
+            truncate="round_robin",
+        )
+        output = packer([seq1, seq2])
+        self.assertAllEqual(
+            output,
+            (
+                [
+                    [
+                        "[CLS]",
+                        "a",
+                        "b",
+                        "c",
+                        "[SEP]",
+                        "[SEP]",
+                        "x",
+                        "y",
+                        "[SEP]",
+                    ],
+                    [
+                        "[CLS]",
+                        "a",
+                        "b",
+                        "c",
+                        "[SEP]",
+                        "[SEP]",
+                        "x",
+                        "[SEP]",
+                        "[PAD]",
+                    ],
+                ],
+                [
+                    [0, 0, 0, 0, 0, 0, 1, 1, 1],
+                    [0, 0, 0, 0, 0, 0, 1, 1, 0],
                 ],
             ),
         )
