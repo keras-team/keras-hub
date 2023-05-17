@@ -206,13 +206,8 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         of the inputted decoder prompt).
         """
         # If `sequence_length` is not provided, we use the default value.
-        # We decrement this value by one since we need to add `end_token_id` to
-        # the *beginning* of the decoder sequence.
-        sequence_length = (
-            sequence_length - 1
-            if sequence_length
-            else self._decoder_sequence_length - 1
-        )
+        if sequence_length is None:
+            sequence_length = self._decoder_sequence_length
 
         if isinstance(x, dict):
             encoder_text = x["encoder_text"]
@@ -232,27 +227,16 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             encoder_token_ids
         )
 
-        # Tokenize decoder inputs. We cannot use the preprocessor call directly
-        # since the `max_length` might be different. Moreover, the
-        # `BartSeq2SeqLMPreprocessor` layer generates inputs to the model for
-        # training; this function handles text generation (inference).
+        # Tokenize and pack the decoder inputs.
         decoder_text = convert_inputs_to_list_of_tensor_segments(decoder_text)[
             0
         ]
         decoder_token_ids = self.tokenizer(decoder_text)
-        decoder_token_ids = self.decoder_packer(
+        decoder_token_ids, decoder_padding_mask = self.decoder_packer(
             decoder_token_ids,
             sequence_length=sequence_length,
             add_end_value=False,
         )
-        # The decoder inputs have end token at the beginning of the sequence.
-        # We concatenate it here.
-        end_tokens = tf.fill(
-            (tf.shape(decoder_token_ids)[0], 1),
-            value=self.tokenizer.end_token_id,
-        )
-        decoder_token_ids = tf.concat([end_tokens, decoder_token_ids], axis=1)
-        decoder_padding_mask = decoder_token_ids != self.tokenizer.pad_token_id
 
         return {
             "encoder_token_ids": encoder_token_ids,
