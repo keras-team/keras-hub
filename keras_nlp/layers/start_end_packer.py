@@ -34,16 +34,16 @@ class StartEndPacker(keras.layers.Layer):
 
     Args:
         sequence_length: int. The desired output length.
-        start_value: int/str/list/tuple. The ID(s) or token(s) that is/are to be
+        start_value: int/str/list/tuple. The ID(s) or token(s) that are to be
             placed at the start of each sequence. The dtype must match the dtype
-            of the input tensors to the layer. If None, no start value will be
+            of the input tensors to the layer. If `None`, no start value will be
             added.
-        end_value: int/str/list/tuple. The ID(s) or token(s) that is/are to be
+        end_value: int/str/list/tuple. The ID(s) or token(s) that are to be
             placed at the end of each input segment. The dtype must match the
-            dtype of the input tensors to the layer. If None, no end value will
-            be added.
+            dtype of the input tensors to the layer. If `None`, no end value
+            will be added.
         pad_value: int/str. The ID or token that is to be placed into the
-            unused positions after the last segment in the sequence. If None,
+            unused positions after the last segment in the sequence. If `None`,
             0 or "" will be added depending on the dtype of the input tensor.
         return_padding_mask: bool. Whether to return a boolean padding mask of
             all locations that are filled in with the `pad_value`.
@@ -99,6 +99,18 @@ class StartEndPacker(keras.layers.Layer):
     array([[b'<s>', b'this', b'is', b'fun', b'</s>', b'<pad>'],
            [b'<s>', b'awesome', b'</s>', b'<pad>', b'<pad>', b'<pad>']],
           dtype=object)>
+
+    Multiple start tokens.
+    >>> input_data = tf.ragged.constant([["this", "is", "fun"], ["awesome"]])
+    >>> start_end_packer = keras_nlp.layers.StartEndPacker(
+    ...     sequence_length=6, start_value=["</s>", "<s>"], end_value="</s>",
+    ...     pad_value="<pad>"
+    ... )
+    >>> start_end_packer(input_data)
+    <tf.Tensor: shape=(2, 6), dtype=string, numpy=
+    array([[b'</s>', b'<s>', b'this', b'is', b'fun', b'</s>'],
+        [b'</s>', b'<s>', b'awesome', b'</s>', b'<pad>', b'<pad>']],
+        dtype=object)>
     """
 
     def __init__(
@@ -119,12 +131,19 @@ class StartEndPacker(keras.layers.Layer):
         self._start_value = start_value
         self._end_value = end_value
 
-        if start_value is not None and not isinstance(
-            start_value, (list, tuple)
-        ):
-            start_value = [start_value]
-        if end_value is not None and not isinstance(end_value, (list, tuple)):
-            end_value = [end_value]
+        def check_special_value_type(value, value_name):
+            if isinstance(value, (int, str)):
+                return [value]
+            elif value and not isinstance(value, (list, tuple)):
+                raise ValueError(
+                    f"{value_name} should be of type int/str/list/tuple."
+                    f"Received type: `{type(value)}`."
+                )
+            return value
+
+        start_value = check_special_value_type(start_value, "start_value")
+        end_value = check_special_value_type(end_value, "end_value")
+
         self.start_value = start_value
         self.end_value = end_value
 

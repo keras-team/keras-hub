@@ -126,6 +126,10 @@ class StartEndPackerTest(tf.test.TestCase):
         ]
         self.assertAllEqual(output, expected_output)
 
+    def test_special_token_dtype_error(self):
+        with self.assertRaises(ValueError):
+            StartEndPacker(sequence_length=5, start_value=1.0)
+
     def test_functional_model(self):
         input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]])
         start_end_packer = StartEndPacker(
