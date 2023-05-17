@@ -160,7 +160,7 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
         """Covert integer token output to strings for generation.
 
         This method reverses `generate_preprocess()`, by first removing all
-        padding and start/end tokens, and then converting the interger sequence
+        padding and start/end tokens, and then converting the integer sequence
         back to a string.
         """
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
