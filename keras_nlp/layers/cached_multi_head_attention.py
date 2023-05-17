@@ -28,16 +28,19 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
     to cache decoder self-attention and cross-attention. The forward pass
     can happen in one of three modes:
 
-        - No cache, same as regular multi-head attention.
-        - Static cache (`cache_update_index` is None). In this case, the
-          cached key/value projections will be used and the input values will
-          be ignored.
-        - Updated cache (`cache_update_index` is not None). In this case, new
-          key/value projections are computed using the input, and spliced into
-          the cache at the specified index.
+    - No cache, same as regular multi-head attention.
+    - Static cache (`cache_update_index` is None). In this case, the
+        cached key/value projections will be used and the input values will
+        be ignored.
+    - Updated cache (`cache_update_index` is not None). In this case, new
+        key/value projections are computed using the input, and spliced into
+        the cache at the specified index.
 
     Note that caching is useful only during inference and should not be used
     during training.
+
+    We use the notation `B`, `T`, `S` below, where `B` is the batch dimension,
+    `T` is the target sequence length, and `S` in the source sequence length.
 
     Call arguments:
         query: Query `Tensor` of shape `(B, T, dim)`.
@@ -66,8 +69,8 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
 
     Returns:
         An `(attention_output, cache)` tuple. `attention_output` is the result
-        of the computation, of shape `(B, T, E)`, where `T` is for target
-        sequence shapes and `E` is the query input last dimension if
+        of the computation, of shape `(B, T, dim)`, where `T` is for target
+        sequence shapes and `dim` is the query input last dimension if
         `output_shape` is `None`. Otherwise, the multi-head outputs are
         projected to the shape specified by `output_shape`. `cache` is the
         updated cache.
@@ -110,9 +113,9 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         else:
             if cache_update_index is not None:
                 raise ValueError(
-                    "`cache` is `None`, whereas `cache_update_index` is not "
-                    "`None`. Received "
-                    f"`cache_update_index = {cache_update_index}`"
+                    "`cache_update_index` should not be set if `cache` is "
+                    f"`None`. Received: cache={cache}, "
+                    f"cache_update_index={cache_update_index}"
                 )
             key = self._key_dense(key)
             value = self._value_dense(value)

@@ -237,30 +237,27 @@ class TransformerDecoder(keras.layers.Layer):
             encoder_attention_mask: a boolean Tensor. Customized encoder
                 sequence mask, must be of shape
                 `[batch_size, encoder_sequence_length, encoder_sequence_length]`.
-            self_attention_cache: a dense float Tensor. The cache of key/value
-                of leading tokens in the self-attention layer. Of shape
+            self_attention_cache: a dense float Tensor. The cache of key/values
+                pairs in the self-attention layer. Has shape
                 `[batch_size, 2, max_seq_len, num_heads, key_dims]`.
             self_attention_cache_update_index: an int or int Tensor, the index
                 at which to update the `self_attention_cache`. Usually, this is
                 the index of the current token being processed during decoding.
             cross_attention_cache: a dense float Tensor. The cache of
-                key/value pairs of `encoder_sequence`. `cache` is of shape
+                key/value pairs in the cross-attention layer. Has shape
                 `[batch_size, 2, S, num_heads, key_dims]`.
             cross_attention_cache_update_index:  an int or int Tensor, the index
                 at which to update the `cross_attention_cache`. Usually, this is
                 either `0` (compute the entire `cross_attention_cache`), or
                 `None` (reuse a previously computed `cross_attention_cache`).
         Returns:
-            Returns either just `outputs` or a tuple of outputs and cache(s)
-            based on the following conditions:
-            - If the layer does not have a cross-attention layer
-                - If `self_attention_cache` is not `None`: return a tuple of
-                  `(outputs, self_attention_cache)`.
-                - If `self_attention_cache` is `None`: return `outputs`.
-            - If the layer has a cross-attention layer
-                - If `cross_attention_cache` is not `None`: return a tuple of
-                  `(outputs, self_attention_cache, cross_attention_cache)`.
-                - If `cross_attention_cache` is `None`: return `outputs`.
+            One of three things, depending on call arguments:
+            - `outputs`, if `self_attention_cache` is `None.
+            - `(outputs, self_attention_cache)`, if `self_attention_cache` is
+              set and the layer has no cross-attention.
+            - `(outputs, self_attention_cache, cross_attention_cache)`, if
+              `self_attention_cache` and `cross_attention_cache` are set and
+              the layer has cross-attention.
         """
 
         has_encoder_sequence = encoder_sequence is not None
@@ -295,12 +292,13 @@ class TransformerDecoder(keras.layers.Layer):
             has_self_attention_cache != has_cross_attention_cache
         ):
             raise ValueError(
-                "Since the layer has a cross-attention layer, both "
-                "`self_attention_cache` and `cross_attention_cache` should "
-                "either be `None` or have non-`None` values together, i.e., "
-                "one cannot be `None` while the other is not. Received: "
-                f"`self_attention_cache` = {self_attention_cache}, "
-                f"`cross_attention_cache` = {cross_attention_cache}."
+                "When calling `keras_nlp.layers.TransformerDecoder` with "
+                "cross-attention (with both `encoder_sequence` and "
+                "`decoder_sequence`), `self_attention_cache` and "
+                "`cross_attention_cache` should both be set or both be `None`. "
+                "One cannot be `None` while the other is not. Received: "
+                f"self_attention_cache={self_attention_cache}, "
+                f"cross_attention_cache={cross_attention_cache}."
             )
 
         x = decoder_sequence  # Intermediate result.
