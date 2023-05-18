@@ -15,7 +15,7 @@
 
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
+from tensorflow.python.ops.gen_array_ops import tensor_strided_slice_update
 
 from keras_nlp.api_export import keras_nlp_export
 
@@ -106,9 +106,22 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             else:
                 key_update = self._key_dense(key)
                 value_update = self._value_dense(value)
-                start = [0, cache_update_index, 0, 0]
-                key = dynamic_update_slice(key_cache, key_update, start)
-                value = dynamic_update_slice(value_cache, value_update, start)
+                begin = tf.stack([0, cache_update_index, 0, 0])
+                strides = [1, 1, 1, 1]
+                key = tensor_strided_slice_update(
+                    input=key_cache,
+                    value=key_update,
+                    begin=begin,
+                    end=begin + tf.shape(key_update),
+                    strides=strides,
+                )
+                value = tensor_strided_slice_update(
+                    input=value_cache,
+                    value=value_update,
+                    begin=begin,
+                    end=begin + tf.shape(value_update),
+                    strides=strides,
+                )
                 cache = tf.stack((key, value), axis=1)
         else:
             if cache_update_index is not None:
