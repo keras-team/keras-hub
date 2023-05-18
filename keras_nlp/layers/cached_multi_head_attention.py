@@ -41,6 +41,8 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
 
     We use the notation `B`, `T`, `S` below, where `B` is the batch dimension,
     `T` is the target sequence length, and `S` in the source sequence length.
+    Note that during generative decoding, `T` is usually 1 (you are
+    generating a target sequence of length one to predict the next token).
 
     Call arguments:
         query: Query `Tensor` of shape `(B, T, dim)`.
@@ -53,19 +55,19 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             `attention_mask`. If `cache` is not `None`, `S*` can be any length
             less than `S`, and the computed value will be spliced into `cache`
             at `cache_update_index`.
-        attention_mask: a boolean mask of shape `(B, T, S)` if `cache=None`,
-            otherwise `(B, 1, S)`. `attention_mask` prevents
-            attention to certain positions. The boolean mask specifies which
-            query elements can attend to which key elements, 1 indicates
+        attention_mask: a boolean mask of shape `(B, T, S)`. `attention_mask`
+            prevents attention to certain positions. The boolean mask specifies
+            which query elements can attend to which key elements, 1 indicates
             attention and 0 indicates no attention. Broadcasting can happen for
             the missing batch dimensions and the head dimension.
         cache: a dense float Tensor. The key/value cache, of shape
             `[B, 2, S, num_heads, key_dims]`, where `S` must agree with the
-            `attention_mask` shape. This argument should only be used during
-            inference-time decoding.
-        cache_update_index: a int or int Tensor, the index of the current token
-            being processed. If `cache_update_index=None` while `cache` is set,
-            the cache will not be updated.
+            `attention_mask` shape. This argument is intended for use during
+            generation to avoid recomputing intermediate state.
+        cache_update_index: a int or int Tensor, the index at which to update
+            `cache` (usually the index of the current token being processed
+            when running generation). If `cache_update_index=None` while `cache`
+            is set, the cache will not be updated.
 
     Returns:
         An `(attention_output, cache)` tuple. `attention_output` is the result
