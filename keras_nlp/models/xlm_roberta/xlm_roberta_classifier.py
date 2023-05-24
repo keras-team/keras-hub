@@ -198,7 +198,7 @@ class XLMRobertaClassifier(Task):
                 from_logits=activation is None
             ),
             optimizer=keras.optimizers.Adam(5e-5),
-            metrics=keras.metrics.SparseCategoricalAccuracy(),
+            metrics=[keras.metrics.SparseCategoricalAccuracy()],
             jit_compile=is_xla_compatible(self),
         )
 
