@@ -22,7 +22,9 @@ class T5LayerNorm(keras.layers.Layer):
 
     def build(self, input_shape):
         self.weight = self.add_weight(
-            "weight", shape=(input_shape[-1],), initializer="ones"
+            name="weight",
+            shape=(input_shape[-1],),
+            initializer="ones",
         )
 
     def call(self, hidden_states):
