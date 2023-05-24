@@ -95,7 +95,7 @@ class PositionEmbedding(keras.layers.Layer):
     def build(self, input_shape):
         feature_size = input_shape[-1]
         self.position_embeddings = self.add_weight(
-            "embeddings",
+            name="embeddings",
             shape=[self.sequence_length, feature_size],
             initializer=self.initializer,
             trainable=True,
