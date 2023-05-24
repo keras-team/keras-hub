@@ -387,12 +387,23 @@ def main(_):
     dataset = dataset.repeat()
 
     with strategy.scope():
+        inputs = {
+            "token_ids": keras.Input(
+                shape=(None,), dtype="int32", name="token_ids"
+            ),
+            "segment_ids": keras.Input(
+                shape=(None,), dtype="int32", name="segment_ids"
+            ),
+            "padding_mask": keras.Input(
+                shape=(None,), dtype="int32", name="padding_mask"
+            ),
+        }
         # Create a Bert model the input config.
         encoder = keras_nlp.models.BertBackbone(
             vocabulary_size=len(vocab), **model_config
         )
         # Make sure model has been called.
-        encoder(encoder.inputs)
+        encoder(inputs)
         encoder.summary()
 
         # Allow overriding train steps from the command line for quick testing.

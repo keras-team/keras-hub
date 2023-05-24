@@ -107,12 +107,17 @@ class FNetMaskedLM(Task):
         **kwargs,
     ):
         inputs = {
-            **backbone.input,
+            "token_ids": keras.Input(
+                shape=(None,), dtype="int32", name="token_ids"
+            ),
+            "segment_ids": keras.Input(
+                shape=(None,), dtype="int32", name="segment_ids"
+            ),
             "mask_positions": keras.Input(
                 shape=(None,), dtype="int32", name="mask_positions"
             ),
         }
-        backbone_outputs = backbone(backbone.input)
+        backbone_outputs = backbone(inputs)
         outputs = MaskedLMHead(
             vocabulary_size=backbone.vocabulary_size,
             embedding_weights=backbone.token_embedding.embeddings,

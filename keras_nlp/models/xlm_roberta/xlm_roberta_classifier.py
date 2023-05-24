@@ -162,7 +162,14 @@ class XLMRobertaClassifier(Task):
         dropout=0.0,
         **kwargs,
     ):
-        inputs = backbone.input
+        inputs = {
+            "token_ids": keras.Input(
+                shape=(None,), dtype="int32", name="token_ids"
+            ),
+            "padding_mask": keras.Input(
+                shape=(None,), dtype="int32", name="padding_mask"
+            ),
+        }
         hidden_dim = hidden_dim or backbone.hidden_dim
 
         x = backbone(inputs)[:, backbone.start_token_index, :]

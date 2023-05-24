@@ -114,6 +114,14 @@ class FNetClassifier(Task):
         dropout=0.1,
         **kwargs,
     ):
+        inputs = {
+            "token_ids": keras.Input(
+                shape=(None,), dtype="int32", name="token_ids"
+            ),
+            "segment_ids": keras.Input(
+                shape=(None,), dtype="int32", name="segment_ids"
+            ),
+        }
         inputs = backbone.input
         pooled = backbone(inputs)["pooled_output"]
         pooled = keras.layers.Dropout(dropout)(pooled)

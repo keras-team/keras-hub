@@ -146,7 +146,17 @@ class BertClassifier(Task):
         dropout=0.1,
         **kwargs,
     ):
-        inputs = backbone.input
+        inputs = {
+            "token_ids": keras.Input(
+                shape=(None,), dtype="int32", name="token_ids"
+            ),
+            "segment_ids": keras.Input(
+                shape=(None,), dtype="int32", name="segment_ids"
+            ),
+            "padding_mask": keras.Input(
+                shape=(None,), dtype="int32", name="padding_mask"
+            ),
+        }
         pooled = backbone(inputs)["pooled_output"]
         pooled = keras.layers.Dropout(dropout)(pooled)
         outputs = keras.layers.Dense(

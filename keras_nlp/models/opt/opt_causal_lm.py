@@ -160,7 +160,14 @@ class OPTCausalLM(Task):
         preprocessor=None,
         **kwargs,
     ):
-        inputs = backbone.input
+        inputs = {
+            "token_ids": keras.Input(
+                shape=(None,), dtype="int32", name="token_ids"
+            ),
+            "padding_mask": keras.Input(
+                shape=(None,), dtype="int32", name="padding_mask"
+            ),
+        }
         x = backbone(inputs)
         # Use token embedding weights to project from the token representation
         # to vocabulary logits.

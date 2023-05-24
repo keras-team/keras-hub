@@ -190,7 +190,20 @@ class BartSeq2SeqLM(Task):
         preprocessor=None,
         **kwargs,
     ):
-        inputs = backbone.input
+        inputs = {
+            "encoder_token_ids": keras.Input(
+                shape=(None,), dtype="int32", name="encoder_token_ids"
+            ),
+            "encoder_padding_mask": keras.Input(
+                shape=(None,), dtype="int32", name="encoder_padding_mask"
+            ),
+            "decoder_token_ids": keras.Input(
+                shape=(None,), dtype="int32", name="decoder_token_ids"
+            ),
+            "decoder_padding_mask": keras.Input(
+                shape=(None,), dtype="int32", name="decoder_padding_mask"
+            ),
+        }
         x = backbone(inputs)["decoder_sequence_output"]
         # Use token embedding weights to project from the token representation
         # to vocabulary logits.
