@@ -103,7 +103,7 @@ def train_model(
     model.compile(
         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         optimizer=keras.optimizers.Adam(5e-5),
-        metrics=keras.metrics.SparseCategoricalAccuracy(),
+        metrics=[keras.metrics.SparseCategoricalAccuracy()],
         jit_compile=True,
     )
 
