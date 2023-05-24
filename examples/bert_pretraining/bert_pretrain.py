@@ -146,7 +146,7 @@ class MaskedLMHead(keras.layers.Layer):
             axis=-1, epsilon=1e-12, name="transform/LayerNorm"
         )
         self.bias = self.add_weight(
-            "output_bias/bias",
+            name="output_bias/bias",
             shape=(self._vocab_size,),
             initializer="zeros",
             trainable=True,
