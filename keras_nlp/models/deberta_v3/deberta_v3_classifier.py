@@ -59,9 +59,10 @@ class DebertaV3Classifier(Task):
         preprocessor: A `keras_nlp.models.DebertaV3Preprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
-        activation: Optional `str` or callable, defaults to `None`. The
+        activation: Optional `str` or callable. The
             activation function to use on the model outputs. Set
             `activation="softmax"` to return output probabilities.
+            Defaults to `None`.
         hidden_dim: int. The size of the pooler layer.
         dropout: float. Dropout probability applied to the pooled output. For
             the second dropout layer, `backbone.dropout` is used.

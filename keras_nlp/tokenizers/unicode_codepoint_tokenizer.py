@@ -67,7 +67,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
             formatting in the input and produce no corresponding output
             character.
         replacement_char: The unicode codepoint to use in place of invalid
-            codepoints. Defaults to 65533 (U+FFFD).
+            codepoints. (U+FFFD) is `65533`. Defaults to `65533`.
         input_encoding: One of ("UTF-8", "UTF-16-BE", or "UTF-32-BE").
             One of The encoding of the input text. Defaults to "UTF-8".
         output_encoding: One of ("UTF-8", "UTF-16-BE", or "UTF-32-BE").

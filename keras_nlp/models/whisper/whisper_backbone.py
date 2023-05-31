@@ -59,7 +59,7 @@ class WhisperBackbone(Backbone):
         hidden_dim: int. The size of the transformer encoding and pooler layers.
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
-        num_mels: int, defaults to 80. The number of mel-frequency filters.
+        num_mels: int. The number of mel-frequency filters. Defaults to `80`.
         dropout: float. Dropout probability for the Transformer encoder.
         max_encoder_sequence_length: int. The maximum sequence length that the
             audio encoder can consume. Since the second convolutional layer in

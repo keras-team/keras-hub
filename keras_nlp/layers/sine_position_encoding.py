@@ -41,7 +41,7 @@ class SinePositionEncoding(keras.layers.Layer):
     Args:
         max_wavelength: The maximum angular wavelength of the sine/cosine
             curves, as described in Attention is All You Need. Defaults to
-            10000.
+            `10000`.
 
     Examples:
     ```python
