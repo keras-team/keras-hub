@@ -43,10 +43,10 @@ class DisentangledSelfAttention(keras.layers.Layer):
         dropout: float. Dropout probability. Defaults to `0.1`.
         kernel_initializer: string or `keras.initializers` initializer.
             The kernel initializer for the dense layers.
-            Defaults to "glorot_uniform".
+            Defaults to `"glorot_uniform"`.
         bias_initializer: string or `keras.initializers` initializer.
             The bias initializer for the dense layers.
-            Defaults to "zeros".
+            Defaults to `"zeros"`.
     """
 
     def __init__(

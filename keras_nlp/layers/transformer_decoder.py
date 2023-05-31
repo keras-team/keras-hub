@@ -61,15 +61,15 @@ class TransformerDecoder(keras.layers.Layer):
             MultiHeadAttention and feedforward network. Defaults to `0.`.
         activation: string or `keras.activations`. the
             activation function of feedforward network.
-            Defaults to "relu".
+            Defaults to `"relu"`.
         layer_norm_epsilon: float. The eps value in layer
             normalization components. Defaults to `1e-5`.
         kernel_initializer: string or `keras.initializers` initializer.
             The kernel initializer for the dense and multiheaded
-            attention layers. Defaults to "glorot_uniform".
+            attention layers. Defaults to `"glorot_uniform"`.
         bias_initializer: string or `keras.initializers` initializer.
             The bias initializer for the dense and multiheaded
-            attention layers. Defaults to "zeros".
+            attention layers. Defaults to `"zeros"`.
         normalize_first: bool. If True, the inputs to the
             attention layer(s) and the intermediate dense layer are normalized
             (similar to GPT-2). If set to False, outputs of attention layer and

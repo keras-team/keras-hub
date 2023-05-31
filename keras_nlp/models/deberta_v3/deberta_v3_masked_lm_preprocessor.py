@@ -56,7 +56,7 @@ class DebertaV3MaskedLMPreprocessor(DebertaV3Preprocessor):
             Defaults to `0.8`.
         random_token_rate: float. `random_token_rate` must be
             between 0 and 1 which indicates how often a random token is
-            substituted for tokens selected for masking. Default is 0.1.
+            substituted for tokens selected for masking.
             Note: mask_token_rate + random_token_rate <= 1,  and for
             (1 - mask_token_rate - random_token_rate), the token will not be
             changed. Defaults to `0.1`.

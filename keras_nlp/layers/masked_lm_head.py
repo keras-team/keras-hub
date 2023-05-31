@@ -60,10 +60,10 @@ class MaskedLMHead(keras.layers.Layer):
             normalization components. Defaults to `1e-5`.
         kernel_initializer: string or `keras.initializers` initializer.
             The kernel initializer for the dense and multiheaded
-            attention layers. Defaults to "glorot_uniform".
+            attention layers. Defaults to `"glorot_uniform"`.
         bias_initializer: string or `keras.initializers` initializer.
             The bias initializer for the dense and multiheaded
-            attention layers. Defaults to "zeros".
+            attention layers. Defaults to `"zeros"`.
         name: string. The name of the layer. Defaults to `None`.
         **kwargs: other keyword arguments.
 

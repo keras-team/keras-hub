@@ -52,15 +52,15 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
             Defaults to `0.0`.
         activation: string or `keras.activations`. the
             activation function of feedforward network.
-            Defaults to "relu".
+            Defaults to `"relu"`.
         layer_norm_epsilon: float. The epsilon value in layer
             normalization components. Defaults to `1e-5`.
         kernel_initializer: string or `keras.initializers` initializer.
             The kernel initializer for the dense and disentangled
-            self-attention layers. Defaults to "glorot_uniform".
+            self-attention layers. Defaults to `"glorot_uniform"`.
         bias_initializer: string or `keras.initializers` initializer.
             The bias initializer for the dense and disentangled
-            self-attention layers. Defaults to "zeros".
+            self-attention layers. Defaults to `"zeros"`.
     """
 
     def __init__(

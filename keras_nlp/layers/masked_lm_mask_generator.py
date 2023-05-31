@@ -45,18 +45,16 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         mask_selection_length: int. Maximum number of tokens
             selected for  masking in each sequence. If set, the output
             `mask_positions`, `mask_ids` and `mask_weights` will be padded
-            to dense tensors of length `mask_selection_length`,
-            otherwise the output will be a RaggedTensor.
-            Defaults to `None`.
+            to dense tensors of length `mask_selection_length`, otherwise
+            the output will be a RaggedTensor. Defaults to `None`.
         unselectable_token_ids: A list of tokens, [0] is default
             `padding_token_id`. Defaults to `[0]`.
         mask_token_rate: float. `mask_token_rate` must be
             between 0 and 1 which indicates how often the mask_token is
-            substituted for tokens selected for masking.
-            Defaults to `0.8`.
+            substituted for tokens selected for masking. Defaults to `0.8`.
         random_token_rate: float. `random_token_rate` must be
             between 0 and 1 which indicates how often a random token is
-            substituted for tokens selected for masking. Default is 0.1.
+            substituted for tokens selected for masking.
             Note: mask_token_rate + random_token_rate <= 1,  and for
             (1 - mask_token_rate - random_token_rate), the token will not be
             changed. Defaults to `0.1`.

@@ -35,7 +35,7 @@ class RelativeEmbedding(keras.layers.Layer):
             normalization layer.
         kernel_initializer: string or `keras.initializers` initializer.
             The kernel initializer for the dense embedding.
-            Defaults to "glorot_uniform".
+            Defaults to `"glorot_uniform"`.
     """
 
     def __init__(

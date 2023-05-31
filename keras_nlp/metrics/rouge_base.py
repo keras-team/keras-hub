@@ -40,7 +40,7 @@ class RougeBase(keras.metrics.Metric):
 
     Args:
         variant: string. One of "rougeN", "rougeL". For "rougeN", N lies in
-            the range [1, 9]. Defaults to "rouge2".
+            the range [1, 9]. Defaults to `"rouge2"`.
         use_stemmer: bool. Whether Porter Stemmer should be used to strip word
             suffixes to improve matching. Defaults to `False`.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
