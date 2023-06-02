@@ -47,6 +47,9 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
             `mask_positions`, `mask_ids` and `mask_weights` will be padded
             to dense tensors of length `mask_selection_length`, otherwise
             the output will be a RaggedTensor. Defaults to `None`.
+        unselectable_token_ids: A list of tokens id that should not be
+            considered eligible for masking. By default, we assume `0`
+            corresponds to a padding token and ignore it. Defaults to `[0]`.
         unselectable_token_ids: A list of tokens, [0] is default
             `padding_token_id`. Defaults to `[0]`.
         mask_token_rate: float. `mask_token_rate` must be
