@@ -528,6 +528,9 @@ class BartSeq2SeqLM(Task):
             num_samples = tf.shape(prompt)[0]
 
             def repeat_tensor(x):
+                """Repeats tensors along batch axis to match dim for beam search."""
+                if tf.shape(x)[0] == num_samples:
+                    return x
                 return tf.repeat(x, repeats=num_samples // batch_size, axis=0)
 
             logits, hidden_states, cache, _ = self.call_decoder_with_cache(
