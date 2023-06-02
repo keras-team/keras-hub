@@ -33,9 +33,9 @@ class RelativeEmbedding(keras.layers.Layer):
         bucket_size: int. The size of the relative position buckets.
         layer_norm_epsilon: float. Epsilon value to initialize the layer
             normalization layer.
-        kernel_initializer: string or `keras.initializers` initializer,
-            defaults to "glorot_uniform". The kernel initializer for
-            the dense embedding.
+        kernel_initializer: string or `keras.initializers` initializer.
+            The kernel initializer for the dense embedding.
+            Defaults to `"glorot_uniform"`.
     """
 
     def __init__(

@@ -42,22 +42,25 @@ class DisentangledAttentionEncoder(keras.layers.Layer):
     Args:
         intermediate_dim: int, the hidden size of feedforward network.
         num_heads: int, the number of heads in the attention layer.
-        max_position_embeddings: int, defaults to 512. The maximum input
-            sequence length.
-        bucket_size: int, defaults to 256. The size of the relative position
+        max_position_embeddings: int. The maximum input
+            sequence length. Defaults to `512`.
+        bucket_size: int. The size of the relative position
             buckets. Generally equal to `max_sequence_length // 2`.
-        dropout: float, defaults to 0.0. The dropout value, shared by
+            Defaults to `256`.
+        dropout: float. The dropout value, shared by
             the attention layer and feedforward network.
-        activation: string or `keras.activations`, defaults to "relu". the
+            Defaults to `0.0`.
+        activation: string or `keras.activations`. the
             activation function of feedforward network.
-        layer_norm_epsilon: float, defaults to 1e-5. The epsilon value in layer
-            normalization components.
-        kernel_initializer: string or `keras.initializers` initializer,
-            defaults to "glorot_uniform". The kernel initializer for
-            the dense and disentangled self-attention layers.
-        bias_initializer: string or `keras.initializers` initializer,
-            defaults to "zeros". The bias initializer for
-            the dense and disentangled self-attention layers.
+            Defaults to `"relu"`.
+        layer_norm_epsilon: float. The epsilon value in layer
+            normalization components. Defaults to `1e-5`.
+        kernel_initializer: string or `keras.initializers` initializer.
+            The kernel initializer for the dense and disentangled
+            self-attention layers. Defaults to `"glorot_uniform"`.
+        bias_initializer: string or `keras.initializers` initializer.
+            The bias initializer for the dense and disentangled
+            self-attention layers. Defaults to `"zeros"`.
     """
 
     def __init__(

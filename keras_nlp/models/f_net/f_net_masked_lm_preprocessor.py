@@ -45,15 +45,15 @@ class FNetMaskedLMPreprocessor(FNetPreprocessor):
             masked.
         mask_selection_length: The maximum number of masked tokens supported
             by the layer.
-        mask_token_rate: float, defaults to 0.8. `mask_token_rate` must be
+        mask_token_rate: float. `mask_token_rate` must be
             between 0 and 1 which indicates how often the mask_token is
-            substituted for tokens selected for masking.
-        random_token_rate: float, defaults to 0.1. `random_token_rate` must be
+            substituted for tokens selected for masking. Defaults to `0.8`.
+        random_token_rate: float. `random_token_rate` must be
             between 0 and 1 which indicates how often a random token is
-            substituted for tokens selected for masking. Default is 0.1.
+            substituted for tokens selected for masking.
             Note: mask_token_rate + random_token_rate <= 1,  and for
             (1 - mask_token_rate - random_token_rate), the token will not be
-            changed.
+            changed. Defaults to `0.1`.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
             `round_robin` or `waterfall`:

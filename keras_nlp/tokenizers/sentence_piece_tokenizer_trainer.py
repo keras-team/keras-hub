@@ -43,13 +43,14 @@ def compute_sentence_piece_proto(
     Args:
         data: A `tf.data.Dataset`, or a list of filenames.
         vocabulary_size: int. The maximum size of a vocabulary to be trained.
-        model_type: str, defaults to `"unigram"`. The model algorithm must be one
-            of `"unigram"`, `"bpe"`, `"word"` or `"char"`.
-        proto_output_file: str, defaults to `None`. If provided it will be used
+        model_type: str. The model algorithm must be one of
+            `"unigram"`, `"bpe"`, `"word"` or `"char"`. Defaults to `"unigram"`.
+        proto_output_file: str. If provided it will be used
             as model_file which is passed to model_writer.
             If `None`, the model_file will be `io.BytesIO` object.
-        lowercase: bool, defaults to `False`. If true, the input text will be
-            lowercased before tokenization.
+            Defaults to `None`.
+        lowercase: bool. If True, the input text will be
+            lowercased before tokenization. Defaults to `False`.
 
     Returns:
         A `bytes` object with a serialized SentencePiece proto or

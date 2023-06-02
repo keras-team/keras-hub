@@ -32,7 +32,7 @@ class TopKSampler(Sampler):
 
     Args:
         k: int, the `k` value of top-k.
-        seed: int, defaults to None. The random seed.
+        seed: int. The random seed. Defaults to `None`.
 
     Call arguments:
         {{call_args}}

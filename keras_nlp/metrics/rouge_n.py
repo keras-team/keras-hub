@@ -33,11 +33,11 @@ class RougeN(RougeBase):
 
     Args:
         order: The order of n-grams which are to be matched. It should lie in
-            range [1, 9]. Defaults to 2.
+            range [1, 9]. Defaults to `2`.
         use_stemmer: bool. Whether Porter Stemmer should be used to strip word
-            suffixes to improve matching. Defaults to False.
+            suffixes to improve matching. Defaults to `False`.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
-               not specified, it defaults to tf.float32.
+               not specified, it defaults to `tf.float32`.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
 

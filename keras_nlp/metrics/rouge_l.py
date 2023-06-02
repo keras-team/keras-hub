@@ -33,9 +33,9 @@ class RougeL(RougeBase):
 
     Args:
         use_stemmer: bool. Whether Porter Stemmer should be used to strip word
-            suffixes to improve matching. Defaults to False.
+            suffixes to improve matching. Defaults to `False`.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
-               not specified, it defaults to tf.float32.
+               not specified, it defaults to `tf.float32`.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
 

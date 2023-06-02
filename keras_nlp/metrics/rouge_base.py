@@ -39,12 +39,12 @@ class RougeBase(keras.metrics.Metric):
     inputs of shapes `()`, `(batch_size,)` and `(batch_size, 1)`.
 
     Args:
-        variant: string. One of "rougeN", "rougeL". Defaults to
-            "rouge2". For "rougeN", N lies in the range [1, 9].
+        variant: string. One of "rougeN", "rougeL". For "rougeN", N lies in
+            the range [1, 9]. Defaults to `"rouge2"`.
         use_stemmer: bool. Whether Porter Stemmer should be used to strip word
-            suffixes to improve matching. Defaults to False.
+            suffixes to improve matching. Defaults to `False`.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
-            not specified, it defaults to tf.float32.
+            not specified, it defaults to `tf.float32`.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
 

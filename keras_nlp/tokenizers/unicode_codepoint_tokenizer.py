@@ -50,7 +50,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     an integer type (tf.int16, tf.int32, etc.).
 
     Args:
-        lowercase: If true, the input text will be first lowered before
+        lowercase: If `True`, the input text will be first lowered before
             tokenization.
         sequence_length: If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of sequence_length.
@@ -67,11 +67,11 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
             formatting in the input and produce no corresponding output
             character.
         replacement_char: The unicode codepoint to use in place of invalid
-            codepoints. Defaults to 65533 (U+FFFD).
+            codepoints. (U+FFFD) is `65533`. Defaults to `65533`.
         input_encoding: One of ("UTF-8", "UTF-16-BE", or "UTF-32-BE").
-            One of The encoding of the input text. Defaults to "UTF-8".
+            One of The encoding of the input text. Defaults to `"UTF-8"`.
         output_encoding: One of ("UTF-8", "UTF-16-BE", or "UTF-32-BE").
-            The encoding of the output text. Defaults to "UTF-8".
+            The encoding of the output text. Defaults to `"UTF-8"`.
         vocabulary_size: Set the vocabulary `vocabulary_size`,
             by clamping all codepoints to the range [0, vocabulary_size).
             Effectively this will make the `vocabulary_size - 1` id the

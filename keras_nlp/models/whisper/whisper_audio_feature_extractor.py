@@ -33,15 +33,16 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
     `(max_audio_length * sampling_rate) / stride`.
 
     Args:
-        num_mels: int, defaults to 80. The number of mel-frequency filters.
-        num_fft_bins: int, defaults to 400. The size of the Fourier Transform in
-            STFT.
-        stride: int, defaults to 160. The distance between neighboring
+        num_mels: int. The number of mel-frequency filters. Defaults to `80`.
+        num_fft_bins: int. The size of the Fourier Transform in STFT.
+            Defaults to `400`.
+        stride: int. The distance between neighboring
             sliding window frames while computing STFT.
-        sampling_rate: int, defaults to 16000. The sample rate of the audio.
-        max_audio_length: int, defaults to 30. The length of each audio chunk in
+            Defaults to `160`.
+        sampling_rate: int. The sample rate of the audio. Defaults to `16000`.
+        max_audio_length: int. The length of each audio chunk in
             seconds. The input audio tensor will be padded/trimmed to
-            `max_audio_length * sampling_rate`.
+            `max_audio_length * sampling_rate`. Defaults to `30`.
 
     Examples:
 

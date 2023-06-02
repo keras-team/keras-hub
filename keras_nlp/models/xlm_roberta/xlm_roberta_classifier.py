@@ -54,9 +54,9 @@ class XLMRobertaClassifier(Task):
         preprocessor: A `keras_nlp.models.XLMRobertaPreprocessor` or `None`. If
             `None`, this model will not apply preprocessing, and inputs should
             be preprocessed before calling the model.
-        activation: Optional `str` or callable, defaults to `None`. The
-            activation function to use on the model outputs. Set
-            `activation="softmax"` to return output probabilities.
+        activation: Optional `str` or callable. The activation function to use
+            on the model outputs. Set `activation="softmax"` to return output
+            probabilities. Defaults to `None`.
         hidden_dim: int. The size of the pooler layer.
         dropout: float. The dropout probability value, applied to the pooled
             output, and after the first dense layer.

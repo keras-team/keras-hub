@@ -57,23 +57,25 @@ class TransformerDecoder(keras.layers.Layer):
     Args:
         intermediate_dim: int, the hidden size of feedforward network.
         num_heads: int, the number of heads in MultiHeadAttention.
-        dropout: float, defaults to 0. the dropout value, shared by
-            MultiHeadAttention and feedforward network.
-        activation: string or `keras.activations`, defaults to "relu". the
+        dropout: float. the dropout value, shared by
+            MultiHeadAttention and feedforward network. Defaults to `0.`.
+        activation: string or `keras.activations`. the
             activation function of feedforward network.
-        layer_norm_epsilon: float, defaults to 1e-5. The eps value in layer
-            normalization components.
-        kernel_initializer: string or `keras.initializers` initializer,
-            defaults to "glorot_uniform". The kernel initializer for
-            the dense and multiheaded attention layers.
-        bias_initializer: string or `keras.initializers` initializer,
-            defaults to "zeros". The bias initializer for
-            the dense and multiheaded attention layers.
-        normalize_first: bool. Defaults to False. If True, the inputs to the
+            Defaults to `"relu"`.
+        layer_norm_epsilon: float. The eps value in layer
+            normalization components. Defaults to `1e-5`.
+        kernel_initializer: string or `keras.initializers` initializer.
+            The kernel initializer for the dense and multiheaded
+            attention layers. Defaults to `"glorot_uniform"`.
+        bias_initializer: string or `keras.initializers` initializer.
+            The bias initializer for the dense and multiheaded
+            attention layers. Defaults to `"zeros"`.
+        normalize_first: bool. If True, the inputs to the
             attention layer(s) and the intermediate dense layer are normalized
             (similar to GPT-2). If set to False, outputs of attention layer and
             intermediate dense layer are normalized (similar to BERT).
-        name: string, defaults to None. The name of the layer.
+            Defaults to `False`.
+        name: string. The name of the layer. Defaults to `None`.
         **kwargs: other keyword arguments.
 
     Examples:

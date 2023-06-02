@@ -56,15 +56,15 @@ class MaskedLMHead(keras.layers.Layer):
         activation: The activation function for the outputs of the layer.
             Usually either `None` (return logits), or `"softmax"`
             (return probabilities).
-        layer_norm_epsilon: float, defaults to 1e-5. The epsilon value in layer
-            normalization components.
-        kernel_initializer: string or `keras.initializers` initializer,
-            defaults to "glorot_uniform". The kernel initializer for
-            the dense and multiheaded attention layers.
-        bias_initializer: string or `keras.initializers` initializer,
-            defaults to "zeros". The bias initializer for
-            the dense and multiheaded attention layers.
-        name: string, defaults to None. The name of the layer.
+        layer_norm_epsilon: float. The epsilon value in layer
+            normalization components. Defaults to `1e-5`.
+        kernel_initializer: string or `keras.initializers` initializer.
+            The kernel initializer for the dense and multiheaded
+            attention layers. Defaults to `"glorot_uniform"`.
+        bias_initializer: string or `keras.initializers` initializer.
+            The bias initializer for the dense and multiheaded
+            attention layers. Defaults to `"zeros"`.
+        name: string. The name of the layer. Defaults to `None`.
         **kwargs: other keyword arguments.
 
     Examples:
