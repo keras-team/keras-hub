@@ -35,16 +35,18 @@ class DisentangledSelfAttention(keras.layers.Layer):
     Args:
         num_heads: int. Number of attention heads.
         hidden_dim: int. Hidden dimension of the input, i.e., `hidden_states`.
-        max_position_embeddings: int, defaults to 512. The maximum input
-            sequence length.
-        bucket_size: int, defaults to 256. The size of the relative position
+        max_position_embeddings: int. The maximum input
+            sequence length. Defaults to `512`.
+        bucket_size: int. The size of the relative position
             buckets. Generally equal to `max_sequence_length // 2`.
-        dropout: float, defaults to 0.1. Dropout probability.
-        kernel_initializer: string or `keras.initializers` initializer,
-            defaults to "glorot_uniform". The kernel initializer for
-            the dense layers.
-        bias_initializer: string or `keras.initializers` initializer,
-            defaults to "zeros". The bias initializer for the dense layers.
+            Defaults to `256`.
+        dropout: float. Dropout probability. Defaults to `0.1`.
+        kernel_initializer: string or `keras.initializers` initializer.
+            The kernel initializer for the dense layers.
+            Defaults to `"glorot_uniform"`.
+        bias_initializer: string or `keras.initializers` initializer.
+            The bias initializer for the dense layers.
+            Defaults to `"zeros"`.
     """
 
     def __init__(

@@ -42,22 +42,23 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         mask_selection_rate: float, the probability of a token is selected for
             masking.
         mask_token_id: int. The id of mask token.
-        mask_selection_length: int, defaults to None. Maximum number of tokens
+        mask_selection_length: int. Maximum number of tokens
             selected for  masking in each sequence. If set, the output
             `mask_positions`, `mask_ids` and `mask_weights` will be padded
-            to dense tensors of length `mask_selection_length`,
-            otherwise the output will be a RaggedTensor.
-        unselectable_token_ids: A list of tokens, defaults to [0] (the default
-            `padding_token_id`).
-        mask_token_rate: float, defaults to 0.8. `mask_token_rate` must be
+            to dense tensors of length `mask_selection_length`, otherwise
+            the output will be a RaggedTensor. Defaults to `None`.
+        unselectable_token_ids: A list of tokens id that should not be
+            considered eligible for masking. By default, we assume `0`
+            corresponds to a padding token and ignore it. Defaults to `[0]`.
+        mask_token_rate: float. `mask_token_rate` must be
             between 0 and 1 which indicates how often the mask_token is
-            substituted for tokens selected for masking.
-        random_token_rate: float, defaults to 0.1. `random_token_rate` must be
+            substituted for tokens selected for masking. Defaults to `0.8`.
+        random_token_rate: float. `random_token_rate` must be
             between 0 and 1 which indicates how often a random token is
-            substituted for tokens selected for masking. Default is 0.1.
+            substituted for tokens selected for masking.
             Note: mask_token_rate + random_token_rate <= 1,  and for
             (1 - mask_token_rate - random_token_rate), the token will not be
-            changed.
+            changed. Defaults to `0.1`.
 
     Input:
         A 1D integer tensor of shape [sequence_length] or a 2D integer tensor

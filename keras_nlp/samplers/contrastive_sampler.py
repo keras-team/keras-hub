@@ -39,7 +39,7 @@ class ContrastiveSampler(Sampler):
         alpha: float, the weight of minus max similarity in joint score
             computation. The larger the value of `alpha`, the score relies more
             on the similarity than the token probability.
-        seed: int, defaults to None. The random seed.
+        seed: int. The random seed. Defaults to `None`.
 
     Call arguments:
         {{call_args}}

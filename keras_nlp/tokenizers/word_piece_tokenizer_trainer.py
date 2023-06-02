@@ -51,25 +51,26 @@ def compute_word_piece_vocabulary(
     Args:
         data: A `tf.data.Dataset`, or a list of filenames.
         vocabulary_size: int. The maximum size of a vocabulary to be trained.
-        vocabulary_output_file: str, defaults to `None`. The location to write a
-            vocabulary file.
-        lowercase: bool, defaults to `False`. If true, the input text will be
-            lowercased before tokenization.
-        strip_accents: bool, defaults to `False`. If true, all accent marks will
-            be removed from text before tokenization.
-        split: bool, defaults to `True`. If true, input will be split on
+        vocabulary_output_file: str. The location to write a
+            vocabulary file. defaults to `None`.
+        lowercase: bool. If `True`, the input text will be
+            lowercased before tokenization. Defaults to `False`.
+        strip_accents: bool. If `True`, all accent marks will
+            be removed from text before tokenization. Defaults to `False`.
+        split: bool. If `True`, input will be split on
             whitespace and punctuation marks, and all punctuation marks will be
-            kept as tokens. If false, input should be split ("pre-tokenized")
+            kept as tokens. If `False`, input should be split ("pre-tokenized")
             before calling the tokenizer, and passed as a dense or ragged tensor
             of whole words. `split` is required to be `True` when `data` is a
-            list of filenames.
-        split_on_cjk: bool, defaults to `True`. If true, input will be split
+            list of filenames. Defaults to `True`.
+        split_on_cjk: bool. If `True`, input will be split
             on CJK characters, i.e., Chinese, Japanese, Korean and Vietnamese
             characters (https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)).
-            Note that this is applicable only when `split` is true.
-        suffix_indicator: str, defaults to "##". The characters prepended to a
+            Note that this is applicable only when `split` is `True`.
+            Defaults to `True`.
+        suffix_indicator: str. The characters prepended to a
             WordPiece to indicate that it is a suffix to another subword.
-            E.g. "##ing".
+            E.g. `"##ing"`. Defaults to `"##"`.
         reserved_tokens: list of strings. A list of tokens that must be included in the vocabulary.
 
     Returns:

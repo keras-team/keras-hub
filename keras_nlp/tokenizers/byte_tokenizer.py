@@ -70,10 +70,11 @@ class ByteTokenizer(tokenizer.Tokenizer):
             A value of `'ignore'` will cause the tokenizer to skip any invalid
             formatting in the input and produce no corresponding output
             character.
-        replacement_char: int. Defaults to 65533. The replacement character to
+        replacement_char: int. The replacement character to
             use when an invalid byte sequence is encountered and when `errors`
             is set to "replace" (same behaviour as
             https://www.tensorflow.org/api_docs/python/tf/strings/unicode_transcode).
+            (U+FFFD) is `65533`. Defaults to `65533`.
 
     Examples:
 

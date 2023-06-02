@@ -85,13 +85,13 @@ class Bleu(keras.metrics.Metric):
             (https://github.com/mjpost/sacrebleu/blob/v2.1.0/sacrebleu/tokenizers/tokenizer_13a.py).
         max_order: int. The maximum n-gram order to use. For example, if
             `max_order` is set to 3, unigrams, bigrams, and trigrams will be
-            considered. Defaults to 4.
+            considered. Defaults to `4`.
         smooth: bool. Whether to apply Lin et al. 2004 smoothing to the BLEU
             score. Adds 1 to the matched n-gram count (i.e., numerator) and 1
             to the total n-gram count (i.e., denominator) for every order while
-            calculating precision. Defaults to False.
+            calculating precision. Defaults to `False`.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
-               not specified, it defaults to tf.float32.
+               not specified, it defaults to `tf.float32`.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
 

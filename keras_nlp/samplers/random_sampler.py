@@ -31,7 +31,7 @@ class RandomSampler(Sampler):
     chance determined by the probability of each token.
 
     Args:
-        seed: int, defaults to None. The random seed.
+        seed: int. The random seed. Defaults to `None`.
 
     Call arguments:
         {{call_args}}

@@ -34,13 +34,13 @@ class TopPSampler(Sampler):
 
     Args:
         p: float, the `p` value of top-p.
-        k: int, defaults to None. If set, this argument defines a
+        k: int. If set, this argument defines a
             heuristic "top-k" cutoff applied before the "top-p" sampling. All
             logits not in the top `k` will be discarded, and the remaining
             logits will be sorted to find a cutoff point for `p`. Setting this
             arg can significantly speed sampling up by reducing the number
-            of tokens to sort.
-        seed: int, defaults to None. The random seed.
+            of tokens to sort. Defaults to `None`.
+        seed: int. The random seed. Defaults to `None`.
 
     Call arguments:
         {{call_args}}

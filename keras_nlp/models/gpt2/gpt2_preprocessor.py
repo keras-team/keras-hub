@@ -57,9 +57,9 @@ class GPT2Preprocessor(Preprocessor):
     Args:
         tokenizer: A `keras_nlp.models.GPT2Tokenizer` instance.
         sequence_length: The length of the packed inputs.
-        add_start_token: If true, the preprocessor will prepend the tokenizer
+        add_start_token: If `True`, the preprocessor will prepend the tokenizer
             start token to each input sequence.
-        add_end_token: If true, the preprocessor will append the tokenizer
+        add_end_token: If `True`, the preprocessor will append the tokenizer
             end token to each input sequence.
 
     Call arguments:

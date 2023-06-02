@@ -106,19 +106,19 @@ def pretokenize(
 
     Args:
         text: `tf.Tensor` or `tf.RaggedTensor`. Input to be pretokenized.
-        lowercase: bool, defaults to `True`. If true, the input text will be
-            lowercased before tokenization.
-        strip_accents: bool, defaults to `True`. If true, all accent marks will
-            be removed from text before tokenization.
-        split: bool, defaults to `True`. If true, input will be split on
+        lowercase: bool. If True, the input text will be
+            lowercased before tokenization. Defaults to `True`.
+        strip_accents: bool. If `True`, all accent marks will
+            be removed from text before tokenization. Defaults to `True`.
+        split: bool. If `True`, input will be split on
             whitespace and punctuation marks, and all punctuation marks will be
-            kept as tokens. If false, input should be split ("pre-tokenized")
+            kept as tokens. If `False`, input should be split ("pre-tokenized")
             before calling the tokenizer, and passed as a dense or ragged tensor
-            of whole words.
-        split_on_cjk: bool, defaults to `True`. If true, input will be split
+            of whole words. Defaults to `True`.
+        split_on_cjk: bool. If `True`, input will be split
             on CJK characters, i.e., Chinese, Japanese, Korean and Vietnamese
             characters (https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)).
-            Note that this is applicable only when `split` is true.
+            Note that this is applicable only when `split` is `True`. Defaults to `True`.
 
     Returns:
         A tensor containing the pre-processed and pre-tokenized `text`.
@@ -199,24 +199,26 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             plain text file containing a single WordPiece token per line.
         sequence_length: int. If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of sequence_length.
-        lowercase: bool, defaults to `False`. If true, the input text will be
-            lowercased before tokenization.
-        strip_accents: bool, defaults to `False`. If true, all accent marks will
-            be removed from text before tokenization.
-        split: bool, defaults to `True`. If true, input will be split on
+        lowercase: bool. If `True`, the input text will be
+            lowercased before tokenization. Defaults to `False`.
+        strip_accents: bool. If `True`, all accent marks will
+            be removed from text before tokenization. Defaults to `False`.
+        split: bool. If `True`, input will be split on
             whitespace and punctuation marks, and all punctuation marks will be
-            kept as tokens. If false, input should be split ("pre-tokenized")
+            kept as tokens. If `False`, input should be split ("pre-tokenized")
             before calling the tokenizer, and passed as a dense or ragged tensor
-            of whole words.
-        split_on_cjk: bool, defaults to `True`. If true, input will be split
+            of whole words. Defaults to `True`.
+        split_on_cjk: bool. If True, input will be split
             on CJK characters, i.e., Chinese, Japanese, Korean and Vietnamese
             characters (https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)).
-            Note that this is applicable only when `split` is true.
-        suffix_indicator: str, defaults to "##". The characters prepended to a
+            Note that this is applicable only when `split` is True.
+            Defaults to `True`.
+        suffix_indicator: str. The characters prepended to a
             WordPiece to indicate that it is a suffix to another subword.
-            E.g. "##ing".
-        oov_token: str, defaults to "[UNK]". The string value to substitute for
+            E.g. "##ing". Defaults to `"##"`.
+        oov_token: str. The string value to substitute for
             an unknown token. It must be included in the vocab.
+            Defaults to `"[UNK]"`.
 
     References:
      - [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)

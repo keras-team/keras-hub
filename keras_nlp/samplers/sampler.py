@@ -50,9 +50,9 @@ class Sampler:
     """Base sampler class.
 
     Args:
-        temperature: float. optional. defaults to '1.0'. Used to control the
+        temperature: float. optional. Used to control the
             randomness of the sampling. The higher the temperature, the
-            more diverse the samples.
+            more diverse the samples. Defaults to `1.0`.
 
     Call arguments:
         {{call_args}}
