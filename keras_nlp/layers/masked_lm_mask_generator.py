@@ -50,8 +50,6 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         unselectable_token_ids: A list of tokens id that should not be
             considered eligible for masking. By default, we assume `0`
             corresponds to a padding token and ignore it. Defaults to `[0]`.
-        unselectable_token_ids: A list of tokens, [0] is default
-            `padding_token_id`. Defaults to `[0]`.
         mask_token_rate: float. `mask_token_rate` must be
             between 0 and 1 which indicates how often the mask_token is
             substituted for tokens selected for masking. Defaults to `0.8`.
