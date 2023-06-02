@@ -502,6 +502,8 @@ class BartSeq2SeqLM(Task):
             inputs["decoder_padding_mask"],
         )
 
+        batch_size = tf.shape(encoder_token_ids)[0]
+
         # Create and seed cache with a single forward pass.
         (
             hidden_states,
@@ -523,13 +525,21 @@ class BartSeq2SeqLM(Task):
             cache_index = index - 1
             prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
 
+            num_samples = tf.shape(prompt)[0]
+
+            def repeat_tensor(x):
+                """Repeats tensors along batch axis to match dim for beam search."""
+                if tf.shape(x)[0] == num_samples:
+                    return x
+                return tf.repeat(x, repeats=num_samples // batch_size, axis=0)
+
             logits, hidden_states, cache, _ = self.call_decoder_with_cache(
-                encoder_hidden_states=encoder_hidden_states,
-                encoder_padding_mask=encoder_padding_mask,
+                encoder_hidden_states=repeat_tensor(encoder_hidden_states),
+                encoder_padding_mask=repeat_tensor(encoder_padding_mask),
                 decoder_token_ids=prompt,
                 self_attention_cache=cache,
                 self_attention_cache_update_index=cache_index,
-                cross_attention_cache=cross_attention_cache,
+                cross_attention_cache=repeat_tensor(cross_attention_cache),
                 cross_attention_cache_update_index=None,
             )
             return (

@@ -198,6 +198,14 @@ class BartSeq2SeqLMTest(tf.test.TestCase, parameterized.TestCase):
                 self.seq_2_seq_lm.call_decoder_with_cache.call_count, 2
             )
 
+    def test_beam_search(self):
+        seq_2_seq_lm = BartSeq2SeqLM(
+            backbone=self.backbone,
+            preprocessor=self.preprocessor,
+        )
+        seq_2_seq_lm.compile(sampler="beam")
+        seq_2_seq_lm.generate(self.raw_batch)
+
     def test_generate_compilation(self):
         # Assert we do not recompile with successive calls.
         self.seq_2_seq_lm.generate(self.raw_batch)
