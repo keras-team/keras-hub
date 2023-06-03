@@ -246,12 +246,12 @@ class MultiSegmentPacker(keras.layers.Layer):
         end_columns = tf.repeat(
             end_value[tf.newaxis, :], repeats=batch_size, axis=0
         )
-        ones_sep_columns = tf.ones_like(sep_columns, dtype=tf.int32)
-        ones_end_columns = tf.ones_like(end_columns, dtype=tf.int32)
+        ones_sep_columns = tf.ones_like(sep_columns, dtype="int32")
+        ones_end_columns = tf.ones_like(end_columns, dtype="int32")
 
         segments_to_combine = [start_columns]
         segment_ids_to_combine = [
-            tf.ones_like(start_columns, dtype=tf.int32) * 0
+            tf.ones_like(start_columns, dtype="int32") * 0
         ]
 
         for i, seg in enumerate(segments):
@@ -259,7 +259,7 @@ class MultiSegmentPacker(keras.layers.Layer):
             segments_to_combine.append(seg)
 
             # Combine segment ids.
-            segment_ids_to_combine.append(tf.ones_like(seg, dtype=tf.int32) * i)
+            segment_ids_to_combine.append(tf.ones_like(seg, dtype="int32") * i)
 
             # Account for the sep/end tokens here.
             if i == len(segments) - 1:
@@ -285,7 +285,7 @@ class MultiSegmentPacker(keras.layers.Layer):
         segments = self._trim_inputs(inputs)
         token_ids, segment_ids = self._combine_inputs(segments)
         # Pad to dense tensor output.
-        shape = tf.cast([-1, self.sequence_length], tf.int64)
+        shape = tf.cast([-1, self.sequence_length], "int64")
         token_ids = token_ids.to_tensor(
             shape=shape, default_value=self.pad_value
         )

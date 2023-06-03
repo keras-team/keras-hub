@@ -47,7 +47,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     a dense `tf.Tensor` of shape `[sequence_length]`.
 
     The output dtype can be controlled via the `dtype` argument, which should be
-    an integer type (tf.int16, tf.int32, etc.).
+    an integer type ("int16", "int32", etc.).
 
     Args:
         lowercase: If `True`, the input text will be first lowered before
@@ -174,7 +174,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     dtype=int32)>
 
     Detokenization.
-    >>> inputs = tf.constant([110, 105, 110, 106,  97], dtype=tf.int32)
+    >>> inputs = tf.constant([110, 105, 110, 106,  97], dtype="int32")
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer()
     >>> tokenizer.detokenize(inputs)
     <tf.Tensor: shape=(), dtype=string, numpy=b'ninja'>
@@ -215,7 +215,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
 
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = tf.int32
+            kwargs["dtype"] = "int32"
         else:
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer:

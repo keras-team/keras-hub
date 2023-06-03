@@ -63,7 +63,7 @@ class PerplexityTest(tf.test.TestCase):
                 ],
             ]
         )
-        sample_wt = tf.cast(y_true != 0, tf.int32)
+        sample_wt = tf.cast(y_true != 0, "int32")
 
         perplexity_val = perplexity(y_true, y_pred, sample_wt)
         self.assertAlmostEqual(perplexity_val.numpy(), 2.8789, delta=1e-3)
@@ -173,7 +173,7 @@ class PerplexityTest(tf.test.TestCase):
         )
         y_prob = tf.nn.softmax(y_pred, axis=-1)
 
-        sample_wt = tf.cast(y_true != 0, tf.int32)
+        sample_wt = tf.cast(y_true != 0, "int32")
 
         perplexity_val = perplexity(y_true, y_prob, sample_wt)
         self.assertAlmostEqual(perplexity_val, 2.8789, delta=1e-3)
@@ -342,14 +342,14 @@ class PerplexityTest(tf.test.TestCase):
         perplexity = Perplexity(
             from_logits=True,
             mask_token_id=0,
-            dtype=tf.float32,
+            dtype="float32",
             name="perplexity_test",
         )
         config = perplexity.get_config()
         expected_config = {
             "from_logits": True,
             "mask_token_id": 0,
-            "dtype": tf.float32,
+            "dtype": "float32",
             "name": "perplexity_test",
         }
         self.assertEqual(config, expected_config)

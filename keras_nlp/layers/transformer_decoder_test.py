@@ -147,7 +147,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
 
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
         encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        label = tf.cast(decoder_sequence[:, :, 0] >= 0.5, dtype=tf.int32)
+        label = tf.cast(decoder_sequence[:, :, 0] >= 0.5, dtype="int32")
 
         loss_fn = keras.losses.BinaryCrossentropy(from_logits=False)
         optimizer = keras.optimizers.Adam()
@@ -175,7 +175,7 @@ class TransformerDecoderTest(tf.test.TestCase, parameterized.TestCase):
         model = MyModel()
 
         decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        label = tf.cast(decoder_sequence[:, :, 0] >= 0.5, dtype=tf.int32)
+        label = tf.cast(decoder_sequence[:, :, 0] >= 0.5, dtype="int32")
 
         loss_fn = keras.losses.BinaryCrossentropy(from_logits=False)
         optimizer = keras.optimizers.Adam()

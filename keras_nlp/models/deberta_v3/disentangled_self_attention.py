@@ -229,12 +229,12 @@ class DisentangledSelfAttention(keras.layers.Layer):
             x=rel_pos,
             y=log_pos * sign,
         )
-        bucket_pos = tf.cast(bucket_pos, dtype=tf.int64)
+        bucket_pos = tf.cast(bucket_pos, dtype="int64")
 
         return bucket_pos
 
     def _get_rel_pos(self, num_positions):
-        ids = tf.range(num_positions, dtype=tf.int64)
+        ids = tf.range(num_positions, dtype="int64")
         query_ids = ids[:, tf.newaxis]
         key_ids = ids[tf.newaxis, :]
         key_ids = tf.repeat(key_ids, repeats=num_positions, axis=0)

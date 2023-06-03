@@ -56,7 +56,7 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
             batch_size = tf.shape(prompt)[0]
             logits = (
                 tf.one_hot(
-                    tf.zeros(batch_size, dtype=tf.int32),
+                    tf.zeros(batch_size, dtype="int32"),
                     self.vocab_size,
                 )
                 * 1e9
@@ -127,7 +127,7 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
             # Favoring `best_token_id` in the logits.
             logits += (
                 tf.one_hot(
-                    tf.zeros(self.batch_size, dtype=tf.int32) + best_token_id,
+                    tf.zeros(self.batch_size, dtype="int32") + best_token_id,
                     self.vocab_size,
                 )
                 * 1e9
@@ -137,11 +137,11 @@ class ContrastiveSamplerTest(tf.test.TestCase, parameterized.TestCase):
             # gets the max similarity penality score.
             mask_of_best_token = prompt[:, index - 1] == best_token_id
             random_states = tf.random.uniform([batch_size, self.hidden_dim]) * (
-                1 - tf.cast(mask_of_best_token, dtype=tf.float32)[:, tf.newaxis]
+                1 - tf.cast(mask_of_best_token, dtype="float32")[:, tf.newaxis]
             )
             hidden_states = (
                 tf.ones([batch_size, self.hidden_dim])
-                * tf.cast(mask_of_best_token, dtype=tf.float32)[:, tf.newaxis]
+                * tf.cast(mask_of_best_token, dtype="float32")[:, tf.newaxis]
             )
             hidden_states = hidden_states + random_states
             return logits, hidden_states, cache

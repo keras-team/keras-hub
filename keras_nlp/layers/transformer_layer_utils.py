@@ -95,9 +95,9 @@ def merge_padding_and_attention_mask(
     if mask is not None:
         # Add an axis for broadcasting, the attention mask should be 2D
         # (not including the batch axis).
-        mask = tf.cast(mask[:, tf.newaxis, :], dtype=tf.int32)
+        mask = tf.cast(mask[:, tf.newaxis, :], dtype="int32")
     if attention_mask is not None:
-        attention_mask = tf.cast(attention_mask, dtype=tf.int32)
+        attention_mask = tf.cast(attention_mask, dtype="int32")
         if mask is None:
             return attention_mask
         else:

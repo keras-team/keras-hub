@@ -78,7 +78,7 @@ class MaskedLMMaskGeneratorTest(tf.test.TestCase):
         inputs = tf.random.uniform(
             shape=[5, 10],
             maxval=len(self.VOCAB),
-            dtype=tf.int32,
+            dtype="int32",
         )
         outputs = masked_lm_masker(inputs)
         token_ids, mask_positions, mask_ids = (
@@ -125,10 +125,10 @@ class MaskedLMMaskGeneratorTest(tf.test.TestCase):
         outputs = masked_lm_masker(inputs)
         expected_number_of_masked_tokens = tf.cast(
             tf.math.ceil(
-                tf.cast(inputs.row_lengths(), dtype=tf.float32)
+                tf.cast(inputs.row_lengths(), dtype="float32")
                 * mask_selection_rate,
             ),
-            dtype=tf.int64,
+            dtype="int64",
         )
 
         self.assertAllEqual(
@@ -159,7 +159,7 @@ class MaskedLMMaskGeneratorTest(tf.test.TestCase):
         inputs = tf.random.uniform(
             shape=[5, 10],
             maxval=len(self.VOCAB),
-            dtype=tf.int32,
+            dtype="int32",
         )
         outputs = masked_lm_masker(inputs)
         tokens_ids, mask_positions, mask_ids = (

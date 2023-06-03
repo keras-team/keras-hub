@@ -108,7 +108,7 @@ class TransformerEncoderTest(tf.test.TestCase, parameterized.TestCase):
         model = keras.Model(inputs=inputs, outputs=x)
 
         data = tf.random.uniform(shape=[2, 4, 6])
-        label = tf.cast(data[:, :, 0] >= 0.5, dtype=tf.int32)
+        label = tf.cast(data[:, :, 0] >= 0.5, dtype="int32")
 
         loss_fn = keras.losses.BinaryCrossentropy(from_logits=False)
         optimizer = keras.optimizers.Adam()
