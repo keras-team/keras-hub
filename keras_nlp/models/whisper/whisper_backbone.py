@@ -73,8 +73,8 @@ class WhisperBackbone(Backbone):
 
     ```python
     input_data = {
-        "encoder_features": tf.ones(shape=(1, 12, 80), dtype=tf.int64),
-        "decoder_token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
+        "encoder_features": tf.ones(shape=(1, 12, 80), dtype="int64"),
+        "decoder_token_ids": tf.ones(shape=(1, 12), dtype="int64"),
         "decoder_padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0], shape=(1, 12)
         ),
@@ -194,7 +194,7 @@ class WhisperBackbone(Backbone):
             name="encoder_layer_norm",
             axis=-1,
             epsilon=1e-5,
-            dtype=tf.float32,
+            dtype="float32",
         )(x)
         encoder_output = x
 
@@ -240,7 +240,7 @@ class WhisperBackbone(Backbone):
             name="decoder_layer_norm",
             axis=-1,
             epsilon=1e-5,
-            dtype=tf.float32,
+            dtype="float32",
         )(x)
         decoder_output = x
 

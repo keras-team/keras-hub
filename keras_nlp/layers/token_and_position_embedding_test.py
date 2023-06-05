@@ -65,7 +65,7 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase, parameterized.TestCase):
         # Create a 2-dimensional ragged input
         # (the first dimension is implicit).
         input_tensor = keras.Input(
-            shape=(sequence_length,), dtype=tf.float32, ragged=True
+            shape=(sequence_length,), dtype="float32", ragged=True
         )
         output_tensor = test_layer(input_tensor)
         model = keras.Model(input_tensor, output_tensor)

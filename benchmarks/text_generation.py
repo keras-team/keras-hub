@@ -74,7 +74,7 @@ def generate_random_ds(vocab_size, num_samples, batch_size, length, seed):
 def build_model(
     vocab_size, max_length, embed_dim, num_layers, num_heads, ff_dim
 ):
-    inputs = keras.layers.Input(shape=(None,), dtype=tf.int32)
+    inputs = keras.layers.Input(shape=(None,), dtype="int32")
     # Embedding.
     x = keras_nlp.layers.TokenAndPositionEmbedding(
         vocabulary_size=vocab_size,

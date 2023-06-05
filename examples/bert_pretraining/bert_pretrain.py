@@ -188,7 +188,7 @@ class MaskedLMHead(keras.layers.Layer):
         width = sequence_tensor.shape.as_list()[2] or sequence_shape[2]
 
         flat_offsets = tf.reshape(
-            tf.range(0, batch_size, dtype=tf.int32) * seq_length, [-1, 1]
+            tf.range(0, batch_size, dtype="int32") * seq_length, [-1, 1]
         )
         flat_positions = tf.reshape(positions + flat_offsets, [-1])
         flat_sequence_tensor = tf.reshape(
@@ -250,10 +250,10 @@ class LinearDecayWithWarmup(keras.optimizers.schedules.LearningRateSchedule):
         self.train_steps = num_train_steps
 
     def __call__(self, step):
-        peak_lr = tf.cast(self.learning_rate, dtype=tf.float32)
-        warmup = tf.cast(self.warmup_steps, dtype=tf.float32)
-        training = tf.cast(self.train_steps, dtype=tf.float32)
-        step = tf.cast(step, dtype=tf.float32)
+        peak_lr = tf.cast(self.learning_rate, dtype="float32")
+        warmup = tf.cast(self.warmup_steps, dtype="float32")
+        training = tf.cast(self.train_steps, dtype="float32")
+        step = tf.cast(step, dtype="float32")
 
         is_warmup = step < warmup
 
@@ -280,21 +280,21 @@ def decode_record(record):
     seq_length = PREPROCESSING_CONFIG["max_seq_length"]
     lm_length = PREPROCESSING_CONFIG["max_predictions_per_seq"]
     name_to_features = {
-        "token_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
-        "padding_mask": tf.io.FixedLenFeature([seq_length], tf.int64),
-        "segment_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
-        "masked_lm_positions": tf.io.FixedLenFeature([lm_length], tf.int64),
-        "masked_lm_ids": tf.io.FixedLenFeature([lm_length], tf.int64),
-        "masked_lm_weights": tf.io.FixedLenFeature([lm_length], tf.float32),
-        "next_sentence_labels": tf.io.FixedLenFeature([1], tf.int64),
+        "token_ids": tf.io.FixedLenFeature([seq_length], "int64"),
+        "padding_mask": tf.io.FixedLenFeature([seq_length], "int64"),
+        "segment_ids": tf.io.FixedLenFeature([seq_length], "int64"),
+        "masked_lm_positions": tf.io.FixedLenFeature([lm_length], "int64"),
+        "masked_lm_ids": tf.io.FixedLenFeature([lm_length], "int64"),
+        "masked_lm_weights": tf.io.FixedLenFeature([lm_length], "float32"),
+        "next_sentence_labels": tf.io.FixedLenFeature([1], "int64"),
     }
-    # tf.Example only supports tf.int64, but the TPU only supports tf.int32.
+    # tf.Example only supports "int64", but the TPU only supports "int32".
     # So cast all int64 to int32.
     example = tf.io.parse_single_example(record, name_to_features)
     for name in list(example.keys()):
         value = example[name]
-        if value.dtype == tf.int64:
-            value = tf.cast(value, tf.int32)
+        if value.dtype == "int64":
+            value = tf.cast(value, "int32")
         example[name] = value
 
     inputs = {

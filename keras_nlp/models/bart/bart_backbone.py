@@ -16,7 +16,6 @@
 
 import copy
 
-import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
@@ -67,11 +66,11 @@ class BartBackbone(Backbone):
     Examples:
     ```python
     input_data = {
-        "encoder_token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
+        "encoder_token_ids": tf.ones(shape=(1, 12), dtype="int64"),
         "encoder_padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
-        "decoder_token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
+        "decoder_token_ids": tf.ones(shape=(1, 12), dtype="int64"),
         "decoder_padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0], shape=(1, 12)
         ),
@@ -148,7 +147,7 @@ class BartBackbone(Backbone):
             name="encoder_embeddings_layer_norm",
             axis=-1,
             epsilon=1e-5,
-            dtype=tf.float32,
+            dtype="float32",
         )(x)
         x = keras.layers.Dropout(
             dropout,
@@ -190,7 +189,7 @@ class BartBackbone(Backbone):
             name="decoder_embeddings_layer_norm",
             axis=-1,
             epsilon=1e-5,
-            dtype=tf.float32,
+            dtype="float32",
         )(x)
         x = keras.layers.Dropout(
             dropout,

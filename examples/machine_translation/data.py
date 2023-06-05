@@ -110,7 +110,7 @@ def prepare_datasets(text_pairs, batch_size, eng_tokenizer, spa_tokenizer):
                 "decoder_inputs": spa[:, :-1],
             },
             spa[:, 1:],
-            tf.cast((spa[:, 1:] != 0), tf.float32),  # mask as sample weights
+            tf.cast((spa[:, 1:] != 0), "float32"),  # mask as sample weights
         )
 
     dataset = tf.data.Dataset.from_tensor_slices((eng_texts, spa_texts))

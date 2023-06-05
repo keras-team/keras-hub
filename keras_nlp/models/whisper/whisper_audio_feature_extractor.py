@@ -47,15 +47,15 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
     Examples:
 
     ```python
-    audio_tensor = tf.ones((8000,), dtype=tf.float32)
+    audio_tensor = tf.ones((8000,), dtype="float32")
 
     # Compute the log-mel spectrogram.
     whisper_audio_feature_extractor = keras_nlp.models.WhisperAudioFeatureExtractor()
     whisper_audio_feature_extractor(audio_tensor)
 
     # Compute the log-mel spectrogram for a batch of audio tensors.
-    audio_tensor_1 = tf.ones((8000,), dtype=tf.float32)
-    audio_tensor_2 = tf.ones((10000,), dtype=tf.float32
+    audio_tensor_1 = tf.ones((8000,), dtype="float32")
+    audio_tensor_2 = tf.ones((10000,), dtype="float32"
     audio_tensor = tf.ragged.stack([audio_tensor_1, audio_tensor_2], axis=0)
     whisper_audio_feature_extractor(audio_tensor)
     ```
@@ -72,7 +72,7 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
     ):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = tf.float32
+            kwargs["dtype"] = "float32"
         else:
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_floating:

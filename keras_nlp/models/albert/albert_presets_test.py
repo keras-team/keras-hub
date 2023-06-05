@@ -139,7 +139,7 @@ class AlbertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
             )
             input_data = {
                 "token_ids": tf.random.uniform(
-                    shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
+                    shape=(1, 512), dtype="int64", maxval=model.vocabulary_size
                 ),
                 "segment_ids": tf.constant(
                     [0] * 200 + [1] * 312, shape=(1, 512)
@@ -175,7 +175,7 @@ class AlbertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 512),
-                    dtype=tf.int64,
+                    dtype="int64",
                     maxval=classifier.backbone.vocabulary_size,
                 ),
                 "segment_ids": tf.constant(

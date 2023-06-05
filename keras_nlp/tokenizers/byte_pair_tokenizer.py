@@ -92,7 +92,7 @@ def remove_strings_from_inputs(tensor, string_to_remove):
     non_empty_mask = tensor != string_to_remove
     flatten_indexes = tf.where(non_empty_mask)
     flatten_result = tf.gather_nd(tensor, flatten_indexes)
-    row_lengths = tf.reduce_sum(tf.cast(non_empty_mask, tf.int64), axis=1)
+    row_lengths = tf.reduce_sum(tf.cast(non_empty_mask, "int64"), axis=1)
     result = tf.RaggedTensor.from_row_lengths(
         values=flatten_result,
         row_lengths=row_lengths,
@@ -154,10 +154,10 @@ class BytePairTokenizerCache(tf.Module):
         # string mapping. So we first convert to string to an integer key, and
         # use the integer key to find the value.
         self.factors = tf.pow(
-            tf.constant(256, dtype=tf.int64), tf.range(0, 8, dtype=tf.int64)
+            tf.constant(256, dtype="int64"), tf.range(0, 8, dtype="int64")
         )
         self.id2value = tf.lookup.experimental.MutableHashTable(
-            tf.int64, tf.string, ""
+            "int64", tf.string, ""
         )
 
     def _get_key(self, keys):
@@ -166,7 +166,7 @@ class BytePairTokenizerCache(tf.Module):
         # need to convert it to a uint64.
         return tf.squeeze(
             tf.matmul(
-                tf.cast(tf.fingerprint(keys), dtype=tf.int64),
+                tf.cast(tf.fingerprint(keys), dtype="int64"),
                 self.factors[:, tf.newaxis],
             ),
             -1,
@@ -278,7 +278,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = tf.int32
+            kwargs["dtype"] = "int32"
         else:
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer and dtype != tf.string:
@@ -441,7 +441,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         empty_strs = tf.fill(tf.shape(merged_pairs), "")
 
         unfinished_word_indices = tf.cast(
-            tf.boolean_mask(tf.range(tf.shape(mask)[0]), mask), dtype=tf.int64
+            tf.boolean_mask(tf.range(tf.shape(mask)[0]), mask), dtype="int64"
         )
         merged_pair_indices = tf.concat(
             [

@@ -204,7 +204,7 @@ class StartEndPacker(keras.layers.Layer):
         outputs = tf.squeeze(outputs, axis=0) if input_is_1d else outputs
 
         if self.return_padding_mask:
-            mask = tf.ones_like(x, dtype=tf.bool)
+            mask = tf.ones_like(x, dtype="bool")
             mask = mask.to_tensor(shape=(batch_size, sequence_length))
             mask = tf.squeeze(mask, axis=0) if input_is_1d else mask
             return outputs, mask

@@ -116,7 +116,7 @@ class BartPresetFullTest(tf.test.TestCase, parameterized.TestCase):
             input_data = {
                 "encoder_token_ids": tf.random.uniform(
                     shape=(1, 1024),
-                    dtype=tf.int64,
+                    dtype="int64",
                     maxval=model.vocabulary_size,
                 ),
                 "encoder_padding_mask": tf.constant(
@@ -124,7 +124,7 @@ class BartPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 ),
                 "decoder_token_ids": tf.random.uniform(
                     shape=(1, 1024),
-                    dtype=tf.int64,
+                    dtype="int64",
                     maxval=model.vocabulary_size,
                 ),
                 "decoder_padding_mask": tf.constant(
