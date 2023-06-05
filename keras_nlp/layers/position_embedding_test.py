@@ -85,7 +85,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase, parameterized.TestCase):
         # to be the same as the input shape in all dimensions save batch.
         expected_output_shape = [None, sequence_length, feature_size]
         self.assertEqual(expected_output_shape, output_tensor.shape.as_list())
-        # The default output dtype for this layer should be tf.float32.
+        # The default output dtype for this layer should be "float32".
         self.assertEqual(tf.float16, output_tensor.dtype)
 
     def test_dynamic_layer_output_shape(self):
@@ -178,7 +178,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase, parameterized.TestCase):
         )
         # Create a 3-dimensional ragged input (the first dimension is implicit).
         input_tensor = keras.Input(
-            shape=(None, feature_size), dtype=tf.float32, ragged=True
+            shape=(None, feature_size), dtype="float32", ragged=True
         )
         output_tensor = test_layer(input_tensor)
         model = keras.Model(input_tensor, output_tensor)
@@ -215,7 +215,7 @@ class PositionEmbeddingLayerTest(tf.test.TestCase, parameterized.TestCase):
         )
         # Create a 4-dimensional ragged input (the first dimension is implicit).
         input_tensor = keras.Input(
-            shape=(None, None, feature_size), dtype=tf.float32, ragged=True
+            shape=(None, None, feature_size), dtype="float32", ragged=True
         )
         output_tensor = test_layer(input_tensor)
         model = keras.Model(input_tensor, output_tensor)

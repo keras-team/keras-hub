@@ -47,7 +47,7 @@ class EditDistance(keras.metrics.Metric):
             False, number of operations are calculated for every sample, and
             averaged over all the samples.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
-            not specified, it defaults to `tf.float32`.
+            not specified, it defaults to `"float32"`.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
 
@@ -197,7 +197,7 @@ class EditDistance(keras.metrics.Metric):
         _ = tf.map_fn(
             fn=calculate_edit_distance,
             elems=(y_true, y_pred),
-            fn_output_signature=tf.int8,
+            fn_output_signature="int8",
         )
 
     def result(self):

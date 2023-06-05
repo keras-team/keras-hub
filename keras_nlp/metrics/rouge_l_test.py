@@ -217,7 +217,7 @@ class RougeLTest(tf.test.TestCase):
     def test_get_config(self):
         rouge = RougeL(
             use_stemmer=True,
-            dtype=tf.float32,
+            dtype="float32",
             name="rouge_l_test",
         )
 

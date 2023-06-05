@@ -119,7 +119,7 @@ class RandomDeletion(keras.layers.Layer):
     ):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = tf.int32
+            kwargs["dtype"] = "int32"
         else:
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer and dtype != tf.string:
@@ -186,7 +186,7 @@ class RandomDeletion(keras.layers.Layer):
             skip_masks = self.StaticHashTable.lookup(inputs.flat_values)
         elif self.skip_fn:
             skip_masks = tf.map_fn(
-                self.skip_fn, inputs.flat_values, fn_output_signature=tf.bool
+                self.skip_fn, inputs.flat_values, fn_output_signature="bool"
             )
         elif self.skip_py_fn:
 
@@ -199,9 +199,9 @@ class RandomDeletion(keras.layers.Layer):
             py_fn = string_fn if inputs.dtype == tf.string else int_fn
 
             skip_masks = tf.map_fn(
-                lambda x: tf.py_function(py_fn, [x], tf.bool),
+                lambda x: tf.py_function(py_fn, [x], "bool"),
                 inputs.flat_values,
-                fn_output_signature=tf.bool,
+                fn_output_signature="bool",
             )
 
         positions_flat = tf.range(tf.size(inputs.flat_values))

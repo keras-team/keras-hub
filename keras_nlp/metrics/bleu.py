@@ -91,7 +91,7 @@ class Bleu(keras.metrics.Metric):
             to the total n-gram count (i.e., denominator) for every order while
             calculating precision. Defaults to `False`.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
-               not specified, it defaults to `tf.float32`.
+               not specified, it defaults to `"float32"`.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
 

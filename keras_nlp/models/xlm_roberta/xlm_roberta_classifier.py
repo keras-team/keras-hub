@@ -91,7 +91,7 @@ class XLMRobertaClassifier(Task):
     Preprocessed integer data.
     ```python
     features = {
-        "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
+        "token_ids": tf.ones(shape=(2, 12), dtype="int64"),
         "padding_mask": tf.constant(
             [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
         ),

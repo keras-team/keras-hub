@@ -241,7 +241,7 @@ class RougeNTest(tf.test.TestCase):
         rouge = RougeN(
             order=5,
             use_stemmer=True,
-            dtype=tf.float32,
+            dtype="float32",
             name="rouge_n_test",
         )
 

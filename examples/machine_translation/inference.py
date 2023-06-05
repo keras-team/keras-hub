@@ -73,14 +73,14 @@ def decode_sequence(input_sentence, model, max_sequence_length, lookup_table):
     for i in range(max_sequence_length):
         decoder_inputs = tf.convert_to_tensor(
             [decoded_sentence],
-            dtype=tf.int64,
+            dtype="int64",
         )
         decoder_inputs = tf.concat(
             [
                 decoder_inputs,
                 tf.zeros(
                     [1, max_sequence_length - i - 1],
-                    dtype=tf.int64,
+                    dtype="int64",
                 ),
             ],
             axis=1,

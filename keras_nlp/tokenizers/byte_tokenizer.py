@@ -51,7 +51,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
 
     The output dtype can be controlled via the
     `dtype` argument, which should be an integer type
-    (tf.int16, tf.int32, etc.).
+    ("int16", "int32", etc.).
 
     Args:
         lowercase: boolean. If True, the input text will be converted to
@@ -140,14 +140,14 @@ class ByteTokenizer(tokenizer.Tokenizer):
            [102, 117, 110,   0,   0]], dtype=int32)>
 
     Detokenization.
-    >>> inputs = tf.constant([104, 101, 108, 108, 111], dtype=tf.int32)
+    >>> inputs = tf.constant([104, 101, 108, 108, 111], dtype="int32")
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
     >>> tokenizer.detokenize(inputs)
     <tf.Tensor: shape=(), dtype=string, numpy=b'hello'>
 
     Detokenization with invalid bytes.
     >>> # The 255 below is invalid utf-8.
-    >>> inputs = tf.constant([104, 101, 255, 108, 108, 111], dtype=tf.int32)
+    >>> inputs = tf.constant([104, 101, 255, 108, 108, 111], dtype="int32")
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(
     ...     errors="replace", replacement_char=88)
     >>> tokenizer.detokenize(inputs).numpy().decode('utf-8')
@@ -167,7 +167,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
 
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = tf.int32
+            kwargs["dtype"] = "int32"
         else:
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer:
