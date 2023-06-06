@@ -27,6 +27,7 @@ class RotaryEmbedding(keras.layers.Layer):
         self.inverse_freq = self.add_weight(
             "inverse_freq", shape=(self.hidden_dim // 2,), dtype=tf.float32
         )
+
         self.inverse_freq.assign(
             1.0
             / (
@@ -43,27 +44,24 @@ class RotaryEmbedding(keras.layers.Layer):
             )
         )
 
-    @staticmethod
-    def apply_rotary_pos_emb(cls, tensor, cos_emb, sin_emb):
-
-        cos_emb = cos_emb[:, :, : tf.shape(tensor)[-2], :]
-        sin_emb = sin_emb[:, :, : tf.shape(tensor)[-2], :]
-
+    def apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
+        cos_emb = cos_emb[:, : tf.shape(tensor)[1], :, :]
+        sin_emb = sin_emb[:, : tf.shape(tensor)[1], :, :]
         x1, x2 = tf.split(tensor, 2, axis=-1)
         half_rot_tensor = tf.concat((-x2, x1), axis=-1)
+        # Incompatible shapes: [32,256,8,2] vs. [1,256,1,16] [Op:Mul]
+        ret = (tensor * cos_emb) + (half_rot_tensor * sin_emb)
+        return ret
 
-        return (tensor * cos_emb) + (half_rot_tensor * sin_emb)
-
-    def _compute_cos_sin(self, x, seq_dim=2):
+    def _compute_cos_sin_embedding(self, x, seq_dim=1):
         seq_len = tf.shape(x)[seq_dim]
         tensor = tf.range(seq_len, dtype=self.inverse_freq.dtype)
         freqs = tf.einsum("i, j -> ij", tensor, self.inverse_freq)
-        embedding = tf.concat((freqs, freqs), axis=-1)[None, None, :, :]
+        embedding = tf.concat((freqs, freqs), axis=-1)[None, :, None, :]
         return tf.cos(embedding), tf.sin(embedding)
 
     def call(self, query, key):
-        cos_emb, sin_emb = self._compute_cos_sin(key, seq_dim=-2)
-        return (
-            self.apply_rotary_pos_emb(query, cos_emb, sin_emb),
-            self.apply_rotary_pos_emb(key, cos_emb, sin_emb),
-        )
+        cos_emb, sin_emb = self._compute_cos_sin_embedding(key, seq_dim=1)
+        q_emb = self.apply_rotary_pos_emb(query, cos_emb, sin_emb)
+        k_emb = self.apply_rotary_pos_emb(key, cos_emb, sin_emb)
+        return q_emb, k_emb
