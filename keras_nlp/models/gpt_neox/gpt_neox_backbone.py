@@ -22,11 +22,11 @@ from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.gpt_neox.gpt_neox_decoder import GPTNeoXDecoder
 
 
-def _gpt_2_kernel_initializer(stddev=0.02):
+def _gpt_neox_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.GPT2Backbone")
+@keras_nlp_export("keras_nlp.models.GPTNeoXBackbone")
 class GPTNeoXBackbone(Backbone):
     def __init__(
         self,
@@ -36,7 +36,7 @@ class GPTNeoXBackbone(Backbone):
         hidden_dim,
         intermediate_dim,
         dropout=0.1,
-        max_sequence_length=1024,
+        max_sequence_length=512,
         **kwargs,
     ):
         # Inputs
@@ -49,14 +49,14 @@ class GPTNeoXBackbone(Backbone):
         token_embedding = keras.layers.Embedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            embeddings_initializer=_gpt_2_kernel_initializer(stddev=0.01),
+            embeddings_initializer=_gpt_neox_kernel_initializer(stddev=0.01),
             name="token_embedding",
         )(token_ids)
 
         # Can't use `TokenAndPositionEmbedding` layer here because of different
         # initializers.
         position_embedding = PositionEmbedding(
-            initializer=_gpt_2_kernel_initializer(stddev=0.02),
+            initializer=_gpt_neox_kernel_initializer(stddev=0.02),
             sequence_length=max_sequence_length,
             name="position_embedding",
         )(token_embedding)
@@ -80,7 +80,7 @@ class GPTNeoXBackbone(Backbone):
                 activation=lambda x: keras.activations.gelu(
                     x, approximate=True
                 ),
-                kernel_initializer=_gpt_2_kernel_initializer(stddev=0.02),
+                kernel_initializer=_gpt_neox_kernel_initializer(stddev=0.02),
                 normalize_first=True,
                 name=f"transformer_layer_{i}",
             )(x, decoder_padding_mask=padding_mask)

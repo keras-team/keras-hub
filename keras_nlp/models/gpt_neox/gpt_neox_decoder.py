@@ -28,16 +28,17 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self,
         intermediate_dim,
         num_heads,
-        dropout=0,
+        max_position_embeddings=512,
+        dropout=0.2,
         activation="relu",
         layer_norm_epsilon=1e-5,
+        rotary_pct=0.25,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         normalize_first=None,
         name=None,
         **kwargs,
     ):
-
         self._input_shape = kwargs.pop("build_input_shape", None)
         self._has_cross_attention = kwargs.pop("has_cross_attention", False)
 
@@ -45,6 +46,8 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.dropout = dropout
+        self.rotary_pct = rotary_pct
+        self.max_position_embeddings = max_position_embeddings
         self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
@@ -54,13 +57,12 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self.supports_masking = True
 
         if self._input_shape is not None:
-            self._build(self._input_shape, self._has_cross_attention)
+            self._build(self._input_shape)
 
-    def _build(self, input_shape, has_cross_attention):
+    def _build(self, input_shape):
         # Create layers based on input shape.
         self._built = True
         self._input_shape = input_shape
-        self._has_cross_attention = has_cross_attention
         # Infer the dimension of our hidden feature size from the build shape.
         hidden_dim = input_shape[-1]
         # Attention head size is `hidden_dim` over the number of heads.
@@ -71,41 +73,19 @@ class GPTNeoXDecoder(keras.layers.Layer):
             num_heads=self.num_heads,
             hidden_dim=head_dim,
             dropout=self.dropout,
-            # kernel_initializer=clone_initializer(self.kernel_initializer),
-            # bias_initializer=clone_initializer(self.bias_initializer),
+            rotary_pct=head_dim,
+            max_position_embeddings=self.max_position_embeddings,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
         )
-        self._self_attention_layer._build_from_signature(
-            query=input_shape,
-            value=input_shape,
-        )
+
         self._self_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
+
         self._self_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,
         )
-
-        # Cross attention layers are optional.
-        self._cross_attention_layer = None
-        if has_cross_attention:
-            self._cross_attention_layer = GPTNeoXAttention(
-                num_heads=self.num_heads,
-                hidden_dim=head_dim,
-                # value_dim=head_dim,
-                dropout=self.dropout,
-                # kernel_initializer=clone_initializer(self.kernel_initializer),
-                # bias_initializer=clone_initializer(self.bias_initializer),
-            )
-            self._cross_attention_layer._build_from_signature(
-                query=input_shape,
-                value=input_shape,
-            )
-            self._cross_attention_layernorm = keras.layers.LayerNormalization(
-                epsilon=self.layer_norm_epsilon,
-            )
-            self._cross_attention_dropout = keras.layers.Dropout(
-                rate=self.dropout,
-            )
 
         # Feedforward layers.
         self._feedforward_intermediate_dense = keras.layers.Dense(
@@ -134,52 +114,14 @@ class GPTNeoXDecoder(keras.layers.Layer):
         decoder_attention_mask=None,
         encoder_padding_mask=None,
         encoder_attention_mask=None,
-        self_attention_cache=None,
-        self_attention_cache_update_index=None,
-        cross_attention_cache=None,
-        cross_attention_cache_update_index=None,
     ):
 
-        has_encoder_sequence = encoder_sequence is not None
+        # has_encoder_sequence = encoder_sequence is not None
+
         if not self._built:
-            self._build(decoder_sequence.shape, has_encoder_sequence)
+            self._build(decoder_sequence.shape)
 
-        is_cross_attention = self._cross_attention_layer is not None
-        if not is_cross_attention and has_encoder_sequence:
-            raise ValueError(
-                "The number of call arguments to "
-                "`keras_nlp.layers.TransformerDecoder` should not change. "
-                "Use `layer(decoder_sequence, encoder_sequence)` to "
-                "build a layer with cross attention, or "
-                "`layer(decoder_sequence)` to build a layer without. "
-                "This layer has been built without cross attention, but "
-                "you are trying to call it with encoder_sequence."
-            )
-        elif is_cross_attention and not has_encoder_sequence:
-            raise ValueError(
-                "The number of call arguments to "
-                "`keras_nlp.layers.TransformerDecoder` should not change. "
-                "Use `layer(decoder_sequence, encoder_sequence)` to "
-                "build a layer with cross attention, or "
-                "`layer(decoder_sequence)` to build a layer without. "
-                "This layer has been built with cross attention, but "
-                "you did not provide encoder_sequence."
-            )
-
-        has_self_attention_cache = self_attention_cache is not None
-        has_cross_attention_cache = cross_attention_cache is not None
-        if is_cross_attention and (
-            has_self_attention_cache != has_cross_attention_cache
-        ):
-            raise ValueError(
-                "When calling `keras_nlp.layers.TransformerDecoder` with "
-                "cross-attention (with both `encoder_sequence` and "
-                "`decoder_sequence`), `self_attention_cache` and "
-                "`cross_attention_cache` should both be set or both be `None`. "
-                "One cannot be `None` while the other is not. Received: "
-                f"self_attention_cache={self_attention_cache}, "
-                f"cross_attention_cache={cross_attention_cache}."
-            )
+        #         has_self_attention_cache = self_attention_cache is not None
 
         x = decoder_sequence  # Intermediate result.
 
@@ -189,15 +131,15 @@ class GPTNeoXDecoder(keras.layers.Layer):
         # We need to handle a rectangular causal mask when doing cached
         # decoding. For generative inference, `decoder_sequence` will
         # generally be length 1, and `cache` will be the full generation length.
-        if self_attention_cache is not None:
-            input_length = tf.shape(self_attention_cache)[2]
+        #         if self_attention_cache is not None:
+        #             input_length = tf.shape(self_attention_cache)[2]
         self_attention_mask = compute_causal_mask(
             batch_size,
             input_length,
             output_length,
-            0
-            if self_attention_cache_update_index is None
-            else self_attention_cache_update_index,
+            #             0
+            #             if self_attention_cache_update_index is None
+            #             else self_attention_cache_update_index,
         )
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
@@ -209,40 +151,16 @@ class GPTNeoXDecoder(keras.layers.Layer):
         residual = x
         if self.normalize_first:
             x = self._self_attention_layernorm(x)
-        x, self_attention_cache = self._self_attention_layer(
-            query=x,
-            value=x,
+
+        x = self._self_attention_layer(
+            hidden_states=x,
             attention_mask=self_attention_mask,
-            cache=self_attention_cache,
-            cache_update_index=self_attention_cache_update_index,
+            return_attention_scores=False,
         )
         x = self._self_attention_dropout(x)
         x = x + residual
         if not self.normalize_first:
             x = self._self_attention_layernorm(x)
-
-        # Cross attention is optional.
-        if is_cross_attention:
-            # Compute cross attention mask.
-            cross_attention_mask = merge_padding_and_attention_mask(
-                encoder_sequence, encoder_padding_mask, encoder_attention_mask
-            )
-
-            # Cross attention block.
-            residual = x
-            if self.normalize_first:
-                x = self._cross_attention_layernorm(x)
-            x, cross_attention_cache = self._cross_attention_layer(
-                query=x,
-                value=encoder_sequence,
-                attention_mask=cross_attention_mask,
-                cache=cross_attention_cache,
-                cache_update_index=cross_attention_cache_update_index,
-            )
-            x = self._cross_attention_dropout(x)
-            x = x + residual
-            if not self.normalize_first:
-                x = self._cross_attention_layernorm(x)
 
         # Feedforward block.
         residual = x
@@ -255,13 +173,11 @@ class GPTNeoXDecoder(keras.layers.Layer):
         if not self.normalize_first:
             x = self._feedforward_layernorm(x)
 
-        if self_attention_cache is not None:
-            if is_cross_attention:
-                return (x, self_attention_cache, cross_attention_cache)
-            else:
-                return (x, self_attention_cache)
-        else:
-            return x
+        #         if self_attention_cache is not None:
+        #             return (x, self_attention_cache)
+        #         else:
+
+        return x
 
     def get_config(self):
         config = super().get_config()
