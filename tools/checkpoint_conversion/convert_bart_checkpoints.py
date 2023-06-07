@@ -26,6 +26,7 @@ import keras_nlp
 PRESET_MAP = {
     "bart_base_en": "facebook/bart-base",
     "bart_large_en": "facebook/bart-large",
+    "bart_large_en_cnn": "facebook/bart-large-cnn",
 }
 
 FLAGS = flags.FLAGS
