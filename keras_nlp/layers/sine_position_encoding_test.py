@@ -40,8 +40,8 @@ class SinePositionEncodingTest(tf.test.TestCase):
 
         # When using static positional encoding shapes, the output is expected
         # to be the same as the input shape in all dimensions.
-        expected_output_shape = [None, seq_length, hidden_size]
-        self.assertEqual(expected_output_shape, outputs.shape.as_list())
+        expected_output_shape = (None, seq_length, hidden_size)
+        self.assertEqual(expected_output_shape, outputs.shape)
 
     def test_dynamic_layer_output_shape(self):
         pos_encoding = sine_position_encoding.SinePositionEncoding()
@@ -51,8 +51,8 @@ class SinePositionEncodingTest(tf.test.TestCase):
 
         # When using dynamic positional encoding shapes, the output is expected
         # to be the same as the input shape in all dimensions but may be None.
-        expected_output_shape = [None, None, hidden_size]
-        self.assertEqual(expected_output_shape, outputs.shape.as_list())
+        expected_output_shape = (None, None, hidden_size)
+        self.assertEqual(expected_output_shape, outputs.shape)
 
     # do multi dimension before sequence length
     def test_multi_dimension_layer_output_shape(self):
@@ -64,8 +64,8 @@ class SinePositionEncodingTest(tf.test.TestCase):
 
         # When using muliple dimensions before sequence length, the output is
         # expected to be the same as the input shape in all dimensions.
-        expected_output_shape = [None, None, seq_length, hidden_size]
-        self.assertEqual(expected_output_shape, outputs.shape.as_list())
+        expected_output_shape = (None, None, seq_length, hidden_size)
+        self.assertEqual(expected_output_shape, outputs.shape)
 
     def test_output_correct_values(self):
         pos_encoding = sine_position_encoding.SinePositionEncoding()
