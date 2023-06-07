@@ -35,7 +35,7 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
             max_decoder_sequence_length=6,
         )
         self.input_batch = {
-            "encoder_features": tf.ones((2, 5, 80), dtype="int32"),
+            "encoder_features": tf.ones((2, 5, 80), dtype="float32"),
             "decoder_token_ids": tf.ones((2, 5), dtype="int32"),
             "decoder_padding_mask": tf.ones((2, 5), dtype="int32"),
         }
@@ -60,7 +60,9 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def test_variable_sequence_length_call_whisper(self):
         for seq_length in (2, 3, 4):
             input_data = {
-                "encoder_features": tf.ones((2, seq_length, 80), dtype="int32"),
+                "encoder_features": tf.ones(
+                    (2, seq_length, 80), dtype="float32"
+                ),
                 "decoder_token_ids": tf.ones((2, seq_length), dtype="int32"),
                 "decoder_padding_mask": tf.ones((2, seq_length), dtype="int32"),
             }
