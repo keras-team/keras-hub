@@ -27,7 +27,7 @@ class GPTNeoXAttention(keras.layers.Layer):
         max_position_embeddings=512,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
-        **kwargs
+        **kwargs,
     ):
 
         super().__init__()

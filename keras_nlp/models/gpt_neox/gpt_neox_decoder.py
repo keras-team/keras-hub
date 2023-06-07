@@ -65,16 +65,13 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self._input_shape = input_shape
         # Infer the dimension of our hidden feature size from the build shape.
         hidden_dim = input_shape[-1]
-        # Attention head size is `hidden_dim` over the number of heads.
-        head_dim = int(hidden_dim // self.num_heads)
 
         # Self attention layers.
         self._self_attention_layer = GPTNeoXAttention(
             num_heads=self.num_heads,
-            hidden_dim=head_dim,
-            dropout=self.dropout,
-            rotary_pct=head_dim,
+            hidden_dim=hidden_dim,
             max_position_embeddings=self.max_position_embeddings,
+            dropout=self.dropout,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
@@ -115,8 +112,6 @@ class GPTNeoXDecoder(keras.layers.Layer):
         encoder_padding_mask=None,
         encoder_attention_mask=None,
     ):
-
-        # has_encoder_sequence = encoder_sequence is not None
 
         if not self._built:
             self._build(decoder_sequence.shape)
@@ -166,10 +161,11 @@ class GPTNeoXDecoder(keras.layers.Layer):
         residual = x
         if self.normalize_first:
             x = self._feedforward_layernorm(x)
+
         x = self._feedforward_intermediate_dense(x)
         x = self._feedforward_output_dense(x)
         x = self._feedforward_dropout(x)
-        x = x + residual
+        # x = x + residual
         if not self.normalize_first:
             x = self._feedforward_layernorm(x)
 
