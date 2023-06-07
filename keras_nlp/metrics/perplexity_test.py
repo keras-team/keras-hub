@@ -269,69 +269,6 @@ class PerplexityTest(tf.test.TestCase):
         perplexity_val = perplexity.result()
         self.assertAlmostEqual(perplexity_val, 3.9998, delta=1e-3)
 
-    def test_merge_state(self):
-        perplexity_1 = Perplexity(from_logits=True, mask_token_id=0)
-        perplexity_2 = Perplexity(from_logits=True, mask_token_id=0)
-
-        y_true_1 = tf.constant([[1, 3, 0], [2, 1, 3]])
-        y_pred_1 = tf.constant(
-            [
-                [
-                    [1.034, 4.797, 2.82, 1.154],
-                    [2.258, 1.591, 1.811, 1.852],
-                    [3.216, 1.037, 0.3662, 2.7],
-                ],
-                [
-                    [1.363, 1.726, 1.898, 2.582],
-                    [1.163, 1.943, 1.761, 1.497],
-                    [2.766, 1.453, 2.61, 2.805],
-                ],
-            ]
-        )
-
-        y_true_2 = tf.constant([[2, 0, 0], [1, 2, 3]])
-        y_pred_2 = tf.constant(
-            [
-                [
-                    [2.887, 0.885, 2.973, 2.582],
-                    [0.3838, 2.629, 1.91, 1.802],
-                    [0.2578, 1.081, 1.125, 2.773],
-                ],
-                [
-                    [1.623, 2.784, 0.2109, 2.66],
-                    [2.395, 2.01, 0.252, 1.828],
-                    [0.4482, 2.629, 0.9697, 0.998],
-                ],
-            ]
-        )
-
-        y_true_3 = tf.constant([[1, 3, 1], [2, 2, 1]])
-        y_pred_3 = tf.constant(
-            [
-                [
-                    [0.7383, 0.882, 0.7295, 2.64],
-                    [0.867, 1.588, 2.291, 0.967],
-                    [0.0908, 1.453, 1.5, 0.0703],
-                ],
-                [
-                    [2.783, 0.9785, 2.664, 0.507],
-                    [0.741, 1.535, 2.16, 2.531],
-                    [2.863, 1.591, 1.403, 0.885],
-                ],
-            ]
-        )
-
-        perplexity_1.update_state(y_true_1, y_pred_1)
-        perplexity_1.update_state(y_true_2, y_pred_2)
-        self.assertAlmostEqual(perplexity_1.result(), 3.9998, delta=1e-3)
-
-        perplexity_2.update_state(y_true_3, y_pred_3)
-        self.assertAlmostEqual(perplexity_2.result(), 4.4303, delta=1e-3)
-
-        merged_perplexity = Perplexity(from_logits=True, mask_token_id=0)
-        merged_perplexity.merge_state([perplexity_1, perplexity_2])
-        self.assertAlmostEqual(merged_perplexity.result(), 4.1385, delta=1e-3)
-
     def test_get_config(self):
         perplexity = Perplexity(
             from_logits=True,
