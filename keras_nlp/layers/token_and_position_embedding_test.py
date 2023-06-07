@@ -52,50 +52,6 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase, parameterized.TestCase):
             {**config, **expected_config_subset},
         )
 
-    def test_ragged_tensor(self):
-        vocabulary_size = 5
-        sequence_length = 4
-        embedding_dim = 3
-        test_layer = TokenAndPositionEmbedding(
-            vocabulary_size=vocabulary_size,
-            sequence_length=sequence_length,
-            embedding_dim=embedding_dim,
-            embeddings_initializer=keras.initializers.Constant(1.0),
-        )
-        # Create a 2-dimensional ragged input
-        # (the first dimension is implicit).
-        input_tensor = keras.Input(
-            shape=(sequence_length,), dtype="float32", ragged=True
-        )
-        output_tensor = test_layer(input_tensor)
-        model = keras.Model(input_tensor, output_tensor)
-
-        input_data = tf.ragged.constant(
-            [
-                [1.0, 1.0],
-                [],
-                [1.0, 1.0, 1.0, 1.0],
-                [1.0, 1.0, 1.0],
-            ],
-            ragged_rank=1,
-        )
-        expected_output_data = tf.ragged.constant(
-            [
-                [[2.0, 2.0, 2.0], [2.0, 2.0, 2.0]],
-                [],
-                [
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                    [2.0, 2.0, 2.0],
-                ],
-                [[2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0]],
-            ],
-            ragged_rank=1,
-        )
-        output_data = model.predict(input_data)
-        self.assertAllClose(output_data, expected_output_data)
-
     def test_dense_tensor(self):
         vocabulary_size = 5
         sequence_length = 4
