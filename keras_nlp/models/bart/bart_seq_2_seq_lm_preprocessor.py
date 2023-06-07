@@ -14,15 +14,19 @@
 
 """BART Seq2Seq LM preprocessor layer."""
 
+import copy
+
 import tensorflow as tf
 from absl import logging
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.bart.bart_preprocessor import BartPreprocessor
+from keras_nlp.models.bart.bart_presets import backbone_presets
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
+from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLMPreprocessor")
@@ -187,6 +191,10 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         y = decoder_token_ids[..., 1:]
         sample_weight = decoder_padding_mask[..., 1:]
         return pack_x_y_sample_weight(x, y, sample_weight)
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
 
     def generate_preprocess(
         self,

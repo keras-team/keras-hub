@@ -70,4 +70,32 @@ backbone_presets = {
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/bart_large_en/v1/merges.txt",
         "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
     },
+    "bart_large_en_cnn": {
+        "metadata": {
+            "description": (
+                "The `bart_large_en` backbone model fine-tuned on the CNN+DM "
+                "summarization dataset."
+            ),
+            "params": 406287360,
+            "official_name": "BART",
+            "path": "bart",
+            "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/bart/README.md",
+        },
+        "config": {
+            "vocabulary_size": 50264,
+            "num_layers": 12,
+            "num_heads": 16,
+            "hidden_dim": 1024,
+            "intermediate_dim": 4096,
+            "dropout": 0.1,
+            "max_sequence_length": 1024,
+        },
+        "preprocessor_config": {},
+        "weights_url": "https://storage.googleapis.com/keras-nlp/models/bart_large_en/v1/model.h5",
+        "weights_hash": "6bfe7e591af8c5699ce6f9f18753af9a",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/bart_large_en/v1/vocab.json",
+        "vocabulary_hash": "cf410ee085c5c69c957bb1f6d8456596",
+        "merges_url": "https://storage.googleapis.com/keras-nlp/models/bart_large_en/v1/merges.txt",
+        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+    },
 }
