@@ -112,12 +112,16 @@ class Perplexity(keras.metrics.Metric):
         self.mask_token_id = mask_token_id
 
         self._aggregate_crossentropy = self.add_weight(
-            name="aggregate_crossentropy",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="aggregate_crossentropy",
         )
         self._number_of_samples = self.add_weight(
-            name="number_of_samples", initializer="zeros", dtype=self.dtype
+            shape=(),
+            initializer="zeros",
+            dtype=self.dtype,
+            name="number_of_samples",
         )
 
     def update_state(self, y_true, y_pred, sample_weight=None):
