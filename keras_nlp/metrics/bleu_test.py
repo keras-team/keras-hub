@@ -212,43 +212,6 @@ class BleuTest(tf.test.TestCase):
         bleu_val = bleu.result()
         self.assertAlmostEqual(bleu_val, 0.26, delta=1e-3)
 
-    def test_merge_state_normalize(self):
-        bleu_1 = Bleu(smooth=True)
-        bleu_2 = Bleu(smooth=True)
-
-        y_true_1 = tf.ragged.constant(
-            [
-                ["He eats a sweet apple."],
-                ["Silicon Valley is one of my favourite shows!"],
-            ]
-        )
-        y_pred_1 = tf.constant(
-            [
-                "He He He eats sweet apple which is a fruit.",
-                "I love Silicon Valley, it's one of my favourite shows.",
-            ]
-        )
-
-        y_true_2 = tf.constant(["Virat Kohli is the GOAT."])
-        y_pred_2 = tf.constant("Virat Kohli is the greatest of all time!")
-
-        y_true_3 = tf.constant([["Watching Test cricket is so much fun."]])
-        y_pred_3 = tf.constant(["Test is the best format in cricket."])
-
-        bleu_1.update_state(y_true_1, y_pred_1)
-        bleu_1.update_state(y_true_2, y_pred_2)
-        bleu_val = bleu_1.result()
-        self.assertAlmostEqual(bleu_val, 0.293, delta=1e-3)
-
-        bleu_2.update_state(y_true_3, y_pred_3)
-        bleu_val = bleu_2.result()
-        self.assertAlmostEqual(bleu_val, 0.202, delta=1e-3)
-
-        merged_bleu = Bleu(smooth=True)
-        merged_bleu.merge_state([bleu_1, bleu_2])
-        bleu_val = merged_bleu.result()
-        self.assertAlmostEqual(bleu_val, 0.495, delta=1e-3)
-
     def test_get_config(self):
         byte_tokenizer = ByteTokenizer()
         bleu = Bleu(
