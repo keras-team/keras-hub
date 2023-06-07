@@ -515,7 +515,7 @@ class BartSeq2SeqLM(Task):
         )
         # Compute the lengths of all user inputted tokens ids.
         row_lengths = tf.math.reduce_sum(
-            tf.cast(decoder_padding_mask, tf.int32), axis=-1
+            tf.cast(decoder_padding_mask, "int32"), axis=-1
         )
         # Start at the first index that has no user inputted id.
         index = tf.math.reduce_min(row_lengths)
@@ -565,16 +565,14 @@ class BartSeq2SeqLM(Task):
             end_locations = (decoder_token_ids == end_token_id) & (
                 ~decoder_padding_mask
             )
-            end_locations = tf.cast(end_locations, tf.int32)
+            end_locations = tf.cast(end_locations, "int32")
             # Use cumsum to get ones in all locations after `end_locations`.
             overflow = tf.math.cumsum(end_locations, exclusive=True, axis=-1)
             # Our padding mask is the inverse of these overflow locations.
-            decoder_padding_mask = ~tf.cast(overflow, tf.bool)
+            decoder_padding_mask = ~tf.cast(overflow, "bool")
         else:
             # Without early stopping, all locations will have been updated.
-            decoder_padding_mask = tf.ones_like(
-                decoder_token_ids, dtype=tf.bool
-            )
+            decoder_padding_mask = tf.ones_like(decoder_token_ids, dtype="bool")
 
         return {
             "decoder_token_ids": decoder_token_ids,

@@ -16,7 +16,6 @@
 
 import copy
 
-import tensorflow as tf
 from tensorflow import keras
 from tensorflow.experimental import dtensor
 from tensorflow.experimental.dtensor import Layout
@@ -67,7 +66,7 @@ class OPTBackbone(Backbone):
     Examples:
     ```python
     input_data = {
-        "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
+        "token_ids": tf.ones(shape=(1, 12), dtype="int64"),
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
         ),
@@ -134,7 +133,7 @@ class OPTBackbone(Backbone):
             name="layer_norm",
             axis=-1,
             epsilon=1e-5,
-            dtype=tf.float32,
+            dtype="float32",
         )(x)
 
         # Instantiate using Functional API Model constructor

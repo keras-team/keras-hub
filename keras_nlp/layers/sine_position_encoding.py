@@ -49,7 +49,7 @@ class SinePositionEncoding(keras.layers.Layer):
     seq_len = 100
     vocab_size = 1000
     embedding_dim = 32
-    inputs = keras.Input((seq_len,), dtype=tf.float32)
+    inputs = keras.Input((seq_len,), dtype="float32")
     embedding = keras.layers.Embedding(
         input_dim=vocab_size, output_dim=embedding_dim
     )(inputs)

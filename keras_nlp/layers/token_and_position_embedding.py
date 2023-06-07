@@ -48,7 +48,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
 
     Examples:
     ```python
-    inputs = tf.ones(shape=(1, 50), dtype=tf.int64)
+    inputs = tf.ones(shape=(1, 50), dtype="int64")
     embedding_layer = keras_nlp.layers.TokenAndPositionEmbedding(
         vocabulary_size=10_000,
         sequence_length=50,

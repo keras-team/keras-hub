@@ -52,7 +52,7 @@ class BeamSamplerTest(tf.test.TestCase, parameterized.TestCase):
             # Return a distribution favoring the first token in the vocab.
             logits = (
                 tf.one_hot(
-                    tf.zeros(self.batch_size, dtype=tf.int32),
+                    tf.zeros(self.batch_size, dtype="int32"),
                     self.vocab_size,
                 )
                 * 1e9

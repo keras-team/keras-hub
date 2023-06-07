@@ -136,8 +136,8 @@ class T5MultiHeadAttention(keras.layers.Layer):
         is_small = tf.math.less(relative_position, max_exact)
         relative_position_if_large = max_exact + tf.cast(
             tf.math.log(
-                tf.cast(relative_position, tf.float32)
-                / tf.cast(max_exact, tf.float32)
+                tf.cast(relative_position, "float32")
+                / tf.cast(max_exact, "float32")
             )
             / tf.math.log(max_distance / max_exact)
             * (num_buckets - max_exact),

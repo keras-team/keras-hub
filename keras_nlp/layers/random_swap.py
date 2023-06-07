@@ -121,7 +121,7 @@ class RandomSwap(keras.layers.Layer):
     ):
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = tf.int32
+            kwargs["dtype"] = "int32"
         else:
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer and dtype != tf.string:
@@ -182,7 +182,7 @@ class RandomSwap(keras.layers.Layer):
             skip_masks = self.StaticHashTable.lookup(inputs.flat_values)
         elif self.skip_fn:
             skip_masks = tf.map_fn(
-                self.skip_fn, inputs.flat_values, fn_output_signature=tf.bool
+                self.skip_fn, inputs.flat_values, fn_output_signature="bool"
             )
         elif self.skip_py_fn:
 
@@ -195,9 +195,9 @@ class RandomSwap(keras.layers.Layer):
             py_fn = string_fn if inputs.dtype == tf.string else int_fn
 
             skip_masks = tf.map_fn(
-                lambda x: tf.py_function(py_fn, [x], tf.bool),
+                lambda x: tf.py_function(py_fn, [x], "bool"),
                 inputs.flat_values,
-                fn_output_signature=tf.bool,
+                fn_output_signature="bool",
             )
 
         positions = tf.ragged.range(inputs.row_lengths())
@@ -219,9 +219,9 @@ class RandomSwap(keras.layers.Layer):
         if self.max_swaps is not None:
             num_to_select = tf.math.minimum(num_to_select, self.max_swaps)
         num_to_select = tf.math.minimum(
-            num_to_select, tf.cast(positions.row_lengths(), tf.int32)
+            num_to_select, tf.cast(positions.row_lengths(), "int32")
         )
-        num_to_select = tf.cast(num_to_select, tf.int64)
+        num_to_select = tf.cast(num_to_select, "int64")
 
         def _swap(x):
             positions, inputs, num_to_select = x
@@ -230,7 +230,7 @@ class RandomSwap(keras.layers.Layer):
                     shape=[2],
                     minval=0,
                     maxval=tf.size(positions),
-                    dtype=tf.int32,
+                    dtype="int32",
                     seed=self._generator.make_seeds()[:, 0],
                 )
                 index1, index2 = positions[index[0]], positions[index[1]]

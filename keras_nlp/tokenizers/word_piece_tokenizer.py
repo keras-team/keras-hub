@@ -299,7 +299,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         # Check dtype and provide a default.
         if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = tf.int32
+            kwargs["dtype"] = "int32"
         else:
             dtype = tf.dtypes.as_dtype(kwargs["dtype"])
             if not dtype.is_integer and dtype != tf.string:

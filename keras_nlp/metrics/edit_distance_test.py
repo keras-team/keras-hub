@@ -289,7 +289,7 @@ class EditDistanceTest(tf.test.TestCase):
     def test_get_config(self):
         rouge = EditDistance(
             normalize=False,
-            dtype=tf.float32,
+            dtype="float32",
             name="edit_distance_test",
         )
 
