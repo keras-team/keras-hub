@@ -168,11 +168,11 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_tiny_en/v1/model.h5",
-        "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
+        "weights_hash": "3dc3768ac48ec90b1029fbf52ffbacc7",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_tiny_en/v1/vocab.json",
-        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "vocabulary_hash": "22377f841debacb023848b3468ea3281",
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/whisper_tiny_en/v1/merges.txt",
-        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+        "merges_hash": "093ecf3f30371012f2e96fcfb10ea6ab",
     },
     "whisper_base_en": {
         "metadata": {
@@ -203,11 +203,11 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_en/v1/model.h5",
-        "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
+        "weights_hash": "799d3c143993d42f7446bafbc0f46d7d",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_en/v1/vocab.json",
-        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "vocabulary_hash": "22377f841debacb023848b3468ea3281",
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_en/v1/merges.txt",
-        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+        "merges_hash": "093ecf3f30371012f2e96fcfb10ea6ab",
     },
     "whisper_small_en": {
         "metadata": {
@@ -238,11 +238,11 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_en/v1/model.h5",
-        "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
+        "weights_hash": "b75a89225e20019d85ff5f1c362f8a49",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_en/v1/vocab.json",
-        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "vocabulary_hash": "22377f841debacb023848b3468ea3281",
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_en/v1/merges.txt",
-        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+        "merges_hash": "093ecf3f30371012f2e96fcfb10ea6ab",
     },
     "whisper_medium_en": {
         "metadata": {
@@ -273,11 +273,11 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_medium_en/v1/model.h5",
-        "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
+        "weights_hash": "107184882d1cc65926815e4cc50dc5f3",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_medium_en/v1/vocab.json",
-        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "vocabulary_hash": "22377f841debacb023848b3468ea3281",
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/whisper_medium_en/v1/merges.txt",
-        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+        "merges_hash": "093ecf3f30371012f2e96fcfb10ea6ab",
     },
     "whisper_tiny_multi": {
         "metadata": {
@@ -308,11 +308,11 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_tiny_multi/v1/model.h5",
-        "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
+        "weights_hash": "b1279a81001ad5eb35970d1aea706396",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_tiny_multi/v1/vocab.json",
-        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "vocabulary_hash": "1b87ed3e3ecd9ccfdca74e64cbe81d68",
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/whisper_tiny_multi/v1/merges.txt",
-        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+        "merges_hash": "c7f01d4100f6211417988889bf35ccd8",
     },
     "whisper_base_multi": {
         "metadata": {
@@ -343,11 +343,11 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_multi/v1/model.h5",
-        "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
+        "weights_hash": "5208396e2d5efac43114a4a3d4f583ab",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_multi/v1/vocab.json",
-        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "vocabulary_hash": "1b87ed3e3ecd9ccfdca74e64cbe81d68",
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_multi/v1/merges.txt",
-        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+        "merges_hash": "c7f01d4100f6211417988889bf35ccd8",
     },
     "whisper_small_multi": {
         "metadata": {
@@ -378,11 +378,11 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_multi/v1/model.h5",
-        "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
+        "weights_hash": "c90c6a895e522056b77b924b6e907ed8",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_multi/v1/vocab.json",
-        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "vocabulary_hash": "1b87ed3e3ecd9ccfdca74e64cbe81d68",
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_multi/v1/merges.txt",
-        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+        "merges_hash": "c7f01d4100f6211417988889bf35ccd8",
     },
     "whisper_medium_multi": {
         "metadata": {
@@ -413,11 +413,11 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_medium_multi/v1/model.h5",
-        "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
+        "weights_hash": "6f993f732fe397e9c5e3a96a9505a3a9",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_medium_multi/v1/vocab.json",
-        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "vocabulary_hash": "1b87ed3e3ecd9ccfdca74e64cbe81d68",
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/whisper_medium_multi/v1/merges.txt",
-        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+        "merges_hash": "c7f01d4100f6211417988889bf35ccd8",
     },
     "whisper_large_multi": {
         "metadata": {
@@ -448,11 +448,11 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_large_multi/v1/model.h5",
-        "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
+        "weights_hash": "ccab1c93c5739007868ae73fe025806d",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_large_multi/v1/vocab.json",
-        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "vocabulary_hash": "1b87ed3e3ecd9ccfdca74e64cbe81d68",
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/whisper_large_multi/v1/merges.txt",
-        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+        "merges_hash": "c7f01d4100f6211417988889bf35ccd8",
     },
     "whisper_large_multi_v2": {
         "metadata": {
@@ -484,10 +484,10 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_large_multi_v2/v1/model.h5",
-        "weights_hash": "f4ea6e1b214516dd7de452461ee6e16e",
+        "weights_hash": "ca157162ec9c3329a659388528a3af88",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_large_multi_v2/v1/vocab.json",
-        "vocabulary_hash": "dffec25a898b1f5e569bec4dffd7e5c0",
+        "vocabulary_hash": "1b87ed3e3ecd9ccfdca74e64cbe81d68",
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/whisper_large_multi_v2/v1/merges.txt",
-        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+        "merges_hash": "c7f01d4100f6211417988889bf35ccd8",
     },
 }
