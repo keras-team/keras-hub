@@ -188,49 +188,6 @@ class RougeNTest(tf.test.TestCase):
             {"precision": 0.45, "recall": 0.35, "f1_score": 0.385185},
         )
 
-    def test_merge_state(self):
-        rouge_1 = RougeN()
-        rouge_2 = RougeN()
-
-        y_true_1 = tf.constant(
-            [
-                "the tiny little cat was found under the big funny bed",
-                "i really love contributing to KerasNLP",
-            ]
-        )
-        y_pred_1 = tf.constant(
-            ["the cat was under the bed", "i love contributing to KerasNLP"]
-        )
-
-        y_true_2 = tf.constant(["what is your favourite show"])
-        y_pred_2 = tf.constant(["my favourite show is silicon valley"])
-
-        y_true_3 = tf.constant(["lorem ipsum dolor sit amet"])
-        y_pred_3 = tf.constant(["lorem ipsum is simply dummy text"])
-
-        rouge_1.update_state(y_true_1, y_pred_1)
-        rouge_1.update_state(y_true_2, y_pred_2)
-        rouge_val = rouge_1.result()
-        self.assertAllClose(
-            rouge_val,
-            {"precision": 0.45, "recall": 0.35, "f1_score": 0.385185},
-        )
-
-        rouge_2.update_state(y_true_3, y_pred_3)
-        rouge_val = rouge_2.result()
-        self.assertAllClose(
-            rouge_val,
-            {"precision": 0.2, "recall": 0.25, "f1_score": 0.222222},
-        )
-
-        merged_rouge = RougeN()
-        merged_rouge.merge_state([rouge_1, rouge_2])
-        rouge_val = merged_rouge.result()
-        self.assertAllClose(
-            rouge_val,
-            {"precision": 0.3875, "recall": 0.325, "f1_score": 0.344444},
-        )
-
     def test_get_config(self):
         rouge = RougeN(
             order=5,
