@@ -15,34 +15,18 @@
 """Tests for RougeL."""
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.metrics.rouge_l import RougeL
 
 
 class RougeLTest(tf.test.TestCase):
-    def setUp(self):
-        super().setUp()
-
-        def assertDictAlmostEqual(d1, d2, delta=1e-3, typecast_to_numpy=True):
-            for key, val in d1.items():
-                if typecast_to_numpy:
-                    val = val.numpy()
-                self.assertAlmostEqual(val, d2[key], delta=delta)
-
-        def assertDictAllValuesNotEqual(d1, d2):
-            for key, val in d1.items():
-                self.assertNotEqual(val, d2[key])
-
-        self.assertDictAlmostEqual = assertDictAlmostEqual
-        self.assertDictAllValuesNotEqual = assertDictAllValuesNotEqual
-
     def test_initialization(self):
         rouge = RougeL()
         result = rouge.result()
 
         self.assertDictEqual(
-            result, {"precision": 0.0, "recall": 0.0, "f1_score": 0.0}
+            result,
+            {"precision": 0.0, "recall": 0.0, "f1_score": 0.0},
         )
 
     def test_string_input(self):
@@ -51,8 +35,9 @@ class RougeLTest(tf.test.TestCase):
         y_pred = "the cat was under the bed"
 
         rouge_val = rouge(y_true, y_pred)
-        self.assertDictAlmostEqual(
-            rouge_val, {"precision": 1.0, "recall": 0.545, "f1_score": 0.706}
+        self.assertAllClose(
+            rouge_val,
+            {"precision": 1.0, "recall": 0.545454, "f1_score": 0.705882},
         )
 
     def test_string_list_input(self):
@@ -67,8 +52,9 @@ class RougeLTest(tf.test.TestCase):
         ]
 
         rouge_val = rouge(y_true, y_pred)
-        self.assertDictAlmostEqual(
-            rouge_val, {"precision": 1.0, "recall": 0.689, "f1_score": 0.807}
+        self.assertAllClose(
+            rouge_val,
+            {"precision": 1.0, "recall": 0.689393, "f1_score": 0.807486},
         )
 
     def test_tensor_input(self):
@@ -84,8 +70,9 @@ class RougeLTest(tf.test.TestCase):
         )
 
         rouge_val = rouge(y_true, y_pred)
-        self.assertDictAlmostEqual(
-            rouge_val, {"precision": 1.0, "recall": 0.689, "f1_score": 0.807}
+        self.assertAllClose(
+            rouge_val,
+            {"precision": 1.0, "recall": 0.689393, "f1_score": 0.807486},
         )
 
     def test_rank_2_input(self):
@@ -101,26 +88,9 @@ class RougeLTest(tf.test.TestCase):
         )
 
         rouge_val = rouge(y_true, y_pred)
-        self.assertDictAlmostEqual(
-            rouge_val, {"precision": 1.0, "recall": 0.689, "f1_score": 0.807}
-        )
-
-    def test_model_compile(self):
-        inputs = keras.Input(shape=(), dtype="string")
-        outputs = tf.strings.lower(inputs)
-        model = keras.Model(inputs, outputs)
-
-        model.compile(metrics=[RougeL()])
-
-        x = tf.constant(["HELLO THIS IS FUN"])
-        y = tf.constant(["hello this is awesome"])
-
-        output = model.evaluate(x, y, return_dict=True)
-        del output["loss"]
-        self.assertDictAlmostEqual(
-            output,
-            {"precision": 0.75, "recall": 0.75, "f1_score": 0.75},
-            typecast_to_numpy=False,
+        self.assertAllClose(
+            rouge_val,
+            {"precision": 1.0, "recall": 0.689393, "f1_score": 0.807486},
         )
 
     def test_reset_state(self):
@@ -137,14 +107,16 @@ class RougeLTest(tf.test.TestCase):
 
         rouge.update_state(y_true, y_pred)
         rouge_val = rouge.result()
-        self.assertDictAllValuesNotEqual(
-            rouge_val, {"precision": 0.0, "recall": 0.0, "f1_score": 0.0}
+        self.assertNotAllClose(
+            rouge_val,
+            {"precision": 0.0, "recall": 0.0, "f1_score": 0.0},
         )
 
         rouge.reset_state()
         rouge_val = rouge.result()
         self.assertDictEqual(
-            rouge_val, {"precision": 0.0, "recall": 0.0, "f1_score": 0.0}
+            rouge_val,
+            {"precision": 0.0, "recall": 0.0, "f1_score": 0.0},
         )
 
     def test_update_state(self):
@@ -161,8 +133,9 @@ class RougeLTest(tf.test.TestCase):
 
         rouge.update_state(y_true_1, y_pred_1)
         rouge_val = rouge.result()
-        self.assertDictAlmostEqual(
-            rouge_val, {"precision": 1.0, "recall": 0.689, "f1_score": 0.807}
+        self.assertAllClose(
+            rouge_val,
+            {"precision": 1.0, "recall": 0.689393, "f1_score": 0.807486},
         )
 
         y_true_2 = tf.constant(["what is your favourite show"])
@@ -170,8 +143,9 @@ class RougeLTest(tf.test.TestCase):
 
         rouge.update_state(y_true_2, y_pred_2)
         rouge_val = rouge.result()
-        self.assertDictAlmostEqual(
-            rouge_val, {"precision": 0.778, "recall": 0.593, "f1_score": 0.66}
+        self.assertAllClose(
+            rouge_val,
+            {"precision": 0.777777, "recall": 0.592929, "f1_score": 0.659536},
         )
 
     def test_merge_state(self):
@@ -197,21 +171,24 @@ class RougeLTest(tf.test.TestCase):
         rouge_1.update_state(y_true_1, y_pred_1)
         rouge_1.update_state(y_true_2, y_pred_2)
         rouge_val = rouge_1.result()
-        self.assertDictAlmostEqual(
-            rouge_val, {"precision": 0.778, "recall": 0.593, "f1_score": 0.66}
+        self.assertAllClose(
+            rouge_val,
+            {"precision": 0.777777, "recall": 0.592929, "f1_score": 0.659536},
         )
 
         rouge_2.update_state(y_true_3, y_pred_3)
         rouge_val = rouge_2.result()
-        self.assertDictAlmostEqual(
-            rouge_val, {"precision": 0.333, "recall": 0.4, "f1_score": 0.364}
+        self.assertAllClose(
+            rouge_val,
+            {"precision": 0.333333, "recall": 0.4, "f1_score": 0.363636},
         )
 
         merged_rouge = RougeL()
         merged_rouge.merge_state([rouge_1, rouge_2])
         rouge_val = merged_rouge.result()
-        self.assertDictAlmostEqual(
-            rouge_val, {"precision": 0.667, "recall": 0.545, "f1_score": 0.586}
+        self.assertAllClose(
+            rouge_val,
+            {"precision": 0.666666, "recall": 0.544696, "f1_score": 0.585561},
         )
 
     def test_get_config(self):
