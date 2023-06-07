@@ -13,10 +13,13 @@
 # limitations under the License.
 """Whisper tokenizer."""
 
+import copy
 import json
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.models.whisper.whisper_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+from keras_nlp.utils.python_utils import classproperty
 
 
 def _load_dict(dict_or_path):
@@ -139,3 +142,7 @@ class WhisperTokenizer(BytePairTokenizer):
             }
         )
         return config
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
