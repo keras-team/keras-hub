@@ -22,7 +22,7 @@ from keras_nlp.metrics.perplexity import Perplexity
 class PerplexityTest(tf.test.TestCase):
     def test_vars_after_initializing_class(self):
         perplexity = Perplexity()
-        self.assertEqual(perplexity.result().numpy(), 0.0)
+        self.assertEqual(perplexity.result(), 0.0)
 
     def test_from_logits_without_masking(self):
         perplexity = Perplexity(from_logits=True)
@@ -43,7 +43,7 @@ class PerplexityTest(tf.test.TestCase):
         )
 
         perplexity_val = perplexity(y_true, y_pred)
-        self.assertAlmostEqual(perplexity_val.numpy(), 2.6542, delta=1e-3)
+        self.assertAlmostEqual(perplexity_val, 2.6542, delta=1e-3)
 
     def test_from_logits_with_sample_weight(self):
         perplexity = Perplexity(from_logits=True)
@@ -66,7 +66,7 @@ class PerplexityTest(tf.test.TestCase):
         sample_wt = tf.cast(y_true != 0, "int32")
 
         perplexity_val = perplexity(y_true, y_pred, sample_wt)
-        self.assertAlmostEqual(perplexity_val.numpy(), 2.8789, delta=1e-3)
+        self.assertAlmostEqual(perplexity_val, 2.8789, delta=1e-3)
 
     def test_from_logits_with_mask_token_id(self):
         perplexity = Perplexity(from_logits=True, mask_token_id=0)
@@ -88,7 +88,7 @@ class PerplexityTest(tf.test.TestCase):
         )
 
         perplexity_val = perplexity(y_true, y_pred)
-        self.assertAlmostEqual(perplexity_val.numpy(), 2.8789, delta=1e-3)
+        self.assertAlmostEqual(perplexity_val, 2.8789, delta=1e-3)
 
     def test_from_logits_with_mask_token_id_and_sample_weight(self):
         perplexity = Perplexity(from_logits=True, mask_token_id=0)
@@ -111,7 +111,7 @@ class PerplexityTest(tf.test.TestCase):
         sample_weight = tf.constant([[0.5, 0.1, 0.9], [1, 0.7, 0.5]])
 
         perplexity_val = perplexity(y_true, y_pred, sample_weight)
-        self.assertAlmostEqual(perplexity_val.numpy(), 2.9442, delta=1e-3)
+        self.assertAlmostEqual(perplexity_val, 2.9442, delta=1e-3)
 
     def test_two_inputs_from_logits(self):
         perplexity = Perplexity(from_logits=True, mask_token_id=0)
@@ -133,7 +133,7 @@ class PerplexityTest(tf.test.TestCase):
         )
 
         perplexity_val = perplexity(y_true_1, y_pred_1)
-        self.assertAlmostEqual(perplexity_val.numpy(), 2.8789, delta=1e-3)
+        self.assertAlmostEqual(perplexity_val, 2.8789, delta=1e-3)
 
         y_true_2 = tf.constant([[2, 0, 0], [1, 2, 3]])
         y_pred_2 = tf.constant(
@@ -151,7 +151,7 @@ class PerplexityTest(tf.test.TestCase):
             ]
         )
         perplexity_val = perplexity(y_true_2, y_pred_2)
-        self.assertAlmostEqual(perplexity_val.numpy(), 3.9998, delta=1e-3)
+        self.assertAlmostEqual(perplexity_val, 3.9998, delta=1e-3)
 
     def test_from_probs_with_sample_weight(self):
         perplexity = Perplexity(from_logits=False)
@@ -247,7 +247,7 @@ class PerplexityTest(tf.test.TestCase):
 
         perplexity.update_state(y_true_1, y_pred_1)
         perplexity_val = perplexity.result()
-        self.assertAlmostEqual(perplexity_val.numpy(), 2.8789, delta=1e-3)
+        self.assertAlmostEqual(perplexity_val, 2.8789, delta=1e-3)
 
         y_true_2 = tf.constant([[2, 0, 0], [1, 2, 3]])
         y_pred_2 = tf.constant(
@@ -323,20 +323,14 @@ class PerplexityTest(tf.test.TestCase):
 
         perplexity_1.update_state(y_true_1, y_pred_1)
         perplexity_1.update_state(y_true_2, y_pred_2)
-        self.assertAlmostEqual(
-            perplexity_1.result().numpy(), 3.9998, delta=1e-3
-        )
+        self.assertAlmostEqual(perplexity_1.result(), 3.9998, delta=1e-3)
 
         perplexity_2.update_state(y_true_3, y_pred_3)
-        self.assertAlmostEqual(
-            perplexity_2.result().numpy(), 4.4303, delta=1e-3
-        )
+        self.assertAlmostEqual(perplexity_2.result(), 4.4303, delta=1e-3)
 
         merged_perplexity = Perplexity(from_logits=True, mask_token_id=0)
         merged_perplexity.merge_state([perplexity_1, perplexity_2])
-        self.assertAlmostEqual(
-            merged_perplexity.result().numpy(), 4.1385, delta=1e-3
-        )
+        self.assertAlmostEqual(merged_perplexity.result(), 4.1385, delta=1e-3)
 
     def test_get_config(self):
         perplexity = Perplexity(

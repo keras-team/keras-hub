@@ -37,7 +37,7 @@ class BleuTest(tf.test.TestCase):
         y_pred = "He He He eats sweet apple which is a fruit."
 
         bleu_val = bleu(y_true, y_pred)
-        self.assertAlmostEqual(bleu_val.numpy(), 0.212, delta=1e-3)
+        self.assertAlmostEqual(bleu_val, 0.212, delta=1e-3)
 
     def test_1d_list_input(self):
         bleu = Bleu()
@@ -51,7 +51,7 @@ class BleuTest(tf.test.TestCase):
         ]
 
         bleu_val = bleu(y_true, y_pred)
-        self.assertAlmostEqual(bleu_val.numpy(), 0.243, delta=1e-3)
+        self.assertAlmostEqual(bleu_val, 0.243, delta=1e-3)
 
     def test_2d_list_input(self):
         bleu = Bleu()
@@ -65,7 +65,7 @@ class BleuTest(tf.test.TestCase):
         ]
 
         bleu_val = bleu(y_true, y_pred)
-        self.assertAlmostEqual(bleu_val.numpy(), 0.243, delta=1e-3)
+        self.assertAlmostEqual(bleu_val, 0.243, delta=1e-3)
 
     def test_1d_tensor_input(self):
         bleu = Bleu()
@@ -83,7 +83,7 @@ class BleuTest(tf.test.TestCase):
         )
 
         bleu_val = bleu(y_true, y_pred)
-        self.assertAlmostEqual(bleu_val.numpy(), 0.243, delta=1e-3)
+        self.assertAlmostEqual(bleu_val, 0.243, delta=1e-3)
 
     def test_2d_tensor_input(self):
         bleu = Bleu()
@@ -101,7 +101,7 @@ class BleuTest(tf.test.TestCase):
         )
 
         bleu_val = bleu(y_true, y_pred)
-        self.assertAlmostEqual(bleu_val.numpy(), 0.243, delta=1e-3)
+        self.assertAlmostEqual(bleu_val, 0.243, delta=1e-3)
 
     def test_custom_tokenizer(self):
         byte_tokenizer = ByteTokenizer()
@@ -120,7 +120,7 @@ class BleuTest(tf.test.TestCase):
         )
 
         bleu_val = bleu(y_true, y_pred)
-        self.assertAlmostEqual(bleu_val.numpy(), 0.609, delta=1e-3)
+        self.assertAlmostEqual(bleu_val, 0.609, delta=1e-3)
 
     def test_different_order(self):
         bleu = Bleu(max_order=5)
@@ -138,7 +138,7 @@ class BleuTest(tf.test.TestCase):
         )
 
         bleu_val = bleu(y_true, y_pred)
-        self.assertAlmostEqual(bleu_val.numpy(), 0.188, delta=1e-3)
+        self.assertAlmostEqual(bleu_val, 0.188, delta=1e-3)
 
     def test_model_compile(self):
         inputs = keras.Input(shape=(), dtype="string")
@@ -180,7 +180,7 @@ class BleuTest(tf.test.TestCase):
 
         bleu.update_state(y_true, y_pred)
         bleu_val = bleu.result()
-        self.assertNotEqual(bleu_val.numpy(), 0.0)
+        self.assertNotEqual(bleu_val, 0.0)
 
         bleu.reset_state()
         bleu_val = bleu.result()
@@ -203,14 +203,14 @@ class BleuTest(tf.test.TestCase):
 
         bleu.update_state(y_true_1, y_pred_1)
         bleu_val = bleu.result()
-        self.assertAlmostEqual(bleu_val.numpy(), 0.243, delta=1e-3)
+        self.assertAlmostEqual(bleu_val, 0.243, delta=1e-3)
 
         y_true_2 = tf.constant(["Virat Kohli is the GOAT."])
         y_pred_2 = tf.constant("Virat Kohli is the greatest of all time!")
 
         bleu.update_state(y_true_2, y_pred_2)
         bleu_val = bleu.result()
-        self.assertAlmostEqual(bleu_val.numpy(), 0.26, delta=1e-3)
+        self.assertAlmostEqual(bleu_val, 0.26, delta=1e-3)
 
     def test_merge_state_normalize(self):
         bleu_1 = Bleu(smooth=True)
@@ -238,16 +238,16 @@ class BleuTest(tf.test.TestCase):
         bleu_1.update_state(y_true_1, y_pred_1)
         bleu_1.update_state(y_true_2, y_pred_2)
         bleu_val = bleu_1.result()
-        self.assertAlmostEqual(bleu_val.numpy(), 0.293, delta=1e-3)
+        self.assertAlmostEqual(bleu_val, 0.293, delta=1e-3)
 
         bleu_2.update_state(y_true_3, y_pred_3)
         bleu_val = bleu_2.result()
-        self.assertAlmostEqual(bleu_val.numpy(), 0.202, delta=1e-3)
+        self.assertAlmostEqual(bleu_val, 0.202, delta=1e-3)
 
         merged_bleu = Bleu(smooth=True)
         merged_bleu.merge_state([bleu_1, bleu_2])
         bleu_val = merged_bleu.result()
-        self.assertAlmostEqual(bleu_val.numpy(), 0.495, delta=1e-3)
+        self.assertAlmostEqual(bleu_val, 0.495, delta=1e-3)
 
     def test_get_config(self):
         byte_tokenizer = ByteTokenizer()
