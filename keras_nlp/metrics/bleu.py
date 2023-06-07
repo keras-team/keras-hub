@@ -124,30 +124,33 @@ class Bleu(keras.metrics.Metric):
 
         self._matches = self.add_weight(
             shape=(self.max_order,),
-            name="bleu_matches",
             initializer="zeros",
             dtype=self.dtype,
+            name="bleu_matches",
         )
         self._possible_matches = self.add_weight(
             shape=(self.max_order,),
-            name="bleu_possible_matches",
             initializer="zeros",
             dtype=self.dtype,
+            name="bleu_possible_matches",
         )
         self._translation_length = self.add_weight(
-            name="bleu_translation_length",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="bleu_translation_length",
         )
         self._reference_length = self.add_weight(
-            name="bleu_reference_length",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="bleu_reference_length",
         )
         self._bleu = self.add_weight(
-            name="bleu",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="bleu",
         )
 
     def _tokenizer(self, inputs):

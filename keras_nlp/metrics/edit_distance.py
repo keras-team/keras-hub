@@ -133,21 +133,24 @@ class EditDistance(keras.metrics.Metric):
         self.normalize = normalize
 
         self._aggregate_unnormalized_edit_distance = self.add_weight(
-            name="aggregate_unnormalized_edit_distance",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="aggregate_unnormalized_edit_distance",
         )
         if normalize:
             self._aggregate_reference_length = self.add_weight(
-                name="aggregate_reference_length",
+                shape=(),
                 initializer="zeros",
                 dtype=self.dtype,
+                name="aggregate_reference_length",
             )
         else:
             self._number_of_samples = self.add_weight(
-                name="number_of_samples",
+                shape=(),
                 initializer="zeros",
                 dtype=self.dtype,
+                name="number_of_samples",
             )
 
     def update_state(self, y_true, y_pred, sample_weight=None):

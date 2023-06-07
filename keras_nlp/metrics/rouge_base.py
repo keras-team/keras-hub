@@ -94,23 +94,29 @@ class RougeBase(keras.metrics.Metric):
         )
 
         self._rouge_precision = self.add_weight(
-            name="rouge_precision",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="rouge_precision",
         )
         self._rouge_recall = self.add_weight(
-            name="rouge_recall",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="rouge_recall",
         )
         self._rouge_f1_score = self.add_weight(
-            name="rouge_f1_score",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="rouge_f1_score",
         )
 
         self._number_of_samples = self.add_weight(
-            name="number_of_samples", initializer="zeros", dtype=self.dtype
+            shape=(),
+            initializer="zeros",
+            dtype=self.dtype,
+            name="number_of_samples",
         )
 
     def __new__(cls, *args, **kwargs):
