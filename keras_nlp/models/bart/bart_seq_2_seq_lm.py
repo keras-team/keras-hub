@@ -28,7 +28,7 @@ from keras_nlp.models.task import Task
 from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.tf_utils import tensor_to_string_list
+from keras_nlp.utils.tensor_utils import tensor_to_string_list
 
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLM")

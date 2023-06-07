@@ -19,7 +19,8 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers import tokenizer
-from keras_nlp.utils.tf_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import is_integer_dtype
 
 try:
     import tensorflow_text as tf_text
@@ -161,20 +162,16 @@ class ByteTokenizer(tokenizer.Tokenizer):
         normalization_form: str = None,
         errors: str = "replace",
         replacement_char: int = 65533,
+        dtype="int32",
         **kwargs,
     ):
         assert_tf_text_installed(self.__class__.__name__)
 
-        # Check dtype and provide a default.
-        if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = "int32"
-        else:
-            dtype = tf.dtypes.as_dtype(kwargs["dtype"])
-            if not dtype.is_integer:
-                raise ValueError(
-                    "Output dtype must be an integer type. "
-                    f"Received: dtype={dtype}"
-                )
+        if not is_integer_dtype(dtype):
+            raise ValueError(
+                "Output dtype must be an integer type. "
+                f"Received: dtype={dtype}"
+            )
 
         # Check normalization_form.
         if normalization_form not in (None, "NFC", "NFKC", "NFD", "NFKD"):
@@ -191,7 +188,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
                 f"Received: errors={errors}"
             )
 
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
 
         self.lowercase = lowercase
         self.sequence_length = sequence_length

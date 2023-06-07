@@ -88,3 +88,21 @@ def is_tensor_type(x):
         return isinstance(x, (tf.Tensor, np.ndarray))
     else:
         return isinstance(x, (tf.Tensor, np.ndarray, pd.Series, pd.DataFrame))
+
+
+def is_floating_dtype(dtype):
+    if hasattr(dtype, "name"):
+        dtype = dtype.name
+    return "float" in dtype
+
+
+def is_integer_dtype(dtype):
+    if hasattr(dtype, "name"):
+        dtype = dtype.name
+    return "int" in dtype
+
+
+def is_string_dtype(dtype):
+    if hasattr(dtype, "name"):
+        dtype = dtype.name
+    return "string" in dtype

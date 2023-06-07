@@ -21,7 +21,8 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.utils.tf_utils import tensor_to_list
+from keras_nlp.utils.tensor_utils import is_floating_dtype
+from keras_nlp.utils.tensor_utils import tensor_to_list
 
 REPLACE_SUBSTRINGS = [
     ("<skipped>", ""),
@@ -106,13 +107,13 @@ class Bleu(keras.metrics.Metric):
         tokenizer=None,
         max_order=4,
         smooth=False,
-        dtype=None,
+        dtype="float32",
         name="bleu",
         **kwargs,
     ):
         super().__init__(name=name, dtype=dtype, **kwargs)
 
-        if not tf.as_dtype(self.dtype).is_floating:
+        if not is_floating_dtype(dtype):
             raise ValueError(
                 "`dtype` must be a floating point type. "
                 f"Received: dtype={dtype}"
