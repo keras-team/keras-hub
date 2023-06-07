@@ -209,3 +209,5 @@ class XLNetBackbone(Backbone):
     @property
     def token_embedding(self):
         return self.get_layer("token_embedding")
+
+
