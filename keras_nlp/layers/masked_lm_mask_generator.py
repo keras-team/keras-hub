@@ -16,7 +16,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.utils.tf_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import assert_tf_text_installed
 
 try:
     import tensorflow_text as tf_text

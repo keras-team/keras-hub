@@ -135,7 +135,6 @@ class RougeN(RougeBase):
         self,
         order=2,
         use_stemmer=False,
-        dtype=None,
         name="rouge-n",
         **kwargs,
     ):
@@ -148,7 +147,6 @@ class RougeN(RougeBase):
         super().__init__(
             variant=f"rouge{order}",
             use_stemmer=use_stemmer,
-            dtype=dtype,
             name=name,
             **kwargs,
         )

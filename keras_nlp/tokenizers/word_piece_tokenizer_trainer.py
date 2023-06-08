@@ -17,7 +17,7 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers.word_piece_tokenizer import pretokenize
-from keras_nlp.utils.tf_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import assert_tf_text_installed
 
 try:
     from tensorflow_text.tools.wordpiece_vocab import (

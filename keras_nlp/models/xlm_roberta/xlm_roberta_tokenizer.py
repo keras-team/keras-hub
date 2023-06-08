@@ -22,7 +22,7 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.tf_utils import tensor_to_string_list
+from keras_nlp.utils.tensor_utils import tensor_to_string_list
 
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaTokenizer")
