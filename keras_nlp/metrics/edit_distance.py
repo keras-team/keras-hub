@@ -18,6 +18,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.utils.tensor_utils import is_floating_dtype
 
 
 @keras_nlp_export("keras_nlp.metrics.EditDistance")
@@ -97,34 +98,18 @@ class EditDistance(keras.metrics.Metric):
     ... ])
     >>> edit_distance(y_true, y_pred)
     <tf.Tensor: shape=(), dtype=float32, numpy=0.73333335>
-
-    Pass the metric to `model.compile()`.
-    >>> inputs = keras.Input(shape=(None,), dtype="string")
-    >>> outputs = tf.strings.lower(inputs)
-    >>> model = keras.Model(inputs, outputs)
-    >>> model.compile(metrics=[keras_nlp.metrics.EditDistance()])
-    >>> x = tf.strings.split(
-    ...     tf.constant(
-    ...         ["the tiny little cat was found under the big funny bed"]
-    ...     )
-    ... )
-    >>> y = tf.strings.split(["the cat was found under the bed"])
-    >>> y = tf.strings.split(["the cat was found under the bed"])
-    >>> output = model.evaluate(y, x, return_dict=True)
-    >>> output["edit_distance"]
-    0.3636363744735718
     """
 
     def __init__(
         self,
         normalize=True,
-        dtype=None,
+        dtype="float32",
         name="edit_distance",
         **kwargs,
     ):
         super().__init__(name=name, dtype=dtype, **kwargs)
 
-        if not tf.as_dtype(self.dtype).is_floating:
+        if not is_floating_dtype(dtype):
             raise ValueError(
                 "`dtype` must be a floating point type. "
                 f"Received: dtype={dtype}"

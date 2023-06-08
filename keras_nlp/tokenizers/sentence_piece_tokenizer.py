@@ -24,8 +24,10 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers import tokenizer
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
-from keras_nlp.utils.tf_utils import assert_tf_text_installed
-from keras_nlp.utils.tf_utils import tensor_to_string_list
+from keras_nlp.utils.tensor_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import is_integer_dtype
+from keras_nlp.utils.tensor_utils import is_string_dtype
+from keras_nlp.utils.tensor_utils import tensor_to_string_list
 
 try:
     import tensorflow_text as tf_text
@@ -105,22 +107,18 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         self,
         proto,
         sequence_length: int = None,
+        dtype="int32",
         **kwargs,
     ) -> None:
         assert_tf_text_installed(self.__class__.__name__)
 
-        # Check dtype and provide a default.
-        if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = "int32"
-        else:
-            dtype = tf.dtypes.as_dtype(kwargs["dtype"])
-            if not dtype.is_integer and dtype != tf.string:
-                raise ValueError(
-                    "Output dtype must be one of `'string'`, `'int32'`, and "
-                    f"`'int64'`. Received: dtype={dtype}"
-                )
+        if not is_integer_dtype(dtype) and not is_string_dtype(dtype):
+            raise ValueError(
+                "Output dtype must be an integer type or a string. "
+                f"Received: dtype={dtype}"
+            )
 
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
 
         if isinstance(proto, str):
             # A string could be either a filepath, or a base64 encoded byte

@@ -17,6 +17,8 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.utils.tensor_utils import is_integer_dtype
+from keras_nlp.utils.tensor_utils import is_string_dtype
 
 
 @keras_nlp_export("keras_nlp.layers.RandomDeletion")
@@ -115,20 +117,16 @@ class RandomDeletion(keras.layers.Layer):
         skip_py_fn=None,
         seed=None,
         name=None,
+        dtype="int32",
         **kwargs,
     ):
-        # Check dtype and provide a default.
-        if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = "int32"
-        else:
-            dtype = tf.dtypes.as_dtype(kwargs["dtype"])
-            if not dtype.is_integer and dtype != tf.string:
-                raise ValueError(
-                    "Output dtype must be one of `'string'`, `'int32'`, and "
-                    f"`'int64'`. Received: dtype={dtype}"
-                )
+        if not is_integer_dtype(dtype) and not is_string_dtype(dtype):
+            raise ValueError(
+                "Output dtype must be an integer type or a string. "
+                f"Received: dtype={dtype}"
+            )
 
-        super().__init__(name=name, **kwargs)
+        super().__init__(dtype=dtype, name=name, **kwargs)
         self.rate = rate
         self.max_deletions = max_deletions
         self.seed = random.randint(1, 1e9) if seed is None else seed
