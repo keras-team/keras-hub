@@ -115,14 +115,12 @@ class RougeL(RougeBase):
     def __init__(
         self,
         use_stemmer=False,
-        dtype=None,
         name="rouge-l",
         **kwargs,
     ):
         super().__init__(
             variant="rougeL",
             use_stemmer=use_stemmer,
-            dtype=dtype,
             name=name,
             **kwargs,
         )

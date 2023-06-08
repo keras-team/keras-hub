@@ -21,7 +21,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
-from keras_nlp.utils.tf_utils import is_tensor_type
+from keras_nlp.utils.tensor_utils import is_tensor_type
 
 
 def _convert_inputs_to_dataset(

@@ -20,7 +20,8 @@ import types
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.utils.tf_utils import tensor_to_string_list
+from keras_nlp.utils.tensor_utils import is_floating_dtype
+from keras_nlp.utils.tensor_utils import tensor_to_string_list
 
 try:
     from rouge_score import rouge_scorer
@@ -56,7 +57,7 @@ class RougeBase(keras.metrics.Metric):
         self,
         variant="rouge2",
         use_stemmer=False,
-        dtype=None,
+        dtype="float32",
         name="rouge",
         **kwargs,
     ):
@@ -68,7 +69,7 @@ class RougeBase(keras.metrics.Metric):
                 "package. Please install it with `pip install rouge-score`."
             )
 
-        if not tf.as_dtype(self.dtype).is_floating:
+        if not is_floating_dtype(dtype):
             raise ValueError(
                 "`dtype` must be a floating point type. "
                 f"Received: dtype={dtype}"
@@ -94,23 +95,29 @@ class RougeBase(keras.metrics.Metric):
         )
 
         self._rouge_precision = self.add_weight(
-            name="rouge_precision",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="rouge_precision",
         )
         self._rouge_recall = self.add_weight(
-            name="rouge_recall",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="rouge_recall",
         )
         self._rouge_f1_score = self.add_weight(
-            name="rouge_f1_score",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="rouge_f1_score",
         )
 
         self._number_of_samples = self.add_weight(
-            name="number_of_samples", initializer="zeros", dtype=self.dtype
+            shape=(),
+            initializer="zeros",
+            dtype=self.dtype,
+            name="number_of_samples",
         )
 
     def __new__(cls, *args, **kwargs):

@@ -18,6 +18,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.utils.tensor_utils import is_floating_dtype
 
 
 @keras_nlp_export("keras_nlp.metrics.Perplexity")
@@ -92,17 +93,17 @@ class Perplexity(keras.metrics.Metric):
         self,
         from_logits=False,
         mask_token_id=None,
-        dtype=None,
+        dtype="float32",
         name="perplexity",
         **kwargs,
     ):
-        super().__init__(name=name, dtype=dtype, **kwargs)
-
-        if not tf.as_dtype(self.dtype).is_floating:
+        if not is_floating_dtype(dtype):
             raise ValueError(
                 "`dtype` must be a floating point type. "
                 f"Received: dtype={dtype}"
             )
+
+        super().__init__(name=name, dtype=dtype, **kwargs)
 
         self._crossentropy = keras.losses.SparseCategoricalCrossentropy(
             from_logits=from_logits, reduction="sum"
@@ -112,12 +113,16 @@ class Perplexity(keras.metrics.Metric):
         self.mask_token_id = mask_token_id
 
         self._aggregate_crossentropy = self.add_weight(
-            name="aggregate_crossentropy",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="aggregate_crossentropy",
         )
         self._number_of_samples = self.add_weight(
-            name="number_of_samples", initializer="zeros", dtype=self.dtype
+            shape=(),
+            initializer="zeros",
+            dtype=self.dtype,
+            name="number_of_samples",
         )
 
     def update_state(self, y_true, y_pred, sample_weight=None):
