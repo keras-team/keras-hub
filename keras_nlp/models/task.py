@@ -58,9 +58,9 @@ class Task(PipelineModel):
             # Only handle sparse categorical crossentropy.
             return
 
-        is_softmax = activation == keras.activations.softmax
-        is_linear = activation == keras.activations.linear
-        if is_softmax and from_logits:
+        softmax_output = activation == keras.activations.softmax
+        logit_output = activation == keras.activations.linear
+        if softmax_output and from_logits:
             raise ValueError(
                 "The `loss` passed to `compile()` expects logit output, but "
                 "the model is configured to output softmax probabilities "
@@ -68,7 +68,7 @@ class Task(PipelineModel):
                 "`from_logits=False` to your loss, e.g. "
                 "`loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False)`. "
             )
-        if is_linear and not from_logits:
+        if logit_output and not from_logits:
             raise ValueError(
                 "The `loss` passed to `compile()` expects softmax probability "
                 "output, but the model is configured to output logits "

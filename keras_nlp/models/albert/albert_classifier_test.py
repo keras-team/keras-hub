@@ -115,12 +115,26 @@ class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
         self.classifier.fit(self.preprocessed_dataset)
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.classifier)
-        new_classifier = keras.utils.deserialize_keras_object(config)
-        self.assertEqual(
-            new_classifier.get_config(),
-            self.classifier.get_config(),
+        # Defaults.
+        original = AlbertClassifier(
+            self.backbone,
+            num_classes=2,
         )
+        config = keras.utils.serialize_keras_object(original)
+        restored = keras.utils.deserialize_keras_object(config)
+        self.assertEqual(restored.get_config(), original.get_config())
+        # With options.
+        original = AlbertClassifier(
+            self.backbone,
+            num_classes=4,
+            preprocessor=self.preprocessor,
+            activation=keras.activations.softmax,
+            name="test",
+            trainable=False,
+        )
+        config = keras.utils.serialize_keras_object(original)
+        restored = keras.utils.deserialize_keras_object(config)
+        self.assertEqual(restored.get_config(), original.get_config())
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
