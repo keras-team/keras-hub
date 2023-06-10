@@ -17,7 +17,6 @@ from tensorflow.experimental import dtensor
 from tensorflow.experimental.dtensor import Layout
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.gpt_neox.gpt_neox_decoder import GPTNeoXDecoder
 

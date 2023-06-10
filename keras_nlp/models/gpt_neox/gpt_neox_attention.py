@@ -41,7 +41,9 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.rotary_dim = int(self.attn_head_size * rotary_pct)
         self.rotary_emb_base = rotary_emb_base
         self.max_position_embeddings = max_position_embeddings
-        self.rotary_embedding = RotaryEmbedding(self.rotary_dim, rotary_emb_base)
+        self.rotary_embedding = RotaryEmbedding(
+            self.rotary_dim, rotary_emb_base
+        )
 
         self._kernel_initializer = keras.initializers.get(kernel_initializer)
         self._bias_initializer = keras.initializers.get(bias_initializer)
@@ -134,7 +136,8 @@ class GPTNeoXAttention(keras.layers.Layer):
 
         return attention_output, attention_scores
 
-    def call(self,
+    def call(
+        self,
         hidden_states,
         attention_mask,
         return_attention_scores=False,

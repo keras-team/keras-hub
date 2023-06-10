@@ -23,7 +23,6 @@ from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
 )
 
 
-
 class GPTNeoXDecoder(keras.layers.Layer):
     def __init__(
         self,
@@ -69,8 +68,6 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self._input_shape = input_shape
         # Infer the dimension of our hidden feature size from the build shape.
         hidden_dim = input_shape[-1]
-        # Attention head size is `hidden_dim` over the number of heads.
-        head_dim = int(hidden_dim // self.num_heads)
 
         # Self attention layers.
         self._self_attention_layer = GPTNeoXAttention(
@@ -120,8 +117,6 @@ class GPTNeoXDecoder(keras.layers.Layer):
         encoder_padding_mask=None,
         encoder_attention_mask=None,
     ):
-
-        has_encoder_sequence = encoder_sequence is not None
 
         if not self._built:
             self._build(decoder_sequence.shape)
