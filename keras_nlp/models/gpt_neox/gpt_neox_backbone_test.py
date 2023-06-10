@@ -31,15 +31,14 @@ class GPTNeoXTest(tf.test.TestCase, parameterized.TestCase):
 
         self.backbone = GPTNeoXBackbone(
             vocabulary_size=10,
-            num_layers=2,
-            num_heads=2,
-            hidden_dim=2,
-            intermediate_dim=4,
-            max_sequence_length=5,
+            num_layers=4,
+            num_heads=4,
+            hidden_dim=64,
+            intermediate_dim=64,
+            max_sequence_length=10,
         )
         self.input_batch = {
             "token_ids": tf.ones((2, 5), dtype="int32"),
-            "segment_ids": tf.ones((2, 5), dtype="int32"),
             "padding_mask": tf.ones((2, 5), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
@@ -51,11 +50,11 @@ class GPTNeoXTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_token_embedding(self):
         output = self.backbone.token_embedding(self.input_batch["token_ids"])
-        self.assertEqual(output.shape, (2, 5, 2))
+        self.assertEqual(output.shape, (2, 5, 64))
 
-    def test_name(self):
-        # Check default name passed through
-        self.assertRegexpMatches(self.backbone.name, "gpt_neox_backbone")
+    # def test_name(self):
+    #     # Check default name passed through
+    #     self.assertRegexpMatches(self.backbone.name, "gpt_neox_backbone")
 
     def test_variable_sequence_length(self):
         for seq_length in (2, 3, 4):

@@ -18,28 +18,29 @@ from tensorflow import keras
 
 
 class RotaryEmbedding(keras.layers.Layer):
-    def __init__(self, hidden_dim):
+    def __init__(self, dim, rotary_emb_base=10000):
         super().__init__()
-        self.hidden_dim = hidden_dim
+        self.dim = int(dim)
+        self.rotary_emb_base = rotary_emb_base
 
     def build(self, input_shape):
         super().build(input_shape)
         self.inverse_freq = self.add_weight(
-            "inverse_freq", shape=(self.hidden_dim // 2,), dtype=tf.float32
+            "inverse_freq", shape=(self.dim // 2,), dtype=tf.float32
         )
 
         self.inverse_freq.assign(
             1.0
             / (
-                10000
+                self.rotary_emb_base
                 ** (
                     tf.range(
                         start=0,
-                        limit=self.hidden_dim,
+                        limit=self.dim,
                         delta=2,
                         dtype=tf.float32,
                     )
-                    / self.hidden_dim
+                    / self.dim
                 )
             )
         )

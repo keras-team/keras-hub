@@ -23,6 +23,7 @@ from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
 )
 
 
+
 class GPTNeoXDecoder(keras.layers.Layer):
     def __init__(
         self,
@@ -33,6 +34,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
         activation="relu",
         layer_norm_epsilon=1e-5,
         rotary_pct=0.25,
+        rotary_emb_base=10000,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         normalize_first=None,
@@ -47,6 +49,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self.num_heads = num_heads
         self.dropout = dropout
         self.rotary_pct = rotary_pct
+        self.rotary_emb_base = rotary_emb_base
         self.max_position_embeddings = max_position_embeddings
         self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -55,6 +58,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self.normalize_first = normalize_first
         self._built = False
         self.supports_masking = True
+        self.rotary_pct = rotary_pct
 
         if self._input_shape is not None:
             self._build(self._input_shape)
@@ -65,6 +69,8 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self._input_shape = input_shape
         # Infer the dimension of our hidden feature size from the build shape.
         hidden_dim = input_shape[-1]
+        # Attention head size is `hidden_dim` over the number of heads.
+        head_dim = int(hidden_dim // self.num_heads)
 
         # Self attention layers.
         self._self_attention_layer = GPTNeoXAttention(
@@ -74,6 +80,8 @@ class GPTNeoXDecoder(keras.layers.Layer):
             dropout=self.dropout,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            rotary_pct=self.rotary_pct,
+            rotary_emb_base=self.rotary_emb_base,
         )
 
         self._self_attention_layernorm = keras.layers.LayerNormalization(
@@ -112,6 +120,8 @@ class GPTNeoXDecoder(keras.layers.Layer):
         encoder_padding_mask=None,
         encoder_attention_mask=None,
     ):
+
+        has_encoder_sequence = encoder_sequence is not None
 
         if not self._built:
             self._build(decoder_sequence.shape)

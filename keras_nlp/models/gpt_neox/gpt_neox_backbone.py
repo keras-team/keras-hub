@@ -35,8 +35,11 @@ class GPTNeoXBackbone(Backbone):
         num_heads,
         hidden_dim,
         intermediate_dim,
+        rotary_pct=0.25,
+        rotary_emb_base=10000,
         dropout=0.1,
         max_sequence_length=512,
+        layer_norm_epsilon=1e-5,
         **kwargs,
     ):
         # Inputs
@@ -53,22 +56,10 @@ class GPTNeoXBackbone(Backbone):
             name="token_embedding",
         )(token_ids)
 
-        # Can't use `TokenAndPositionEmbedding` layer here because of different
-        # initializers.
-        position_embedding = PositionEmbedding(
-            initializer=_gpt_neox_kernel_initializer(stddev=0.02),
-            sequence_length=max_sequence_length,
-            name="position_embedding",
-        )(token_embedding)
-
-        # Sum and apply dropout to embeddings.
-        x = keras.layers.Add(name="embeddings_add")(
-            (token_embedding, position_embedding)
-        )
         x = keras.layers.Dropout(
             dropout,
             name="embeddings_dropout",
-        )(x)
+        )(token_embedding)
 
         # Apply successive transformer decoder blocks.
         for i in range(num_layers):
@@ -76,7 +67,9 @@ class GPTNeoXBackbone(Backbone):
                 intermediate_dim=intermediate_dim,
                 num_heads=num_heads,
                 dropout=dropout,
-                layer_norm_epsilon=1e-05,
+                rotary_pct=rotary_pct,
+                rotary_emb_base=rotary_emb_base,
+                layer_norm_epsilon=layer_norm_epsilon,
                 activation=lambda x: keras.activations.gelu(
                     x, approximate=True
                 ),
@@ -109,6 +102,8 @@ class GPTNeoXBackbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
+        self.rotary_pct = rotary_pct
+        self.rotary_emb_base = rotary_emb_base
 
     def get_config(self):
         config = super().get_config()
