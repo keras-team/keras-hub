@@ -28,21 +28,10 @@ class RotaryEmbedding(keras.layers.Layer):
         self.inverse_freq = self.add_weight(
             "inverse_freq", shape=(self.dim // 2,), dtype=tf.float32
         )
-
+        range = tf.range(start=0, limit=self.dim, delta=2, dtype="float32")
+        self.inverse_freq.assign(1.0 / ...)
         self.inverse_freq.assign(
-            1.0
-            / (
-                self.rotary_emb_base
-                ** (
-                    tf.range(
-                        start=0,
-                        limit=self.dim,
-                        delta=2,
-                        dtype=tf.float32,
-                    )
-                    / self.dim
-                )
-            )
+            1.0 / (self.rotary_emb_base ** (range / self.dim))
         )
 
     def apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
