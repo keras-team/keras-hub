@@ -34,7 +34,7 @@ class GPTNeoXBackbone(Backbone):
         num_heads,
         hidden_dim,
         intermediate_dim,
-        dropout=0.1,
+        dropout=0.,
         rotary_pct=0.25,
         rotary_emb_base=10000,
         layer_norm_epsilon=1e-5,
