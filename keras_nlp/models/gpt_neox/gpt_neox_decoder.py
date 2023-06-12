@@ -25,23 +25,22 @@ from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
 
 class GPTNeoXDecoder(keras.layers.Layer):
     def __init__(
-        self,
-        intermediate_dim,
-        num_heads,
-        max_position_embeddings=512,
-        dropout=0.2,
-        activation="relu",
-        layer_norm_epsilon=1e-5,
-        rotary_pct=0.25,
-        rotary_emb_base=10000,
-        kernel_initializer="glorot_uniform",
-        bias_initializer="zeros",
-        normalize_first=None,
-        name=None,
-        **kwargs,
+            self,
+            intermediate_dim,
+            num_heads,
+            max_position_embeddings=512,
+            dropout=0.,
+            activation="relu",
+            layer_norm_epsilon=1e-5,
+            rotary_pct=0.25,
+            rotary_emb_base=10000,
+            kernel_initializer="glorot_uniform",
+            bias_initializer="zeros",
+            use_parallel_residual=True,
+            name=None,
+            **kwargs,
     ):
         self._input_shape = kwargs.pop("build_input_shape", None)
-        self._has_cross_attention = kwargs.pop("has_cross_attention", False)
 
         super().__init__(name=name, **kwargs)
         self.intermediate_dim = intermediate_dim
@@ -54,10 +53,10 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
-        self.normalize_first = normalize_first
         self._built = False
         self.supports_masking = True
         self.rotary_pct = rotary_pct
+        self.use_parallel_residual = use_parallel_residual
 
         if self._input_shape is not None:
             self._build(self._input_shape)
@@ -69,16 +68,20 @@ class GPTNeoXDecoder(keras.layers.Layer):
         # Infer the dimension of our hidden feature size from the build shape.
         hidden_dim = input_shape[-1]
 
+        self._input_layernorm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+        )
+
         # Self attention layers.
         self._self_attention_layer = GPTNeoXAttention(
             num_heads=self.num_heads,
             hidden_dim=hidden_dim,
-            max_position_embeddings=self.max_position_embeddings,
             dropout=self.dropout,
-            kernel_initializer=clone_initializer(self.kernel_initializer),
-            bias_initializer=clone_initializer(self.bias_initializer),
             rotary_pct=self.rotary_pct,
             rotary_emb_base=self.rotary_emb_base,
+            max_position_embeddings=self.max_position_embeddings,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
         )
 
         self._self_attention_layernorm = keras.layers.LayerNormalization(
@@ -101,45 +104,32 @@ class GPTNeoXDecoder(keras.layers.Layer):
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
-        self._feedforward_layernorm = keras.layers.LayerNormalization(
-            epsilon=self.layer_norm_epsilon,
-        )
+
         self._feedforward_dropout = keras.layers.Dropout(
             rate=self.dropout,
         )
 
     def call(
-        self,
-        decoder_sequence,
-        encoder_sequence=None,
-        decoder_padding_mask=None,
-        decoder_attention_mask=None,
-        encoder_padding_mask=None,
-        encoder_attention_mask=None,
+            self,
+            decoder_sequence,
+            decoder_padding_mask=None,
+            decoder_attention_mask=None,
     ):
 
         if not self._built:
             self._build(decoder_sequence.shape)
-
-        #         has_self_attention_cache = self_attention_cache is not None
 
         x = decoder_sequence  # Intermediate result.
 
         # Compute self attention mask.
         batch_size = tf.shape(decoder_sequence)[0]
         input_length = output_length = tf.shape(decoder_sequence)[1]
-        # We need to handle a rectangular causal mask when doing cached
-        # decoding. For generative inference, `decoder_sequence` will
-        # generally be length 1, and `cache` will be the full generation length.
-        #         if self_attention_cache is not None:
-        #             input_length = tf.shape(self_attention_cache)[2]
+
         self_attention_mask = compute_causal_mask(
             batch_size,
             input_length,
             output_length,
-            #             0
-            #             if self_attention_cache_update_index is None
-            #             else self_attention_cache_update_index,
+            0
         )
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
@@ -147,36 +137,32 @@ class GPTNeoXDecoder(keras.layers.Layer):
         if decoder_mask is not None:
             self_attention_mask = tf.minimum(decoder_mask, self_attention_mask)
 
+        x = self._input_layernorm(x)
+
         # Self attention block.
         residual = x
-        if self.normalize_first:
-            x = self._self_attention_layernorm(x)
 
         x = self._self_attention_layer(
             hidden_states=x,
             attention_mask=self_attention_mask,
-            return_attention_scores=False,
         )
         x = self._self_attention_dropout(x)
-        x = x + residual
-        if not self.normalize_first:
-            x = self._self_attention_layernorm(x)
+        if not self.use_parallel_residual:
+            x = x + residual
+
+        attn_residual = x
+
+        x = self._self_attention_layernorm(x)
 
         # Feedforward block.
-        residual = x
-        if self.normalize_first:
-            x = self._feedforward_layernorm(x)
-
         x = self._feedforward_intermediate_dense(x)
         x = self._feedforward_output_dense(x)
         x = self._feedforward_dropout(x)
-        # x = x + residual
-        if not self.normalize_first:
-            x = self._feedforward_layernorm(x)
 
-        #         if self_attention_cache is not None:
-        #             return (x, self_attention_cache)
-        #         else:
+        if self.use_parallel_residual:
+            x = x + residual + attn_residual
+        else:
+            x = x + attn_residual
 
         return x
 
@@ -195,9 +181,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
                 ),
-                "normalize_first": self.normalize_first,
                 "build_input_shape": self._input_shape,
-                "has_cross_attention": self._has_cross_attention,
             }
         )
         return config

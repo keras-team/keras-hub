@@ -99,11 +99,11 @@ class GPTNeoXTest(tf.test.TestCase, parameterized.TestCase):
         with GPTNeoXBackbone.create_layout_map(mesh).scope():
             GPTNeoXBackbone(
                 vocabulary_size=10,
-                num_layers=2,
-                num_heads=2,
-                hidden_dim=2,
-                intermediate_dim=4,
-                max_sequence_length=5,
+                num_layers=4,
+                num_heads=4,
+                hidden_dim=64,
+                intermediate_dim=64,
+                max_sequence_length=10,
             )
         # Using DTensor enables the mlir bridge as a side effect. Eventually
         # this will be default, but for now we have compile errors with the
@@ -117,7 +117,7 @@ class GPTNeoXTest(tf.test.TestCase, parameterized.TestCase):
 class GPTNeoXBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
-            self.model = GPTNeoXBackbone(
+            GPTNeoXBackbone(
                 vocabulary_size=10,
                 num_layers=4,
                 num_heads=4,

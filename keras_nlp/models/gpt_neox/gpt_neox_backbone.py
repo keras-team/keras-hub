@@ -34,11 +34,11 @@ class GPTNeoXBackbone(Backbone):
         num_heads,
         hidden_dim,
         intermediate_dim,
+        dropout=0.1,
         rotary_pct=0.25,
         rotary_emb_base=10000,
-        dropout=0.1,
-        max_sequence_length=512,
         layer_norm_epsilon=1e-5,
+        max_sequence_length=512,
         **kwargs,
     ):
         # Inputs
@@ -73,7 +73,6 @@ class GPTNeoXBackbone(Backbone):
                     x, approximate=True
                 ),
                 kernel_initializer=_gpt_neox_kernel_initializer(stddev=0.02),
-                normalize_first=True,
                 name=f"transformer_layer_{i}",
             )(x, decoder_padding_mask=padding_mask)
 
@@ -101,8 +100,7 @@ class GPTNeoXBackbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
-        self.rotary_pct = rotary_pct
-        self.rotary_emb_base = rotary_emb_base
+        self.layer_norm_epsilon = layer_norm_epsilon
 
     def get_config(self):
         config = super().get_config()
@@ -115,6 +113,7 @@ class GPTNeoXBackbone(Backbone):
                 "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
                 "max_sequence_length": self.max_sequence_length,
+                "layer_norm_epsilon": self.layer_norm_epsilon
             }
         )
         return config
@@ -125,9 +124,6 @@ class GPTNeoXBackbone(Backbone):
 
     @classmethod
     def create_layout_map(cls, mesh):
-
-        # We assert the mesh is 2D, and assume the first mesh dim is for data
-        # parallel and the second dim is for model parallel.
         mesh_shape = mesh.shape()
         if len(mesh_shape) != 2:
             raise ValueError(
@@ -160,3 +156,4 @@ class GPTNeoXBackbone(Backbone):
             [unshard_dim], mesh
         )
         return layout_map
+

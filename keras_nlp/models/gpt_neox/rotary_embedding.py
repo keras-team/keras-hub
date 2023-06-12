@@ -14,9 +14,6 @@
 import tensorflow as tf
 from tensorflow import keras
 
-# referenc from https://github.com/huggingface/transformers/blob/17a55534f5e5df10ac4804d4270bf6b8cc24998d/src/transformers/models/esm/modeling_tf_esm.py#L93
-
-
 class RotaryEmbedding(keras.layers.Layer):
     def __init__(self, dim, rotary_emb_base=10000):
         super().__init__()
@@ -29,12 +26,13 @@ class RotaryEmbedding(keras.layers.Layer):
             "inverse_freq", shape=(self.dim // 2,), dtype=tf.float32
         )
         range = tf.range(start=0, limit=self.dim, delta=2, dtype="float32")
-        self.inverse_freq.assign(1.0 / ...)
+
         self.inverse_freq.assign(
             1.0 / (self.rotary_emb_base ** (range / self.dim))
         )
 
-    def apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
+    @staticmethod
+    def apply_rotary_pos_emb(tensor, cos_emb, sin_emb):
         cos_emb = cos_emb[:, : tf.shape(tensor)[1], :, :]
         sin_emb = sin_emb[:, : tf.shape(tensor)[1], :, :]
         x1, x2 = tf.split(tensor, 2, axis=-1)

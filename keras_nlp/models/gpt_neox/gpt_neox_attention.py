@@ -18,6 +18,7 @@ from keras_nlp.models.gpt_neox.rotary_embedding import RotaryEmbedding
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
+
 class GPTNeoXAttention(keras.layers.Layer):
     def __init__(
         self,
@@ -32,18 +33,16 @@ class GPTNeoXAttention(keras.layers.Layer):
         **kwargs,
     ):
 
-        super().__init__()
+        super().__init__(**kwargs)
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.rotary_pct = rotary_pct
         self.dropout = dropout
         self.attn_head_size = hidden_dim // num_heads
-        self.rotary_dim = int(self.attn_head_size * rotary_pct)
+        self.rotary_ndims = int(self.attn_head_size * rotary_pct)
         self.rotary_emb_base = rotary_emb_base
         self.max_position_embeddings = max_position_embeddings
-        self.rotary_embedding = RotaryEmbedding(
-            self.rotary_dim, rotary_emb_base
-        )
+        self.rotary_embedding = RotaryEmbedding(self.rotary_ndims, rotary_emb_base)
 
         self._kernel_initializer = keras.initializers.get(kernel_initializer)
         self._bias_initializer = keras.initializers.get(bias_initializer)
@@ -116,16 +115,6 @@ class GPTNeoXAttention(keras.layers.Layer):
 
         attention_scores = tf.einsum("aecd,abcd->acbe", key, query)
 
-        #         batch_size, _, key_len, _ = tf.shape(key)
-        #         causal_mask = compute_causal_mask(batch_size, key_len, key_len)
-        #         attention_mask = attention_mask & causal_mask
-        #         mask_value = tf.constant(float('-inf'), dtype=attention_scores.dtype)
-        #         attention_scores = tf.where(causal_mask, attention_scores, mask_value)
-
-        #         print(attention_scores[0].shape, attention_scores[1].shape)
-        #         if attention_mask is not None:
-        #             attention_scores += attention_mask
-
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
         )
@@ -136,42 +125,45 @@ class GPTNeoXAttention(keras.layers.Layer):
 
         return attention_output, attention_scores
 
-    def call(
-        self,
-        hidden_states,
-        attention_mask,
-        return_attention_scores=False,
-        training=None,
-    ):
+    def call(self,
+            hidden_states,
+            attention_mask,
+            layer_past=None,
+            return_attention_scores=False,
+            training=None):
 
         query = self._query_dense(hidden_states)
         key = self._key_dense(hidden_states)
         value = self._value_dense(hidden_states)
 
-        # query = tf.transpose(query, (0, 2, 1, 3))
-        # key = tf.transpose(key, (0, 2, 1, 3))
-        # value = tf.transpose(value, (0, 2, 1, 3))
-
         query_rot, query_pass = (
-            query[..., : self.rotary_dim],
-            query[..., self.rotary_dim :],
+            query[..., : self.rotary_ndims],
+            query[..., self.rotary_ndims :],
         )
         key_rot, key_pass = (
-            key[..., : self.rotary_dim],
-            key[..., self.rotary_dim :],
+            key[..., : self.rotary_ndims],
+            key[..., self.rotary_ndims:],
         )
+
+        seq_len = key.shape[1]
+        if layer_past is not None:
+            seq_len += layer_past[0].shape[-2]
 
         query, key = self.rotary_embedding(query_rot, key_rot)
         query = tf.concat((query, query_pass), axis=-1)
         key = tf.concat((key, key_pass), axis=-1)
 
-        #         if layer_past is not None:
-        #             past_key, past_value = layer_past
-        #             key = tf.concat((past_key, key), axis=-2)
-        #             value = tf.concat((past_value, value), axis=-2)
+        if layer_past is not None:
+            past_key, past_value = layer_past
+            key = tf.concat((past_key, key), axis=-2)
+            value = tf.concat((past_value, value), axis=-2)
 
         attention_output, attention_scores = self._compute_attention(
-            query, key, value, attention_mask, training
+            query=query,
+            key=key,
+            value=value,
+            attention_mask=attention_mask,
+            training=training
         )
 
         # Reshape `attention_output` to `(batch_size, sequence_length, hidden_dim)`.
