@@ -113,19 +113,21 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
         super().__init__(kernel_initializer=kernel_initializer, **kwargs)
 
     def _build_from_signature(self, query, value, key=None):
-        super(MultiHeadRelativeAttention, self)._build_from_signature(
-            query=query, value=value, key=key
-        )
+        self._built_from_signature = True
+        if hasattr(query, "shape"):
+            self._query_shape = tf.TensorShape(query.shape)
+        else:
+            self._query_shape = tf.TensorShape(query)
         if hasattr(value, "shape"):
-            value_shape = tf.TensorShape(value.shape)
+            self._value_shape = tf.TensorShape(value.shape)
         else:
-            value_shape = value
+            self._value_shape = value
         if key is None:
-            key_shape = value_shape
+            self._key_shape = value_shape
         elif hasattr(key, "shape"):
-            key_shape = tf.TensorShape(key.shape)
+            self._key_shape = tf.TensorShape(key.shape)
         else:
-            key_shape = key
+            self._key_shape = key
 
         common_kwargs = dict(
             kernel_initializer=self._kernel_initializer,
@@ -138,8 +140,65 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
         )
 
         with tf.init_scope():
+            free_dims = self._query_shape.rank - 1
             einsum_equation, _, output_rank = _build_proj_equation(
-                key_shape.rank - 1, bound_dims=1, output_dims=2
+                free_dims, bound_dims=1, output_dims=2
+            )
+            self._query_dense = keras.layers.EinsumDense(
+                einsum_equation,
+                output_shape=_get_output_shape(
+                    output_rank - 1, [self._num_heads, self._key_dim]
+                ),
+                bias_axes=None,
+                name="query",
+                **common_kwargs,
+            )
+            einsum_equation, _, output_rank = _build_proj_equation(
+                self._key_shape.rank - 1, bound_dims=1, output_dims=2
+            )
+            self._key_dense = keras.layers.EinsumDense(
+                einsum_equation,
+                output_shape=_get_output_shape(
+                    output_rank - 1, [self._num_heads, self._key_dim]
+                ),
+                bias_axes=None,
+                name="key",
+                **common_kwargs,
+            )
+            einsum_equation, _, output_rank = _build_proj_equation(
+                self._value_shape.rank - 1, bound_dims=1, output_dims=2
+            )
+            self._value_dense = keras.layers.EinsumDense(
+                einsum_equation,
+                output_shape=_get_output_shape(
+                    output_rank - 1, [self._num_heads, self._value_dim]
+                ),
+                bias_axes=None,
+                name="value",
+                **common_kwargs,
+            )
+            self._build_attention(output_rank)
+
+
+
+            # self._output_dense = self._make_output_dense(
+            #     free_dims,
+            #     common_kwargs,
+            #     "attention_output",
+            # )
+
+            einsum_equation, _, output_rank = _build_proj_equation(
+                free_dims, bound_dims=2, output_dims=1
+            )
+            self._output_dense = keras.layers.EinsumDense(
+                einsum_equation,
+                output_shape=_get_output_shape(output_rank - 1, [self._query_shape[-1]]),
+                bias_axes=None,
+                name="attention_output",
+                **common_kwargs,
+            )
+            einsum_equation, _, output_rank = _build_proj_equation(
+                self._key_shape.rank - 1, bound_dims=1, output_dims=2
             )
             self._encoding_dense = keras.layers.EinsumDense(
                 einsum_equation,
@@ -148,7 +207,7 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
                 ),
                 bias_axes=None,
                 name="encoding",
-                **common_kwargs
+                **common_kwargs,
             )
 
     def compute_attention(
@@ -235,6 +294,7 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
         attention_output = tf.einsum(
             self._combine_equation, attention_output, value
         )
+
         return attention_output
 
     def call(
