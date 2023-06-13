@@ -179,14 +179,6 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
             )
             self._build_attention(output_rank)
 
-
-
-            # self._output_dense = self._make_output_dense(
-            #     free_dims,
-            #     common_kwargs,
-            #     "attention_output",
-            # )
-
             einsum_equation, _, output_rank = _build_proj_equation(
                 free_dims, bound_dims=2, output_dims=1
             )
