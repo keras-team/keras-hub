@@ -179,16 +179,17 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
             )
             self._build_attention(output_rank)
 
-            einsum_equation, _, output_rank = _build_proj_equation(
+            _, _, output_rank = _build_proj_equation(
                 free_dims, bound_dims=2, output_dims=1
             )
             self._output_dense = keras.layers.EinsumDense(
-                einsum_equation,
+                "ibnd,hnd->ibh",
                 output_shape=_get_output_shape(output_rank - 1, [self._query_shape[-1]]),
                 bias_axes=None,
                 name="attention_output",
                 **common_kwargs,
             )
+
             einsum_equation, _, output_rank = _build_proj_equation(
                 self._key_shape.rank - 1, bound_dims=1, output_dims=2
             )
