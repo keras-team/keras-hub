@@ -50,7 +50,7 @@ class MultiQueryAttentionBatched(keras.layers.Layer):
         TensorShape([32, 10, 64])
 
     References:
-        - [Multi-Query Attention (Shazeer et al., 2019)](https://arxiv.org/abs/1911.02150)
+        - [Multi-Query Attention | Fast Transformer Decoding: One Write-Head is All You Need (Shazeer et al., 2019)](https://arxiv.org/abs/1911.02150)
     """
     def __init__(self, P_q, P_k, P_v, P_o, **kwargs):
         super(MultiQueryAttentionBatched, self).__init__(**kwargs)
@@ -111,7 +111,7 @@ class MultiQuerySelfAttentionIncremental(keras.layers.Layer):
         TensorShape([32, 21, 32])
 
     References:
-        - [Multi-Query Attention (Shazeer et al., 2019)](https://arxiv.org/abs/1911.02150)
+        - [Multi-Query Attention | Fast Transformer Decoding: One Write-Head is All You Need (Shazeer et al., 2019)](https://arxiv.org/abs/1911.02150)
     """
 
     def __init__(self, P_q, P_k, P_v, P_o, **kwargs):
