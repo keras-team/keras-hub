@@ -14,6 +14,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
+
 class RotaryEmbedding(keras.layers.Layer):
     def __init__(self, dim, rotary_emb_base=10000):
         super().__init__()

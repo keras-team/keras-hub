@@ -25,20 +25,20 @@ from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
 
 class GPTNeoXDecoder(keras.layers.Layer):
     def __init__(
-            self,
-            intermediate_dim,
-            num_heads,
-            max_position_embeddings=512,
-            dropout=0.,
-            activation="relu",
-            layer_norm_epsilon=1e-5,
-            rotary_pct=0.25,
-            rotary_emb_base=10000,
-            kernel_initializer="glorot_uniform",
-            bias_initializer="zeros",
-            use_parallel_residual=True,
-            name=None,
-            **kwargs,
+        self,
+        intermediate_dim,
+        num_heads,
+        max_position_embeddings=512,
+        dropout=0.0,
+        activation="relu",
+        layer_norm_epsilon=1e-5,
+        rotary_pct=0.25,
+        rotary_emb_base=10000,
+        kernel_initializer="glorot_uniform",
+        bias_initializer="zeros",
+        use_parallel_residual=True,
+        name=None,
+        **kwargs,
     ):
         self._input_shape = kwargs.pop("build_input_shape", None)
 
@@ -110,10 +110,10 @@ class GPTNeoXDecoder(keras.layers.Layer):
         )
 
     def call(
-            self,
-            decoder_sequence,
-            decoder_padding_mask=None,
-            decoder_attention_mask=None,
+        self,
+        decoder_sequence,
+        decoder_padding_mask=None,
+        decoder_attention_mask=None,
     ):
 
         if not self._built:
@@ -126,10 +126,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
         input_length = output_length = tf.shape(decoder_sequence)[1]
 
         self_attention_mask = compute_causal_mask(
-            batch_size,
-            input_length,
-            output_length,
-            0
+            batch_size, input_length, output_length, 0
         )
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask

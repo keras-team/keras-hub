@@ -67,74 +67,98 @@ keras_model.get_layer("token_embedding").embeddings.assign(
 
 keras_model.get_layer("token_embedding").embeddings.assign(
     hf_model.embed_in.weight.detach().numpy()
-);
+)
 
 for ilayer in range(cfg["num_layers"]):
     # attention layer
-    keras_model.get_layer(f"transformer_layer_{ilayer}")._self_attention_layer._qkv_dense.kernel.assign(
-        hf_wts[f"layers.{ilayer}.attention.query_key_value.weight"].numpy().T
-        .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+    keras_model.get_layer(
+        f"transformer_layer_{ilayer}"
+    )._self_attention_layer._qkv_dense.kernel.assign(
+        hf_wts[f"layers.{ilayer}.attention.query_key_value.weight"]
+        .numpy()
+        .T.reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
     )
 
-    keras_model.get_layer(f"transformer_layer_{ilayer}")._self_attention_layer._qkv_dense.bias.assign(
-        hf_wts[f"layers.{ilayer}.attention.query_key_value.bias"]
-        .reshape((cfg["num_heads"], -1))
+    keras_model.get_layer(
+        f"transformer_layer_{ilayer}"
+    )._self_attention_layer._qkv_dense.bias.assign(
+        hf_wts[f"layers.{ilayer}.attention.query_key_value.bias"].reshape(
+            (cfg["num_heads"], -1)
+        )
     )
 
     # Attention Dense
-    keras_model.get_layer(f"transformer_layer_{ilayer}")._self_attention_layer._output_dense.kernel.assign(
+    keras_model.get_layer(
+        f"transformer_layer_{ilayer}"
+    )._self_attention_layer._output_dense.kernel.assign(
         hf_wts[f"layers.{ilayer}.attention.dense.weight"].numpy().T
     )
 
-    keras_model.get_layer(f"transformer_layer_{ilayer}")._self_attention_layer._output_dense.bias.assign(
+    keras_model.get_layer(
+        f"transformer_layer_{ilayer}"
+    )._self_attention_layer._output_dense.bias.assign(
         hf_wts[f"layers.{ilayer}.attention.dense.bias"]
     )
 
     # LAYERNORM
-    keras_model.get_layer(f"transformer_layer_{ilayer}")._input_layernorm.gamma.assign(
+    keras_model.get_layer(
+        f"transformer_layer_{ilayer}"
+    )._input_layernorm.gamma.assign(
         hf_wts[f"layers.{ilayer}.input_layernorm.weight"]
     )
 
-    keras_model.get_layer(f"transformer_layer_{ilayer}")._input_layernorm.beta.assign(
+    keras_model.get_layer(
+        f"transformer_layer_{ilayer}"
+    )._input_layernorm.beta.assign(
         hf_wts[f"layers.{ilayer}.input_layernorm.bias"]
     )
 
-    keras_model.get_layer(f"transformer_layer_{ilayer}")._self_attention_layernorm.gamma.assign(
+    keras_model.get_layer(
+        f"transformer_layer_{ilayer}"
+    )._self_attention_layernorm.gamma.assign(
         hf_wts[f"layers.{ilayer}.post_attention_layernorm.weight"]
     )
 
-    keras_model.get_layer(f"transformer_layer_{ilayer}")._self_attention_layernorm.beta.assign(
+    keras_model.get_layer(
+        f"transformer_layer_{ilayer}"
+    )._self_attention_layernorm.beta.assign(
         hf_wts[f"layers.{ilayer}.post_attention_layernorm.bias"]
     )
 
     # MLP
-    keras_model.get_layer(f"transformer_layer_{ilayer}")._feedforward_intermediate_dense.kernel.assign(
-        hf_wts[f"layers.{ilayer}.mlp.dense_h_to_4h.weight"]
-        .numpy().T
+    keras_model.get_layer(
+        f"transformer_layer_{ilayer}"
+    )._feedforward_intermediate_dense.kernel.assign(
+        hf_wts[f"layers.{ilayer}.mlp.dense_h_to_4h.weight"].numpy().T
     )
 
-    keras_model.get_layer(f"transformer_layer_{ilayer}")._feedforward_intermediate_dense.bias.assign(
+    keras_model.get_layer(
+        f"transformer_layer_{ilayer}"
+    )._feedforward_intermediate_dense.bias.assign(
         hf_wts[f"layers.{ilayer}.mlp.dense_h_to_4h.bias"]
     )
 
-    keras_model.get_layer(f"transformer_layer_{ilayer}")._feedforward_output_dense.kernel.assign(
-        hf_wts[f"layers.{ilayer}.mlp.dense_4h_to_h.weight"]
-        .numpy().T
+    keras_model.get_layer(
+        f"transformer_layer_{ilayer}"
+    )._feedforward_output_dense.kernel.assign(
+        hf_wts[f"layers.{ilayer}.mlp.dense_4h_to_h.weight"].numpy().T
     )
 
-    keras_model.get_layer(f"transformer_layer_{ilayer}")._feedforward_output_dense.bias.assign(
+    keras_model.get_layer(
+        f"transformer_layer_{ilayer}"
+    )._feedforward_output_dense.bias.assign(
         hf_wts[f"layers.{ilayer}.mlp.dense_4h_to_h.bias"]
-    );
+    )
 
     # Rotary Embedding
-    keras_model.get_layer(f"transformer_layer_{ilayer}")._self_attention_layer.rotary_embedding.inverse_freq.assign(
+    keras_model.get_layer(
+        f"transformer_layer_{ilayer}"
+    )._self_attention_layer.rotary_embedding.inverse_freq.assign(
         hf_wts[f"layers.{ilayer}.attention.rotary_emb.inv_freq"]
-    );
+    )
 
-keras_model.get_layer(f"layer_norm").gamma.assign(
+keras_model.get_layer("layer_norm").gamma.assign(
     hf_wts["final_layer_norm.weight"]
 )
 
-keras_model.get_layer(f"layer_norm").beta.assign(
-    hf_wts["final_layer_norm.bias"]
-);
+keras_model.get_layer("layer_norm").beta.assign(hf_wts["final_layer_norm.bias"])

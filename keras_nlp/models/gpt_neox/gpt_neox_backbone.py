@@ -34,7 +34,7 @@ class GPTNeoXBackbone(Backbone):
         num_heads,
         hidden_dim,
         intermediate_dim,
-        dropout=0.,
+        dropout=0.0,
         rotary_pct=0.25,
         rotary_emb_base=10000,
         layer_norm_epsilon=1e-5,
@@ -113,7 +113,7 @@ class GPTNeoXBackbone(Backbone):
                 "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
                 "max_sequence_length": self.max_sequence_length,
-                "layer_norm_epsilon": self.layer_norm_epsilon
+                "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )
         return config
