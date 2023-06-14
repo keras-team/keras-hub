@@ -30,13 +30,13 @@ from keras_nlp.models.falcon.falcon_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
 
 
-def Falcon_kernel_initializer(stddev=0.02):
+def falcon_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
 @keras_nlp_export("keras_nlp.models.FalconBackbone")
 class FalconBackbone(Backbone):
-    """An Falcon decoder network.
+    """A Falcon decoder network.
 
     This class implements a Transformer-based decoder model as described in
     ["Falcon: Open Pre-trained Transformer Language Models"]().
@@ -111,7 +111,7 @@ class FalconBackbone(Backbone):
             vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
             embedding_dim=hidden_dim,
-            embeddings_initializer=Falcon_kernel_initializer(),
+            embeddings_initializer=falcon_kernel_initializer(),
             name="embeddings",
         )(token_ids)
 
@@ -124,7 +124,7 @@ class FalconBackbone(Backbone):
                 activation="relu",
                 layer_norm_epsilon=1e-5,
                 normalize_first=True,
-                kernel_initializer=Falcon_kernel_initializer(),
+                kernel_initializer=falcon_kernel_initializer(),
                 name=f"transformer_layer_{i}",
             )(x, decoder_padding_mask=padding_mask)
 
@@ -173,71 +173,4 @@ class FalconBackbone(Backbone):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def create_layout_map(cls, mesh):
-        """Create a DTensor layout map for an FalconBackbone.
-
-        Given a DTensor mesh describing a list of devices, this method returns a
-        DTensor layout map for creating a `keras_nlp.models.FalconBackbone`
-        instance. This mapping describes how to distribute all model weights
-        across multiple devices. For an overview of DTensor concepts, see
-        [this guide](https://www.tensorflow.org/guide/dtensor_overview).
-
-        Args:
-            mesh: A 2D `tf.experimental.dtensor.Mesh` describing the arrangement
-                of devices for running distributed computation. The
-                first dimension in the mesh is expected to be for data parallel
-                distribution, and the second for model parallel distribution.
-
-        Returns:
-            A `tf.keras.dtensor.experimental.LayoutMap` which contains the
-            proper layout to weights mapping for the model parallel setting.
-
-        Examples:
-        ```python
-        keras.backend.experimental.enable_tf_random_generator()
-        keras.utils.set_random_seed(1337)
-
-        # Update both dimensions below for a multi-device setting.
-        mesh = dtensor.create_mesh([("batch", 1), ("model", 1)])
-        layout_map = keras_nlp.models.FalconBackbone.create_layout_map(mesh)
-
-        with layout_map.scope():
-            model = keras_nlp.models.FalconBackbone.from_preset("Falcon_125m_en")
-        ```
-        """
-        # We assert the mesh is 2D, and assume the first mesh dim is for data
-        # parallel and the second dim is for model parallel.
-        mesh_shape = mesh.shape()
-        if len(mesh_shape) != 2:
-            raise ValueError(
-                f"Expect to create layout based on 2D mesh, received {mesh}"
-            )
-        _, model_dim = mesh.dim_names
-        unshard_dim = dtensor.UNSHARDED
-
-        layout_map = keras.dtensor.experimental.LayoutMap(mesh=mesh)
-        # Embedding sharding
-        layout_map[r".*embeddings"] = Layout([unshard_dim, model_dim], mesh)
-
-        # Transformer block sharding
-        layout_map[r".*_(query|key|value)_dense.kernel"] = Layout(
-            [unshard_dim, unshard_dim, model_dim], mesh
-        )
-        layout_map[r".*_(query|key|value)_dense.bias"] = Layout(
-            [model_dim, unshard_dim], mesh
-        )
-        layout_map[r".*_feedforward_intermediate_dense.kernel"] = Layout(
-            [unshard_dim, model_dim], mesh
-        )
-        layout_map[r".*_feedforward_intermediate_dense.bias"] = Layout(
-            [model_dim], mesh
-        )
-        layout_map[r".*_feedforward_output_dense.kernel"] = Layout(
-            [model_dim, unshard_dim], mesh
-        )
-        layout_map[r".*_feedforward_output_dense.bias"] = Layout(
-            [unshard_dim], mesh
-        )
-        return layout_map
+    
