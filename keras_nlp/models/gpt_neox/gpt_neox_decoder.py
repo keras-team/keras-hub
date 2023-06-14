@@ -28,7 +28,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self,
         intermediate_dim,
         num_heads,
-        max_position_embeddings=512,
+        max_sequence_length=512,
         dropout=0.0,
         activation="relu",
         layer_norm_epsilon=1e-5,
@@ -48,7 +48,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self.dropout = dropout
         self.rotary_pct = rotary_pct
         self.rotary_emb_base = rotary_emb_base
-        self.max_position_embeddings = max_position_embeddings
+        self.max_sequence_length = max_sequence_length
         self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
@@ -79,7 +79,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
             dropout=self.dropout,
             rotary_pct=self.rotary_pct,
             rotary_emb_base=self.rotary_emb_base,
-            max_position_embeddings=self.max_position_embeddings,
+            max_sequence_length=self.max_sequence_length,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
@@ -167,6 +167,9 @@ class GPTNeoXDecoder(keras.layers.Layer):
                 "intermediate_dim": self.intermediate_dim,
                 "num_heads": self.num_heads,
                 "dropout": self.dropout,
+                "rotary_pct": self.rotary_pct,
+                "rotary_emb_base": self.rotary_emb_base,
+                "max_sequence_length": self.max_sequence_length,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "kernel_initializer": keras.initializers.serialize(
@@ -176,6 +179,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
                     self.bias_initializer
                 ),
                 "build_input_shape": self._input_shape,
+                "use_parallel_residual": self.use_parallel_residual
             }
         )
         return config

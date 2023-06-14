@@ -33,7 +33,7 @@ class RotaryEmbedding(keras.layers.Layer):
         )
 
     @staticmethod
-    def apply_rotary_pos_emb(tensor, cos_emb, sin_emb):
+    def _apply_rotary_pos_emb(tensor, cos_emb, sin_emb):
         cos_emb = cos_emb[:, : tf.shape(tensor)[1], :, :]
         sin_emb = sin_emb[:, : tf.shape(tensor)[1], :, :]
         x1, x2 = tf.split(tensor, 2, axis=-1)
@@ -51,6 +51,16 @@ class RotaryEmbedding(keras.layers.Layer):
 
     def call(self, query, key):
         cos_emb, sin_emb = self._compute_cos_sin_embedding(key, seq_dim=1)
-        q_emb = self.apply_rotary_pos_emb(query, cos_emb, sin_emb)
-        k_emb = self.apply_rotary_pos_emb(key, cos_emb, sin_emb)
+        q_emb = self._apply_rotary_pos_emb(query, cos_emb, sin_emb)
+        k_emb = self._apply_rotary_pos_emb(key, cos_emb, sin_emb)
         return q_emb, k_emb
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "dim": self.dim,
+                "rotary_emb_base": self.rotary_emb_base,
+                "inverse_freq": self.inverse_freq
+            }
+        )

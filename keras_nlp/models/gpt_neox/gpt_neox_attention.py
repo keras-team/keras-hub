@@ -25,7 +25,7 @@ class GPTNeoXAttention(keras.layers.Layer):
         num_heads,
         hidden_dim,
         dropout=0.1,
-        max_position_embeddings=512,
+        max_sequence_length=512,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         rotary_pct=0.25,
@@ -41,7 +41,7 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.attn_head_size = hidden_dim // num_heads
         self.rotary_ndims = int(self.attn_head_size * rotary_pct)
         self.rotary_emb_base = rotary_emb_base
-        self.max_position_embeddings = max_position_embeddings
+        self.max_sequence_length = max_sequence_length
         self.rotary_embedding = RotaryEmbedding(
             self.rotary_ndims, rotary_emb_base
         )

@@ -121,38 +121,3 @@ class GPTNeoXBackbone(Backbone):
     @property
     def token_embedding(self):
         return self.get_layer("token_embedding")
-
-    @classmethod
-    def create_layout_map(cls, mesh):
-        mesh_shape = mesh.shape()
-        if len(mesh_shape) != 2:
-            raise ValueError(
-                f"Expect to create layout based on 2D mesh, received {mesh}"
-            )
-        _, model_dim = mesh.dim_names
-        unshard_dim = dtensor.UNSHARDED
-
-        layout_map = keras.dtensor.experimental.LayoutMap(mesh=mesh)
-        # Embedding sharding
-        layout_map[r".*embeddings"] = Layout([unshard_dim, model_dim], mesh)
-
-        # Transformer block sharding
-        layout_map[r".*_(query|key|value)_dense.kernel"] = Layout(
-            [unshard_dim, unshard_dim, model_dim], mesh
-        )
-        layout_map[r".*_(query|key|value)_dense.bias"] = Layout(
-            [model_dim, unshard_dim], mesh
-        )
-        layout_map[r".*_feedforward_intermediate_dense.kernel"] = Layout(
-            [unshard_dim, model_dim], mesh
-        )
-        layout_map[r".*_feedforward_intermediate_dense.bias"] = Layout(
-            [model_dim], mesh
-        )
-        layout_map[r".*_feedforward_output_dense.kernel"] = Layout(
-            [model_dim, unshard_dim], mesh
-        )
-        layout_map[r".*_feedforward_output_dense.bias"] = Layout(
-            [unshard_dim], mesh
-        )
-        return layout_map
