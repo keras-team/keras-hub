@@ -181,9 +181,10 @@ class RobertaClassifier(Task):
         self.dropout = dropout
 
         # Default compilation
+        logit_output = self.activation == keras.activations.linear
         self.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(
-                from_logits=activation is None
+                from_logits=logit_output
             ),
             optimizer=keras.optimizers.Adam(2e-5),
             metrics=[keras.metrics.SparseCategoricalAccuracy()],

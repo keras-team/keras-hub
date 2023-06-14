@@ -138,9 +138,10 @@ class FNetClassifier(Task):
         self.activation = keras.activations.get(activation)
         self.dropout = dropout
 
+        logit_output = self.activation == keras.activations.linear
         self.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(
-                from_logits=activation is None
+                from_logits=logit_output
             ),
             optimizer=keras.optimizers.Adam(5e-5),
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
