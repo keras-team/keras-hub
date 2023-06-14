@@ -18,7 +18,6 @@ from keras_nlp.models.gpt_neox.rotary_embedding import RotaryEmbedding
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
-
 class GPTNeoXAttention(keras.layers.Layer):
     def __init__(
         self,
@@ -43,30 +42,16 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.rotary_emb_base = rotary_emb_base
         self.max_position_embeddings = max_position_embeddings
         self.rotary_embedding = RotaryEmbedding(self.rotary_ndims, rotary_emb_base)
-
+        self.norm_factor = np.sqrt(self.attn_head_size)
         self._kernel_initializer = keras.initializers.get(kernel_initializer)
         self._bias_initializer = keras.initializers.get(bias_initializer)
 
-        self._query_dense = keras.layers.EinsumDense(
+        self._qkv_dense = keras.layers.EinsumDense(
             equation="abc,cde->abde",
-            output_shape=(None, self.num_heads, self.attn_head_size),
+            output_shape=(None, self.num_heads, 3*self.attn_head_size),
             bias_axes="de",
             **self._get_common_kwargs_for_sublayer(use_bias=True),
-            name="attention_output",
-        )
-        self._key_dense = keras.layers.EinsumDense(
-            equation="abc,cde->abde",
-            output_shape=(None, self.num_heads, self.attn_head_size),
-            bias_axes="de",
-            **self._get_common_kwargs_for_sublayer(use_bias=True),
-            name="key",
-        )
-        self._value_dense = keras.layers.EinsumDense(
-            equation="abc,cde->abde",
-            output_shape=(None, self.num_heads, self.attn_head_size),
-            bias_axes="de",
-            **self._get_common_kwargs_for_sublayer(use_bias=True),
-            name="value",
+            name="query",
         )
 
         self._attn_dropout_layer = keras.layers.Dropout(
@@ -97,8 +82,7 @@ class GPTNeoXAttention(keras.layers.Layer):
         return common_kwargs
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
-        #         print(attention_scores[0].shape, attention_scores[1].shape)
-        # print(attention_mask.shape, attention_scores.shape)
+
         if attention_mask is not None:
             mask_expansion_axis = -3
             for _ in range(
@@ -114,6 +98,7 @@ class GPTNeoXAttention(keras.layers.Layer):
     ):
 
         attention_scores = tf.einsum("aecd,abcd->acbe", key, query)
+        attention_scores /= self.norm_factor
 
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
@@ -132,9 +117,11 @@ class GPTNeoXAttention(keras.layers.Layer):
             return_attention_scores=False,
             training=None):
 
-        query = self._query_dense(hidden_states)
-        key = self._key_dense(hidden_states)
-        value = self._value_dense(hidden_states)
+        query_key_value = self._qkv_dense(hidden_states)
+
+        query = query_key_value[..., :self.attn_head_size]
+        key = query_key_value[..., self.attn_head_size: 2*self.attn_head_size]
+        value = query_key_value[..., 2*self.attn_head_size:]
 
         query_rot, query_pass = (
             query[..., : self.rotary_ndims],
@@ -175,6 +162,7 @@ class GPTNeoXAttention(keras.layers.Layer):
                 self.hidden_dim,
             ],
         )
+        residual = attention_output
         attention_output = self._output_dense(attention_output)
 
         if return_attention_scores:

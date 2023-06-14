@@ -137,32 +137,29 @@ class GPTNeoXDecoder(keras.layers.Layer):
         if decoder_mask is not None:
             self_attention_mask = tf.minimum(decoder_mask, self_attention_mask)
 
+        residual = x
+
         x = self._input_layernorm(x)
 
         # Self attention block.
-        residual = x
-
-        x = self._self_attention_layer(
+        attention_output = self._self_attention_layer(
             hidden_states=x,
             attention_mask=self_attention_mask,
         )
-        x = self._self_attention_dropout(x)
-        if not self.use_parallel_residual:
-            x = x + residual
-
-        attn_residual = x
-
-        x = self._self_attention_layernorm(x)
-
-        # Feedforward block.
-        x = self._feedforward_intermediate_dense(x)
-        x = self._feedforward_output_dense(x)
-        x = self._feedforward_dropout(x)
+        attention_output = self._self_attention_dropout(attention_output)
 
         if self.use_parallel_residual:
-            x = x + residual + attn_residual
+            ln_out = self._self_attention_layernorm(decoder_sequence)
+            mlp_output = self._feedforward_intermediate_dense(ln_out)
+            mlp_output = self._feedforward_output_dense(mlp_output)
+            x = mlp_output + attention_output + decoder_sequence
         else:
-            x = x + attn_residual
+            attention_output = attention_output + decoder_sequence
+            ln_out = self._self_attention_layernorm(x)
+            mlp_output = self._feedforward_intermediate_dense(ln_out)
+            mlp_output = self.activation(mlp_output)
+            mlp_output = self._feedforward_output_dense(mlp_output)
+            x = mlp_output + attention_output
 
         return x
 

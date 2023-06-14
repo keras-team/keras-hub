@@ -156,4 +156,3 @@ class GPTNeoXBackbone(Backbone):
             [unshard_dim], mesh
         )
         return layout_map
-
