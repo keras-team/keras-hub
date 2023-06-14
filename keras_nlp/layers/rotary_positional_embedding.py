@@ -19,6 +19,7 @@ from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
 
+
 @keras_nlp_export("keras_nlp.layers.RotaryPositionalEmbedding")
 class RotaryPositionalEmbedding(keras.layers.Layer):
     """Rotary Positional Embedding layer for Transformers.

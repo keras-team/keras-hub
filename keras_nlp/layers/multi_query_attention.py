@@ -16,6 +16,7 @@ import tensorflow as tf
 from tensorflow import keras
 from keras_nlp.api_export import keras_nlp_export
 
+
 @keras_nlp_export("keras_nlp.layers.MultiQueryAttentionBatched")
 class MultiQueryAttentionBatched(keras.layers.Layer):
     """Multi-Query Attention Layer.
@@ -69,6 +70,8 @@ class MultiQueryAttentionBatched(keras.layers.Layer):
         O = tf.einsum("bhnm,bmv->bhnv", weights, V)
         Y = tf.einsum("bhnv,hdv->bnd", O, self.P_o)
         return Y
+
+
 
 @keras_nlp_export("keras_nlp.layers.MultiQuerySelfAttentionIncremental")
 class MultiQuerySelfAttentionIncremental(keras.layers.Layer):
