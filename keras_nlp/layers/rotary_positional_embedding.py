@@ -22,78 +22,91 @@ from keras_nlp.api_export import keras_nlp_export
 
 @keras_nlp_export("keras_nlp.layers.RotaryPositionalEmbedding")
 class RotaryPositionalEmbedding(keras.layers.Layer):
-    """Rotary Positional Embedding layer for Transformers.
+    """Rotary Positional Embedding layer has been created for falcon models.
+
 
     This layer computes rotary positional embeddings that can be used in Transformer models
     to incorporate positional information into the input sequences.
 
     Args:
-        dim: The dimensionality of the positional embeddings.
+        head_dim (int): The dimensionality of the positional embeddings.
+        base (int): The base value used in the exponential calculation. Defaults to 10000.
 
     Input Shape:
-        - A scalar tensor representing the maximum sequence length.
+        - `q` and `k`: Tensor of shape `(batch_size, seq_len, head_dim)` representing queries and keys.
 
     Output Shape:
-        - A tensor of shape `(max_seq_len, 2 * dim)` representing the rotary positional embeddings.
+        - `output_q` and `output_k`: Tensor of shape `(batch_size, seq_len, head_dim)` representing the transformed queries and keys.
 
     Examples:
         ```python
-        rotary_emb = RotaryPositionalEmbedding(dim)
-        pos_emb = rotary_emb(n, device=device)
-        q, k = map(lambda t: apply_rotary_pos_emb(pos_emb, t), (q, k))
+        embedding = RotaryEmbedding(head_dim)
+        output_q, output_k = embedding(q, k)
         ```
 
     Reference:
         - [RoFormer: Enhanced Transformer with Rotary Position Embedding (Su et al., 2021)](https://arxiv.org/abs/2104.09864)
+        - [GPT-NeoX](https://github.com/EleutherAI/gpt-neox)
     """
 
-    def __init__(self, dim):
+    def __init__(self, head_dim, base=10000):
         super(RotaryPositionalEmbedding, self).__init__()
-        inv_freq = 1.0 / (10000 ** (tf.range(0, dim, 2, dtype=tf.float32) / dim))
+        inv_freq = 1.0 / (base ** (tf.range(0, head_dim, 2, dtype=tf.float32) / head_dim))
         self.inv_freq = self.add_weight(
             name="inv_freq",
-            shape=(dim,),
+            shape=(head_dim,),
             initializer=tf.keras.initializers.Constant(inv_freq),
             trainable=False,
         )
-
-    def call(self, max_seq_len, device=None):
-        """Compute rotary positional embeddings.
+    
+    def rotate_half(self, x):
+        """Rotate the input tensor by half.
 
         Args:
-            max_seq_len: The maximum length of the input sequence.
-            device: Optional device to place the tensors.
+            x: The input tensor.
 
         Returns:
-            A tensor of shape `(max_seq_len, 2 * dim)` representing the rotary positional embeddings.
+            The rotated tensor.
         """
-        seq = tf.range(max_seq_len, dtype=self.inv_freq.dtype)
-        freqs = tf.einsum("i,j->ij", seq, self.inv_freq)
-        return tf.concat((freqs, freqs), axis=-1)
+        x1, x2 = tf.split(x, 2, axis=-1)
+        return tf.concat((-x2, x1), axis=-1)
+    
+    def cos_sin(self, seq_len, device=None, dtype=tf.float32):
+        """Compute the cosine and sine values for positional embeddings.
 
+        Args:
+            seq_len (int): The length of the sequence.
+            device: Optional device to place the tensors.
+            dtype: Data type of the positional embeddings.
 
-def rotate_half(x):
-    """Rotate the input tensor by half.
+        Returns:
+            Tuple of cosine and sine tensors.
+        """
+        if seq_len != self.seq_len_cached:
+            self.seq_len_cached = seq_len
+            t = tf.range(seq_len, dtype=self.inv_freq.dtype)
+            freqs = tf.einsum("i,j->ij", t, self.inv_freq)
+            emb = tf.concat((freqs, freqs), axis=-1)
+            emb = tf.cast(emb, dtype)
+            self.cos_cached = tf.cos(emb)[None, :, :]
+            self.sin_cached = tf.sin(emb)[None, :, :]
+        
+        return self.cos_cached, self.sin_cached
+    
+    def call(self, q, k):
+        """Compute the rotary positional embeddings for queries and keys.
 
-    Args:
-        x: The input tensor.
+        Args:
+            q: Tensor of shape `(batch_size, seq_len, head_dim)` representing queries.
+            k: Tensor of shape `(batch_size, seq_len, head_dim)` representing keys.
 
-    Returns:
-        The rotated tensor.
-    """
-    x = tf.reshape(x, (-1, 2))
-    x1, x2 = tf.unstack(x, axis=-1)
-    return tf.concat((-x2, x1), axis=-1)
-
-
-def apply_rotary_pos_emb(pos, t):
-    """Apply rotary positional embedding to the input tensor.
-
-    Args:
-        pos: The rotary positional embeddings.
-        t: The input tensor.
-
-    Returns:
-        The tensor with applied rotary positional embedding.
-    """
-    return (t * tf.cos(pos)) + (rotate_half(t) * tf.sin(pos))
+        Returns:
+            Tuple of transformed query and key tensors.
+        """
+        batch, seq_len, head_dim = q.shape
+        cos, sin = self.cos_sin(seq_len, q.device, q.dtype)
+        rotated_q = self.rotate_half(q)
+        rotated_k = self.rotate_half(k)
+        output_q = (q * cos) + (rotated_q * sin)
+        output_k = (k * cos) + (rotated_k * sin)
+        return output_q, output_k
