@@ -15,12 +15,14 @@
 import os
 import shutil
 
-import keras_nlp
-from absl import app, flags
 import numpy as np
 import tensorflow as tf
 import transformers
+from absl import app
+from absl import flags
 from checkpoint_conversion_utils import get_md5_checksum
+
+import keras_nlp
 
 PRESET_MAP = {
     "pythia-70m-deduped": "EleutherAI/pythia-70m-deduped",
@@ -30,6 +32,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
 )
+
 
 def convert_checkpoints(hf_model):
     print("\n-> Convert original weights to KerasNLP format.")
@@ -41,7 +44,7 @@ def convert_checkpoints(hf_model):
     hf_wts = hf_model.state_dict()
     print("Original weights:")
     print(list(hf_wts.keys()))
-    
+
     keras_model.get_layer("token_embedding").embeddings.assign(
         hf_model.embed_in.weight.detach().numpy()
     )
@@ -142,13 +145,16 @@ def convert_checkpoints(hf_model):
         hf_wts["final_layer_norm.weight"]
     )
 
-    keras_model.get_layer("layer_norm").beta.assign(hf_wts["final_layer_norm.bias"])
+    keras_model.get_layer("layer_norm").beta.assign(
+        hf_wts["final_layer_norm.bias"]
+    )
 
     # Save the model.
     print("\n-> Save KerasNLP model weights.")
     keras_model.save_weights(os.path.join(FLAGS.preset, "model.h5"))
 
     return keras_model
+
 
 def extract_vocab(hf_tokenizer):
     spm_path = os.path.join(FLAGS.preset, "spiece.model")
@@ -205,6 +211,7 @@ def check_output(
         get_md5_checksum(os.path.join(FLAGS.preset, "model.h5")),
     )
 
+
 def main(_):
     os.makedirs(FLAGS.preset)
 
@@ -225,6 +232,7 @@ def main(_):
         hf_tokenizer,
         hf_model,
     )
+
 
 if __name__ == "__main__":
     flags.mark_flag_as_required("preset")
