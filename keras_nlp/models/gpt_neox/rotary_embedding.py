@@ -61,6 +61,6 @@ class RotaryEmbedding(keras.layers.Layer):
             {
                 "dim": self.dim,
                 "rotary_emb_base": self.rotary_emb_base,
-                "inverse_freq": self.inverse_freq
+                "inverse_freq": self.inverse_freq,
             }
         )

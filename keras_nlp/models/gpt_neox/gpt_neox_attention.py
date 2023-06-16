@@ -32,7 +32,6 @@ class GPTNeoXAttention(keras.layers.Layer):
         rotary_emb_base=10000,
         **kwargs,
     ):
-
         super().__init__(**kwargs)
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
@@ -85,7 +84,6 @@ class GPTNeoXAttention(keras.layers.Layer):
         return common_kwargs
 
     def _masked_softmax(self, attention_scores, attention_mask=None):
-
         if attention_mask is not None:
             mask_expansion_axis = -3
             for _ in range(
@@ -99,7 +97,6 @@ class GPTNeoXAttention(keras.layers.Layer):
     def _compute_attention(
         self, query, key, value, attention_mask=None, training=None
     ):
-
         attention_scores = tf.einsum("aecd,abcd->acbe", key, query)
         attention_scores /= self.norm_factor
 
@@ -121,7 +118,6 @@ class GPTNeoXAttention(keras.layers.Layer):
         return_attention_scores=False,
         training=None,
     ):
-
         query_key_value = self._qkv_dense(hidden_states)
 
         query = query_key_value[..., : self.attn_head_size]

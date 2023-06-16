@@ -15,7 +15,9 @@ import json
 import os
 
 import requests
-from transformers import GPTNeoXModel, AutoTokenizer
+import tensorflow as tf
+from transformers import AutoTokenizer
+from transformers import GPTNeoXModel
 
 from keras_nlp.models.gpt_neox.gpt_neox_backbone import GPTNeoXBackbone
 
@@ -168,8 +170,27 @@ sample_text = ["cricket is awesome, easily the best sport in the world!"]
 hf_inputs = hf_tokenizer(sample_text, return_tensors="pt")
 
 keras_inputs = {
-    'token_ids': tf.constant([[68, 4662, 292, 310, 13103, 13, 4354, 253, 1682, 9678, 275, 253, 1533, 2]]),
-    'padding_mask': tf.constant([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
+    "token_ids": tf.constant(
+        [
+            [
+                68,
+                4662,
+                292,
+                310,
+                13103,
+                13,
+                4354,
+                253,
+                1682,
+                9678,
+                275,
+                253,
+                1533,
+                2,
+            ]
+        ]
+    ),
+    "padding_mask": tf.constant([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]),
 }
 
 keras_outputs = keras_model(keras_inputs)

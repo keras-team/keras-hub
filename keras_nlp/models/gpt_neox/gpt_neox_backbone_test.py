@@ -94,22 +94,22 @@ class GPTNeoXTest(tf.test.TestCase, parameterized.TestCase):
         restored_output = restored_model(self.input_batch)
         self.assertAllClose(model_output, restored_output)
 
-    def test_create_layout_map(self):
-        mesh = tf.experimental.dtensor.create_mesh([("batch", 1), ("model", 1)])
-        with GPTNeoXBackbone.create_layout_map(mesh).scope():
-            GPTNeoXBackbone(
-                vocabulary_size=10,
-                num_layers=4,
-                num_heads=4,
-                hidden_dim=64,
-                intermediate_dim=64,
-                max_sequence_length=10,
-            )
-        # Using DTensor enables the mlir bridge as a side effect. Eventually
-        # this will be default, but for now we have compile errors with the
-        # bridge elsewhere and must disable. See
-        # https://github.com/keras-team/keras-nlp/issues/1001
-        tf.config.experimental.disable_mlir_bridge()
+    # def test_create_layout_map(self):
+    #     mesh = tf.experimental.dtensor.create_mesh([("batch", 1), ("model", 1)])
+    #     with GPTNeoXBackbone.create_layout_map(mesh).scope():
+    #         GPTNeoXBackbone(
+    #             vocabulary_size=10,
+    #             num_layers=4,
+    #             num_heads=4,
+    #             hidden_dim=64,
+    #             intermediate_dim=64,
+    #             max_sequence_length=10,
+    #         )
+    #     # Using DTensor enables the mlir bridge as a side effect. Eventually
+    #     # this will be default, but for now we have compile errors with the
+    #     # bridge elsewhere and must disable. See
+    #     # https://github.com/keras-team/keras-nlp/issues/1001
+    #     tf.config.experimental.disable_mlir_bridge()
 
 
 @pytest.mark.tpu

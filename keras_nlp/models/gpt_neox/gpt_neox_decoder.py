@@ -115,7 +115,6 @@ class GPTNeoXDecoder(keras.layers.Layer):
         decoder_padding_mask=None,
         decoder_attention_mask=None,
     ):
-
         if not self._built:
             self._build(decoder_sequence.shape)
 
@@ -133,8 +132,6 @@ class GPTNeoXDecoder(keras.layers.Layer):
         )
         if decoder_mask is not None:
             self_attention_mask = tf.minimum(decoder_mask, self_attention_mask)
-
-        residual = x
 
         x = self._input_layernorm(x)
 
@@ -179,7 +176,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
                     self.bias_initializer
                 ),
                 "build_input_shape": self._input_shape,
-                "use_parallel_residual": self.use_parallel_residual
+                "use_parallel_residual": self.use_parallel_residual,
             }
         )
         return config
