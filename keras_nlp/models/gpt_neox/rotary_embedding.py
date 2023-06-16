@@ -16,20 +16,22 @@ from tensorflow import keras
 
 
 class RotaryEmbedding(keras.layers.Layer):
-    def __init__(self, dim, rotary_emb_base=10000):
+    def __init__(self, rotary_ndims, max_wavelength=10000):
         super().__init__()
-        self.dim = int(dim)
-        self.rotary_emb_base = rotary_emb_base
+        self.rotary_ndims = int(rotary_ndims)
+        self.max_wavelength = max_wavelength
 
     def build(self, input_shape):
         super().build(input_shape)
         self.inverse_freq = self.add_weight(
-            "inverse_freq", shape=(self.dim // 2,), dtype=tf.float32
+            "inverse_freq", shape=(self.rotary_ndims // 2,), dtype=tf.float32
         )
-        range = tf.range(start=0, limit=self.dim, delta=2, dtype="float32")
+        range = tf.range(
+            start=0, limit=self.rotary_ndims, delta=2, dtype="float32"
+        )
 
         self.inverse_freq.assign(
-            1.0 / (self.rotary_emb_base ** (range / self.dim))
+            1.0 / (self.max_wavelength ** (range / self.rotary_ndims))
         )
 
     @staticmethod
@@ -38,7 +40,6 @@ class RotaryEmbedding(keras.layers.Layer):
         sin_emb = sin_emb[:, : tf.shape(tensor)[1], :, :]
         x1, x2 = tf.split(tensor, 2, axis=-1)
         half_rot_tensor = tf.concat((-x2, x1), axis=-1)
-        # Incompatible shapes: [32,256,8,2] vs. [1,256,1,16] [Op:Mul]
         ret = (tensor * cos_emb) + (half_rot_tensor * sin_emb)
         return ret
 
@@ -50,17 +51,30 @@ class RotaryEmbedding(keras.layers.Layer):
         return tf.cos(embedding), tf.sin(embedding)
 
     def call(self, query, key):
-        cos_emb, sin_emb = self._compute_cos_sin_embedding(key, seq_dim=1)
-        q_emb = self._apply_rotary_pos_emb(query, cos_emb, sin_emb)
-        k_emb = self._apply_rotary_pos_emb(key, cos_emb, sin_emb)
-        return q_emb, k_emb
+        query_rot, query_pass = (
+            query[..., : self.rotary_ndims],
+            query[..., self.rotary_ndims :],
+        )
+        key_rot, key_pass = (
+            key[..., : self.rotary_ndims],
+            key[..., self.rotary_ndims :],
+        )
+
+        cos_emb, sin_emb = self._compute_cos_sin_embedding(key_rot, seq_dim=1)
+        query_emb = self._apply_rotary_pos_emb(query_rot, cos_emb, sin_emb)
+        key_emb = self._apply_rotary_pos_emb(key_rot, cos_emb, sin_emb)
+
+        query = tf.concat((query_emb, query_pass), axis=-1)
+        key = tf.concat((key_emb, key_pass), axis=-1)
+
+        return query, key
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "dim": self.dim,
-                "rotary_emb_base": self.rotary_emb_base,
+                "rotary_ndims": self.rotary_ndims,
+                "max_wavelength": self.max_wavelength,
                 "inverse_freq": self.inverse_freq,
             }
         )

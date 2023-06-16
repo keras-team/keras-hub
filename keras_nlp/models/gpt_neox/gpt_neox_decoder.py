@@ -32,8 +32,8 @@ class GPTNeoXDecoder(keras.layers.Layer):
         dropout=0.0,
         activation="relu",
         layer_norm_epsilon=1e-5,
-        rotary_pct=0.25,
-        rotary_emb_base=10000,
+        rotary_percentage=0.25,
+        rotary_max_wavelength=10000,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         use_parallel_residual=True,
@@ -46,8 +46,8 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.dropout = dropout
-        self.rotary_pct = rotary_pct
-        self.rotary_emb_base = rotary_emb_base
+        self.rotary_percentage = rotary_percentage
+        self.rotary_max_wavelength = rotary_max_wavelength
         self.max_sequence_length = max_sequence_length
         self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -55,7 +55,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self._built = False
         self.supports_masking = True
-        self.rotary_pct = rotary_pct
+        self.rotary_percentage = rotary_percentage
         self.use_parallel_residual = use_parallel_residual
 
         if self._input_shape is not None:
@@ -77,8 +77,8 @@ class GPTNeoXDecoder(keras.layers.Layer):
             num_heads=self.num_heads,
             hidden_dim=hidden_dim,
             dropout=self.dropout,
-            rotary_pct=self.rotary_pct,
-            rotary_emb_base=self.rotary_emb_base,
+            rotary_percentage=self.rotary_percentage,
+            rotary_max_wavelength=self.rotary_max_wavelength,
             max_sequence_length=self.max_sequence_length,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
@@ -164,8 +164,8 @@ class GPTNeoXDecoder(keras.layers.Layer):
                 "intermediate_dim": self.intermediate_dim,
                 "num_heads": self.num_heads,
                 "dropout": self.dropout,
-                "rotary_pct": self.rotary_pct,
-                "rotary_emb_base": self.rotary_emb_base,
+                "rotary_percentage": self.rotary_percentage,
+                "rotary_max_wavelength": self.rotary_max_wavelength,
                 "max_sequence_length": self.max_sequence_length,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,

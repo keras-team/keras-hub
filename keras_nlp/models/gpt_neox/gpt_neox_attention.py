@@ -28,21 +28,21 @@ class GPTNeoXAttention(keras.layers.Layer):
         max_sequence_length=512,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
-        rotary_pct=0.25,
-        rotary_emb_base=10000,
+        rotary_percentage=0.25,
+        rotary_max_wavelength=10000,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
-        self.rotary_pct = rotary_pct
+        self.rotary_percentage = rotary_percentage
         self.dropout = dropout
         self.attn_head_size = hidden_dim // num_heads
-        self.rotary_ndims = int(self.attn_head_size * rotary_pct)
-        self.rotary_emb_base = rotary_emb_base
+        self.rotary_ndims = int(self.attn_head_size * rotary_percentage)
+        self.rotary_max_wavelength = rotary_max_wavelength
         self.max_sequence_length = max_sequence_length
         self.rotary_embedding = RotaryEmbedding(
-            self.rotary_ndims, rotary_emb_base
+            self.rotary_ndims, rotary_max_wavelength
         )
         self.norm_factor = np.sqrt(self.attn_head_size)
         self._kernel_initializer = keras.initializers.get(kernel_initializer)
@@ -114,7 +114,6 @@ class GPTNeoXAttention(keras.layers.Layer):
         self,
         hidden_states,
         attention_mask,
-        layer_past=None,
         return_attention_scores=False,
         training=None,
     ):
@@ -126,27 +125,7 @@ class GPTNeoXAttention(keras.layers.Layer):
         ]
         value = query_key_value[..., 2 * self.attn_head_size :]
 
-        query_rot, query_pass = (
-            query[..., : self.rotary_ndims],
-            query[..., self.rotary_ndims :],
-        )
-        key_rot, key_pass = (
-            key[..., : self.rotary_ndims],
-            key[..., self.rotary_ndims :],
-        )
-
-        seq_len = key.shape[1]
-        if layer_past is not None:
-            seq_len += layer_past[0].shape[-2]
-
-        query, key = self.rotary_embedding(query_rot, key_rot)
-        query = tf.concat((query, query_pass), axis=-1)
-        key = tf.concat((key, key_pass), axis=-1)
-
-        if layer_past is not None:
-            past_key, past_value = layer_past
-            key = tf.concat((past_key, key), axis=-2)
-            value = tf.concat((past_value, value), axis=-2)
+        query, key = self.rotary_embedding(query, key)
 
         attention_output, attention_scores = self._compute_attention(
             query=query,

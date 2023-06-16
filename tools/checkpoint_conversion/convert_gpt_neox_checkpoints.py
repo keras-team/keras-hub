@@ -53,7 +53,7 @@ cfg["hidden_dim"] = pt_cfg["hidden_size"]
 cfg["intermediate_dim"] = pt_cfg["intermediate_size"]
 cfg["max_sequence_length"] = pt_cfg["max_position_embeddings"]
 cfg["layer_norm_epsilon"] = pt_cfg["layer_norm_eps"]
-cfg["rotary_pct"] = pt_cfg["rotary_pct"]
+cfg["rotary_percentage"] = pt_cfg["rotary_percentage"]
 cfg["rotary_emb_dim"] = pt_cfg["rotary_emb_dim"]
 
 hf_model = GPTNeoXModel.from_pretrained(PRESET)

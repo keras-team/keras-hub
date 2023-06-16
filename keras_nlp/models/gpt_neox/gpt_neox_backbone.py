@@ -33,8 +33,8 @@ class GPTNeoXBackbone(Backbone):
         hidden_dim,
         intermediate_dim,
         dropout=0.0,
-        rotary_pct=0.25,
-        rotary_emb_base=10000,
+        rotary_percentage=0.25,
+        rotary_max_wavelength=10000,
         layer_norm_epsilon=1e-5,
         max_sequence_length=512,
         **kwargs,
@@ -64,8 +64,9 @@ class GPTNeoXBackbone(Backbone):
                 intermediate_dim=intermediate_dim,
                 num_heads=num_heads,
                 dropout=dropout,
-                rotary_pct=rotary_pct,
-                rotary_emb_base=rotary_emb_base,
+                max_sequence_length=max_sequence_length,
+                rotary_percentage=rotary_percentage,
+                rotary_max_wavelength=rotary_max_wavelength,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=lambda x: keras.activations.gelu(
                     x, approximate=True
@@ -77,7 +78,7 @@ class GPTNeoXBackbone(Backbone):
         sequence_output = keras.layers.LayerNormalization(
             name="layer_norm",
             axis=-1,
-            epsilon=1e-05,
+            epsilon=layer_norm_epsilon,
             dtype=tf.float32,
         )(x)
 
