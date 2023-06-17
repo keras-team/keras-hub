@@ -256,11 +256,15 @@ from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
 
 
 
+from tensorflow import keras
+from keras_nlp.layers import TwoStreamRelativeAttention
+
 class XLNetEncoder(keras.layers.Layer):
     def __init__(self,
                  intermediate_dim,
                  num_heads,
-                 dim,
+                 head_dim,
+                 ff_dim,
                  dropout=0,
                  layer_norm_epsilon=1e-12,
                  kernel_initializer="glorot_uniform",
@@ -272,7 +276,8 @@ class XLNetEncoder(keras.layers.Layer):
         super().__init__(name=name, **kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
-        self.dim = dim
+        self.head_dim = head_dim
+        self.ff_dim = ff_dim
         self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
@@ -280,36 +285,50 @@ class XLNetEncoder(keras.layers.Layer):
         self._built = False
         self.supports_masking = True
 
+        # Attention Part
         self.relative_attention = TwoStreamRelativeAttention(num_heads=self.num_heads,
-                                                key_dim=self.dim,
+                                                key_dim=self.head_dim,
                                                 kernel_initializer=self.kernel_initializer,
                                                 bias_initializer=self.bias_initializer,
+                                                name="rel_attn",
                                                 )
         self.layer_norm = keras.layers.LayerNormalization(epsilon=self.layer_norm_epsilon,
-                                                             name="layer_norm")
+                                                             name="layer_norm_rel_attn")
         self.dropout = keras.layers.Dropout(self.dropout)
+
+        # Feed-Forward Part
+        self.layer_norm_ff = keras.layers.LayerNormalization(epsilon=self.layer_norm_epsilon,
+                                                             name="layer_norm_ff")
+        self.layer_1_ff = tf.keras.layers.Dense(
+            self.ff_dim, kernel_initializer=self.kernel_initializer, name="layer_1_ff"
+        )
+        self.layer_2_ff = tf.keras.layers.Dense(
+            self.intermediate_dim, kernel_initializer=self.kernel_initializer, name="layer_2_ff"
+        )
+        self.dropout_ff = tf.keras.layers.Dropout(config.dropout)
+        self.activation_function_ff = keras.activations.gelu
 
     def build(self, input_shape):
         self.content_attention_bias = self.add_weight(
-            shape=(self.num_heads, self.dim),
+            shape=(self.num_heads, self.head_dim),
             initializer=self.bias_initializer,
             trainable=True,
             name="content_attention_bias"
         )
         self.positional_attention_bias = self.add_weight(
-            shape=(self.num_heads, self.dim),
+            shape=(self.num_heads, self.head_dim),
             initializer=self.bias_initializer,
             trainable=True,
             name="positional_attention_bias"
         )
         self.segment_attention_bias = self.add_weight(
-            shape=(self.num_heads, self.dim),
+            shape=(self.num_heads, self.head_dim),
             initializer=self.bias_initializer,
             trainable=True,
             name="segment_attention_bias"
         )
         self.segment_encoding = self.add_weight(
-            shape=(2, self.num_heads, self.dim),
+            shape=(2, self.num_heads, self.head_dim),
             initializer=self.kernel_initializer,
             trainable=True,
             name="segment_encoding"
@@ -328,6 +347,7 @@ class XLNetEncoder(keras.layers.Layer):
              training=False,
         ):
 
+        # rel_attn
         attn_out_h, attn_out_g = self.relative_attention(content_stream=output_h,
                                            query_stream=output_g,
                                            content_attention_mask=attn_mask_h,
@@ -345,13 +365,32 @@ class XLNetEncoder(keras.layers.Layer):
         attn_out_h = attn_out_h + output_h
         attn_out_h = self.layer_norm(attn_out_h)
 
-        if output_g is not None:
+        if attn_out_g is not None:
             attn_out_g = self.dropout(attn_out_g)
             attn_out_g = attn_out_g + output_g
             attn_out_g = self.layer_norm(attn_out_g)
 
-            return attn_out_h, attn_out_g
+        # feed-forward
+        ff_out_h = attn_out_h
+        ff_out_h = self.layer_1_ff(ff_out_h)
+        ff_out_h = self.activation_function_ff(ff_out_h)
+        ff_out_h = self.dropout_ff(ff_out_h, training=training)
+        ff_out_h = self.layer_2_ff(ff_out_h)
+        ff_out_h = self.dropout_ff(ff_out_h, training=training)
+        ff_out_h = self.layer_norm_ff(ff_out_h + attn_out_h)
 
-        return attn_out_h, None
+        if attn_out_g is not None:
+            ff_out_g = attn_out_g
+            ff_out_g = self.layer_1_ff(ff_out_g)
+            ff_out_g = self.activation_function_ff(ff_out_g)
+            ff_out_g = self.dropout_ff(ff_out_g, training=training)
+            ff_out_g = self.layer_2_ff(ff_out_g)
+            ff_out_g = self.dropout_ff(ff_out_g, training=training)
+            ff_out_g = self.layer_norm_ff(ff_out_g + attn_out_g)
+
+            return ff_out_h, ff_out_g
+
+        return ff_out_h, None
+
 
 
