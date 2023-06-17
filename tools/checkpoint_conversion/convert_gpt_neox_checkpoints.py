@@ -171,7 +171,7 @@ hf_inputs = hf_tokenizer(sample_text, return_tensors="pt")
 
 keras_inputs = {
     "token_ids": tf.convert_to_tensor(hf_inputs["input_ids"]),
-    "padding_mask": tf.convert_to_tensor(hf_inputs["attention_mask"])
+    "padding_mask": tf.convert_to_tensor(hf_inputs["attention_mask"]),
 }
 
 keras_outputs = keras_model(keras_inputs)
