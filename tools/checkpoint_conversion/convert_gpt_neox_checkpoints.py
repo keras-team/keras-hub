@@ -19,7 +19,7 @@ import tensorflow as tf
 from transformers import AutoTokenizer
 from transformers import GPTNeoXModel
 
-from keras_nlp.models.gpt_neox.gpt_neox_backbone import GPTNeoXBackbone
+from keras_nlp.models.gpt_neo_x.gpt_neo_x_backbone import GPTNeoXBackbone
 
 PRESET_NAME = "pythia-70m"
 PRESET = "EleutherAI/pythia-70m-deduped"
@@ -33,14 +33,18 @@ if not os.path.exists(extract_dir):
 # Config.
 config_path = os.path.join(extract_dir, "config.json")
 response = requests.get(f"https://huggingface.co/{PRESET}/raw/main/config.json")
+# https://huggingface.co/EleutherAI/pythia-70m-deduped/raw/main/config.json
+
 open(config_path, "wb").write(response.content)
 
-# Vocab.
-spm_path = os.path.join(extract_dir, "spm.model")
-response = requests.get(
-    f"https://huggingface.co/{PRESET}/resolve/main/spm.model"
-)
-open(spm_path, "wb").write(response.content)
+# # Vocab.
+# spm_path = os.path.join(extract_dir, "spm.model")
+# response = requests.get(
+#     f"https://huggingface.co/{PRESET}/resolve/main/spm.model"
+# )
+# # https://huggingface.co/EleutherAI/pythia-70m-deduped/resolve/main/spm.model
+
+# open(spm_path, "wb").write(response.content)
 
 cfg = {}
 with open(config_path, "r") as pt_cfg_handler:
@@ -105,25 +109,25 @@ for ilayer in range(cfg["num_layers"]):
     # LAYERNORM
     keras_model.get_layer(
         f"transformer_layer_{ilayer}"
-    )._input_layernorm.gamma.assign(
+    )._self_attention_layernorm.gamma.assign(
         hf_wts[f"layers.{ilayer}.input_layernorm.weight"]
     )
 
     keras_model.get_layer(
         f"transformer_layer_{ilayer}"
-    )._input_layernorm.beta.assign(
+    )._self_attention_layernorm.beta.assign(
         hf_wts[f"layers.{ilayer}.input_layernorm.bias"]
     )
 
     keras_model.get_layer(
         f"transformer_layer_{ilayer}"
-    )._self_attention_layernorm.gamma.assign(
+    )._feedforward_layernorm.gamma.assign(
         hf_wts[f"layers.{ilayer}.post_attention_layernorm.weight"]
     )
 
     keras_model.get_layer(
         f"transformer_layer_{ilayer}"
-    )._self_attention_layernorm.beta.assign(
+    )._feedforward_layernorm.beta.assign(
         hf_wts[f"layers.{ilayer}.post_attention_layernorm.bias"]
     )
 
@@ -152,12 +156,6 @@ for ilayer in range(cfg["num_layers"]):
         hf_wts[f"layers.{ilayer}.mlp.dense_4h_to_h.bias"]
     )
 
-    # Rotary Embedding
-    keras_model.get_layer(
-        f"transformer_layer_{ilayer}"
-    )._self_attention_layer.rotary_embedding.inverse_freq.assign(
-        hf_wts[f"layers.{ilayer}.attention.rotary_emb.inv_freq"]
-    )
 
 keras_model.get_layer("layer_norm").gamma.assign(
     hf_wts["final_layer_norm.weight"]
