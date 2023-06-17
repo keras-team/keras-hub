@@ -320,7 +320,7 @@ class TransformerDecoder(keras.layers.Layer):
             if self_attention_cache is not None:
                 input_length = tf.shape(self_attention_cache)[2]
 
-            self_attention_mask = compute_causal_mask(
+            causal_mask = compute_causal_mask(
                 batch_size,
                 input_length,
                 output_length,
@@ -328,10 +328,11 @@ class TransformerDecoder(keras.layers.Layer):
                 if self_attention_cache_update_index is None
                 else self_attention_cache_update_index,
             )
-            if decoder_mask is not None:
-                self_attention_mask = tf.minimum(
-                    decoder_mask, self_attention_mask
-                )
+            self_attention_mask = (
+                tf.minimum(decoder_mask, causal_mask)
+                if decoder_mask is not None
+                else causal_mask
+            )
         else:
             self_attention_mask = decoder_mask
 
