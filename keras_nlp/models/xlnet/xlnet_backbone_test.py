@@ -127,8 +127,9 @@ class XLNetTPUTest(tf.test.TestCase, parameterized.TestCase):
             "perm_mask": tf.random.uniform(
                 minval=0, maxval=2, shape=(2, 7, 7), dtype=tf.int64
             ),
-            "mems": tf.random.uniform((2, 7, 768, 12), dtype=tf.float64),
+            "mems": tf.random.uniform((2, 7, 64, 2), dtype=tf.float64),
         }
+
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch
         ).batch(2)
