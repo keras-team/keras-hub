@@ -37,7 +37,7 @@ class TransformerDecoder(keras.layers.Layer):
     paper [Attention is All You Need](https://arxiv.org/abs/1706.03762). Users
     can instantiate multiple instances of this class to stack up a decoder.
 
-    This layer will always apply a causal mask to the decoder attention layer.
+    By default, this layer will apply a causal mask to the decoder attention layer.
     This layer will correctly compute an attention mask from an implicit
     Keras padding mask (for example, by passing `mask_zero=True` to a
     `keras.layers.Embedding` layer). See the Masking and Padding
@@ -218,6 +218,7 @@ class TransformerDecoder(keras.layers.Layer):
         self_attention_cache_update_index=None,
         cross_attention_cache=None,
         cross_attention_cache_update_index=None,
+        use_causal_mask=True,
     ):
         """Forward pass of the TransformerDecoder.
 
@@ -252,6 +253,8 @@ class TransformerDecoder(keras.layers.Layer):
                 at which to update the `cross_attention_cache`. Usually, this is
                 either `0` (compute the entire `cross_attention_cache`), or
                 `None` (reuse a previously computed `cross_attention_cache`).
+             use_causal_mask: bool, defaults to `True`. If true, a causal mask
+                (masking out future input) is applied `on the decoder sequence.
         Returns:
             One of three things, depending on call arguments:
             - `outputs`, if `self_attention_cache` is `None.
@@ -305,27 +308,14 @@ class TransformerDecoder(keras.layers.Layer):
 
         x = decoder_sequence  # Intermediate result.
 
-        # Compute self attention mask.
-        batch_size = tf.shape(decoder_sequence)[0]
-        input_length = output_length = tf.shape(decoder_sequence)[1]
-        # We need to handle a rectangular causal mask when doing cached
-        # decoding. For generative inference, `decoder_sequence` will
-        # generally be length 1, and `cache` will be the full generation length.
-        if self_attention_cache is not None:
-            input_length = tf.shape(self_attention_cache)[2]
-        self_attention_mask = compute_causal_mask(
-            batch_size,
-            input_length,
-            output_length,
-            0
-            if self_attention_cache_update_index is None
-            else self_attention_cache_update_index,
+        self_attention_mask = self._compute_self_attention_mask(
+            decoder_sequence=decoder_sequence,
+            decoder_padding_mask=decoder_padding_mask,
+            decoder_attention_mask=decoder_attention_mask,
+            use_causal_mask=use_causal_mask,
+            self_attention_cache=self_attention_cache,
+            self_attention_cache_update_index=self_attention_cache_update_index,
         )
-        decoder_mask = merge_padding_and_attention_mask(
-            decoder_sequence, decoder_padding_mask, decoder_attention_mask
-        )
-        if decoder_mask is not None:
-            self_attention_mask = tf.minimum(decoder_mask, self_attention_mask)
 
         # Self attention block.
         residual = x
@@ -384,6 +374,42 @@ class TransformerDecoder(keras.layers.Layer):
                 return (x, self_attention_cache)
         else:
             return x
+
+    def _compute_self_attention_mask(
+        self,
+        decoder_sequence,
+        decoder_padding_mask,
+        decoder_attention_mask,
+        use_causal_mask,
+        self_attention_cache,
+        self_attention_cache_update_index,
+    ):
+        decoder_mask = merge_padding_and_attention_mask(
+            decoder_sequence, decoder_padding_mask, decoder_attention_mask
+        )
+        if use_causal_mask:
+            batch_size = tf.shape(decoder_sequence)[0]
+            input_length = output_length = tf.shape(decoder_sequence)[1]
+            # We need to handle a rectangular causal mask when doing cached
+            # decoding. For generative inference, `decoder_sequence` will
+            # generally be length 1, and `cache` will be the full generation length.
+            if self_attention_cache is not None:
+                input_length = tf.shape(self_attention_cache)[2]
+
+            causal_mask = compute_causal_mask(
+                batch_size,
+                input_length,
+                output_length,
+                0
+                if self_attention_cache_update_index is None
+                else self_attention_cache_update_index,
+            )
+            return (
+                tf.minimum(decoder_mask, causal_mask)
+                if decoder_mask is not None
+                else causal_mask
+            )
+        return decoder_mask
 
     def get_config(self):
         config = super().get_config()
