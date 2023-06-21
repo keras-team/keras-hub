@@ -20,6 +20,31 @@ from keras_nlp.utils.keras_utils import clone_initializer
 
 
 class GPTNeoXAttention(keras.layers.Layer):
+    """GPTNeoXAttention layer.
+
+    This is an implementation of disentangled attention as described in the
+    paper ["GPT-NeoX-20B: An Open-Source Autoregressive Language Model"](https://arxiv.org/abs/2204.06745).
+    Effectively, this layer implements Multi-Head Self Attention with rotary embedding,
+
+    Args:
+        num_heads: int. Number of attention heads.
+        hidden_dim: int. Hidden dimension of the input, i.e., `hidden_states`.
+        max_position_embeddings: int, defaults to 512. The maximum input
+            sequence length.
+        bucket_size: int, defaults to 256. The size of the relative position
+            buckets. Generally equal to `max_sequence_length // 2`.
+        dropout: float, defaults to 0.1. Dropout probability.
+        kernel_initializer: string or `keras.initializers` initializer,
+            defaults to "glorot_uniform". The kernel initializer for
+            the dense layers.
+        bias_initializer: string or `keras.initializers` initializer,
+            defaults to "zeros". The bias initializer for the dense layers.
+        rotary_max_wavelength: int. The maximum angular wavelength of the sine/cosine
+            curves, for rotary embeddings. Defaults to 10000.
+        rotary_percentage: float. The percentage by which query, key, value matrices are
+            to be rotated
+    """
+
     def __init__(
         self,
         num_heads,
@@ -44,7 +69,6 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.rotary_embedding = RotaryEmbedding(
             self.rotary_ndims, rotary_max_wavelength
         )
-        self.norm_factor = np.sqrt(self.attn_head_size)
         self._kernel_initializer = keras.initializers.get(kernel_initializer)
         self._bias_initializer = keras.initializers.get(bias_initializer)
 
@@ -98,7 +122,7 @@ class GPTNeoXAttention(keras.layers.Layer):
         self, query, key, value, attention_mask=None, training=None
     ):
         attention_scores = tf.einsum("aecd,abcd->acbe", key, query)
-        attention_scores /= self.norm_factor
+        attention_scores /= tf.sqrt(self.attn_head_size)
 
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask

@@ -25,6 +25,44 @@ def _gpt_neo_x_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.GPTNeoXBackbone")
 class GPTNeoXBackbone(Backbone):
+    """GPT-2 core network with hyperparameters.
+
+    This network implements a Transformer-based decoder network,
+    Generative Pretrained Transformer-Neo-X (GPTNeoX), as described in
+    ["GPT-NeoX-20B: An Open-Source Autoregressive Language Model"](https://arxiv.org/abs/2204.06745).
+    It includes the embedding lookups and transformer layers.
+
+    The default constructor gives a fully customizable, randomly initialized
+    GPT-NeoX model with any number of layers, heads, and embedding
+    dimensions.
+
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind. The underlying model is provided by a
+    third party and subject to a separate license, available
+    [here](https://github.com/EleutherAI/pythiarota).
+
+    Args:
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers.
+        num_heads: int. The number of attention heads for each transformer.
+            The hidden size must be divisible by the number of attention heads.
+        hidden_dim: int. The size of the transformer encoding and pooler layers.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for each transformer.
+        dropout: float. Dropout probability for the Transformer encoder.
+        layer_norm_epsilon: float. a value added to the denominator for numerical stability.
+           Default: 1e-5
+        rotary_max_wavelength: int. The maximum angular wavelength of the sine/cosine
+           curves, for rotary embeddings. Defaults to 10000.
+        rotary_percentage: float. The percentage by which query, key, value matrices are
+           to be rotated
+        max_sequence_length: int. The maximum sequence length that this encoder
+            can consume. If `None`, `max_sequence_length` uses the value from
+            sequence length. This determines the variable shape for positional
+            embeddings.
+        **kwargs: other keyword arguments.
+    """
+
     def __init__(
         self,
         vocabulary_size,

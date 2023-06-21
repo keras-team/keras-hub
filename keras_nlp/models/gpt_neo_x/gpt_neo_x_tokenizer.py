@@ -11,15 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""GPTNeoX preprocessing layers."""
+"""GptNeoX tokenizer"""
 
-# import copy
 from keras_nlp.api_export import keras_nlp_export
-
-# from keras_nlp.models.gpt_neo_x.gpt_neo_x_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
-
-# from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.GPTNeoXTokenizer")
@@ -47,27 +42,6 @@ class GPTNeoXTokenizer(BytePairTokenizer):
             it should be the file path to merge rules. The merge rule file
             should have one merge rule per line. Every merge rule contains
             merge entities separated by a space.
-
-    Examples:
-
-    ```python
-    # Unbatched input.
-    tokenizer = keras_nlp.models.GPTNeoXTokenizer.from_preset("pythia-70m-deduped")
-    tokenizer("The quick brown fox jumped.")
-
-    # Batched input.
-    tokenizer(["The quick brown fox jumped.", "The fox slept."])
-
-    # Detokenization.
-    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
-
-    # Custom vocabulary.
-    vocab = {"<|endoftext|>": 0, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    merges += ["Ġ f", "o x", "Ġf ox"]
-    tokenizer = keras_nlp.models.GPTNeoXTokenizer(vocabulary=vocab, merges=merges)
-    tokenizer("a quick fox.")
-    ```
     """
 
     def __init__(
@@ -98,10 +72,6 @@ class GPTNeoXTokenizer(BytePairTokenizer):
         # GPTNeoX uses the same start as end token, i.e., "<|endoftext|>".
         self.start_token_id = self.end_token_id
         self.pad_token_id = 0
-
-    # @classproperty
-    # def presets(cls):
-    #     return copy.deepcopy(backbone_presets)
 
     def get_config(self):
         config = super().get_config()

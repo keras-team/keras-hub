@@ -24,18 +24,64 @@ from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
 
 
 class GPTNeoXDecoder(keras.layers.Layer):
+    """GPTNeoX decoder.
+
+    This class follows the architecture of the GPT-NeoX decoder layer in the
+    paper [GPT-NeoX-20B: An Open-Source Autoregressive Language Model](https://arxiv.org/abs/2204.06745). Users
+    can instantiate multiple instances of this class to stack up a decoder.
+
+    This layer will always apply a causal mask to the decoder attention layer.
+    This layer will correctly compute an attention mask from an implicit
+    Keras padding mask (for example, by passing `mask_zero=True` to a
+    `keras.layers.Embedding` layer). See the Masking and Padding
+    [guide](https://keras.io/guides/understanding_masking_and_padding/)
+    for more details.
+
+    This layer can be called with either one input which is as follows:
+        `layer(decoder_sequence)`: no cross-attention will be built into the
+            decoder block. This is useful when building a "decoder-only"
+            transformer such as GPT-2.
+
+    Args:
+        intermediate_dim: int, the hidden size of feedforward network.
+        num_heads: int, the number of heads in MultiHeadAttention.
+        dropout: float, defaults to 0. the dropout value, shared by
+            MultiHeadAttention and feedforward network.
+        activation: string or `keras.activations`, defaults to "relu". the
+            activation function of feedforward network.
+        layer_norm_epsilon: float, defaults to 1e-5. The eps value in layer
+            normalization components.
+        kernel_initializer: string or `keras.initializers` initializer,
+            defaults to "glorot_uniform". The kernel initializer for
+            the dense and multiheaded attention layers.
+        bias_initializer: string or `keras.initializers` initializer,
+            defaults to "zeros". The bias initializer for
+            the dense and multiheaded attention layers.
+        rotary_max_wavelength: int. The maximum angular wavelength of the sine/cosine
+            curves, for rotary embeddings. Defaults to 10000.
+        rotary_percentage: float. The percentage by which query, key, value matrices are
+            to be rotated
+        max_sequence_length: int. The maximum sequence length that this encoder
+             can consume. If `None`, `max_sequence_length` uses the value from
+             sequence length. This determines the variable shape for positional
+             embeddings.
+        name: string, defaults to None. The name of the layer.
+        **kwargs: other keyword arguments.
+
+    """
+
     def __init__(
         self,
         intermediate_dim,
         num_heads,
-        max_sequence_length=512,
         dropout=0.0,
         activation="relu",
         layer_norm_epsilon=1e-5,
-        rotary_percentage=0.25,
-        rotary_max_wavelength=10000,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
+        rotary_percentage=0.25,
+        rotary_max_wavelength=10000,
+        max_sequence_length=512,
         name=None,
         **kwargs,
     ):
