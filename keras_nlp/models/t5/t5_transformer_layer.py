@@ -123,7 +123,7 @@ class T5TransformerLayer(keras.layers.Layer):
         x = self.layer_norm(x)
         if self.use_gated_activation:
             hidden_activation = self.input_projector(x)
-            hidden_linear = self.gate_projector(hidden_states)
+            hidden_linear = self.gate_projector(x)
             x = hidden_activation * hidden_linear
         else:
             x = self.input_projector(x)
