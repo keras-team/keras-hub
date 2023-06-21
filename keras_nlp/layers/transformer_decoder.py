@@ -404,14 +404,12 @@ class TransformerDecoder(keras.layers.Layer):
                 if self_attention_cache_update_index is None
                 else self_attention_cache_update_index,
             )
-            self_attention_mask = (
+            return (
                 tf.minimum(decoder_mask, causal_mask)
                 if decoder_mask is not None
                 else causal_mask
             )
-        else:
-            self_attention_mask = decoder_mask
-        return self_attention_mask
+        return decoder_mask
 
     def get_config(self):
         config = super().get_config()
