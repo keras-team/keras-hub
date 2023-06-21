@@ -105,7 +105,7 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
             output_dim=self.hidden_dim,
             name="word_embedding",
         )
-        self.dropout = keras.layers.Dropout(self.dropout)
+        self.dropout_layer = keras.layers.Dropout(self.dropout)
 
         super().build(input_shape)
 
@@ -178,12 +178,12 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
 
         # Word embeddings and prepare h & g hidden states
         word_emb = self.word_embed(token_id_input)
-        output_h = keras.layers.Dropout(self.dropout)(word_emb)
+        output_h = self.dropout_layer(word_emb)
         if target_mapping is not None:
             word_emb_q = tf.tile(
                 self.mask_emb, [tf.shape(target_mapping)[0], bsz, 1]
             )
-            output_g = keras.layers.Dropout(self.dropout)(word_emb_q)
+            output_g = self.dropout_layer(word_emb_q)
         else:
             output_g = None
 
@@ -212,7 +212,7 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
 
         # Positional encoding
         pos_emb = self.relative_positional_encoding(qlen, klen, bsz=bsz)
-        pos_emb = keras.layers.Dropout(self.dropout)(pos_emb)
+        pos_emb = self.dropout_layer(pos_emb)
 
         # to make sure inputs suitable for TwoStreamRelativeAttention
         output_g = (

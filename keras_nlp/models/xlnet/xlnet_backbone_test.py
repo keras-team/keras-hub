@@ -75,6 +75,8 @@ class XLNetTest(tf.test.TestCase, parameterized.TestCase):
             self.backbone(input_data)
 
     def test_predict(self):
+
+
         self.backbone.predict(self.input_batch)
         self.backbone.predict(self.input_dataset)
 
