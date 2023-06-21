@@ -253,8 +253,8 @@ class TransformerDecoder(keras.layers.Layer):
                 at which to update the `cross_attention_cache`. Usually, this is
                 either `0` (compute the entire `cross_attention_cache`), or
                 `None` (reuse a previously computed `cross_attention_cache`).
-             use_causal_mask: bool, defaults to True. If true, causal mask
-                (masking out future input) is applied on the decoder sequence.
+             use_causal_mask: bool, defaults to `True`. If true, a causal mask
+                (masking out future input) is applied `on the decoder sequence.
         Returns:
             One of three things, depending on call arguments:
             - `outputs`, if `self_attention_cache` is `None.
