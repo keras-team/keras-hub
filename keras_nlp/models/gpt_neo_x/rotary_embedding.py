@@ -69,5 +69,4 @@ class RotaryEmbedding(keras.layers.Layer):
                 "max_wavelength": self.max_wavelength,
             }
         )
-
         return config
