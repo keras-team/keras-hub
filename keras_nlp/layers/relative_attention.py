@@ -123,7 +123,7 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
         else:
             self._value_shape = value
         if key is None:
-            self._key_shape = value_shape
+            self._key_shape = self._value_shape
         elif hasattr(key, "shape"):
             self._key_shape = tf.TensorShape(key.shape)
         else:
@@ -184,7 +184,9 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
             )
             self._output_dense = keras.layers.EinsumDense(
                 "ibnd,hnd->ibh",
-                output_shape=_get_output_shape(output_rank - 1, [self._query_shape[-1]]),
+                output_shape=_get_output_shape(
+                    output_rank - 1, [self._query_shape[-1]]
+                ),
                 bias_axes=None,
                 name="attention_output",
                 **common_kwargs,
