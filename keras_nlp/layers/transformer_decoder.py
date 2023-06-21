@@ -384,7 +384,6 @@ class TransformerDecoder(keras.layers.Layer):
         self_attention_cache,
         self_attention_cache_update_index,
     ):
-        # Compute self attention mask.
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )
