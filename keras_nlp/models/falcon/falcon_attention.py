@@ -17,7 +17,7 @@ import math
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.layers import Dense, Dropout
-from keras_nlp.layers.rotary_positional_embedding import RotaryPositionalEmbedding
+from keras_nlp.models.falcon.falcon_rotary_positional_embedding import FalconRotaryPositionalEmbedding
 
 from keras_nlp.api_export import keras_nlp_export
 
@@ -77,7 +77,7 @@ class FalconAttention(keras.layers.Layer):
                 f" {self.num_heads})."
             )
 
-        self.maybe_rotary = RotaryPositionalEmbedding(config.head_dim) if config.rotary else lambda q, k: (q, k)
+        self.maybe_rotary = FalconRotaryPositionalEmbedding(config.head_dim) if config.rotary else lambda q, k: (q, k)
 
         # Layer-wise attention scaling
         self.inv_norm_factor = 1.0 / math.sqrt(self.head_dim)

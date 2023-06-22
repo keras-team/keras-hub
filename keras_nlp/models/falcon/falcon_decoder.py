@@ -16,8 +16,8 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.layers import LayerNormalization
-from keras_nlp.layers.falcon_mlp import FalconMLP
-from keras_nlp.layers.falcon_attention import FalconAttention
+from keras_nlp.models.falcon.falcon_mlp import FalconMLP
+from keras_nlp.models.falcon.falcon_attention import FalconAttention
 
 from keras_nlp.api_export import keras_nlp_export
 

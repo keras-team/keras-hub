@@ -21,7 +21,7 @@ from keras_nlp.api_export import keras_nlp_export
 
 
 @keras_nlp_export("keras_nlp.layers.RotaryPositionalEmbedding")
-class RotaryPositionalEmbedding(keras.layers.Layer):
+class FalconRotaryPositionalEmbedding(keras.layers.Layer):
     """Rotary Positional Embedding layer has been created for falcon models.
 
 
@@ -50,7 +50,7 @@ class RotaryPositionalEmbedding(keras.layers.Layer):
     """
 
     def __init__(self, head_dim, base=10000):
-        super(RotaryPositionalEmbedding, self).__init__()
+        super(FalconRotaryPositionalEmbedding, self).__init__()
         inv_freq = 1.0 / (base ** (tf.range(0, head_dim, 2, dtype=tf.float32) / head_dim))
         self.inv_freq = self.add_weight(
             name="inv_freq",

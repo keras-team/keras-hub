@@ -19,8 +19,8 @@ import tensorflow as tf
 from tensorflow import keras
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.backbone import Backbone
-from keras_nlp.models.falcon.falcon_presets import backbone_presets
-from keras_nlp.layers.falcon_decoder import FalconDecoder
+# from keras_nlp.models.falcon.falcon_presets import backbone_presets
+from keras_nlp.models.falcon.falcon_decoder import FalconDecoder
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -225,12 +225,12 @@ class FalconBackbone(Backbone):
         """
         return not self.alibi
 
-    @classproperty
-    def presets(cls):
-        """
-        Get the presets for the FalconBackbone model.
+    # @classproperty
+    # def presets(cls):
+    #     """
+    #     Get the presets for the FalconBackbone model.
 
-        Returns:
-            dict: The presets for the model.
-        """
-        return copy.deepcopy(backbone_presets)
+    #     Returns:
+    #         dict: The presets for the model.
+    #     """
+    #     return copy.deepcopy(backbone_presets)
