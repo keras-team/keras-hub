@@ -181,7 +181,7 @@ class WhisperTokenizer(BytePairTokenizer):
             file_hash=metadata["merges_hash"],
         )
 
-        config = metadata["tokenizer_config"]
+        config = metadata["preprocessor_config"]
 
         # Override the config if any field is present in kwargs. Delete the
         # field from kwargs.

@@ -15,12 +15,15 @@
 
 import copy
 
+from absl import logging
+
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.start_end_packer import StartEndPacker
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
+from keras_nlp.models.whisper.whisper_presets import LANGUAGE_TOKENS
 from keras_nlp.models.whisper.whisper_presets import backbone_presets
 from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.utils.keras_utils import (
@@ -28,111 +31,45 @@ from keras_nlp.utils.keras_utils import (
 )
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras_nlp_export("keras_nlp.models.WhisperPreprocessor")
 class WhisperPreprocessor(Preprocessor):
-    """A Whisper preprocessing layer which tokenizes and packs inputs.
+    """A Whisper preprocessing layer which extracts audio features, tokenizes
+    and packs inputs.
 
     This preprocessing layer will do three things:
 
-     1. Tokenize both encoder inputs and decoder inputs using the `tokenizer`.
-        Both inputs can contain only one segment.
-     2. Add the appropriate special tokens - `"<s>"`, `"</s>"` and `"<pad>"`.
-     3. Construct a dictionary with keys `"encoder_token_ids"`,
-        `"encoder_padding_mask"`, `"decoder_token_ids"`, `"decoder_padding_mask"`
-        that can be passed directly to a Whisper model.
+     1. Compute the log-mel spectrogram of the audio tensor inputs using
+        `audio_feature_extractor`.
+     2. Tokenize decoder inputs using the `tokenizer`.
+     2. Add the appropriate special tokens - `"<|startoftranscript|>", task
+        token, language token, `<|endoftext|>`, etc.
+     3. Construct a dictionary with keys `"encoder_features"`,
+        `"decoder_token_ids"`, `"decoder_padding_mask"` that can be passed
+        directly to a Whisper model.
 
     Args:
+        audio_feature_extractor: A `keras_nlp.models.WhisperAudioFeatureExtractor`
+            instance.
         tokenizer: A `keras_nlp.models.WhisperTokenizer` instance.
-        encoder_sequence_length: The length of the packed encoder inputs.
         decoder_sequence_length: The length of the packed decoder inputs.
+        language: string, language tokens. Should only be passed if your
+            tokenizer is multilingual.
+        task: string, task name. One of `"transcribe"`, `"translate"`. Should
+            only be passed if your tokenizer is multilingual.
+        no_timestamps: bool. If True, `<|no_timestamps|>` will be added as a
+            special token to your input.
 
     Call arguments:
-        x: A dictionary with `encoder_text` and `decoder_text` as its keys.
-            Each value in the dictionary should be a tensor of single string
-            sequences. Inputs may be batched or unbatched. Raw python inputs
-            will be converted to tensors.
+        x: A dictionary with `encoder_audio` and `decoder_text` as its keys.
+            `encoder_audio` should correspond to the input audio tensor.
+            `decoder_text` should be a tensor of single string sequences. Inputs
+            may be batched or unbatched. Raw python inputs will be converted to
+            tensors.
         y: Any label data. Will be passed through unaltered.
         sample_weight: Any label weight data. Will be passed through unaltered.
-
-    Examples:
-
-    Directly calling the layer on data.
-    ```python
-    preprocessor = keras_nlp.models.WhisperPreprocessor.from_preset("whisper_base_en")
-
-    # Preprocess unbatched inputs.
-    inputs = {
-        "encoder_text": "The fox was sleeping.",
-        "decoder_text": "The fox was awake."
-    }
-    preprocessor(inputs)
-
-    # Preprocess batched inputs.
-    inputs = {
-        "encoder_text": ["The fox was sleeping.", "The lion was quiet."],
-        "decoder_text": ["The fox was awake.", "The lion was roaring."]
-    }
-    preprocessor(inputs)
-
-    # Custom vocabulary.
-    vocab = {
-        "<s>": 0,
-        "<pad>": 1,
-        "</s>": 2,
-        "Ġafter": 5,
-        "noon": 6,
-        "Ġsun": 7,
-    }
-    merges = ["Ġ a", "Ġ s", "Ġ n", "e r", "n o", "o n", "Ġs u", "Ġa f", "no on"]
-    merges += ["Ġsu n", "Ġaf t", "Ġaft er"]
-
-    tokenizer = keras_nlp.models.WhisperTokenizer(
-        vocabulary=vocab,
-        merges=merges,
-    )
-    preprocessor = keras_nlp.models.WhisperPreprocessor(
-        tokenizer=tokenizer,
-        encoder_sequence_length=20,
-        decoder_sequence_length=10,
-    )
-    inputs = {
-        "encoder_text": "The fox was sleeping.",
-        "decoder_text": "The fox was awake."
-    }
-    preprocessor(inputs)
-    ```
-
-    Mapping with `tf.data.Dataset`.
-    ```python
-    preprocessor = keras_nlp.models.WhisperPreprocessor.from_preset("whisper_base_en")
-
-    # Map labeled single sentences.
-    features = {
-        "encoder_text": tf.constant(
-            ["The fox was sleeping.", "The lion was quiet."]
-        ),
-        "decoder_text": tf.constant(
-            ["The fox was awake.", "The lion was silent."]
-        )
-    }
-    labels = tf.constant(["True", "False"])
-    ds = tf.data.Dataset.from_tensor_slices((features, labels))
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map unlabeled single sentences.
-    features = {
-        "encoder_text": tf.constant(
-            ["The fox was sleeping.", "The lion was quiet."]
-        ),
-        "decoder_text": tf.constant(
-            ["The fox was awake.", "The lion was roaring."]
-        )
-    }
-    ds = tf.data.Dataset.from_tensor_slices(features)
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-    ```
     """
 
     def __init__(
@@ -142,12 +79,41 @@ class WhisperPreprocessor(Preprocessor):
         decoder_sequence_length=448,
         language=None,
         task=None,
-        no_timestamps=False,
+        no_timestamps=True,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.audio_feature_extractor = audio_feature_extractor
         self.tokenizer = tokenizer
+
+        if self.tokenizer.language_tokens is not None:
+            if language is None or language not in LANGUAGE_TOKENS:
+                raise ValueError(
+                    "You must pass a non-None value for `language` when using "
+                    "a multilingual tokenizer. The value must be one of "
+                    f'{",".join(LANGUAGE_TOKENS.keys())}. '
+                    f"Received: language={language}."
+                )
+            if task is None or task not in ["transcribe", "translate"]:
+                raise ValueError(
+                    "You must pass a non-None value for `task` when using "
+                    "a multilingual tokenizer. The value must be one of "
+                    f'`"transcribe"`, `"translate"`. Received: task={task}.'
+                )
+        else:
+            if language is not None:
+                logging.info(
+                    "`tokenizer` is monolingual, and `language` has a "
+                    "non-`None` value. Setting `language` to `None`."
+                )
+                language = None
+            if task is not None:
+                logging.info(
+                    "`tokenizer` is monolingual, and `task` has a "
+                    "non-`None` value. Setting `task` to `None`."
+                )
+                task = None
+
         self.language = language
         self.task = task
         self.no_timestamps = no_timestamps
@@ -159,9 +125,9 @@ class WhisperPreprocessor(Preprocessor):
             if language is not None:
                 bos_tokens += [self.tokenizer.language_tokens[language]]
             if task == "transcribe":
-                bos_tokens += [self.tokenizer.task_tokens["<|transcribe|>"]]
+                bos_tokens += [self.tokenizer.special_tokens["<|transcribe|>"]]
             elif task == "translate":
-                bos_tokens += [self.tokenizer.task_tokens["<|translate|>"]]
+                bos_tokens += [self.tokenizer.special_tokens["<|translate|>"]]
 
         if no_timestamps:
             bos_tokens += [self.tokenizer.no_timestamps_token_id]
@@ -243,10 +209,32 @@ class WhisperPreprocessor(Preprocessor):
     def from_preset(
         cls,
         preset,
+        language=None,
+        task=None,
+        no_timestamps=True,
         **kwargs,
     ):
+        """Instantiate `WhisperPreprocessor` from preset architecture.
+
+        Args:
+            preset: string. Must be one of "{{preset_names}}".
+            language: string, language tokens. Should only be passed if your
+                tokenizer is multilingual. Must be one of "{{language_tokens}}".
+            task: string, task name. One of `"transcribe"`, `"translate"`.
+                Should only be passed if your tokenizer is multilingual.
+            no_timestamps: bool. If True, `"<|no_timestamps|>"` will be added as
+                a special token to your input.
+
+        Examples:
+        ```python
+        # Load a preprocessor layer from a preset.
+        preprocessor = keras_nlp.models.WhisperPreprocessor.from_preset(
+            "{{example_preset_name}}",
+        )
+        ```
+        """
         # Override base class's `from_preset` to handle audio feature extractor
-        # and `decoder_sequence_length`.
+        # , `decoder_sequence_length` and special tokens.
         if not cls.presets:
             raise NotImplementedError(
                 "No presets have been created for this class."
@@ -299,5 +287,15 @@ class WhisperPreprocessor(Preprocessor):
             audio_feature_extractor=audio_feature_extractor,
             tokenizer=tokenizer,
             decoder_sequence_length=decoder_sequence_length,
+            language=language,
+            task=task,
+            no_timestamps=no_timestamps,
             **kwargs,
         )
+
+
+format_docstring(
+    example_preset_name=next(iter(backbone_presets), ""),
+    preset_names='", "'.join(backbone_presets),
+    language_tokens='", "'.join(LANGUAGE_TOKENS),
+)(WhisperPreprocessor.from_preset.__func__)
