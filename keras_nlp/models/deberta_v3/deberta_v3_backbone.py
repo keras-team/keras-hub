@@ -16,7 +16,6 @@
 
 import copy
 
-import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
@@ -74,7 +73,7 @@ class DebertaV3Backbone(Backbone):
     Example usage:
     ```python
     input_data = {
-        "token_ids": tf.ones(shape=(1, 12), dtype=tf.int64),
+        "token_ids": tf.ones(shape=(1, 12), dtype="int64"),
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)),
     }
@@ -131,7 +130,7 @@ class DebertaV3Backbone(Backbone):
         # Normalize and apply dropout to embeddings.
         x = keras.layers.LayerNormalization(
             epsilon=1e-7,
-            dtype=tf.float32,
+            dtype="float32",
             name="embeddings_layer_norm",
         )(x)
         x = keras.layers.Dropout(

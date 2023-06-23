@@ -110,9 +110,9 @@ class Sampler:
         # Make sure `max_length` and `index` are the same dtype.
         index = tf.cast(index, max_length.dtype)
         if mask is None:
-            mask = tf.zeros_like(prompt, dtype=tf.bool)
+            mask = tf.zeros_like(prompt, dtype="bool")
         else:
-            mask = tf.cast(mask, dtype=tf.bool)
+            mask = tf.cast(mask, dtype="bool")
         # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
         cache = () if cache is None else cache
 

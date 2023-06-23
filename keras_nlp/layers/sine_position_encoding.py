@@ -49,7 +49,7 @@ class SinePositionEncoding(keras.layers.Layer):
     seq_len = 100
     vocab_size = 1000
     embedding_dim = 32
-    inputs = keras.Input((seq_len,), dtype=tf.float32)
+    inputs = keras.Input((seq_len,), dtype="float32")
     embedding = keras.layers.Embedding(
         input_dim=vocab_size, output_dim=embedding_dim
     )(inputs)
@@ -72,24 +72,7 @@ class SinePositionEncoding(keras.layers.Layer):
     def call(self, inputs):
         # TODO(jbischof): replace `hidden_size` with`hidden_dim` for consistency
         # with other layers.
-        if isinstance(inputs, tf.RaggedTensor):
-            bounding_shape = inputs.bounding_shape()
-            position_embeddings = (
-                self._compute_trim_and_broadcast_position_embeddings(
-                    bounding_shape,
-                )
-            )
-            # then apply row lengths to recreate the same ragged shape as inputs
-            return tf.RaggedTensor.from_tensor(
-                position_embeddings,
-                inputs.nested_row_lengths(),
-            )
-        else:
-            return self._compute_trim_and_broadcast_position_embeddings(
-                tf.shape(inputs),
-            )
-
-    def _compute_trim_and_broadcast_position_embeddings(self, shape):
+        shape = tf.shape(inputs)
         seq_length = shape[-2]
         hidden_size = shape[-1]
         position = tf.cast(tf.range(seq_length), self.compute_dtype)

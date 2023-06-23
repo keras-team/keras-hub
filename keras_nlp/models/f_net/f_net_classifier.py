@@ -89,7 +89,7 @@ class FNetClassifier(Task):
     Preprocessed integer data.
     ```python
     features = {
-        "token_ids": tf.ones(shape=(2, 12), dtype=tf.int64),
+        "token_ids": tf.ones(shape=(2, 12), dtype="int64"),
         "segment_ids": tf.constant(
             [[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
         ),
@@ -138,9 +138,10 @@ class FNetClassifier(Task):
         self.activation = keras.activations.get(activation)
         self.dropout = dropout
 
+        logit_output = self.activation == keras.activations.linear
         self.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(
-                from_logits=activation is None
+                from_logits=logit_output
             ),
             optimizer=keras.optimizers.Adam(5e-5),
             metrics=[keras.metrics.SparseCategoricalAccuracy()],

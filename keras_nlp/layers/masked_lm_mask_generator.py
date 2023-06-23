@@ -16,7 +16,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.utils.tf_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import assert_tf_text_installed
 
 try:
     import tensorflow_text as tf_text
@@ -192,7 +192,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         mask_weights = tf.ones_like(mask_positions, self.compute_dtype)
         # If `mask_selection_length` is set, convert to dense.
         if self.mask_selection_length:
-            target_shape = tf.cast([-1, self.mask_selection_length], tf.int64)
+            target_shape = tf.cast([-1, self.mask_selection_length], "int64")
             mask_positions = mask_positions.to_tensor(shape=target_shape)
             mask_ids = mask_ids.to_tensor(shape=target_shape)
             mask_weights = mask_weights.to_tensor(shape=target_shape)

@@ -33,7 +33,7 @@ class EditDistanceTest(tf.test.TestCase):
         y_pred = "the cat was found under the bed".split()
 
         edit_distance_val = edit_distance(y_true, y_pred)
-        self.assertAlmostEqual(edit_distance_val.numpy(), 0.364, delta=1e-3)
+        self.assertAlmostEqual(edit_distance_val, 0.364, delta=1e-3)
 
     def test_2d_list_input_normalize(self):
         edit_distance = EditDistance()
@@ -47,7 +47,7 @@ class EditDistanceTest(tf.test.TestCase):
         ]
 
         edit_distance_val = edit_distance(y_true, y_pred)
-        self.assertAlmostEqual(edit_distance_val.numpy(), 0.733, delta=1e-3)
+        self.assertAlmostEqual(edit_distance_val, 0.733, delta=1e-3)
 
     def test_rank_1_tensor_input_normalize(self):
         edit_distance = EditDistance()
@@ -57,7 +57,7 @@ class EditDistanceTest(tf.test.TestCase):
         y_pred = tf.strings.split("the cat was found under the bed")
 
         edit_distance_val = edit_distance(y_true, y_pred)
-        self.assertAlmostEqual(edit_distance_val.numpy(), 0.364, delta=1e-3)
+        self.assertAlmostEqual(edit_distance_val, 0.364, delta=1e-3)
 
     def test_rank_2_tensor_input_normalize(self):
         edit_distance = EditDistance()
@@ -75,7 +75,7 @@ class EditDistanceTest(tf.test.TestCase):
         )
 
         edit_distance_val = edit_distance(y_true, y_pred)
-        self.assertAlmostEqual(edit_distance_val.numpy(), 0.733, delta=1e-3)
+        self.assertAlmostEqual(edit_distance_val, 0.733, delta=1e-3)
 
     def test_rank_1_tensor_input_normalize_false(self):
         edit_distance = EditDistance(normalize=False)
@@ -85,7 +85,7 @@ class EditDistanceTest(tf.test.TestCase):
         y_pred = tf.strings.split("the cat was found under the bed")
 
         edit_distance_val = edit_distance(y_true, y_pred)
-        self.assertAlmostEqual(edit_distance_val.numpy(), 4.0, delta=1e-3)
+        self.assertAlmostEqual(edit_distance_val, 4.0, delta=1e-3)
 
     def test_rank_2_tensor_input_normalize_false(self):
         edit_distance = EditDistance(normalize=False)
@@ -103,7 +103,7 @@ class EditDistanceTest(tf.test.TestCase):
         )
 
         edit_distance_val = edit_distance(y_true, y_pred)
-        self.assertAlmostEqual(edit_distance_val.numpy(), 5.5, delta=1e-3)
+        self.assertAlmostEqual(edit_distance_val, 5.5, delta=1e-3)
 
     def test_model_compile_normalize(self):
         inputs = keras.Input(shape=(None,), dtype="string")
@@ -154,7 +154,7 @@ class EditDistanceTest(tf.test.TestCase):
 
         edit_distance.update_state(y_true, y_pred)
         edit_distance_val = edit_distance.result()
-        self.assertNotEqual(edit_distance_val.numpy(), 0.0)
+        self.assertNotEqual(edit_distance_val, 0.0)
 
         edit_distance.reset_state()
         edit_distance_val = edit_distance.result()
@@ -177,14 +177,14 @@ class EditDistanceTest(tf.test.TestCase):
 
         edit_distance.update_state(y_true_1, y_pred_1)
         edit_distance_val = edit_distance.result()
-        self.assertAlmostEqual(edit_distance_val.numpy(), 0.733, delta=1e-3)
+        self.assertAlmostEqual(edit_distance_val, 0.733, delta=1e-3)
 
         y_true_2 = tf.strings.split(["what is your favourite show"])
         y_pred_2 = tf.strings.split(["my favourite show is silicon valley"])
 
         edit_distance.update_state(y_true_2, y_pred_2)
         edit_distance_val = edit_distance.result()
-        self.assertAlmostEqual(edit_distance_val.numpy(), 0.85, delta=1e-3)
+        self.assertAlmostEqual(edit_distance_val, 0.85, delta=1e-3)
 
     def test_update_state_normalize_false(self):
         edit_distance = EditDistance(normalize=False)
@@ -203,93 +203,19 @@ class EditDistanceTest(tf.test.TestCase):
 
         edit_distance.update_state(y_true_1, y_pred_1)
         edit_distance_val = edit_distance.result()
-        self.assertAlmostEqual(edit_distance_val.numpy(), 5.5, delta=1e-3)
+        self.assertAlmostEqual(edit_distance_val, 5.5, delta=1e-3)
 
         y_true_2 = tf.strings.split(["what is your favourite show"])
         y_pred_2 = tf.strings.split(["my favourite show is silicon valley"])
 
         edit_distance.update_state(y_true_2, y_pred_2)
         edit_distance_val = edit_distance.result()
-        self.assertAlmostEqual(edit_distance_val.numpy(), 5.667, delta=1e-3)
-
-    def test_merge_state_normalize(self):
-        edit_distance_1 = EditDistance()
-        edit_distance_2 = EditDistance()
-
-        y_true_1 = tf.strings.split(
-            [
-                "the tiny little cat was found under the big funny bed",
-                "it is sunny today",
-            ]
-        )
-        y_pred_1 = tf.strings.split(
-            [
-                "the cat was found under the bed",
-                "it is sunny but with a hint of cloud cover",
-            ]
-        )
-
-        y_true_2 = tf.strings.split(["what is your favourite show"])
-        y_pred_2 = tf.strings.split(["my favourite show is silicon valley"])
-
-        y_true_3 = tf.strings.split(["lorem ipsum dolor sit amet"])
-        y_pred_3 = tf.strings.split(["lorem ipsum is simply dummy text"])
-
-        edit_distance_1.update_state(y_true_1, y_pred_1)
-        edit_distance_1.update_state(y_true_2, y_pred_2)
-        edit_distance_val = edit_distance_1.result()
-        self.assertAlmostEqual(edit_distance_val.numpy(), 0.85, delta=1e-3)
-
-        edit_distance_2.update_state(y_true_3, y_pred_3)
-        edit_distance_val = edit_distance_2.result()
-        self.assertAlmostEqual(edit_distance_val.numpy(), 0.8, delta=1e-3)
-
-        merged_edit_distance = EditDistance()
-        merged_edit_distance.merge_state([edit_distance_1, edit_distance_2])
-        edit_distance_val = merged_edit_distance.result()
-        self.assertAlmostEqual(edit_distance_val.numpy(), 0.84, delta=1e-3)
-
-    def test_merge_state_normalize_false(self):
-        edit_distance_1 = EditDistance(normalize=False)
-        edit_distance_2 = EditDistance(normalize=False)
-
-        y_true_1 = tf.strings.split(
-            [
-                "the tiny little cat was found under the big funny bed",
-                "it is sunny today",
-            ]
-        )
-        y_pred_1 = tf.strings.split(
-            [
-                "the cat was found under the bed",
-                "it is sunny but with a hint of cloud cover",
-            ]
-        )
-
-        y_true_2 = tf.strings.split(["what is your favourite show"])
-        y_pred_2 = tf.strings.split(["my favourite show is silicon valley"])
-
-        y_true_3 = tf.strings.split(["lorem ipsum dolor sit amet"])
-        y_pred_3 = tf.strings.split(["lorem ipsum is simply dummy text"])
-
-        edit_distance_1.update_state(y_true_1, y_pred_1)
-        edit_distance_1.update_state(y_true_2, y_pred_2)
-        edit_distance_val = edit_distance_1.result()
-        self.assertAlmostEqual(edit_distance_val.numpy(), 5.667, delta=1e-3)
-
-        edit_distance_2.update_state(y_true_3, y_pred_3)
-        edit_distance_val = edit_distance_2.result()
-        self.assertAlmostEqual(edit_distance_val.numpy(), 4.0, delta=1e-3)
-
-        merged_edit_distance = EditDistance(normalize=False)
-        merged_edit_distance.merge_state([edit_distance_1, edit_distance_2])
-        edit_distance_val = merged_edit_distance.result()
-        self.assertAlmostEqual(edit_distance_val.numpy(), 5.25, delta=1e-3)
+        self.assertAlmostEqual(edit_distance_val, 5.667, delta=1e-3)
 
     def test_get_config(self):
         rouge = EditDistance(
             normalize=False,
-            dtype=tf.float32,
+            dtype="float32",
             name="edit_distance_test",
         )
 

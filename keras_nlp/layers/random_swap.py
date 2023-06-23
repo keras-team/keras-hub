@@ -17,6 +17,8 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.utils.tensor_utils import is_integer_dtype
+from keras_nlp.utils.tensor_utils import is_string_dtype
 
 
 @keras_nlp_export("keras_nlp.layers.RandomSwap")
@@ -117,20 +119,16 @@ class RandomSwap(keras.layers.Layer):
         skip_py_fn=None,
         seed=None,
         name=None,
+        dtype="int32",
         **kwargs,
     ):
-        # Check dtype and provide a default.
-        if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = tf.int32
-        else:
-            dtype = tf.dtypes.as_dtype(kwargs["dtype"])
-            if not dtype.is_integer and dtype != tf.string:
-                raise ValueError(
-                    "Output dtype must be one of `'string'`, `'int32'`, and "
-                    f"`'int64'`. Received: dtype={dtype}"
-                )
+        if not is_integer_dtype(dtype) and not is_string_dtype(dtype):
+            raise ValueError(
+                "Output dtype must be an integer type or a string. "
+                f"Received: dtype={dtype}"
+            )
 
-        super().__init__(name=name, **kwargs)
+        super().__init__(name=name, dtype=dtype, **kwargs)
         self.rate = rate
         self.max_swaps = max_swaps
         self.seed = random.randint(1, 1e9) if seed is None else seed
@@ -182,7 +180,7 @@ class RandomSwap(keras.layers.Layer):
             skip_masks = self.StaticHashTable.lookup(inputs.flat_values)
         elif self.skip_fn:
             skip_masks = tf.map_fn(
-                self.skip_fn, inputs.flat_values, fn_output_signature=tf.bool
+                self.skip_fn, inputs.flat_values, fn_output_signature="bool"
             )
         elif self.skip_py_fn:
 
@@ -195,9 +193,9 @@ class RandomSwap(keras.layers.Layer):
             py_fn = string_fn if inputs.dtype == tf.string else int_fn
 
             skip_masks = tf.map_fn(
-                lambda x: tf.py_function(py_fn, [x], tf.bool),
+                lambda x: tf.py_function(py_fn, [x], "bool"),
                 inputs.flat_values,
-                fn_output_signature=tf.bool,
+                fn_output_signature="bool",
             )
 
         positions = tf.ragged.range(inputs.row_lengths())
@@ -219,9 +217,9 @@ class RandomSwap(keras.layers.Layer):
         if self.max_swaps is not None:
             num_to_select = tf.math.minimum(num_to_select, self.max_swaps)
         num_to_select = tf.math.minimum(
-            num_to_select, tf.cast(positions.row_lengths(), tf.int32)
+            num_to_select, tf.cast(positions.row_lengths(), "int32")
         )
-        num_to_select = tf.cast(num_to_select, tf.int64)
+        num_to_select = tf.cast(num_to_select, "int64")
 
         def _swap(x):
             positions, inputs, num_to_select = x
@@ -230,7 +228,7 @@ class RandomSwap(keras.layers.Layer):
                     shape=[2],
                     minval=0,
                     maxval=tf.size(positions),
-                    dtype=tf.int32,
+                    dtype="int32",
                     seed=self._generator.make_seeds()[:, 0],
                 )
                 index1, index2 = positions[index[0]], positions[index[1]]

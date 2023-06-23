@@ -21,7 +21,8 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.utils.tf_utils import tensor_to_list
+from keras_nlp.utils.tensor_utils import is_floating_dtype
+from keras_nlp.utils.tensor_utils import tensor_to_list
 
 REPLACE_SUBSTRINGS = [
     ("<skipped>", ""),
@@ -91,7 +92,7 @@ class Bleu(keras.metrics.Metric):
             to the total n-gram count (i.e., denominator) for every order while
             calculating precision. Defaults to `False`.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
-               not specified, it defaults to `tf.float32`.
+               not specified, it defaults to `"float32"`.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
 
@@ -106,13 +107,13 @@ class Bleu(keras.metrics.Metric):
         tokenizer=None,
         max_order=4,
         smooth=False,
-        dtype=None,
+        dtype="float32",
         name="bleu",
         **kwargs,
     ):
         super().__init__(name=name, dtype=dtype, **kwargs)
 
-        if not tf.as_dtype(self.dtype).is_floating:
+        if not is_floating_dtype(dtype):
             raise ValueError(
                 "`dtype` must be a floating point type. "
                 f"Received: dtype={dtype}"
@@ -124,30 +125,33 @@ class Bleu(keras.metrics.Metric):
 
         self._matches = self.add_weight(
             shape=(self.max_order,),
-            name="bleu_matches",
             initializer="zeros",
             dtype=self.dtype,
+            name="bleu_matches",
         )
         self._possible_matches = self.add_weight(
             shape=(self.max_order,),
-            name="bleu_possible_matches",
             initializer="zeros",
             dtype=self.dtype,
+            name="bleu_possible_matches",
         )
         self._translation_length = self.add_weight(
-            name="bleu_translation_length",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="bleu_translation_length",
         )
         self._reference_length = self.add_weight(
-            name="bleu_reference_length",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="bleu_reference_length",
         )
         self._bleu = self.add_weight(
-            name="bleu",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="bleu",
         )
 
     def _tokenizer(self, inputs):

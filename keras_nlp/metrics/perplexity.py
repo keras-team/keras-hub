@@ -18,6 +18,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.utils.tensor_utils import is_floating_dtype
 
 
 @keras_nlp_export("keras_nlp.metrics.Perplexity")
@@ -38,7 +39,7 @@ class Perplexity(keras.metrics.Metric):
             we will compute the final `sample_weight` as the element-wise
             product of the mask and the `sample_weight`.
         dtype: string or tf.dtypes.Dtype. Precision of metric computation. If
-               not specified, it defaults to `tf.float32`.
+               not specified, it defaults to `"float32"`.
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
 
@@ -49,7 +50,7 @@ class Perplexity(keras.metrics.Metric):
     >>> tf.random.set_seed(42)
     >>> perplexity = keras_nlp.metrics.Perplexity(name="perplexity")
     >>> target = tf.random.uniform(
-    ...     shape=[2, 5],  maxval=10, dtype=tf.int32, seed=42)
+    ...     shape=[2, 5],  maxval=10, dtype="int32", seed=42)
     >>> logits = tf.random.uniform(shape=(2, 5, 10), seed=42)
     >>> perplexity.update_state(target, logits)
     >>> perplexity.result()
@@ -59,10 +60,10 @@ class Perplexity(keras.metrics.Metric):
     >>> tf.random.set_seed(42)
     >>> perplexity = keras_nlp.metrics.Perplexity(name="perplexity")
     >>> target = tf.random.uniform(
-    ...     shape=[2, 5],  maxval=10, dtype=tf.int32, seed=42)
+    ...     shape=[2, 5],  maxval=10, dtype="int32", seed=42)
     >>> logits = tf.random.uniform(shape=(2, 5, 10), seed=42)
     >>> sample_weight = tf.cast(
-    ...     tf.math.logical_not(tf.equal(target, 0)), tf.float32)
+    ...     tf.math.logical_not(tf.equal(target, 0)), "float32")
     >>> perplexity.update_state(target, logits, sample_weight)
     >>> perplexity.result()
     <tf.Tensor: shape=(), dtype=float32, numpy=13.1128>
@@ -71,7 +72,7 @@ class Perplexity(keras.metrics.Metric):
     >>> tf.random.set_seed(42)
     >>> perplexity = keras_nlp.metrics.Perplexity(name="perplexity")
     >>> target = tf.random.uniform(
-    ...     shape=[2, 5],  maxval=10, dtype=tf.int32, seed=42)
+    ...     shape=[2, 5],  maxval=10, dtype="int32", seed=42)
     >>> logits = tf.random.uniform(shape=(2, 5, 10), seed=42)
     >>> perplexity(target, logits)
     <tf.Tensor: shape=(), dtype=float32, numpy=11.8781595>
@@ -82,7 +83,7 @@ class Perplexity(keras.metrics.Metric):
     >>> perplexity = keras_nlp.metrics.Perplexity(
     ...     name="perplexity", mask_token_id=0)
     >>> target = tf.random.uniform(
-    ...     shape=[2, 5],  maxval=10, dtype=tf.int32, seed=42)
+    ...     shape=[2, 5],  maxval=10, dtype="int32", seed=42)
     >>> logits = tf.random.uniform(shape=(2, 5, 10), seed=42)
     >>> perplexity(target, logits)
     <tf.Tensor: shape=(), dtype=float32, numpy=13.1128>
@@ -92,17 +93,17 @@ class Perplexity(keras.metrics.Metric):
         self,
         from_logits=False,
         mask_token_id=None,
-        dtype=None,
+        dtype="float32",
         name="perplexity",
         **kwargs,
     ):
-        super().__init__(name=name, dtype=dtype, **kwargs)
-
-        if not tf.as_dtype(self.dtype).is_floating:
+        if not is_floating_dtype(dtype):
             raise ValueError(
                 "`dtype` must be a floating point type. "
                 f"Received: dtype={dtype}"
             )
+
+        super().__init__(name=name, dtype=dtype, **kwargs)
 
         self._crossentropy = keras.losses.SparseCategoricalCrossentropy(
             from_logits=from_logits, reduction="sum"
@@ -112,12 +113,16 @@ class Perplexity(keras.metrics.Metric):
         self.mask_token_id = mask_token_id
 
         self._aggregate_crossentropy = self.add_weight(
-            name="aggregate_crossentropy",
+            shape=(),
             initializer="zeros",
             dtype=self.dtype,
+            name="aggregate_crossentropy",
         )
         self._number_of_samples = self.add_weight(
-            name="number_of_samples", initializer="zeros", dtype=self.dtype
+            shape=(),
+            initializer="zeros",
+            dtype=self.dtype,
+            name="number_of_samples",
         )
 
     def update_state(self, y_true, y_pred, sample_weight=None):

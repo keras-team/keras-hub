@@ -136,7 +136,7 @@ class StartEndPackerTest(tf.test.TestCase):
             sequence_length=7, start_value=1, end_value=2, pad_value=3
         )
 
-        inputs = keras.Input(dtype=tf.int32, shape=())
+        inputs = keras.Input(dtype="int32", shape=())
         outputs = start_end_packer(inputs)
         model = keras.Model(inputs, outputs)
         model_output = model(input_data)

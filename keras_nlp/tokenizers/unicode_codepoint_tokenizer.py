@@ -16,7 +16,8 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers import tokenizer
-from keras_nlp.utils.tf_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import is_integer_dtype
 
 try:
     import tensorflow_text as tf_text
@@ -47,7 +48,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     a dense `tf.Tensor` of shape `[sequence_length]`.
 
     The output dtype can be controlled via the `dtype` argument, which should be
-    an integer type (tf.int16, tf.int32, etc.).
+    an integer type ("int16", "int32", etc.).
 
     Args:
         lowercase: If `True`, the input text will be first lowered before
@@ -174,7 +175,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     dtype=int32)>
 
     Detokenization.
-    >>> inputs = tf.constant([110, 105, 110, 106,  97], dtype=tf.int32)
+    >>> inputs = tf.constant([110, 105, 110, 106,  97], dtype="int32")
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer()
     >>> tokenizer.detokenize(inputs)
     <tf.Tensor: shape=(), dtype=string, numpy=b'ninja'>
@@ -209,20 +210,16 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         input_encoding: str = "UTF-8",
         output_encoding: str = "UTF-8",
         vocabulary_size: int = None,
+        dtype="int32",
         **kwargs,
     ) -> None:
         assert_tf_text_installed(self.__class__.__name__)
 
-        # Check dtype and provide a default.
-        if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = tf.int32
-        else:
-            dtype = tf.dtypes.as_dtype(kwargs["dtype"])
-            if not dtype.is_integer:
-                raise ValueError(
-                    "Output dtype must be an integer type. "
-                    f"Received: dtype={dtype}"
-                )
+        if not is_integer_dtype(dtype):
+            raise ValueError(
+                "Output dtype must be an integer type. "
+                f"Received: dtype={dtype}"
+            )
 
         # Check normalization_form.
         if normalization_form not in [None, "NFC", "NFKC", "NFD", "NFKD"]:
@@ -247,7 +244,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
                      UTF-8"""
                 )
 
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
 
         self.sequence_length = sequence_length
         self.lowercase = lowercase

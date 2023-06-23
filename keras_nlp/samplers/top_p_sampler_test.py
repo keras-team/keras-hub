@@ -50,7 +50,7 @@ class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
             # Return a distribution favoring the first token in the vocab.
             logits = (
                 tf.one_hot(
-                    tf.zeros(self.batch_size, dtype=tf.int32),
+                    tf.zeros(self.batch_size, dtype="int32"),
                     self.vocab_size,
                 )
                 * 1e9
@@ -126,7 +126,7 @@ class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
         def next(prompt, cache, index):
             # Dummy hidden states.
             hidden_states = tf.ones([self.batch_size, 5])
-            logits = tf.range(self.vocab_size, 0, -1, dtype=tf.float32)
+            logits = tf.range(self.vocab_size, 0, -1, dtype="float32")
             logits = tf.reshape(logits[tf.newaxis, :], (self.batch_size, -1))
             return tf.constant(logits), hidden_states, cache
 

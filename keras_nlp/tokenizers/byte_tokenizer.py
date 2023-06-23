@@ -19,7 +19,8 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers import tokenizer
-from keras_nlp.utils.tf_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import is_integer_dtype
 
 try:
     import tensorflow_text as tf_text
@@ -51,7 +52,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
 
     The output dtype can be controlled via the
     `dtype` argument, which should be an integer type
-    (tf.int16, tf.int32, etc.).
+    ("int16", "int32", etc.).
 
     Args:
         lowercase: boolean. If True, the input text will be converted to
@@ -140,14 +141,14 @@ class ByteTokenizer(tokenizer.Tokenizer):
            [102, 117, 110,   0,   0]], dtype=int32)>
 
     Detokenization.
-    >>> inputs = tf.constant([104, 101, 108, 108, 111], dtype=tf.int32)
+    >>> inputs = tf.constant([104, 101, 108, 108, 111], dtype="int32")
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
     >>> tokenizer.detokenize(inputs)
     <tf.Tensor: shape=(), dtype=string, numpy=b'hello'>
 
     Detokenization with invalid bytes.
     >>> # The 255 below is invalid utf-8.
-    >>> inputs = tf.constant([104, 101, 255, 108, 108, 111], dtype=tf.int32)
+    >>> inputs = tf.constant([104, 101, 255, 108, 108, 111], dtype="int32")
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(
     ...     errors="replace", replacement_char=88)
     >>> tokenizer.detokenize(inputs).numpy().decode('utf-8')
@@ -161,20 +162,16 @@ class ByteTokenizer(tokenizer.Tokenizer):
         normalization_form: str = None,
         errors: str = "replace",
         replacement_char: int = 65533,
+        dtype="int32",
         **kwargs,
     ):
         assert_tf_text_installed(self.__class__.__name__)
 
-        # Check dtype and provide a default.
-        if "dtype" not in kwargs or kwargs["dtype"] is None:
-            kwargs["dtype"] = tf.int32
-        else:
-            dtype = tf.dtypes.as_dtype(kwargs["dtype"])
-            if not dtype.is_integer:
-                raise ValueError(
-                    "Output dtype must be an integer type. "
-                    f"Received: dtype={dtype}"
-                )
+        if not is_integer_dtype(dtype):
+            raise ValueError(
+                "Output dtype must be an integer type. "
+                f"Received: dtype={dtype}"
+            )
 
         # Check normalization_form.
         if normalization_form not in (None, "NFC", "NFKC", "NFD", "NFKD"):
@@ -191,7 +188,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
                 f"Received: errors={errors}"
             )
 
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
 
         self.lowercase = lowercase
         self.sequence_length = sequence_length

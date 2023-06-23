@@ -118,7 +118,7 @@ class ContrastiveSampler(Sampler):
             unflat_shape = [batch_size, self.k] + x.shape.as_list()[1:]
             return tf.reshape(x, shape=unflat_shape)
 
-        mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
+        mask = tf.zeros_like(prompt, dtype="bool") if mask is None else mask
         # Compute initial logits.
         logits, _, cache = next(prompt, cache, index)
         # `tf.while_loop` will not accept `None` as a value for `loop_vars`.

@@ -96,7 +96,7 @@ class GPT2PresetFullTest(tf.test.TestCase, parameterized.TestCase):
             input_data = {
                 "token_ids": tf.random.uniform(
                     shape=(1, 1024),
-                    dtype=tf.int64,
+                    dtype="int64",
                     maxval=model.vocabulary_size,
                 ),
                 "padding_mask": tf.constant([1] * 1024, shape=(1, 1024)),
