@@ -15,9 +15,6 @@
 
 import copy
 import json
-import os
-
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.whisper.whisper_presets import backbone_presets
@@ -149,51 +146,3 @@ class WhisperTokenizer(BytePairTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
-
-    @classmethod
-    def from_preset(
-        cls,
-        preset,
-        **kwargs,
-    ):
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class"
-            )
-
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-
-        vocabulary = keras.utils.get_file(
-            "vocab.json",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["vocabulary_hash"],
-        )
-        merges = keras.utils.get_file(
-            "merges.txt",
-            metadata["merges_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["merges_hash"],
-        )
-
-        config = metadata["preprocessor_config"]
-
-        # Override the config if any field is present in kwargs. Delete the
-        # field from kwargs.
-        for key in config:
-            if key in kwargs:
-                config[key] = kwargs.pop(key)
-
-        config.update(
-            {
-                "vocabulary": vocabulary,
-                "merges": merges,
-            },
-        )
-
-        return cls.from_config({**config, **kwargs})

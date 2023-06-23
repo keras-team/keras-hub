@@ -45,7 +45,7 @@ class WhisperPreprocessor(Preprocessor):
         `audio_feature_extractor`.
      2. Tokenize decoder inputs using the `tokenizer`.
      2. Add the appropriate special tokens - `"<|startoftranscript|>", task
-        token, language token, `<|endoftext|>`, etc.
+        token, language token, `"<|endoftext|>"`, etc.
      3. Construct a dictionary with keys `"encoder_features"`,
         `"decoder_token_ids"`, `"decoder_padding_mask"` that can be passed
         directly to a Whisper model.
@@ -59,15 +59,15 @@ class WhisperPreprocessor(Preprocessor):
             tokenizer is multilingual.
         task: string, task name. One of `"transcribe"`, `"translate"`. Should
             only be passed if your tokenizer is multilingual.
-        no_timestamps: bool. If True, `<|no_timestamps|>` will be added as a
+        no_timestamps: bool. If True, `"<|no_timestamps|>"` will be added as a
             special token to your input.
 
     Call arguments:
-        x: A dictionary with `encoder_audio` and `decoder_text` as its keys.
-            `encoder_audio` should correspond to the input audio tensor.
-            `decoder_text` should be a tensor of single string sequences. Inputs
-            may be batched or unbatched. Raw python inputs will be converted to
-            tensors.
+        x: A dictionary with `"encoder_audio"` and `"decoder_text"` as its keys.
+            `"encoder_audio"` should correspond to the input audio tensor.
+            `"decoder_text"` should be a tensor of single string sequences.
+            Inputs may be batched or unbatched. Raw python inputs will be
+            converted to tensors.
         y: Any label data. Will be passed through unaltered.
         sample_weight: Any label weight data. Will be passed through unaltered.
     """
