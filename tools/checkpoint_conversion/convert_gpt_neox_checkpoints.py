@@ -33,19 +33,8 @@ if not os.path.exists(extract_dir):
 # Config.
 config_path = os.path.join(extract_dir, "config.json")
 response = requests.get(f"https://huggingface.co/{PRESET}/raw/main/config.json")
-# https://huggingface.co/EleutherAI/pythia-70m-deduped/raw/main/config.json
 
 open(config_path, "wb").write(response.content)
-
-# # Vocab.
-# spm_path = os.path.join(extract_dir, "spm.model")
-# response = requests.get(
-#     f"https://huggingface.co/{PRESET}/resolve/main/spm.model"
-# )
-# # https://huggingface.co/EleutherAI/pythia-70m-deduped/resolve/main/spm.model
-
-# open(spm_path, "wb").write(response.content)
-
 cfg = {}
 with open(config_path, "r") as pt_cfg_handler:
     pt_cfg = json.load(pt_cfg_handler)
@@ -71,89 +60,85 @@ keras_model.get_layer("token_embedding").embeddings.assign(
     hf_model.embed_in.weight.detach().numpy()
 )
 
-keras_model.get_layer("token_embedding").embeddings.assign(
-    hf_model.embed_in.weight.detach().numpy()
-)
-
-for ilayer in range(cfg["num_layers"]):
+for layer_index in range(cfg["num_layers"]):
     # attention layer
     keras_model.get_layer(
-        f"transformer_layer_{ilayer}"
+        f"transformer_layer_{layer_index}"
     )._self_attention_layer._qkv_dense.kernel.assign(
-        hf_wts[f"layers.{ilayer}.attention.query_key_value.weight"]
+        hf_wts[f"layers.{layer_index}.attention.query_key_value.weight"]
         .numpy()
         .T.reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
     )
 
     keras_model.get_layer(
-        f"transformer_layer_{ilayer}"
+        f"transformer_layer_{layer_index}"
     )._self_attention_layer._qkv_dense.bias.assign(
-        hf_wts[f"layers.{ilayer}.attention.query_key_value.bias"].reshape(
+        hf_wts[f"layers.{layer_index}.attention.query_key_value.bias"].reshape(
             (cfg["num_heads"], -1)
         )
     )
 
     # Attention Dense
     keras_model.get_layer(
-        f"transformer_layer_{ilayer}"
+        f"transformer_layer_{layer_index}"
     )._self_attention_layer._output_dense.kernel.assign(
-        hf_wts[f"layers.{ilayer}.attention.dense.weight"].numpy().T
+        hf_wts[f"layers.{layer_index}.attention.dense.weight"].numpy().T
     )
 
     keras_model.get_layer(
-        f"transformer_layer_{ilayer}"
+        f"transformer_layer_{layer_index}"
     )._self_attention_layer._output_dense.bias.assign(
-        hf_wts[f"layers.{ilayer}.attention.dense.bias"]
+        hf_wts[f"layers.{layer_index}.attention.dense.bias"]
     )
 
     # LAYERNORM
     keras_model.get_layer(
-        f"transformer_layer_{ilayer}"
+        f"transformer_layer_{layer_index}"
     )._self_attention_layernorm.gamma.assign(
-        hf_wts[f"layers.{ilayer}.input_layernorm.weight"]
+        hf_wts[f"layers.{layer_index}.input_layernorm.weight"]
     )
 
     keras_model.get_layer(
-        f"transformer_layer_{ilayer}"
+        f"transformer_layer_{layer_index}"
     )._self_attention_layernorm.beta.assign(
-        hf_wts[f"layers.{ilayer}.input_layernorm.bias"]
+        hf_wts[f"layers.{layer_index}.input_layernorm.bias"]
     )
 
     keras_model.get_layer(
-        f"transformer_layer_{ilayer}"
+        f"transformer_layer_{layer_index}"
     )._feedforward_layernorm.gamma.assign(
-        hf_wts[f"layers.{ilayer}.post_attention_layernorm.weight"]
+        hf_wts[f"layers.{layer_index}.post_attention_layernorm.weight"]
     )
 
     keras_model.get_layer(
-        f"transformer_layer_{ilayer}"
+        f"transformer_layer_{layer_index}"
     )._feedforward_layernorm.beta.assign(
-        hf_wts[f"layers.{ilayer}.post_attention_layernorm.bias"]
+        hf_wts[f"layers.{layer_index}.post_attention_layernorm.bias"]
     )
 
     # MLP
     keras_model.get_layer(
-        f"transformer_layer_{ilayer}"
+        f"transformer_layer_{layer_index}"
     )._feedforward_intermediate_dense.kernel.assign(
-        hf_wts[f"layers.{ilayer}.mlp.dense_h_to_4h.weight"].numpy().T
+        hf_wts[f"layers.{layer_index}.mlp.dense_h_to_4h.weight"].numpy().T
     )
 
     keras_model.get_layer(
-        f"transformer_layer_{ilayer}"
+        f"transformer_layer_{layer_index}"
     )._feedforward_intermediate_dense.bias.assign(
-        hf_wts[f"layers.{ilayer}.mlp.dense_h_to_4h.bias"]
+        hf_wts[f"layers.{layer_index}.mlp.dense_h_to_4h.bias"]
     )
 
     keras_model.get_layer(
-        f"transformer_layer_{ilayer}"
+        f"transformer_layer_{layer_index}"
     )._feedforward_output_dense.kernel.assign(
-        hf_wts[f"layers.{ilayer}.mlp.dense_4h_to_h.weight"].numpy().T
+        hf_wts[f"layers.{layer_index}.mlp.dense_4h_to_h.weight"].numpy().T
     )
 
     keras_model.get_layer(
-        f"transformer_layer_{ilayer}"
+        f"transformer_layer_{layer_index}"
     )._feedforward_output_dense.bias.assign(
-        hf_wts[f"layers.{ilayer}.mlp.dense_4h_to_h.bias"]
+        hf_wts[f"layers.{layer_index    }.mlp.dense_4h_to_h.bias"]
     )
 
 

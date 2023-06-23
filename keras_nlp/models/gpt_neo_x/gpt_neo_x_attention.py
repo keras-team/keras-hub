@@ -48,7 +48,7 @@ class GPTNeoXAttention(keras.layers.Layer):
         self,
         num_heads,
         hidden_dim,
-        dropout=0.1,
+        dropout=0.0,
         max_sequence_length=512,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
@@ -62,11 +62,10 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.rotary_percentage = rotary_percentage
         self.dropout = dropout
         self.attn_head_size = hidden_dim // num_heads
-        self.rotary_ndims = int(self.attn_head_size * rotary_percentage)
         self.rotary_max_wavelength = rotary_max_wavelength
         self.max_sequence_length = max_sequence_length
         self.rotary_embedding = RotaryEmbedding(
-            self.rotary_ndims, rotary_max_wavelength
+            self.rotary_percentage, rotary_max_wavelength
         )
         self._kernel_initializer = keras.initializers.get(kernel_initializer)
         self._bias_initializer = keras.initializers.get(bias_initializer)
@@ -121,7 +120,10 @@ class GPTNeoXAttention(keras.layers.Layer):
         self, query, key, value, attention_mask=None, training=None
     ):
         attention_scores = tf.einsum("aecd,abcd->acbe", key, query)
-        attention_scores /= tf.sqrt(self.attn_head_size)
+        norm_factor = tf.sqrt(
+            tf.constant(self.attn_head_size, dtype=tf.float32)
+        )
+        attention_scores /= norm_factor
 
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
@@ -137,7 +139,6 @@ class GPTNeoXAttention(keras.layers.Layer):
         self,
         hidden_states,
         attention_mask,
-        return_attention_scores=False,
         training=None,
     ):
         query_key_value = self._qkv_dense(hidden_states)
@@ -170,6 +171,24 @@ class GPTNeoXAttention(keras.layers.Layer):
 
         attention_output = self._output_dense(attention_output)
 
-        if return_attention_scores:
-            return attention_output, attention_scores
         return attention_output
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "dropout": self.dropout,
+                "rotary_percentage": self.rotary_percentage,
+                "rotary_max_wavelength": self.rotary_max_wavelength,
+                "max_sequence_length": self.max_sequence_length,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                ),
+            }
+        )
+        return config

@@ -39,7 +39,7 @@ class GPTNeoXBackbone(Backbone):
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind. The underlying model is provided by a
     third party and subject to a separate license, available
-    [here](https://github.com/EleutherAI/pythiarota).
+    [here](https://github.com/EleutherAI/gpt-neox/).
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -60,7 +60,6 @@ class GPTNeoXBackbone(Backbone):
             can consume. If `None`, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
-        **kwargs: other keyword arguments.
     """
 
     def __init__(
@@ -83,7 +82,7 @@ class GPTNeoXBackbone(Backbone):
             shape=(None,), dtype="int32", name="padding_mask"
         )
 
-        # Embed tokens, positions.
+        # Embed tokens
         token_embedding = keras.layers.Embedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,

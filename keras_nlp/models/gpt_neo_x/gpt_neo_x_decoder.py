@@ -14,13 +14,12 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.models.gpt_neo_x.gpt_neo_x_attention import GPTNeoXAttention
-from keras_nlp.utils.keras_utils import clone_initializer
-
-from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
-    compute_causal_mask,
+from keras_nlp.layers.transformer_layer_utils import compute_causal_mask
+from keras_nlp.layers.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
+from keras_nlp.models.gpt_neo_x.gpt_neo_x_attention import GPTNeoXAttention
+from keras_nlp.utils.keras_utils import clone_initializer
 
 
 class GPTNeoXDecoder(keras.layers.Layer):
@@ -36,11 +35,6 @@ class GPTNeoXDecoder(keras.layers.Layer):
     `keras.layers.Embedding` layer). See the Masking and Padding
     [guide](https://keras.io/guides/understanding_masking_and_padding/)
     for more details.
-
-    This layer can be called with either one input which is as follows:
-        `layer(decoder_sequence)`: no cross-attention will be built into the
-            decoder block. This is useful when building a "decoder-only"
-            transformer such as GPT-2.
 
     Args:
         intermediate_dim: int, the hidden size of feedforward network.
@@ -66,8 +60,6 @@ class GPTNeoXDecoder(keras.layers.Layer):
              sequence length. This determines the variable shape for positional
              embeddings.
         name: string, defaults to None. The name of the layer.
-        **kwargs: other keyword arguments.
-
     """
 
     def __init__(
@@ -85,8 +77,6 @@ class GPTNeoXDecoder(keras.layers.Layer):
         name=None,
         **kwargs,
     ):
-        self._input_shape = kwargs.pop("build_input_shape", None)
-
         super().__init__(name=name, **kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
@@ -98,20 +88,11 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
-        self._built = False
         self.supports_masking = True
         self.rotary_percentage = rotary_percentage
 
-        if self._input_shape is not None:
-            self._build(self._input_shape)
-
-    def _build(self, input_shape):
-        # Create layers based on input shape.
-        self._built = True
-        self._input_shape = input_shape
-        # Infer the dimension of our hidden feature size from the build shape.
+    def build(self, input_shape):
         hidden_dim = input_shape[-1]
-
         # Self attention layers.
         self._self_attention_layer = GPTNeoXAttention(
             num_heads=self.num_heads,
@@ -159,11 +140,6 @@ class GPTNeoXDecoder(keras.layers.Layer):
         decoder_padding_mask=None,
         decoder_attention_mask=None,
     ):
-        if not self._built:
-            self._build(decoder_sequence.shape)
-
-        x = decoder_sequence  # Intermediate result.
-
         # Compute self attention mask.
         batch_size = tf.shape(decoder_sequence)[0]
         input_length = output_length = tf.shape(decoder_sequence)[1]
@@ -177,7 +153,9 @@ class GPTNeoXDecoder(keras.layers.Layer):
         if decoder_mask is not None:
             self_attention_mask = tf.minimum(decoder_mask, self_attention_mask)
 
-        x = self._self_attention_layernorm(x)
+        residual = decoder_sequence
+
+        x = self._self_attention_layernorm(decoder_sequence)
 
         # Self attention block.
         x = self._self_attention_layer(
@@ -185,15 +163,14 @@ class GPTNeoXDecoder(keras.layers.Layer):
             attention_mask=self_attention_mask,
         )
         x = self._self_attention_dropout(x)
-
-        residual = x
+        attention_output = x
 
         x = self._feedforward_layernorm(decoder_sequence)
         x = self._feedforward_intermediate_dense(x)
         x = self._feedforward_output_dense(x)
-        x = x + residual + decoder_sequence
+        feedforward_output = x
 
-        return x
+        return feedforward_output + attention_output + residual
 
     def get_config(self):
         config = super().get_config()
@@ -213,7 +190,6 @@ class GPTNeoXDecoder(keras.layers.Layer):
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
                 ),
-                "build_input_shape": self._input_shape,
             }
         )
         return config
