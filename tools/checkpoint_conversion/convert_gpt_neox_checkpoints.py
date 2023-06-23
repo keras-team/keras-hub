@@ -19,16 +19,30 @@ import tensorflow as tf
 from transformers import AutoTokenizer
 from transformers import GPTNeoXModel
 
-from keras_nlp.models.gpt_neo_x.gpt_neo_x_backbone import GPTNeoXBackbone
+from keras_nlp.models import GPTNeoXBackbone
+from keras_nlp.models import GPTNeoXTokenizer
 
 PRESET_NAME = "pythia-70m"
+BASE_MODEL = "EleutherAI/gpt-neox-20b"
 PRESET = "EleutherAI/pythia-70m-deduped"
 EXTRACT_DIR = "./{}"
-
 
 extract_dir = EXTRACT_DIR.format(PRESET_NAME)
 if not os.path.exists(extract_dir):
     os.makedirs(extract_dir)
+
+# Vocab
+vocab_path = os.path.join(extract_dir, "vocab.json")
+response = requests.get(
+    f"https://huggingface.co/{BASE_MODEL}/raw/main/vocab.json"
+)
+open(vocab_path, "wb").write(response.content)
+
+merges_path = os.path.join(extract_dir, "merges.txt")
+response = requests.get(
+    f"https://huggingface.co/{BASE_MODEL}/raw/main/merges.txt"
+)
+open(merges_path, "wb").write(response.content)
 
 # Config.
 config_path = os.path.join(extract_dir, "config.json")
@@ -151,6 +165,11 @@ keras_model.get_layer("layer_norm").beta.assign(hf_wts["final_layer_norm.bias"])
 hf_tokenizer = AutoTokenizer.from_pretrained(PRESET)
 sample_text = ["cricket is awesome, easily the best sport in the world!"]
 hf_inputs = hf_tokenizer(sample_text, return_tensors="pt")
+print("HF inputs", hf_inputs)
+
+keras_tokenizer = GPTNeoXTokenizer(vocabulary=vocab_path, merges=merges_path)
+keras_tokenized_inputs = keras_tokenizer(sample_text)
+print("Keras tok input", keras_tokenized_inputs)
 
 keras_inputs = {
     "token_ids": tf.convert_to_tensor(hf_inputs["input_ids"]),
