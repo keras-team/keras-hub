@@ -86,6 +86,8 @@ class WhisperPreprocessor(Preprocessor):
         self.audio_feature_extractor = audio_feature_extractor
         self.tokenizer = tokenizer
 
+        # Create list of tokens to be prepended to decoder inputs.
+        bos_tokens = [self.tokenizer.bos_token_id]
         if self.tokenizer.language_tokens is not None:
             if language is None or language not in LANGUAGE_TOKENS:
                 raise ValueError(
@@ -100,6 +102,14 @@ class WhisperPreprocessor(Preprocessor):
                     "a multilingual tokenizer. The value must be one of "
                     f'`"transcribe"`, `"translate"`. Received: task={task}.'
                 )
+
+            if language is not None:
+                bos_tokens += [self.tokenizer.language_tokens[language]]
+            if task == "transcribe":
+                bos_tokens += [self.tokenizer.special_tokens["<|transcribe|>"]]
+            elif task == "translate":
+                bos_tokens += [self.tokenizer.special_tokens["<|translate|>"]]
+
         else:
             if language is not None:
                 logging.info(
@@ -114,21 +124,6 @@ class WhisperPreprocessor(Preprocessor):
                 )
                 task = None
 
-        self.language = language
-        self.task = task
-        self.no_timestamps = no_timestamps
-
-        # The decoder is packed a bit differently; the format is as follows:
-        # `[end_token_id, start_token_id, tokens..., end_token_id, padding...]`.
-        bos_tokens = [self.tokenizer.bos_token_id]
-        if self.tokenizer.language_tokens is not None:
-            if language is not None:
-                bos_tokens += [self.tokenizer.language_tokens[language]]
-            if task == "transcribe":
-                bos_tokens += [self.tokenizer.special_tokens["<|transcribe|>"]]
-            elif task == "translate":
-                bos_tokens += [self.tokenizer.special_tokens["<|translate|>"]]
-
         if no_timestamps:
             bos_tokens += [self.tokenizer.no_timestamps_token_id]
 
@@ -142,6 +137,10 @@ class WhisperPreprocessor(Preprocessor):
             sequence_length=decoder_sequence_length,
             return_padding_mask=True,
         )
+
+        self.language = language
+        self.task = task
+        self.no_timestamps = no_timestamps
 
     def get_config(self):
         config = super().get_config()
