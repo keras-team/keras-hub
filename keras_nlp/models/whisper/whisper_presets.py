@@ -137,6 +137,20 @@ LANGUAGE_TOKENS = {
     "<|zh|>": 50260,
 }
 
+ENGLISH_PREPROCESSOR_CONFIG = {
+    "decoder_sequence_length": 448,
+    "language": None,
+    "task": None,
+    "no_timestamps": True,
+}
+
+MULTILINGUAL_PREPROCESSOR_CONFIG = {
+    "decoder_sequence_length": 448,
+    "language": "<|en|>",
+    "task": "transcribe",
+    "no_timestamps": True,
+}
+
 # Metadata for loading pretrained model weights.
 backbone_presets = {
     "whisper_tiny_en": {
@@ -166,7 +180,7 @@ backbone_presets = {
             "special_tokens": ENGLISH_SPECIAL_TOKENS,
             "language_tokens": None,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": ENGLISH_PREPROCESSOR_CONFIG,
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_tiny_en/v1/model.h5",
         "weights_hash": "3dc3768ac48ec90b1029fbf52ffbacc7",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_tiny_en/v1/vocab.json",
@@ -201,7 +215,7 @@ backbone_presets = {
             "special_tokens": ENGLISH_SPECIAL_TOKENS,
             "language_tokens": None,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": ENGLISH_PREPROCESSOR_CONFIG,
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_en/v1/model.h5",
         "weights_hash": "799d3c143993d42f7446bafbc0f46d7d",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_en/v1/vocab.json",
@@ -236,7 +250,7 @@ backbone_presets = {
             "special_tokens": ENGLISH_SPECIAL_TOKENS,
             "language_tokens": None,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": ENGLISH_PREPROCESSOR_CONFIG,
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_en/v1/model.h5",
         "weights_hash": "b75a89225e20019d85ff5f1c362f8a49",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_en/v1/vocab.json",
@@ -271,7 +285,7 @@ backbone_presets = {
             "special_tokens": ENGLISH_SPECIAL_TOKENS,
             "language_tokens": None,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": ENGLISH_PREPROCESSOR_CONFIG,
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_medium_en/v1/model.h5",
         "weights_hash": "107184882d1cc65926815e4cc50dc5f3",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_medium_en/v1/vocab.json",
@@ -306,7 +320,7 @@ backbone_presets = {
             "special_tokens": MULTILINGUAL_SPECIAL_TOKENS,
             "language_tokens": LANGUAGE_TOKENS,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": MULTILINGUAL_PREPROCESSOR_CONFIG,
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_tiny_multi/v1/model.h5",
         "weights_hash": "b1279a81001ad5eb35970d1aea706396",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_tiny_multi/v1/vocab.json",
@@ -341,7 +355,7 @@ backbone_presets = {
             "special_tokens": MULTILINGUAL_SPECIAL_TOKENS,
             "language_tokens": LANGUAGE_TOKENS,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": MULTILINGUAL_PREPROCESSOR_CONFIG,
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_multi/v1/model.h5",
         "weights_hash": "5208396e2d5efac43114a4a3d4f583ab",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_multi/v1/vocab.json",
@@ -376,7 +390,7 @@ backbone_presets = {
             "special_tokens": MULTILINGUAL_SPECIAL_TOKENS,
             "language_tokens": LANGUAGE_TOKENS,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": MULTILINGUAL_PREPROCESSOR_CONFIG,
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_multi/v1/model.h5",
         "weights_hash": "c90c6a895e522056b77b924b6e907ed8",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_base_multi/v1/vocab.json",
@@ -411,7 +425,7 @@ backbone_presets = {
             "special_tokens": MULTILINGUAL_SPECIAL_TOKENS,
             "language_tokens": LANGUAGE_TOKENS,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": MULTILINGUAL_PREPROCESSOR_CONFIG,
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_medium_multi/v1/model.h5",
         "weights_hash": "6f993f732fe397e9c5e3a96a9505a3a9",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_medium_multi/v1/vocab.json",
@@ -446,7 +460,7 @@ backbone_presets = {
             "special_tokens": MULTILINGUAL_SPECIAL_TOKENS,
             "language_tokens": LANGUAGE_TOKENS,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": MULTILINGUAL_PREPROCESSOR_CONFIG,
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_large_multi/v1/model.h5",
         "weights_hash": "ccab1c93c5739007868ae73fe025806d",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_large_multi/v1/vocab.json",
@@ -482,7 +496,7 @@ backbone_presets = {
             "special_tokens": MULTILINGUAL_SPECIAL_TOKENS,
             "language_tokens": LANGUAGE_TOKENS,
         },
-        "preprocessor_config": {},
+        "preprocessor_config": MULTILINGUAL_PREPROCESSOR_CONFIG,
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_large_multi_v2/v1/model.h5",
         "weights_hash": "ca157162ec9c3329a659388528a3af88",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_large_multi_v2/v1/vocab.json",

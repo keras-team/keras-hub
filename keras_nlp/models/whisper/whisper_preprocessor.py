@@ -18,6 +18,9 @@ import copy
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.start_end_packer import StartEndPacker
 from keras_nlp.models.preprocessor import Preprocessor
+from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
+    WhisperAudioFeatureExtractor,
+)
 from keras_nlp.models.whisper.whisper_presets import backbone_presets
 from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.utils.keras_utils import (
@@ -149,32 +152,6 @@ class WhisperPreprocessor(Preprocessor):
         self.task = task
         self.no_timestamps = no_timestamps
 
-        def _get_bos_tokens(self, language, task, no_timestamps):
-            bos_tokens = {
-                "bos_token": self.tokenizer.bos_token_id,
-                "language_token": None,
-                "task_token": None,
-                "no_timestamps_token": None,
-            }
-            if self.tokenizer.language_tokens is not None:
-                if language is not None:
-                    bos_tokens[
-                        "language_token"
-                    ] = self.tokenizer.language_tokens[language]
-                if task == "transcribe":
-                    bos_tokens["task_token"] = self.tokenizer.task_tokens[
-                        "<|transcribe|>"
-                    ]
-                elif task == "translate":
-                    bos_tokens["task_token"] = self.tokenizer.task_tokens[
-                        "<|translate|>"
-                    ]
-
-            if no_timestamps:
-                bos_tokens[
-                    "no_timestamps_token"
-                ] = self.tokenizer.no_timestamps_token_id
-
         # The decoder is packed a bit differently; the format is as follows:
         # `[end_token_id, start_token_id, tokens..., end_token_id, padding...]`.
         bos_tokens = [self.tokenizer.bos_token_id]
@@ -189,14 +166,12 @@ class WhisperPreprocessor(Preprocessor):
         if no_timestamps:
             bos_tokens += [self.tokenizer.no_timestamps_token_id]
 
-        self._bos_tokens = bos_tokens
-
         # TODO: Use `MultiSegmentPacker` instead of `StartEndPacker` once we
         # want to move to multi-segment packing and have improved
         # `MultiSegmentPacker`'s performance.
         self.decoder_packer = StartEndPacker(
             start_value=bos_tokens,
-            end_value=self.tokenizer.end_token_id,
+            end_value=self.tokenizer.eos_token_id,
             pad_value=self.tokenizer.pad_token_id,
             sequence_length=decoder_sequence_length,
             return_padding_mask=True,
@@ -253,6 +228,10 @@ class WhisperPreprocessor(Preprocessor):
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty
+    def audio_feature_extractor_cls(cls):
+        return WhisperAudioFeatureExtractor
+
+    @classproperty
     def tokenizer_cls(cls):
         return WhisperTokenizer
 
@@ -266,7 +245,7 @@ class WhisperPreprocessor(Preprocessor):
         preset,
         **kwargs,
     ):
-        # Override base class's `from_preset` to handle `encoder_sequence_length`
+        # Override base class's `from_preset` to handle audio feature extractor
         # and `decoder_sequence_length`.
         if not cls.presets:
             raise NotImplementedError(
@@ -278,6 +257,9 @@ class WhisperPreprocessor(Preprocessor):
                 f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
 
+        audio_feature_extractor = cls.audio_feature_extractor_cls.from_preset(
+            preset
+        )
         tokenizer = cls.tokenizer_cls.from_preset(preset)
 
         metadata = cls.presets[preset]
@@ -287,35 +269,35 @@ class WhisperPreprocessor(Preprocessor):
         else:
             backbone_config = metadata["config"]
 
-        # Use model's `max_sequence_length` if either `encoder_sequence_length`
-        # or `decoder_sequence_length` are unspecified; otherwise check that
-        # `encoder_sequence_length`/`decoder_sequence_length` are not too long.
-        encoder_sequence_length = kwargs.pop("encoder_sequence_length", None)
+        # Use model's `max_decoder_sequence_length` if `decoder_sequence_length`
+        # is unspecified; otherwise check that `decoder_sequence_length` is not
+        # too long.
         decoder_sequence_length = kwargs.pop("decoder_sequence_length", None)
-        max_sequence_length = backbone_config["max_sequence_length"]
+        max_decoder_sequence_length = backbone_config[
+            "max_decoder_sequence_length"
+        ]
 
-        def check_sequence_length(sequence_length, name):
+        def check_sequence_length(sequence_length, max_sequence_length, name):
             if sequence_length is not None:
                 if sequence_length > max_sequence_length:
                     raise ValueError(
                         f"`{name}` cannot be longer than `{preset}` "
-                        f"preset's `max_sequence_length` of {max_sequence_length}. "
+                        f"preset's `max_{name}` of {max_sequence_length}. "
                         f"Received: {sequence_length}."
                     )
                 return sequence_length
             else:
                 return max_sequence_length
 
-        encoder_sequence_length = check_sequence_length(
-            encoder_sequence_length, "encoder_sequence_length"
-        )
         decoder_sequence_length = check_sequence_length(
-            decoder_sequence_length, "decoder_sequence_length"
+            decoder_sequence_length,
+            max_decoder_sequence_length,
+            "decoder_sequence_length",
         )
 
         return cls(
+            audio_feature_extractor=audio_feature_extractor,
             tokenizer=tokenizer,
-            encoder_sequence_length=encoder_sequence_length,
             decoder_sequence_length=decoder_sequence_length,
             **kwargs,
         )
