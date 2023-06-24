@@ -26,40 +26,33 @@ class GPTNeoXDecoder(keras.layers.Layer):
     """GPTNeoX decoder.
 
     This class follows the architecture of the GPT-NeoX decoder layer in the
-    paper [GPT-NeoX-20B: An Open-Source Autoregressive Language Model](https://arxiv.org/abs/2204.06745). Users
-    can instantiate multiple instances of this class to stack up a decoder.
+    paper [GPT-NeoX-20B: An Open-Source Autoregressive Language Model](https://arxiv.org/abs/2204.06745).
+    Users can instantiate multiple instances of this class to stack up a decoder.
 
     This layer will always apply a causal mask to the decoder attention layer.
-    This layer will correctly compute an attention mask from an implicit
-    Keras padding mask (for example, by passing `mask_zero=True` to a
-    `keras.layers.Embedding` layer). See the Masking and Padding
-    [guide](https://keras.io/guides/understanding_masking_and_padding/)
-    for more details.
 
     Args:
         intermediate_dim: int, the hidden size of feedforward network.
-        num_heads: int, the number of heads in MultiHeadAttention.
-        dropout: float, defaults to 0. the dropout value, shared by
-            MultiHeadAttention and feedforward network.
-        activation: string or `keras.activations`, defaults to "relu". the
-            activation function of feedforward network.
-        layer_norm_epsilon: float, defaults to 1e-5. The eps value in layer
+        num_heads: int, the number of heads for multi-head attention.
+        dropout: float. the dropout value, shared by
+            the multi-head attention and feedforward layers.
+        activation: string or `keras.activations`. the activation function of
+            feedforward network.
+        layer_norm_epsilon: float. The epsilon value in layer
             normalization components.
-        kernel_initializer: string or `keras.initializers` initializer,
-            defaults to "glorot_uniform". The kernel initializer for
-            the dense and multiheaded attention layers.
-        bias_initializer: string or `keras.initializers` initializer,
-            defaults to "zeros". The bias initializer for
-            the dense and multiheaded attention layers.
-        rotary_max_wavelength: int. The maximum angular wavelength of the sine/cosine
-            curves, for rotary embeddings. Defaults to 10000.
-        rotary_percentage: float. The percentage by which query, key, value matrices are
-            to be rotated
+        kernel_initializer: string or `keras.initializers` initializer. The
+            kernel initializer for the dense and multi-head  attention layers.
+        bias_initializer: string or `keras.initializers` initializer. The bias
+            initializer for the dense and multi-head  attention layers.
+        rotary_max_wavelength: int. The maximum angular wavelength of the
+            sine/cosine curves, for rotary embeddings.
+        rotary_percentage: float. The percentage by which query, key, value
+            matrices are to be rotated.
         max_sequence_length: int. The maximum sequence length that this encoder
              can consume. If `None`, `max_sequence_length` uses the value from
              sequence length. This determines the variable shape for positional
              embeddings.
-        name: string, defaults to None. The name of the layer.
+        name: string. The name of the layer.
     """
 
     def __init__(

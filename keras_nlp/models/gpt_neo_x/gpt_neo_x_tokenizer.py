@@ -23,7 +23,7 @@ class GPTNeoXTokenizer(BytePairTokenizer):
 
     This tokenizer class will tokenize raw strings into integer sequences and
     is based on `keras_nlp.tokenizers.BytePairTokenizer`. Unlike the
-    underlying tokenizer, it will check for all special tokens needed by GPT-2
+    underlying tokenizer, it will check for all special tokens needed by GPTNeoX
     models and provides a `from_preset()` method to automatically download
     a matching vocabulary for a GPTNeoX preset.
 

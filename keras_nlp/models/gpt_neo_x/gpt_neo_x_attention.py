@@ -21,27 +21,26 @@ from keras_nlp.utils.keras_utils import clone_initializer
 class GPTNeoXAttention(keras.layers.Layer):
     """GPTNeoXAttention layer.
 
-    This is an implementation of disentangled attention as described in the
+    This is an implementation of attention layer as described in the
     paper ["GPT-NeoX-20B: An Open-Source Autoregressive Language Model"](https://arxiv.org/abs/2204.06745).
-    Effectively, this layer implements Multi-Head Self Attention with rotary embedding,
+    Effectively, this layer implements Multi-Head Self Attention with a rotary
+    embedding for encoding position information.
 
     Args:
         num_heads: int. Number of attention heads.
         hidden_dim: int. Hidden dimension of the input, i.e., `hidden_states`.
-        max_position_embeddings: int, defaults to 512. The maximum input
-            sequence length.
-        bucket_size: int, defaults to 256. The size of the relative position
+        bucket_size: int. The size of the relative position
             buckets. Generally equal to `max_sequence_length // 2`.
-        dropout: float, defaults to 0.1. Dropout probability.
-        kernel_initializer: string or `keras.initializers` initializer,
-            defaults to "glorot_uniform". The kernel initializer for
-            the dense layers.
-        bias_initializer: string or `keras.initializers` initializer,
-            defaults to "zeros". The bias initializer for the dense layers.
-        rotary_max_wavelength: int. The maximum angular wavelength of the sine/cosine
-            curves, for rotary embeddings. Defaults to 10000.
-        rotary_percentage: float. The percentage by which query, key, value matrices are
-            to be rotated
+        dropout: float. Dropout probability.
+        kernel_initializer: string or `keras.initializers` initializer.
+            The kernel initializer for the dense layers.
+        bias_initializer: string or `keras.initializers` initializer.
+            The bias initializer for the dense layers.
+        rotary_percentage: float. The percentage by which query, key, value
+            matrices are to be rotated.
+        rotary_max_wavelength: int. The maximum angular wavelength of the
+            sine/cosine curves, for rotary embeddings.
+        max_sequence_length: int. The maximum input sequence length.
     """
 
     def __init__(
@@ -49,11 +48,11 @@ class GPTNeoXAttention(keras.layers.Layer):
         num_heads,
         hidden_dim,
         dropout=0.0,
-        max_sequence_length=512,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         rotary_percentage=0.25,
         rotary_max_wavelength=10000,
+        max_sequence_length=512,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -63,12 +62,12 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.dropout = dropout
         self.attn_head_size = hidden_dim // num_heads
         self.rotary_max_wavelength = rotary_max_wavelength
-        self.max_sequence_length = max_sequence_length
         self.rotary_embedding = RotaryEmbedding(
             self.rotary_percentage, rotary_max_wavelength
         )
-        self._kernel_initializer = keras.initializers.get(kernel_initializer)
-        self._bias_initializer = keras.initializers.get(bias_initializer)
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.max_sequence_length = max_sequence_length
 
         self._qkv_dense = keras.layers.EinsumDense(
             equation="abc,cde->abde",
@@ -96,8 +95,8 @@ class GPTNeoXAttention(keras.layers.Layer):
     def _get_common_kwargs_for_sublayer(self, use_bias=True):
         common_kwargs = {}
 
-        kernel_initializer = clone_initializer(self._kernel_initializer)
-        bias_initializer = clone_initializer(self._bias_initializer)
+        kernel_initializer = clone_initializer(self.kernel_initializer)
+        bias_initializer = clone_initializer(self.bias_initializer)
 
         common_kwargs["kernel_initializer"] = kernel_initializer
         if use_bias:
@@ -133,7 +132,7 @@ class GPTNeoXAttention(keras.layers.Layer):
         )
         attention_output = tf.einsum("acbe,aecd->abcd", attention_scores, value)
 
-        return attention_output, attention_scores
+        return attention_output
 
     def call(
         self,
@@ -151,7 +150,7 @@ class GPTNeoXAttention(keras.layers.Layer):
 
         query, key = self.rotary_embedding(query, key)
 
-        attention_output, attention_scores = self._compute_attention(
+        attention_output = self._compute_attention(
             query=query,
             key=key,
             value=value,
@@ -180,15 +179,15 @@ class GPTNeoXAttention(keras.layers.Layer):
                 "num_heads": self.num_heads,
                 "hidden_dim": self.hidden_dim,
                 "dropout": self.dropout,
-                "rotary_percentage": self.rotary_percentage,
-                "rotary_max_wavelength": self.rotary_max_wavelength,
-                "max_sequence_length": self.max_sequence_length,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
                 ),
+                "rotary_percentage": self.rotary_percentage,
+                "rotary_max_wavelength": self.rotary_max_wavelength,
+                "max_sequence_length": self.max_sequence_length,
             }
         )
         return config

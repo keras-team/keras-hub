@@ -25,10 +25,6 @@ from keras_nlp.models import GPTNeoXBackbone
 
 class GPTNeoXTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        # For DTensor.
-        keras.backend.experimental.enable_tf_random_generator()
-        keras.utils.set_random_seed(1337)
-
         self.backbone = GPTNeoXBackbone(
             vocabulary_size=10,
             num_layers=4,

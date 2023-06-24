@@ -50,12 +50,12 @@ class GPTNeoXBackbone(Backbone):
         intermediate_dim: int. The output dimension of the first Dense layer in
             a two-layer feedforward network for each transformer.
         dropout: float. Dropout probability for the Transformer encoder.
-        layer_norm_epsilon: float. a value added to the denominator for numerical stability.
-           Default: 1e-5
-        rotary_max_wavelength: int. The maximum angular wavelength of the sine/cosine
-           curves, for rotary embeddings. Defaults to 10000.
-        rotary_percentage: float. The percentage by which query, key, value matrices are
-           to be rotated
+        layer_norm_epsilon: float. a value added to the denominator for
+            numerical stability.
+        rotary_max_wavelength: int. The maximum angular wavelength of the
+            sine/cosine curves, for rotary embeddings.
+        rotary_percentage: float. The percentage by which query, key, value
+            matrices are to be rotated
         max_sequence_length: int. The maximum sequence length that this encoder
             can consume. If `None`, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
