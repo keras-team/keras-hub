@@ -89,11 +89,14 @@ class WhisperPreprocessor(Preprocessor):
         # Create list of tokens to be prepended to decoder inputs.
         bos_tokens = [self.tokenizer.bos_token_id]
         if self.tokenizer.language_tokens is not None:
-            if language is None or language not in LANGUAGE_TOKENS:
+            if (
+                language is None
+                or language not in self.tokenizer.language_tokens
+            ):
                 raise ValueError(
                     "You must pass a non-None value for `language` when using "
                     "a multilingual tokenizer. The value must be one of "
-                    f'{",".join(LANGUAGE_TOKENS.keys())}. '
+                    f'{",".join(self.tokenizer.language_tokens.keys())}. '
                     f"Received: language={language}."
                 )
             if task is None or task not in ["transcribe", "translate"]:
@@ -103,13 +106,12 @@ class WhisperPreprocessor(Preprocessor):
                     f'`"transcribe"`, `"translate"`. Received: task={task}.'
                 )
 
-            if language is not None:
-                bos_tokens += [self.tokenizer.language_tokens[language]]
+            bos_tokens += [self.tokenizer.language_tokens[language]]
+
             if task == "transcribe":
                 bos_tokens += [self.tokenizer.special_tokens["<|transcribe|>"]]
             elif task == "translate":
                 bos_tokens += [self.tokenizer.special_tokens["<|translate|>"]]
-
         else:
             if language is not None:
                 logging.info(
