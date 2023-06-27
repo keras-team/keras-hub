@@ -28,13 +28,13 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras_nlp_export("keras_nlp.models.GPTNeoXPreprocessor")
 class GPTNeoXPreprocessor(Preprocessor):
-    """GPT2 preprocessing layer which tokenizes and packs inputs.
+    """GPTNeoX preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do 2 things:
 
     - Tokenize the inputs using the `tokenizer`.
     - Construct a dictionary with keys `"token_ids"`, `"padding_mask"`, that can
-        be passed directly to a `keras_nlp.models.GPT2Backbone`.
+        be passed directly to a `keras_nlp.models.GPTNeoXBackbone`.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
@@ -47,13 +47,13 @@ class GPTNeoXPreprocessor(Preprocessor):
     `y` and `sample_weight` are both optional, can have any format, and will be
     passed through unaltered.
 
-    `GPT2Preprocessor` forces the input to have only one segment, as GPT2 is
+    `GPTNeoXPreprocessor` forces the input to have only one segment, as GPTNeoX is
     mainly used for generation tasks. For tasks having multi-segment inputs
     like "glue/mnli", please use a model designed for classification purposes
     such as BERT or RoBERTa.
 
     Args:
-        tokenizer: A `keras_nlp.models.GPT2Tokenizer` instance.
+        tokenizer: A `keras_nlp.models.GPTNeoXTokenizer` instance.
         sequence_length: The length of the packed inputs.
         add_start_token: If `True`, the preprocessor will prepend the tokenizer
             start token to each input sequence.
@@ -71,7 +71,7 @@ class GPTNeoXPreprocessor(Preprocessor):
 
     Directly calling the layer on data.
     ```python
-    preprocessor = keras_nlp.models.GPT2Preprocessor.from_preset("gpt2_base_en")
+    preprocessor = keras_nlp.models.GPTNeoXPreprocessor.from_preset("GPTNeoX_base_en")
 
     # Tokenize and pack a single sentence.
     preprocessor("The quick brown fox jumped.")
@@ -84,17 +84,17 @@ class GPTNeoXPreprocessor(Preprocessor):
     vocab = {"<|endoftext|>": 0, "a": 4, "Ġquick": 5, "Ġfox": 6}
     merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
     merges += ["Ġ f", "o x", "Ġf ox"]
-    tokenizer = keras_nlp.models.GPT2Tokenizer(
+    tokenizer = keras_nlp.models.GPTNeoXTokenizer(
         vocabulary=vocab,
         merges=merges,
     )
-    preprocessor = keras_nlp.models.GPT2Preprocessor(tokenizer=tokenizer)
+    preprocessor = keras_nlp.models.GPTNeoXPreprocessor(tokenizer=tokenizer)
     preprocessor("The quick brown fox jumped.")
     ```
 
     Mapping with `tf.data.Dataset`.
     ```python
-    preprocessor = keras_nlp.models.GPT2Preprocessor.from_preset("gpt2_base_en")
+    preprocessor = keras_nlp.models.GPTNeoXPreprocessor.from_preset("GPTNeoX_base_en")
 
     text = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     label = tf.constant([1, 1])
@@ -152,8 +152,8 @@ class GPTNeoXPreprocessor(Preprocessor):
         x = convert_inputs_to_list_of_tensor_segments(x)
         if len(x) != 1:
             raise ValueError(
-                "GPT2 requires each input feature to contain only "
-                f"one segment, but received {len(x)}. If you are using GPT2 "
+                "GPTNeoX requires each input feature to contain only "
+                f"one segment, but received {len(x)}. If you are using GPTNeoX "
                 "for a multi-segment classification task, please refer to "
                 "classification models like BERT or RoBERTa."
             )
@@ -169,10 +169,6 @@ class GPTNeoXPreprocessor(Preprocessor):
             "padding_mask": padding_mask,
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
-
-    # @classproperty
-    # def presets(cls):
-    #     return copy.deepcopy(backbone_presets)
 
     @classproperty
     def tokenizer_cls(cls):
