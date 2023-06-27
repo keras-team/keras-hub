@@ -14,7 +14,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.models.gpt_neo_x.rotary_embedding import RotaryEmbedding
+from keras_nlp.layers.rotary_embedding import RotaryEmbedding
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
