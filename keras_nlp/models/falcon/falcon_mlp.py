@@ -39,14 +39,19 @@ class FalconMLP(keras.layers.Layer):
 
     """
 
-    def __init__(self, config):
-        super(FalconMLP, self).__init__()
-        hidden_size = config.hidden_size
+    def __init__(self,
+                 hidden_size,
+                 bias,
+                 hidden_dropout,
+                 **kwargs,
+                   ):
+        super(FalconMLP, self).__init__( **kwargs)
+        hidden_size = hidden_size
 
-        self.dense_h_to_4h = Dense(4 * hidden_size, use_bias=config.bias)
+        self.dense_h_to_4h = Dense(4 * hidden_size, use_bias=bias)
         self.act = gelu
-        self.dense_4h_to_h = Dense(hidden_size, use_bias=config.bias)
-        self.hidden_dropout = config.hidden_dropout
+        self.dense_4h_to_h = Dense(hidden_size, use_bias=bias)
+        self.hidden_dropout = hidden_dropout
 
     def call(self, x, training=None):
         """

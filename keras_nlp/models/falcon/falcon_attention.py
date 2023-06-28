@@ -62,14 +62,25 @@ class FalconAttention(keras.layers.Layer):
         ```
     """
 
-    def __init__(self, config):
-        super(FalconAttention, self).__init__()
+    def __init__(self, 
+                 hidden_size,
+                 n_head,
+                 hidden_dropout,
+                 head_dim,
+                 rotary,
+                 multi_query,
+                 bias,
+                 attention_dropout,
+                 **kwargs,
+                 #config
+                 ):
+        super(FalconAttention, self).__init__(**kwargs)
 
-        self.hidden_size = config.hidden_size
-        self.num_heads = config.n_head
+        self.hidden_size = hidden_size
+        self.num_heads =n_head
         self.head_dim = self.hidden_size // self.num_heads
         self.split_size = self.hidden_size
-        self.hidden_dropout = config.hidden_dropout
+        self.hidden_dropout =hidden_dropout
 
         if self.head_dim * self.num_heads != self.hidden_size:
             raise ValueError(
@@ -77,20 +88,20 @@ class FalconAttention(keras.layers.Layer):
                 f" {self.num_heads})."
             )
 
-        self.maybe_rotary = FalconRotaryPositionalEmbedding(config.head_dim) if config.rotary else lambda q, k: (q, k)
+        self.maybe_rotary = FalconRotaryPositionalEmbedding(head_dim) if rotary else lambda q, k: (q, k)
 
         # Layer-wise attention scaling
         self.inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
         self.beta = self.inv_norm_factor
 
         self.query_key_value = Dense(
-            3 * self.hidden_size if not config.multi_query else (self.hidden_size + 2 * self.head_dim),
-            bias=config.bias,
+            3 * self.hidden_size if not multi_query else (self.hidden_size + 2 * self.head_dim),
+            bias=bias,
         )
-        self.multi_query = config.multi_query
-        self.dense = Dense(self.hidden_size, bias=config.bias)
-        self.attention_dropout = Dropout(config.attention_dropout)
-        self.num_kv = config.n_head if not self.multi_query else 1
+        self.multi_query = multi_query
+        self.dense = Dense(self.hidden_size, bias=bias)
+        self.attention_dropout = Dropout(attention_dropout)
+        self.num_kv = n_head if not self.multi_query else 1
 
     def _split_heads(self, fused_qkv):
         """

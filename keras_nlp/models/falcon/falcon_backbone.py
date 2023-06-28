@@ -21,6 +21,9 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.backbone import Backbone
 # from keras_nlp.models.falcon.falcon_presets import backbone_presets
 from keras_nlp.models.falcon.falcon_decoder import FalconDecoder
+def _falcon_kernel_initializer(stddev=0.02):
+    return keras.initializers.RandomNormal(stddev=stddev)
+
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -111,6 +114,7 @@ class FalconBackbone(Backbone):
         alibi=False,
         bias=False,
         parallel_attn=False,
+        max_sequence_length=512,
         **kwargs,
     ):
         """
@@ -134,76 +138,76 @@ class FalconBackbone(Backbone):
             bias (bool): Whether to use bias in attention layers.
             parallel_attn (bool): Whether to use parallel attention.
 
-        Returns:
-            None
-        """
-        token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="token_ids"
-        )
+            Returns:
+                None
+            """
+            # Inputs
+        token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
         padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
-
-        x = token_id_input
-        config = self.get_config()
-        for _ in range(n_layer):
-            x = FalconDecoder(config)(
-                hidden_states=x,
-                alibi=None,
-                attention_mask=None,
-                layer_past=None,
-                head_mask=None,
-                use_cache=use_cache,
-                output_attentions=False,
-                training=False
+                shape=(None,), dtype="int32", name="padding_mask"
             )
 
+        # Embed tokens, positions.
+        token_embedding = keras.layers.Embedding(
+                input_dim=vocab_size , #vocabulary_size,
+                output_dim=hidden_size,
+                embeddings_initializer=_falcon_kernel_initializer(stddev=0.01),
+                 name="token_embedding",
+            )(token_ids)
+
+            # Apply successive transformer decoder blocks.
+        for i in range(n_layer):
+                x = FalconDecoder(
+                hidden_size=hidden_size,
+                name=f"transformer_layer_{i}",
+            )(x, padding_mask=padding_mask)
+
+        sequence_output = keras.layers.LayerNormalization(
+                name="layer_norm",
+                axis=-1,
+                epsilon=layer_norm_epsilon,
+                dtype=tf.float32,
+            )(x)
+
+            # Instantiate using Functional API Model constructor
         super().__init__(
-            inputs={
-                "token_ids": token_id_input,
-                "padding_mask": padding_mask,
-            },
-            outputs=x,
-            **kwargs,
-        )
-        self.vocab_size = vocab_size
-        n_embed = kwargs.pop("n_embed", None)
-        self.hidden_size = hidden_size if n_embed is None else n_embed
-        self.n_layer = n_layer
-        self.n_head = n_head
-        self.layer_norm_epsilon = layer_norm_epsilon
-        self.initializer_range = initializer_range
-        self.use_cache = use_cache
-        self.apply_residual_connection_post_layernorm = apply_residual_connection_post_layernorm
-        self.hidden_dropout = hidden_dropout
-        self.attention_dropout = attention_dropout
-        self.bos_token_id = bos_token_id
-        self.eos_token_id = eos_token_id
-        self.multi_query = multi_query
-        self.alibi = alibi
-        self.bias = bias
-        self.parallel_attn = parallel_attn
+                inputs={
+                    "token_ids": token_ids,
+                    "padding_mask": padding_mask,
+                },
+                outputs=sequence_output,
+                **kwargs,
+            )
+            # All references to `self` below this line
+        self.vocabulary_size = vocab_size
+        self.num_layers = n_layer
+        self.num_heads = n_head
+        self.hidden_dim = hidden_size
+        # self.intermediate_dim = intermediate_dim
+        self.dropout = hidden_dropout
+        self.max_sequence_length = max_sequence_length
+        self.cls_token_index = 0
+        
 
-    def get_config(self):
-        """
-        Get the configuration of the FalconBackbone model.
+        def get_config(self):
+                config = super().get_config()
+                config.update(
+                    {
+                        "vocabulary_size": self.vocabulary_size,
+                        "num_layers": self.num_layers,
+                        "num_heads": self.num_heads,
+                        "hidden_dim": self.hidden_dim,
+                        # "intermediate_dim": self.intermediate_dim,
+                        "dropout": self.dropout,
+                        "max_sequence_length": self.max_sequence_length,
+                        "config": self.config,
+                    }
+                )
+                return config
 
-        Returns:
-            dict: The model configuration.
-        """
-        config = super().get_config()
-        config.update(
-            {
-                "hidden_size": self.hidden_size,
-                "n_head": self.n_head,
-                "layer_norm_epsilon": self.layer_norm_epsilon,
-                "hidden_dropout": self.hidden_dropout,
-                "attention_dropout": self.attention_dropout,
-                "apply_residual_connection_post_layernorm": self.apply_residual_connection_post_layernorm,
-                "parallel_attn": self.parallel_attn,
-            }
-        )
-        return config
+    @property
+    def token_embedding(self):
+        return self.get_layer("token_embedding")
 
     @property
     def head_dim(self):
