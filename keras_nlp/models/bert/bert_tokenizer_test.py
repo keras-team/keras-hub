@@ -21,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class BertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class BertTokenizerTest(TestCase):
     def setUp(self):
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]

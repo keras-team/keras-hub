@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for Whisper preprocessing layers."""
-
 import os
 
 import tensorflow as tf
@@ -21,9 +20,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class WhisperTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class WhisperTokenizerTest(TestCase):
     def setUp(self):
         self.vocab = {
             "Ġair": 0,

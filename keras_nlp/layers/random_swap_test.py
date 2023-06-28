@@ -17,9 +17,10 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers.random_swap import RandomSwap
+from keras_nlp.tests.test_case import TestCase
 
 
-class RandomSwapTest(tf.test.TestCase):
+class RandomSwapTest(TestCase):
     def test_shape_and_output_from_word_swap(self):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]

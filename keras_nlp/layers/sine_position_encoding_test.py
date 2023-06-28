@@ -17,9 +17,10 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers import sine_position_encoding
+from keras_nlp.tests.test_case import TestCase
 
 
-class SinePositionEncodingTest(tf.test.TestCase):
+class SinePositionEncodingTest(TestCase):
     def test_valid_call(self):
         pos_encoding = sine_position_encoding.SinePositionEncoding()
         model = keras.Sequential(

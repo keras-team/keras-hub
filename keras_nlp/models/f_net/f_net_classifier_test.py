@@ -26,9 +26,10 @@ from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_classifier import FNetClassifier
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class FNetClassifierTest(tf.test.TestCase, parameterized.TestCase):
+class FNetClassifierTest(TestCase):
     def setUp(self):
         # Setup Model
         bytes_io = io.BytesIO()

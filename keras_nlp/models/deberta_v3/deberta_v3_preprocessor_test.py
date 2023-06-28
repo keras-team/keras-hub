@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for DeBERTa preprocessor layer."""
-
 import io
 import os
 
@@ -27,9 +26,10 @@ from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
     DebertaV3Preprocessor,
 )
 from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class DebertaV3PreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class DebertaV3PreprocessorTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(

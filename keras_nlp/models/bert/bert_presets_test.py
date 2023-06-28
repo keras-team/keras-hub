@@ -21,10 +21,11 @@ from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_classifier import BertClassifier
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+class BertPresetSmokeTest(TestCase):
     """
     A smoke test for BERT presets we run continuously.
 
@@ -170,7 +171,7 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class BertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class BertPresetFullTest(TestCase):
     """
     Test the full enumeration of our preset.
 

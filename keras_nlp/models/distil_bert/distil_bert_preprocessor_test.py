@@ -26,9 +26,10 @@ from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
 from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
-class DistilBertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class DistilBertPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]

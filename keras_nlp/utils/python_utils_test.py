@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tensorflow as tf
-
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-class ClassPropertyTest(tf.test.TestCase):
+class ClassPropertyTest(TestCase):
     def test_class_property(self):
         class Foo:
             @classproperty
@@ -28,7 +27,7 @@ class ClassPropertyTest(tf.test.TestCase):
         self.assertAllEqual(Foo.bar, "class property")
 
 
-class FormatDocstringTest(tf.test.TestCase):
+class FormatDocstringTest(TestCase):
     def test_function(self):
         @format_docstring(adjective="salubrious")
         def foo():

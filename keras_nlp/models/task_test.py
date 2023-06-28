@@ -11,12 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.losses import SparseCategoricalCrossentropy
 
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.models.task import Task
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.tokenizer import Tokenizer
 
 
@@ -40,7 +40,7 @@ class SimpleTask(Task):
         self.activation = keras.activations.get(activation)
 
 
-class TestTask(tf.test.TestCase):
+class TestTask(TestCase):
     def test_summary_with_preprocessor(self):
         preprocessor = SimplePreprocessor()
         model = SimpleTask(preprocessor)

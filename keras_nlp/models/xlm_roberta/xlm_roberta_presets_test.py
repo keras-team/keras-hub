@@ -27,10 +27,11 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
 from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+class XLMRobertaPresetSmokeTest(TestCase):
     """
     A smoke test for XLM-RoBERTa presets we run continuously.
 
@@ -124,7 +125,7 @@ class XLMRobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class XLMRobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class XLMRobertaPresetFullTest(TestCase):
     """
     Test the full enumeration of our preset.
 

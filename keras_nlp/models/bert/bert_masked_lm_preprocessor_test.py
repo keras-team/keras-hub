@@ -24,9 +24,10 @@ from keras_nlp.models.bert.bert_masked_lm_preprocessor import (
     BertMaskedLMPreprocessor,
 )
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class BertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class BertMaskedLMPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]

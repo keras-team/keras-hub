@@ -15,9 +15,10 @@
 import tensorflow as tf
 
 import keras_nlp.layers.transformer_layer_utils as utils
+from keras_nlp.tests.test_case import TestCase
 
 
-class TransformerEncoderTest(tf.test.TestCase):
+class TransformerEncoderTest(TestCase):
     def test_compute_causal_mask(self):
         mask = utils.compute_causal_mask(1, 2, 2)
         self.assertTrue((mask.numpy() == [[1, 0], [1, 1]]).all())

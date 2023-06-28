@@ -23,11 +23,10 @@ from tensorflow import keras
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
-class WhisperAudioFeatureExtractorTest(
-    tf.test.TestCase, parameterized.TestCase
-):
+class WhisperAudioFeatureExtractorTest(TestCase):
     def setUp(self):
         self.num_mels = 80
         self.num_fft_bins = 400

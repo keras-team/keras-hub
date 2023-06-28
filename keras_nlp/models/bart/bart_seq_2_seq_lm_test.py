@@ -28,9 +28,10 @@ from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class BartSeq2SeqLMTest(tf.test.TestCase, parameterized.TestCase):
+class BartSeq2SeqLMTest(TestCase):
     def setUp(self):
         # For DTensor.
         keras.backend.experimental.enable_tf_random_generator()

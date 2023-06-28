@@ -15,11 +15,12 @@
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.utils.keras_utils import clone_initializer
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-class CloneInitializerTest(tf.test.TestCase):
+class CloneInitializerTest(TestCase):
     def test_config_equality(self):
         initializer = keras.initializers.VarianceScaling(
             scale=2.0,
@@ -42,7 +43,7 @@ class CloneInitializerTest(tf.test.TestCase):
         self.assertAllEqual(initializer, clone)
 
 
-class PackTest(tf.test.TestCase):
+class PackTest(TestCase):
     def test_pack_dict(self):
         tensor_dict = {"foo": tf.constant([1, 2])}
         data = pack_x_y_sample_weight(tensor_dict)

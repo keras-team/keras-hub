@@ -20,6 +20,7 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.layers import position_embedding
+from keras_nlp.tests.test_case import TestCase
 
 
 def custom_init(shape, dtype=None):
@@ -29,7 +30,7 @@ def custom_init(shape, dtype=None):
     return tf.reshape(tf.range(count, dtype=dtype), shape)
 
 
-class PositionEmbeddingLayerTest(tf.test.TestCase, parameterized.TestCase):
+class PositionEmbeddingLayerTest(TestCase):
     def test_static_layer_output_shape(self):
         # Create a 3-dimensional input (the first dimension is implicit).
         sequence_length = 21

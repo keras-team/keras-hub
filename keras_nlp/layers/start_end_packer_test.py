@@ -13,15 +13,14 @@
 # limitations under the License.
 
 """Tests for Start End Packer layer."""
-
-
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers.start_end_packer import StartEndPacker
+from keras_nlp.tests.test_case import TestCase
 
 
-class StartEndPackerTest(tf.test.TestCase):
+class StartEndPackerTest(TestCase):
     def test_dense_input(self):
         input_data = tf.constant([5, 6, 7])
         start_end_packer = StartEndPacker(sequence_length=5)
