@@ -23,7 +23,6 @@ from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
-from keras_nlp.models.whisper.whisper_presets import LANGUAGE_TOKENS
 from keras_nlp.models.whisper.whisper_presets import backbone_presets
 from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.utils.keras_utils import (
@@ -36,8 +35,7 @@ from keras_nlp.utils.python_utils import format_docstring
 
 @keras_nlp_export("keras_nlp.models.WhisperPreprocessor")
 class WhisperPreprocessor(Preprocessor):
-    """A Whisper preprocessing layer which extracts audio features, tokenizes
-    and packs inputs.
+    """A Whisper preprocessing layer which handles audio and text input.
 
     This preprocessing layer will do three things:
 
@@ -55,7 +53,7 @@ class WhisperPreprocessor(Preprocessor):
             instance.
         tokenizer: A `keras_nlp.models.WhisperTokenizer` instance.
         decoder_sequence_length: The length of the packed decoder inputs.
-        language: string, language tokens. Should only be passed if your
+        language: string, language token. Should only be passed if your
             tokenizer is multilingual.
         task: string, task name. One of `"transcribe"`, `"translate"`. Should
             only be passed if your tokenizer is multilingual.
@@ -219,8 +217,8 @@ class WhisperPreprocessor(Preprocessor):
 
         Args:
             preset: string. Must be one of "{{preset_names}}".
-            language: string, language tokens. Should only be passed if your
-                tokenizer is multilingual. Must be one of "{{language_tokens}}".
+            language: string, language token (eg., `"<|en|>"`). Should only be
+                passed if your tokenizer is multilingual.
             task: string, task name. One of `"transcribe"`, `"translate"`.
                 Should only be passed if your tokenizer is multilingual.
             no_timestamps: bool. If True, `"<|no_timestamps|>"` will be added as
@@ -298,5 +296,4 @@ class WhisperPreprocessor(Preprocessor):
 format_docstring(
     example_preset_name=next(iter(backbone_presets), ""),
     preset_names='", "'.join(backbone_presets),
-    language_tokens='", "'.join(LANGUAGE_TOKENS),
 )(WhisperPreprocessor.from_preset.__func__)
