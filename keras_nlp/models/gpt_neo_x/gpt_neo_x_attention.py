@@ -138,8 +138,10 @@ class GPTNeoXAttention(keras.layers.Layer):
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
         tensor_rot = tensor[..., : self.rotary_ndims]
         tensor_pass = tensor[..., self.rotary_ndims :]
+
         cos_emb = cos_emb[:, : tf.shape(tensor_rot)[1], :, :]
         sin_emb = sin_emb[:, : tf.shape(tensor_rot)[1], :, :]
+
         x1, x2 = tf.split(tensor_rot, 2, axis=-1)
         half_rot_tensor = tf.concat((-x2, x1), axis=-1)
         tensor_rot = (tensor_rot * cos_emb) + (half_rot_tensor * sin_emb)
