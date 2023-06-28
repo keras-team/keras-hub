@@ -24,7 +24,7 @@ except ImportError:
 
 def maybe_register_serializable(symbol):
     if isinstance(symbol, types.FunctionType) or hasattr(symbol, "get_config"):
-        keras.utils.register_keras_serializable(package="keras_nlp")(symbol)
+        keras.saving.register_keras_serializable(package="keras_nlp")(symbol)
 
 
 if namex:
