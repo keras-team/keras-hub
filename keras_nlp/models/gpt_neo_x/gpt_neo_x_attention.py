@@ -136,30 +136,15 @@ class GPTNeoXAttention(keras.layers.Layer):
         return attention_output
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
-        cos_emb = cos_emb[:, : tf.shape(tensor)[1], :, :]
-        sin_emb = sin_emb[:, : tf.shape(tensor)[1], :, :]
-        x1, x2 = tf.split(tensor, 2, axis=-1)
+        tensor_rot = tensor[..., : self.rotary_ndims]
+        tensor_pass = tensor[..., self.rotary_ndims :]
+        cos_emb = cos_emb[:, : tf.shape(tensor_rot)[1], :, :]
+        sin_emb = sin_emb[:, : tf.shape(tensor_rot)[1], :, :]
+        x1, x2 = tf.split(tensor_rot, 2, axis=-1)
         half_rot_tensor = tf.concat((-x2, x1), axis=-1)
-        ret = (tensor * cos_emb) + (half_rot_tensor * sin_emb)
-        return ret
+        tensor_rot = (tensor_rot * cos_emb) + (half_rot_tensor * sin_emb)
 
-    def _get_rotary_query_key(self, query, key, cos_emb, sin_emb):
-        query_rot, query_pass = (
-            query[..., : self.rotary_ndims],
-            query[..., self.rotary_ndims :],
-        )
-        key_rot, key_pass = (
-            key[..., : self.rotary_ndims],
-            key[..., self.rotary_ndims :],
-        )
-
-        query = self._apply_rotary_pos_emb(query_rot, cos_emb, sin_emb)
-        key = self._apply_rotary_pos_emb(key_rot, cos_emb, sin_emb)
-
-        query = tf.concat((query, query_pass), axis=-1)
-        key = tf.concat((key, key_pass), axis=-1)
-
-        return query, key
+        return tf.concat((tensor_rot, tensor_pass), axis=-1)
 
     def call(
         self,
@@ -177,7 +162,8 @@ class GPTNeoXAttention(keras.layers.Layer):
 
         cos_emb, sin_emb = self.rotary_embedding(value)
 
-        query, key = self._get_rotary_query_key(query, key, cos_emb, sin_emb)
+        query = self._apply_rotary_pos_emb(query, cos_emb, sin_emb)
+        key = self._apply_rotary_pos_emb(key, cos_emb, sin_emb)
 
         attention_output = self._compute_attention(
             query=query,
