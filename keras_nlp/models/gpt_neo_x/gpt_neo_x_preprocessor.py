@@ -66,47 +66,6 @@ class GPTNeoXPreprocessor(Preprocessor):
         sample_weight: Any label weight data. Will be passed through unaltered.
         sequence_length: Pass to override the configured `sequence_length` of
             the layer.
-
-    Examples:
-
-    Directly calling the layer on data.
-    ```python
-    preprocessor = keras_nlp.models.GPTNeoXPreprocessor.from_preset("GPTNeoX_base_en")
-
-    # Tokenize and pack a single sentence.
-    preprocessor("The quick brown fox jumped.")
-
-    # Tokenize a batch of single sentences.
-    preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
-
-    # Custom vocabulary.
-    features = ["a quick fox.", "a fox quick."]
-    vocab = {"<|endoftext|>": 0, "a": 4, "Ġquick": 5, "Ġfox": 6}
-    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    merges += ["Ġ f", "o x", "Ġf ox"]
-    tokenizer = keras_nlp.models.GPTNeoXTokenizer(
-        vocabulary=vocab,
-        merges=merges,
-    )
-    preprocessor = keras_nlp.models.GPTNeoXPreprocessor(tokenizer=tokenizer)
-    preprocessor("The quick brown fox jumped.")
-    ```
-
-    Mapping with `tf.data.Dataset`.
-    ```python
-    preprocessor = keras_nlp.models.GPTNeoXPreprocessor.from_preset("GPTNeoX_base_en")
-
-    text = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
-    label = tf.constant([1, 1])
-
-    # Map labeled single sentences.
-    ds = tf.data.Dataset.from_tensor_slices((text, label))
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-
-    # Map unlabeled single sentences.
-    ds = tf.data.Dataset.from_tensor_slices(text)
-    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
-    ```
     """
 
     def __init__(
