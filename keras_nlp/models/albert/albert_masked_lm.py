@@ -19,7 +19,7 @@ import copy
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers.masked_lm_head import MaskedLMHead
+from keras_nlp.layers.modeling.masked_lm_head import MaskedLMHead
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.models.albert.albert_backbone import albert_kernel_initializer
 from keras_nlp.models.albert.albert_masked_lm_preprocessor import (

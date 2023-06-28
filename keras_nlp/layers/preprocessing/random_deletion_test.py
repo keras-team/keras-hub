@@ -16,7 +16,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers.random_deletion import RandomDeletion
+from keras_nlp.layers.preprocessing.random_deletion import RandomDeletion
 from keras_nlp.tests.test_case import TestCase
 
 

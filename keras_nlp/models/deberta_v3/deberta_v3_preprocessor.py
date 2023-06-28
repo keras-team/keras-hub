@@ -16,7 +16,9 @@
 import copy
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
+from keras_nlp.layers.preprocessing.multi_segment_packer import (
+    MultiSegmentPacker,
+)
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 from keras_nlp.models.preprocessor import Preprocessor

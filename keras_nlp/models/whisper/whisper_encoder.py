@@ -15,7 +15,7 @@
 
 from tensorflow import keras
 
-from keras_nlp.layers.transformer_encoder import TransformerEncoder
+from keras_nlp.layers.modeling.transformer_encoder import TransformerEncoder
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")

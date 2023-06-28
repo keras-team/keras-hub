@@ -19,7 +19,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.layers import masked_lm_head
+from keras_nlp.layers.modeling import masked_lm_head
 from keras_nlp.tests.test_case import TestCase
 
 

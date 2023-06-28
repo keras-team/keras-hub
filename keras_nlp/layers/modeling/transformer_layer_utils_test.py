@@ -14,7 +14,7 @@
 
 import tensorflow as tf
 
-import keras_nlp.layers.transformer_layer_utils as utils
+import keras_nlp.layers.modeling.transformer_layer_utils as utils
 from keras_nlp.tests.test_case import TestCase
 
 

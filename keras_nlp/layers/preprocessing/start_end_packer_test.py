@@ -16,7 +16,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers.start_end_packer import StartEndPacker
+from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.tests.test_case import TestCase
 
 

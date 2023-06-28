@@ -18,8 +18,8 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers.position_embedding import PositionEmbedding
-from keras_nlp.layers.token_and_position_embedding import (
+from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
+from keras_nlp.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
 from keras_nlp.models.backbone import Backbone
