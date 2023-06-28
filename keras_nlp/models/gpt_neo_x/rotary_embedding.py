@@ -30,12 +30,13 @@ class RotaryEmbedding(keras.layers.Layer):
         return tf.cos(embedding), tf.sin(embedding)
 
     def call(self, inputs):
-
         shape = tf.shape(inputs)
         attn_head_size = shape[-1]
         seq_len = shape[1]
 
-        rotary_ndims = tf.cast(attn_head_size, self.compute_dtype) * self.percentage
+        rotary_ndims = (
+            tf.cast(attn_head_size, self.compute_dtype) * self.percentage
+        )
 
         cos_emb, sin_emb = self._compute_cos_sin_embedding(
             inputs, rotary_ndims, seq_len
