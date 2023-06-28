@@ -24,15 +24,13 @@ from keras_nlp.models.bart.bart_presets import backbone_presets
 from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
-from keras_nlp.models.task import Task
-from keras_nlp.samplers.serialization import get as get_sampler
+from keras_nlp.models.generative_task import GenerativeTask
 from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.tensor_utils import tensor_to_string_list
 
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLM")
-class BartSeq2SeqLM(Task):
+class BartSeq2SeqLM(GenerativeTask):
     """An end-to-end BART model for seq2seq language modeling.
 
     A seq2seq language model (LM) is an encoder-decoder model which is used for
@@ -433,42 +431,6 @@ class BartSeq2SeqLM(Task):
             cross_attention_cache,
         )
 
-    def compile(
-        self,
-        *args,
-        run_eagerly=False,
-        jit_compile=True,
-        sampler="top_k",
-        **kwargs,
-    ):
-        xla_compatible = is_xla_compatible(self)
-        super().compile(
-            *args,
-            run_eagerly=run_eagerly,
-            # Only `jit_compile` if not eager and in a compatible environment.
-            jit_compile=jit_compile and xla_compatible and not run_eagerly,
-            **kwargs,
-        )
-        self._sampler = get_sampler(sampler)
-        # Clear the compiled generate function.
-        self.generate_function = None
-
-    def make_generate_function(self):
-        """Create or return the compiled generation function."""
-        if self.generate_function is not None:
-            return self.generate_function
-
-        if self.run_eagerly:
-            self.generate_function = self.generate_step
-        else:
-            # `jit_compile` is a property of keras.Model after TF 2.12.
-            # Use `getattr()` for backwards compatibility.
-            jit_compile = getattr(self, "jit_compile", True)
-            self.generate_function = tf.function(
-                self.generate_step, jit_compile=jit_compile
-            )
-        return self.generate_function
-
     def generate_step(
         self,
         inputs,
@@ -578,141 +540,3 @@ class BartSeq2SeqLM(Task):
             "decoder_token_ids": decoder_token_ids,
             "decoder_padding_mask": decoder_padding_mask,
         }
-
-    def _normalize_generate_inputs(
-        self,
-        inputs,
-    ):
-        """Normalizes user input to the generate function.
-
-        This function converts all inputs to tensors, adds a batch dimension if
-        necessary, and returns a iterable "dataset like" object (either an
-        actual `tf.data.Dataset` or a list with a single batch element).
-        """
-        input_is_scalar = False
-
-        if isinstance(inputs, tf.data.Dataset):
-            return inputs, input_is_scalar
-
-        def normalize(x):
-            x_is_scalar = False
-            if isinstance(x, str) or isinstance(x, list):
-                x = tf.convert_to_tensor(x)
-
-            if isinstance(x, tf.Tensor) and x.shape.rank == 0:
-                x_is_scalar = True
-                x = x[tf.newaxis]
-
-            return x, x_is_scalar
-
-        if isinstance(inputs, dict):
-            for key in inputs:
-                inputs[key], input_is_scalar = normalize(inputs[key])
-        else:
-            inputs, input_is_scalar = normalize(inputs)
-
-        # We avoid converting to a dataset purely for speed, for a single batch
-        # of input, creating a dataset would add significant overhead.
-        return [inputs], input_is_scalar
-
-    def _normalize_generate_outputs(
-        self,
-        outputs,
-        input_is_scalar,
-    ):
-        """Normalizes user output from the generate function.
-
-        This function converts the output to numpy (for integer output), or
-        python strings (for string output). If a batch dimension was added to
-        the input, it is removed from the output (so generate can be string in,
-        string out).
-        """
-
-        def normalize(x):
-            x = tf.concat(x, axis=0)
-            x = tf.squeeze(x, 0) if input_is_scalar else x
-            is_string = x.dtype == tf.string
-            # Convert outputs to a friendly pythonic type. For numerical outputs
-            # that is numpy, for string outputs that is `list` and `str`.
-            return tensor_to_string_list(x) if is_string else x.numpy()
-
-        if isinstance(outputs[0], dict):
-            return {
-                "decoder_token_ids": normalize(
-                    [x["decoder_token_ids"] for x in outputs]
-                ),
-                "decoder_padding_mask": normalize(
-                    [x["decoder_padding_mask"] for x in outputs]
-                ),
-            }
-        return normalize([x for x in outputs])
-
-    def generate(
-        self,
-        inputs,
-        max_length=None,
-    ):
-        """Generates text conditioned on the encoder inputs.
-
-        This method generates text based on given `inputs`. The sampling method
-        used for generation can be set in the `compile` method.
-
-        If `inputs` is a `tf.data.Dataset`, outputs will be generated
-        "batch-by-batch" and concatenated. Otherwise, all inputs will be handled
-        as a single batch.
-
-        If a `preprocessor` is attached to the model, `inputs` can either be
-        strings (encoder inputs), or a dictionary with `"encoder_text"` and
-        `"decoder_text"` as keys and strings for values. The returned sequences
-        will be strings. Otherwise, `inputs` should be preprocessed before
-        calling `generate()` and the returned sequences will be token IDs.
-
-        Args:
-            inputs: a single input, batch of inputs, or `tf.data.Dataset` of
-                batched inputs. If a preprocessor is attached, each input can be
-                a simple string for basic conditional generation, or a
-                dictionary with keys `"encoder_text"` and `"decoder_text"` to
-                specify a prompt. If a preprocessor is not attached, input
-                batches should have the same structure as when directly calling
-                the model.
-            max_length: int. The max length of generated sequence.
-            add_start_token: bool. Whether to add the start token to `prompt`.
-        """
-
-        # Setup our three main passes.
-        # 1. Optionally preprocessing strings to dense integer tensors.
-        # 2. Generate new tokens via a compiled function on dense tensors.
-        # 3. Optionally postprocess dense integer tensors back to string.
-        generate_function = self.make_generate_function()
-        end_token_id = None
-        if self.preprocessor is not None:
-            end_token_id = self.preprocessor.tokenizer.end_token_id
-
-        def preprocess(x):
-            return self.preprocessor.generate_preprocess(
-                x, sequence_length=max_length
-            )
-
-        def generate(x):
-            return generate_function(x, end_token_id=end_token_id)
-
-        def postprocess(x):
-            return self.preprocessor.generate_postprocess(x)
-
-        # Normalize inputs, apply our three passes, and normalize outputs.
-        inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
-
-        if self.preprocessor is not None:
-            if isinstance(inputs, tf.data.Dataset):
-                inputs = inputs.map(preprocess, tf.data.AUTOTUNE)
-                inputs = inputs.prefetch(tf.data.AUTOTUNE)
-            else:
-                # Fast path for non-dataset, single-batch input.
-                inputs = [preprocess(x) for x in inputs]
-
-        outputs = [generate(x) for x in inputs]
-
-        if self.preprocessor is not None:
-            outputs = [postprocess(x) for x in outputs]
-
-        return self._normalize_generate_outputs(outputs, input_is_scalar)
