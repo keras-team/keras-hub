@@ -298,12 +298,6 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
 
         config = cls.presets[preset]["audio_feature_extractor_config"]
 
-        # Override the config if any field is present in kwargs. Delete the
-        # field from kwargs.
-        for key in config:
-            if key in kwargs:
-                config[key] = kwargs.pop(key)
-
         return cls.from_config({**config, **kwargs})
 
 

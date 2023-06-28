@@ -15,7 +15,9 @@
 
 import copy
 
+import tensorflow as tf
 from absl import logging
+from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.start_end_packer import StartEndPacker
@@ -138,6 +140,7 @@ class WhisperPreprocessor(Preprocessor):
             return_padding_mask=True,
         )
 
+        self.decoder_sequence_length = decoder_sequence_length
         self.language = language
         self.task = task
         self.no_timestamps = no_timestamps
@@ -146,7 +149,10 @@ class WhisperPreprocessor(Preprocessor):
         config = super().get_config()
         config.update(
             {
-                "decoder_sequence_length": self.decoder_packer.sequence_length,
+                "audio_feature_extractor": keras.layers.serialize(
+                    self.audio_feature_extractor
+                ),
+                "decoder_sequence_length": self.decoder_sequence_length,
                 "language": self.language,
                 "task": self.task,
                 "no_timestamps": self.no_timestamps,
@@ -154,7 +160,21 @@ class WhisperPreprocessor(Preprocessor):
         )
         return config
 
-    def call(self, x, y=None, sample_weight=None):
+    @classmethod
+    def from_config(cls, config):
+        if "tokenizer" in config and isinstance(config["tokenizer"], dict):
+            config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
+
+        if "audio_feature_extractor" in config and isinstance(
+            config["audio_feature_extractor"], dict
+        ):
+            config["audio_feature_extractor"] = keras.layers.deserialize(
+                config["audio_feature_extractor"]
+            )
+
+        return cls(**config)
+
+    def call(self, x, y=None, sample_weight=None, decoder_sequence_length=None):
         if not (
             isinstance(x, dict)
             and ["encoder_audio", "decoder_text"] == list(x.keys())
@@ -178,10 +198,16 @@ class WhisperPreprocessor(Preprocessor):
             )
 
         encoder_features = self.audio_feature_extractor(encoder_audio[0])
+        if encoder_audio[0].shape.rank < 2:
+            encoder_features = tf.squeeze(encoder_features, axis=0)
 
+        decoder_sequence_length = (
+            decoder_sequence_length or self.decoder_sequence_length
+        )
         decoder_inputs = self.tokenizer(decoder_text[0])
         decoder_token_ids, decoder_padding_mask = self.decoder_packer(
-            decoder_inputs
+            decoder_inputs,
+            sequence_length=decoder_sequence_length,
         )
 
         x = {
