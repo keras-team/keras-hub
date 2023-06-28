@@ -16,14 +16,12 @@ from tensorflow import keras
 
 
 class RotaryEmbedding(keras.layers.Layer):
-    def __init__(self, rotary_percentage, max_wavelength=10000):
+    def __init__(self, percentage, max_wavelength=10000):
         super().__init__()
-        self.rotary_percentage = rotary_percentage
+        self.percentage = percentage
         self.max_wavelength = max_wavelength
 
-    def _compute_cos_sin_embedding(self, x, rotary_ndims, seq_dim=1):
-        seq_len = tf.shape(x)[seq_dim]
-        rotary_ndims = tf.cast(rotary_ndims, tf.float32)
+    def _compute_cos_sin_embedding(self, x, rotary_ndims, seq_len):
         range = tf.range(start=0, limit=rotary_ndims, delta=2, dtype="float32")
         inverse_freq = 1.0 / (self.max_wavelength ** (range / rotary_ndims))
         tensor = tf.range(seq_len, dtype=inverse_freq.dtype)
@@ -32,15 +30,15 @@ class RotaryEmbedding(keras.layers.Layer):
         return tf.cos(embedding), tf.sin(embedding)
 
     def call(self, inputs):
-        attn_head_size = tf.shape(inputs)[-1]
-        rotary_ndims = tf.cast(
-            tf.cast(attn_head_size, self.compute_dtype)
-            * self.rotary_percentage,
-            tf.int32,
-        )
+
+        shape = tf.shape(inputs)
+        attn_head_size = shape[-1]
+        seq_len = shape[1]
+
+        rotary_ndims = tf.cast(attn_head_size, self.compute_dtype) * self.percentage
 
         cos_emb, sin_emb = self._compute_cos_sin_embedding(
-            inputs, rotary_ndims, seq_dim=1
+            inputs, rotary_ndims, seq_len
         )
 
         return cos_emb, sin_emb
@@ -49,7 +47,7 @@ class RotaryEmbedding(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "rotary_percentage": self.rotary_percentage,
+                "percentage": self.percentage,
                 "max_wavelength": self.max_wavelength,
             }
         )
