@@ -21,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
+from keras_nlp.tests.test_case import TestCase
 
 
-class DebertaV3BackboneTest(tf.test.TestCase, parameterized.TestCase):
+class DebertaV3BackboneTest(TestCase):
     def setUp(self):
         self.backbone = DebertaV3Backbone(
             vocabulary_size=10,
@@ -99,7 +100,7 @@ class DebertaV3BackboneTest(tf.test.TestCase, parameterized.TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-class DebertaV3BackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+class DebertaV3BackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.backbone = DebertaV3Backbone(

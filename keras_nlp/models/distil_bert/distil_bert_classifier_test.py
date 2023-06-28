@@ -30,9 +30,10 @@ from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
 from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
-class DistilBertClassifierTest(tf.test.TestCase, parameterized.TestCase):
+class DistilBertClassifierTest(TestCase):
     def setUp(self):
         # Setup model
 

@@ -20,9 +20,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.layers import masked_lm_head
+from keras_nlp.tests.test_case import TestCase
 
 
-class MaskedLMHeadTest(tf.test.TestCase, parameterized.TestCase):
+class MaskedLMHeadTest(TestCase):
     def test_valid_call(self):
         head = masked_lm_head.MaskedLMHead(
             vocabulary_size=100,

@@ -13,15 +13,14 @@
 # limitations under the License.
 """Tests for Sampler classes."""
 
-import tensorflow as tf
-
 from keras_nlp.samplers.serialization import deserialize
 from keras_nlp.samplers.serialization import get
 from keras_nlp.samplers.serialization import serialize
 from keras_nlp.samplers.top_k_sampler import TopKSampler
+from keras_nlp.tests.test_case import TestCase
 
 
-class SerializationTest(tf.test.TestCase):
+class SerializationTest(TestCase):
     def test_serialization(self):
         sampler = TopKSampler(k=5)
         restored = deserialize(serialize(sampler))

@@ -20,9 +20,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.layers import transformer_encoder
+from keras_nlp.tests.test_case import TestCase
 
 
-class TransformerEncoderTest(tf.test.TestCase, parameterized.TestCase):
+class TransformerEncoderTest(TestCase):
     @parameterized.named_parameters(
         ("without_norm_first", False),
         ("with_norm_first", True),

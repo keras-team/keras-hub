@@ -21,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
+from keras_nlp.tests.test_case import TestCase
 
 
-class AlbertBackboneTest(tf.test.TestCase, parameterized.TestCase):
+class AlbertBackboneTest(TestCase):
     def setUp(self):
         self.backbone = AlbertBackbone(
             vocabulary_size=10,
@@ -111,7 +112,7 @@ class AlbertBackboneTest(tf.test.TestCase, parameterized.TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-class AlbertBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+class AlbertBackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.backbone = AlbertBackbone(

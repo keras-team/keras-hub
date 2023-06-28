@@ -25,10 +25,11 @@ from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
     DebertaV3Preprocessor,
 )
 from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+class DebertaV3PresetSmokeTest(TestCase):
     """
     A smoke test for DeBERTa presets we run continuously.
 
@@ -132,7 +133,7 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class DebertaV3PresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class DebertaV3PresetFullTest(TestCase):
     """
     Test the full enumeration of our preset.
 

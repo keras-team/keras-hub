@@ -21,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
+from keras_nlp.tests.test_case import TestCase
 
 
-class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
+class DistilBertTest(TestCase):
     def setUp(self):
         self.backbone = DistilBertBackbone(
             vocabulary_size=10,
@@ -93,7 +94,7 @@ class DistilBertTest(tf.test.TestCase, parameterized.TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-class DistilBertTPUTest(tf.test.TestCase, parameterized.TestCase):
+class DistilBertTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.backbone = DistilBertBackbone(

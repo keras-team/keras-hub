@@ -20,9 +20,10 @@ from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 from keras_nlp.layers.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
-class CachedMultiHeadAttentionTest(tf.test.TestCase, parameterized.TestCase):
+class CachedMultiHeadAttentionTest(TestCase):
     def test_valid_call(self):
         layer = CachedMultiHeadAttention(num_heads=2, key_dim=4)
         x = tf.random.uniform(shape=[2, 2, 8])

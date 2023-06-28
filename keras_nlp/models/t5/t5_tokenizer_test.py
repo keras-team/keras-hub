@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for T5 tokenizer."""
-
 import io
 import os
 
@@ -24,9 +23,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.t5.t5_tokenizer import T5Tokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class T5TokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class T5TokenizerTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(

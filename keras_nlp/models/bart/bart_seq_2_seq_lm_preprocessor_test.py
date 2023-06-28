@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for BART preprocessor layer."""
-
 import os
 
 import pytest
@@ -25,9 +24,10 @@ from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class BartSeq2SeqLMPreprocessorTest(TestCase):
     def setUp(self):
         vocab = {
             "<s>": 0,

@@ -21,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
+from keras_nlp.tests.test_case import TestCase
 
 
-class FNetBackboneTest(tf.test.TestCase, parameterized.TestCase):
+class FNetBackboneTest(TestCase):
     def setUp(self):
         self.backbone = FNetBackbone(
             vocabulary_size=10,
@@ -91,7 +92,7 @@ class FNetBackboneTest(tf.test.TestCase, parameterized.TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-class FNetBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+class FNetBackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.backbone = FNetBackbone(

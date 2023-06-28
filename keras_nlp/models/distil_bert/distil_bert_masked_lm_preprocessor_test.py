@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for DistilBERT masked language model preprocessor layer."""
-
 import os
 
 import pytest
@@ -27,11 +26,10 @@ from keras_nlp.models.distil_bert.distil_bert_masked_lm_preprocessor import (
 from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
-class DistilBertMaskedLMPreprocessorTest(
-    tf.test.TestCase, parameterized.TestCase
-):
+class DistilBertMaskedLMPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]

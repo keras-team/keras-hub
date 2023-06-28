@@ -22,9 +22,10 @@ from tensorflow import keras
 from keras_nlp.layers.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
-class TokenAndPositionEmbeddingTest(tf.test.TestCase, parameterized.TestCase):
+class TokenAndPositionEmbeddingTest(TestCase):
     def test_get_config_and_from_config(self):
         token_and_position_embed = TokenAndPositionEmbedding(
             vocabulary_size=5,

@@ -28,9 +28,10 @@ from keras_nlp.models.opt.opt_causal_lm_preprocessor import (
     OPTCausalLMPreprocessor,
 )
 from keras_nlp.models.opt.opt_tokenizer import OPTTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class OPTCausalLMTest(tf.test.TestCase, parameterized.TestCase):
+class OPTCausalLMTest(TestCase):
     def setUp(self):
         # For DTensor.
         keras.backend.experimental.enable_tf_random_generator()

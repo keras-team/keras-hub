@@ -26,9 +26,10 @@ from keras_nlp.models.albert.albert_masked_lm_preprocessor import (
     AlbertMaskedLMPreprocessor,
 )
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class AlbertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class AlbertMaskedLMPreprocessorTest(TestCase):
     def setUp(self):
         vocab_data = tf.data.Dataset.from_tensor_slices(
             ["the quick brown fox", "the earth is round"]

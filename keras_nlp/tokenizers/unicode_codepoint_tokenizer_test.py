@@ -18,12 +18,13 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.unicode_codepoint_tokenizer import (
     UnicodeCodepointTokenizer,
 )
 
 
-class UnicodeCodepointTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class UnicodeCodepointTokenizerTest(TestCase):
     def test_tokenize(self):
         input_data = tf.constant(["ninja", "samurai", "▀▁▂▃"])
         tokenizer = UnicodeCodepointTokenizer()

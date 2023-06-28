@@ -18,13 +18,14 @@ import re
 
 import tensorflow as tf
 
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.tokenizers.sentence_piece_tokenizer_trainer import (
     compute_sentence_piece_proto,
 )
 
 
-class SentencePieceTokenizerTrainerTest(tf.test.TestCase):
+class SentencePieceTokenizerTrainerTest(TestCase):
     def test_dataset_input(self):
         test_text = ["Ninjas and Samurais"]
         expected_output = [

@@ -17,9 +17,10 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers.random_deletion import RandomDeletion
+from keras_nlp.tests.test_case import TestCase
 
 
-class RandomDeletionTest(tf.test.TestCase):
+class RandomDeletionTest(TestCase):
     def test_shape_and_output_from_word_deletion(self):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]

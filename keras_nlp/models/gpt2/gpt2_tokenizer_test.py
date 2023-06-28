@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for GPT-2 preprocessing layers."""
-
 import os
 
 import pytest
@@ -22,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class GPT2TokenizerTest(TestCase):
     def setUp(self):
         self.vocab = {
             "<|endoftext|>": 0,
