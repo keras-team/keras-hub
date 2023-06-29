@@ -196,7 +196,11 @@ class WhisperPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             "encoder_audio": tf.ones((1, 200)),
             "decoder_text": tf.constant([" airplane at airport"]),
         }
-        inputs = keras.Input(dtype="string", shape=())
+
+        inputs = {
+            "encoder_audio": keras.Input(dtype="float32", shape=(None,)),
+            "decoder_text": keras.Input(dtype="string", shape=()),
+        }
         outputs = self.preprocessor(inputs)
         model = keras.Model(inputs, outputs)
 
