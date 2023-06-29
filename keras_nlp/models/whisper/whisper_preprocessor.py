@@ -20,7 +20,7 @@ from absl import logging
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers.start_end_packer import StartEndPacker
+from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
@@ -70,6 +70,67 @@ class WhisperPreprocessor(Preprocessor):
             converted to tensors.
         y: Any label data. Will be passed through unaltered.
         sample_weight: Any label weight data. Will be passed through unaltered.
+
+    Examples:
+
+    Directly calling the layer on data.
+    ```python
+    preprocessor = keras_nlp.models.WhisperPreprocessor.from_preset("whisper_tiny_multi")
+
+    # Preprocess unbatched inputs.
+    input_data = {
+        "encoder_audio": tf.ones((200,)),
+        "decoder_text": "The quick brown fox jumped.",
+    }
+    preprocessor(input_data)
+
+    # Preprocess batched inputs.
+    input_data = {
+        "encoder_audio": tf.ones((2, 200)),
+        "decoder_text": ["The quick brown fox jumped.", "Call me Ishmael."],
+    }
+    preprocessor(input_data)
+
+    # Custom audio feature extractor and vocabulary.
+    audio_feature_extractor = WhisperAudioFeatureExtractor(
+        num_mels=80,
+        num_fft_bins=400,
+        stride=100,
+        sampling_rate=100,
+        max_audio_length=5,
+    )
+
+    features = ["a quick fox.", "a fox quick."]
+    vocab = {"<|endoftext|>": 0, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    merges += ["Ġ f", "o x", "Ġf ox"]
+
+    tokenizer = keras_nlp.models.WhisperTokenizer(
+        vocabulary=vocab,
+        merges=merges,
+    )
+    preprocessor = keras_nlp.models.WhisperPreprocessor(
+        audio_feature_extractor=audio_feature_extractor,
+        tokenizer=tokenizer,
+    )
+    preprocessor("The quick brown fox jumped.")
+    ```
+
+    Mapping with `tf.data.Dataset`.
+    ```python
+    preprocessor = keras_nlp.models.WhisperPreprocessor.from_preset("gpt2_base_en")
+
+    text = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    label = tf.constant([1, 1])
+
+    # Map labeled single sentences.
+    ds = tf.data.Dataset.from_tensor_slices((text, label))
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map unlabeled single sentences.
+    ds = tf.data.Dataset.from_tensor_slices(text)
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+    ```
     """
 
     def __init__(
