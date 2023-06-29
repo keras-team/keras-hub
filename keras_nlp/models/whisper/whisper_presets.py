@@ -145,7 +145,7 @@ backbone_presets = {
                 "4-layer Whisper model. Trained on 438,000 hours of labelled "
                 "English speech data."
             ),
-            "params": 124439808,
+            "params": 37184256,
             "official_name": "Whisper",
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
@@ -213,7 +213,7 @@ backbone_presets = {
                 "12-layer Whisper model. Trained on 438,000 hours of labelled "
                 "English speech data."
             ),
-            "params": 124439808,
+            "params": 241734144,
             "official_name": "Whisper",
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
@@ -247,7 +247,7 @@ backbone_presets = {
                 "24-layer Whisper model. Trained on 438,000 hours of labelled "
                 "English speech data."
             ),
-            "params": 124439808,
+            "params": 763856896,
             "official_name": "Whisper",
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
@@ -281,7 +281,7 @@ backbone_presets = {
                 "4-layer Whisper model. Trained on 680,000 hours of labelled "
                 "multilingual speech data."
             ),
-            "params": 124439808,
+            "params": 37760640,
             "official_name": "Whisper",
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
@@ -315,7 +315,7 @@ backbone_presets = {
                 "6-layer Whisper model. Trained on 680,000 hours of labelled "
                 "multilingual speech data."
             ),
-            "params": 124439808,
+            "params": 72593920,
             "official_name": "Whisper",
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
@@ -349,7 +349,7 @@ backbone_presets = {
                 "12-layer Whisper model. Trained on 680,000 hours of labelled "
                 "multilingual speech data."
             ),
-            "params": 124439808,
+            "params": 241734912,
             "official_name": "Whisper",
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
@@ -383,7 +383,7 @@ backbone_presets = {
                 "24-layer Whisper model. Trained on 680,000 hours of labelled "
                 "multilingual speech data."
             ),
-            "params": 124439808,
+            "params": 763857920,
             "official_name": "Whisper",
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
@@ -417,7 +417,7 @@ backbone_presets = {
                 "32-layer Whisper model. Trained on 680,000 hours of labelled "
                 "multilingual speech data."
             ),
-            "params": 124439808,
+            "params": 1543304960,
             "official_name": "Whisper",
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
@@ -452,7 +452,7 @@ backbone_presets = {
                 "hours of labelled multilingual speech data. An improved "
                 "of `whisper_large_multi`."
             ),
-            "params": 124439808,
+            "params": 1543304960,
             "official_name": "Whisper",
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
