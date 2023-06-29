@@ -287,7 +287,7 @@ backbone_presets = {
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
         "config": {
-            "vocabulary_size": 51864,
+            "vocabulary_size": 51865,
             "num_layers": 4,
             "num_heads": 6,
             "hidden_dim": 384,
@@ -321,7 +321,7 @@ backbone_presets = {
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
         "config": {
-            "vocabulary_size": 51864,
+            "vocabulary_size": 51865,
             "num_layers": 6,
             "num_heads": 8,
             "hidden_dim": 512,
@@ -389,7 +389,7 @@ backbone_presets = {
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
         "config": {
-            "vocabulary_size": 51864,
+            "vocabulary_size": 51865,
             "num_layers": 24,
             "num_heads": 16,
             "hidden_dim": 1024,

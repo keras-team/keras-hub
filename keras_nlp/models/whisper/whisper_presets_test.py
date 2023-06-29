@@ -60,14 +60,14 @@ class WhisperPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         model = WhisperBackbone.from_preset(
             "whisper_tiny_en", load_weights=load_weights
         )
-        outputs = model(input_data)[0, 0, :5]["decoder_sequence_output"]
+        outputs = model(input_data)["decoder_sequence_output"][0, 0, :5]
         if load_weights:
             # The forward pass from a preset should be stable!
             # This test should catch cases where we unintentionally change our
             # network code in a way that would invalidate our preset weights.
             # We should only update these numbers if we are updating a weights
             # file, or have found a discrepancy with the upstream source.
-            expected_outputs = [-0.1116, -0.0375, -0.2624, 0.00891, -0.0061]
+            expected_outputs = [13.238, 1.051, 8.348, -20.012, -5.022]
             # Keep a high tolerance, so we are robust to different hardware.
             self.assertAllClose(outputs, expected_outputs, atol=0.01, rtol=0.01)
 
@@ -109,12 +109,13 @@ class WhisperPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 preset, load_weights=load_weights
             )
             input_data = {
-                "token_ids": tf.random.uniform(
-                    shape=(1, 1024),
+                "encoder_features": tf.ones((1, 3000, 80)),
+                "decoder_token_ids": tf.random.uniform(
+                    shape=(1, 446),
                     dtype="int64",
                     maxval=model.vocabulary_size,
                 ),
-                "padding_mask": tf.constant([1] * 1024, shape=(1, 1024)),
+                "decoder_padding_mask": tf.constant([1] * 446, shape=(1, 446)),
             }
             model(input_data)
 
