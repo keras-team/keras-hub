@@ -161,8 +161,8 @@ class BartPreprocessorTest(TestCase):
             self.preprocessor(input_data)
 
     def test_serialization(self):
-        new_preprocessor = keras.utils.deserialize_keras_object(
-            keras.utils.serialize_keras_object(self.preprocessor)
+        new_preprocessor = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(self.preprocessor)
         )
         self.assertEqual(
             new_preprocessor.get_config(), self.preprocessor.get_config()

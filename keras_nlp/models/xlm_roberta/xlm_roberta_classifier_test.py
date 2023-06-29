@@ -114,8 +114,8 @@ class XLMRobertaClassifierTest(TestCase):
             self.backbone,
             num_classes=2,
         )
-        config = keras.utils.serialize_keras_object(original)
-        restored = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(original)
+        restored = keras.saving.deserialize_keras_object(config)
         self.assertEqual(restored.get_config(), original.get_config())
         # With options.
         original = XLMRobertaClassifier(
@@ -127,8 +127,8 @@ class XLMRobertaClassifierTest(TestCase):
             name="test",
             trainable=False,
         )
-        config = keras.utils.serialize_keras_object(original)
-        restored = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(original)
+        restored = keras.saving.deserialize_keras_object(config)
         self.assertEqual(restored.get_config(), original.get_config())
 
     @parameterized.named_parameters(

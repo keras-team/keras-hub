@@ -144,8 +144,8 @@ class XLMRobertaMaskedLMPreprocessorTest(TestCase):
         self.assertAllEqual(sw, [0.0, 0.0, 0.0, 0.0, 0.0])
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.preprocessor)
-        new_preprocessor = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.preprocessor)
+        new_preprocessor = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_preprocessor.get_config(),
             self.preprocessor.get_config(),

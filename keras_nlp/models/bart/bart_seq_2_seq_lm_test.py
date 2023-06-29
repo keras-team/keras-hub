@@ -219,8 +219,8 @@ class BartSeq2SeqLMTest(TestCase):
         self.assertIsNone(self.seq_2_seq_lm.generate_function)
 
     def test_serialization(self):
-        new_seq_2_seq_lm = keras.utils.deserialize_keras_object(
-            keras.utils.serialize_keras_object(self.seq_2_seq_lm)
+        new_seq_2_seq_lm = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(self.seq_2_seq_lm)
         )
         self.assertEqual(
             new_seq_2_seq_lm.get_config(), self.seq_2_seq_lm.get_config()
