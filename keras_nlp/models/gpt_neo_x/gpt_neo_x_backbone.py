@@ -25,7 +25,7 @@ def _gpt_neo_x_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.GPTNeoXBackbone")
 class GPTNeoXBackbone(Backbone):
-    """GPT-2 core network with hyperparameters.
+    """GPT-NeoX core network with hyperparameters.
 
     This network implements a Transformer-based decoder network,
     Generative Pretrained Transformer-Neo-X (GPTNeoX), as described in
