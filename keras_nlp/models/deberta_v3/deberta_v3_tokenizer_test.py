@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for DeBERTa tokenizer."""
-
 import io
 import os
 
@@ -24,9 +23,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class DebertaV3TokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class DebertaV3TokenizerTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(

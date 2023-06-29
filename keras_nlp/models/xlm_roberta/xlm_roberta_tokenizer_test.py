@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for XLM-RoBERTa tokenizer."""
-
 import io
 import os
 
@@ -26,9 +25,10 @@ from tensorflow import keras
 from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
-class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class XLMRobertaTokenizerTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(

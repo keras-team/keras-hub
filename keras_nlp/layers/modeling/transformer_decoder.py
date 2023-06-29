@@ -18,12 +18,12 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers.cached_multi_head_attention import (
+from keras_nlp.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
 from keras_nlp.utils.keras_utils import clone_initializer
 
-from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
+from keras_nlp.layers.modeling.transformer_layer_utils import (  # isort:skip
     compute_causal_mask,
     merge_padding_and_attention_mask,
 )

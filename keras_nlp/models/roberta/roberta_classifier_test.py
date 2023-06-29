@@ -24,9 +24,10 @@ from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class RobertaClassifierTest(tf.test.TestCase, parameterized.TestCase):
+class RobertaClassifierTest(TestCase):
     def setUp(self):
         self.vocab = {
             "<s>": 0,

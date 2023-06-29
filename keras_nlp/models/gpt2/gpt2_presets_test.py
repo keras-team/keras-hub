@@ -19,10 +19,11 @@ from absl.testing import parameterized
 
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+class GPT2PresetSmokeTest(TestCase):
     """
     A smoke test for GPT-2 presets we run continuously.
 
@@ -78,7 +79,7 @@ class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class GPT2PresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class GPT2PresetFullTest(TestCase):
     """
     Test the full enumeration of our preset.
 

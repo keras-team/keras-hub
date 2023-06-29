@@ -13,13 +13,13 @@
 # limitations under the License.
 
 """Tests for Perplexity."""
-
 import tensorflow as tf
 
 from keras_nlp.metrics.perplexity import Perplexity
+from keras_nlp.tests.test_case import TestCase
 
 
-class PerplexityTest(tf.test.TestCase):
+class PerplexityTest(TestCase):
     def test_vars_after_initializing_class(self):
         perplexity = Perplexity()
         self.assertEqual(perplexity.result(), 0.0)

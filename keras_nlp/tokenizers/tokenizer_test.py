@@ -15,6 +15,7 @@
 import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.tokenizer import Tokenizer
 
 
@@ -28,7 +29,7 @@ class SimpleTokenizer(Tokenizer):
         return tf.strings.reduce_join([inputs], separator=" ", axis=-1)
 
 
-class TokenizerTest(tf.test.TestCase):
+class TokenizerTest(TestCase):
     def test_tokenize(self):
         input_data = ["the quick brown fox"]
         tokenizer = SimpleTokenizer()

@@ -19,10 +19,13 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
+from keras_nlp.layers.preprocessing.multi_segment_packer import (
+    MultiSegmentPacker,
+)
+from keras_nlp.tests.test_case import TestCase
 
 
-class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
+class MultiSegmentPackerTest(TestCase):
     def test_trim_single_input_ints(self):
         input_data = tf.range(3, 10)
         packer = MultiSegmentPacker(8, start_value=1, end_value=2)

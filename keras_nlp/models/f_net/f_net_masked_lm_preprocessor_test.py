@@ -24,9 +24,10 @@ from keras_nlp.models.f_net.f_net_masked_lm_preprocessor import (
     FNetMaskedLMPreprocessor,
 )
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class FNetMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class FNetMaskedLMPreprocessorTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(

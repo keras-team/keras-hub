@@ -21,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
+from keras_nlp.tests.test_case import TestCase
 
 
-class GPT2Test(tf.test.TestCase, parameterized.TestCase):
+class GPT2Test(TestCase):
     def setUp(self):
         # For DTensor.
         keras.backend.experimental.enable_tf_random_generator()
@@ -115,7 +116,7 @@ class GPT2Test(tf.test.TestCase, parameterized.TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-class GPT2BackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+class GPT2BackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.model = GPT2Backbone(

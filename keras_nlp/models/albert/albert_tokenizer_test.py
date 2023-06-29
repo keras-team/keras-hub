@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for ALBERT tokenizer."""
-
 import io
 import os
 
@@ -24,9 +23,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class AlbertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class AlbertTokenizerTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(

@@ -26,9 +26,10 @@ from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.models.albert.albert_classifier import AlbertClassifier
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class AlbertClassifierTest(tf.test.TestCase, parameterized.TestCase):
+class AlbertClassifierTest(TestCase):
     def setUp(self):
         # Setup model
 

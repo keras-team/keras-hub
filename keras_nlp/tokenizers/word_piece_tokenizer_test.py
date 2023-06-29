@@ -18,10 +18,11 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
-class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class WordPieceTokenizerTest(TestCase):
     def test_tokenize(self):
         input_data = ["the quick brown fox."]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]

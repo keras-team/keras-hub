@@ -19,7 +19,7 @@ from tensorflow import keras
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.keras_utils import clone_initializer
 
-from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
+from keras_nlp.layers.modeling.transformer_layer_utils import (  # isort:skip
     merge_padding_and_attention_mask,
 )
 

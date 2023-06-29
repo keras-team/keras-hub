@@ -21,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.opt.opt_backbone import OPTBackbone
+from keras_nlp.tests.test_case import TestCase
 
 
-class OPTTest(tf.test.TestCase, parameterized.TestCase):
+class OPTTest(TestCase):
     def setUp(self):
         # For DTensor.
         keras.backend.experimental.enable_tf_random_generator()
@@ -115,7 +116,7 @@ class OPTTest(tf.test.TestCase, parameterized.TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-class OPTBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+class OPTBackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.backbone = OPTBackbone(

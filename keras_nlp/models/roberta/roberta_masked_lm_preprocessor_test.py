@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for RoBERTa masked language model preprocessor layer."""
-
 import os
 
 import pytest
@@ -25,9 +24,10 @@ from keras_nlp.models.roberta.roberta_masked_lm_preprocessor import (
     RobertaMaskedLMPreprocessor,
 )
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class RobertaMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class RobertaMaskedLMPreprocessorTest(TestCase):
     def setUp(self):
         vocab = {
             "<s>": 0,

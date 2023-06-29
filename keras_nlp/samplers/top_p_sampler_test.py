@@ -18,9 +18,10 @@ import tensorflow as tf
 from absl.testing import parameterized
 
 from keras_nlp.samplers.top_p_sampler import TopPSampler
+from keras_nlp.tests.test_case import TestCase
 
 
-class TopPSamplerTest(tf.test.TestCase, parameterized.TestCase):
+class TopPSamplerTest(TestCase):
     def setUp(self):
         super().setUp()
         # Use a simple alphabet of lowercase characters to [0, 26).

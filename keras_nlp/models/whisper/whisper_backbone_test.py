@@ -21,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.whisper.whisper_backbone import WhisperBackbone
+from keras_nlp.tests.test_case import TestCase
 
 
-class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
+class WhisperBackboneTest(TestCase):
     def setUp(self):
         self.backbone = WhisperBackbone(
             vocabulary_size=10,
@@ -126,7 +127,7 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-class WhisperBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+class WhisperBackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.backbone = WhisperBackbone(

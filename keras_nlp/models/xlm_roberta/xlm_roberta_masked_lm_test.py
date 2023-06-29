@@ -32,9 +32,10 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import (
 from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
-class XLMRobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
+class XLMRobertaMaskedLMTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
