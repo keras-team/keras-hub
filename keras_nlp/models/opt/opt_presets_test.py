@@ -19,10 +19,11 @@ from absl.testing import parameterized
 
 from keras_nlp.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.models.opt.opt_tokenizer import OPTTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-class OPTPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+class OPTPresetSmokeTest(TestCase):
     """
     A smoke test for GPT-2 presets we run continuously.
 
@@ -78,7 +79,7 @@ class OPTPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class OPTPresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class OPTPresetFullTest(TestCase):
     """
     Test the full enumeration of our preset.
 

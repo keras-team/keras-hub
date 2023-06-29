@@ -15,10 +15,10 @@
 
 from tensorflow import keras
 
-from keras_nlp.layers.transformer_decoder import TransformerDecoder
+from keras_nlp.layers.modeling.transformer_decoder import TransformerDecoder
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class WhisperDecoder(TransformerDecoder):
     """A Whisper decoder.
 

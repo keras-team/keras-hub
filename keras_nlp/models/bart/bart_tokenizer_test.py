@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for BART tokenizer."""
-
 import os
 
 import tensorflow as tf
@@ -21,9 +20,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class BartTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class BartTokenizerTest(TestCase):
     def setUp(self):
         vocab = {
             "<s>": 0,

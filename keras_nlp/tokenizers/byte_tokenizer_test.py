@@ -18,10 +18,11 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.byte_tokenizer import ByteTokenizer
 
 
-class ByteTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class ByteTokenizerTest(TestCase):
     def test_tokenize(self):
         input_data = tf.constant(["hello", "fun", "▀▁▂▃"])
         tokenizer = ByteTokenizer()

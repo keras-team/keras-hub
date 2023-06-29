@@ -26,9 +26,10 @@ from keras_nlp.models.roberta.roberta_masked_lm_preprocessor import (
     RobertaMaskedLMPreprocessor,
 )
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class RobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
+class RobertaMaskedLMTest(TestCase):
     def setUp(self):
         self.vocab = {
             "<s>": 0,

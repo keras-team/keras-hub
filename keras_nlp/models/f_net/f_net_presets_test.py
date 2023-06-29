@@ -21,10 +21,11 @@ from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_classifier import FNetClassifier
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+class FNetPresetSmokeTest(TestCase):
     """
     A smoke test for FNet presets we run continuously.
 
@@ -110,7 +111,7 @@ class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class FNetPresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class FNetPresetFullTest(TestCase):
     """
     Test the full enumeration of our preset.
 

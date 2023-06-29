@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Test for RoBERTa backbone models."""
-
 import os
 
 import pytest
@@ -22,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
+from keras_nlp.tests.test_case import TestCase
 
 
-class RobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
+class RobertaBackboneTest(TestCase):
     def setUp(self):
         self.backbone = RobertaBackbone(
             vocabulary_size=10,
@@ -99,7 +99,7 @@ class RobertaBackboneTest(tf.test.TestCase, parameterized.TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-class RobertaBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+class RobertaBackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.backbone = RobertaBackbone(

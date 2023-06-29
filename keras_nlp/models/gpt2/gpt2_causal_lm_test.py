@@ -28,9 +28,10 @@ from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
     GPT2CausalLMPreprocessor,
 )
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class GPT2CausalLMTest(tf.test.TestCase, parameterized.TestCase):
+class GPT2CausalLMTest(TestCase):
     def setUp(self):
         # For DTensor.
         keras.backend.experimental.enable_tf_random_generator()

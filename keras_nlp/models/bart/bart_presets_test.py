@@ -13,6 +13,8 @@
 # limitations under the License.
 # Copyright 2023 The KerasNLP Authors
 #
+from keras_nlp.tests.test_case import TestCase
+
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -35,7 +37,7 @@ from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
 
 
 @pytest.mark.large
-class BartPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+class BartPresetSmokeTest(TestCase):
     """
     A smoke test for BART presets we run continuously.
 
@@ -98,7 +100,7 @@ class BartPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class BartPresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class BartPresetFullTest(TestCase):
     """
     Test the full enumeration of our preset.
 

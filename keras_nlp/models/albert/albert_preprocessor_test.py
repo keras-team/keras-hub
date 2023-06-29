@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for ALBERT preprocessor layer."""
-
 import io
 import os
 
@@ -25,9 +24,10 @@ from tensorflow import keras
 
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class AlbertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class AlbertPreprocessorTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(

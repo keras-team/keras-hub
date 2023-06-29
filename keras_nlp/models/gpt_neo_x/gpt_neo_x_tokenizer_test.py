@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for GPT-2 preprocessing layers."""
-
 import os
 
 import pytest
@@ -22,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class GPTNeoXTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class GPTNeoXTokenizerTest(TestCase):
     def setUp(self):
         self.vocab = {
             "<|endoftext|>": 0,

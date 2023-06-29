@@ -21,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models import GPTNeoXBackbone
+from keras_nlp.tests.test_case import TestCase
 
 
-class GPTNeoXTest(tf.test.TestCase, parameterized.TestCase):
+class GPTNeoXTest(TestCase):
     def setUp(self):
         self.backbone = GPTNeoXBackbone(
             vocabulary_size=10,
@@ -93,7 +94,7 @@ class GPTNeoXTest(tf.test.TestCase, parameterized.TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-class GPTNeoXBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+class GPTNeoXBackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             GPTNeoXBackbone(

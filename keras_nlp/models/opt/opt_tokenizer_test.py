@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for OPT tokenizer layer."""
-
 import os
 
 import pytest
@@ -22,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.opt.opt_tokenizer import OPTTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class OPTTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class OPTTokenizerTest(TestCase):
     def setUp(self):
         self.vocab = {
             "<pad>": 0,

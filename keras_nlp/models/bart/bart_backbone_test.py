@@ -21,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.bart.bart_backbone import BartBackbone
+from keras_nlp.tests.test_case import TestCase
 
 
-class BartBackboneTest(tf.test.TestCase, parameterized.TestCase):
+class BartBackboneTest(TestCase):
     def setUp(self):
         self.model = BartBackbone(
             vocabulary_size=1000,
@@ -120,7 +121,7 @@ class BartBackboneTest(tf.test.TestCase, parameterized.TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-class BartBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+class BartBackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.model = BartBackbone(

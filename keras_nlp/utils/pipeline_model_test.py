@@ -17,6 +17,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.utils.pipeline_model import PipelineModel
 
 
@@ -84,7 +85,7 @@ class FunctionalPipeline(PipelineModel):
         return cls(**config)
 
 
-class TestNoopPipelineModel(tf.test.TestCase, parameterized.TestCase):
+class TestNoopPipelineModel(TestCase):
     def test_fit(self):
         x = tf.random.uniform((8, 5))
         y = tf.random.uniform((8, 1))
@@ -155,7 +156,7 @@ class TestNoopPipelineModel(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
-class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
+class TestFeaturePreprocessingModel(TestCase):
     def test_fit_with_preprocessing(self):
         x = tf.strings.as_string(tf.random.uniform((100, 5)))
         y = tf.random.uniform((100, 1))
@@ -273,7 +274,7 @@ class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
-class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
+class TestLabelPreprocessingModel(TestCase):
     def test_fit_with_preprocessing(self):
         x = tf.random.uniform((100, 5))
         y = tf.strings.as_string(tf.random.uniform((100, 1)))
@@ -384,7 +385,7 @@ class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
-class TestDataPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
+class TestDataPreprocessingModel(TestCase):
     def test_fit_with_preprocessing(self):
         data = tf.strings.as_string(tf.random.uniform((100, 1)))
         model = DataPipeline()
@@ -478,7 +479,7 @@ class TestDataPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
-class TestFunctional(tf.test.TestCase, parameterized.TestCase):
+class TestFunctional(TestCase):
     def test_fit(self):
         x = tf.strings.as_string(tf.random.uniform((100, 5)))
         y = tf.random.uniform((100, 1))
@@ -529,7 +530,7 @@ class TestFunctional(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
-class TestFitArguments(tf.test.TestCase):
+class TestFitArguments(TestCase):
     def test_validation_data(self):
         x = tf.strings.as_string(tf.random.uniform((80, 5)))
         y = tf.random.uniform((80, 1))
@@ -574,7 +575,7 @@ class TestFitArguments(tf.test.TestCase):
             model.fit(ds, sample_weight=sw)
 
 
-class TestInputErrors(tf.test.TestCase):
+class TestInputErrors(TestCase):
     def test_unbatched_input_raises(self):
         model = FeaturePipeline()
         with self.assertRaisesRegex(ValueError, "must have a batch dimension"):

@@ -22,10 +22,11 @@ from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
 from keras_nlp.models.roberta.roberta_masked_lm import RobertaMaskedLM
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+class RobertaPresetSmokeTest(TestCase):
     """
     A smoke test for RoBERTa presets we run continuously.
 
@@ -149,7 +150,7 @@ class RobertaPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class RobertaPresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class RobertaPresetFullTest(TestCase):
     """
     Test the full enumeration of our preset.
 
