@@ -20,8 +20,8 @@ import numpy as np
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (

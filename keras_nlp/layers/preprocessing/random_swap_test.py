@@ -14,8 +14,8 @@
 """Tests for RandomSwaps Layer."""
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.random_swap import RandomSwap
 from keras_nlp.tests.test_case import TestCase
 
@@ -204,9 +204,9 @@ class RandomSwapTest(TestCase):
         keras.utils.set_random_seed(1337)
         input_data = tf.constant(["Hey I like", "Keras and Tensorflow"])
         augmenter = RandomSwap(rate=0.7, max_swaps=2, seed=42)
-        inputs = tf.keras.Input(dtype="string", shape=())
+        inputs = keras.Input(dtype="string", shape=())
         outputs = augmenter(tf.strings.split(inputs))
-        model = tf.keras.Model(inputs, outputs)
+        model = keras.Model(inputs, outputs)
         model_output = model(input_data)
         exp_output = [
             [b"like", b"I", b"Hey"],

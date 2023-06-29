@@ -18,8 +18,8 @@ import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_masked_lm import FNetMaskedLM
 from keras_nlp.models.f_net.f_net_masked_lm_preprocessor import (

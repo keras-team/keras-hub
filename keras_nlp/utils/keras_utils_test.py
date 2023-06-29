@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.utils.keras_utils import clone_initializer
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight

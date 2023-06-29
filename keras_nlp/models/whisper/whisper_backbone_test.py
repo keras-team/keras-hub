@@ -18,8 +18,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.tests.test_case import TestCase
 

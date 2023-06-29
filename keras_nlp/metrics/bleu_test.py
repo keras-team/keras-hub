@@ -14,8 +14,8 @@
 
 """Tests for Bleu."""
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.metrics.bleu import Bleu
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.byte_tokenizer import ByteTokenizer

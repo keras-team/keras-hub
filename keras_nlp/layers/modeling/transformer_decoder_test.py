@@ -17,9 +17,9 @@ import os
 
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
+from keras_nlp.backend import keras
 from keras_nlp.layers.modeling import transformer_decoder
 from keras_nlp.tests.test_case import TestCase
 

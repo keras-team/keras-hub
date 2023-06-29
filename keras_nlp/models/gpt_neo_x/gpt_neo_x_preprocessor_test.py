@@ -19,8 +19,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_preprocessor import (
     GPTNeoXPreprocessor,
 )

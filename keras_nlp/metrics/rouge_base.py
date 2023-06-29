@@ -18,8 +18,8 @@
 import types
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.utils.tensor_utils import is_floating_dtype
 from keras_nlp.utils.tensor_utils import tensor_to_string_list
 

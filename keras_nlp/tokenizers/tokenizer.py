@@ -14,9 +14,8 @@
 
 from typing import List
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 
 
 @keras_nlp_export("keras_nlp.tokenizers.Tokenizer")

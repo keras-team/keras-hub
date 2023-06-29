@@ -18,8 +18,8 @@ import sys
 
 import tensorflow as tf
 from absl import logging
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.utils.tensor_utils import is_tensor_type
 
 

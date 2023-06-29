@@ -20,8 +20,8 @@ import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_masked_lm import DebertaV3MaskedLM
 from keras_nlp.models.deberta_v3.deberta_v3_masked_lm_preprocessor import (

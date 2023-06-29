@@ -14,8 +14,8 @@
 """Tests for Sinusoidal Positional encoding."""
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.layers.modeling import sine_position_encoding
 from keras_nlp.tests.test_case import TestCase
 

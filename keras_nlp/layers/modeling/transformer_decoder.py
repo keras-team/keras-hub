@@ -15,9 +15,9 @@
 """Transformer decoder block implementation based on `keras.layers.Layer`."""
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )

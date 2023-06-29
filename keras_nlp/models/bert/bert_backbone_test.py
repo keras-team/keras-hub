@@ -18,8 +18,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.tests.test_case import TestCase
 
