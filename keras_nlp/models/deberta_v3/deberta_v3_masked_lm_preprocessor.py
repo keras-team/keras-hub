@@ -17,7 +17,9 @@
 from absl import logging
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
+from keras_nlp.layers.preprocessing.masked_lm_mask_generator import (
+    MaskedLMMaskGenerator,
+)
 from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
     DebertaV3Preprocessor,
 )

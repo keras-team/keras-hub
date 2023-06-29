@@ -18,7 +18,7 @@ import copy
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers.masked_lm_head import MaskedLMHead
+from keras_nlp.layers.modeling.masked_lm_head import MaskedLMHead
 from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_backbone import (
     distilbert_kernel_initializer,

@@ -14,7 +14,9 @@
 
 import tensorflow as tf
 
-from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
+from keras_nlp.layers.preprocessing.masked_lm_mask_generator import (
+    MaskedLMMaskGenerator,
+)
 from keras_nlp.tests.test_case import TestCase
 
 

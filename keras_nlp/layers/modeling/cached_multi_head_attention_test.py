@@ -17,7 +17,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
-from keras_nlp.layers.cached_multi_head_attention import (
+from keras_nlp.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
 from keras_nlp.tests.test_case import TestCase

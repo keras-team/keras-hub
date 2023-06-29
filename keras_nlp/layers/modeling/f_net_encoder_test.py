@@ -19,7 +19,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.layers import f_net_encoder
+from keras_nlp.layers.modeling import f_net_encoder
 from keras_nlp.tests.test_case import TestCase
 
 
