@@ -12,13 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
 import tensorflow as tf
 
-try:
-    import pandas as pd
-except ImportError:
-    pd = None
+from keras_nlp.backend import config
 
 try:
     import tensorflow_text as tf_text
@@ -75,7 +71,6 @@ def truncate_at_token(inputs, token, mask):
 
 
 def assert_tf_text_installed(symbol_name):
-    """Detokenize and convert tensor to nested lists of python strings."""
     if tf_text is None:
         raise ImportError(
             f"{symbol_name} requires the `tensorflow-text` package. "
@@ -83,11 +78,16 @@ def assert_tf_text_installed(symbol_name):
         )
 
 
+def assert_tf_backend(symbol_name):
+    if config.backend() != "tensorflow":
+        raise ImportError(
+            f"{symbol_name} requires the `tensorflow` backend. "
+            "Please set `KERAS_BACKEND=tensorflow` when running your program."
+        )
+
+
 def is_tensor_type(x):
-    if pd is None:
-        return isinstance(x, (tf.Tensor, np.ndarray))
-    else:
-        return isinstance(x, (tf.Tensor, np.ndarray, pd.Series, pd.DataFrame))
+    return hasattr(x, "__array__")
 
 
 def is_floating_dtype(dtype):
