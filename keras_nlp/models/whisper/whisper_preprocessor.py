@@ -75,7 +75,7 @@ class WhisperPreprocessor(Preprocessor):
 
     Directly calling the layer on data.
     ```python
-    preprocessor = keras_nlp.models.WhisperPreprocessor.from_preset("whisper_tiny_multi")
+    preprocessor = keras_nlp.models.WhisperPreprocessor.from_preset("whisper_tiny_en")
 
     # Preprocess unbatched inputs.
     input_data = {
@@ -92,7 +92,7 @@ class WhisperPreprocessor(Preprocessor):
     preprocessor(input_data)
 
     # Custom audio feature extractor and vocabulary.
-    audio_feature_extractor = WhisperAudioFeatureExtractor(
+    audio_feature_extractor = keras_nlp.models.WhisperAudioFeatureExtractor(
         num_mels=80,
         num_fft_bins=400,
         stride=100,
@@ -104,31 +104,51 @@ class WhisperPreprocessor(Preprocessor):
     vocab = {"<|endoftext|>": 0, "a": 4, "Ġquick": 5, "Ġfox": 6}
     merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
     merges += ["Ġ f", "o x", "Ġf ox"]
+    special_tokens = {
+        "<|startoftranscript|>": 9,
+        "<|endoftext|>": 10,
+        "<|notimestamps|>": 11,
+        "<|transcribe|>": 12,
+        "<|translate|>": 13,
+    }
 
     tokenizer = keras_nlp.models.WhisperTokenizer(
         vocabulary=vocab,
         merges=merges,
+        special_tokens=special_tokens,
     )
     preprocessor = keras_nlp.models.WhisperPreprocessor(
         audio_feature_extractor=audio_feature_extractor,
         tokenizer=tokenizer,
     )
-    preprocessor("The quick brown fox jumped.")
+
+    input_data = {
+        "encoder_audio": tf.ones((200,)),
+        "decoder_text": "The quick brown fox jumped.",
+    }
+    preprocessor(input_data)
     ```
 
     Mapping with `tf.data.Dataset`.
     ```python
-    preprocessor = keras_nlp.models.WhisperPreprocessor.from_preset("gpt2_base_en")
-
-    text = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
-    label = tf.constant([1, 1])
+    preprocessor = keras_nlp.models.WhisperPreprocessor.from_preset(
+        "whisper_tiny_en")
 
     # Map labeled single sentences.
-    ds = tf.data.Dataset.from_tensor_slices((text, label))
+    features = {
+        "encoder_audio": tf.ones((2, 200)),
+        "decoder_text": ["The quick brown fox jumped.", "Call me Ishmael."],
+    }
+    labels = tf.constant(["True", "False"])
+    ds = tf.data.Dataset.from_tensor_slices((features, labels))
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
 
     # Map unlabeled single sentences.
-    ds = tf.data.Dataset.from_tensor_slices(text)
+    features = {
+        "encoder_audio": tf.ones((2, 200)),
+        "decoder_text": ["The quick brown fox jumped.", "Call me Ishmael."],
+    }
+    ds = tf.data.Dataset.from_tensor_slices(features)
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     ```
     """
