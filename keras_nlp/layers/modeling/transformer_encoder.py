@@ -71,12 +71,12 @@ class TransformerEncoder(keras.layers.Layer):
         intermediate_dim=64, num_heads=8)
 
     # Create a simple model containing the encoder.
-    input = keras.Input(shape=[10, 64])
+    input = keras.Input(shape=(10, 64))
     output = encoder(input)
     model = keras.Model(inputs=input, outputs=output)
 
     # Call encoder on the inputs.
-    input_data = tf.random.uniform(shape=[2, 10, 64])
+    input_data = np.random.uniform(size=(2, 10, 64))
     output = model(input_data)
     ```
 

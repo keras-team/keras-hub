@@ -76,13 +76,15 @@ class MaskedLMHead(keras.layers.Layer):
     mask_length = 10
 
     # Generate a random encoding.
-    encoded_tokens = tf.random.normal([batch_size, seq_length, encoding_size])
-    # Generate random positions and labels
-    mask_positions = tf.random.uniform(
-        [batch_size, mask_length], maxval=seq_length, dtype="int32"
+    encoded_tokens = np.random.normal(
+        size=(batch_size, seq_length, encoding_size),
     )
-    mask_ids = tf.random.uniform(
-        [batch_size, mask_length], maxval=vocab_size, dtype="int32"
+    # Generate random positions and labels
+    mask_positions = np.random.randint(
+        seq_length, size=(batch_size, mask_length),
+    )
+    mask_ids = np.random.randint(
+        vocab_size, size=(batch_size, mask_length),
     )
 
     # Predict an output word for each masked input token.

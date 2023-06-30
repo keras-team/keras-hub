@@ -84,17 +84,18 @@ class TransformerDecoder(keras.layers.Layer):
         intermediate_dim=64, num_heads=8)
 
     # Create a simple model containing the decoder.
-    decoder_input = keras.Input(shape=[10, 64])
-    encoder_input = keras.Input(shape=[10, 64])
+    decoder_input = keras.Input(shape=(10, 64))
+    encoder_input = keras.Input(shape=(10, 64))
     output = decoder(decoder_input, encoder_input)
-    model = keras.Model(inputs=[decoder_input, encoder_input],
-        outputs=output)
+    model = keras.Model(
+        inputs=(decoder_input, encoder_input),
+        outputs=output,
+    )
 
     # Call decoder on the inputs.
-    decoder_input_data = tf.random.uniform(shape=[2, 10, 64])
-    encoder_input_data = tf.random.uniform(shape=[2, 10, 64])
-    decoder_output = model([decoder_input_data, encoder_input_data])
-
+    decoder_input_data = np.random.uniform(size=(2, 10, 64))
+    encoder_input_data = np.random.uniform(size=(2, 10, 64))
+    decoder_output = model((decoder_input_data, encoder_input_data))
     ```
 
     References:

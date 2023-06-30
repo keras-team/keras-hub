@@ -27,11 +27,6 @@ class PositionEmbedding(keras.layers.Layer):
     to the features, and the dimension before the last corresponds to the
     sequence.
 
-    This layer optionally accepts `tf.RaggedTensor`s as inputs to process
-    batches of sequences of different lengths. The one ragged dimension must be
-    the dimension that corresponds to the sequence, that is, the penultimate
-    dimension.
-
     This layer does not supporting masking, but can be combined with a
     `keras.layers.Embedding` for padding mask support.
 
@@ -45,7 +40,7 @@ class PositionEmbedding(keras.layers.Layer):
 
     Called directly on input.
     >>> layer = keras_nlp.layers.PositionEmbedding(sequence_length=10)
-    >>> layer(tf.zeros((8, 10, 16)))
+    >>> layer(np.zeros((8, 10, 16)))
 
     Combine with a token embedding.
     ```python

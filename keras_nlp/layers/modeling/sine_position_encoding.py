@@ -32,11 +32,6 @@ class SinePositionEncoding(keras.layers.Layer):
     positional encoding the same size as the embedded token tensor, which
     can be added directly to the embedded token tensor.
 
-    This layer optionally accepts `tf.RaggedTensor`s as inputs to process
-    batches of sequences of different lengths. The one ragged dimension must be
-    the dimension that corresponds to the sequence, that is, the penultimate
-    dimension.
-
     Args:
         max_wavelength: The maximum angular wavelength of the sine/cosine
             curves, as described in Attention is All You Need. Defaults to
