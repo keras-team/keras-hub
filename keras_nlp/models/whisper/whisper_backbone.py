@@ -135,7 +135,7 @@ class WhisperBackbone(Backbone):
             kernel_size=3,
             strides=1,
             padding="same",
-            activation=keras.activation.gelu(approximate=False),
+            activation=keras.activations.gelu(approximate=False),
             name="encoder_token_embedding_conv_layer_1",
         )
         embedded_features = encoder_conv_layer_1(encoder_feature_input)
@@ -151,7 +151,7 @@ class WhisperBackbone(Backbone):
             kernel_size=3,
             strides=2,
             padding="valid",
-            activation=keras.activation.gelu(approximate=False),
+            activation=keras.activations.gelu(approximate=False),
             name="encoder_token_embedding_conv_layer_2",
         )
         embedded_features = encoder_conv_layer_2(embedded_features)
