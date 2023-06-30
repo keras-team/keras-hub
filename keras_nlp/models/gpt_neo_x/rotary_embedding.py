@@ -16,8 +16,8 @@ from tensorflow import keras
 
 
 class RotaryEmbedding(keras.layers.Layer):
-    def __init__(self, max_wavelength=10000):
-        super().__init__()
+    def __init__(self, max_wavelength=10000, **kwargs):
+        super().__init__(**kwargs)
         self.max_wavelength = max_wavelength
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
