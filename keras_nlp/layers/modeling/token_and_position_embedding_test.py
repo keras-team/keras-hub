@@ -15,10 +15,8 @@
 
 import os
 
-import tensorflow as tf
-from absl.testing import parameterized
-
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
@@ -69,8 +67,8 @@ class TokenAndPositionEmbeddingTest(TestCase):
         outputs = test_layer(inputs)
         model = keras.Model(inputs, outputs)
 
-        input_data = tf.ones((2, sequence_length), dtype="int32")
-        expected_output_data = tf.ones((2, sequence_length, embedding_dim)) * 2
+        input_data = ops.ones((2, sequence_length), dtype="int32")
+        expected_output_data = ops.ones((2, sequence_length, embedding_dim)) * 2
         output_data = model.predict(input_data)
         self.assertAllClose(output_data, expected_output_data)
 
@@ -81,16 +79,12 @@ class TokenAndPositionEmbeddingTest(TestCase):
             embedding_dim=3,
             mask_zero=True,
         )
-        input_data = tf.constant([[1, 0], [1, 0]])
+        input_data = ops.array([[1, 0], [1, 0]])
         mask = input_data != 0
         outputs = test_layer(input_data)
         self.assertAllEqual(outputs._keras_mask, mask)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         vocabulary_size = 5
         sequence_length = 4
         embedding_dim = 3
@@ -103,13 +97,11 @@ class TokenAndPositionEmbeddingTest(TestCase):
         outputs = test_layer(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)
 
-        data = tf.zeros(shape=[2, sequence_length])
+        data = ops.zeros(shape=[2, sequence_length])
         model(data)
 
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         loaded_model = keras.models.load_model(path)
 
         model_output = model.predict(data)

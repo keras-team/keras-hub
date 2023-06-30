@@ -14,10 +14,9 @@
 
 """Transformer decoder block implementation based on `keras.layers.Layer`."""
 
-import tensorflow as tf
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
@@ -85,17 +84,18 @@ class TransformerDecoder(keras.layers.Layer):
         intermediate_dim=64, num_heads=8)
 
     # Create a simple model containing the decoder.
-    decoder_input = keras.Input(shape=[10, 64])
-    encoder_input = keras.Input(shape=[10, 64])
+    decoder_input = keras.Input(shape=(10, 64))
+    encoder_input = keras.Input(shape=(10, 64))
     output = decoder(decoder_input, encoder_input)
-    model = keras.Model(inputs=[decoder_input, encoder_input],
-        outputs=output)
+    model = keras.Model(
+        inputs=(decoder_input, encoder_input),
+        outputs=output,
+    )
 
     # Call decoder on the inputs.
-    decoder_input_data = tf.random.uniform(shape=[2, 10, 64])
-    encoder_input_data = tf.random.uniform(shape=[2, 10, 64])
-    decoder_output = model([decoder_input_data, encoder_input_data])
-
+    decoder_input_data = np.random.uniform(size=(2, 10, 64))
+    encoder_input_data = np.random.uniform(size=(2, 10, 64))
+    decoder_output = model((decoder_input_data, encoder_input_data))
     ```
 
     References:
@@ -118,8 +118,8 @@ class TransformerDecoder(keras.layers.Layer):
     ):
         # Work around for model saving, we need to ensure our model is built
         # immediately after restoring from config.
-        self._input_shape = kwargs.pop("build_input_shape", None)
-        self._has_cross_attention = kwargs.pop("has_cross_attention", False)
+        decoder_sequence_shape = kwargs.pop("decoder_sequence_shape", None)
+        encoder_sequence_shape = kwargs.pop("encoder_sequence_shape", None)
 
         super().__init__(name=name, **kwargs)
         self.intermediate_dim = intermediate_dim
@@ -130,19 +130,22 @@ class TransformerDecoder(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.normalize_first = normalize_first
-        self._built = False
         self.supports_masking = True
+        self._decoder_sequence_shape = None
+        self._encoder_sequence_shape = None
 
-        if self._input_shape is not None:
-            self._build(self._input_shape, self._has_cross_attention)
+        if decoder_sequence_shape:
+            self.build(decoder_sequence_shape, encoder_sequence_shape)
 
-    def _build(self, input_shape, has_cross_attention):
-        # Create layers based on input shape.
-        self._built = True
-        self._input_shape = input_shape
-        self._has_cross_attention = has_cross_attention
+    def build(
+        self,
+        decoder_sequence_shape,
+        encoder_sequence_shape=None,
+    ):
+        self._decoder_sequence_shape = decoder_sequence_shape
+        self._encoder_sequence_shape = encoder_sequence_shape
         # Infer the dimension of our hidden feature size from the build shape.
-        hidden_dim = input_shape[-1]
+        hidden_dim = decoder_sequence_shape[-1]
         # Attention head size is `hidden_dim` over the number of heads.
         head_dim = int(hidden_dim // self.num_heads)
 
@@ -154,20 +157,27 @@ class TransformerDecoder(keras.layers.Layer):
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
-        self._self_attention_layer._build_from_signature(
-            query=input_shape,
-            value=input_shape,
-        )
+        if hasattr(self._self_attention_layer, "_build_from_signature"):
+            self._self_attention_layer._build_from_signature(
+                query=decoder_sequence_shape,
+                value=decoder_sequence_shape,
+            )
+        else:
+            self._self_attention_layer.build(
+                query_shape=decoder_sequence_shape,
+                value_shape=decoder_sequence_shape,
+            )
         self._self_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
+        self._self_attention_layernorm.build(decoder_sequence_shape)
         self._self_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,
         )
 
         # Cross attention layers are optional.
         self._cross_attention_layer = None
-        if has_cross_attention:
+        if encoder_sequence_shape:
             self._cross_attention_layer = CachedMultiHeadAttention(
                 num_heads=self.num_heads,
                 key_dim=head_dim,
@@ -176,13 +186,20 @@ class TransformerDecoder(keras.layers.Layer):
                 kernel_initializer=clone_initializer(self.kernel_initializer),
                 bias_initializer=clone_initializer(self.bias_initializer),
             )
-            self._cross_attention_layer._build_from_signature(
-                query=input_shape,
-                value=input_shape,
-            )
+            if hasattr(self._cross_attention_layer, "_build_from_signature"):
+                self._cross_attention_layer._build_from_signature(
+                    query=encoder_sequence_shape,
+                    value=encoder_sequence_shape,
+                )
+            else:
+                self._cross_attention_layer.build(
+                    query_shape=encoder_sequence_shape,
+                    value_shape=encoder_sequence_shape,
+                )
             self._cross_attention_layernorm = keras.layers.LayerNormalization(
                 epsilon=self.layer_norm_epsilon,
             )
+            self._cross_attention_layernorm.build(encoder_sequence_shape)
             self._cross_attention_dropout = keras.layers.Dropout(
                 rate=self.dropout,
             )
@@ -194,16 +211,39 @@ class TransformerDecoder(keras.layers.Layer):
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
+        self._feedforward_intermediate_dense.build(decoder_sequence_shape)
         self._feedforward_output_dense = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
+        intermediate_shape = list(decoder_sequence_shape)
+        intermediate_shape[-1] = self.intermediate_dim
+        self._feedforward_output_dense.build(tuple(intermediate_shape))
         self._feedforward_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
+        self._feedforward_layernorm.build(decoder_sequence_shape)
         self._feedforward_dropout = keras.layers.Dropout(
             rate=self.dropout,
+        )
+        # Create layers based on input shape.
+        self.built = True
+
+    def __call__(
+        self,
+        decoder_sequence,
+        encoder_sequence=None,
+        **kwargs,
+    ):
+        if not self.built:
+            decoder_sequence_shape = decoder_sequence.shape
+            encoder_sequence_shape = None
+            if encoder_sequence is not None:
+                encoder_sequence_shape = encoder_sequence.shape
+            self.build(decoder_sequence_shape, encoder_sequence_shape)
+        return super().__call__(
+            decoder_sequence, encoder_sequence=encoder_sequence, **kwargs
         )
 
     def call(
@@ -253,7 +293,7 @@ class TransformerDecoder(keras.layers.Layer):
                 at which to update the `cross_attention_cache`. Usually, this is
                 either `0` (compute the entire `cross_attention_cache`), or
                 `None` (reuse a previously computed `cross_attention_cache`).
-             use_causal_mask: bool, defaults to `True`. If true, a causal mask
+            use_causal_mask: bool, defaults to `True`. If true, a causal mask
                 (masking out future input) is applied `on the decoder sequence.
         Returns:
             One of three things, depending on call arguments:
@@ -266,11 +306,9 @@ class TransformerDecoder(keras.layers.Layer):
         """
 
         has_encoder_sequence = encoder_sequence is not None
-        if not self._built:
-            self._build(decoder_sequence.shape, has_encoder_sequence)
 
-        is_cross_attention = self._cross_attention_layer is not None
-        if not is_cross_attention and has_encoder_sequence:
+        has_cross_attention = self._cross_attention_layer is not None
+        if not has_cross_attention and has_encoder_sequence:
             raise ValueError(
                 "The number of call arguments to "
                 "`keras_nlp.layers.TransformerDecoder` should not change. "
@@ -280,7 +318,7 @@ class TransformerDecoder(keras.layers.Layer):
                 "This layer has been built without cross attention, but "
                 "you are trying to call it with encoder_sequence."
             )
-        elif is_cross_attention and not has_encoder_sequence:
+        elif has_cross_attention and not has_encoder_sequence:
             raise ValueError(
                 "The number of call arguments to "
                 "`keras_nlp.layers.TransformerDecoder` should not change. "
@@ -293,7 +331,7 @@ class TransformerDecoder(keras.layers.Layer):
 
         has_self_attention_cache = self_attention_cache is not None
         has_cross_attention_cache = cross_attention_cache is not None
-        if is_cross_attention and (
+        if has_cross_attention and (
             has_self_attention_cache != has_cross_attention_cache
         ):
             raise ValueError(
@@ -306,8 +344,6 @@ class TransformerDecoder(keras.layers.Layer):
                 f"cross_attention_cache={cross_attention_cache}."
             )
 
-        x = decoder_sequence  # Intermediate result.
-
         self_attention_mask = self._compute_self_attention_mask(
             decoder_sequence=decoder_sequence,
             decoder_padding_mask=decoder_padding_mask,
@@ -316,6 +352,8 @@ class TransformerDecoder(keras.layers.Layer):
             self_attention_cache=self_attention_cache,
             self_attention_cache_update_index=self_attention_cache_update_index,
         )
+
+        x = decoder_sequence  # Intermediate result.
 
         # Self attention block.
         residual = x
@@ -334,7 +372,7 @@ class TransformerDecoder(keras.layers.Layer):
             x = self._self_attention_layernorm(x)
 
         # Cross attention is optional.
-        if is_cross_attention:
+        if has_cross_attention:
             # Compute cross attention mask.
             cross_attention_mask = merge_padding_and_attention_mask(
                 encoder_sequence, encoder_padding_mask, encoder_attention_mask
@@ -368,7 +406,7 @@ class TransformerDecoder(keras.layers.Layer):
             x = self._feedforward_layernorm(x)
 
         if self_attention_cache is not None:
-            if is_cross_attention:
+            if has_cross_attention:
                 return (x, self_attention_cache, cross_attention_cache)
             else:
                 return (x, self_attention_cache)
@@ -388,13 +426,13 @@ class TransformerDecoder(keras.layers.Layer):
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )
         if use_causal_mask:
-            batch_size = tf.shape(decoder_sequence)[0]
-            input_length = output_length = tf.shape(decoder_sequence)[1]
+            batch_size = ops.shape(decoder_sequence)[0]
+            input_length = output_length = ops.shape(decoder_sequence)[1]
             # We need to handle a rectangular causal mask when doing cached
             # decoding. For generative inference, `decoder_sequence` will
             # generally be length 1, and `cache` will be the full generation length.
             if self_attention_cache is not None:
-                input_length = tf.shape(self_attention_cache)[2]
+                input_length = ops.shape(self_attention_cache)[2]
 
             causal_mask = compute_causal_mask(
                 batch_size,
@@ -405,7 +443,7 @@ class TransformerDecoder(keras.layers.Layer):
                 else self_attention_cache_update_index,
             )
             return (
-                tf.minimum(decoder_mask, causal_mask)
+                ops.minimum(decoder_mask, causal_mask)
                 if decoder_mask is not None
                 else causal_mask
             )
@@ -427,8 +465,11 @@ class TransformerDecoder(keras.layers.Layer):
                     self.bias_initializer
                 ),
                 "normalize_first": self.normalize_first,
-                "build_input_shape": self._input_shape,
-                "has_cross_attention": self._has_cross_attention,
+                "decoder_sequence_shape": self._decoder_sequence_shape,
+                "encoder_sequence_shape": self._encoder_sequence_shape,
             }
         )
         return config
+
+    def compute_output_shape(self, decoder_sequence_shape):
+        return decoder_sequence_shape

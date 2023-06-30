@@ -11,7 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import tensorflow as tf
+
 from keras_nlp.backend import keras
+from keras_nlp.layers.modeling.transformer_layer_utils import (
+    compute_causal_mask,
+)
 from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.models.t5.t5_multi_head_attention import T5MultiHeadAttention
 
@@ -91,8 +96,16 @@ class T5TransformerLayer(keras.layers.Layer):
         position_bias=None,
         encoder_hidden_states=None,
         encoder_attention_mask=None,
+        use_causal_mask=False,
         training=False,
     ):
+        if use_causal_mask:
+            shape = tf.shape(hidden_states)
+            batch_size, length = shape[0], shape[1]
+            causal_mask = compute_causal_mask(batch_size, length, length)
+            attention_mask = tf.cast(attention_mask, "int32")
+            attention_mask = causal_mask & attention_mask
+
         x = hidden_states  # Intermediate result.
 
         residual = x

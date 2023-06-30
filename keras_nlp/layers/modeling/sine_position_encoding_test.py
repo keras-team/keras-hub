@@ -13,9 +13,8 @@
 # limitations under the License.
 """Tests for Sinusoidal Positional encoding."""
 
-import tensorflow as tf
-
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.layers.modeling import sine_position_encoding
 from keras_nlp.tests.test_case import TestCase
 
@@ -29,7 +28,7 @@ class SinePositionEncodingTest(TestCase):
                 pos_encoding,
             ]
         )
-        input = tf.random.uniform(shape=[2, 4, 6])
+        input = ops.random.uniform(shape=[2, 4, 6])
         model(input)
 
     def test_static_layer_output_shape(self):
@@ -76,7 +75,7 @@ class SinePositionEncodingTest(TestCase):
                 pos_encoding,
             ]
         )
-        input = tf.random.uniform(shape=[1, 4, 6])
+        input = ops.random.uniform(shape=[1, 4, 6])
         output = model(input)
 
         # comapre position encoding values for position 0 and 3
@@ -112,4 +111,4 @@ class SinePositionEncodingTest(TestCase):
         outputs = pos_encoding(inputs)
 
         # output dtype for this layer should be tf.float16.
-        self.assertEqual(outputs.dtype, tf.float16)
+        self.assertEqual(outputs.dtype, "float16")

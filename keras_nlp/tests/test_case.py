@@ -14,6 +14,8 @@
 import tensorflow as tf
 from absl.testing import parameterized
 
+from keras_nlp.backend import ops
+
 
 class TestCase(tf.test.TestCase, parameterized.TestCase):
     """Base test case class for KerasNLP.
@@ -23,4 +25,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
     want.
     """
 
-    pass
+    def assertAllClose(self, x1, x2, atol=1e-6, rtol=1e-6, msg=None):
+        def convert_to_numpy(x):
+            return ops.convert_to_numpy(x) if ops.is_tensor(x) else x
+
+        x1 = tf.nest.map_structure(convert_to_numpy, x1)
+        x2 = tf.nest.map_structure(convert_to_numpy, x2)
+        super().assertAllClose(x1, x2, atol=atol, rtol=rtol, msg=msg)

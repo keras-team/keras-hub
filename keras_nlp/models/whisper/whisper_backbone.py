@@ -231,7 +231,6 @@ class WhisperBackbone(Backbone):
                 kernel_initializer=whisper_kernel_initializer(),
                 normalize_first=True,
                 name=f"transformer_decoder_layer_{i}",
-                has_cross_attention=True,
             )
             x = transformer_decoder_layer(
                 decoder_sequence=x,

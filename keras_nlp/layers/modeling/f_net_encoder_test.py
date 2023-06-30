@@ -15,14 +15,15 @@
 
 import os
 
-import tensorflow as tf
-from absl.testing import parameterized
+import pytest
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.layers.modeling import f_net_encoder
 from keras_nlp.tests.test_case import TestCase
 
 
+@pytest.mark.tf_only
 class FNetEncoderTest(TestCase):
     def test_valid_call(self):
         encoder = f_net_encoder.FNetEncoder(intermediate_dim=4)
@@ -32,7 +33,7 @@ class FNetEncoderTest(TestCase):
                 encoder,
             ]
         )
-        input = tf.random.uniform(shape=[2, 4, 6])
+        input = ops.random.uniform(shape=[2, 4, 6])
         model(input)
 
     def test_get_config_and_from_config(self):
@@ -78,51 +79,16 @@ class FNetEncoderTest(TestCase):
         x = keras.layers.Dense(1, activation="sigmoid")(x)
         model = keras.Model(inputs=inputs, outputs=x)
 
-        data = tf.random.uniform(shape=[2, 4, 6])
-        label = tf.cast(data[:, :, 0] >= 0.5, dtype="int32")
+        data = ops.random.uniform(shape=[2, 4, 6])
+        label = ops.random.randint(minval=0, maxval=2, shape=(2, 4, 1))
 
-        loss_fn = keras.losses.BinaryCrossentropy(from_logits=False)
+        loss = keras.losses.BinaryCrossentropy(from_logits=False)
         optimizer = keras.optimizers.Adam()
-        with tf.GradientTape() as tape:
-            pred = model(data)
-            loss = loss_fn(label, pred)
-        grad = tape.gradient(loss, model.trainable_variables)
-        self.assertGreater(len(grad), 1)
-        optimizer.apply_gradients(zip(grad, model.trainable_variables))
+        model.compile(loss=loss, optimizer=optimizer)
+        loss = model.train_on_batch(x=data, y=label)
+        self.assertGreater(loss, 0)
 
-    def test_checkpointing_f_net_encoder(self):
-        encoder1 = f_net_encoder.FNetEncoder(
-            intermediate_dim=4,
-        )
-
-        encoder2 = f_net_encoder.FNetEncoder(
-            intermediate_dim=4,
-        )
-        data = tf.random.uniform(shape=[2, 4, 6])
-        encoder1(data)
-        encoder2(data)
-        # The weights of encoder1 and encoder2 are different.
-        self.assertFalse(
-            all(
-                encoder1._output_dense.trainable_variables[0][0]
-                == encoder2._output_dense.trainable_variables[0][0]
-            )
-        )
-        checkpoint = tf.train.Checkpoint(encoder1)
-        checkpoint2 = tf.train.Checkpoint(encoder2)
-        temp_dir = self.get_temp_dir()
-        save_path = checkpoint.save(temp_dir)
-        checkpoint2.restore(save_path)
-
-        encoder1_output = encoder1(data)
-        encoder2_output = encoder2(data)
-        self.assertAllClose(encoder1_output, encoder2_output)
-
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model = keras.Sequential(
             [
                 keras.Input(shape=(4, 6)),
@@ -131,12 +97,10 @@ class FNetEncoderTest(TestCase):
                 ),
             ]
         )
-        data = tf.random.uniform(shape=[2, 4, 6])
+        data = ops.random.uniform(shape=[2, 4, 6])
         model(data)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         loaded_model = keras.models.load_model(path)
 
         model_output = model(data)
