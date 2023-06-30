@@ -22,14 +22,23 @@ class WhisperDecoder(TransformerDecoder):
     """A Whisper decoder.
 
     Inherits from `keras_nlp.layers.TransformerDecoder`, and overrides the
-    `_build` method so as to remove the bias term from the key projection layer.
+    `build` method so as to remove the bias term from the key projection layer.
     """
 
-    def _build(self, input_shape, has_cross_attention):
-        super()._build(input_shape, has_cross_attention)
+    def build(
+        self,
+        decoder_sequence_shape,
+        encoder_sequence_shape=None,
+    ):
+        super().build(
+            decoder_sequence_shape,
+            encoder_sequence_shape=encoder_sequence_shape,
+        )
 
         # Since there is no exposed option for this in MHA, we will reach into
         # the internals of the layer for now.
         self._self_attention_layer._key_dense.bias_axes = None
-        if has_cross_attention:
+        self._self_attention_layer._key_dense.bias = None
+        if self._cross_attention_layer:
             self._cross_attention_layer._key_dense.bias_axes = None
+            self._cross_attention_layer._key_dense.bias = None

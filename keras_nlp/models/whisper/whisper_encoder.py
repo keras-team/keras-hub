@@ -25,9 +25,10 @@ class WhisperEncoder(TransformerEncoder):
     `_build` method so as to remove the bias term from the key projection layer.
     """
 
-    def _build(self, input_shape):
-        super()._build(input_shape)
+    def build(self, inputs_shape):
+        super().build(inputs_shape)
 
         # Since there is no exposed option for this in MHA, we will reach into
         # the internals of the layer for now.
         self._self_attention_layer._key_dense.bias_axes = None
+        self._self_attention_layer._key_dense.bias = None
