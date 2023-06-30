@@ -15,8 +15,6 @@
 
 import os
 
-from absl.testing import parameterized
-
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.layers.modeling import masked_lm_head
@@ -121,11 +119,7 @@ class MaskedLMHeadTest(TestCase):
         loss = model.train_on_batch(x=(token_data, position_data), y=label_data)
         self.assertGreater(loss, 0)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         head = masked_lm_head.MaskedLMHead(
             vocabulary_size=100,
             activation="softmax",
@@ -138,10 +132,8 @@ class MaskedLMHeadTest(TestCase):
         token_data = ops.random.uniform(shape=(4, 10, 16))
         position_data = ops.random.randint(minval=0, maxval=10, shape=(4, 5))
         model_output = model((token_data, position_data))
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
 
         restored_output = restored_model((token_data, position_data))

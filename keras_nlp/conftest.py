@@ -95,10 +95,6 @@ def pytest_collection_modifyitems(config, items):
     run_tpu = config.getoption("--run_tpu")
 
     # Messages to annotate skipped tests with.
-    skip_tf_saving_test = pytest.mark.skipif(
-        backend_config.multi_backend(),
-        reason="keras core does not support tf save format.",
-    )
     skip_large = pytest.mark.skipif(
         not run_large_tests,
         reason="need --run_large option to run",
@@ -117,7 +113,6 @@ def pytest_collection_modifyitems(config, items):
     )
     for item in items:
         if "tf_format" in item.name:
-            item.add_marker(skip_tf_saving_test)
             item.add_marker(skip_extra_large)
         if "large" in item.keywords:
             item.add_marker(skip_large)

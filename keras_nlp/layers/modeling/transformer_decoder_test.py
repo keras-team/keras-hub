@@ -269,11 +269,7 @@ class TransformerDecoderTest(TestCase):
         loaded_model_output = loaded_model([decoder_sequence, encoder_sequence])
         self.assertAllClose(model_output, loaded_model_output)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model_without_cross_attention(self, save_format, filename):
+    def test_saved_model_without_cross_attention(self):
         decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
@@ -287,10 +283,8 @@ class TransformerDecoderTest(TestCase):
         )
         decoder_sequence = ops.random.uniform(shape=[2, 4, 6])
         model(decoder_sequence)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         loaded_model = keras.models.load_model(path)
 
         model_output = model(decoder_sequence)

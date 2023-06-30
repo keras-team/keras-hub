@@ -128,11 +128,7 @@ class TransformerEncoderTest(TestCase):
         outputs = encoder(inputs)
         self.assertAllEqual(outputs._keras_mask, mask)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model = keras.Sequential(
             [
                 keras.Input(shape=(4, 6)),
@@ -145,10 +141,8 @@ class TransformerEncoderTest(TestCase):
         )
         data = ops.random.uniform(shape=[2, 4, 6])
         model_output = model(data)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
 
         loaded_model = keras.models.load_model(path)
         loaded_model_output = loaded_model(data)

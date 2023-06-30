@@ -15,8 +15,6 @@
 
 import os
 
-from absl.testing import parameterized
-
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.layers.modeling import position_embedding
@@ -204,11 +202,7 @@ class PositionEmbeddingTest(TestCase):
         restored = position_embedding.PositionEmbedding.from_config(config)
         self.assertEqual(restored.get_config(), config)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         max_sequence_length = 4
         feature_size = 6
         test_layer = position_embedding.PositionEmbedding(
@@ -221,10 +215,8 @@ class PositionEmbeddingTest(TestCase):
         data = ops.zeros(shape=[2, max_sequence_length, feature_size])
         model(data)
 
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         loaded_model = keras.models.load_model(path)
 
         model_output = model.predict(data)
