@@ -135,12 +135,10 @@ class WhisperBackbone(Backbone):
             kernel_size=3,
             strides=1,
             padding="same",
+            activation=keras.activation.gelu(approximate=False),
             name="encoder_token_embedding_conv_layer_1",
         )
-        embedded_features = keras.activations.gelu(
-            encoder_conv_layer_1(encoder_feature_input),
-            approximate=False,
-        )
+        embedded_features = encoder_conv_layer_1(encoder_feature_input)
 
         # For the second conv. layer, we cannot use `padding="same"` since
         # that corresponds to a padding size of 1.5 (since stride is 2). Hence,
@@ -153,12 +151,10 @@ class WhisperBackbone(Backbone):
             kernel_size=3,
             strides=2,
             padding="valid",
+            activation=keras.activation.gelu(approximate=False),
             name="encoder_token_embedding_conv_layer_2",
         )
-        embedded_features = keras.activations.gelu(
-            encoder_conv_layer_2(embedded_features),
-            approximate=False,
-        )
+        embedded_features = encoder_conv_layer_2(embedded_features)
 
         # The position embedding layer for the encoder is a sinusoidal embedding
         # layer: https://github.com/openai/whisper/blob/v20230124/whisper/model.py#L137.
