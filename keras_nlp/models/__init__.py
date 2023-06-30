@@ -101,6 +101,7 @@ from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
 from keras_nlp.models.whisper.whisper_backbone import WhisperBackbone
+from keras_nlp.models.whisper.whisper_preprocessor import WhisperPreprocessor
 from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_classifier import (

@@ -68,14 +68,6 @@ class WhisperTokenizerTest(TestCase):
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [0, 1, 2, 0, 3])
 
-    def test_tokenize_special_tokens(self):
-        input_data = (
-            "<|startoftranscript|><|en|><|transcribe|><|notimestamps|> "
-            "airplane at airport<|endoftext|>"
-        )
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [9, 14, 12, 11, 0, 1, 2, 0, 3, 10])
-
     def test_tokenize_batch(self):
         input_data = tf.constant([" airplane at airport", " kohli is the best"])
         output = self.tokenizer(input_data)

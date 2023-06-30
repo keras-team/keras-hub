@@ -12,11 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
+
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.models.whisper.whisper_presets import backbone_presets
+from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras_nlp_export("keras_nlp.models.WhisperAudioFeatureExtractor")
@@ -194,7 +199,7 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         # Calculate the log mel spectrogram.
         log_spec = tf_log10(mel_spec)
         # Dynamic range compression.
-        log_spec_shape = log_spec.shape.as_list()
+        log_spec_shape = tf.shape(log_spec)
         max_value_minus_eight = tf.math.subtract(
             tf.math.reduce_max(log_spec, axis=[1, 2]),
             tf.cast(8, dtype=log_spec.dtype),
@@ -251,3 +256,52 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
             }
         )
         return config
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        """Instantiate Whisper audio feature extractor from a given preset.
+
+        Args:
+            preset: string. Must be one of "{{preset_names}}".
+
+        Examples:
+        ```python
+        # Load a preset tokenizer.
+        audio_feature_extractor = WhisperAudioFeatureExtractor.from_preset(
+            "{{example_preset_name}}"
+        )
+
+        # Compute the log-mel spectrogram.
+        audio_tensor = tf.ones((8000,), dtype=tf.float32)
+        audio_feature_extractor(audio_tensor)
+        ```
+        """
+
+        if not cls.presets:
+            raise NotImplementedError(
+                "No presets have been created for this class"
+            )
+
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+
+        config = cls.presets[preset]["audio_feature_extractor_config"]
+
+        return cls.from_config({**config, **kwargs})
+
+
+format_docstring(
+    example_preset_name=next(iter(backbone_presets), ""),
+    preset_names='", "'.join(backbone_presets),
+)(WhisperAudioFeatureExtractor.from_preset.__func__)

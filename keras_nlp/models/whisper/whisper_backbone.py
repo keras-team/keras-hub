@@ -13,6 +13,7 @@
 # limitations under the License.
 """Whisper backbone model."""
 
+import copy
 
 import tensorflow as tf
 from tensorflow import keras
@@ -25,6 +26,8 @@ from keras_nlp.layers.modeling.token_and_position_embedding import (
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.whisper.whisper_decoder import WhisperDecoder
 from keras_nlp.models.whisper.whisper_encoder import WhisperEncoder
+from keras_nlp.models.whisper.whisper_presets import backbone_presets
+from keras_nlp.utils.python_utils import classproperty
 
 
 def whisper_kernel_initializer(stddev=0.02):
@@ -291,3 +294,7 @@ class WhisperBackbone(Backbone):
         return self.get_layer(
             "decoder_token_and_position_embedding"
         ).token_embedding
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)

@@ -487,7 +487,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         super().__init_subclass__(**kwargs)
 
         # If the subclass does not define from_preset, assign a wrapper so that
-        # each class can have an distinct docstring.
+        # each class can have a distinct docstring.
         if "from_preset" not in cls.__dict__:
 
             def from_preset(calling_cls, *args, **kwargs):
