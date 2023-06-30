@@ -21,10 +21,11 @@ from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.models.albert.albert_classifier import AlbertClassifier
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+class AlbertPresetSmokeTest(TestCase):
     """
     A smoke test for ALBERT presets we run continuously.
     This only tests the smallest weights we have available. Run with:
@@ -121,7 +122,7 @@ class AlbertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class AlbertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class AlbertPresetFullTest(TestCase):
     """
     Test the full enumeration of our preset.
     This tests every ALBERT preset and is only run manually.

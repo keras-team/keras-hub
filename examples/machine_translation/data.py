@@ -59,7 +59,7 @@ strip_chars = strip_chars.replace("[", "")
 strip_chars = strip_chars.replace("]", "")
 
 
-@keras.utils.register_keras_serializable()
+@keras.saving.register_keras_serializable()
 def custom_standardization(input_string):
     lowercase = tf.strings.lower(input_string)
     return tf.strings.regex_replace(

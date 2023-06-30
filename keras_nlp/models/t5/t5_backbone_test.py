@@ -21,9 +21,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.t5.t5_backbone import T5Backbone
+from keras_nlp.tests.test_case import TestCase
 
 
-class T5Test(tf.test.TestCase, parameterized.TestCase):
+class T5Test(TestCase):
     def setUp(self):
         self.backbone = T5Backbone(
             vocabulary_size=4,
@@ -119,7 +120,7 @@ class T5Test(tf.test.TestCase, parameterized.TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-class T5BackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+class T5BackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.backbone = T5Backbone(

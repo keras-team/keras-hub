@@ -13,14 +13,14 @@
 # limitations under the License.
 
 """Tests for EditDistance."""
-
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.metrics.edit_distance import EditDistance
+from keras_nlp.tests.test_case import TestCase
 
 
-class EditDistanceTest(tf.test.TestCase):
+class EditDistanceTest(TestCase):
     def test_initialization(self):
         edit_distance = EditDistance()
         result = edit_distance.result()

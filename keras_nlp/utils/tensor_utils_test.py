@@ -14,11 +14,12 @@
 
 import tensorflow as tf
 
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.utils.tensor_utils import tensor_to_list
 from keras_nlp.utils.tensor_utils import tensor_to_string_list
 
 
-class TensorToListTest(tf.test.TestCase):
+class TensorToListTest(TestCase):
     def test_ragged_input(self):
         input_data = tf.ragged.constant([[1, 2], [4, 5, 6]])
         list_output = tensor_to_list(input_data)
@@ -35,7 +36,7 @@ class TensorToListTest(tf.test.TestCase):
         self.assertEqual(list_output, 1)
 
 
-class TensorToStringListTest(tf.test.TestCase):
+class TensorToStringListTest(TestCase):
     def test_detokenize_to_strings_for_ragged(self):
         input_data = tf.ragged.constant([["▀▁▂▃", "samurai"]])
         detokenize_output = tensor_to_string_list(input_data)

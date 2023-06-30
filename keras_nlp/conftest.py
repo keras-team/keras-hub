@@ -96,7 +96,7 @@ def pytest_collection_modifyitems(config, items):
     )
     # Run Keras saving tests on 2.12 stable, nightlies and later releases.
     skip_keras_saving_test = pytest.mark.skipif(
-        version.parse(tf.__version__) < version.parse("2.12.0-dev0"),
+        version.parse(tf.__version__) < version.parse("2.12.0"),
         reason="keras_v3 format requires tf > 2.12.",
     )
     skip_large = pytest.mark.skipif(
@@ -113,6 +113,8 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_xla)
         if "keras_format" in item.name:
             item.add_marker(skip_keras_saving_test)
+        if "tf_format" in item.name:
+            item.add_marker(skip_extra_large)
         if "large" in item.keywords:
             item.add_marker(skip_large)
         if "extra_large" in item.keywords:

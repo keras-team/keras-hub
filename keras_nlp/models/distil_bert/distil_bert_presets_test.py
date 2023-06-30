@@ -27,10 +27,11 @@ from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
 from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+class DistilBertPresetSmokeTest(TestCase):
     """
     A smoke test for DistilBERT presets we run continuously.
 
@@ -123,7 +124,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class DistilBertPresetFullTest(TestCase):
     """
     Tests the full enumeration of our preset.
 

@@ -20,10 +20,11 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 
 
-class SentencePieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class SentencePieceTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
         bytes_io = io.BytesIO()

@@ -19,6 +19,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 VOCAB_PATH = keras.utils.get_file(
@@ -32,7 +33,7 @@ MERGE_PATH = keras.utils.get_file(
 
 
 @pytest.mark.large
-class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class BytePairTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
         self.tokenizer = BytePairTokenizer(

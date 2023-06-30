@@ -13,13 +13,13 @@
 # limitations under the License.
 
 """Tests for RougeL."""
-
 import tensorflow as tf
 
 from keras_nlp.metrics.rouge_l import RougeL
+from keras_nlp.tests.test_case import TestCase
 
 
-class RougeLTest(tf.test.TestCase):
+class RougeLTest(TestCase):
     def test_initialization(self):
         rouge = RougeL()
         result = rouge.result()

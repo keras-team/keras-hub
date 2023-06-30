@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for Whisper preprocessing layers."""
-
 import os
 
 import tensorflow as tf
@@ -21,9 +20,10 @@ from absl.testing import parameterized
 from tensorflow import keras
 
 from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class WhisperTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class WhisperTokenizerTest(TestCase):
     def setUp(self):
         self.vocab = {
             "Ġair": 0,
@@ -67,14 +67,6 @@ class WhisperTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         input_data = " airplane at airport"
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [0, 1, 2, 0, 3])
-
-    def test_tokenize_special_tokens(self):
-        input_data = (
-            "<|startoftranscript|><|en|><|transcribe|><|notimestamps|> "
-            "airplane at airport<|endoftext|>"
-        )
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [9, 14, 12, 11, 0, 1, 2, 0, 3, 10])
 
     def test_tokenize_batch(self):
         input_data = tf.constant([" airplane at airport", " kohli is the best"])

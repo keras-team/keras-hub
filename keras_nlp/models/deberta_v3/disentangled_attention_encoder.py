@@ -21,7 +21,7 @@ from keras_nlp.models.deberta_v3.disentangled_self_attention import (
 )
 from keras_nlp.utils.keras_utils import clone_initializer
 
-from keras_nlp.layers.transformer_layer_utils import (  # isort:skip
+from keras_nlp.layers.modeling.transformer_layer_utils import (  # isort:skip
     merge_padding_and_attention_mask,
 )
 

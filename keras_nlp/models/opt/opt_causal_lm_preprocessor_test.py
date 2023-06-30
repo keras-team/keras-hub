@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for OPT causal LM preprocessor layer."""
-
 import os
 
 import pytest
@@ -25,9 +24,10 @@ from keras_nlp.models.opt.opt_causal_lm_preprocessor import (
     OPTCausalLMPreprocessor,
 )
 from keras_nlp.models.opt.opt_tokenizer import OPTTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class OPTCausalLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class OPTCausalLMPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = {
             "<pad>": 0,

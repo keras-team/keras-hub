@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for OPT preprocessor layer."""
-
 import os
 
 import pytest
@@ -23,9 +22,10 @@ from tensorflow import keras
 
 from keras_nlp.models.opt.opt_preprocessor import OPTPreprocessor
 from keras_nlp.models.opt.opt_tokenizer import OPTTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class OPTPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class OPTPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = {
             "<pad>": 0,

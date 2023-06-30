@@ -19,20 +19,18 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.models.generative_task import GenerativeTask
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
     GPT2CausalLMPreprocessor,
 )
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
-from keras_nlp.models.task import Task
-from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.tensor_utils import tensor_to_string_list
 
 
 @keras_nlp_export("keras_nlp.models.GPT2CausalLM")
-class GPT2CausalLM(Task):
+class GPT2CausalLM(GenerativeTask):
     """An end-to-end GPT2 model for causal langauge modeling.
 
     A causal language model (LM) predicts the next token based on previous
@@ -267,42 +265,6 @@ class GPT2CausalLM(Task):
         _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
         return hidden_states, cache
 
-    def compile(
-        self,
-        *args,
-        run_eagerly=False,
-        jit_compile=True,
-        sampler="top_k",
-        **kwargs,
-    ):
-        xla_compatible = is_xla_compatible(self)
-        super().compile(
-            *args,
-            run_eagerly=run_eagerly,
-            # Only `jit_compile` if not eager and in a compatible environment.
-            jit_compile=jit_compile and xla_compatible and not run_eagerly,
-            **kwargs,
-        )
-        self._sampler = get_sampler(sampler)
-        # Clear the compiled generate function.
-        self.generate_function = None
-
-    def make_generate_function(self):
-        """Create or return the compiled generation function."""
-        if self.generate_function is not None:
-            return self.generate_function
-
-        if self.run_eagerly:
-            self.generate_function = self.generate_step
-        else:
-            # `jit_compile` is a property of keras.Model after TF 2.12.
-            # Use `getattr()` for backwards compatibility.
-            jit_compile = getattr(self, "jit_compile", True)
-            self.generate_function = tf.function(
-                self.generate_step, jit_compile=jit_compile
-            )
-        return self.generate_function
-
     def generate_step(
         self,
         inputs,
@@ -373,133 +335,6 @@ class GPT2CausalLM(Task):
             "token_ids": token_ids,
             "padding_mask": padding_mask,
         }
-
-    def _normalize_generate_inputs(
-        self,
-        inputs,
-    ):
-        """Normalize user input to the generate function.
-
-        This function coverts all inputs to tensors, adds a batch dimension if
-        necessary, and returns a iterable "dataset like" object (either an
-        actual `tf.data.Dataset` or a list with a single batch element).
-        """
-        input_is_scalar = False
-
-        if isinstance(inputs, tf.data.Dataset):
-            return inputs, input_is_scalar
-
-        if isinstance(inputs, str) or isinstance(inputs, list):
-            inputs = tf.convert_to_tensor(inputs)
-
-        if isinstance(inputs, tf.Tensor) and inputs.shape.rank == 0:
-            input_is_scalar = True
-            inputs = inputs[tf.newaxis]
-
-        # We avoid coverting to a dataset purely for speed, for a single batch
-        # of input, creating a dataset would add significant overhead.
-        return [inputs], input_is_scalar
-
-    def _normalize_generate_outputs(
-        self,
-        outputs,
-        input_is_scalar,
-    ):
-        """Normalize user output from the generate function.
-
-        This function converts all output to numpy (for integer output), or
-        python strings (for string output). If a batch dimension was added to
-        the input, it is removed from the output (so generate can be string in,
-        string out).
-        """
-
-        def normalize(x):
-            x = tf.concat(x, axis=0)
-            x = tf.squeeze(x, 0) if input_is_scalar else x
-            is_string = x.dtype == tf.string
-            # Convert outputs to a friendly pythonic type. For numerical outputs
-            # that is numpy, for string outputs that is `list` and `str`.
-            return tensor_to_string_list(x) if is_string else x.numpy()
-
-        if isinstance(outputs[0], dict):
-            return {
-                "token_ids": normalize([x["token_ids"] for x in outputs]),
-                "padding_mask": normalize([x["padding_mask"] for x in outputs]),
-            }
-        return normalize([x for x in outputs])
-
-    def generate(
-        self,
-        inputs,
-        max_length=None,
-    ):
-        """Generate text given prompt `inputs`.
-
-        This method generates text based on given `inputs`. The sampling method
-        used for generation can be set in the `compile` method.
-
-        If `inputs` are a `tf.data.Dataset`, outputs will be generated
-        "batch-by-batch" and concatenated. Otherwise, all inputs will be handled
-        as a single batch.
-
-        If a `preprocessor` is attached to the model, `inputs` should be
-        strings and returned sequences will be strings. Otherwise, inputs should
-        be preprocessed before calling `generate()`, and returned sequences will
-        be token ids.
-
-        Args:
-            inputs: a string `tf.Tensor`, a `tf.data.Dataset` of strings, a
-                python string or a list of python strings. If no `preprocessor`
-                is attached to the model, inputs should instead be a nested
-                `tf.Tensor` or `tf.data.Dataset` with keys `"token_ids"` and
-                `"padding_mask"`.
-            max_length: Optional. int. The max length of the generated sequence.
-                Will default to the max configured `sequence_length` of the
-                `preprocessor`. If `preprocessor` is `None`, `inputs` should be
-                should be padded to the desired maximum length and this argument
-                will be ignored.
-
-        Returns:
-            A string or string list if `preprocessor` is set, and a integer
-            tensor of token IDs if `preprocessor is None`.
-        """
-        # Setup our three main passes.
-        # 1. Optionally preprocessing strings to dense integer tensors.
-        # 2. Generate new tokens via a compiled function on dense tensors.
-        # 3. Optionally postprocess dense integer tensors back to string.
-        generate_function = self.make_generate_function()
-        end_token_id = None
-        if self.preprocessor is not None:
-            end_token_id = self.preprocessor.tokenizer.end_token_id
-
-        def preprocess(x):
-            return self.preprocessor.generate_preprocess(
-                x, sequence_length=max_length
-            )
-
-        def generate(x):
-            return generate_function(x, end_token_id=end_token_id)
-
-        def postprocess(x):
-            return self.preprocessor.generate_postprocess(x)
-
-        # Normalize inputs, apply our three passes, and normalize outputs.
-        inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
-
-        if self.preprocessor is not None:
-            if isinstance(inputs, tf.data.Dataset):
-                inputs = inputs.map(preprocess, tf.data.AUTOTUNE)
-                inputs = inputs.prefetch(tf.data.AUTOTUNE)
-            else:
-                # Fast path for non-dataset, single-batch input.
-                inputs = [preprocess(x) for x in inputs]
-
-        outputs = [generate(x) for x in inputs]
-
-        if self.preprocessor is not None:
-            outputs = [postprocess(x) for x in outputs]
-
-        return self._normalize_generate_outputs(outputs, input_is_scalar)
 
     @classmethod
     def create_layout_map(cls, mesh):

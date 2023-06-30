@@ -17,9 +17,10 @@ import tensorflow as tf
 from absl.testing import parameterized
 
 from keras_nlp.samplers.greedy_sampler import GreedySampler
+from keras_nlp.tests.test_case import TestCase
 
 
-class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
+class GreedySamplerTest(TestCase):
     def setUp(self):
         super().setUp()
         # Use a simple alphabet of lowercase characters to [0, 26).
