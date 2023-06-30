@@ -14,10 +14,9 @@
 
 """Position embedding implementation based on `keras.layers.Layer`."""
 
-import tensorflow as tf
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 
 
 @keras_nlp_export("keras_nlp.layers.PositionEmbedding")
@@ -27,11 +26,6 @@ class PositionEmbedding(keras.layers.Layer):
     This class assumes that in the input tensor, the last dimension corresponds
     to the features, and the dimension before the last corresponds to the
     sequence.
-
-    This layer optionally accepts `tf.RaggedTensor`s as inputs to process
-    batches of sequences of different lengths. The one ragged dimension must be
-    the dimension that corresponds to the sequence, that is, the penultimate
-    dimension.
 
     This layer does not supporting masking, but can be combined with a
     `keras.layers.Embedding` for padding mask support.
@@ -46,8 +40,7 @@ class PositionEmbedding(keras.layers.Layer):
 
     Called directly on input.
     >>> layer = keras_nlp.layers.PositionEmbedding(sequence_length=10)
-    >>> layer(tf.zeros((8, 10, 16))).shape
-    TensorShape([8, 10, 16])
+    >>> layer(np.zeros((8, 10, 16)))
 
     Combine with a token embedding.
     ```python
@@ -104,15 +97,18 @@ class PositionEmbedding(keras.layers.Layer):
         super().build(input_shape)
 
     def call(self, inputs, start_index=0):
-        shape = tf.shape(inputs)
+        shape = ops.shape(inputs)
         feature_length = shape[-1]
         sequence_length = shape[-2]
         # trim to match the length of the input sequence, which might be less
         # than the sequence_length of the layer.
-        position_embeddings = tf.slice(
-            self.position_embeddings,
+        position_embeddings = ops.convert_to_tensor(self.position_embeddings)
+        position_embeddings = ops.slice(
+            position_embeddings,
             (start_index, 0),
             (sequence_length, feature_length),
         )
-        # then broadcast to add the missing dimensions to match "shape"
-        return tf.broadcast_to(position_embeddings, shape)
+        return ops.broadcast_to(position_embeddings, shape)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape

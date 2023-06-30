@@ -14,10 +14,9 @@
 
 """Masked Language Model (MaskedLM) head."""
 
-import tensorflow as tf
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 
 
 @keras_nlp_export("keras_nlp.layers.MaskedLMHead")
@@ -77,13 +76,15 @@ class MaskedLMHead(keras.layers.Layer):
     mask_length = 10
 
     # Generate a random encoding.
-    encoded_tokens = tf.random.normal([batch_size, seq_length, encoding_size])
-    # Generate random positions and labels
-    mask_positions = tf.random.uniform(
-        [batch_size, mask_length], maxval=seq_length, dtype="int32"
+    encoded_tokens = np.random.normal(
+        size=(batch_size, seq_length, encoding_size),
     )
-    mask_ids = tf.random.uniform(
-        [batch_size, mask_length], maxval=vocab_size, dtype="int32"
+    # Generate random positions and labels
+    mask_positions = np.random.randint(
+        seq_length, size=(batch_size, mask_length),
+    )
+    mask_ids = np.random.randint(
+        vocab_size, size=(batch_size, mask_length),
     )
 
     # Predict an output word for each masked input token.
@@ -141,11 +142,11 @@ class MaskedLMHead(keras.layers.Layer):
                 )
             self.vocabulary_size = shape[0]
 
-    def build(self, input_shapes):
+    def build(self, inputs_shape, masked_positions_shape=None):
         if self.embedding_weights is not None:
             feature_size = self.embedding_weights.shape[-1]
         else:
-            feature_size = input_shapes[-1]
+            feature_size = inputs_shape[-1]
 
         self._dense = keras.layers.Dense(
             feature_size,
@@ -156,6 +157,12 @@ class MaskedLMHead(keras.layers.Layer):
         self._layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
+        if masked_positions_shape:
+            gather_length = masked_positions_shape[1]
+            shape = (inputs_shape[0], gather_length, inputs_shape[-1])
+            self._dense.build(shape)
+            shape = (inputs_shape[0], gather_length, feature_size)
+            self._layer_norm.build(shape)
         if self.embedding_weights is None:
             self._kernel = self.add_weight(
                 name="output_kernel",
@@ -170,9 +177,10 @@ class MaskedLMHead(keras.layers.Layer):
             dtype=self.dtype,
         )
 
-    def call(self, inputs, mask_positions):
+    def call(self, inputs, masked_positions):
         # Gather the encoded tokens at the masked indices.
-        x = tf.gather(inputs, mask_positions, axis=1, batch_dims=1)
+        masked_positions = ops.expand_dims(masked_positions, axis=-1)
+        x = ops.take_along_axis(inputs, masked_positions, axis=1)
 
         # Apply a trainable linear transformation and a layer norm.
         x = self._dense(x)
@@ -180,13 +188,11 @@ class MaskedLMHead(keras.layers.Layer):
 
         # Transform encodings to vocabulary_size predictions.
         if self.embedding_weights is None:
-            outputs = tf.matmul(x, self._kernel)
+            kernel = self._kernel
         else:
-            outputs = tf.matmul(
-                x,
-                tf.cast(self.embedding_weights, self.compute_dtype),
-                transpose_b=True,
-            )
+            kernel = ops.cast(self.embedding_weights, self.compute_dtype)
+            kernel = ops.transpose(kernel)
+        outputs = ops.matmul(x, kernel)
         outputs = outputs + self._bias
 
         # Apply a final activation.
@@ -214,3 +220,8 @@ class MaskedLMHead(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(self, inputs_shape, masked_positions_shape):
+        output_shape = list(masked_positions_shape)
+        output_shape[-1] = self.vocabulary_size
+        return tuple(output_shape)

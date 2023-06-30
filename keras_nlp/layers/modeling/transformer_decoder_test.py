@@ -15,11 +15,10 @@
 
 import os
 
-import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.layers.modeling import transformer_decoder
 from keras_nlp.tests.test_case import TestCase
 
@@ -42,8 +41,8 @@ class TransformerDecoderTest(TestCase):
             inputs=[decoder_input, encoder_input],
             outputs=output,
         )
-        encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
+        encoder_sequence = ops.random.uniform(shape=[2, 4, 6])
+        decoder_sequence = ops.random.uniform(shape=[2, 4, 6])
         model([decoder_sequence, encoder_sequence])
 
     @parameterized.named_parameters(
@@ -62,12 +61,12 @@ class TransformerDecoderTest(TestCase):
             inputs=decoder_input,
             outputs=output,
         )
-        decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
+        decoder_sequence = ops.random.uniform(shape=[2, 4, 6])
         model(decoder_sequence)
 
     def test_invalid_calls(self):
-        encoder_input = keras.Input(shape=[4, 6])
-        decoder_input = keras.Input(shape=[4, 6])
+        encoder_input = ops.zeros((2, 4, 6))
+        decoder_input = ops.zeros((2, 4, 6))
 
         # with cross-attention.
         decoder = transformer_decoder.TransformerDecoder(
@@ -132,126 +131,53 @@ class TransformerDecoderTest(TestCase):
             )
 
     def test_one_training_step_of_transformer_with_cross_attention(self):
-        class MyModel(keras.Model):
-            def __init__(self):
-                super().__init__()
-                self._decoder = transformer_decoder.TransformerDecoder(
-                    intermediate_dim=4, num_heads=2
-                )
-                self._dense = keras.layers.Dense(1, activation="sigmoid")
+        decoder_input = keras.Input(shape=(4, 6))
+        encoder_input = keras.Input(shape=(4, 6))
+        decoder = transformer_decoder.TransformerDecoder(
+            intermediate_dim=4, num_heads=2
+        )
+        outputs = decoder(decoder_input, encoder_input)
+        outputs = keras.layers.Dense(10, activation="softmax")(outputs)
+        model = keras.Model((decoder_input, encoder_input), outputs)
 
-            def call(self, decoder_input, encoder_output):
-                x = self._decoder(decoder_input, encoder_output)
-                return self._dense(x)
+        decoder_sequence = ops.random.uniform(shape=(2, 4, 6))
+        encoder_sequence = ops.random.uniform(shape=(2, 4, 6))
+        label = ops.random.randint(minval=0, maxval=10, shape=(2, 4, 1))
 
-        model = MyModel()
-
-        decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        label = tf.cast(decoder_sequence[:, :, 0] >= 0.5, dtype="int32")
-
-        loss_fn = keras.losses.BinaryCrossentropy(from_logits=False)
+        loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
         optimizer = keras.optimizers.Adam()
-        with tf.GradientTape() as tape:
-            pred = model(decoder_sequence, encoder_sequence)
-            loss = loss_fn(label, pred)
-        grad = tape.gradient(loss, model.trainable_variables)
-        self.assertGreater(len(grad), 1)
-        optimizer.apply_gradients(zip(grad, model.trainable_variables))
+        model.compile(loss=loss, optimizer=optimizer)
+        loss = model.train_on_batch(
+            x=(decoder_sequence, encoder_sequence), y=label
+        )
+        self.assertGreater(loss, 0)
 
     def test_one_training_step_of_transformer_without_cross_attention(self):
-        class MyModel(keras.Model):
-            def __init__(self):
-                super().__init__()
-                self._decoder = transformer_decoder.TransformerDecoder(
-                    intermediate_dim=4,
-                    num_heads=2,
-                )
-                self._dense = keras.layers.Dense(1, activation="sigmoid")
+        decoder_input = keras.Input(shape=(4, 6))
+        decoder = transformer_decoder.TransformerDecoder(
+            intermediate_dim=4, num_heads=2
+        )
+        outputs = decoder(decoder_input)
+        outputs = keras.layers.Dense(10, activation="softmax")(outputs)
+        model = keras.Model(decoder_input, outputs)
 
-            def call(self, decoder_input):
-                x = self._decoder(decoder_input)
-                return self._dense(x)
+        decoder_sequence = ops.random.uniform(shape=(2, 4, 6))
+        label = ops.random.randint(minval=0, maxval=10, shape=(2, 4, 1))
 
-        model = MyModel()
-
-        decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        label = tf.cast(decoder_sequence[:, :, 0] >= 0.5, dtype="int32")
-
-        loss_fn = keras.losses.BinaryCrossentropy(from_logits=False)
+        loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
         optimizer = keras.optimizers.Adam()
-        with tf.GradientTape() as tape:
-            pred = model(decoder_sequence)
-            loss = loss_fn(label, pred)
-        grad = tape.gradient(loss, model.trainable_variables)
-        self.assertGreater(len(grad), 1)
-        optimizer.apply_gradients(zip(grad, model.trainable_variables))
-
-    def test_checkpointing_transformer_decoder(self):
-        decoder1 = transformer_decoder.TransformerDecoder(
-            intermediate_dim=4,
-            num_heads=2,
-        )
-        decoder2 = transformer_decoder.TransformerDecoder(
-            intermediate_dim=4,
-            num_heads=2,
-        )
-        decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        decoder1(decoder_sequence, encoder_sequence)
-        decoder2(decoder_sequence, encoder_sequence)
-        # The weights of decoder1 and decoder2 are different.
-        self.assertNotAllClose(
-            decoder1.trainable_variables[0][0],
-            decoder2.trainable_variables[0][0],
-        )
-        checkpoint = tf.train.Checkpoint(decoder1)
-        checkpoint2 = tf.train.Checkpoint(decoder2)
-        temp_dir = self.get_temp_dir()
-        save_path = checkpoint.save(temp_dir)
-        checkpoint2.restore(save_path)
-
-        decoder1_output = decoder1(decoder_sequence, encoder_sequence)
-        decoder2_output = decoder2(decoder_sequence, encoder_sequence)
-        self.assertAllClose(decoder1_output, decoder2_output)
-
-    def test_checkpointing_transformer_decoder_without_cross_attention(self):
-        decoder1 = transformer_decoder.TransformerDecoder(
-            intermediate_dim=4,
-            num_heads=2,
-        )
-
-        decoder2 = transformer_decoder.TransformerDecoder(
-            intermediate_dim=4,
-            num_heads=2,
-        )
-
-        decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        decoder1(decoder_sequence)
-        decoder2(decoder_sequence)
-        # The weights of decoder1 and decoder2 are different.
-        self.assertNotAllClose(
-            decoder1.trainable_variables[0][0],
-            decoder2.trainable_variables[0][0],
-        )
-        checkpoint = tf.train.Checkpoint(decoder1)
-        checkpoint2 = tf.train.Checkpoint(decoder2)
-        temp_dir = self.get_temp_dir()
-        save_path = checkpoint.save(temp_dir)
-        checkpoint2.restore(save_path)
-
-        decoder1_output = decoder1(decoder_sequence)
-        decoder2_output = decoder2(decoder_sequence)
-        self.assertAllClose(decoder1_output, decoder2_output)
+        model.compile(loss=loss, optimizer=optimizer)
+        loss = model.train_on_batch(x=decoder_sequence, y=label)
+        self.assertGreater(loss, 0)
 
     def test_mask_propagation(self):
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=2,
         )
-        decoder_sequence = tf.random.uniform(shape=[1, 4, 6])
-        encoder_sequence = tf.random.uniform(shape=[1, 4, 6])
-        mask = tf.constant([[True, True, False, False]])
+        decoder_sequence = ops.random.uniform(shape=[1, 4, 6])
+        encoder_sequence = ops.random.uniform(shape=[1, 4, 6])
+        mask = ops.array([[True, True, False, False]])
         decoder_sequence._keras_mask = mask
         outputs = decoder(decoder_sequence, encoder_sequence)
         self.assertAllEqual(outputs._keras_mask, mask)
@@ -261,61 +187,57 @@ class TransformerDecoderTest(TestCase):
             intermediate_dim=4,
             num_heads=2,
         )
-        decoder_sequence = tf.random.uniform(shape=[1, 4, 6])
-        mask = tf.constant([[True, True, False, False]])
+        decoder_sequence = ops.random.uniform(shape=[1, 4, 6])
+        mask = ops.array([[True, True, False, False]])
         decoder_sequence._keras_mask = mask
         outputs = decoder(decoder_sequence)
         self.assertAllEqual(outputs._keras_mask, mask)
 
-    @parameterized.named_parameters(
-        ("graph", False),
-        ("eager", True),
-    )
-    def test_cached_decoding_is_correct(self, eager):
+    def test_cache_call_is_correct(self):
         batch_size = 2
         seq_len = 5
         num_heads = 2
-        head_dim = 4
+        key_dim = 4
+        hidden_dim = num_heads * key_dim
+
+        input_shape = (batch_size, seq_len, hidden_dim)
+        x = ops.random.uniform(shape=input_shape)
+        input_cache = ops.zeros((batch_size, 2, seq_len, num_heads, key_dim))
+        outputs = ops.zeros_like(x)
 
         layer = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
             num_heads=num_heads,
         )
-        dtype = layer.compute_dtype
-        x = tf.random.uniform(
-            shape=[batch_size, seq_len, num_heads * head_dim], dtype=dtype
+        no_loop_outputs, no_loop_cache = layer(
+            x,
+            self_attention_cache=input_cache,
+            self_attention_cache_update_index=0,
         )
-        self_attention_cache = tf.zeros(
-            [batch_size, 2, seq_len, num_heads, head_dim], dtype=dtype
-        )
-        outputs = tf.zeros_like(x)
 
-        def call(outputs, self_attention_cache):
-            def loop_body(i, outputs, self_attention_cache):
-                # Compute the rest tokens.
-                next_input = x[:, i : i + 1, :]
-                next_output, self_attention_cache = layer(
-                    decoder_sequence=next_input,
-                    self_attention_cache=self_attention_cache,
-                    self_attention_cache_update_index=i,
-                )
-                outputs = dynamic_update_slice(outputs, next_output, [0, i, 0])
-                return i + 1, outputs, self_attention_cache
-
-            _, outputs, self_attention_cache = tf.while_loop(
-                cond=lambda i, outputs, self_attention_cache: i < seq_len,
-                body=loop_body,
-                loop_vars=[0, outputs, self_attention_cache],
+        def loop_body(i, outputs, cache):
+            # Compute the rest tokens.
+            next_input = ops.slice(x, (0, i, 0), (batch_size, 1, hidden_dim))
+            next_output, cache = layer(
+                decoder_sequence=next_input,
+                self_attention_cache=cache,
+                self_attention_cache_update_index=i,
             )
-            return outputs, self_attention_cache
+            outputs = ops.slice_update(outputs, [0, i, 0], next_output)
+            return i + 1, outputs, cache
 
-        call = call if eager else tf.function(call)
-        output, self_attention_cache = call(outputs, self_attention_cache)
+        def call(outputs, cache):
+            _, outputs, cache = ops.while_loop(
+                cond=lambda i, outputs, cache: i < seq_len,
+                body=loop_body,
+                loop_vars=[0, outputs, cache],
+            )
+            return outputs, cache
 
-        no_loop_outputs = layer(x)
-        _, no_loop_cache = layer(x, self_attention_cache=self_attention_cache)
+        output, output_cache = call(outputs, input_cache)
+
         self.assertAllClose(output, no_loop_outputs)
-        self.assertAllClose(self_attention_cache, no_loop_cache)
+        self.assertAllClose(output_cache, no_loop_cache)
 
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
@@ -334,8 +256,8 @@ class TransformerDecoderTest(TestCase):
             inputs=[decoder_input, encoder_input],
             outputs=output,
         )
-        encoder_sequence = tf.random.uniform(shape=[2, 4, 6])
-        decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
+        encoder_sequence = ops.random.uniform(shape=[2, 4, 6])
+        decoder_sequence = ops.random.uniform(shape=[2, 4, 6])
         model([decoder_sequence, encoder_sequence])
         path = os.path.join(self.get_temp_dir(), filename)
         # Don't save traces in the tf format, we check compilation elsewhere.
@@ -347,11 +269,7 @@ class TransformerDecoderTest(TestCase):
         loaded_model_output = loaded_model([decoder_sequence, encoder_sequence])
         self.assertAllClose(model_output, loaded_model_output)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model_without_cross_attention(self, save_format, filename):
+    def test_saved_model_without_cross_attention(self):
         decoder_input = keras.Input(shape=[4, 6])
         decoder = transformer_decoder.TransformerDecoder(
             intermediate_dim=4,
@@ -363,12 +281,10 @@ class TransformerDecoderTest(TestCase):
             inputs=decoder_input,
             outputs=output,
         )
-        decoder_sequence = tf.random.uniform(shape=[2, 4, 6])
+        decoder_sequence = ops.random.uniform(shape=[2, 4, 6])
         model(decoder_sequence)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         loaded_model = keras.models.load_model(path)
 
         model_output = model(decoder_sequence)

@@ -15,10 +15,8 @@
 
 import os
 
-import tensorflow as tf
-from absl.testing import parameterized
-
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.layers.modeling import position_embedding
 from keras_nlp.tests.test_case import TestCase
 
@@ -27,10 +25,10 @@ def custom_init(shape, dtype=None):
     count = 1
     for length in shape:
         count *= length
-    return tf.reshape(tf.range(count, dtype=dtype), shape)
+    return ops.reshape(ops.arange(count, dtype=dtype), shape)
 
 
-class PositionEmbeddingLayerTest(TestCase):
+class PositionEmbeddingTest(TestCase):
     def test_static_layer_output_shape(self):
         # Create a 3-dimensional input (the first dimension is implicit).
         sequence_length = 21
@@ -87,7 +85,7 @@ class PositionEmbeddingLayerTest(TestCase):
         expected_output_shape = (None, sequence_length, feature_size)
         self.assertEqual(expected_output_shape, output_tensor.shape)
         # The default output dtype for this layer should be "float32".
-        self.assertEqual(tf.float16, output_tensor.dtype)
+        self.assertEqual("float16", output_tensor.dtype)
 
     def test_dynamic_layer_output_shape(self):
         max_sequence_length = 40
@@ -141,7 +139,7 @@ class PositionEmbeddingLayerTest(TestCase):
         # have the same batch cardinality as outputs. In practice, this layer
         # should be used inside a model, where it can be projected when added to
         # another tensor.
-        input_data = tf.ones(shape=[1, input_length, feature_size])
+        input_data = ops.ones(shape=[1, input_length, feature_size])
         output_data = model.predict(input_data)
 
         self.assertAllEqual([1, input_length, feature_size], output_data.shape)
@@ -158,12 +156,12 @@ class PositionEmbeddingLayerTest(TestCase):
         model = keras.Model(inputs=inputs, outputs=outputs)
 
         batch_size = 2
-        data = tf.zeros(shape=[batch_size, max_sequence_length, feature_size])
+        data = ops.zeros(shape=[batch_size, max_sequence_length, feature_size])
         model(data)
         model_output = model.predict(data)
-        expected_output = tf.broadcast_to(
-            tf.reshape(
-                tf.range(max_sequence_length * feature_size),
+        expected_output = ops.broadcast_to(
+            ops.reshape(
+                ops.arange(max_sequence_length * feature_size),
                 [max_sequence_length, feature_size],
             ),
             [batch_size, max_sequence_length, feature_size],
@@ -173,32 +171,26 @@ class PositionEmbeddingLayerTest(TestCase):
     def test_one_training_step(self):
         max_sequence_length = 4
         feature_size = 3
+        inputs = keras.Input(shape=(max_sequence_length, feature_size))
         test_layer = position_embedding.PositionEmbedding(
             sequence_length=max_sequence_length
         )
-        inputs = keras.Input(shape=(max_sequence_length, feature_size))
         outputs = test_layer(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)
 
         batch_size = 2
-        data = tf.random.uniform(
+        data = ops.random.uniform(
             shape=[batch_size, max_sequence_length, feature_size]
         )
-        label = tf.random.uniform(shape=[max_sequence_length, feature_size])
-
-        loss_fn = keras.losses.MeanSquaredError()
-        optimizer = keras.optimizers.Adam()
-        with tf.GradientTape() as tape:
-            pred = model(data)
-            loss = loss_fn(label, pred)
-        grad = tape.gradient(loss, model.trainable_variables)
-        self.assertEqual(len(grad), 1)
-
-        trainable_variables_before = tf.Variable(model.trainable_variables[0])
-        optimizer.apply_gradients(zip(grad, model.trainable_variables))
-        self.assertNotAllClose(
-            trainable_variables_before, model.trainable_variables[0]
+        label = ops.random.uniform(
+            shape=[batch_size, max_sequence_length, feature_size]
         )
+
+        loss = keras.losses.MeanSquaredError()
+        optimizer = keras.optimizers.Adam()
+        model.compile(loss=loss, optimizer=optimizer)
+        loss = model.train_on_batch(x=data, y=label)
+        self.assertGreater(loss, 0)
 
     def test_get_config_and_from_config(self):
         max_sequence_length = 40
@@ -210,11 +202,7 @@ class PositionEmbeddingLayerTest(TestCase):
         restored = position_embedding.PositionEmbedding.from_config(config)
         self.assertEqual(restored.get_config(), config)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         max_sequence_length = 4
         feature_size = 6
         test_layer = position_embedding.PositionEmbedding(
@@ -224,19 +212,13 @@ class PositionEmbeddingLayerTest(TestCase):
         outputs = test_layer(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)
 
-        data = tf.zeros(shape=[2, max_sequence_length, feature_size])
+        data = ops.zeros(shape=[2, max_sequence_length, feature_size])
         model(data)
 
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         loaded_model = keras.models.load_model(path)
 
         model_output = model.predict(data)
         loaded_model_output = loaded_model.predict(data)
         self.assertAllClose(model_output, loaded_model_output)
-
-
-if __name__ == "__main__":
-    tf.test.main()

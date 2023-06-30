@@ -71,12 +71,12 @@ class TransformerEncoder(keras.layers.Layer):
         intermediate_dim=64, num_heads=8)
 
     # Create a simple model containing the encoder.
-    input = keras.Input(shape=[10, 64])
+    input = keras.Input(shape=(10, 64))
     output = encoder(input)
     model = keras.Model(inputs=input, outputs=output)
 
     # Call encoder on the inputs.
-    input_data = tf.random.uniform(shape=[2, 10, 64])
+    input_data = np.random.uniform(size=(2, 10, 64))
     output = model(input_data)
     ```
 
@@ -97,9 +97,6 @@ class TransformerEncoder(keras.layers.Layer):
         name=None,
         **kwargs
     ):
-        # Work around for model saving
-        self._input_shape = kwargs.pop("build_input_shape", None)
-
         super().__init__(name=name, **kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
@@ -109,18 +106,11 @@ class TransformerEncoder(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.normalize_first = normalize_first
-        self._built = False
         self.supports_masking = True
 
-        if self._input_shape is not None:
-            self._build(self._input_shape)
-
-    def _build(self, input_shape):
-        # Create layers based on input shape.
-        self._built = True
-        self._input_shape = input_shape
+    def build(self, inputs_shape):
         # Infer the dimension of our hidden feature size from the build shape.
-        hidden_dim = input_shape[-1]
+        hidden_dim = inputs_shape[-1]
         # Attention head size is `hidden_dim` over the number of heads.
         key_dim = int(hidden_dim // self.num_heads)
 
@@ -132,13 +122,20 @@ class TransformerEncoder(keras.layers.Layer):
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
-        self._self_attention_layer._build_from_signature(
-            query=input_shape,
-            value=input_shape,
-        )
+        if hasattr(self._self_attention_layer, "_build_from_signature"):
+            self._self_attention_layer._build_from_signature(
+                query=inputs_shape,
+                value=inputs_shape,
+            )
+        else:
+            self._self_attention_layer.build(
+                query_shape=inputs_shape,
+                value_shape=inputs_shape,
+            )
         self._self_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
+        self._self_attention_layernorm.build(inputs_shape)
         self._self_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,
         )
@@ -147,20 +144,26 @@ class TransformerEncoder(keras.layers.Layer):
         self._feedforward_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
+        self._feedforward_layernorm.build(inputs_shape)
         self._feedforward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
+        self._feedforward_intermediate_dense.build(inputs_shape)
         self._feedforward_output_dense = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
+        intermediate_shape = list(inputs_shape)
+        intermediate_shape[-1] = self.intermediate_dim
+        self._feedforward_output_dense.build(tuple(intermediate_shape))
         self._feedforward_dropout = keras.layers.Dropout(
             rate=self.dropout,
         )
+        self.built = True
 
     def call(self, inputs, padding_mask=None, attention_mask=None):
         """Forward pass of the TransformerEncoder.
@@ -178,10 +181,6 @@ class TransformerEncoder(keras.layers.Layer):
         Returns:
             A Tensor of the same shape as the `inputs`.
         """
-
-        if not self._built:
-            self._build(inputs.shape)
-
         x = inputs  # Intermediate result.
 
         # Compute self attention mask.
@@ -232,7 +231,9 @@ class TransformerEncoder(keras.layers.Layer):
                     self.bias_initializer
                 ),
                 "normalize_first": self.normalize_first,
-                "build_input_shape": self._input_shape,
             }
         )
         return config
+
+    def compute_output_shape(self, inputs_shape):
+        return inputs_shape

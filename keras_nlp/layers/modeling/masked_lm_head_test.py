@@ -15,10 +15,8 @@
 
 import os
 
-import tensorflow as tf
-from absl.testing import parameterized
-
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.layers.modeling import masked_lm_head
 from keras_nlp.tests.test_case import TestCase
 
@@ -31,13 +29,11 @@ class MaskedLMHeadTest(TestCase):
         )
         encoded_tokens = keras.Input(shape=(10, 16))
         positions = keras.Input(shape=(5,), dtype="int32")
-        outputs = head(encoded_tokens, mask_positions=positions)
+        outputs = head(encoded_tokens, masked_positions=positions)
         model = keras.Model((encoded_tokens, positions), outputs)
 
-        token_data = tf.random.uniform(shape=(4, 10, 16))
-        position_data = tf.random.uniform(
-            shape=(4, 5), maxval=10, dtype="int32"
-        )
+        token_data = ops.random.uniform(shape=(4, 10, 16))
+        position_data = ops.random.randint(minval=0, maxval=10, shape=(4, 5))
         model((token_data, position_data))
 
     def test_valid_call_with_embedding_weights(self):
@@ -52,12 +48,10 @@ class MaskedLMHeadTest(TestCase):
         # need to support this in the layer.
         sequence = keras.Input(shape=(10, 32))
         positions = keras.Input(shape=(5,), dtype="int32")
-        outputs = head(sequence, mask_positions=positions)
+        outputs = head(sequence, masked_positions=positions)
         model = keras.Model((sequence, positions), outputs)
-        sequence_data = tf.random.uniform(shape=(4, 10, 32))
-        position_data = tf.random.uniform(
-            shape=(4, 5), maxval=10, dtype="int32"
-        )
+        sequence_data = ops.random.uniform(shape=(4, 10, 32))
+        position_data = ops.random.randint(minval=0, maxval=10, shape=(4, 5))
         model((sequence_data, position_data))
 
     def test_get_config_and_from_config(self):
@@ -112,75 +106,34 @@ class MaskedLMHeadTest(TestCase):
         )
         encoded_tokens = keras.Input(shape=(10, 16))
         positions = keras.Input(shape=(5,), dtype="int32")
-        outputs = head(encoded_tokens, mask_positions=positions)
+        outputs = head(encoded_tokens, masked_positions=positions)
         model = keras.Model((encoded_tokens, positions), outputs)
 
-        token_data = tf.random.uniform(shape=(4, 10, 16))
-        position_data = tf.random.uniform(
-            shape=(4, 5), maxval=10, dtype="int32"
-        )
-        label_data = tf.random.uniform(shape=(4, 5), maxval=100, dtype="int32")
+        token_data = ops.random.uniform(shape=(4, 10, 16))
+        position_data = ops.random.randint(minval=0, maxval=10, shape=(4, 5))
+        label_data = ops.random.randint(minval=0, maxval=2, shape=(4, 5, 1))
 
-        loss_fn = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+        loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
         optimizer = keras.optimizers.Adam()
-        with tf.GradientTape() as tape:
-            model((token_data, position_data))
-            pred = model((token_data, position_data))
-            loss = loss_fn(label_data, pred)
-        grad = tape.gradient(loss, model.trainable_variables)
-        self.assertGreater(len(grad), 1)
-        optimizer.apply_gradients(zip(grad, model.trainable_variables))
+        model.compile(loss=loss, optimizer=optimizer)
+        loss = model.train_on_batch(x=(token_data, position_data), y=label_data)
+        self.assertGreater(loss, 0)
 
-    def test_checkpointing(self):
-        head1 = masked_lm_head.MaskedLMHead(
-            vocabulary_size=100,
-            activation="softmax",
-        )
-        head2 = masked_lm_head.MaskedLMHead(
-            vocabulary_size=100,
-            activation="softmax",
-        )
-        token_data = tf.random.uniform(shape=(4, 10, 16))
-        position_data = tf.random.uniform(
-            shape=(4, 5), maxval=10, dtype="int32"
-        )
-        # The weights of head1 and head2 are different.
-        head1_output = head1(token_data, mask_positions=position_data)
-        head2_output = head2(token_data, mask_positions=position_data)
-        self.assertNotAllClose(head1_output, head2_output)
-
-        checkpoint = tf.train.Checkpoint(head1)
-        checkpoint2 = tf.train.Checkpoint(head2)
-        save_path = checkpoint.save(self.get_temp_dir())
-        checkpoint2.restore(save_path)
-
-        head1_output = head1(token_data, mask_positions=position_data)
-        head2_output = head2(token_data, mask_positions=position_data)
-        self.assertAllClose(head1_output, head2_output)
-
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         head = masked_lm_head.MaskedLMHead(
             vocabulary_size=100,
             activation="softmax",
         )
         encoded_tokens = keras.Input(shape=(10, 16))
         positions = keras.Input(shape=(5,), dtype="int32")
-        outputs = head(encoded_tokens, mask_positions=positions)
+        outputs = head(encoded_tokens, masked_positions=positions)
         model = keras.Model((encoded_tokens, positions), outputs)
 
-        token_data = tf.random.uniform(shape=(4, 10, 16))
-        position_data = tf.random.uniform(
-            shape=(4, 5), maxval=10, dtype="int32"
-        )
+        token_data = ops.random.uniform(shape=(4, 10, 16))
+        position_data = ops.random.randint(minval=0, maxval=10, shape=(4, 5))
         model_output = model((token_data, position_data))
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
 
         restored_output = restored_model((token_data, position_data))

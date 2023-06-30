@@ -14,8 +14,9 @@
 
 """ Utility functions for `TransformerEncoder` and `TransformerDecoder`."""
 
-import tensorflow as tf
 from absl import logging
+
+from keras_nlp.backend import ops
 
 
 def _check_masks_shapes(inputs, padding_mask, attention_mask):
@@ -23,14 +24,14 @@ def _check_masks_shapes(inputs, padding_mask, attention_mask):
     if hasattr(inputs, "_keras_mask") and mask is None:
         mask = inputs._keras_mask
     if mask is not None:
-        if mask._rank() != 2:
+        if len(mask.shape) != 2:
             raise ValueError(
                 "`padding_mask` should have shape "
                 "(batch_size, target_length). "
                 f"Received shape `{mask.shape}`."
             )
     if attention_mask is not None:
-        if attention_mask._rank() != 3:
+        if len(attention_mask.shape) != 3:
             raise ValueError(
                 "`attention_mask` should have shape "
                 "(batch_size, target_length, source_length). "
@@ -56,10 +57,10 @@ def compute_causal_mask(batch_size, input_length, output_length, cache_index=0):
         `(batch_size, output_length, input_length)` that can be passed to a
         attention layer.
     """
-    i = tf.range(output_length)[:, tf.newaxis] + cache_index
-    j = tf.range(input_length)
-    mask = tf.cast(i >= j, dtype="int32")[tf.newaxis, :, :]
-    return tf.broadcast_to(mask, (batch_size, output_length, input_length))
+    i = ops.expand_dims(ops.arange(output_length), axis=1) + cache_index
+    j = ops.arange(input_length)
+    mask = ops.expand_dims(ops.cast(i >= j, dtype="int32"), axis=0)
+    return ops.broadcast_to(mask, (batch_size, output_length, input_length))
 
 
 def merge_padding_and_attention_mask(
@@ -95,11 +96,11 @@ def merge_padding_and_attention_mask(
     if mask is not None:
         # Add an axis for broadcasting, the attention mask should be 2D
         # (not including the batch axis).
-        mask = tf.cast(mask[:, tf.newaxis, :], dtype="int32")
+        mask = ops.cast(ops.expand_dims(mask, axis=1), "int32")
     if attention_mask is not None:
-        attention_mask = tf.cast(attention_mask, dtype="int32")
+        attention_mask = ops.cast(attention_mask, "int32")
         if mask is None:
             return attention_mask
         else:
-            return tf.minimum(mask, attention_mask)
+            return ops.minimum(mask, attention_mask)
     return mask
