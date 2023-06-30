@@ -207,7 +207,6 @@ class BartBackbone(Backbone):
                 layer_norm_epsilon=1e-5,
                 kernel_initializer=bart_kernel_initializer(),
                 name=f"transformer_decoder_layer_{i}",
-                has_cross_attention=True,
             )
             x = transformer_decoder_layer(
                 decoder_sequence=x,

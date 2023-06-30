@@ -18,9 +18,6 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
-from keras_nlp.layers.modeling.transformer_layer_utils import (
-    compute_causal_mask,
-)
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.models.t5.t5_transformer_layer import T5TransformerLayer
@@ -135,6 +132,7 @@ class T5Backbone(Backbone):
                 x,
                 attention_mask=encoder_attention_mask,
                 position_bias=position_bias,
+                use_causal_mask=False,
             )
 
         x = T5LayerNorm(
@@ -156,11 +154,7 @@ class T5Backbone(Backbone):
             name="decoder_embedding_dropout",
         )(token_embedding)
 
-        # Decoder attention mask is padding mask plus a causal mask.
-        decoder_attention_mask = decoder_padding_mask[:, tf.newaxis, :]
-        batch_size, length = tf.shape(x)[0], tf.shape(x)[1]
-        causal_mask = compute_causal_mask(batch_size, length, length)
-        decoder_attention_mask = causal_mask & decoder_attention_mask
+        decoder_attention_mask = decoder_padding_mask[:, None, :]
 
         position_bias = None
         for i in range(num_layers):
@@ -181,6 +175,7 @@ class T5Backbone(Backbone):
                 position_bias=position_bias,
                 encoder_hidden_states=encoder_output,
                 encoder_attention_mask=encoder_attention_mask,
+                use_causal_mask=True,
             )
 
         x = T5LayerNorm(
