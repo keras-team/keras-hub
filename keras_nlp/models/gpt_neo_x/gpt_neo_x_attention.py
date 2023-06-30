@@ -62,10 +62,8 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.dropout = dropout
         self.attn_head_size = hidden_dim // num_heads
         self.rotary_max_wavelength = rotary_max_wavelength
-        self.rotary_ndims = int(self.attn_head_size * rotary_percentage)
-        self.rotary_embedding = RotaryEmbedding(
-            self.rotary_percentage, rotary_max_wavelength
-        )
+        self.rotary_dim = int(self.attn_head_size * rotary_percentage)
+        self.rotary_embedding = RotaryEmbedding(rotary_max_wavelength)
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.max_sequence_length = max_sequence_length
@@ -135,19 +133,6 @@ class GPTNeoXAttention(keras.layers.Layer):
 
         return attention_output
 
-    def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
-        tensor_rot = tensor[..., : self.rotary_ndims]
-        tensor_pass = tensor[..., self.rotary_ndims :]
-
-        cos_emb = cos_emb[:, : tf.shape(tensor_rot)[1], :, :]
-        sin_emb = sin_emb[:, : tf.shape(tensor_rot)[1], :, :]
-
-        x1, x2 = tf.split(tensor_rot, 2, axis=-1)
-        half_rot_tensor = tf.concat((-x2, x1), axis=-1)
-        tensor_rot = (tensor_rot * cos_emb) + (half_rot_tensor * sin_emb)
-
-        return tf.concat((tensor_rot, tensor_pass), axis=-1)
-
     def call(
         self,
         hidden_states,
@@ -162,10 +147,19 @@ class GPTNeoXAttention(keras.layers.Layer):
         ]
         value = query_key_value[..., 2 * self.attn_head_size :]
 
-        cos_emb, sin_emb = self.rotary_embedding(value)
+        query_rot, query_pass = (
+            query[..., : self.rotary_dim],
+            query[..., self.rotary_dim :],
+        )
+        key_rot, key_pass = (
+            key[..., : self.rotary_dim],
+            key[..., self.rotary_dim :],
+        )
 
-        query = self._apply_rotary_pos_emb(query, cos_emb, sin_emb)
-        key = self._apply_rotary_pos_emb(key, cos_emb, sin_emb)
+        query_rot, key_rot = self.rotary_embedding(query_rot, key_rot)
+
+        query = tf.concat((query_rot, query_pass), axis=-1)
+        key = tf.concat((key_rot, key_pass), axis=-1)
 
         attention_output = self._compute_attention(
             query=query,
