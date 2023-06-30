@@ -13,11 +13,9 @@
 # limitations under the License.
 """Cached MHA layer based on `keras.layers.MultiHeadAttention`."""
 
-import tensorflow as tf
-from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 
 
 @keras_nlp_export("keras_nlp.layers.CachedMultiHeadAttention")
@@ -87,8 +85,12 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         cache=None,
         cache_update_index=None,
     ):
-        if not self._built_from_signature:
+        if (
+            hasattr(self, "_build_from_signature")
+            and not self._built_from_signature
+        ):
             self._build_from_signature(query=query, value=value, key=key)
+
         if key is None:
             key = value
 
@@ -101,7 +103,8 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         # cache at the specified index. `cache = None` handles the training
         # case, where we don't use the cache at all.
         if cache is not None:
-            key_cache, value_cache = tf.unstack(cache, axis=1)
+            key_cache = cache[:, 0, ...]
+            value_cache = cache[:, 1, ...]
             if cache_update_index is None:
                 key = key_cache
                 value = value_cache
@@ -109,9 +112,9 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
                 key_update = self._key_dense(key)
                 value_update = self._value_dense(value)
                 start = [0, cache_update_index, 0, 0]
-                key = dynamic_update_slice(key_cache, key_update, start)
-                value = dynamic_update_slice(value_cache, value_update, start)
-                cache = tf.stack((key, value), axis=1)
+                key = ops.slice_update(key_cache, start, key_update)
+                value = ops.slice_update(value_cache, start, value_update)
+                cache = ops.stack((key, value), axis=1)
         else:
             if cache_update_index is not None:
                 raise ValueError(
@@ -122,16 +125,17 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             key = self._key_dense(key)
             value = self._value_dense(value)
 
-        query = tf.multiply(
-            query, 1.0 / tf.math.sqrt(tf.cast(self._key_dim, query.dtype))
+        query = ops.multiply(
+            query,
+            1.0 / ops.sqrt(ops.cast(self._key_dim, query.dtype)),
         )
-        attention_scores = tf.einsum(self._dot_product_equation, key, query)
+        attention_scores = ops.einsum(self._dot_product_equation, key, query)
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
         )
         attention_scores = self._dropout_layer(attention_scores)
 
-        attention_output = tf.einsum(
+        attention_output = ops.einsum(
             self._combine_equation, attention_scores, value
         )
         attention_output = self._output_dense(attention_output)

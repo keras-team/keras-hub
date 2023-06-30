@@ -13,10 +13,7 @@
 # limitations under the License.
 """Tests for CachedMultiHeadAttention."""
 
-import tensorflow as tf
-from absl.testing import parameterized
-from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
-
+from keras_nlp.backend import ops
 from keras_nlp.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
@@ -26,57 +23,55 @@ from keras_nlp.tests.test_case import TestCase
 class CachedMultiHeadAttentionTest(TestCase):
     def test_valid_call(self):
         layer = CachedMultiHeadAttention(num_heads=2, key_dim=4)
-        x = tf.random.uniform(shape=[2, 2, 8])
+        x = ops.random.uniform(shape=(2, 2, 8))
         layer(query=x, value=x)
 
-    @parameterized.named_parameters(
-        ("graph", False),
-        ("eager", True),
-    )
-    def test_cache_call_is_correct(self, eager):
+    def test_cache_call_is_correct(self):
         batch_size = 2
         seq_len = 5
         num_heads = 2
         key_dim = 4
+        hidden_dim = num_heads * key_dim
+
+        input_shape = (batch_size, seq_len, hidden_dim)
+        x = ops.random.uniform(shape=input_shape)
+        input_cache = ops.zeros((batch_size, 2, seq_len, num_heads, key_dim))
+        # Use a causal mask.
+        mask = ops.tril(ops.ones((seq_len, seq_len)))
+        outputs = ops.zeros_like(x)
 
         layer = CachedMultiHeadAttention(num_heads=num_heads, key_dim=key_dim)
-        dtype = layer.compute_dtype
-        x = tf.random.uniform(
-            shape=[batch_size, seq_len, num_heads * key_dim], dtype=dtype
+        no_loop_outputs, no_loop_cache = layer(
+            x,
+            x,
+            cache=input_cache,
+            cache_update_index=0,
+            attention_mask=mask,
         )
-        cache = tf.zeros(
-            [batch_size, 2, seq_len, num_heads, key_dim], dtype=dtype
-        )
-        # Use a causal mask.
-        mask = tf.linalg.band_part(tf.ones((seq_len, seq_len)), -1, 0)
-        outputs = tf.zeros_like(x)
+
+        def loop_body(i, outputs, cache):
+            # Compute the rest tokens.
+            next_input = ops.slice(x, (0, i, 0), (batch_size, 1, hidden_dim))
+            next_mask = ops.slice(mask, (i, 0), (1, seq_len))
+            next_output, cache = layer(
+                query=next_input,
+                value=next_input,
+                cache=cache,
+                cache_update_index=i,
+                attention_mask=next_mask,
+            )
+            outputs = ops.slice_update(outputs, [0, i, 0], next_output)
+            return i + 1, outputs, cache
 
         def call(outputs, cache):
-            def loop_body(i, outputs, cache):
-                # Compute the rest tokens.
-                next_input = x[:, i : i + 1, :]
-                next_mask = mask[i : i + 1, :]
-                next_output, cache = layer(
-                    query=next_input,
-                    value=next_input,
-                    cache=cache,
-                    cache_update_index=i,
-                    attention_mask=next_mask,
-                )
-                outputs = dynamic_update_slice(outputs, next_output, [0, i, 0])
-                return i + 1, outputs, cache
-
-            _, outputs, cache = tf.while_loop(
+            _, outputs, cache = ops.while_loop(
                 cond=lambda i, outputs, cache: i < seq_len,
                 body=loop_body,
                 loop_vars=[0, outputs, cache],
             )
             return outputs, cache
 
-        call = call if eager else tf.function(call)
-        output, cache = call(outputs, cache)
+        output, output_cache = call(outputs, input_cache)
 
-        no_loop_outputs, _ = layer(x, x, attention_mask=mask)
-        _, no_loop_cache = layer(x, x, cache=cache, attention_mask=mask)
         self.assertAllClose(output, no_loop_outputs)
-        self.assertAllClose(cache, no_loop_cache)
+        self.assertAllClose(output_cache, no_loop_cache)
