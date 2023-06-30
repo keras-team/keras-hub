@@ -18,8 +18,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
@@ -68,10 +68,10 @@ class WhisperAudioFeatureExtractorTest(TestCase):
         self.assertAllClose(outputs[1, :, 0], expected_2, atol=0.01, rtol=0.01)
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(
+        config = keras.saving.serialize_keras_object(
             self.audio_feature_extractor
         )
-        new_audio_feature_extractor = keras.utils.deserialize_keras_object(
+        new_audio_feature_extractor = keras.saving.deserialize_keras_object(
             config
         )
         self.assertEqual(

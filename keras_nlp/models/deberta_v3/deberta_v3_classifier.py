@@ -15,9 +15,8 @@
 
 import copy
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import (
     deberta_kernel_initializer,

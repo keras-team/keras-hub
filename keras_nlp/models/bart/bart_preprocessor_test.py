@@ -18,8 +18,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.bart.bart_preprocessor import BartPreprocessor
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.tests.test_case import TestCase
@@ -161,8 +161,8 @@ class BartPreprocessorTest(TestCase):
             self.preprocessor(input_data)
 
     def test_serialization(self):
-        new_preprocessor = keras.utils.deserialize_keras_object(
-            keras.utils.serialize_keras_object(self.preprocessor)
+        new_preprocessor = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(self.preprocessor)
         )
         self.assertEqual(
             new_preprocessor.get_config(), self.preprocessor.get_config()

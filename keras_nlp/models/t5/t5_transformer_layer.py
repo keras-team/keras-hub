@@ -11,8 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from tensorflow import keras
-
+from keras_nlp.backend import keras
 from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.models.t5.t5_multi_head_attention import T5MultiHeadAttention
 

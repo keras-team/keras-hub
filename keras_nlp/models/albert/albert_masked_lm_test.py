@@ -20,8 +20,8 @@ import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.models.albert.albert_masked_lm import AlbertMaskedLM
 from keras_nlp.models.albert.albert_masked_lm_preprocessor import (

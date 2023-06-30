@@ -14,10 +14,10 @@
 """Cached MHA layer based on `keras.layers.MultiHeadAttention`."""
 
 import tensorflow as tf
-from tensorflow import keras
 from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 
 
 @keras_nlp_export("keras_nlp.layers.CachedMultiHeadAttention")

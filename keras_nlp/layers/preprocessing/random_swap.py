@@ -14,9 +14,9 @@
 import random
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.utils.tensor_utils import is_integer_dtype
 from keras_nlp.utils.tensor_utils import is_string_dtype
 

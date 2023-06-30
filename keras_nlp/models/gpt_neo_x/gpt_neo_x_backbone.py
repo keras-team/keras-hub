@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_decoder import GPTNeoXDecoder
 

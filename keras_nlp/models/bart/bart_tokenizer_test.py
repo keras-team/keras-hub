@@ -17,8 +17,8 @@ import os
 
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.tests.test_case import TestCase
 

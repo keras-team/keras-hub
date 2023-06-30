@@ -16,9 +16,9 @@
 import copy
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.models.bart.bart_backbone import BartBackbone
 from keras_nlp.models.bart.bart_presets import backbone_presets
 from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (

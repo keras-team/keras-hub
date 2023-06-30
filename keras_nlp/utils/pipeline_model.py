@@ -18,8 +18,8 @@ import functools
 import math
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.tensor_utils import is_tensor_type
 
@@ -249,7 +249,7 @@ class PipelineModel(keras.Model):
     ):
         if self.include_preprocessing:
             data = self.preprocess_samples(x, y, sample_weight)
-            x, y, sample_weight = tf.keras.utils.unpack_x_y_sample_weight(data)
+            x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
         return super().train_on_batch(
             x=x,
             y=y,
@@ -266,7 +266,7 @@ class PipelineModel(keras.Model):
     ):
         if self.include_preprocessing:
             data = self.preprocess_samples(x, y, sample_weight)
-            x, y, sample_weight = tf.keras.utils.unpack_x_y_sample_weight(data)
+            x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
         return super().test_on_batch(
             x=x,
             y=y,
@@ -281,7 +281,7 @@ class PipelineModel(keras.Model):
     ):
         if self.include_preprocessing:
             data = self.preprocess_samples(x)
-            x, _, _ = tf.keras.utils.unpack_x_y_sample_weight(data)
+            x, _, _ = keras.utils.unpack_x_y_sample_weight(data)
         return super().predict_on_batch(
             x=x,
             **kwargs,

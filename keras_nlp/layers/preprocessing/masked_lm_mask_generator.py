@@ -13,9 +13,9 @@
 # limitations under the License.
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
 
 try:
