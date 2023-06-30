@@ -20,8 +20,8 @@ import numpy as np
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
@@ -150,8 +150,8 @@ class GPT2CausalLMTest(TestCase):
         self.assertIsNone(self.causal_lm.generate_function)
 
     def test_serialization(self):
-        new_causal_lm = keras.utils.deserialize_keras_object(
-            keras.utils.serialize_keras_object(self.causal_lm)
+        new_causal_lm = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(self.causal_lm)
         )
         self.assertEqual(
             new_causal_lm.get_config(), self.causal_lm.get_config()

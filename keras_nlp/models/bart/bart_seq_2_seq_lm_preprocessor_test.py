@@ -18,8 +18,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
@@ -149,8 +149,8 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
         self.assertAllEqual(x, " kohli is the best")
 
     def test_serialization(self):
-        new_preprocessor = keras.utils.deserialize_keras_object(
-            keras.utils.serialize_keras_object(self.preprocessor)
+        new_preprocessor = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(self.preprocessor)
         )
         self.assertEqual(
             new_preprocessor.get_config(), self.preprocessor.get_config()

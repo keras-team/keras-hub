@@ -18,8 +18,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.tests.test_case import TestCase
 
@@ -71,8 +71,8 @@ class GPT2Test(TestCase):
         self.backbone.predict(self.input_dataset)
 
     def test_serialization(self):
-        new_backbone = keras.utils.deserialize_keras_object(
-            keras.utils.serialize_keras_object(self.backbone)
+        new_backbone = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(self.backbone)
         )
         self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 

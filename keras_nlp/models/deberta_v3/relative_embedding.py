@@ -15,7 +15,8 @@
 """Relative embedding layer."""
 
 import tensorflow as tf
-from tensorflow import keras
+
+from keras_nlp.backend import keras
 
 
 class RelativeEmbedding(keras.layers.Layer):

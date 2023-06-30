@@ -22,9 +22,9 @@ import numpy as np
 import pytest
 import sentencepiece
 import tensorflow as tf
-from tensorflow import keras
 
 import keras_nlp
+from keras_nlp.backend import keras
 from keras_nlp.tests.doc_tests import docstring_lib
 from keras_nlp.tests.doc_tests import fenced_docstring_lib
 from keras_nlp.tests.doc_tests.fenced_docstring_lib import (

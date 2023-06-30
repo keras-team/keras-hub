@@ -18,8 +18,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_classifier import (
     DistilBertClassifier,
@@ -103,8 +103,8 @@ class DistilBertClassifierTest(TestCase):
             self.backbone,
             num_classes=2,
         )
-        config = keras.utils.serialize_keras_object(original)
-        restored = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(original)
+        restored = keras.saving.deserialize_keras_object(config)
         self.assertEqual(restored.get_config(), original.get_config())
         # With options.
         original = DistilBertClassifier(
@@ -116,8 +116,8 @@ class DistilBertClassifierTest(TestCase):
             name="test",
             trainable=False,
         )
-        config = keras.utils.serialize_keras_object(original)
-        restored = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(original)
+        restored = keras.saving.deserialize_keras_object(config)
         self.assertEqual(restored.get_config(), original.get_config())
 
     @parameterized.named_parameters(

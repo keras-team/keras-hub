@@ -14,8 +14,8 @@
 """Base class for Generative Task models."""
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.task import Task
 from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.tensor_utils import tensor_to_string_list

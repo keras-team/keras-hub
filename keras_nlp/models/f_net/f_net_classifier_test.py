@@ -20,8 +20,8 @@ import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_classifier import FNetClassifier
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
@@ -118,8 +118,8 @@ class FNetClassifierTest(TestCase):
             self.backbone,
             num_classes=2,
         )
-        config = keras.utils.serialize_keras_object(original)
-        restored = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(original)
+        restored = keras.saving.deserialize_keras_object(config)
         self.assertEqual(restored.get_config(), original.get_config())
         # With options.
         original = FNetClassifier(
@@ -130,8 +130,8 @@ class FNetClassifierTest(TestCase):
             name="test",
             trainable=False,
         )
-        config = keras.utils.serialize_keras_object(original)
-        restored = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(original)
+        restored = keras.saving.deserialize_keras_object(config)
         self.assertEqual(restored.get_config(), original.get_config())
 
     @parameterized.named_parameters(

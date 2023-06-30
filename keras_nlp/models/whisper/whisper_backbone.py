@@ -15,9 +15,9 @@
 
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,

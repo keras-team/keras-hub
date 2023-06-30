@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.tokenizer import Tokenizer
 

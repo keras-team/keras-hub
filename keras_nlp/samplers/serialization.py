@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.samplers.beam_sampler import BeamSampler
 from keras_nlp.samplers.contrastive_sampler import ContrastiveSampler
 from keras_nlp.samplers.greedy_sampler import GreedySampler
@@ -25,7 +24,7 @@ from keras_nlp.samplers.top_p_sampler import TopPSampler
 
 @keras_nlp_export("keras_nlp.samplers.serialize")
 def serialize(sampler):
-    return keras.utils.serialize_keras_object(sampler)
+    return keras.saving.serialize_keras_object(sampler)
 
 
 @keras_nlp_export("keras_nlp.samplers.deserialize")
@@ -39,7 +38,7 @@ def deserialize(config, custom_objects=None):
         "top_k": TopKSampler,
         "top_p": TopPSampler,
     }
-    return keras.utils.deserialize_keras_object(
+    return keras.saving.deserialize_keras_object(
         config,
         module_objects=all_classes,
         custom_objects=custom_objects,

@@ -16,8 +16,8 @@
 import os
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.keras_utils import print_row
 from keras_nlp.utils.pipeline_model import PipelineModel

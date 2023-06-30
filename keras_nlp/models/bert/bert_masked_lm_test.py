@@ -18,8 +18,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_masked_lm import BertMaskedLM
 from keras_nlp.models.bert.bert_masked_lm_preprocessor import (
@@ -91,8 +91,8 @@ class BertMaskedLMTest(TestCase):
         self.masked_lm.fit(self.preprocessed_dataset)
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.masked_lm)
-        new_classifier = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.masked_lm)
+        new_classifier = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_classifier.get_config(),
             self.masked_lm.get_config(),

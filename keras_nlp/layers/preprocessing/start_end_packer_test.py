@@ -14,8 +14,8 @@
 
 """Tests for Start End Packer layer."""
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.tests.test_case import TestCase
 

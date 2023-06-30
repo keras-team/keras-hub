@@ -13,8 +13,7 @@
 # limitations under the License.
 """Whisper decoder block."""
 
-from tensorflow import keras
-
+from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.transformer_decoder import TransformerDecoder
 
 

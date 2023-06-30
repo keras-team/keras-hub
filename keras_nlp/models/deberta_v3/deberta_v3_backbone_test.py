@@ -18,8 +18,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.tests.test_case import TestCase
 
@@ -72,8 +72,8 @@ class DebertaV3BackboneTest(TestCase):
         self.backbone.predict(self.input_dataset)
 
     def test_serialization(self):
-        new_backbone = keras.utils.deserialize_keras_object(
-            keras.utils.serialize_keras_object(self.backbone)
+        new_backbone = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(self.backbone)
         )
         self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 

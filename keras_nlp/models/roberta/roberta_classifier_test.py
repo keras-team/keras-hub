@@ -18,8 +18,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
@@ -115,8 +115,8 @@ class RobertaClassifierTest(TestCase):
             self.backbone,
             num_classes=2,
         )
-        config = keras.utils.serialize_keras_object(original)
-        restored = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(original)
+        restored = keras.saving.deserialize_keras_object(config)
         self.assertEqual(restored.get_config(), original.get_config())
         # With options.
         original = RobertaClassifier(
@@ -128,8 +128,8 @@ class RobertaClassifierTest(TestCase):
             name="test",
             trainable=False,
         )
-        config = keras.utils.serialize_keras_object(original)
-        restored = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(original)
+        restored = keras.saving.deserialize_keras_object(config)
         self.assertEqual(restored.get_config(), original.get_config())
 
     @parameterized.named_parameters(
