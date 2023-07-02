@@ -204,8 +204,8 @@ class WhisperAudioToSpeechLMPreprocessor(WhisperPreprocessor):
         # end markers. In the future, we could make this configurable.
         decoder_padding_mask = (
             decoder_padding_mask
-            & (decoder_token_ids != self.tokenizer.end_token_id)
-            & (decoder_token_ids != self.tokenizer.start_token_id)
+            & (decoder_token_ids != self.tokenizer.eos_token_id)
+            & (decoder_token_ids != self.tokenizer.bos_token_id)
         )
         decoder_token_ids = tf.ragged.boolean_mask(
             decoder_token_ids, decoder_padding_mask
