@@ -100,6 +100,12 @@ from keras_nlp.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
+from keras_nlp.models.whisper.whisper_audio_to_speech_lm import (
+    WhisperAudioToSpeechLM,
+)
+from keras_nlp.models.whisper.whisper_audio_to_speech_lm_preprocessor import (
+    WhisperAudioToSpeechLMPreprocessor,
+)
 from keras_nlp.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.models.whisper.whisper_preprocessor import WhisperPreprocessor
 from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer

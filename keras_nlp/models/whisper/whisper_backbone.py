@@ -168,7 +168,9 @@ class WhisperBackbone(Backbone):
         )(embedded_features)
 
         # Sum and apply dropout to embeddings.
-        x = keras.layers.Add()((embedded_features, position_embedding))
+        x = keras.layers.Add(name="encoder_embeddings_add")(
+            (embedded_features, position_embedding)
+        )
         x = keras.layers.Dropout(
             dropout,
             name="encoder_embeddings_dropout",
