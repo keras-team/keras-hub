@@ -11,9 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import tensorflow as tf
+import math
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.gpt_neo_x.rotary_embedding import RotaryEmbedding
 from keras_nlp.utils.keras_utils import clone_initializer
 
@@ -63,12 +64,13 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.attn_head_size = hidden_dim // num_heads
         self.rotary_max_wavelength = rotary_max_wavelength
         self.rotary_embedding = RotaryEmbedding(
-            self.rotary_percentage, rotary_max_wavelength
+            rotary_percentage, rotary_max_wavelength
         )
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.max_sequence_length = max_sequence_length
 
+    def build(self, input_shape):
         self._qkv_dense = keras.layers.EinsumDense(
             equation="abc,cde->abde",
             output_shape=(None, self.num_heads, 3 * self.attn_head_size),
@@ -76,6 +78,7 @@ class GPTNeoXAttention(keras.layers.Layer):
             **self._get_common_kwargs_for_sublayer(use_bias=True),
             name="query",
         )
+        self._qkv_dense.build(input_shape)
 
         self._attn_dropout_layer = keras.layers.Dropout(
             self.dropout, name="attention_dropout"
@@ -91,6 +94,9 @@ class GPTNeoXAttention(keras.layers.Layer):
             **self._get_common_kwargs_for_sublayer(use_bias=True),
             name="attention_output",
         )
+
+        self._output_dense.build(input_shape)
+        self.built = True
 
     def _get_common_kwargs_for_sublayer(self, use_bias=True):
         common_kwargs = {}
@@ -108,9 +114,9 @@ class GPTNeoXAttention(keras.layers.Layer):
         if attention_mask is not None:
             mask_expansion_axis = -3
             for _ in range(
-                attention_scores.shape.rank - attention_mask.shape.rank
+                len(attention_scores.shape) - len(attention_mask.shape)
             ):
-                attention_mask = tf.expand_dims(
+                attention_mask = ops.expand_dims(
                     attention_mask, axis=mask_expansion_axis
                 )
         return self._softmax(attention_scores, attention_mask)
@@ -118,10 +124,11 @@ class GPTNeoXAttention(keras.layers.Layer):
     def _compute_attention(
         self, query, key, value, attention_mask=None, training=None
     ):
-        attention_scores = tf.einsum("aecd,abcd->acbe", key, query)
-        norm_factor = tf.sqrt(
-            tf.constant(self.attn_head_size, dtype=tf.float32)
-        )
+        attention_scores = ops.einsum("aecd,abcd->acbe", key, query)
+        # norm_factor = ops.sqrt(
+        #     ops.constant(self.attn_head_size, dtype="float32")
+        # )
+        norm_factor = math.sqrt(self.attn_head_size)
         attention_scores /= norm_factor
 
         attention_scores = self._masked_softmax(
@@ -130,7 +137,9 @@ class GPTNeoXAttention(keras.layers.Layer):
         attention_scores = self._attn_dropout_layer(
             attention_scores, training=training
         )
-        attention_output = tf.einsum("acbe,aecd->abcd", attention_scores, value)
+        attention_output = ops.einsum(
+            "acbe,aecd->abcd", attention_scores, value
+        )
 
         return attention_output
 
@@ -159,11 +168,11 @@ class GPTNeoXAttention(keras.layers.Layer):
         )
 
         # Reshape `attention_output` to `(batch_size, sequence_length, hidden_dim)`.
-        attention_output = tf.reshape(
+        attention_output = ops.reshape(
             attention_output,
             [
-                tf.shape(attention_output)[0],
-                tf.shape(attention_output)[1],
+                ops.shape(attention_output)[0],
+                ops.shape(attention_output)[1],
                 self.hidden_dim,
             ],
         )

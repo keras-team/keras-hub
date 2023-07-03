@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """Tests for GPT-2 preprocessing layers."""
+
 import os
 
 import pytest

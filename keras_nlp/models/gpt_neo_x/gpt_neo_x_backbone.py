@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import tensorflow as tf
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.models.backbone import Backbone
@@ -25,7 +23,7 @@ def _gpt_neo_x_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.GPTNeoXBackbone")
 class GPTNeoXBackbone(Backbone):
-    """GPT-NeoX core network with hyperparameters.
+    """GPT-2 core network with hyperparameters.
 
     This network implements a Transformer-based decoder network,
     Generative Pretrained Transformer-Neo-X (GPTNeoX), as described in
@@ -116,7 +114,7 @@ class GPTNeoXBackbone(Backbone):
             name="layer_norm",
             axis=-1,
             epsilon=layer_norm_epsilon,
-            dtype=tf.float32,
+            dtype="float32",
         )(x)
 
         # Instantiate using Functional API Model constructor
