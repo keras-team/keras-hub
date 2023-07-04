@@ -40,7 +40,7 @@ class FalconRotaryPositionalEmbedding(keras.layers.Layer):
 
     Examples:
         ```python
-        embedding = RotaryEmbedding(head_dim)
+        embedding = FalconRotaryPositionalEmbedding(head_dim)
         output_q, output_k = embedding(q, k)
         ```
 
@@ -49,64 +49,40 @@ class FalconRotaryPositionalEmbedding(keras.layers.Layer):
         - [GPT-NeoX](https://github.com/EleutherAI/gpt-neox)
     """
 
-    def __init__(self, head_dim, base=10000):
+    def __init__(self,
+                 head_dim: int,
+                 base=10000):
         super(FalconRotaryPositionalEmbedding, self).__init__()
         inv_freq = 1.0 / (base ** (tf.range(0, head_dim, 2, dtype=tf.float32) / head_dim))
-        self.inv_freq = self.add_weight(
-            name="inv_freq",
-            shape=(head_dim,),
-            initializer=tf.keras.initializers.Constant(inv_freq),
-            trainable=False,
-        )
-    
-    def rotate_half(self, x):
-        """Rotate the input tensor by half.
+        self.inv_freq = tf.Variable(inv_freq, trainable=False)
+        self.head_dim = head_dim
+        self.seq_len_cached = None
+        self.cos_cached = None
+        self.sin_cached = None
 
-        Args:
-            x: The input tensor.
-
-        Returns:
-            The rotated tensor.
-        """
-        x1, x2 = tf.split(x, 2, axis=-1)
-        return tf.concat((-x2, x1), axis=-1)
-    
-    def cos_sin(self, seq_len, device=None, dtype=tf.float32):
-        """Compute the cosine and sine values for positional embeddings.
-
-        Args:
-            seq_len (int): The length of the sequence.
-            device: Optional device to place the tensors.
-            dtype: Data type of the positional embeddings.
-
-        Returns:
-            Tuple of cosine and sine tensors.
-        """
+    def cos_sin(self, seq_len):
         if seq_len != self.seq_len_cached:
             self.seq_len_cached = seq_len
-            t = tf.range(seq_len, dtype=self.inv_freq.dtype)
+            t = tf.range(seq_len, dtype=tf.float32)
             freqs = tf.einsum("i,j->ij", t, self.inv_freq)
             emb = tf.concat((freqs, freqs), axis=-1)
-            emb = tf.cast(emb, dtype)
+
             self.cos_cached = tf.cos(emb)[None, :, :]
             self.sin_cached = tf.sin(emb)[None, :, :]
-        
+
         return self.cos_cached, self.sin_cached
-    
+
     def call(self, q, k):
-        """Compute the rotary positional embeddings for queries and keys.
-
-        Args:
-            q: Tensor of shape `(batch_size, seq_len, head_dim)` representing queries.
-            k: Tensor of shape `(batch_size, seq_len, head_dim)` representing keys.
-
-        Returns:
-            Tuple of transformed query and key tensors.
-        """
         batch, seq_len, head_dim = q.shape
-        cos, sin = self.cos_sin(seq_len, q.device, q.dtype)
-        rotated_q = self.rotate_half(q)
-        rotated_k = self.rotate_half(k)
-        output_q = (q * cos) + (rotated_q * sin)
-        output_k = (k * cos) + (rotated_k * sin)
-        return output_q, output_k
+        cos, sin = self.cos_sin(seq_len)
+        rotated_q = tf.concat((-q[..., head_dim // 2 :], q[..., : head_dim // 2]), axis=q.ndim - 1)
+        return (q * cos) + (rotated_q * sin), (k * cos) + (rotated_q * sin)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "head_dim": self.head_dim,
+            }
+        )
+        return config

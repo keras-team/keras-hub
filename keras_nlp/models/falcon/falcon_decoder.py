@@ -15,15 +15,15 @@
 """Falcon Decoder Layer"""
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import LayerNormalization
-from keras_nlp.models.falcon.falcon_mlp import FalconMLP
+from tensorflow.keras.layers import Dense,Dropout,LayerNormalization
+from tensorflow.keras.activations import gelu
 from keras_nlp.models.falcon.falcon_attention import FalconAttention
 
 from keras_nlp.api_export import keras_nlp_export
 
 
-@keras_nlp_export("keras_nlp.layers.FalconDecoder")
-class FalconDecoder(keras.layers.Layer):
+@keras_nlp_export("keras_nlp.layers.FalconDecoderLayer")
+class FalconDecoderLayer(tf.keras.Model):
     """FalconDecoder used in Falcon models for decoding.
 
     This layer implements the decoder layer used in Falcon models. It consists of
@@ -33,125 +33,96 @@ class FalconDecoder(keras.layers.Layer):
         config: Configuration object containing the hyperparameters.
 
     Inputs:
-        - hidden_states: Tensor of shape `(batch_size, seq_length, hidden_size)`.
-          Input hidden states to the decoder layer.
-        - alibi: Tensor of shape `(batch_size, num_heads, 1, kv_length)` containing
-          alibi values for each head. Set to None if not using alibi.
-        - attention_mask: Tensor of shape `(batch_size, 1, 1, seq_length)` containing
-          the attention mask. Set to None if not using attention mask.
-        - layer_past: Tuple of tensors `(past_key, past_value)` containing the cached
-          key and value states from previous layers. Set to None if not using cache.
-        - head_mask: Tensor of shape `(num_heads,)` containing the head mask. Set to None
-          if not using head mask.
-        - use_cache: Boolean value indicating whether to use the cache.
-        - output_attentions: Boolean value indicating whether to output attention scores.
-        - training: Boolean value indicating whether the layer is in training mode.
 
     Outputs:
-        - outputs: Tuple containing the output tensor and additional outputs.
-            - hidden_states: Tensor of shape `(batch_size, seq_length, hidden_size)`.
-              Output hidden states from the decoder layer.
-            - present: Tuple of tensors `(key_layer, value_layer)` containing the updated
-              key and value states for caching.
-            - attentions (optional): Tensor of shape `(batch_size, num_heads, seq_length, seq_length)`
-              containing the attention scores. Only present if `output_attentions=True`.
-
+  
     Examples:
         ```python
-        config = DecoderLayerConfig(hidden_size=768, n_head=12, layer_norm_epsilon=1e-6,
-                                    attention_dropout=0.1, hidden_dropout=0.1,
-                                    apply_residual_connection_post_layernorm=True,
-                                    parallel_attn=False)
-        decoder_layer = FalconDecoder(config)
-        outputs = decoder_layer(hidden_states, alibi, attention_mask, layer_past=None,
-                                head_mask=None, use_cache=False, output_attentions=False,
-                                training=True)
+     
         ```
     """
 
-    def __init__(self, config):
-        super(FalconDecoder, self).__init__()
-        hidden_size = config.hidden_size
+    def __init__(self,
+        num_heads,
+        hidden_dim,
+        dropout=0.0,
+        layer_norm_epsilon=1e-5,
+        max_sequence_length=512,
+        name=None,
+        **kwargs,
+                ):
+        self._input_shape = kwargs.pop("build_input_shape", None)
 
-        self.input_layernorm = LayerNormalization(epsilon=config.layer_norm_epsilon)
-        self.num_heads = config.n_head
-        self.self_attention = FalconAttention(config)
+        super().__init__(name=name, **kwargs)
+        self.num_heads = num_heads
+        self.hidden_dim=hidden_dim
+        self.dropout = dropout
+        self.max_sequence_length = max_sequence_length
+        self.layer_norm_epsilon = layer_norm_epsilon
+        self._built = False
+        if self._input_shape is not None:
+            self._build(self._input_shape)
+        self.input_layernorm = LayerNormalization(epsilon=self.layer_norm_epsilon)
+        self.self_attention = FalconAttention(self.num_heads,
+                                              self.hidden_dim,
+                                              self.dropout,
+                                              max_sequence_length=512,)
 
-        if not config.parallel_attn:
-            self.post_attention_layernorm = LayerNormalization(epsilon=config.layer_norm_epsilon)
+        self.dense_h_to_4h = Dense(4 * hidden_dim, use_bias=False)
+        self.act = gelu
+        self.dense_4h_to_h = Dense(hidden_dim, use_bias=False)
+        self.hidden_dropout = Dropout(self.dropout)
 
-        self.mlp = FalconMLP(config)
-
-        self.apply_residual_connection_post_layernorm = config.apply_residual_connection_post_layernorm
-        self.hidden_dropout = config.hidden_dropout
-
-        self.config = config
-
-    def call(
-        self,
-        hidden_states,
-        alibi,
-        attention_mask,
-        layer_past=None,
-        head_mask=None,
-        use_cache=False,
-        output_attentions=False,
-        training=None,
-    ):
-        """Call method of the FalconDecoderLayer.
-
-        This method is called when applying the FalconDecoderLayer as a layer in a model.
-        It performs the forward pass of the decoder layer.
-
-        Args:
-            hidden_states: Input hidden states to the decoder layer.
-            alibi: Alibi values for each head.
-            attention_mask: Attention mask.
-            layer_past: Cached key and value states from previous layers.
-            head_mask: Head mask.
-            use_cache: Boolean value indicating whether to use the cache.
-            output_attentions: Boolean value indicating whether to output attention scores.
-            training: Boolean value indicating whether the layer is in training mode.
-
-        Returns:
-            outputs: Tuple containing the output tensor and additional outputs.
-
-        """
-
+    def call(self, hidden_states):
         layernorm_output = self.input_layernorm(hidden_states)
         residual = hidden_states
+        attn_outputs = self.self_attention(hidden_states, attention_mask=None)  # Pass attention_mask argument
+        attention_output = attn_outputs[0]
+        outputs = attn_outputs[1:]
+        mlp_output = self.act(self.dense_h_to_4h(self.hidden_dim))
+        mlp_output = self.dense_4h_to_h(mlp_output)
+        output = self.hidden_dropout(mlp_output)
+        output = tf.keras.layers.Add()([output, residual])
+        outputs = (output,) + outputs[1:]
+        return outputs
 
-        attn_outputs = self.self_attention(
-            layernorm_output,
-            layer_past=layer_past,
-            attention_mask=attention_mask,
-            alibi=alibi,
-            head_mask=head_mask,
-            use_cache=use_cache,
-            output_attentions=output_attentions,
-            training=training,
+
+    def _build(self, input_shape):
+        # Create layers based on input shape.
+        self._built = True
+        self._input_shape = input_shape
+        # Infer the dimension of our hidden feature size from the build shape.
+        hidden_dim = input_shape[-1]
+
+        # Self attention layers.
+        self._self_attention_layer = FalconAttention(
+                                            self.num_heads,
+                                            self.hidden_dim,
+                                            self.dropout,
+                                            max_sequence_length=512,
+
         )
 
-        attention_output = attn_outputs[0]
+        self._self_attention_layernorm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+        )
 
-        if not self.config.parallel_attn:
-            residual = tf.keras.layers.Dropout(self.config.attention_dropout)(residual, training=training)
-            residual += attention_output
-            layernorm_output = self.post_attention_layernorm(residual)
+        self._self_attention_dropout = keras.layers.Dropout(
+            rate=self.dropout,
+        )
 
-        outputs = attn_outputs[1:]
+        self.dense_h_to_4h = Dense(4 * hidden_dim, use_bias=False)
+        self.act = gelu
+        self.dense_4h_to_h = Dense(hidden_dim, use_bias=False)
+        self.hidden_dropout = Dropout(self.dropout)
 
-        mlp_output = self.mlp(layernorm_output)
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
 
-        if self.config.parallel_attn:
-            mlp_output += attention_output
-
-        output = tf.keras.layers.Dropout(self.config.hidden_dropout)(mlp_output, training=training)
-        output += residual
-
-        if use_cache:
-            outputs = (output,) + outputs
-        else:
-            outputs = (output,) + outputs[1:]
-
-        return outputs
+                "num_heads": self.num_heads,
+                "dropout": self.dropout,
+            }
+        )
+        return config
