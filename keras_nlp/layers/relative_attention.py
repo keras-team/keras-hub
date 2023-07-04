@@ -113,72 +113,11 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
         super().__init__(kernel_initializer=kernel_initializer, **kwargs)
 
     def _build_from_signature(self, query, value, key=None):
-        self._built_from_signature = True
-        if hasattr(query, "shape"):
-            self._query_shape = tf.TensorShape(query.shape)
-        else:
-            self._query_shape = tf.TensorShape(query)
-        if hasattr(value, "shape"):
-            self._value_shape = tf.TensorShape(value.shape)
-        else:
-            self._value_shape = value
-        if key is None:
-            self._key_shape = self._value_shape
-        elif hasattr(key, "shape"):
-            self._key_shape = tf.TensorShape(key.shape)
-        else:
-            self._key_shape = key
-
-        common_kwargs = dict(
-            kernel_initializer=self._kernel_initializer,
-            bias_initializer=self._bias_initializer,
-            kernel_regularizer=self._kernel_regularizer,
-            bias_regularizer=self._bias_regularizer,
-            activity_regularizer=self._activity_regularizer,
-            kernel_constraint=self._kernel_constraint,
-            bias_constraint=self._bias_constraint,
-        )
+        self._use_bias = False
+        super()._build_from_signature(query=query, value=value, key=key)
 
         with tf.init_scope():
             free_dims = self._query_shape.rank - 1
-            einsum_equation, _, output_rank = _build_proj_equation(
-                free_dims, bound_dims=1, output_dims=2
-            )
-            self._query_dense = keras.layers.EinsumDense(
-                einsum_equation,
-                output_shape=_get_output_shape(
-                    output_rank - 1, [self._num_heads, self._key_dim]
-                ),
-                bias_axes=None,
-                name="query",
-                **common_kwargs,
-            )
-            einsum_equation, _, output_rank = _build_proj_equation(
-                self._key_shape.rank - 1, bound_dims=1, output_dims=2
-            )
-            self._key_dense = keras.layers.EinsumDense(
-                einsum_equation,
-                output_shape=_get_output_shape(
-                    output_rank - 1, [self._num_heads, self._key_dim]
-                ),
-                bias_axes=None,
-                name="key",
-                **common_kwargs,
-            )
-            einsum_equation, _, output_rank = _build_proj_equation(
-                self._value_shape.rank - 1, bound_dims=1, output_dims=2
-            )
-            self._value_dense = keras.layers.EinsumDense(
-                einsum_equation,
-                output_shape=_get_output_shape(
-                    output_rank - 1, [self._num_heads, self._value_dim]
-                ),
-                bias_axes=None,
-                name="value",
-                **common_kwargs,
-            )
-            self._build_attention(output_rank)
-
             _, _, output_rank = _build_proj_equation(
                 free_dims, bound_dims=2, output_dims=1
             )
@@ -189,7 +128,7 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
                 ),
                 bias_axes=None,
                 name="attention_output",
-                **common_kwargs,
+                **self._get_common_kwargs_for_sublayer(),
             )
 
             einsum_equation, _, output_rank = _build_proj_equation(
@@ -202,8 +141,21 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
                 ),
                 bias_axes=None,
                 name="encoding",
-                **common_kwargs,
+                **self._get_common_kwargs_for_sublayer(),
             )
+
+    def _get_common_kwargs_for_sublayer(self):
+        common_kwargs = dict(
+            kernel_initializer=self._kernel_initializer,
+            bias_initializer=self._bias_initializer,
+            kernel_regularizer=self._kernel_regularizer,
+            bias_regularizer=self._bias_regularizer,
+            activity_regularizer=self._activity_regularizer,
+            kernel_constraint=self._kernel_constraint,
+            bias_constraint=self._bias_constraint,
+        )
+        return common_kwargs
+
 
     def compute_attention(
         self,
