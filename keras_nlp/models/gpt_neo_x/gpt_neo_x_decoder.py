@@ -13,7 +13,9 @@
 # limitations under the License.
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
-from keras_nlp.layers.modeling.transformer_layer_utils import compute_causal_mask
+from keras_nlp.layers.modeling.transformer_layer_utils import (
+    compute_causal_mask,
+)
 from keras_nlp.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
