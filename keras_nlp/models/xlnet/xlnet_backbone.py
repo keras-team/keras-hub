@@ -258,10 +258,6 @@ class XLNetBackbone(Backbone):
         )
         return config
 
-    @classproperty
-    def presets(cls):
-        return {}
-
     @property
     def token_embedding(self):
         return self.get_layer("content_query_embedding").word_embed

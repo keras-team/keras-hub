@@ -109,15 +109,15 @@ class XLNetEncoder(keras.layers.Layer):
         self.layer_norm_ff = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon, name="layer_norm_ff"
         )
-        self.layer_1_ff = tf.keras.layers.Dense(
+        self.feedforward_intermediate_dense = tf.keras.layers.Dense(
             self.intermediate_dim,
             kernel_initializer=self.kernel_initializer,
-            name="layer_1_ff",
+            name="feedforward_intermediate_dense",
         )
-        self.layer_2_ff = tf.keras.layers.Dense(
+        self.feedforward_output_dense = tf.keras.layers.Dense(
             self.hidden_dim,
             kernel_initializer=self.kernel_initializer,
-            name="layer_2_ff",
+            name="feedforward_output_dense",
         )
         self.dropout_ff = tf.keras.layers.Dropout(self.dropout)
         self.activation_function_ff = keras.activations.get(self.activation)
@@ -185,19 +185,19 @@ class XLNetEncoder(keras.layers.Layer):
 
         # feed-forward
         ff_out_h = attn_out_h
-        ff_out_h = self.layer_1_ff(ff_out_h)
+        ff_out_h = self.feedforward_intermediate_dense(ff_out_h)
         ff_out_h = self.activation_function_ff(ff_out_h)
         ff_out_h = self.dropout_ff(ff_out_h)
-        ff_out_h = self.layer_2_ff(ff_out_h)
+        ff_out_h = self.feedforward_output_dense(ff_out_h)
         ff_out_h = self.dropout_ff(ff_out_h)
         ff_out_h = self.layer_norm_ff(ff_out_h + attn_out_h)
 
         if attn_out_g is not None:
             ff_out_g = attn_out_g
-            ff_out_g = self.layer_1_ff(ff_out_g)
+            ff_out_g = self.feedforward_intermediate_dense(ff_out_g)
             ff_out_g = self.activation_function_ff(ff_out_g)
             ff_out_g = self.dropout_ff(ff_out_g)
-            ff_out_g = self.layer_2_ff(ff_out_g)
+            ff_out_g = self.feedforward_output_dense(ff_out_g)
             ff_out_g = self.dropout_ff(ff_out_g)
             ff_out_g = self.layer_norm_ff(ff_out_g + attn_out_g)
 
