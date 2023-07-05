@@ -103,7 +103,7 @@ class XLNetEncoder(keras.layers.Layer):
         self.layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon, name="layer_norm_rel_attn"
         )
-        self.dropout = keras.layers.Dropout(self.dropout)
+        self.dropout_attn = keras.layers.Dropout(self.dropout)
 
         # Feed-Forward Part
         self.layer_norm_ff = keras.layers.LayerNormalization(
@@ -119,7 +119,7 @@ class XLNetEncoder(keras.layers.Layer):
             kernel_initializer=self.kernel_initializer,
             name="feedforward_output_dense",
         )
-        self.dropout_ff = tf.keras.layers.Dropout(self.dropout)
+        self.dropout_ff = keras.layers.Dropout(self.dropout)
         self.activation_function_ff = keras.activations.get(self.activation)
 
         self.content_attention_bias = self.add_weight(
@@ -174,12 +174,12 @@ class XLNetEncoder(keras.layers.Layer):
             target_mapping=target_mapping,
             state=mems,
         )
-        attn_out_h = self.dropout(attn_out_h)
+        attn_out_h = self.dropout_attn(attn_out_h)
         attn_out_h = attn_out_h + output_h
         attn_out_h = self.layer_norm(attn_out_h)
 
         if attn_out_g is not None:
-            attn_out_g = self.dropout(attn_out_g)
+            attn_out_g = self.dropout_attn(attn_out_g)
             attn_out_g = attn_out_g + output_g
             attn_out_g = self.layer_norm(attn_out_g)
 
