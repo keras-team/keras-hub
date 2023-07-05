@@ -165,7 +165,6 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
         )
         return common_kwargs
 
-
     def compute_attention(
         self,
         query,

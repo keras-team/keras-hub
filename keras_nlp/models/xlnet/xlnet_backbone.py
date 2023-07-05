@@ -23,7 +23,6 @@ from keras_nlp.models.xlnet.xlnet_content_and_query_embedding import (
     ContentAndQueryEmbedding,
 )
 from keras_nlp.models.xlnet.xlnet_encoder import XLNetEncoder
-from keras_nlp.utils.python_utils import classproperty
 
 
 def cache_mem(curr_out, prev_mem):
