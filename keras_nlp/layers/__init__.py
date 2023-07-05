@@ -24,8 +24,6 @@ from keras_nlp.layers.modeling.sine_position_encoding import (
 from keras_nlp.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
-from keras_nlp.layers.relative_attention import MultiHeadRelativeAttention
-from keras_nlp.layers.relative_attention import TwoStreamRelativeAttention
 from keras_nlp.layers.modeling.transformer_decoder import TransformerDecoder
 from keras_nlp.layers.modeling.transformer_encoder import TransformerEncoder
 from keras_nlp.layers.preprocessing.masked_lm_mask_generator import (

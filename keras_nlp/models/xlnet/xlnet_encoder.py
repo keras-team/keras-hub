@@ -19,7 +19,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers import TwoStreamRelativeAttention
+from keras_nlp.models.xlnet.relative_attention import TwoStreamRelativeAttention
 from keras_nlp.models.xlnet.xlnet_content_and_query_embedding import (
     xlnet_kernel_initializer,
 )
