@@ -37,10 +37,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         def convert_strings(x):
             """Convert any string tensors to simple python types.
 
-            This allows for simple output comparisons across backend without
+            This allows for simple output comparisons across backends without
             needing to worry about tensorflow's bytes representation.
             """
-            if hasattr(x, "dtype") and x.dtype == tf.string:
+            if getattr(x, "dtype", None) == tf.string:
                 if isinstance(x, tf.RaggedTensor):
                     x = x.to_list()
                 if isinstance(x, tf.Tensor):

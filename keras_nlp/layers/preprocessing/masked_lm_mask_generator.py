@@ -32,15 +32,18 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
     """Layer that applies language model masking.
 
     This layer is useful for preparing inputs for masked language modeling
-    (MaskedLM) tasks. It follows the masking strategy described in the [original BERT
-    paper](https://arxiv.org/abs/1810.04805). Given tokenized text,
-    it randomly selects certain number of tokens for masking. Then for each
-    selected token, it has a chance (configurable) to be replaced by
+    (MaskedLM) tasks. It follows the masking strategy described in the
+    [original BERT paper](https://arxiv.org/abs/1810.04805). Given tokenized
+    text, it randomly selects certain number of tokens for masking. Then for
+    each selected token, it has a chance (configurable) to be replaced by
     "mask token" or random token, or stay unchanged.
 
     Input data should be passed as tensors, `tf.RaggedTensor`s, or lists. For
     batched input, inputs should be a list of lists or a rank two tensor. For
     unbatched inputs, each element should be a list or a rank one tensor.
+
+    This layer can be used with `tf.data` to generate dynamic masks on the fly
+    during training.
 
     Args:
         vocabulary_size: int, the size of the vocabulary.
