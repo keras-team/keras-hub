@@ -56,9 +56,8 @@ class RotaryEmbedding(keras.layers.Layer):
          - [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864v4)
     """
 
-    def __init__(self, percentage=0, max_wavelength=10000):
-        super().__init__()
-        self.percentage = percentage
+    def __init__(self, max_wavelength=10000, **kwargs):
+        super().__init__(**kwargs)
         self.max_wavelength = max_wavelength
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
@@ -67,8 +66,6 @@ class RotaryEmbedding(keras.layers.Layer):
 
         x1, x2 = tf.split(tensor, 2, axis=-1)
         half_rot_tensor = tf.concat((-x2, x1), axis=-1)
-        ret = (tensor * cos_emb) + (half_rot_tensor * sin_emb)
-        return ret
 
         return (tensor * cos_emb) + (half_rot_tensor * sin_emb)
 
@@ -91,8 +88,6 @@ class RotaryEmbedding(keras.layers.Layer):
         cos_emb, sin_emb = self._compute_cos_sin_embedding(
             query, rotary_dim, seq_dim=1
         )
-        query_emb = self._apply_rotary_pos_emb(query_rot, cos_emb, sin_emb)
-        key_emb = self._apply_rotary_pos_emb(key_rot, cos_emb, sin_emb)
 
         query = self._apply_rotary_pos_emb(query, cos_emb, sin_emb)
         key = self._apply_rotary_pos_emb(key, cos_emb, sin_emb)
@@ -103,7 +98,6 @@ class RotaryEmbedding(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "rotary_percentage": self.rotary_percentage,
                 "max_wavelength": self.max_wavelength,
             }
         )
