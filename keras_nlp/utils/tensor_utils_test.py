@@ -14,9 +14,10 @@
 
 import tensorflow as tf
 
+from keras_nlp.backend import ops
 from keras_nlp.tests.test_case import TestCase
+from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.utils.tensor_utils import tensor_to_list
-from keras_nlp.utils.tensor_utils import tensor_to_string_list
 
 
 class TensorToListTest(TestCase):
@@ -35,19 +36,59 @@ class TensorToListTest(TestCase):
         list_output = tensor_to_list(input_data)
         self.assertEqual(list_output, 1)
 
-
-class TensorToStringListTest(TestCase):
-    def test_detokenize_to_strings_for_ragged(self):
+    def test_ragged_strings(self):
         input_data = tf.ragged.constant([["▀▁▂▃", "samurai"]])
-        detokenize_output = tensor_to_string_list(input_data)
+        detokenize_output = tensor_to_list(input_data)
         self.assertAllEqual(detokenize_output, [["▀▁▂▃", "samurai"]])
 
-    def test_detokenize_to_strings_for_dense(self):
+    def test_dense_strings(self):
         input_data = tf.constant([["▀▁▂▃", "samurai"]])
-        detokenize_output = tensor_to_string_list(input_data)
+        detokenize_output = tensor_to_list(input_data)
         self.assertAllEqual(detokenize_output, [["▀▁▂▃", "samurai"]])
 
-    def test_detokenize_to_strings_for_scalar(self):
+    def test_scalar_string(self):
         input_data = tf.constant("▀▁▂▃")
-        detokenize_output = tensor_to_string_list(input_data)
+        detokenize_output = tensor_to_list(input_data)
         self.assertEqual(detokenize_output, "▀▁▂▃")
+
+
+class ConvertToRaggedBatch(TestCase):
+    def test_convert_1d_python(self):
+        inputs = [1, 2]
+        outputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
+        self.assertIsInstance(outputs, tf.RaggedTensor)
+        self.assertAllEqual(outputs, [[1, 2]])
+        self.assertTrue(unbatched)
+        self.assertTrue(rectangular)
+
+    def test_convert_2d_python(self):
+        inputs = [[1, 2], [2]]
+        outputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
+        self.assertIsInstance(outputs, tf.RaggedTensor)
+        self.assertAllEqual(outputs, [[1, 2], [2]])
+        self.assertFalse(unbatched)
+        self.assertFalse(rectangular)
+
+    def test_convert_1d_tensor(self):
+        inputs = ops.array([1, 2, 3])
+        outputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
+        self.assertIsInstance(outputs, tf.RaggedTensor)
+        self.assertAllEqual(outputs, [[1, 2, 3]])
+        self.assertTrue(unbatched)
+        self.assertTrue(rectangular)
+
+    def test_convert_2d_tensor(self):
+        inputs = ops.array([[1, 2, 3], [1, 2, 3]])
+        outputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
+        self.assertIsInstance(outputs, tf.RaggedTensor)
+        self.assertAllEqual(outputs, [[1, 2, 3], [1, 2, 3]])
+        self.assertFalse(unbatched)
+        self.assertTrue(rectangular)
+
+    def test_convert_ragged(self):
+        inputs = tf.ragged.constant([[1, 2], [1]])
+        outputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
+        self.assertIsInstance(outputs, tf.RaggedTensor)
+        self.assertAllEqual(outputs, [[1, 2], [1]])
+        self.assertFalse(unbatched)
+        self.assertFalse(rectangular)

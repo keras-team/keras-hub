@@ -16,13 +16,16 @@ import random
 import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
+from keras_nlp.layers.preprocessing.preprocessing_layer import (
+    PreprocessingLayer,
+)
+from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.utils.tensor_utils import is_integer_dtype
 from keras_nlp.utils.tensor_utils import is_string_dtype
 
 
 @keras_nlp_export("keras_nlp.layers.RandomDeletion")
-class RandomDeletion(keras.layers.Layer):
+class RandomDeletion(PreprocessingLayer):
     """Augments input by randomly deleting tokens.
 
     This layer comes in handy when you need to generate new data using deletion
@@ -33,8 +36,9 @@ class RandomDeletion(keras.layers.Layer):
     augmentation, you can split by character for character level swaps, or by
     word for word level swaps.
 
-    Input should be either a `tf.RaggedTensor` or a dense `tf.Tensor`, and
-    either rank-1 or rank-2.
+    Input data should be passed as tensors, `tf.RaggedTensor`s, or lists. For
+    batched input, inputs should be a list of lists or a rank two tensor. For
+    unbatched inputs, each element should be a list or a rank one tensor.
 
     Args:
         rate: The probability of a token being chosen for deletion.
@@ -127,6 +131,7 @@ class RandomDeletion(keras.layers.Layer):
             )
 
         super().__init__(dtype=dtype, name=name, **kwargs)
+
         self.rate = rate
         self.max_deletions = max_deletions
         self.seed = random.randint(1, 1e9) if seed is None else seed
@@ -162,22 +167,7 @@ class RandomDeletion(keras.layers.Layer):
             )
 
     def call(self, inputs):
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
-
-        input_is_1d = False
-        if inputs.shape.rank < 1 or inputs.shape.rank > 2:
-            raise ValueError(
-                "Input must either be rank 1 or rank 2. Received input with "
-                f"rank={inputs.shape.rank}"
-            )
-        elif inputs.shape.rank == 1:
-            input_is_1d = True
-            # Add a new axis at the beginning.
-            inputs = tf.expand_dims(inputs, axis=0)
-        if isinstance(inputs, tf.Tensor):
-            # Convert to ragged tensor.
-            inputs = tf.RaggedTensor.from_tensor(inputs)
+        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
 
         skip_masks = None
         if self.skip_list:
@@ -252,7 +242,7 @@ class RandomDeletion(keras.layers.Layer):
 
         inputs = tf.ragged.boolean_mask(inputs, mask)
 
-        if input_is_1d:
+        if unbatched:
             inputs = tf.squeeze(inputs, axis=0)
 
         return inputs
@@ -270,3 +260,8 @@ class RandomDeletion(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(self, inputs_shape):
+        inputs_shape = list(inputs_shape)
+        inputs_shape[-1] = None
+        return tuple(inputs_shape)

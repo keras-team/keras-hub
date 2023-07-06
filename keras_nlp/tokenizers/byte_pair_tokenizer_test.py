@@ -16,7 +16,6 @@ import os
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.tests.test_case import TestCase
@@ -44,7 +43,7 @@ class BytePairTokenizerTest(TestCase):
         input_data = ["brown.", "black."]
         call_output = self.tokenizer(input_data)
         tokenize_output = self.tokenizer.tokenize(input_data)
-        expected = tf.ragged.constant([[31876, 4], [14178, 4]])
+        expected = [[31876, 4], [14178, 4]]
         self.assertAllEqual(call_output, expected)
         self.assertAllEqual(tokenize_output, expected)
 
@@ -55,15 +54,13 @@ class BytePairTokenizerTest(TestCase):
     def test_tokenize_string_output(self):
         input_data = ["quick brown fox.", "slow black bear."]
         tokenizer = BytePairTokenizer(
-            vocabulary=VOCAB_PATH, merges=MERGE_PATH, dtype=tf.string
+            vocabulary=VOCAB_PATH, merges=MERGE_PATH, dtype="string"
         )
         call_output = tokenizer(input_data)
-        expected = tf.ragged.constant(
-            [
-                ["quick", "Ġbrown", "Ġfox", "."],
-                ["slow", "Ġblack", "Ġbear", "."],
-            ]
-        )
+        expected = [
+            ["quick", "Ġbrown", "Ġfox", "."],
+            ["slow", "Ġblack", "Ġbear", "."],
+        ]
         self.assertAllEqual(call_output, expected)
 
     def test_tokenize_with_special_tokens(self):
@@ -83,24 +80,19 @@ class BytePairTokenizerTest(TestCase):
             merges=merges,
         )
         output = tokenizer("sp")
-        self.assertEqual(output, [0])
+        self.assertAllEqual(output, [0])
 
     def test_tokenize_prefix_space(self):
         input_data = ["brown.", "black."]
         tokenizer = BytePairTokenizer(
             vocabulary=VOCAB_PATH,
             merges=MERGE_PATH,
-            dtype=tf.string,
+            dtype="string",
             add_prefix_space=True,
         )
         call_output = tokenizer(input_data)
 
-        expected = tf.ragged.constant(
-            [
-                ["Ġbrown", "."],
-                ["Ġblack", "."],
-            ]
-        )
+        expected = [["Ġbrown", "."], ["Ġblack", "."]]
         self.assertAllEqual(call_output, expected)
 
     def test_tokenize_scalar_input(self):
@@ -115,7 +107,7 @@ class BytePairTokenizerTest(TestCase):
         self.assertAllEqual(input_data, decoded)
 
     def test_detokenize_list_input(self):
-        input_data = ["quick brown fox.", "slow black bear."]
+        input_data = ["quick brown fox.", "slow bear"]
         encoded = self.tokenizer.tokenize(input_data)
         decoded = self.tokenizer.detokenize(encoded)
         self.assertAllEqual(input_data, decoded)
@@ -163,9 +155,10 @@ class BytePairTokenizerTest(TestCase):
         ds = tf.data.Dataset.from_tensor_slices(data)
         ds = ds.batch(2).map(self.tokenizer)
         encoded = next(iter(ds))
-        expected = tf.ragged.constant(
-            [[100, 524, 95, 10, 1296, 6755], [100, 524, 67, 10, 1296, 6755]]
-        )
+        expected = [
+            [100, 524, 95, 10, 1296, 6755],
+            [100, 524, 67, 10, 1296, 6755],
+        ]
         self.assertAllEqual(encoded, expected)
 
     def test_config(self):
@@ -178,20 +171,15 @@ class BytePairTokenizerTest(TestCase):
             cloned_tokenizer(input_data),
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    @pytest.mark.tf_only
+    def test_saved_model(self):
         input_data = tf.constant(["the quick brown whale."])
         tokenizer = self.tokenizer
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),

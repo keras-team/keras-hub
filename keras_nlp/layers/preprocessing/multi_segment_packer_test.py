@@ -13,12 +13,8 @@
 # limitations under the License.
 """Tests for multi-segment packing."""
 
-import os
+import numpy as np
 
-import tensorflow as tf
-from absl.testing import parameterized
-
-from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
@@ -27,132 +23,144 @@ from keras_nlp.tests.test_case import TestCase
 
 class MultiSegmentPackerTest(TestCase):
     def test_trim_single_input_ints(self):
-        input_data = tf.range(3, 10)
-        packer = MultiSegmentPacker(8, start_value=1, end_value=2)
-        output = packer(input_data)
-        self.assertAllEqual(
-            output, ([1, 3, 4, 5, 6, 7, 8, 2], [0, 0, 0, 0, 0, 0, 0, 0])
+        input_data = np.arange(3, 10)
+        packer = MultiSegmentPacker(
+            sequence_length=8, start_value=1, end_value=2
         )
+        token_ids, segment_ids = packer(input_data)
+        self.assertAllEqual(token_ids, [1, 3, 4, 5, 6, 7, 8, 2])
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 0, 0, 0, 0])
 
     def test_trim_single_input_strings(self):
-        input_data = tf.constant(["a", "b", "c", "d"])
-        packer = MultiSegmentPacker(5, start_value="[CLS]", end_value="[SEP]")
-        output = packer(input_data)
-        self.assertAllEqual(
-            output, (["[CLS]", "a", "b", "c", "[SEP]"], [0, 0, 0, 0, 0])
+        input_data = np.array(["a", "b", "c", "d"])
+        packer = MultiSegmentPacker(
+            sequence_length=5, start_value="[CLS]", end_value="[SEP]"
         )
+        token_ids, segment_ids = packer(input_data)
+        self.assertAllEqual(token_ids, ["[CLS]", "a", "b", "c", "[SEP]"])
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 0])
 
     def test_trim_multiple_inputs_round_robin(self):
-        seq1 = tf.constant(["a", "b", "c"])
-        seq2 = tf.constant(["x", "y", "z"])
+        seq1 = ["a", "b", "c"]
+        seq2 = ["x", "y", "z"]
         packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", truncate="round_robin"
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            truncate="round_robin",
         )
-        output = packer([seq1, seq2])
+        token_ids, segment_ids = packer([seq1, seq2])
         self.assertAllEqual(
-            output,
-            (
-                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
-                [0, 0, 0, 0, 1, 1, 1],
-            ),
+            token_ids, ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"]
         )
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 1, 1, 1])
 
     def test_trim_multiple_inputs_waterfall(self):
-        seq1 = tf.constant(["a", "b", "c"])
-        seq2 = tf.constant(["x", "y", "z"])
+        seq1 = ["a", "b", "c"]
+        seq2 = ["x", "y", "z"]
         packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", truncate="waterfall"
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            truncate="waterfall",
         )
-        output = packer([seq1, seq2])
+        token_ids, segment_ids = packer([seq1, seq2])
         self.assertAllEqual(
-            output,
-            (
-                ["[CLS]", "a", "b", "c", "[SEP]", "x", "[SEP]"],
-                [0, 0, 0, 0, 0, 1, 1],
-            ),
+            token_ids, ["[CLS]", "a", "b", "c", "[SEP]", "x", "[SEP]"]
         )
+        self.assertAllEqual(segment_ids, [0, 0, 0, 0, 0, 1, 1])
 
     def test_trim_batched_inputs_round_robin(self):
-        seq1 = tf.constant([["a", "b", "c"], ["a", "b", "c"]])
-        seq2 = tf.constant([["x", "y", "z"], ["x", "y", "z"]])
+        seq1 = [["a", "b", "c"], ["a", "b", "c"]]
+        seq2 = [["x", "y", "z"], ["x", "y", "z"]]
         packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", truncate="round_robin"
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            truncate="round_robin",
         )
-        output = packer([seq1, seq2])
+        token_ids, segment_ids = packer([seq1, seq2])
         self.assertAllEqual(
-            output,
-            (
-                [
-                    ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
-                    ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
-                ],
-                [
-                    [0, 0, 0, 0, 1, 1, 1],
-                    [0, 0, 0, 0, 1, 1, 1],
-                ],
-            ),
+            token_ids,
+            [
+                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
+                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
+            ],
+        )
+        self.assertAllEqual(
+            segment_ids,
+            [
+                [0, 0, 0, 0, 1, 1, 1],
+                [0, 0, 0, 0, 1, 1, 1],
+            ],
         )
 
     def test_trim_batched_inputs_waterfall(self):
-        seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b"]])
-        seq2 = tf.constant([["x", "y", "z"], ["x", "y", "z"]])
+        seq1 = [["a", "b", "c"], ["a", "b"]]
+        seq2 = [["x", "y", "z"], ["x", "y", "z"]]
         packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", truncate="waterfall"
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            truncate="waterfall",
         )
-        output = packer([seq1, seq2])
+        token_ids, segment_ids = packer([seq1, seq2])
         self.assertAllEqual(
-            output,
-            (
-                [
-                    ["[CLS]", "a", "b", "c", "[SEP]", "x", "[SEP]"],
-                    ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
-                ],
-                [
-                    [0, 0, 0, 0, 0, 1, 1],
-                    [0, 0, 0, 0, 1, 1, 1],
-                ],
-            ),
+            token_ids,
+            [
+                ["[CLS]", "a", "b", "c", "[SEP]", "x", "[SEP]"],
+                ["[CLS]", "a", "b", "[SEP]", "x", "y", "[SEP]"],
+            ],
+        )
+        self.assertAllEqual(
+            segment_ids,
+            [
+                [0, 0, 0, 0, 0, 1, 1],
+                [0, 0, 0, 0, 1, 1, 1],
+            ],
         )
 
     def test_pad_inputs(self):
-        seq1 = tf.constant(["a"])
-        seq2 = tf.constant(["x"])
+        seq1 = ["a"]
+        seq2 = ["x"]
         packer = MultiSegmentPacker(
             6, start_value="[CLS]", end_value="[SEP]", pad_value="[PAD]"
         )
-        output = packer([seq1, seq2])
+        token_ids, segment_ids = packer([seq1, seq2])
         self.assertAllEqual(
-            output,
-            (
-                ["[CLS]", "a", "[SEP]", "x", "[SEP]", "[PAD]"],
-                [0, 0, 0, 1, 1, 0],
-            ),
+            token_ids,
+            ["[CLS]", "a", "[SEP]", "x", "[SEP]", "[PAD]"],
         )
+        self.assertAllEqual(segment_ids, [0, 0, 0, 1, 1, 0])
 
     def test_pad_batched_inputs(self):
-        seq1 = tf.ragged.constant([["a"], ["a"]])
-        seq2 = tf.ragged.constant([["x"], ["x", "y"]])
+        seq1 = [["a"], ["a"]]
+        seq2 = [["x"], ["x", "y"]]
         packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", pad_value="[PAD]"
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            pad_value="[PAD]",
         )
-        output = packer([seq1, seq2])
+        token_ids, segment_ids = packer([seq1, seq2])
         self.assertAllEqual(
-            output,
-            (
-                [
-                    ["[CLS]", "a", "[SEP]", "x", "[SEP]", "[PAD]", "[PAD]"],
-                    ["[CLS]", "a", "[SEP]", "x", "y", "[SEP]", "[PAD]"],
-                ],
-                [
-                    [0, 0, 0, 1, 1, 0, 0],
-                    [0, 0, 0, 1, 1, 1, 0],
-                ],
-            ),
+            token_ids,
+            [
+                ["[CLS]", "a", "[SEP]", "x", "[SEP]", "[PAD]", "[PAD]"],
+                ["[CLS]", "a", "[SEP]", "x", "y", "[SEP]", "[PAD]"],
+            ],
+        )
+        self.assertAllEqual(
+            segment_ids,
+            [
+                [0, 0, 0, 1, 1, 0, 0],
+                [0, 0, 0, 1, 1, 1, 0],
+            ],
         )
 
     def test_list_special_tokens(self):
-        seq1 = tf.ragged.constant([["a", "b"], ["a", "b"]])
-        seq2 = tf.ragged.constant([["x", "y"], ["x"]])
+        seq1 = [["a", "b"], ["a", "b"]]
+        seq2 = [["x", "y"], ["x"]]
         packer = MultiSegmentPacker(
             8,
             start_value="<s>",
@@ -161,57 +169,35 @@ class MultiSegmentPackerTest(TestCase):
             pad_value="<pad>",
             truncate="round_robin",
         )
-        output = packer([seq1, seq2])
+        token_ids, segment_ids = packer([seq1, seq2])
         self.assertAllEqual(
-            output,
-            (
-                [
-                    ["<s>", "a", "b", "</s>", "</s>", "x", "y", "</s>"],
-                    ["<s>", "a", "b", "</s>", "</s>", "x", "</s>", "<pad>"],
-                ],
-                [
-                    [0, 0, 0, 0, 0, 1, 1, 1],
-                    [0, 0, 0, 0, 0, 1, 1, 0],
-                ],
-            ),
+            token_ids,
+            [
+                ["<s>", "a", "b", "</s>", "</s>", "x", "y", "</s>"],
+                ["<s>", "a", "b", "</s>", "</s>", "x", "</s>", "<pad>"],
+            ],
+        )
+        self.assertAllEqual(
+            segment_ids,
+            [
+                [0, 0, 0, 0, 0, 1, 1, 1],
+                [0, 0, 0, 0, 0, 1, 1, 0],
+            ],
         )
 
     def test_config(self):
-        seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b"]])
-        seq2 = tf.ragged.constant([["x", "y", "z"], ["x", "y", "z"]])
+        seq1 = [["a", "b", "c"], ["a", "b"]]
+        seq2 = [["x", "y", "z"], ["x", "y", "z"]]
         original_packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", truncate="waterfall"
+            sequence_length=7,
+            start_value="[CLS]",
+            end_value="[SEP]",
+            truncate="waterfall",
         )
         cloned_packer = MultiSegmentPacker.from_config(
             original_packer.get_config()
         )
-        self.assertAllEqual(
-            original_packer([seq1, seq2]),
-            cloned_packer([seq1, seq2]),
-        )
-
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
-        seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b"]])
-        seq2 = tf.ragged.constant([["x", "y", "z"], ["x", "y", "z"]])
-        packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", truncate="waterfall"
-        )
-        inputs = (
-            keras.Input(dtype="string", ragged=True, shape=(None,)),
-            keras.Input(dtype="string", ragged=True, shape=(None,)),
-        )
-        outputs = packer(inputs)
-        model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
-        restored_model = keras.models.load_model(path)
-        self.assertAllEqual(
-            model((seq1, seq2)),
-            restored_model((seq1, seq2)),
-        )
+        token_ids, segment_ids = original_packer([seq1, seq2])
+        cloned_token_ids, cloned_segment_ids = cloned_packer([seq1, seq2])
+        self.assertAllEqual(token_ids, cloned_token_ids)
+        self.assertAllEqual(segment_ids, cloned_segment_ids)

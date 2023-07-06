@@ -27,9 +27,10 @@ class RandomDeletionTest(TestCase):
         split = tf.strings.split(inputs)
         augmenter = RandomDeletion(rate=0.4, max_deletions=1, seed=42)
         augmented = augmenter(split)
-        output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"I like", b"and Tensorflow"]
+        output = [
+            tf.strings.reduce_join(x, separator=" ", axis=-1) for x in augmented
+        ]
+        exp_output = ["I like", "and Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
     def test_shape_and_output_from_character_swaps(self):
@@ -38,9 +39,8 @@ class RandomDeletionTest(TestCase):
         split = tf.strings.unicode_split(inputs, "UTF-8")
         augmenter = RandomDeletion(rate=0.4, max_deletions=1, seed=42)
         augmented = augmenter(split)
-        output = tf.strings.reduce_join(augmented, axis=-1)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey I lie", b"Keras and Tensoflow"]
+        output = [tf.strings.reduce_join(x, axis=-1) for x in augmented]
+        exp_output = ["Hey I lie", "Keras and Tensoflow"]
         self.assertAllEqual(output, exp_output)
 
     def test_with_integer_tokens(self):
@@ -48,7 +48,6 @@ class RandomDeletionTest(TestCase):
         inputs = tf.constant([[1, 2], [3, 4]])
         augmenter = RandomDeletion(rate=0.4, max_deletions=4, seed=42)
         output = augmenter(inputs)
-        self.assertAllEqual(output.to_tensor().shape[0], inputs.shape[0])
         exp_output = [[2], [4]]
         self.assertAllEqual(output, exp_output)
 
@@ -61,8 +60,7 @@ class RandomDeletionTest(TestCase):
         split = tf.strings.split(inputs)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"I like", b"and Tensorflow"]
+        exp_output = ["I like", "and Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
@@ -75,8 +73,7 @@ class RandomDeletionTest(TestCase):
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey like", b"Keras Tensorflow"]
+        exp_output = ["Hey like", "Keras Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
         def skip_py_fn(word):
@@ -89,8 +86,7 @@ class RandomDeletionTest(TestCase):
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"Hey like", b"Keras Tensorflow"]
+        exp_output = ["Hey like", "Keras Tensorflow"]
 
     def test_get_config_and_from_config(self):
         augmenter = RandomDeletion(rate=0.4, max_deletions=1, seed=42)
@@ -120,7 +116,7 @@ class RandomDeletionTest(TestCase):
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
 
-        exp_output = [[b"I", b"like"], [b"Keras", b"and", b"Tensorflow"]]
+        exp_output = [["I", "like"], ["Keras", "and", "Tensorflow"]]
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
@@ -136,7 +132,7 @@ class RandomDeletionTest(TestCase):
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-        exp_output = [[b"I", b"like"], [b"and", b"Tensorflow"]]
+        exp_output = [["I", "like"], ["and", "Tensorflow"]]
         self.assertAllEqual(output, exp_output)
 
         augmenter = RandomDeletion(
@@ -146,7 +142,7 @@ class RandomDeletionTest(TestCase):
         ds = ds.map(augmenter)
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
-        exp_output = [[b"Hey", b"I", b"like"], [b"and", b"Tensorflow"]]
+        exp_output = [["Hey", "I", "like"], ["and", "Tensorflow"]]
         self.assertAllEqual(output, exp_output)
 
     def test_batch_first_augment_second(self):
@@ -158,7 +154,7 @@ class RandomDeletionTest(TestCase):
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
 
-        exp_output = [[b"I", b"like"], [b"and", b"Tensorflow"]]
+        exp_output = [["I", "like"], ["and", "Tensorflow"]]
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
@@ -173,7 +169,7 @@ class RandomDeletionTest(TestCase):
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        exp_output = [[b"I", b"like"], [b"and", b"Tensorflow"]]
+        exp_output = [["I", "like"], ["and", "Tensorflow"]]
         self.assertAllEqual(output, exp_output)
 
         augmenter = RandomDeletion(
@@ -182,17 +178,5 @@ class RandomDeletionTest(TestCase):
         ds = tf.data.Dataset.from_tensor_slices(split)
         ds = ds.batch(5).map(augmenter)
         output = ds.take(1).get_single_element()
-        exp_output = [[b"Hey", b"I", b"like"], [b"and", b"Tensorflow"]]
+        exp_output = [["Hey", "I", "like"], ["and", "Tensorflow"]]
         self.assertAllEqual(output, exp_output)
-
-    def test_functional_model(self):
-        keras.utils.set_random_seed(1337)
-        input_data = tf.constant(["Hey I like", "Keras and Tensorflow"])
-        augmenter = RandomDeletion(rate=0.4, max_deletions=1, seed=42)
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = augmenter(tf.strings.split(inputs))
-        model = keras.Model(inputs, outputs)
-        model_output = model(input_data)
-        self.assertAllEqual(
-            model_output, [[b"I", b"like"], [b"and", b"Tensorflow"]]
-        )
