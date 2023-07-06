@@ -42,7 +42,8 @@ if keras_core.config.backend() == "tensorflow" or not multi_backend():
             if static_shape[i] != 1:
                 squeezable = False
         if squeezable:
-            indices = tf.squeeze(indices, leftover_axes)
+            if leftover_axes:
+                indices = tf.squeeze(indices, leftover_axes)
             return tf.gather(x, indices, batch_dims=axis)
         # Otherwise, fall back to the tfnp call.
         return keras_core.src.backend.tensorflow.numpy.take_along_axis(

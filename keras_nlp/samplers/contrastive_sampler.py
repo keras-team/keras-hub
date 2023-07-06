@@ -21,6 +21,7 @@ from keras_nlp.backend import keras
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import call_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
+from keras_nlp.utils.tensor_utils import assert_tf_backend
 
 
 @format_docstring(call_args=call_args_docstring)
@@ -78,6 +79,8 @@ class ContrastiveSampler(Sampler):
         seed=None,
         **kwargs,
     ):
+        assert_tf_backend(self.__class__.__name__)
+
         super().__init__(**kwargs)
         self.k = k
         self.alpha = alpha
