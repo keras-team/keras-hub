@@ -14,7 +14,6 @@
 import os
 
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.tests.test_case import TestCase
@@ -133,18 +132,12 @@ class TestNoopPipelineModel(TestCase):
         model.test_on_batch(x=x, y=y)
         model.predict_on_batch(x=x)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model = NoopPipeline()
         x = tf.random.uniform((8, 5))
         model_output = model.predict(x)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(
             path, custom_objects={"NoopPipeline": NoopPipeline}
         )
@@ -251,18 +244,12 @@ class TestFeaturePreprocessingModel(TestCase):
         model.test_on_batch(x=x, y=y)
         model.predict_on_batch(x=x)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model = FeaturePipeline()
         x = tf.strings.as_string(tf.random.uniform((8, 5)))
         model_output = model.predict(x)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(
             path, custom_objects={"FeaturePipeline": FeaturePipeline}
         )
@@ -362,18 +349,12 @@ class TestLabelPreprocessingModel(TestCase):
         model.test_on_batch(x=x, y=y)
         model.predict_on_batch(x=x)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model = LabelPipeline()
         x = tf.random.uniform((8, 5))
         model_output = model.predict(x)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(
             path, custom_objects={"LabelPipeline": LabelPipeline}
         )
@@ -456,18 +437,12 @@ class TestDataPreprocessingModel(TestCase):
         model.test_on_batch(x=x, y=y)
         model.predict_on_batch(x=x)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model = DataPipeline()
         data = tf.strings.as_string(tf.random.uniform((8, 1)))
         model_output = model.predict(data)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(
             path, custom_objects={"DataPipeline": DataPipeline}
         )
@@ -507,18 +482,12 @@ class TestFunctional(TestCase):
         model.fit(x=x, y=y, batch_size=8)
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model = FunctionalPipeline()
         x = tf.strings.as_string(tf.random.uniform((8, 5)))
         model_output = model.predict(x)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(
             path, custom_objects={"FunctionalPipeline": FunctionalPipeline}
         )

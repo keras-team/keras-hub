@@ -19,7 +19,6 @@ import os
 import pytest
 import sentencepiece
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
@@ -91,22 +90,16 @@ class AlbertTokenizerTest(TestCase):
             self.tokenizer.get_config(),
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         input_data = tf.constant(["the quick brown fox"])
 
         inputs = keras.Input(dtype="string", shape=())
         outputs = self.tokenizer(inputs)
         model = keras.Model(inputs, outputs)
 
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
 
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
