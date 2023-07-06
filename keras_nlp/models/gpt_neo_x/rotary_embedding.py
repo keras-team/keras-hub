@@ -74,7 +74,7 @@ class RotaryEmbedding(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "rotary_percentage": self.rotary_percentage,
+                "percentage": self.percentage,
                 "max_wavelength": self.max_wavelength,
             }
         )
