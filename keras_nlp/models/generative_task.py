@@ -13,6 +13,8 @@
 # limitations under the License.
 """Base class for Generative Task models."""
 
+import itertools
+
 import tensorflow as tf
 
 from keras_nlp.backend import config
@@ -76,32 +78,51 @@ class GenerativeTask(Task):
 
             @jax.jit
             def compiled_generate_function(inputs, end_token_id, state):
-                # Gather variable mapping
-                mapping = zip(self._sampler.variables, state)
+                (
+                    sampler_variables,
+                    trainable_variables,
+                    non_trainable_variables,
+                ) = state
+                mapping = itertools.chain(
+                    zip(self._sampler.variables, sampler_variables),
+                    zip(self.trainable_variables, trainable_variables),
+                    zip(self.non_trainable_variables, non_trainable_variables),
+                )
 
                 with keras.StatelessScope(state_mapping=mapping) as scope:
                     outputs = self.generate_step(inputs, end_token_id)
 
-                state = []
+                # Get updated sampler variables from the stateless scope.
+                sampler_variables = []
                 for v in self._sampler.variables:
                     new_v = scope.get_current_value(v)
-                    state.append(new_v if new_v is not None else v)
+                    sampler_variables.append(new_v if new_v is not None else v)
+                state = (
+                    sampler_variables,
+                    trainable_variables,
+                    non_trainable_variables,
+                )
                 return outputs, state
 
             def wrapped_generate_function(
                 inputs,
                 end_token_id=None,
             ):
-                state = self._sampler.variables
+                # Create an explicit tuple of all variable state.
+                state = (
+                    self._sampler.variables,
+                    self.trainable_variables,
+                    self.non_trainable_variables,
+                )
                 inputs = tf.nest.map_structure(ops.convert_to_tensor, inputs)
                 outputs, state = compiled_generate_function(
                     inputs,
                     end_token_id,
                     state,
                 )
-                # As our state is so minimal (generally just random seeds), we
-                # can assign it each step without much worry for performance.
-                for ref_v, v in zip(self._sampler.variables, state):
+                # Only assign the sampler variables (random seeds), as other
+                # model variables should never be updated in generation.
+                for ref_v, v in zip(self._sampler.variables, state[0]):
                     ref_v.assign(v)
                 return outputs
 
