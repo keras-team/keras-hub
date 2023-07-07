@@ -30,10 +30,9 @@ class StartEndPacker(PreprocessingLayer):
     be called after tokenization. The layer will first trim inputs to fit, then
     add start/end tokens, and finally pad, if necessary, to `sequence_length`.
 
-    Input data should be passed as tensors or `tf.RaggedTensor` or lists. For
+    Input data should be passed as tensors, `tf.RaggedTensor`s, or lists. For
     batched input, inputs should be a list of lists or a rank two tensor. For
     unbatched inputs, each element should be a list or a rank one tensor.
-
 
     Args:
         sequence_length: int. The desired output length.

@@ -68,14 +68,14 @@ def convert_to_backend_tensor_or_python_list(x):
 
 
 def convert_to_ragged_batch(inputs):
-    """Convert pythonic or numpy-like input to a 2-D tf.RaggedTensor.
+    """Convert pythonic or numpy-like input to a 2-D `tf.RaggedTensor`.
 
     This is useful for text preprocessing layers which deal with already
     tokenized or split text.
 
     Args:
-        inputs: A numpy-like input passed to a layer's call method. This input
-            should represent a possibly batched list of token sequences.
+        inputs: A pythonic or numpy-like input to covert. This input should
+            represent a possibly batched list of token sequences.
 
     Returns:
         An `(inputs, unbatched, rectangular)` tuple, where `inputs` is a
