@@ -14,9 +14,11 @@
 """Tests for Top-P sampler."""
 
 import numpy as np
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
+from keras_nlp.backend import ops
 from keras_nlp.samplers.top_p_sampler import TopPSampler
 from keras_nlp.tests.test_case import TestCase
 
@@ -33,32 +35,33 @@ class TopPSamplerTest(TestCase):
 
         def next(prompt, cache, index):
             # Dummy hidden states.
-            hidden_states = tf.ones([self.batch_size, 5])
+            hidden_states = ops.ones([self.batch_size, 5])
             # Return a distribution favoring the next char in cache.
-            logits = tf.one_hot(cache[:, index], self.vocab_size) * 1e9
+            logits = ops.one_hot(cache[:, index], self.vocab_size) * 1e9
             return logits, hidden_states, cache
 
         self.next = next
         self.sampler = TopPSampler(p=0.1)
 
     def join_as_string(self, x):
-        return ["".join([self.int_lookup[i] for i in s]) for s in x.numpy()]
+        x = ops.convert_to_numpy(x)
+        return ["".join([self.int_lookup[i] for i in s]) for s in x]
 
     def test_stateless_call(self):
         def next(prompt, cache, index):
             # Dummy hidden states.
-            hidden_states = tf.ones([self.batch_size, 5])
+            hidden_states = ops.ones([self.batch_size, 5])
             # Return a distribution favoring the first token in the vocab.
             logits = (
-                tf.one_hot(
-                    tf.zeros(self.batch_size, dtype="int32"),
+                ops.one_hot(
+                    ops.zeros(self.batch_size, dtype="int32"),
                     self.vocab_size,
                 )
                 * 1e9
             )
             return logits, hidden_states, cache
 
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
             next=next,
             prompt=prompt,
@@ -68,8 +71,8 @@ class TopPSamplerTest(TestCase):
 
     def test_stateful_call(self):
         cache_chars = list("sequentially")
-        cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        cache = ops.array([[self.char_lookup[c] for c in cache_chars]])
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
             next=self.next,
             prompt=prompt,
@@ -79,8 +82,8 @@ class TopPSamplerTest(TestCase):
 
     def test_early_stopping(self):
         cache_chars = list("sequentially")
-        cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        cache = ops.array([[self.char_lookup[c] for c in cache_chars]])
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
             next=self.next,
             prompt=prompt,
@@ -92,13 +95,13 @@ class TopPSamplerTest(TestCase):
     def test_only_sample_from_top_k_tokens(self):
         def next(prompt, cache, index):
             # Dummy hidden states.
-            hidden_states = tf.ones([self.batch_size, 5])
+            hidden_states = ops.ones([self.batch_size, 5])
             # Return a distribution where each id is progressively less likely.
-            logits = tf.range(self.vocab_size, 0, -1, dtype="float32")
-            logits = tf.repeat(logits[tf.newaxis, :], self.batch_size, axis=0)
+            logits = ops.arange(self.vocab_size, 0, -1, dtype="float32")
+            logits = ops.repeat(logits[None, :], self.batch_size, axis=0)
             return logits, hidden_states, cache
 
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
         output = TopPSampler(p=1, k=5)(
             next=next,
             prompt=prompt,
@@ -111,41 +114,43 @@ class TopPSamplerTest(TestCase):
     def test_outputs_in_top_p(self):
         def next(prompt, cache, index):
             # Dummy hidden states.
-            hidden_states = tf.ones([self.batch_size, 5])
+            hidden_states = ops.ones([self.batch_size, 5])
             logits = np.zeros((self.batch_size, self.vocab_size))
-            return tf.constant(logits), hidden_states, cache
+            logits[:, :3] = 1.0
+            return ops.array(logits), hidden_states, cache
 
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
         output = TopPSampler(p=(2.0 / self.vocab_size))(
             next=next,
             prompt=prompt,
         )
-        output_ids = set(output[0].numpy())
+        output_ids = set(ops.convert_to_numpy(output[0]))
         self.assertContainsSubset(output_ids, range(3))
 
     def test_temperature(self):
         def next(prompt, cache, index):
             # Dummy hidden states.
-            hidden_states = tf.ones([self.batch_size, 5])
-            logits = tf.range(self.vocab_size, 0, -1, dtype="float32")
-            logits = tf.reshape(logits[tf.newaxis, :], (self.batch_size, -1))
-            return tf.constant(logits), hidden_states, cache
+            hidden_states = ops.ones([self.batch_size, 5])
+            logits = ops.arange(self.vocab_size, 0, -1, dtype="float32")
+            logits = ops.reshape(logits[None, :], (self.batch_size, -1))
+            return ops.array(logits), hidden_states, cache
 
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
 
         output = TopPSampler(p=0.5, temperature=1e-9)(
             next=next,
             prompt=prompt,
         )
-        self.assertAllEqual(output, tf.zeros_like(output))
+        self.assertAllEqual(output, ops.zeros_like(output))
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
+    @pytest.mark.tf_only
     def test_compilation(self, jit_compile):
         cache_chars = list("sequentially")
-        cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        cache = ops.array([[self.char_lookup[c] for c in cache_chars]])
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
 
         @tf.function(jit_compile=jit_compile)
         def generate(prompt, cache):

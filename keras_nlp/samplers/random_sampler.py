@@ -13,9 +13,9 @@
 # limitations under the License.
 """Random Sampler."""
 
-import tensorflow as tf
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import call_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
@@ -69,10 +69,10 @@ class RandomSampler(Sampler):
 
     def get_next_token(self, probabilities):
         # Sample the next token from the probability distribution.
-        next_token_id = tf.random.categorical(
-            tf.math.log(probabilities), 1, seed=self.seed, dtype="int32"
+        next_token_id = random.categorical(
+            ops.log(probabilities), 1, seed=self.seed, dtype="int32"
         )
-        return tf.squeeze(next_token_id, axis=-1)
+        return ops.squeeze(next_token_id, axis=-1)
 
     def get_config(self):
         config = super().get_config()
