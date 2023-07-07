@@ -102,6 +102,8 @@ class BeamSampler(Sampler):
         return_all_beams=False,
         **kwargs,
     ):
+        # Temporarily turn off beam search in other backends.
+        # No technical blockers here, just need tf -> ops rewrite.
         assert_tf_backend(self.__class__.__name__)
 
         super().__init__(**kwargs)
