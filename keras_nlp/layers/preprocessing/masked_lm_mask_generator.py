@@ -15,8 +15,11 @@
 import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
+from keras_nlp.layers.preprocessing.preprocessing_layer import (
+    PreprocessingLayer,
+)
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
 
 try:
     import tensorflow_text as tf_text
@@ -25,17 +28,22 @@ except ImportError:
 
 
 @keras_nlp_export("keras_nlp.layers.MaskedLMMaskGenerator")
-class MaskedLMMaskGenerator(keras.layers.Layer):
+class MaskedLMMaskGenerator(PreprocessingLayer):
     """Layer that applies language model masking.
 
     This layer is useful for preparing inputs for masked language modeling
-    (MaskedLM) tasks. It follows the masking strategy described in the [original BERT
-    paper](https://arxiv.org/abs/1810.04805). Given tokenized text,
-    it randomly selects certain number of tokens for masking. Then for each
-    selected token, it has a chance (configurable) to be replaced by
+    (MaskedLM) tasks. It follows the masking strategy described in the
+    [original BERT paper](https://arxiv.org/abs/1810.04805). Given tokenized
+    text, it randomly selects certain number of tokens for masking. Then for
+    each selected token, it has a chance (configurable) to be replaced by
     "mask token" or random token, or stay unchanged.
 
-    Users should use this layer with `tf.data` to generate masks.
+    Input data should be passed as tensors, `tf.RaggedTensor`s, or lists. For
+    batched input, inputs should be a list of lists or a rank two tensor. For
+    unbatched inputs, each element should be a list or a rank one tensor.
+
+    This layer can be used with `tf.data` to generate dynamic masks on the fly
+    during training.
 
     Args:
         vocabulary_size: int, the size of the vocabulary.
@@ -59,11 +67,6 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
             Note: mask_token_rate + random_token_rate <= 1,  and for
             (1 - mask_token_rate - random_token_rate), the token will not be
             changed. Defaults to `0.1`.
-
-    Input:
-        A 1D integer tensor of shape [sequence_length] or a 2D integer tensor
-        of shape [batch_size, sequence_length], or a 2D integer RaggedTensor.
-        Represents the sequence to mask.
 
     Returns:
         A Dict with 4 keys:
@@ -90,19 +93,19 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         mask_selection_length=5
     )
     # Dense input.
-    masker(tf.constant([1, 2, 3, 4, 5]))
+    masker([1, 2, 3, 4, 5])
 
     # Ragged input.
-    masker(tf.ragged.constant([[1, 2], [1, 2, 3, 4]]))
+    masker([[1, 2], [1, 2, 3, 4]])
     ```
 
     Masking a batch that contains special tokens.
     ```python
     pad_id, cls_id, sep_id, mask_id = 0, 1, 2, 3
-    batch = tf.constant([
+    batch = [
         [cls_id,   4,    5,      6, sep_id,    7,    8, sep_id, pad_id, pad_id],
         [cls_id,   4,    5, sep_id,      6,    7,    8,      9, sep_id, pad_id],
-    ])
+    ]
 
     masker = keras_nlp.layers.MaskedLMMaskGenerator(
         vocabulary_size = 10,
@@ -115,7 +118,6 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
             pad_id,
         ]
     )
-
     masker(batch)
     ```
     """
@@ -134,6 +136,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         assert_tf_text_installed(self.__class__.__name__)
 
         super().__init__(**kwargs)
+
         self.vocabulary_size = vocabulary_size
         self.unselectable_token_ids = unselectable_token_ids
         self.mask_selection_rate = mask_selection_rate
@@ -165,15 +168,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         )
 
     def call(self, inputs):
-        input_is_ragged = isinstance(inputs, tf.RaggedTensor)
-        input_is_1d = inputs.shape.rank == 1
-        if input_is_1d:
-            # If inputs is of rank 1, we manually add the batch axis.
-            inputs = inputs[tf.newaxis, :]
-        if not input_is_ragged:
-            # `tf_text.mask_language_model` requires a ragged tensor, so
-            # convert dense to ragged.
-            inputs = tf.RaggedTensor.from_tensor(inputs)
+        inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
 
         (
             token_ids,
@@ -185,7 +180,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
             mask_values_chooser=self._mask_values_chooser,
         )
 
-        if not input_is_ragged:
+        if rectangular:
             # If we converted the input from dense to ragged, convert back.
             token_ids = token_ids.to_tensor()
 
@@ -197,7 +192,7 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
             mask_ids = mask_ids.to_tensor(shape=target_shape)
             mask_weights = mask_weights.to_tensor(shape=target_shape)
 
-        if input_is_1d:
+        if unbatched:
             # If inputs is 1D, we format the output to be 1D as well.
             token_ids = tf.squeeze(token_ids, axis=0)
             mask_positions = tf.squeeze(mask_positions, axis=0)

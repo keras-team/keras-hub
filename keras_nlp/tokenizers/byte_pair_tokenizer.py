@@ -33,6 +33,7 @@ from keras_nlp.tokenizers import tokenizer
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.utils.tensor_utils import is_integer_dtype
 from keras_nlp.utils.tensor_utils import is_string_dtype
 
@@ -245,18 +246,21 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     >>> vocab = {"butter": 1, "fly": 2}
     >>> merge = ["b u", "t t", "e r", "bu tt", "butt er", "f l", "fl y"]
     >>> tokenizer = keras_nlp.tokenizers.BytePairTokenizer(vocab, merge)
-    >>> tokenizer("butterfly")
-    <tf.Tensor: shape=(2,), dtype=int32, numpy=array([1, 2], dtype=int32)>
-    >>> tokenizer(["butterfly"])
-    <tf.RaggedTensor [[1, 2]]>
-    >>> tokenizer(["butterfly", "butter"])
-    <tf.RaggedTensor [[1, 2], [1]]>
+    >>> outputs = tokenizer("butterfly")
+    >>> np.array(outputs)
+    array([1, 2], dtype=int32)
+    >>> seq1, seq2 = tokenizer(["butterfly", "butter"])
+    >>> np.array(seq1)
+    array([1, 2], dtype=int32)
+    >>> np.array(seq2)
+    array([1], dtype=int32)
     >>> tokenizer = keras_nlp.tokenizers.BytePairTokenizer(
     ...     vocab, merge, sequence_length=2)
-    >>> tokenizer(["butterfly", "butter"])
-    <tf.Tensor: shape=(2, 2), dtype=int32, numpy=
-    array([[1, 2],
-           [1, 0]], dtype=int32)>
+    >>> seq1, seq2 = tokenizer(["butterfly", "butter"])
+    >>> np.array(seq1)
+    array([1, 2], dtype=int32)
+    >>> np.array(seq2)
+    array([1, 0], dtype=int32)
 
     Detokenize
     >>> vocab = {"butter": 1, "fly": 2}
@@ -556,22 +560,19 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
-
-        scalar_input = inputs.shape.rank == 0
-        if scalar_input:
-            inputs = tf.expand_dims(inputs, 0)
+        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
 
         unicode_text = tf.strings.reduce_join(
             self.id_to_token_map.lookup(inputs), axis=-1
         )
         split_unicode_text = tf.strings.unicode_split(unicode_text, "UTF-8")
-        byte_text = tf.strings.reduce_join(
+        outputs = tf.strings.reduce_join(
             self.unicode2byte.lookup(split_unicode_text), axis=-1
         )
 
-        return byte_text
+        if unbatched:
+            outputs = tf.squeeze(outputs, 0)
+        return outputs
 
     def _transform_bytes(self, tokens):
         """Map token bytes to unicode using `byte2unicode`."""

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
@@ -44,6 +45,7 @@ class TokenizerTest(TestCase):
         detokenize_output = tokenizer.detokenize(input_data)
         self.assertAllEqual(detokenize_output, ["the quick brown fox"])
 
+    @pytest.mark.tf_only
     def test_functional_model(self):
         input_data = tf.constant(["the   quick   brown   fox"])
         tokenizer = SimpleTokenizer()

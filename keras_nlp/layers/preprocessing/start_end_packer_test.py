@@ -13,47 +13,38 @@
 # limitations under the License.
 
 """Tests for Start End Packer layer."""
+
+
 import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.tests.test_case import TestCase
 
 
 class StartEndPackerTest(TestCase):
     def test_dense_input(self):
-        input_data = tf.constant([5, 6, 7])
+        input_data = [5, 6, 7]
         start_end_packer = StartEndPacker(sequence_length=5)
         output = start_end_packer(input_data)
         expected_output = [5, 6, 7, 0, 0]
         self.assertAllEqual(output, expected_output)
 
     def test_dense_2D_input(self):
-        input_data = tf.constant([[5, 6, 7]])
+        input_data = [[5, 6, 7]]
         start_end_packer = StartEndPacker(sequence_length=5)
         output = start_end_packer(input_data)
         expected_output = [[5, 6, 7, 0, 0]]
         self.assertAllEqual(output, expected_output)
 
     def test_ragged_input(self):
-        input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]])
+        input_data = [[5, 6, 7], [8, 9, 10, 11]]
         start_end_packer = StartEndPacker(sequence_length=5)
         output = start_end_packer(input_data)
         expected_output = [[5, 6, 7, 0, 0], [8, 9, 10, 11, 0]]
         self.assertAllEqual(output, expected_output)
 
-    def test_ragged_input_error(self):
-        input_data = tf.ragged.constant([[[5, 6, 7], [8, 9, 10, 11]]])
-        start_end_packer = StartEndPacker(sequence_length=5)
-        with self.assertRaisesRegex(
-            ValueError,
-            "Input must either be rank 1 or rank 2. Received input with "
-            "rank=3",
-        ):
-            start_end_packer(input_data)
-
     def test_start_end_token(self):
-        input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]])
+        input_data = [[5, 6, 7], [8, 9, 10, 11]]
         start_end_packer = StartEndPacker(
             sequence_length=6, start_value=1, end_value=2
         )
@@ -62,7 +53,7 @@ class StartEndPackerTest(TestCase):
         self.assertAllEqual(output, expected_output)
 
     def test_multiple_start_end_tokens(self):
-        input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11, 12, 13]])
+        input_data = [[5, 6, 7], [8, 9, 10, 11, 12, 13]]
         start_end_packer = StartEndPacker(
             sequence_length=8,
             start_value=[1, 2],
@@ -74,7 +65,7 @@ class StartEndPackerTest(TestCase):
         self.assertAllEqual(output, expected_output)
 
     def test_start_end_padding_value(self):
-        input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]])
+        input_data = [[5, 6, 7], [8, 9, 10, 11]]
         start_end_packer = StartEndPacker(
             sequence_length=7, start_value=1, end_value=2, pad_value=3
         )
@@ -83,7 +74,7 @@ class StartEndPackerTest(TestCase):
         self.assertAllEqual(output, expected_output)
 
     def test_end_token_value_during_truncation(self):
-        input_data = tf.ragged.constant([[5, 6], [8, 9, 10, 11, 12, 13]])
+        input_data = [[5, 6], [8, 9, 10, 11, 12, 13]]
         start_end_packer = StartEndPacker(
             sequence_length=5, start_value=1, end_value=2, pad_value=0
         )
@@ -92,9 +83,7 @@ class StartEndPackerTest(TestCase):
         self.assertAllEqual(output, expected_output)
 
     def test_string_input(self):
-        input_data = tf.ragged.constant(
-            [["KerasNLP", "is", "awesome"], ["amazing"]]
-        )
+        input_data = [["KerasNLP", "is", "awesome"], ["amazing"]]
         start_end_packer = StartEndPacker(
             sequence_length=5,
             start_value="[START]",
@@ -109,9 +98,7 @@ class StartEndPackerTest(TestCase):
         self.assertAllEqual(output, expected_output)
 
     def test_string_input_with_multiple_special_values(self):
-        input_data = tf.ragged.constant(
-            [["KerasNLP", "is", "awesome"], ["amazing"]]
-        )
+        input_data = [["KerasNLP", "is", "awesome"], ["amazing"]]
         start_end_packer = StartEndPacker(
             sequence_length=6,
             start_value=["[END]", "[START]"],
@@ -129,20 +116,6 @@ class StartEndPackerTest(TestCase):
         with self.assertRaises(ValueError):
             StartEndPacker(sequence_length=5, start_value=1.0)
 
-    def test_functional_model(self):
-        input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]])
-        start_end_packer = StartEndPacker(
-            sequence_length=7, start_value=1, end_value=2, pad_value=3
-        )
-
-        inputs = keras.Input(dtype="int32", shape=())
-        outputs = start_end_packer(inputs)
-        model = keras.Model(inputs, outputs)
-        model_output = model(input_data)
-
-        expected_output = [[1, 5, 6, 7, 2, 3, 3], [1, 8, 9, 10, 11, 2, 3]]
-        self.assertAllEqual(model_output, expected_output)
-
     def test_batch(self):
         start_end_packer = StartEndPacker(
             sequence_length=7, start_value=1, end_value=2, pad_value=3
@@ -155,12 +128,10 @@ class StartEndPackerTest(TestCase):
         output = ds.take(1).get_single_element()
 
         exp_output = [[1, 5, 6, 7, 2, 3, 3], [1, 8, 9, 10, 11, 2, 3]]
-
-        for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])
+        self.assertAllEqual(output, exp_output)
 
     def test_call_overrides(self):
-        x = tf.constant([5, 6, 7])
+        x = [5, 6, 7]
         packer = StartEndPacker(start_value=1, end_value=2, sequence_length=4)
         self.assertAllEqual(packer(x), [1, 5, 6, 2])
         self.assertAllEqual(packer(x, add_start_value=False), [5, 6, 7, 2])

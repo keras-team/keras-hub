@@ -14,8 +14,8 @@
 
 import os
 
+import pytest
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.tests.test_case import TestCase
@@ -24,19 +24,17 @@ from keras_nlp.tokenizers.byte_tokenizer import ByteTokenizer
 
 class ByteTokenizerTest(TestCase):
     def test_tokenize(self):
-        input_data = tf.constant(["hello", "fun", "▀▁▂▃"])
+        input_data = ["hello", "fun", "▀▁▂▃"]
         tokenizer = ByteTokenizer()
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
-        self.assertIsInstance(call_output, tf.RaggedTensor)
         exp_outputs = [
             [104, 101, 108, 108, 111],
             [102, 117, 110],
             [226, 150, 128, 226, 150, 129, 226, 150, 130, 226, 150, 131],
         ]
-        for i in range(call_output.shape[0]):
-            self.assertAllEqual(call_output[i], exp_outputs[i])
-            self.assertAllEqual(tokenize_output[i], exp_outputs[i])
+        self.assertAllEqual(call_output, exp_outputs)
+        self.assertAllEqual(tokenize_output, exp_outputs)
 
     def test_tokenize_scalar(self):
         input_data = "hello"
@@ -48,10 +46,9 @@ class ByteTokenizerTest(TestCase):
         self.assertAllEqual(tokenize_output, [104, 101, 108, 108, 111])
 
     def test_dense_output(self):
-        input_data = tf.constant(["hello", "fun", "▀▁▂▃"])
+        input_data = ["hello", "fun", "▀▁▂▃"]
         tokenizer = ByteTokenizer(sequence_length=10)
         call_output = tokenizer(input_data)
-        self.assertIsInstance(call_output, tf.Tensor)
         self.assertAllEqual(
             call_output,
             [
@@ -62,13 +59,11 @@ class ByteTokenizerTest(TestCase):
         )
 
     def test_detokenize(self):
-        input_data = tf.ragged.constant(
-            [
-                [104, 101, 108, 108, 111],
-                [102, 117, 110],
-                [226, 150, 128, 226, 150, 129, 226, 150, 130, 226, 150, 131],
-            ]
-        )
+        input_data = [
+            [104, 101, 108, 108, 111],
+            [102, 117, 110],
+            [226, 150, 128, 226, 150, 129, 226, 150, 130, 226, 150, 131],
+        ]
 
         tokenizer = ByteTokenizer()
         detokenize_output = tokenizer.detokenize(input_data)
@@ -76,21 +71,21 @@ class ByteTokenizerTest(TestCase):
 
     def test_detokenize_replace_error(self):
         # 226 is an invalid UTF-8 byte.
-        input_data = tf.ragged.constant([[104, 101, 226, 150, 108, 108, 111]])
+        input_data = [[104, 101, 226, 150, 108, 108, 111]]
 
         tokenizer = ByteTokenizer(errors="replace", replacement_char=341)
         detokenize_output = tokenizer.detokenize(input_data)
         self.assertAllEqual(detokenize_output, [b"he\xc5\x95llo"])
 
     def test_detokenize_ignore_error(self):
-        input_data = tf.ragged.constant([[104, 101, 226, 150, 108, 108, 111]])
+        input_data = [[104, 101, 226, 150, 108, 108, 111]]
 
         tokenizer = ByteTokenizer(errors="ignore")
         detokenize_output = tokenizer.detokenize(input_data)
         self.assertAllEqual(detokenize_output, [b"hello"])
 
     def test_detokenize_strict_error(self):
-        input_data = tf.ragged.constant([[104, 101, 226, 150, 108, 108, 111]])
+        input_data = [[104, 101, 226, 150, 108, 108, 111]]
 
         tokenizer = ByteTokenizer(errors="strict")
         with self.assertRaises(tf.errors.InvalidArgumentError):
@@ -101,7 +96,7 @@ class ByteTokenizerTest(TestCase):
         self.assertEqual(tokenizer.vocabulary_size(), 256)
 
     def test_lowercase(self):
-        input_data = tf.constant(["HeLlO wOrLd"])
+        input_data = ["HeLlO wOrLd"]
         tokenizer = ByteTokenizer()
         call_output = tokenizer(input_data)
         self.assertAllEqual(
@@ -110,7 +105,7 @@ class ByteTokenizerTest(TestCase):
         )
 
     def test_skip_lowercase(self):
-        input_data = tf.constant(["HeLlO wOrLd"])
+        input_data = ["HeLlO wOrLd"]
         tokenizer = ByteTokenizer(lowercase=False)
         call_output = tokenizer(input_data)
         self.assertAllEqual(
@@ -133,8 +128,7 @@ class ByteTokenizerTest(TestCase):
             [226, 150, 128, 226, 150, 129, 226, 150, 130, 226, 150, 131],
             [104, 97, 104, 97],
         ]
-        for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])
+        self.assertAllEqual(output, exp_output)
 
     def test_tokenize_first_batch_second_with_sequence_length(self):
         tokenizer = ByteTokenizer(sequence_length=10)
@@ -152,8 +146,7 @@ class ByteTokenizerTest(TestCase):
             [226, 150, 128, 226, 150, 129, 226, 150, 130, 226],
             [104, 97, 104, 97, 0, 0, 0, 0, 0, 0],
         ]
-        for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])
+        self.assertAllEqual(output, exp_output)
 
     def test_batch_first_tokenize_second(self):
         tokenizer = ByteTokenizer()
@@ -170,8 +163,7 @@ class ByteTokenizerTest(TestCase):
             [226, 150, 128, 226, 150, 129, 226, 150, 130, 226, 150, 131],
             [104, 97, 104, 97],
         ]
-        for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])
+        self.assertAllEqual(output, exp_output)
 
     def test_batch_first_tokenize_second_with_sequence_length(self):
         tokenizer = ByteTokenizer(sequence_length=10)
@@ -188,9 +180,9 @@ class ByteTokenizerTest(TestCase):
             [226, 150, 128, 226, 150, 129, 226, 150, 130, 226],
             [104, 97, 104, 97, 0, 0, 0, 0, 0, 0],
         ]
-        for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])
+        self.assertAllEqual(output, exp_output)
 
+    @pytest.mark.tf_only
     def test_functional_model(self):
         input_data = tf.constant(["hello", "fun", "▀▁▂▃"])
         tokenizer = ByteTokenizer()
@@ -201,7 +193,7 @@ class ByteTokenizerTest(TestCase):
         self.assertAllEqual(model_output, ["hello", "fun", "▀▁▂▃"])
 
     def test_load_model_with_config(self):
-        input_data = tf.constant(["hello"])
+        input_data = ["hello"]
 
         original_tokenizer = ByteTokenizer(
             lowercase=False,
@@ -244,11 +236,8 @@ class ByteTokenizerTest(TestCase):
         }
         self.assertEqual(tokenizer.get_config(), exp_config)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    @pytest.mark.tf_only
+    def test_saved_model(self):
         input_data = tf.constant(["this is fun"])
 
         tokenizer = ByteTokenizer(
@@ -261,10 +250,8 @@ class ByteTokenizerTest(TestCase):
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),

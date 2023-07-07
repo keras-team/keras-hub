@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Start End Packer implementation based on `keras.layers.Layer`."""
-
 import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
+from keras_nlp.layers.preprocessing.preprocessing_layer import (
+    PreprocessingLayer,
+)
+from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
 
 
 @keras_nlp_export("keras_nlp.layers.StartEndPacker")
-class StartEndPacker(keras.layers.Layer):
+class StartEndPacker(PreprocessingLayer):
     """Adds start and end tokens to a sequence and pads to a fixed length.
 
     This layer is useful when tokenizing inputs for tasks like translation,
@@ -29,8 +30,9 @@ class StartEndPacker(keras.layers.Layer):
     be called after tokenization. The layer will first trim inputs to fit, then
     add start/end tokens, and finally pad, if necessary, to `sequence_length`.
 
-    Input should be either a `tf.RaggedTensor` or a dense `tf.Tensor`, and
-    either rank-1 or rank-2.
+    Input data should be passed as tensors, `tf.RaggedTensor`s, or lists. For
+    batched input, inputs should be a list of lists or a rank two tensor. For
+    unbatched inputs, each element should be a list or a rank one tensor.
 
     Args:
         sequence_length: int. The desired output length.
@@ -60,57 +62,55 @@ class StartEndPacker(keras.layers.Layer):
     Examples:
 
     Unbatched input (int).
-    >>> input_data = tf.constant([5, 6, 7])
+    >>> inputs = [5, 6, 7]
     >>> start_end_packer = keras_nlp.layers.StartEndPacker(
     ...     sequence_length=7, start_value=1, end_value=2,
     ... )
-    >>> start_end_packer(input_data)
-    <tf.Tensor: shape=(7,), dtype=int32, numpy=
-    array([1, 5, 6, 7, 2, 0, 0], dtype=int32)>
+    >>> outputs = start_end_packer(inputs)
+    >>> np.array(outputs)
+    array([1, 5, 6, 7, 2, 0, 0], dtype=int32)
 
     Batched input (int).
-    >>> input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11, 12, 13, 14]])
+    >>> inputs = [[5, 6, 7], [8, 9, 10, 11, 12, 13, 14]]
     >>> start_end_packer = keras_nlp.layers.StartEndPacker(
     ...     sequence_length=6, start_value=1, end_value=2,
     ... )
-    >>> start_end_packer(input_data)
-    <tf.Tensor: shape=(2, 6), dtype=int32, numpy=
+    >>> outputs = start_end_packer(inputs)
+    >>> np.array(outputs)
     array([[ 1,  5,  6,  7,  2,  0],
-           [ 1,  8,  9, 10, 11,  2]], dtype=int32)>
+           [ 1,  8,  9, 10, 11,  2]], dtype=int32)
 
     Unbatched input (str).
-    >>> input_data = tf.constant(["this", "is", "fun"])
+    >>> inputs = tf.constant(["this", "is", "fun"])
     >>> start_end_packer = keras_nlp.layers.StartEndPacker(
     ...     sequence_length=6, start_value="<s>", end_value="</s>",
     ...     pad_value="<pad>"
     ... )
-    >>> start_end_packer(input_data)
-    <tf.Tensor: shape=(6,), dtype=string, numpy=
-    array([b'<s>', b'this', b'is', b'fun', b'</s>', b'<pad>'], dtype=object)>
+    >>> outputs = start_end_packer(inputs)
+    >>> np.array(outputs).astype("U")
+    array(['<s>', 'this', 'is', 'fun', '</s>', '<pad>'], dtype='<U5')
 
     Batched input (str).
-    >>> input_data = tf.ragged.constant([["this", "is", "fun"], ["awesome"]])
+    >>> inputs = tf.ragged.constant([["this", "is", "fun"], ["awesome"]])
     >>> start_end_packer = keras_nlp.layers.StartEndPacker(
     ...     sequence_length=6, start_value="<s>", end_value="</s>",
     ...     pad_value="<pad>"
     ... )
-    >>> start_end_packer(input_data)
-    <tf.Tensor: shape=(2, 6), dtype=string, numpy=
-    array([[b'<s>', b'this', b'is', b'fun', b'</s>', b'<pad>'],
-           [b'<s>', b'awesome', b'</s>', b'<pad>', b'<pad>', b'<pad>']],
-          dtype=object)>
+    >>> outputs = start_end_packer(inputs)
+    >>> np.array(outputs).astype("U")
+    array([['<s>', 'this', 'is', 'fun', '</s>', '<pad>'],
+           ['<s>', 'awesome', '</s>', '<pad>', '<pad>', '<pad>']], dtype='<U7')
 
     Multiple start tokens.
-    >>> input_data = tf.ragged.constant([["this", "is", "fun"], ["awesome"]])
+    >>> inputs = tf.ragged.constant([["this", "is", "fun"], ["awesome"]])
     >>> start_end_packer = keras_nlp.layers.StartEndPacker(
     ...     sequence_length=6, start_value=["</s>", "<s>"], end_value="</s>",
     ...     pad_value="<pad>"
     ... )
-    >>> start_end_packer(input_data)
-    <tf.Tensor: shape=(2, 6), dtype=string, numpy=
-    array([[b'</s>', b'<s>', b'this', b'is', b'fun', b'</s>'],
-        [b'</s>', b'<s>', b'awesome', b'</s>', b'<pad>', b'<pad>']],
-        dtype=object)>
+    >>> outputs = start_end_packer(inputs)
+    >>> np.array(outputs).astype("U")
+    array([['</s>', '<s>', 'this', 'is', 'fun', '</s>'],
+           ['</s>', '<s>', 'awesome', '</s>', '<pad>', '<pad>']], dtype='<U7')
     """
 
     def __init__(
@@ -157,28 +157,13 @@ class StartEndPacker(keras.layers.Layer):
         add_start_value=True,
         add_end_value=True,
     ):
+        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
+
         x = inputs  # Intermediate result.
-
-        if not isinstance(x, (tf.Tensor, tf.RaggedTensor)):
-            x = tf.convert_to_tensor(x)
-
-        dtype = x.dtype
-
-        input_is_1d = x.shape.rank == 1
-        if x.shape.rank < 1 or x.shape.rank > 2:
-            raise ValueError(
-                "Input must either be rank 1 or rank 2. Received input with "
-                f"rank={x.shape.rank}"
-            )
-        if input_is_1d:
-            # Add a new axis at the beginning.
-            x = tf.expand_dims(x, axis=0)
-        if isinstance(x, tf.Tensor):
-            # Convert to ragged tensor.
-            x = tf.RaggedTensor.from_tensor(x)
 
         batch_size = tf.shape(x)[0]
         sequence_length = sequence_length or self.sequence_length
+        dtype = inputs.dtype
 
         # Concatenate start and end tokens.
         if add_start_value and self.start_value is not None:
@@ -201,12 +186,12 @@ class StartEndPacker(keras.layers.Layer):
             default_value=self.pad_value,
             shape=(batch_size, sequence_length),
         )
-        outputs = tf.squeeze(outputs, axis=0) if input_is_1d else outputs
+        outputs = tf.squeeze(outputs, axis=0) if unbatched else outputs
 
         if self.return_padding_mask:
             mask = tf.ones_like(x, dtype="bool")
             mask = mask.to_tensor(shape=(batch_size, sequence_length))
-            mask = tf.squeeze(mask, axis=0) if input_is_1d else mask
+            mask = tf.squeeze(mask, axis=0) if unbatched else mask
             return outputs, mask
 
         return outputs
@@ -223,3 +208,8 @@ class StartEndPacker(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(self, inputs_shape):
+        inputs_shape = list(inputs_shape)
+        inputs_shape[-1] = self.sequence_length
+        return tuple(inputs_shape)
