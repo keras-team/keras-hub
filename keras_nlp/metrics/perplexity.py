@@ -18,6 +18,7 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.utils.tensor_utils import assert_tf_backend
 from keras_nlp.utils.tensor_utils import is_floating_dtype
 
 
@@ -97,6 +98,8 @@ class Perplexity(keras.metrics.Metric):
         name="perplexity",
         **kwargs,
     ):
+        assert_tf_backend(self.__class__.__name__)
+
         if not is_floating_dtype(dtype):
             raise ValueError(
                 "`dtype` must be a floating point type. "

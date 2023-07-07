@@ -20,6 +20,7 @@ import types
 import tensorflow as tf
 
 from keras_nlp.backend import keras
+from keras_nlp.utils.tensor_utils import assert_tf_backend
 from keras_nlp.utils.tensor_utils import is_floating_dtype
 from keras_nlp.utils.tensor_utils import tensor_to_list
 
@@ -61,6 +62,8 @@ class RougeBase(keras.metrics.Metric):
         name="rouge",
         **kwargs,
     ):
+        assert_tf_backend(self.__class__.__name__)
+
         super().__init__(name=name, dtype=dtype, **kwargs)
 
         if rouge_scorer is None:

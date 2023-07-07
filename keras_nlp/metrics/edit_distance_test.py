@@ -107,34 +107,30 @@ class EditDistanceTest(TestCase):
 
     def test_model_compile_normalize(self):
         inputs = keras.Input(shape=(None,), dtype="string")
-        outputs = tf.strings.lower(inputs)
-        model = keras.Model(inputs, outputs)
+        model = keras.Model(inputs, inputs)
 
         model.compile(metrics=[EditDistance()])
 
-        x = tf.strings.split(
+        y_pred = x = tf.strings.split(["the cat was found under the bed"])
+        y = tf.strings.split(
             ["the tiny little cat was found under the big funny bed"]
         )
-        y = tf.strings.split(["the cat was found under the bed"])
 
-        output = model.evaluate(y, x, return_dict=True)
-
+        output = model.compute_metrics(x, y, y_pred, sample_weight=None)
         self.assertAlmostEqual(output["edit_distance"], 0.364, delta=1e-3)
 
     def test_model_compile_normalize_false(self):
         inputs = keras.Input(shape=(None,), dtype="string")
-        outputs = tf.strings.lower(inputs)
-        model = keras.Model(inputs, outputs)
+        model = keras.Model(inputs, inputs)
 
         model.compile(metrics=[EditDistance(normalize=False)])
 
-        x = tf.strings.split(
+        y_pred = x = tf.strings.split(["the cat was found under the bed"])
+        y = tf.strings.split(
             ["the tiny little cat was found under the big funny bed"]
         )
-        y = tf.strings.split(["the cat was found under the bed"])
 
-        output = model.evaluate(y, x, return_dict=True)
-
+        output = model.compute_metrics(x, y, y_pred, sample_weight=None)
         self.assertAlmostEqual(output["edit_distance"], 4.0, delta=1e-3)
 
     def test_reset_state_normalize(self):
