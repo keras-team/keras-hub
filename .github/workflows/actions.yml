@@ -102,7 +102,7 @@ jobs:
       env:
         KERAS_BACKEND: ${{ matrix.backend }}
       run: |
-        pytest keras_nlp/
+        pytest keras_nlp/layers/modeling keras_nlp/samplers keras_nlp/tokenizers keras_nlp/models
   format:
     name: Check the code format
     runs-on: ubuntu-latest
