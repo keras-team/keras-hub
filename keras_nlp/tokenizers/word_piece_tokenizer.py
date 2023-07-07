@@ -24,6 +24,7 @@ from keras_nlp.tokenizers import tokenizer
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.utils.tensor_utils import is_integer_dtype
 from keras_nlp.utils.tensor_utils import is_string_dtype
 
@@ -230,13 +231,14 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     Ragged outputs.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
-    >>> inputs = ["The quick brown fox."]
+    >>> inputs = "The quick brown fox."
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
     ...     vocabulary=vocab,
     ...     lowercase=True,
     ... )
-    >>> tokenizer(inputs)
-    <tf.RaggedTensor [[1, 2, 3, 4, 5, 6, 7]]>
+    >>> outputs = tokenizer(inputs)
+    >>> np.array(outputs)
+    array([1, 2, 3, 4, 5, 6, 7], dtype=int32)
 
     Dense outputs.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -246,20 +248,21 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ...     sequence_length=10,
     ...     lowercase=True,
     ... )
-    >>> tokenizer(inputs)
-    <tf.Tensor: shape=(1, 10), dtype=int32, numpy=
-    array([[1, 2, 3, 4, 5, 6, 7, 0, 0, 0]], dtype=int32)>
+    >>> outputs = tokenizer(inputs)
+    >>> np.array(outputs)
+    array([[1, 2, 3, 4, 5, 6, 7, 0, 0, 0]], dtype=int32)
 
     String output.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
-    >>> inputs = ["The quick brown fox."]
+    >>> inputs = "The quick brown fox."
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
     ...     vocabulary=vocab,
     ...     lowercase=True,
     ...     dtype="string",
     ... )
-    >>> tokenizer(inputs)
-    <tf.RaggedTensor [[b'the', b'qu', b'##ick', b'br', b'##own', b'fox', b'.']]>
+    >>> outputs = tokenizer(inputs)
+    >>> np.array(outputs).astype("U")
+    array(['the', 'qu', '##ick', 'br', '##own', 'fox', '.'], dtype='<U5')
 
     Detokenization.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -268,8 +271,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ...     vocabulary=vocab,
     ...     lowercase=True,
     ... )
-    >>> tokenizer.detokenize(tokenizer.tokenize(inputs)).numpy().decode('utf-8')
-    'the quick brown fox .'
+    >>> outputs = tokenizer.detokenize(tokenizer.tokenize(inputs))
+    >>> np.array(outputs).astype("U")
+    array('the quick brown fox .', dtype='<U21')
 
     Custom splitting.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
@@ -424,7 +428,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        return self._fast_word_piece.detokenize(inputs)
+        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
+        outputs = self._fast_word_piece.detokenize(inputs)
+        if unbatched:
+            outputs = tf.squeeze(outputs, 0)
+        return outputs
 
     @classproperty
     def presets(cls):

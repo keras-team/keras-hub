@@ -18,7 +18,7 @@ import tensorflow as tf
 from keras_nlp.backend import keras
 from keras_nlp.models.task import Task
 from keras_nlp.samplers.serialization import get as get_sampler
-from keras_nlp.utils.tensor_utils import tensor_to_string_list
+from keras_nlp.utils.tensor_utils import tensor_to_list
 
 
 @keras.saving.register_keras_serializable(package="keras_nlp")
@@ -120,7 +120,7 @@ class GenerativeTask(Task):
             is_string = x.dtype == tf.string
             # Convert outputs to a friendly pythonic type. For numerical outputs
             # that is numpy, for string outputs that is `list` and `str`.
-            return tensor_to_string_list(x) if is_string else x.numpy()
+            return tensor_to_list(x) if is_string else x.numpy()
 
         if isinstance(outputs[0], dict):
             normalized = {}

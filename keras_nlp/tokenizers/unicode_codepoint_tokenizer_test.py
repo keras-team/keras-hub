@@ -14,8 +14,8 @@
 
 import os
 
+import pytest
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.tests.test_case import TestCase
@@ -26,19 +26,17 @@ from keras_nlp.tokenizers.unicode_codepoint_tokenizer import (
 
 class UnicodeCodepointTokenizerTest(TestCase):
     def test_tokenize(self):
-        input_data = tf.constant(["ninja", "samurai", "▀▁▂▃"])
+        input_data = ["ninja", "samurai", "▀▁▂▃"]
         tokenizer = UnicodeCodepointTokenizer()
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
-        self.assertIsInstance(call_output, tf.RaggedTensor)
         exp_outputs = [
             [110, 105, 110, 106, 97],
             [115, 97, 109, 117, 114, 97, 105],
             [9600, 9601, 9602, 9603],
         ]
-        for i in range(call_output.shape[0]):
-            self.assertAllEqual(call_output[i], exp_outputs[i])
-            self.assertAllEqual(tokenize_output[i], exp_outputs[i])
+        self.assertAllEqual(call_output, exp_outputs)
+        self.assertAllEqual(tokenize_output, exp_outputs)
 
     def test_tokenize_scalar(self):
         input_data = "ninja"
@@ -50,10 +48,9 @@ class UnicodeCodepointTokenizerTest(TestCase):
         self.assertAllEqual(tokenize_output, [110, 105, 110, 106, 97])
 
     def test_dense_output(self):
-        input_data = tf.constant(["ninja", "samurai", "▀▁▂▃"])
+        input_data = ["ninja", "samurai", "▀▁▂▃"]
         tokenizer = UnicodeCodepointTokenizer(sequence_length=10)
         call_output = tokenizer(input_data)
-        self.assertIsInstance(call_output, tf.Tensor)
         self.assertAllEqual(
             call_output,
             [
@@ -73,12 +70,11 @@ class UnicodeCodepointTokenizerTest(TestCase):
         self.assertAllEqual(tokenize_output, [104, 104, 104, 104, 97])
 
     def test_tokenize_dense_with_vocabulary_size(self):
-        input_data = tf.constant(["ninja", "samurai", "▀▁▂▃"])
+        input_data = ["ninja", "samurai", "▀▁▂▃"]
         tokenizer = UnicodeCodepointTokenizer(
             sequence_length=10, vocabulary_size=105
         )
         call_output = tokenizer(input_data)
-        self.assertIsInstance(call_output, tf.Tensor)
         self.assertAllEqual(
             call_output,
             [
@@ -89,28 +85,24 @@ class UnicodeCodepointTokenizerTest(TestCase):
         )
 
     def test_tokenize_ragged_with_vocabulary_size(self):
-        input_data = tf.constant(["ninja", "samurai", "▀▁▂▃"])
+        input_data = ["ninja", "samurai", "▀▁▂▃"]
         tokenizer = UnicodeCodepointTokenizer(vocabulary_size=105)
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
-        self.assertIsInstance(call_output, tf.RaggedTensor)
         exp_outputs = [
             [104, 104, 104, 104, 97],
             [104, 97, 104, 104, 104, 97, 104],
             [104, 104, 104, 104],
         ]
-        for i in range(call_output.shape[0]):
-            self.assertAllEqual(call_output[i], exp_outputs[i])
-            self.assertAllEqual(tokenize_output[i], exp_outputs[i])
+        self.assertAllEqual(call_output, exp_outputs)
+        self.assertAllEqual(tokenize_output, exp_outputs)
 
     def test_detokenize(self):
-        input_data = tf.ragged.constant(
-            [
-                [110, 105, 110, 106, 97],
-                [115, 97, 109, 117, 114, 97, 105],
-                [9600, 9601, 9602, 9603],
-            ]
-        )
+        input_data = [
+            [110, 105, 110, 106, 97],
+            [115, 97, 109, 117, 114, 97, 105],
+            [9600, 9601, 9602, 9603],
+        ]
 
         tokenizer = UnicodeCodepointTokenizer()
         detokenize_output = tokenizer.detokenize(input_data)
@@ -187,8 +179,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
             [107, 101, 114, 97, 115],
             [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
         ]
-        for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])
+        self.assertAllEqual(output, exp_output)
 
     def test_tokenize_first_batch_second_with_sequence_length(self):
         tokenizer = UnicodeCodepointTokenizer(sequence_length=10)
@@ -207,8 +198,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
             [107, 101, 114, 97, 115, 0, 0, 0, 0, 0],
             [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
         ]
-        for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])
+        self.assertAllEqual(output, exp_output)
 
     def test_batch_first_tokenize_second(self):
         tokenizer = UnicodeCodepointTokenizer()
@@ -226,8 +216,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
             [107, 101, 114, 97, 115],
             [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
         ]
-        for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])
+        self.assertAllEqual(output, exp_output)
 
     def test_batch_first_tokenize_second_with_sequence_length(self):
         tokenizer = UnicodeCodepointTokenizer(sequence_length=10)
@@ -245,9 +234,9 @@ class UnicodeCodepointTokenizerTest(TestCase):
             [107, 101, 114, 97, 115, 0, 0, 0, 0, 0],
             [116, 101, 110, 115, 111, 114, 102, 108, 111, 119],
         ]
-        for i in range(output.shape[0]):
-            self.assertAllEqual(output[i], exp_output[i])
+        self.assertAllEqual(output, exp_output)
 
+    @pytest.mark.tf_only
     def test_functional_model(self):
         input_data = tf.constant(
             ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
@@ -345,11 +334,8 @@ class UnicodeCodepointTokenizerTest(TestCase):
             exp_config_different_encoding,
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    @pytest.mark.tf_only
+    def test_saved_model(self):
         input_data = tf.constant(["ninjas and samurais", "time travel"])
 
         tokenizer = UnicodeCodepointTokenizer(
@@ -363,10 +349,8 @@ class UnicodeCodepointTokenizerTest(TestCase):
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),

@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BERT token packing layer."""
-
 import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
+from keras_nlp.layers.preprocessing.preprocessing_layer import (
+    PreprocessingLayer,
+)
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
 
 try:
     import tensorflow_text as tf_text
@@ -27,15 +28,20 @@ except ImportError:
 
 
 @keras_nlp_export("keras_nlp.layers.MultiSegmentPacker")
-class MultiSegmentPacker(keras.layers.Layer):
+class MultiSegmentPacker(PreprocessingLayer):
     """Packs multiple sequences into a single fixed width model input.
 
     This layer packs multiple input sequences into a single fixed width sequence
     containing start and end delimeters, forming an dense input suitable for a
     classification task for BERT and BERT-like models.
 
-    Takes as input a list or tuple of token segments. The layer will process
-    inputs as follows:
+    Takes as input a tuple of token segments. Each tuple element should contain
+    the tokens for a segment, passed as tensors, `tf.RaggedTensor`s, or lists.
+    For batched input, each element in the tuple of segments should be a list of
+    lists or a rank two tensor. For unbatched inputs, each element should be a
+    list or rank one tensor.
+
+    The layer will process inputs as follows:
      - Truncate all input segments to fit within `sequence_length` according to
        the `truncate` strategy.
      - Concatenate all input segments, adding a single `start_value` at the
@@ -47,9 +53,6 @@ class MultiSegmentPacker(keras.layers.Layer):
        segment the token originated from. The segment id of the `start_value`
        is always 0, and the segment id of each `end_value` is the segment that
        precedes it.
-
-    Input should be either a `tf.RaggedTensor` or a dense `tf.Tensor`, and
-    either rank-1 or rank-2.
 
     Args:
         sequence_length: int. The desired output length.
@@ -86,36 +89,42 @@ class MultiSegmentPacker(keras.layers.Layer):
     Examples:
 
     *Pack a single input for classification.*
-    >>> seq1 = tf.constant([1, 2, 3, 4])
+    >>> seq1 = [1, 2, 3, 4]
     >>> packer = keras_nlp.layers.MultiSegmentPacker(
-    ...     8, start_value=101, end_value=102)
-    >>> packer(seq1)
-    (<tf.Tensor: shape=(8,), dtype=int32,
-        numpy=array([101, 1, 2, 3, 4, 102, 0, 0], dtype=int32)>,
-     <tf.Tensor: shape=(8,), dtype=int32,
-        numpy=array([0, 0, 0, 0, 0, 0, 0, 0], dtype=int32)>)
+    ...     sequence_length=8, start_value=101, end_value=102
+    ... )
+    >>> token_ids, segment_ids = packer((seq1,))
+    >>> np.array(token_ids)
+    array([101, 1, 2, 3, 4, 102, 0, 0], dtype=int32)
+    >>> np.array(segment_ids)
+    array([0, 0, 0, 0, 0, 0, 0, 0], dtype=int32)
 
     *Pack multiple inputs for classification.*
-    >>> seq1 = tf.constant([1, 2, 3, 4])
-    >>> seq2 = tf.constant([11, 12, 13, 14])
+    >>> seq1 = [1, 2, 3, 4]
+    >>> seq2 = [11, 12, 13, 14]
     >>> packer = keras_nlp.layers.MultiSegmentPacker(
-    ...     8, start_value=101, end_value=102)
-    >>> packer((seq1, seq2))
-    (<tf.Tensor: shape=(8,), dtype=int32,
-        numpy=array([101,   1,   2,   3, 102,  11,  12, 102], dtype=int32)>,
-     <tf.Tensor: shape=(8,), dtype=int32,
-        numpy=array([0, 0, 0, 0, 0, 1, 1, 1], dtype=int32)>)
+    ...     sequence_length=8, start_value=101, end_value=102
+    ... )
+    >>> token_ids, segment_ids = packer((seq1, seq2))
+    >>> np.array(token_ids)
+    array([101, 1, 2, 3, 102,  11,  12, 102], dtype=int32)
+    >>> np.array(segment_ids)
+    array([0, 0, 0, 0, 0, 1, 1, 1], dtype=int32)
 
     *Pack multiple inputs for classification with different sep tokens.*
-    >>> seq1 = tf.constant([1, 2, 3, 4])
-    >>> seq2 = tf.constant([11, 12, 13, 14])
+    >>> seq1 = [1, 2, 3, 4]
+    >>> seq2 = [11, 12, 13, 14]
     >>> packer = keras_nlp.layers.MultiSegmentPacker(
-    ...     8, start_value=101, end_value=102, sep_value=[102, 102])
-    >>> packer((seq1, seq2))
-    (<tf.Tensor: shape=(8,), dtype=int32,
-        numpy=array([101,   1,   2, 102, 102,  11,  12, 102], dtype=int32)>,
-    <tf.Tensor: shape=(8,), dtype=int32,
-        numpy=array([0, 0, 0, 0, 0, 1, 1, 1], dtype=int32)>)
+    ...     sequence_length=8,
+    ...     start_value=101,
+    ...     end_value=102,
+    ...     sep_value=[102, 102],
+    ... )
+    >>> token_ids, segment_ids = packer((seq1, seq2))
+    >>> np.array(token_ids)
+    array([101,   1,   2, 102, 102,  11,  12, 102], dtype=int32)
+    >>> np.array(segment_ids)
+    array([0, 0, 0, 0, 0, 1, 1, 1], dtype=int32)
 
     Reference:
         [Devlin et al., 2018](https://arxiv.org/abs/1810.04805).
@@ -134,6 +143,7 @@ class MultiSegmentPacker(keras.layers.Layer):
         assert_tf_text_installed(self.__class__.__name__)
 
         super().__init__(**kwargs)
+
         self.sequence_length = sequence_length
         if truncate not in ("round_robin", "waterfall"):
             raise ValueError(
@@ -187,28 +197,22 @@ class MultiSegmentPacker(keras.layers.Layer):
         """Force inputs to a list of rank 2 ragged tensors."""
         # Sanitize inputs.
         if not isinstance(inputs, (list, tuple)):
-            inputs = [inputs]
+            inputs = (inputs,)
         if not inputs:
-            raise ValueError("At least one input is required for packing")
-        input_ranks = [x.shape.rank for x in inputs]
-        if not all(0 < rank < 3 for rank in input_ranks):
             raise ValueError(
-                "All inputs for packing must have rank 1 or 2. "
-                f"Received input ranks: {input_ranks}"
+                "At least one input is required for packing. "
+                f"Received: `inputs={inputs}`"
             )
-        if None in input_ranks or len(set(input_ranks)) > 1:
+        inputs, unbatched_list, _ = list(
+            zip(*(convert_to_ragged_batch(x) for x in inputs))
+        )
+        if len(set(unbatched_list)) != 1:
+            ranks = [1 if unbatched else 2 for unbatched in unbatched_list]
             raise ValueError(
                 "All inputs for packing must have the same rank. "
-                f"Received input ranks: {input_ranks}"
+                f"Received: `inputs={inputs}` with ranks {ranks}"
             )
-        return inputs
-
-    def _convert_dense(self, x):
-        """Converts inputs to rank 2 ragged tensors."""
-        if isinstance(x, tf.Tensor):
-            return tf.RaggedTensor.from_tensor(x)
-        else:
-            return x
+        return inputs, unbatched_list[0]
 
     def _trim_inputs(self, inputs):
         """Trim inputs to desired length."""
@@ -274,13 +278,7 @@ class MultiSegmentPacker(keras.layers.Layer):
         return token_ids, segment_ids
 
     def call(self, inputs):
-        inputs = self._sanitize_inputs(inputs)
-
-        # If rank 1, add a batch dim.
-        rank_1 = inputs[0].shape.rank == 1
-        if rank_1:
-            inputs = [tf.expand_dims(x, 0) for x in inputs]
-        inputs = [self._convert_dense(x) for x in inputs]
+        inputs, unbatched = self._sanitize_inputs(inputs)
 
         segments = self._trim_inputs(inputs)
         token_ids, segment_ids = self._combine_inputs(segments)
@@ -291,8 +289,15 @@ class MultiSegmentPacker(keras.layers.Layer):
         )
         segment_ids = segment_ids.to_tensor(shape=shape)
         # Remove the batch dim if added.
-        if rank_1:
+        if unbatched:
             token_ids = tf.squeeze(token_ids, 0)
             segment_ids = tf.squeeze(segment_ids, 0)
 
         return (token_ids, segment_ids)
+
+    def compute_output_shape(self, inputs_shape):
+        if isinstance(inputs_shape[0], tuple):
+            inputs_shape = inputs_shape[0]
+        inputs_shape = list(inputs_shape)
+        inputs_shape[-1] = self.sequence_length
+        return tuple(inputs_shape)

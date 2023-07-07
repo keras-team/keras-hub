@@ -22,7 +22,7 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.tensor_utils import tensor_to_string_list
+from keras_nlp.utils.tensor_utils import tensor_to_list
 
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaTokenizer")
@@ -108,7 +108,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
     def get_vocabulary(self):
         """Get the size of the tokenizer vocabulary."""
-        vocabulary = tensor_to_string_list(
+        vocabulary = tensor_to_list(
             self._sentence_piece.id_to_string(
                 tf.range(super().vocabulary_size())
             )
@@ -130,7 +130,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
                 f"Received: {id}"
             )
 
-        return tensor_to_string_list(self._sentence_piece.id_to_string(id - 1))
+        return tensor_to_list(self._sentence_piece.id_to_string(id - 1))
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""

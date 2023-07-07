@@ -32,3 +32,22 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         x1 = tf.nest.map_structure(convert_to_numpy, x1)
         x2 = tf.nest.map_structure(convert_to_numpy, x2)
         super().assertAllClose(x1, x2, atol=atol, rtol=rtol, msg=msg)
+
+    def assertAllEqual(self, x1, x2, msg=None):
+        def convert_strings(x):
+            """Convert any string tensors to simple python types.
+
+            This allows for simple output comparisons across backends without
+            needing to worry about tensorflow's bytes representation.
+            """
+            if getattr(x, "dtype", None) == tf.string:
+                if isinstance(x, tf.RaggedTensor):
+                    x = x.to_list()
+                if isinstance(x, tf.Tensor):
+                    x = x.numpy() if x.shape.rank == 0 else x.numpy().tolist()
+                return tf.nest.map_structure(lambda x: x.decode("utf-8"), x)
+            return x
+
+        x1 = tf.nest.map_structure(convert_strings, x1)
+        x2 = tf.nest.map_structure(convert_strings, x2)
+        super().assertAllEqual(x1, x2, msg=msg)

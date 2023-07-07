@@ -27,9 +27,10 @@ class RandomSwapTest(TestCase):
         split = tf.strings.split(inputs)
         augmenter = RandomSwap(rate=0.7, max_swaps=3, seed=42)
         augmented = augmenter(split)
-        output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"like I Hey", b"Tensorflow Keras and"]
+        output = [
+            tf.strings.reduce_join(x, separator=" ", axis=-1) for x in augmented
+        ]
+        exp_output = ["like I Hey", "Tensorflow Keras and"]
         self.assertAllEqual(output, exp_output)
 
     def test_shape_and_output_from_character_swap(self):
@@ -38,9 +39,8 @@ class RandomSwapTest(TestCase):
         split = tf.strings.unicode_split(inputs, "UTF-8")
         augmenter = RandomSwap(rate=0.7, max_swaps=6, seed=42)
         augmented = augmenter(split)
-        output = tf.strings.reduce_join(augmented, axis=-1)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"yli I eHke", b"seaad rnK Tensolrfow"]
+        output = [tf.strings.reduce_join(x, axis=-1) for x in augmented]
+        exp_output = ["yli I eHke", "seaad rnK Tensolrfow"]
         self.assertAllEqual(output, exp_output)
 
     def test_with_integer_tokens(self):
@@ -48,9 +48,6 @@ class RandomSwapTest(TestCase):
         inputs = tf.constant([[1, 2, 3], [4, 5, 6]])
         augmenter = RandomSwap(rate=0.7, max_swaps=6, seed=42)
         output = augmenter(inputs)
-        self.assertAllEqual(
-            output.to_tensor().shape, tf.convert_to_tensor(inputs).shape
-        )
         exp_output = [[3, 2, 1], [6, 4, 5]]
         self.assertAllEqual(output, exp_output)
 
@@ -63,8 +60,7 @@ class RandomSwapTest(TestCase):
         split = tf.strings.split(inputs)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"I Hey like", b"Keras and Tensorflow"]
+        exp_output = ["I Hey like", "Keras and Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
         def skip_fn(word):
@@ -75,8 +71,7 @@ class RandomSwapTest(TestCase):
         augmenter = RandomSwap(rate=0.9, max_swaps=3, seed=11, skip_fn=skip_fn)
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"I Hey like", b"Keras and Tensorflow"]
+        exp_output = ["I Hey like", "Keras and Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
         def skip_py_fn(word):
@@ -89,8 +84,7 @@ class RandomSwapTest(TestCase):
         )
         augmented = augmenter(split)
         output = tf.strings.reduce_join(augmented, separator=" ", axis=-1)
-        self.assertAllEqual(output.shape, tf.convert_to_tensor(inputs).shape)
-        exp_output = [b"I Hey like", b"Keras and Tensorflow"]
+        exp_output = ["I Hey like", "Keras and Tensorflow"]
         self.assertAllEqual(output, exp_output)
 
     def test_get_config_and_from_config(self):
@@ -121,8 +115,8 @@ class RandomSwapTest(TestCase):
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
         exp_output = [
-            [b"like", b"I", b"Hey"],
-            [b"and", b"Tensorflow", b"Keras"],
+            ["like", "I", "Hey"],
+            ["and", "Tensorflow", "Keras"],
         ]
         self.assertAllEqual(output, exp_output)
 
@@ -139,8 +133,8 @@ class RandomSwapTest(TestCase):
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
         exp_output = [
-            [b"like", b"I", b"Hey"],
-            [b"Keras", b"and", b"Tensorflow"],
+            ["like", "I", "Hey"],
+            ["Keras", "and", "Tensorflow"],
         ]
         self.assertAllEqual(output, exp_output)
 
@@ -152,8 +146,8 @@ class RandomSwapTest(TestCase):
         ds = ds.apply(tf.data.experimental.dense_to_ragged_batch(2))
         output = ds.take(1).get_single_element()
         exp_output = [
-            [b"Hey", b"I", b"like"],
-            [b"Tensorflow", b"Keras", b"and"],
+            ["Hey", "I", "like"],
+            ["Tensorflow", "Keras", "and"],
         ]
         self.assertAllEqual(output, exp_output)
 
@@ -166,8 +160,8 @@ class RandomSwapTest(TestCase):
         ds = ds.batch(2).map(augmenter)
         output = ds.take(1).get_single_element()
         exp_output = [
-            [b"like", b"I", b"Hey"],
-            [b"Tensorflow", b"Keras", b"and"],
+            ["like", "I", "Hey"],
+            ["Tensorflow", "Keras", "and"],
         ]
         self.assertAllEqual(output, exp_output)
 
@@ -183,8 +177,8 @@ class RandomSwapTest(TestCase):
         ds = ds.batch(2).map(augmenter)
         output = ds.take(1).get_single_element()
         exp_output = [
-            [b"Hey", b"I", b"like"],
-            [b"and", b"Keras", b"Tensorflow"],
+            ["Hey", "I", "like"],
+            ["and", "Keras", "Tensorflow"],
         ]
         self.assertAllEqual(output, exp_output)
 
@@ -195,21 +189,7 @@ class RandomSwapTest(TestCase):
         ds = ds.batch(2).map(augmenter)
         output = ds.take(1).get_single_element()
         exp_output = [
-            [b"Hey", b"I", b"like"],
-            [b"and", b"Keras", b"Tensorflow"],
+            ["Hey", "I", "like"],
+            ["and", "Keras", "Tensorflow"],
         ]
         self.assertAllEqual(output, exp_output)
-
-    def test_functional_model(self):
-        keras.utils.set_random_seed(1337)
-        input_data = tf.constant(["Hey I like", "Keras and Tensorflow"])
-        augmenter = RandomSwap(rate=0.7, max_swaps=2, seed=42)
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = augmenter(tf.strings.split(inputs))
-        model = keras.Model(inputs, outputs)
-        model_output = model(input_data)
-        exp_output = [
-            [b"like", b"I", b"Hey"],
-            [b"Tensorflow", b"Keras", b"and"],
-        ]
-        self.assertAllEqual(model_output, exp_output)

@@ -20,6 +20,7 @@ import tensorflow as tf
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers import tokenizer
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.utils.tensor_utils import is_integer_dtype
 
 try:
@@ -81,30 +82,27 @@ class ByteTokenizer(tokenizer.Tokenizer):
 
     Basic usage.
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
-    >>> tokenizer("hello")
-    <tf.Tensor: shape=(5,), dtype=int32, numpy=
-    array([104, 101, 108, 108, 111], dtype=int32)>
+    >>> outputs = tokenizer("hello")
+    >>> np.array(outputs)
+    array([104, 101, 108, 108, 111], dtype=int32)
 
     Ragged outputs.
-    >>> inputs = tf.constant(["hello", "hi"])
+    >>> inputs = ["hello", "hi"]
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
-    >>> tokenizer(inputs)
-    <tf.RaggedTensor [[104, 101, 108, 108, 111], [104, 105]]>
+    >>> seq1, seq2 = tokenizer(inputs)
+    >>> np.array(seq1)
+    array([104, 101, 108, 108, 111], dtype=int32)
+    >>> np.array(seq2)
+    array([104, 105], dtype=int32)
 
     Dense outputs.
-    >>> inputs = tf.constant(["hello", "hi"])
+    >>> inputs = ["hello", "hi"]
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(sequence_length=8)
-    >>> tokenizer(inputs)
-    <tf.Tensor: shape=(2, 8), dtype=int32, numpy=
-    array([[104, 101, 108, 108, 111,   0,   0,   0],
-           [104, 105,   0,   0,   0,   0,   0,   0]], dtype=int32)>
-
-    Dense outputs.
-    >>> inputs = tf.constant(["hello"])
-    >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(sequence_length=8)
-    >>> tokenizer(inputs)
-    <tf.Tensor: shape=(1, 8), dtype=int32, numpy=
-    array([[104, 101, 108, 108, 111,   0,   0,   0]], dtype=int32)>
+    >>> seq1, seq2 = tokenizer(inputs)
+    >>> np.array(seq1)
+    array([104, 101, 108, 108, 111,   0,   0,   0], dtype=int32)
+    >>> np.array(seq2)
+    array([104, 105,   0,   0,   0,   0,   0,   0], dtype=int32)
 
     Tokenize, then batch for ragged outputs.
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
@@ -141,18 +139,20 @@ class ByteTokenizer(tokenizer.Tokenizer):
            [102, 117, 110,   0,   0]], dtype=int32)>
 
     Detokenization.
-    >>> inputs = tf.constant([104, 101, 108, 108, 111], dtype="int32")
+    >>> inputs = [104, 101, 108, 108, 111]
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()
-    >>> tokenizer.detokenize(inputs)
-    <tf.Tensor: shape=(), dtype=string, numpy=b'hello'>
+    >>> outputs = tokenizer.detokenize(inputs)
+    >>> np.array(outputs).astype("U")
+    array('hello', dtype='<U5')
 
     Detokenization with invalid bytes.
     >>> # The 255 below is invalid utf-8.
-    >>> inputs = tf.constant([104, 101, 255, 108, 108, 111], dtype="int32")
+    >>> inputs = [104, 101, 255, 108, 108, 111]
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer(
     ...     errors="replace", replacement_char=88)
-    >>> tokenizer.detokenize(inputs).numpy().decode('utf-8')
-    'heXllo'
+    >>> outputs = tokenizer.detokenize(inputs)
+    >>> np.array(outputs).astype("U")
+    array('heXllo', dtype='<U6')
     """
 
     def __init__(
@@ -238,23 +238,26 @@ class ByteTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
+        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
         # Remove trailing padding tokens, so that trailing "\x00" bytes don't
         # show up in the detokenized output.
         inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
 
-        decoded = tf.strings.reduce_join(
+        outputs = tf.strings.reduce_join(
             tf.gather(self._char_lst, inputs), axis=-1
         )
 
         # Handle errors if an invalid byte sequence is encountered.
-        decoded = tf.strings.unicode_transcode(
-            decoded,
+        outputs = tf.strings.unicode_transcode(
+            outputs,
             "UTF-8",
             "UTF-8",
             errors=self.errors,
             replacement_char=self.replacement_char,
         )
-        return decoded
+        if unbatched:
+            outputs = tf.squeeze(outputs, 0)
+        return outputs
 
     def get_config(self):
         config = super().get_config()

@@ -25,9 +25,10 @@ from keras_nlp.tokenizers import tokenizer
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.utils.tensor_utils import is_integer_dtype
 from keras_nlp.utils.tensor_utils import is_string_dtype
-from keras_nlp.utils.tensor_utils import tensor_to_string_list
+from keras_nlp.utils.tensor_utils import tensor_to_list
 
 try:
     import tensorflow_text as tf_text
@@ -159,7 +160,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     def get_vocabulary(self) -> List[str]:
         """Get the tokenizer vocabulary."""
-        return tensor_to_string_list(
+        return tensor_to_list(
             self._sentence_piece.id_to_string(
                 tf.range(int(self._sentence_piece.vocab_size().numpy()))
             )
@@ -172,7 +173,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
                 f"Received: {id}"
             )
-        return tensor_to_string_list(self._sentence_piece.id_to_string(id))
+        return tensor_to_list(self._sentence_piece.id_to_string(id))
 
     def token_to_id(self, token: str) -> int:
         """Convert a string token to an integer id."""
@@ -214,7 +215,11 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
-        return self._sentence_piece.detokenize(inputs)
+        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
+        outputs = self._sentence_piece.detokenize(inputs)
+        if unbatched:
+            outputs = tf.squeeze(outputs, 0)
+        return outputs
 
     @classproperty
     def presets(cls):

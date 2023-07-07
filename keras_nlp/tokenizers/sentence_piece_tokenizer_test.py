@@ -15,9 +15,9 @@
 import io
 import os
 
+import pytest
 import sentencepiece
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.tests.test_case import TestCase
@@ -46,7 +46,6 @@ class SentencePieceTokenizerTest(TestCase):
         )
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
-        self.assertIsInstance(call_output, tf.RaggedTensor)
         self.assertAllEqual(call_output, [[6, 5, 3, 4]])
         self.assertAllEqual(tokenize_output, [[6, 5, 3, 4]])
 
@@ -57,7 +56,6 @@ class SentencePieceTokenizerTest(TestCase):
         )
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
-        self.assertIsInstance(call_output, tf.Tensor)
         self.assertAllEqual(call_output, [6, 5, 3, 4])
         self.assertAllEqual(tokenize_output, [6, 5, 3, 4])
 
@@ -68,7 +66,6 @@ class SentencePieceTokenizerTest(TestCase):
             sequence_length=10,
         )
         output_data = tokenizer(input_data)
-        self.assertIsInstance(output_data, tf.Tensor)
         self.assertAllEqual(output_data, [[6, 5, 3, 4, 0, 0, 0, 0, 0, 0]])
 
     def test_string_tokenize(self):
@@ -80,16 +77,15 @@ class SentencePieceTokenizerTest(TestCase):
         output_data = tokenizer(input_data)
         self.assertAllEqual(
             output_data,
-            tf.ragged.constant([["▁the", "▁quick", "▁brown", "▁fox."]]),
+            [["▁the", "▁quick", "▁brown", "▁fox."]],
         )
 
     def test_detokenize(self):
-        input_data = [[6, 5, 3, 4]]
-        tokenizer = SentencePieceTokenizer(
-            proto=self.proto,
-        )
-        output_data = tokenizer.detokenize(input_data)
-        self.assertAllEqual(output_data, ["the quick brown fox."])
+        tokenizer = SentencePieceTokenizer(proto=self.proto)
+        outputs = tokenizer.detokenize([6, 5, 3, 4])
+        self.assertAllEqual(outputs, "the quick brown fox.")
+        outputs = tokenizer.detokenize([[6, 5, 3, 4], [6, 4]])
+        self.assertAllEqual(outputs, ["the quick brown fox.", "the fox."])
 
     def test_accessors(self):
         tokenizer = SentencePieceTokenizer(
@@ -118,6 +114,7 @@ class SentencePieceTokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             tokenizer.id_to_token(-1)
 
+    @pytest.mark.tf_only
     def test_functional_model(self):
         input_data = tf.constant(["the quick brown fox."])
         tokenizer = SentencePieceTokenizer(
@@ -195,11 +192,8 @@ class SentencePieceTokenizerTest(TestCase):
             cloned_tokenizer(input_data),
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    @pytest.mark.tf_only
+    def test_saved_model(self):
         filepath = os.path.join(self.get_temp_dir(), "model.txt")
         input_data = tf.constant(["the quick brown whale."])
         with tf.io.gfile.GFile(filepath, "wb") as file:
@@ -210,10 +204,8 @@ class SentencePieceTokenizerTest(TestCase):
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),
