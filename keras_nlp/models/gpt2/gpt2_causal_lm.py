@@ -27,6 +27,7 @@ from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
 
 
+# TODO: Extend and factor this out into keras_nlp.layers.
 class ReverseEmbedding(keras.layers.Layer):
     def __init__(self, embedding, **kwargs):
         super().__init__(**kwargs)
