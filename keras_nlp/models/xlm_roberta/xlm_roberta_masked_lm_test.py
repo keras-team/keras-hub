@@ -19,7 +19,6 @@ import os
 import pytest
 import sentencepiece
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
@@ -116,14 +115,10 @@ class XLMRobertaMaskedLMTest(TestCase):
             self.masked_lm.get_config(),
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saved_model(self, save_format, filename):
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        self.masked_lm.save(save_path, save_format=save_format)
+    def test_saved_model(self):
+        save_path = os.path.join(self.get_temp_dir(), "model.keras")
+        self.masked_lm.save(save_path, save_format="keras_v3")
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.

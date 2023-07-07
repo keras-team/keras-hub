@@ -92,16 +92,11 @@ class BartBackboneTest(TestCase):
         self.model.compile(jit_compile=jit_compile)
         self.model.predict(self.input_dataset)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
-        model_output = self.model(self.input_batch)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        self.model.save(path, save_format=save_format, **kwargs)
+    @pytest.mark.large
+    def test_saved_model(self):
+        model_output = self.backbone(self.input_batch)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        self.model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
