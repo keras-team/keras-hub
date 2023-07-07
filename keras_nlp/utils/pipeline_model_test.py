@@ -64,7 +64,6 @@ class DataPipeline(PipelineModel):
     def preprocess_samples(self, x, y=None, sample_weight=None):
         x = tf.strings.to_number(x)
         y = x
-        sample_weight = None
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def call(self, inputs):

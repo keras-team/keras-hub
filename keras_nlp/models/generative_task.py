@@ -127,8 +127,6 @@ class GenerativeTask(Task):
                 return outputs
 
             self.generate_function = wrapped_generate_function
-        else:
-            raise ValueError(f"Unkown backend {config.backend()}")
 
         return self.generate_function
 
@@ -204,19 +202,25 @@ class GenerativeTask(Task):
         """Generate text given prompt `inputs`.
 
         This method generates text based on given `inputs`. The sampling method
-        used for generation can be set in the `compile` method.
+        used for generation can be set via the `compile()` method.
 
         If `inputs` are a `tf.data.Dataset`, outputs will be generated
         "batch-by-batch" and concatenated. Otherwise, all inputs will be handled
         as a single batch.
 
-        If a `preprocessor` is attached to the model, `inputs` should be
-        strings and returned sequences will be strings. Otherwise, inputs should
-        be preprocessed before calling `generate()`, and returned sequences will
-        be token ids.
+        If a `preprocessor` is attached to the model, `inputs` will be
+        preprocessed inside the `generate()` function and should match the
+        structure expected by the `preprocessor` layer (usually raw strings).
+        If a `preprocessor` is not attached, inputs should match the structure
+        expected by the `backbone`. See the example usage above for a
+        demonstration of each.
 
         Args:
-            inputs: python data, tensor data, or a dataset.
+            inputs: python data, tensor data, or a `tf.data.Dataset`. If a
+                `preprocessor` is attached to the model, `inputs` should match
+                the structure expected by the `preprocessor` layer. If a
+                `preprocessor` is not attached, `inputs` should match the
+                structure expected the the `backbone` model.
             max_length: Optional. int. The max length of the generated sequence.
                 Will default to the max configured `sequence_length` of the
                 `preprocessor`. If `preprocessor` is `None`, `inputs` should be
