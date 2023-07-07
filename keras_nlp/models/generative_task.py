@@ -75,30 +75,35 @@ class GenerativeTask(Task):
             import jax
 
             @jax.jit
-            def compiled_generate_function(state, inputs, end_token_id):
-                trainable_variables, non_trainable_variables = state
-
+            def compiled_generate_function(inputs, end_token_id, state):
                 # Gather variable mapping
-                trainable_mapping = zip(
-                    self.trainable_variables, trainable_variables
-                )
-                non_trainable_mapping = zip(
-                    self.non_trainable_variables, non_trainable_variables
-                )
-                mapping = list(trainable_mapping) + list(non_trainable_mapping)
+                mapping = zip(self._sampler.variables, state)
 
-                with keras.StatelessScope(state_mapping=mapping):
-                    return self.generate_step(inputs, end_token_id)
+                with keras.StatelessScope(state_mapping=mapping) as scope:
+                    outputs = self.generate_step(inputs, end_token_id)
+
+                state = []
+                for v in self._sampler.variables:
+                    new_v = scope.get_current_value(v)
+                    state.append(new_v if new_v is not None else v)
+                return outputs, state
 
             def wrapped_generate_function(
                 inputs,
                 end_token_id=None,
             ):
-                trainable_variables = self.trainable_variables
-                non_trainable_variables = self.non_trainable_variables
-                state = (trainable_variables, non_trainable_variables)
+                state = self._sampler.variables
                 inputs = tf.nest.map_structure(ops.convert_to_tensor, inputs)
-                return compiled_generate_function(state, inputs, end_token_id)
+                outputs, state = compiled_generate_function(
+                    inputs,
+                    end_token_id,
+                    state,
+                )
+                # As our state is so minimal (generally just random seeds), we
+                # can assign it each step without much worry for performance.
+                for ref_v, v in zip(self._sampler.variables, state):
+                    ref_v.assign(v)
+                return outputs
 
             self.generate_function = wrapped_generate_function
         else:
