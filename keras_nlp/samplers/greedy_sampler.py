@@ -13,9 +13,8 @@
 # limitations under the License.
 """Greedy Sampler."""
 
-import tensorflow as tf
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import ops
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import call_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
@@ -62,4 +61,4 @@ class GreedySampler(Sampler):
         super().__init__(**kwargs)
 
     def get_next_token(self, probabilities):
-        return tf.argmax(probabilities, axis=-1)
+        return ops.argmax(probabilities, axis=-1)
