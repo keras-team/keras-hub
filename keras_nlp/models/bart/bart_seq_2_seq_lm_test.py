@@ -19,7 +19,6 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.models.bart.bart_backbone import BartBackbone
@@ -226,18 +225,12 @@ class BartSeq2SeqLMTest(TestCase):
             new_seq_2_seq_lm.get_config(), self.seq_2_seq_lm.get_config()
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         keras.utils.set_random_seed(42)
         model_output = self.seq_2_seq_lm.predict(self.raw_batch)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        self.seq_2_seq_lm.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        self.seq_2_seq_lm.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.

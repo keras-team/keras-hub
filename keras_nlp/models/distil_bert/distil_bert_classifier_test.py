@@ -17,7 +17,6 @@ import os
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
@@ -120,17 +119,11 @@ class DistilBertClassifierTest(TestCase):
         restored = keras.saving.deserialize_keras_object(config)
         self.assertEqual(restored.get_config(), original.get_config())
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saving_model(self, save_format, filename):
+    def test_saving_model(self):
         model_output = self.classifier.predict(self.raw_batch)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        self.classifier.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        self.classifier.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.

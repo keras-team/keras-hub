@@ -186,12 +186,8 @@ class WhisperPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             self.preprocessor.get_config(),
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         input_data = {
             "encoder_audio": tf.ones((1, 200)),
             "decoder_text": tf.constant([" airplane at airport"]),
@@ -204,10 +200,8 @@ class WhisperPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         outputs = self.preprocessor(inputs)
         model = keras.Model(inputs, outputs)
 
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
 
         restored_model = keras.models.load_model(path)
 

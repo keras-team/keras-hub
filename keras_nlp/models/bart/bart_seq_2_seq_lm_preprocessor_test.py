@@ -17,7 +17,6 @@ import os
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
@@ -156,28 +155,22 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
             new_preprocessor.get_config(), self.preprocessor.get_config()
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         input_data = {
-            "encoder_text": tf.constant(" airplane at airport"),
-            "decoder_text": tf.constant(" kohli is the best"),
+            "encoder_text": tf.constant([" airplane at airport"]),
+            "decoder_text": tf.constant([" kohli is the best"]),
         }
 
         inputs = {
             "encoder_text": keras.Input(dtype="string", shape=()),
             "decoder_text": keras.Input(dtype="string", shape=()),
         }
-        outputs = self.preprocessor(inputs)
+        outputs, y, sw = self.preprocessor(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)
 
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
 
         restored_model = keras.models.load_model(path)
 

@@ -17,7 +17,6 @@ import os
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
@@ -79,20 +78,16 @@ class WhisperAudioFeatureExtractorTest(TestCase):
             self.audio_feature_extractor.get_config(),
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large  # Saving is slow, so mark these large.
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         audio_tensor = tf.ones((2, 200), dtype="float32")
 
         inputs = keras.Input(dtype="float32", shape=(None,))
         outputs = self.audio_feature_extractor(inputs)
         model = keras.Model(inputs, outputs)
 
-        path = os.path.join(self.get_temp_dir(), filename)
-        model.save(path, save_format=save_format)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
 
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(

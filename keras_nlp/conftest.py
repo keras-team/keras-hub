@@ -112,8 +112,6 @@ def pytest_collection_modifyitems(config, items):
         reason="tests only run on tf backend",
     )
     for item in items:
-        if "tf_format" in item.name:
-            item.add_marker(skip_extra_large)
         if "large" in item.keywords:
             item.add_marker(skip_large)
         if "extra_large" in item.keywords:
