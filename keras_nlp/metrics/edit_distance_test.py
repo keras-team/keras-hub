@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """Tests for EditDistance."""
+import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
@@ -20,6 +21,7 @@ from keras_nlp.metrics.edit_distance import EditDistance
 from keras_nlp.tests.test_case import TestCase
 
 
+@pytest.mark.tf_only
 class EditDistanceTest(TestCase):
     def test_initialization(self):
         edit_distance = EditDistance()
@@ -107,7 +109,8 @@ class EditDistanceTest(TestCase):
 
     def test_model_compile_normalize(self):
         inputs = keras.Input(shape=(None,), dtype="string")
-        model = keras.Model(inputs, inputs)
+        outputs = keras.layers.Identity()(inputs)
+        model = keras.Model(inputs, outputs)
 
         model.compile(metrics=[EditDistance()])
 
@@ -121,7 +124,8 @@ class EditDistanceTest(TestCase):
 
     def test_model_compile_normalize_false(self):
         inputs = keras.Input(shape=(None,), dtype="string")
-        model = keras.Model(inputs, inputs)
+        outputs = keras.layers.Identity()(inputs)
+        model = keras.Model(inputs, outputs)
 
         model.compile(metrics=[EditDistance(normalize=False)])
 

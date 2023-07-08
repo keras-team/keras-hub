@@ -144,7 +144,8 @@ class BleuTest(TestCase):
 
     def test_model_compile(self):
         inputs = keras.Input(shape=(), dtype="string")
-        model = keras.Model(inputs, inputs)
+        outputs = keras.layers.Identity()(inputs)
+        model = keras.Model(inputs, outputs)
         model.compile(metrics=[Bleu()])
 
         y_pred = x = tf.constant(

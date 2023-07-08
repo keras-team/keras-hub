@@ -97,19 +97,19 @@ class RougeNTest(TestCase):
         )
 
     def test_model_compile(self):
-        inputs = keras.Input(shape=(), dtype="string")
-        model = keras.Model(inputs, inputs)
+        inputs = keras.Input(shape=(None,), dtype="string")
+        outputs = keras.layers.Identity()(inputs)
+        model = keras.Model(inputs, outputs)
 
-        model.compile(loss="mse", metrics=[RougeN()])
+        model.compile(metrics=[RougeN()])
 
         y_pred = x = tf.constant(["hello this is fun"])
         y = tf.constant(["hello this is awesome"])
 
         output = model.compute_metrics(x, y, y_pred, sample_weight=None)
-        self.assertAllClose(
-            output,
-            {"precision": 0.666666, "recall": 0.666666, "f1_score": 0.666666},
-        )
+        self.assertAllClose(output["precision"], 0.666666)
+        self.assertAllClose(output["recall"], 0.666666)
+        self.assertAllClose(output["f1_score"], 0.666666)
 
     def test_incorrect_order(self):
         with self.assertRaises(ValueError):
