@@ -21,6 +21,7 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.utils.tensor_utils import assert_tf_backend
 from keras_nlp.utils.tensor_utils import is_floating_dtype
 from keras_nlp.utils.tensor_utils import tensor_to_list
 
@@ -111,6 +112,8 @@ class Bleu(keras.metrics.Metric):
         name="bleu",
         **kwargs,
     ):
+        assert_tf_backend(self.__class__.__name__)
+
         super().__init__(name=name, dtype=dtype, **kwargs)
 
         if not is_floating_dtype(dtype):

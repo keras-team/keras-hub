@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """Tests for RougeN."""
+import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
@@ -20,6 +21,7 @@ from keras_nlp.metrics.rouge_n import RougeN
 from keras_nlp.tests.test_case import TestCase
 
 
+@pytest.mark.tf_only
 class RougeNTest(TestCase):
     def test_initialization(self):
         rouge = RougeN()
@@ -95,21 +97,19 @@ class RougeNTest(TestCase):
         )
 
     def test_model_compile(self):
-        inputs = keras.Input(shape=(), dtype="string")
-        outputs = tf.strings.lower(inputs)
+        inputs = keras.Input(shape=(None,), dtype="string")
+        outputs = keras.layers.Identity()(inputs)
         model = keras.Model(inputs, outputs)
 
         model.compile(metrics=[RougeN()])
 
-        x = tf.constant(["HELLO THIS IS FUN"])
+        y_pred = x = tf.constant(["hello this is fun"])
         y = tf.constant(["hello this is awesome"])
 
-        output = model.evaluate(x, y, return_dict=True)
-        del output["loss"]
-        self.assertAllClose(
-            output,
-            {"precision": 0.666666, "recall": 0.666666, "f1_score": 0.666666},
-        )
+        output = model.compute_metrics(x, y, y_pred, sample_weight=None)
+        self.assertAllClose(output["precision"], 0.666666)
+        self.assertAllClose(output["recall"], 0.666666)
+        self.assertAllClose(output["f1_score"], 0.666666)
 
     def test_incorrect_order(self):
         with self.assertRaises(ValueError):
