@@ -106,14 +106,13 @@ class BertMaskedLM(Task):
         preprocessor=None,
         **kwargs,
     ):
-        inputs = backbone.input
-        backbone_outputs = backbone(
-            {
-                "token_ids": inputs["token_ids"],
-                "segment_ids": inputs["segment_ids"],
-                "padding_mask": inputs["padding_mask"],
-            }
-        )
+        inputs = {
+            **backbone.input,
+            "mask_positions": keras.Input(
+                shape=(None,), dtype="int32", name="mask_positions"
+            ),
+        }
+        backbone_outputs = backbone(backbone.input)
         outputs = MaskedLMHead(
             vocabulary_size=backbone.vocabulary_size,
             embedding_weights=backbone.token_embedding.embeddings,

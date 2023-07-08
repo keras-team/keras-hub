@@ -138,7 +138,7 @@ def assert_tf_text_installed(symbol_name):
 
 def assert_tf_backend(symbol_name):
     if config.backend() != "tensorflow":
-        raise ImportError(
+        raise RuntimeError(
             f"{symbol_name} requires the `tensorflow` backend. "
             "Please set `KERAS_BACKEND=tensorflow` when running your program."
         )

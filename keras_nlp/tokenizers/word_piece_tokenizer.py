@@ -277,7 +277,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     Custom splitting.
     >>> vocab = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
-    >>> inputs = ["The$quick$brown$fox"]
+    >>> inputs = "The$quick$brown$fox"
     >>> tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
     ...     vocabulary=vocab,
     ...     split=False,
@@ -285,8 +285,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
     ...     dtype='string',
     ... )
     >>> split_inputs = tf.strings.split(inputs, sep="$")
-    >>> tokenizer(split_inputs)
-    <tf.RaggedTensor [[b'the', b'qu', b'##ick', b'br', b'##own', b'fox']]>
+    >>> outputs = tokenizer(split_inputs)
+    >>> np.array(outputs).astype("U")
+    array(['the', 'qu', '##ick', 'br', '##own', 'fox'], dtype='<U5')
     """
 
     def __init__(

@@ -98,8 +98,9 @@ class Sampler:
         self._seed_generators = []
 
     def __setattr__(self, name, value):
-        # We could consider user the `Tracker` class from keras-core, but as our
-        # needs are so minimal, we will just track ourselves for now.
+        # We could update to the `Tracker` class from keras-core if our needs
+        # become more advanced (e.g. list assignment, nested trackables). For
+        # now, we only track `SeedGenerator` instances directly on the sampler.
         if isinstance(value, random.SeedGenerator):
             self._seed_generators.append(value)
         return super().__setattr__(name, value)

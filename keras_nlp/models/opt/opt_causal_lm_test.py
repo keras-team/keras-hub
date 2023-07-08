@@ -162,7 +162,7 @@ class OPTCausalLMTest(TestCase):
         keras.utils.set_random_seed(42)
         model_output = self.causal_lm.predict(self.raw_batch)
         path = os.path.join(self.get_temp_dir(), "model.keras")
-        self.seq_2_seq_lm.save(path, save_format="keras_v3")
+        self.causal_lm.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.

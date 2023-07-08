@@ -28,7 +28,6 @@ from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.skip
 class BertMaskedLMTest(TestCase):
     def setUp(self):
         # Setup model.

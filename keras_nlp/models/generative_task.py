@@ -49,6 +49,10 @@ class GenerativeTask(Task):
         # Clear the compiled generate function.
         self.generate_function = None
 
+    def generate_step(self):
+        """Run generation on a single batch of input."""
+        raise NotImplementedError
+
     def make_generate_function(self):
         """Create or return the compiled generation function."""
         if self.generate_function is not None:

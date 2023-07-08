@@ -356,7 +356,7 @@ class OPTCausalLM(GenerativeTask):
                 distribution, and the second for model parallel distribution.
 
         Returns:
-            A `keras.dtensor.experimental.LayoutMap` which contains the
+            A `tf.keras.dtensor.experimental.LayoutMap` which contains the
             proper layout to weights mapping for the model parallel setting.
 
         Examples:
