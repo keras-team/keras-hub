@@ -193,8 +193,8 @@ class BartSeq2SeqLM(GenerativeTask):
         # Use token embedding weights to project from the token representation
         # to vocabulary logits.
         outputs = tf.matmul(
-            x,
-            tf.cast(backbone.token_embedding.embeddings, x.dtype),
+            tf.cast(x, backbone.token_embedding.embeddings.dtype),
+            backbone.token_embedding.embeddings,
             transpose_b=True,
         )
 
