@@ -194,7 +194,7 @@ class BartSeq2SeqLM(GenerativeTask):
         # to vocabulary logits.
         outputs = tf.matmul(
             x,
-            backbone.token_embedding.embeddings,
+            tf.cast(backbone.token_embedding.embeddings, x.dtype),
             transpose_b=True,
         )
 
