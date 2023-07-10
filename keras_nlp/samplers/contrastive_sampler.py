@@ -56,16 +56,16 @@ class ContrastiveSampler(Sampler):
 
     def next(prompt, cache, index):
         prompt_batch_size = tf.shape(prompt)[0]
-        hidden_states = tf.ones((prompt_batch_size, hidden_size))
+        hidden_states = np.ones((prompt_batch_size, hidden_size))
         # A uniform distribution over our alphabet.
-        logits = tf.ones((prompt_batch_size, vocab_size))
+        logits = np.ones((prompt_batch_size, vocab_size))
         return logits, hidden_states, cache
 
     output = keras_nlp.samplers.ContrastiveSampler()(
         next=next,
-        prompt=tf.fill((batch_size, length), char_lookup["z"]),
+        prompt=np.full((batch_size, length), char_lookup["z"], dtype="int32"),
         index=index,
-        hidden_states=tf.ones([batch_size, index, hidden_size]),
+        hidden_states=np.ones([batch_size, index, hidden_size]),
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
     # >>> "zzzzzeeeeeee"

@@ -80,14 +80,10 @@ class BertMaskedLM(Task):
     ```python
     # Create preprocessed batch where 0 is the mask token.
     features = {
-        "token_ids": tf.constant(
-            [[1, 2, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
-        ),
-        "padding_mask": tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1]] * 2, shape=(2, 8)
-        ),
-        "mask_positions": tf.constant([[2, 4]] * 2, shape=(2, 2)),
-        "segment_ids": tf.constant([[0, 0, 0, 0, 0, 0, 0, 0]] * 2, shape=(2, 8))
+        "token_ids": np.array([[1, 2, 0, 4, 0, 6, 7, 8]] * 2),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1]] * 2),
+        "mask_positions": np.array([[2, 4]] * 2),
+        "segment_ids": np.array([[0, 0, 0, 0, 0, 0, 0, 0]] * 2)
     }
     # Labels are the original masked values.
     labels = [[3, 5]] * 2

@@ -99,8 +99,8 @@ class GPT2CausalLM(GenerativeTask):
     # Prompt the model with `5338, 318` (the token ids for `"Who is"`).
     # Use `"padding_mask"` to indicate values that should not be overridden.
     prompt = {
-        "token_ids": tf.constant([[5338, 318, 0, 0, 0]] * 2),
-        "padding_mask": tf.constant([[1, 1, 0, 0, 0]] * 2),
+        "token_ids": np.array([[5338, 318, 0, 0, 0]] * 2),
+        "padding_mask": np.array([[1, 1, 0, 0, 0]] * 2),
     }
 
     gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset(
@@ -120,11 +120,11 @@ class GPT2CausalLM(GenerativeTask):
     Call `fit()` without preprocessing.
     ```python
     x = {
-        "token_ids": tf.constant([[50256, 1, 2, 3, 4]] * 2),
-        "padding_mask": tf.constant([[1, 1, 1, 1, 1]] * 2),
+        "token_ids": np.array([[50256, 1, 2, 3, 4]] * 2),
+        "padding_mask": np.array([[1, 1, 1, 1, 1]] * 2),
     }
-    y = tf.constant([[1, 2, 3, 4, 50256]] * 2)
-    sw = tf.constant([[1, 1, 1, 1, 1]] * 2)
+    y = np.array([[1, 2, 3, 4, 50256]] * 2)
+    sw = np.array([[1, 1, 1, 1, 1]] * 2)
 
     gpt2_lm = keras_nlp.models.GPT2CausalLM.from_preset(
         "gpt2_base_en",
