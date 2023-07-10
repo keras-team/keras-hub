@@ -15,18 +15,30 @@
 
 import copy
 
-import tensorflow as tf
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.generative_task import GenerativeTask
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
     GPT2CausalLMPreprocessor,
 )
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
-from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
+
+
+# TODO: Extend and factor this out into keras_nlp.layers.
+class ReverseEmbedding(keras.layers.Layer):
+    def __init__(self, embedding, **kwargs):
+        super().__init__(**kwargs)
+        self.embedding = embedding
+
+    def call(self, inputs):
+        kernel = ops.transpose(ops.convert_to_tensor(self.embedding.embeddings))
+        return ops.matmul(inputs, kernel)
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0],) + (self.embedding.embeddings.shape[0],)
 
 
 @keras_nlp_export("keras_nlp.models.GPT2CausalLM")
@@ -162,11 +174,10 @@ class GPT2CausalLM(GenerativeTask):
         x = backbone(inputs)
         # Use token embedding weights to project from the token representation
         # to vocabulary logits.
-        outputs = tf.matmul(
-            x,
-            backbone.token_embedding.embeddings,
-            transpose_b=True,
-        )
+        outputs = ReverseEmbedding(
+            backbone.token_embedding,
+            name="reverse_embedding",
+        )(x)
 
         # Instantiate using Functional API Model constructor.
         super().__init__(
@@ -185,7 +196,7 @@ class GPT2CausalLM(GenerativeTask):
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(2e-5),
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=is_xla_compatible(self),
+            jit_compile=True,
         )
 
     @classproperty
@@ -234,33 +245,30 @@ class GPT2CausalLM(GenerativeTask):
         )
         x = self.backbone.get_layer("embeddings_dropout")(x)
         # Each decoder layer has a cache; we update them separately.
-        caches = tf.unstack(cache, axis=1)
+        caches = []
         for i in range(self.backbone.num_layers):
-            current_cache = caches[i]
+            current_cache = cache[:, i, ...]
             x, next_cache = self.backbone.get_layer(f"transformer_layer_{i}")(
                 x,
                 self_attention_cache=current_cache,
                 self_attention_cache_update_index=cache_update_index,
             )
-            caches[i] = next_cache
-        cache = tf.stack(caches, axis=1)
+            caches.append(next_cache)
+        cache = ops.stack(caches, axis=1)
         x = self.backbone.get_layer("layer_norm")(x)
         hidden_states = x
-        logits = tf.matmul(
-            hidden_states,
-            self.backbone.get_layer("token_embedding").embeddings,
-            transpose_b=True,
-        )
+        logits = self.get_layer("reverse_embedding")(x)
         return logits, hidden_states, cache
 
     def _build_cache(self, token_ids):
         """Build an empty cache for use with `call_with_cache()`."""
-        batch_size, max_length = tf.shape(token_ids)[0], tf.shape(token_ids)[1]
+        batch_size = ops.shape(token_ids)[0]
+        max_length = ops.shape(token_ids)[1]
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_heads
         head_dim = self.backbone.hidden_dim // self.backbone.num_heads
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
-        cache = tf.zeros(shape, dtype=self.compute_dtype)
+        cache = ops.zeros(shape, dtype=self.compute_dtype)
         # Seed the cache.
         _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
         return hidden_states, cache
@@ -287,24 +295,23 @@ class GPT2CausalLM(GenerativeTask):
         # Create and seed cache with a single forward pass.
         hidden_states, cache = self._build_cache(token_ids)
         # Compute the lengths of all user inputted tokens ids.
-        row_lengths = tf.math.reduce_sum(
-            tf.cast(padding_mask, "int32"), axis=-1
-        )
+        row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
         # Start at the first index that has no user inputted id.
-        index = tf.math.reduce_min(row_lengths)
+        index = ops.min(row_lengths)
 
         def next(prompt, cache, index):
             # The cache index is the index of our previous token.
             cache_update_index = index - 1
-            prompt = tf.slice(prompt, [0, cache_update_index], [-1, 1])
+            batch_size = ops.shape(prompt)[0]
+            prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
             logits, hidden_states, cache = self.call_with_cache(
                 prompt,
                 cache,
                 cache_update_index,
             )
             return (
-                tf.squeeze(logits, axis=1),
-                tf.squeeze(hidden_states, axis=1),
+                ops.squeeze(logits, axis=1),
+                ops.squeeze(hidden_states, axis=1),
                 cache,
             )
 
@@ -323,14 +330,15 @@ class GPT2CausalLM(GenerativeTask):
             # Build a mask of `end_token_id` locations not in the original
             # prompt (not in locations where `padding_mask` is True).
             end_locations = (token_ids == end_token_id) & (~padding_mask)
-            end_locations = tf.cast(end_locations, "int32")
+            end_locations = ops.cast(end_locations, "int32")
             # Use cumsum to get ones in all locations after end_locations.
-            overflow = tf.math.cumsum(end_locations, exclusive=True, axis=-1)
+            cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
+            overflow = cumsum - end_locations
             # Our padding mask is the inverse of these overflow locations.
-            padding_mask = ~tf.cast(overflow, "bool")
+            padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
         else:
             # Without early stopping, all locations will have been updated.
-            padding_mask = tf.ones_like(token_ids, dtype="bool")
+            padding_mask = ops.ones_like(token_ids, dtype="bool")
         return {
             "token_ids": token_ids,
             "padding_mask": padding_mask,
@@ -353,7 +361,7 @@ class GPT2CausalLM(GenerativeTask):
                 distribution, and the second for model parallel distribution.
 
         Returns:
-            A `tf.keras.dtensor.experimental.LayoutMap` which contains the
+            A `keras.dtensor.experimental.LayoutMap` which contains the
             proper layout to weights mapping for the model parallel setting.
 
         Examples:

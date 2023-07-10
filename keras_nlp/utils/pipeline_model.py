@@ -20,6 +20,7 @@ import math
 import tensorflow as tf
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.tensor_utils import is_tensor_type
 
@@ -54,7 +55,7 @@ def _convert_inputs_to_dataset(
             )
         return x
 
-    inputs = keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+    inputs = pack_x_y_sample_weight(x, y, sample_weight)
     try:
         ds = tf.data.Dataset.from_tensor_slices(inputs)
     except ValueError as e:
@@ -129,6 +130,7 @@ def _train_validation_split(arrays, validation_split):
     return train_arrays, val_arrays
 
 
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class PipelineModel(keras.Model):
     """A model which allows automatically applying preprocessing."""
 
@@ -250,6 +252,11 @@ class PipelineModel(keras.Model):
         if self.include_preprocessing:
             data = self.preprocess_samples(x, y, sample_weight)
             x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
+            x = ops.convert_to_tensor(x)
+            if y is not None:
+                y = ops.convert_to_tensor(y)
+            if sample_weight is not None:
+                sample_weight = ops.convert_to_tensor(sample_weight)
         return super().train_on_batch(
             x=x,
             y=y,
@@ -267,6 +274,11 @@ class PipelineModel(keras.Model):
         if self.include_preprocessing:
             data = self.preprocess_samples(x, y, sample_weight)
             x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
+            x = ops.convert_to_tensor(x)
+            if y is not None:
+                y = ops.convert_to_tensor(y)
+            if sample_weight is not None:
+                sample_weight = ops.convert_to_tensor(sample_weight)
         return super().test_on_batch(
             x=x,
             y=y,
@@ -282,6 +294,7 @@ class PipelineModel(keras.Model):
         if self.include_preprocessing:
             data = self.preprocess_samples(x)
             x, _, _ = keras.utils.unpack_x_y_sample_weight(data)
+            x = ops.convert_to_tensor(x)
         return super().predict_on_batch(
             x=x,
             **kwargs,

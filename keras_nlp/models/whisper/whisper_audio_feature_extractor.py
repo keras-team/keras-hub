@@ -87,6 +87,10 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
 
         super().__init__(**kwargs)
 
+        self._convert_input_args = False
+        self._allow_non_tensor_positional_args = True
+        self.built = True
+
         self.num_mels = num_mels
         self.num_fft_bins = num_fft_bins
         self.stride = stride

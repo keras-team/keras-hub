@@ -17,9 +17,9 @@ import copy
 
 import tensorflow as tf
 from absl import logging
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (

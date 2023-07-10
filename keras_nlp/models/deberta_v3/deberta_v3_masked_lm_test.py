@@ -30,6 +30,7 @@ from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
+@pytest.mark.tf_only
 class DebertaV3MaskedLMTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
@@ -70,12 +71,10 @@ class DebertaV3MaskedLMTest(TestCase):
             preprocessor=self.preprocessor,
         )
 
-        self.raw_batch = tf.constant(
-            [
-                "the quick brown fox.",
-                "the eagle flew over fox.",
-            ]
-        )
+        self.raw_batch = [
+            "the quick brown fox.",
+            "the eagle flew over fox.",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
             self.raw_batch

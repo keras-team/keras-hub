@@ -58,7 +58,7 @@ class BartTokenizerTest(TestCase):
         self.assertAllEqual(output, [0, 3, 4, 5, 3, 6, 0, 1])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant([" airplane at airport", " kohli is the best"])
+        input_data = [" airplane at airport", " kohli is the best"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[3, 4, 5, 3, 6], [7, 8, 9, 10, 11]])
 
@@ -74,7 +74,16 @@ class BartTokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             BartTokenizer(vocabulary=["a", "b", "c"], merges=[])
 
+    def test_serialization(self):
+        config = keras.saving.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.saving.deserialize_keras_object(config)
+        self.assertEqual(
+            new_tokenizer.get_config(),
+            self.tokenizer.get_config(),
+        )
+
     @pytest.mark.large  # Saving is slow, so mark these large.
+    @pytest.mark.tf_only
     def test_saved_model(self):
         input_data = tf.constant([" airplane at airport"])
 

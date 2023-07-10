@@ -19,8 +19,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
@@ -95,7 +95,7 @@ class WhisperPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def test_unbatched_preprocess(self):
         input_data = {
             "encoder_audio": tf.ones((200,)),
-            "decoder_text": " airplane at airport",
+            "decoder_text": tf.constant(" airplane at airport"),
         }
 
         x = self.preprocessor(input_data)
@@ -112,7 +112,7 @@ class WhisperPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def test_preprocess_batch(self):
         input_data = {
             "encoder_audio": tf.ones((4, 200)),
-            "decoder_text": [" airplane at airport"] * 4,
+            "decoder_text": tf.constant([" airplane at airport"] * 4),
         }
 
         x = self.preprocessor(input_data)
@@ -173,19 +173,20 @@ class WhisperPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def test_sequence_length_override(self):
         input_data = {
             "encoder_audio": tf.ones((200,)),
-            "decoder_text": " airplane at airport",
+            "decoder_text": tf.constant(" airplane at airport"),
         }
         x = self.preprocessor(input_data, decoder_sequence_length=6)
         self.assertAllEqual(x["decoder_token_ids"], [9, 14, 13, 11, 0, 10])
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.preprocessor)
-        new_preprocessor = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.preprocessor)
+        new_preprocessor = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_preprocessor.get_config(),
             self.preprocessor.get_config(),
         )
 
+    @pytest.mark.tf_only
     @pytest.mark.large
     def test_saved_model(self):
         input_data = {
@@ -194,8 +195,12 @@ class WhisperPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         }
 
         inputs = {
-            "encoder_audio": keras.Input(dtype="float32", shape=(None,)),
-            "decoder_text": keras.Input(dtype="string", shape=()),
+            "encoder_audio": keras.Input(
+                dtype="float32", shape=(None,), name="encoder_audio"
+            ),
+            "decoder_text": keras.Input(
+                dtype="string", shape=(), name="decoder_text"
+            ),
         }
         outputs = self.preprocessor(inputs)
         model = keras.Model(inputs, outputs)

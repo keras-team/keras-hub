@@ -102,14 +102,13 @@ class RougeL(RougeBase):
 
     3. Pass the metric to `model.compile()`.
     >>> inputs = keras.Input(shape=(), dtype='string')
-    >>> outputs = tf.strings.lower(inputs)
+    >>> outputs = keras.layers.Identity()(inputs)
     >>> model = keras.Model(inputs, outputs)
     >>> model.compile(metrics=[keras_nlp.metrics.RougeL()])
-    >>> x = tf.constant(["HELLO THIS IS FUN"])
+    >>> y_pred = x = tf.constant(["hello this is fun"])
     >>> y = tf.constant(["hello this is awesome"])
-    >>> metric_dict = model.evaluate(x, y, return_dict=True)
-    >>> metric_dict["f1_score"]
-     0.75
+    >>> model.compute_metrics(x, y, y_pred, sample_weight=None)["f1_score"]
+    0.75
     """
 
     def __init__(

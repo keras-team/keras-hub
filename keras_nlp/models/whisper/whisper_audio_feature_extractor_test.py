@@ -79,6 +79,7 @@ class WhisperAudioFeatureExtractorTest(TestCase):
         )
 
     @pytest.mark.large  # Saving is slow, so mark these large.
+    @pytest.mark.tf_only
     def test_saved_model(self):
         audio_tensor = tf.ones((2, 200), dtype="float32")
 

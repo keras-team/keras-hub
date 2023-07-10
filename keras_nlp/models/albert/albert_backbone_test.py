@@ -19,6 +19,7 @@ import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.tests.test_case import TestCase
 
@@ -38,9 +39,9 @@ class AlbertBackboneTest(TestCase):
         )
         self.batch_size = 8
         self.input_batch = {
-            "token_ids": tf.ones((2, 5), dtype="int32"),
-            "segment_ids": tf.ones((2, 5), dtype="int32"),
-            "padding_mask": tf.ones((2, 5), dtype="int32"),
+            "token_ids": ops.ones((2, 5), dtype="int32"),
+            "segment_ids": ops.ones((2, 5), dtype="int32"),
+            "padding_mask": ops.ones((2, 5), dtype="int32"),
         }
 
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
@@ -57,9 +58,9 @@ class AlbertBackboneTest(TestCase):
     def test_variable_sequence_length_call_albert(self):
         for seq_length in (2, 3, 4):
             input_data = {
-                "token_ids": tf.ones((2, seq_length), dtype="int32"),
-                "segment_ids": tf.ones((2, seq_length), dtype="int32"),
-                "padding_mask": tf.ones((2, seq_length), dtype="int32"),
+                "token_ids": ops.ones((2, seq_length), dtype="int32"),
+                "segment_ids": ops.ones((2, seq_length), dtype="int32"),
+                "padding_mask": ops.ones((2, seq_length), dtype="int32"),
             }
             self.backbone(input_data)
 
@@ -121,9 +122,9 @@ class AlbertBackboneTPUTest(TestCase):
             )
 
         self.input_batch = {
-            "token_ids": tf.ones((8, 128), dtype="int32"),
-            "segment_ids": tf.ones((8, 128), dtype="int32"),
-            "padding_mask": tf.ones((8, 128), dtype="int32"),
+            "token_ids": ops.ones((8, 128), dtype="int32"),
+            "segment_ids": ops.ones((8, 128), dtype="int32"),
+            "padding_mask": ops.ones((8, 128), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch

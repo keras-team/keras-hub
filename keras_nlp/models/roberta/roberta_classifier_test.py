@@ -19,6 +19,7 @@ import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
@@ -71,15 +72,13 @@ class RobertaClassifierTest(TestCase):
         )
 
         # Setup data.
-        self.raw_batch = tf.constant(
-            [
-                " airplane at airport",
-                " the airplane is the best",
-            ]
-        )
+        self.raw_batch = [
+            " airplane at airport",
+            " the airplane is the best",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, tf.ones((2,)))
+            (self.raw_batch, ops.ones((2,)))
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
@@ -93,7 +92,7 @@ class RobertaClassifierTest(TestCase):
         # Assert predictions match.
         self.assertAllClose(preds1, preds2)
         # Assert valid softmax output.
-        self.assertAllClose(tf.reduce_sum(preds2, axis=-1), [1.0, 1.0])
+        self.assertAllClose(ops.sum(preds2, axis=-1), [1.0, 1.0])
 
     def test_classifier_fit(self):
         self.classifier.fit(self.raw_dataset)

@@ -14,8 +14,10 @@
 """Base sampler class."""
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.utils.python_utils import format_docstring
 
 call_args_docstring = """next: A function which takes in the
@@ -93,6 +95,22 @@ class Sampler:
         temperature=1.0,
     ):
         self.temperature = temperature
+        self._seed_generators = []
+
+    def __setattr__(self, name, value):
+        # We could update to the `Tracker` class from keras-core if our needs
+        # become more advanced (e.g. list assignment, nested trackables). For
+        # now, we only track `SeedGenerator` instances directly on the sampler.
+        if isinstance(value, random.SeedGenerator):
+            self._seed_generators.append(value)
+        return super().__setattr__(name, value)
+
+    @property
+    def variables(self):
+        variables = []
+        for sg in self._seed_generators:
+            variables.append(sg.state)
+        return variables
 
     def __call__(
         self,
@@ -135,16 +153,52 @@ class Sampler:
             # Update the prompt with the next token.
             next_token = next_token[:, None]
             prompt = ops.slice_update(prompt, [0, index], next_token)
+
             # Return the next prompt, cache and incremented index.
             return (prompt, cache, index + 1)
 
-        prompt, _, _ = ops.while_loop(
-            cond=cond,
-            body=body,
+        prompt, _, _ = self.run_loop(
+            cond,
+            body,
             loop_vars=(prompt, cache, index),
             maximum_iterations=(max_length - index),
         )
         return prompt
+
+    def run_loop(self, cond, body, loop_vars=None, maximum_iterations=None):
+        """Run ops.while_loops with a `StatelessScope` if necessary."""
+        if config.backend() == "jax":
+
+            def stateless_cond(variables, *loop_vars):
+                return cond(*loop_vars)
+
+            def stateless_body(variables, *loop_vars):
+                mapping = zip(self.variables, variables)
+                with keras.StatelessScope(state_mapping=mapping) as scope:
+                    loop_vars = body(*loop_vars)
+
+                variables = []
+                for v in self.variables:
+                    new_v = scope.get_current_value(v)
+                    variables.append(new_v if new_v is not None else v)
+                return variables, *loop_vars
+
+            variables = [ops.convert_to_tensor(v) for v in self.variables]
+            variables, *loop_vars = ops.while_loop(
+                cond=stateless_cond,
+                body=stateless_body,
+                loop_vars=(variables, *loop_vars),
+                maximum_iterations=maximum_iterations,
+            )
+            [ref_v.assign(v) for ref_v, v in zip(self.variables, variables)]
+        else:
+            loop_vars = ops.while_loop(
+                cond=cond,
+                body=body,
+                loop_vars=(loop_vars),
+                maximum_iterations=maximum_iterations,
+            )
+        return loop_vars
 
     def get_next_token(self, probabilities):
         """Get the next token.

@@ -14,9 +14,9 @@
 """Tests for loading pretrained model presets."""
 
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 
+from keras_nlp.backend import ops
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_classifier import BertClassifier
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
@@ -55,9 +55,9 @@ class BertPresetSmokeTest(TestCase):
     )
     def test_backbone_output(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[101, 1996, 4248, 102]]),
-            "segment_ids": tf.constant([[0, 0, 0, 0]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+            "token_ids": ops.array([[101, 1996, 4248, 102]]),
+            "segment_ids": ops.array([[0, 0, 0, 0]]),
+            "padding_mask": ops.array([[1, 1, 1, 1]]),
         }
         model = BertBackbone.from_preset(
             "bert_tiny_en_uncased", load_weights=load_weights
@@ -78,7 +78,7 @@ class BertPresetSmokeTest(TestCase):
         ("load_weights", True), ("no_load_weights", False)
     )
     def test_classifier_output(self, load_weights):
-        input_data = tf.constant(["The quick brown fox."])
+        input_data = ["The quick brown fox."]
         model = BertClassifier.from_preset(
             "bert_tiny_en_uncased",
             num_classes=2,
@@ -92,9 +92,9 @@ class BertPresetSmokeTest(TestCase):
     )
     def test_classifier_output_without_preprocessing(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[101, 1996, 4248, 102]]),
-            "segment_ids": tf.constant([[0, 0, 0, 0]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+            "token_ids": ops.array([[101, 1996, 4248, 102]]),
+            "segment_ids": ops.array([[0, 0, 0, 0]]),
+            "padding_mask": ops.array([[1, 1, 1, 1]]),
         }
         model = BertClassifier.from_preset(
             "bert_tiny_en_uncased",
@@ -187,13 +187,11 @@ class BertPresetFullTest(TestCase):
         for preset in BertBackbone.presets:
             model = BertBackbone.from_preset(preset, load_weights=load_weights)
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 512), dtype="int64", maxval=model.vocabulary_size
                 ),
-                "segment_ids": tf.constant(
-                    [0] * 200 + [1] * 312, shape=(1, 512)
-                ),
-                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+                "segment_ids": ops.array([0] * 200 + [1] * 312, shape=(1, 512)),
+                "padding_mask": ops.array([1] * 512, shape=(1, 512)),
             }
             model(input_data)
 
@@ -207,7 +205,7 @@ class BertPresetFullTest(TestCase):
                 num_classes=2,
                 load_weights=load_weights,
             )
-            input_data = tf.constant(["This quick brown fox"])
+            input_data = ["This quick brown fox."]
             classifier.predict(input_data)
 
     @parameterized.named_parameters(
@@ -222,15 +220,13 @@ class BertPresetFullTest(TestCase):
                 load_weights=load_weights,
             )
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 512),
                     dtype="int64",
                     maxval=classifier.backbone.vocabulary_size,
                 ),
-                "segment_ids": tf.constant(
-                    [0] * 200 + [1] * 312, shape=(1, 512)
-                ),
-                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+                "segment_ids": ops.array([0] * 200 + [1] * 312, shape=(1, 512)),
+                "padding_mask": ops.array([1] * 512, shape=(1, 512)),
             }
             classifier.predict(input_data)
 

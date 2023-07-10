@@ -58,7 +58,7 @@ class OPTTokenizerTest(TestCase):
         self.assertAllEqual(output, [1, 2, 3, 4, 2, 5, 1, 0])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant([" airplane at airport", " kohli is the best"])
+        input_data = [" airplane at airport", " kohli is the best"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[2, 3, 4, 2, 5], [6, 7, 8, 9, 10]])
 
@@ -83,6 +83,7 @@ class OPTTokenizerTest(TestCase):
         )
 
     @pytest.mark.large  # Saving is slow, so mark these large.
+    @pytest.mark.tf_only
     def test_saved_model(self):
         input_data = tf.constant([" airplane at airport"])
 

@@ -22,7 +22,7 @@ class WhisperEncoder(TransformerEncoder):
     """A Whisper encoder.
 
     Inherits from `keras_nlp.layers.TransformerEncoder`, and overrides the
-    `_build` method so as to remove the bias term from the key projection layer.
+    `build` method so as to remove the bias term from the key projection layer.
     """
 
     def build(self, inputs_shape):

@@ -19,6 +19,7 @@ import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.tests.test_case import TestCase
 
@@ -36,8 +37,8 @@ class DistilBertTest(TestCase):
         )
 
         self.input_batch = {
-            "token_ids": tf.ones((2, 5), dtype="int32"),
-            "padding_mask": tf.ones((2, 5), dtype="int32"),
+            "token_ids": ops.ones((2, 5), dtype="int32"),
+            "padding_mask": ops.ones((2, 5), dtype="int32"),
         }
 
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
@@ -54,9 +55,9 @@ class DistilBertTest(TestCase):
     def test_variable_sequence_length_call_distilbert(self):
         for seq_length in (2, 3, 4):
             input_data = {
-                "token_ids": tf.ones((2, seq_length), dtype="int32"),
-                "mask_positions": tf.ones((2, seq_length), dtype="int32"),
-                "padding_mask": tf.ones((2, seq_length), dtype="int32"),
+                "token_ids": ops.ones((2, seq_length), dtype="int32"),
+                "mask_positions": ops.ones((2, seq_length), dtype="int32"),
+                "padding_mask": ops.ones((2, seq_length), dtype="int32"),
             }
             self.backbone(input_data)
 
@@ -99,8 +100,8 @@ class DistilBertTPUTest(TestCase):
                 max_sequence_length=128,
             )
         self.input_batch = {
-            "token_ids": tf.ones((8, 128), dtype="int32"),
-            "padding_mask": tf.ones((8, 128), dtype="int32"),
+            "token_ids": ops.ones((8, 128), dtype="int32"),
+            "padding_mask": ops.ones((8, 128), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch

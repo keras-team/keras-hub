@@ -28,6 +28,7 @@ from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
+@pytest.mark.tf_only
 class FNetMaskedLMTest(TestCase):
     def setUp(self):
         # Setup Model.
@@ -68,12 +69,10 @@ class FNetMaskedLMTest(TestCase):
             preprocessor=self.preprocessor,
         )
 
-        self.raw_batch = tf.constant(
-            [
-                "the quick brown fox",
-                "the slow brown fox",
-            ]
-        )
+        self.raw_batch = [
+            "the quick brown fox",
+            "the slow brown fox",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
             self.raw_batch
