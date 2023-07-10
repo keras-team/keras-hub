@@ -10,7 +10,6 @@ jobs:
     - name: Install dependencies
       run: |
           pip install -r requirements.txt --progress-bar off
-          pip install --no-deps -e "." --progress-bar off
     - name: Build a binary wheel and a source tarball
       run: >-
         python pip_build.py
