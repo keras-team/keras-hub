@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_decoder import GPTNeoXDecoder
@@ -22,7 +21,7 @@ def _gpt_neo_x_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.GPTNeoXBackbone")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class GPTNeoXBackbone(Backbone):
     """GPT-NeoX core network with hyperparameters.
 

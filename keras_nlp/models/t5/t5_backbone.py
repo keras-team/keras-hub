@@ -14,7 +14,6 @@
 
 """T5 backbone model."""
 
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
@@ -23,7 +22,7 @@ from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.tensor_utils import assert_tf_backend
 
 
-@keras_nlp_export("keras_nlp.models.T5Backbone")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class T5Backbone(Backbone):
     """T5 encoder-decoder backbone model.
 
