@@ -14,7 +14,6 @@
 
 import copy
 
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
@@ -29,7 +28,7 @@ def bart_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.BartBackbone")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class BartBackbone(Backbone):
     """BART encoder-decoder network.
 

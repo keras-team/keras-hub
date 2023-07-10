@@ -14,7 +14,6 @@
 
 import copy
 
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.models.bart.bart_backbone import BartBackbone
@@ -26,7 +25,7 @@ from keras_nlp.models.generative_task import GenerativeTask
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.BartSeq2SeqLM")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class BartSeq2SeqLM(GenerativeTask):
     """An end-to-end BART model for seq2seq language modeling.
 
