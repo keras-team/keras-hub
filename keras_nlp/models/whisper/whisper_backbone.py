@@ -135,10 +135,12 @@ class WhisperBackbone(Backbone):
             kernel_size=3,
             strides=1,
             padding="same",
-            activation=lambda x: keras.activations.gelu(x, approximate=False),
             name="encoder_token_embedding_conv_layer_1",
         )
-        embedded_features = encoder_conv_layer_1(encoder_feature_input)
+        embedded_features = keras.activations.gelu(
+            encoder_conv_layer_1(encoder_feature_input),
+            approximate=False,
+        )
 
         # For the second conv. layer, we cannot use `padding="same"` since
         # that corresponds to a padding size of 1.5 (since stride is 2). Hence,
@@ -151,10 +153,12 @@ class WhisperBackbone(Backbone):
             kernel_size=3,
             strides=2,
             padding="valid",
-            activation=lambda x: keras.activations.gelu(x, approximate=False),
             name="encoder_token_embedding_conv_layer_2",
         )
-        embedded_features = encoder_conv_layer_2(embedded_features)
+        embedded_features = keras.activations.gelu(
+            encoder_conv_layer_2(embedded_features),
+            approximate=False,
+        )
 
         # The position embedding layer for the encoder is a sinusoidal embedding
         # layer: https://github.com/openai/whisper/blob/v20230124/whisper/model.py#L137.
@@ -168,9 +172,7 @@ class WhisperBackbone(Backbone):
         )(embedded_features)
 
         # Sum and apply dropout to embeddings.
-        x = keras.layers.Add(name="encoder_embeddings_add")(
-            (embedded_features, position_embedding)
-        )
+        x = keras.layers.Add()((embedded_features, position_embedding))
         x = keras.layers.Dropout(
             dropout,
             name="encoder_embeddings_dropout",

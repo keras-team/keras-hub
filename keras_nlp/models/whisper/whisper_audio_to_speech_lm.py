@@ -227,20 +227,24 @@ class WhisperAudioToSpeechLM(GenerativeTask):
         embedded_features = self.backbone.get_layer(
             "encoder_token_embedding_conv_layer_1"
         )(features)
+        embedded_features = keras.activations.gelu(
+            embedded_features, approximate=False
+        )
         embedded_features = tf.pad(
             embedded_features, paddings=[[0, 0], [1, 1], [0, 0]]
         )
         embedded_features = self.backbone.get_layer(
             "encoder_token_embedding_conv_layer_2"
         )(embedded_features)
+        embedded_features = keras.activations.gelu(
+            embedded_features, approximate=False
+        )
         position_embedding = self.backbone.get_layer(
             "encoder_position_embedding"
         )(embedded_features)
 
         # Sum, normalize and apply dropout to embeddings.
-        x = self.backbone.get_layer("encoder_embeddings_add")(
-            (embedded_features, position_embedding)
-        )
+        x = keras.layers.Add()((embedded_features, position_embedding))
         x = self.backbone.get_layer("encoder_embeddings_dropout")(x)
 
         # Transformer encoder layers.
