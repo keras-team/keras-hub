@@ -37,16 +37,8 @@ jobs:
         env:
             SSH_AUTH_SOCK: /tmp/ssh_agent.sock
         run: |
-          pip install tensorflow==2.12.0
-          pip install torch>=2.0.1+cpu
-          pip install "jax[cpu]"
           pip install -r requirements.txt --progress-bar off
-          pip install -e "." --progress-bar off
-          cd ..
-          git clone git@github.com:keras-team/keras-core.git
-          pip install -r keras-core/requirements.txt --progress-bar off
-          python keras-core/pip_build.py --install
-          cd keras-nlp
+          pip install --no-deps -e "." --progress-bar off
       - name: Test with pytest
         run: |
           pytest --cov=keras_nlp --cov-report xml:coverage.xml keras_nlp/
@@ -88,16 +80,8 @@ jobs:
       env:
           SSH_AUTH_SOCK: /tmp/ssh_agent.sock
       run: |
-          pip install tensorflow==2.12.0
-          pip install torch>=2.0.1+cpu
-          pip install "jax[cpu]"
           pip install -r requirements.txt --progress-bar off
-          pip install -e "." --progress-bar off
-          cd ..
-          git clone git@github.com:keras-team/keras-core.git
-          pip install -r keras-core/requirements.txt --progress-bar off
-          python keras-core/pip_build.py --install
-          cd keras-nlp
+          pip install --no-deps -e "." --progress-bar off
     - name: Test with pytest
       env:
         KERAS_BACKEND: ${{ matrix.backend }}
@@ -127,6 +111,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt --progress-bar off
-          pip install -e "." --progress-bar off
+          pip install --no-deps -e "." --progress-bar off
       - name: Lint
         run: bash shell/lint.sh
