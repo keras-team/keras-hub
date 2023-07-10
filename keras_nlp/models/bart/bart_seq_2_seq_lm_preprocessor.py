@@ -20,6 +20,7 @@ import tensorflow as tf
 from absl import logging
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import ops
 from keras_nlp.models.bart.bart_preprocessor import BartPreprocessor
 from keras_nlp.models.bart.bart_presets import backbone_presets
 from keras_nlp.utils.keras_utils import (
@@ -267,6 +268,10 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             x["decoder_token_ids"],
             x["decoder_padding_mask"],
         )
+        if not isinstance(decoder_token_ids, tf.Tensor):
+            decoder_token_ids = ops.convert_to_numpy(decoder_token_ids)
+        if not isinstance(decoder_padding_mask, tf.Tensor):
+            decoder_padding_mask = ops.convert_to_numpy(decoder_padding_mask)
         # Strip any special tokens during detokenization, i.e., the start and
         # end markers. In the future, we could make this configurable.
         decoder_padding_mask = (
