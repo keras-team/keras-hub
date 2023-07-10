@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.xlnet.xlnet_content_and_query_embedding import (
@@ -23,7 +22,7 @@ from keras_nlp.models.xlnet.xlnet_encoder import XLNetEncoder
 from keras_nlp.models.xlnet.xlnet_encoder import XLNetSegmentMatrixLayer
 
 
-@keras_nlp_export("keras_nlp.models.XLNetBackbone")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class XLNetBackbone(Backbone):
     """XLNet encoder network.
 

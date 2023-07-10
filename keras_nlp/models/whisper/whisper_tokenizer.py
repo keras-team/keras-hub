@@ -15,7 +15,7 @@
 import copy
 import json
 
-from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.models.whisper.whisper_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_nlp.utils.python_utils import classproperty
@@ -28,7 +28,7 @@ def _load_dict(dict_or_path):
     return dict_or_path
 
 
-@keras_nlp_export("keras_nlp.models.WhisperTokenizer")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class WhisperTokenizer(BytePairTokenizer):
     """Whisper text tokenizer using Byte-Pair Encoding subword segmentation.
 
