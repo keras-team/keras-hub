@@ -69,6 +69,7 @@ class TopKSampler(Sampler):
         super().__init__(**kwargs)
         self.k = k
         self.seed = seed
+        self.seed_generator = random.SeedGenerator(seed)
 
     def get_next_token(self, probabilities):
         # Filter out top-k tokens.
@@ -81,7 +82,7 @@ class TopKSampler(Sampler):
         sample_indices = random.categorical(
             ops.log(top_k_pred),
             1,
-            seed=self.seed,
+            seed=self.seed_generator,
             dtype="int32",
         )
 

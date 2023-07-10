@@ -15,18 +15,30 @@
 
 import copy
 
-import tensorflow as tf
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.bart.bart_backbone import BartBackbone
 from keras_nlp.models.bart.bart_presets import backbone_presets
 from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
 from keras_nlp.models.generative_task import GenerativeTask
-from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
+
+
+# TODO: Extend and factor this out into keras_nlp.layers.
+class ReverseEmbedding(keras.layers.Layer):
+    def __init__(self, embedding, **kwargs):
+        super().__init__(**kwargs)
+        self.embedding = embedding
+
+    def call(self, inputs):
+        kernel = ops.transpose(ops.convert_to_tensor(self.embedding.embeddings))
+        return ops.matmul(inputs, kernel)
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0],) + (self.embedding.embeddings.shape[0],)
 
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLM")
@@ -192,11 +204,10 @@ class BartSeq2SeqLM(GenerativeTask):
         x = backbone(inputs)["decoder_sequence_output"]
         # Use token embedding weights to project from the token representation
         # to vocabulary logits.
-        outputs = tf.matmul(
-            x,
-            backbone.token_embedding.embeddings,
-            transpose_b=True,
-        )
+        outputs = ReverseEmbedding(
+            backbone.token_embedding,
+            name="reverse_embedding",
+        )(x)
 
         # Instantiate using Functional API Model constructor.
         super().__init__(
@@ -216,7 +227,7 @@ class BartSeq2SeqLM(GenerativeTask):
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(2e-5),
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=is_xla_compatible(self),
+            jit_compile=True,
         )
 
     @classproperty
@@ -305,11 +316,11 @@ class BartSeq2SeqLM(GenerativeTask):
 
         # Every decoder layer has a separate cache for the self-attention layer
         # and the cross-attention layer. We update all of them separately.
-        self_attention_caches = tf.unstack(self_attention_cache, axis=1)
-        cross_attention_caches = tf.unstack(cross_attention_cache, axis=1)
+        self_attention_caches = []
+        cross_attention_caches = []
         for i in range(self.backbone.num_layers):
-            current_self_attention_cache = self_attention_caches[i]
-            current_cross_attention_cache = cross_attention_caches[i]
+            current_self_attention_cache = self_attention_cache[:, i, ...]
+            current_cross_attention_cache = cross_attention_cache[:, i, ...]
 
             (
                 x,
@@ -326,22 +337,17 @@ class BartSeq2SeqLM(GenerativeTask):
             )
 
             if self_attention_cache_update_index is not None:
-                self_attention_caches[i] = next_self_attention_cache
+                self_attention_caches.append(next_self_attention_cache)
             if cross_attention_cache_update_index is not None:
-                cross_attention_caches[i] = next_cross_attention_cache
+                cross_attention_caches.append(next_cross_attention_cache)
 
         if self_attention_cache_update_index is not None:
-            self_attention_cache = tf.stack(self_attention_caches, axis=1)
+            self_attention_cache = ops.stack(self_attention_caches, axis=1)
         if cross_attention_cache_update_index is not None:
-            cross_attention_cache = tf.stack(cross_attention_caches, axis=1)
+            cross_attention_cache = ops.stack(cross_attention_caches, axis=1)
 
         hidden_states = x
-
-        logits = tf.matmul(
-            hidden_states,
-            self.backbone.get_layer("token_embedding").embeddings,
-            transpose_b=True,
-        )
+        logits = self.get_layer("reverse_embedding")(x)
         return (
             logits,
             hidden_states,
@@ -375,9 +381,9 @@ class BartSeq2SeqLM(GenerativeTask):
 
     def _initialize_cache(self, encoder_token_ids, decoder_token_ids):
         """Initializes empty self-attention cache and cross-attention cache."""
-        batch_size = tf.shape(encoder_token_ids)[0]
-        encoder_max_length = tf.shape(encoder_token_ids)[1]
-        decoder_max_length = tf.shape(decoder_token_ids)[1]
+        batch_size = ops.shape(encoder_token_ids)[0]
+        encoder_max_length = ops.shape(encoder_token_ids)[1]
+        decoder_max_length = ops.shape(decoder_token_ids)[1]
 
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_heads
@@ -391,10 +397,10 @@ class BartSeq2SeqLM(GenerativeTask):
             num_heads,
             head_dim,
         ]
-        self_attention_cache = tf.zeros(shape, dtype=self.compute_dtype)
+        self_attention_cache = ops.zeros(shape, dtype=self.compute_dtype)
 
         shape[3] = encoder_max_length
-        cross_attention_cache = tf.zeros(shape, dtype=self.compute_dtype)
+        cross_attention_cache = ops.zeros(shape, dtype=self.compute_dtype)
 
         return (self_attention_cache, cross_attention_cache)
 
@@ -464,7 +470,7 @@ class BartSeq2SeqLM(GenerativeTask):
             inputs["decoder_padding_mask"],
         )
 
-        batch_size = tf.shape(encoder_token_ids)[0]
+        batch_size = ops.shape(encoder_token_ids)[0]
 
         # Create and seed cache with a single forward pass.
         (
@@ -476,24 +482,21 @@ class BartSeq2SeqLM(GenerativeTask):
             encoder_token_ids, encoder_padding_mask, decoder_token_ids
         )
         # Compute the lengths of all user inputted tokens ids.
-        row_lengths = tf.math.reduce_sum(
-            tf.cast(decoder_padding_mask, "int32"), axis=-1
-        )
+        row_lengths = ops.sum(ops.cast(decoder_padding_mask, "int32"), axis=-1)
         # Start at the first index that has no user inputted id.
-        index = tf.math.reduce_min(row_lengths)
+        index = ops.min(row_lengths)
 
         def next(prompt, cache, index):
             # The cache index is the index of our previous token.
             cache_index = index - 1
-            prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
-
-            num_samples = tf.shape(prompt)[0]
+            num_samples = ops.shape(prompt)[0]
+            prompt = ops.slice(prompt, [0, cache_index], [num_samples, 1])
 
             def repeat_tensor(x):
                 """Repeats tensors along batch axis to match dim for beam search."""
-                if tf.shape(x)[0] == num_samples:
+                if ops.shape(x)[0] == num_samples:
                     return x
-                return tf.repeat(x, repeats=num_samples // batch_size, axis=0)
+                return ops.repeat(x, repeats=num_samples // batch_size, axis=0)
 
             logits, hidden_states, cache, _ = self.call_decoder_with_cache(
                 encoder_hidden_states=repeat_tensor(encoder_hidden_states),
@@ -505,8 +508,8 @@ class BartSeq2SeqLM(GenerativeTask):
                 cross_attention_cache_update_index=None,
             )
             return (
-                tf.squeeze(logits, axis=1),
-                tf.squeeze(hidden_states, axis=1),
+                ops.squeeze(logits, axis=1),
+                ops.squeeze(hidden_states, axis=1),
                 cache,
             )
 
@@ -527,14 +530,17 @@ class BartSeq2SeqLM(GenerativeTask):
             end_locations = (decoder_token_ids == end_token_id) & (
                 ~decoder_padding_mask
             )
-            end_locations = tf.cast(end_locations, "int32")
+            end_locations = ops.cast(end_locations, "int32")
             # Use cumsum to get ones in all locations after `end_locations`.
-            overflow = tf.math.cumsum(end_locations, exclusive=True, axis=-1)
+            cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
+            overflow = cumsum - end_locations
             # Our padding mask is the inverse of these overflow locations.
-            decoder_padding_mask = ~tf.cast(overflow, "bool")
+            decoder_padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
         else:
             # Without early stopping, all locations will have been updated.
-            decoder_padding_mask = tf.ones_like(decoder_token_ids, dtype="bool")
+            decoder_padding_mask = ops.ones_like(
+                decoder_token_ids, dtype="bool"
+            )
 
         return {
             "decoder_token_ids": decoder_token_ids,

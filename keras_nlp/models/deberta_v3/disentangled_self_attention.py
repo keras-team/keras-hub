@@ -82,8 +82,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
             float(num_type_attn * self.attn_head_size)
         )
 
-        # Layers.
-
+    def build(self, inputs_shape, rel_embeddings_shape=None):
         # Q, K, V linear layers.
         self._query_dense = keras.layers.EinsumDense(
             equation="abc,cde->abde",
@@ -92,6 +91,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
             **self._get_common_kwargs_for_sublayer(use_bias=True),
             name="query",
         )
+        self._query_dense.build(inputs_shape)
         self._key_dense = keras.layers.EinsumDense(
             equation="abc,cde->abde",
             output_shape=(None, self.num_heads, self.attn_head_size),
@@ -99,6 +99,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
             **self._get_common_kwargs_for_sublayer(use_bias=True),
             name="key",
         )
+        self._key_dense.build(inputs_shape)
         self._value_dense = keras.layers.EinsumDense(
             equation="abc,cde->abde",
             output_shape=(None, self.num_heads, self.attn_head_size),
@@ -106,6 +107,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
             **self._get_common_kwargs_for_sublayer(use_bias=True),
             name="value",
         )
+        self._value_dense.build(inputs_shape)
 
         # Relative attention.
         self._position_dropout_layer = keras.layers.Dropout(self.dropout)
@@ -123,6 +125,8 @@ class DisentangledSelfAttention(keras.layers.Layer):
             **self._get_common_kwargs_for_sublayer(use_bias=True),
             name="attention_output",
         )
+        self._output_dense.build(inputs_shape)
+        self.built = True
 
     def _get_common_kwargs_for_sublayer(self, use_bias=True):
         common_kwargs = {}
@@ -322,7 +326,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
     def call(
         self,
-        hidden_states,
+        inputs,
         rel_embeddings,
         attention_mask=None,
         return_attention_scores=False,
@@ -330,9 +334,9 @@ class DisentangledSelfAttention(keras.layers.Layer):
     ):
         # `query`, `key`, `value` shape:
         # `(batch_size, sequence_length, num_heads, attn_head_size)`.
-        query = self._query_dense(hidden_states)
-        key = self._key_dense(hidden_states)
-        value = self._value_dense(hidden_states)
+        query = self._query_dense(inputs)
+        key = self._key_dense(inputs)
+        value = self._value_dense(inputs)
 
         attention_output, attention_scores = self._compute_attention(
             query=query,

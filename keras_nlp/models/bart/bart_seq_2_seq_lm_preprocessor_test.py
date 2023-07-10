@@ -156,6 +156,7 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self):
         input_data = {
             "encoder_text": tf.constant([" airplane at airport"]),
@@ -163,8 +164,12 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
         }
 
         inputs = {
-            "encoder_text": keras.Input(dtype="string", shape=()),
-            "decoder_text": keras.Input(dtype="string", shape=()),
+            "encoder_text": keras.Input(
+                dtype="string", name="encoder_text", shape=()
+            ),
+            "decoder_text": keras.Input(
+                dtype="string", name="decoder_text", shape=()
+            ),
         }
         outputs, y, sw = self.preprocessor(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)

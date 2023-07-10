@@ -14,14 +14,13 @@
 
 """T5 backbone model."""
 
-import tensorflow as tf
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.models.t5.t5_transformer_layer import T5TransformerLayer
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.tensor_utils import assert_tf_backend
 
 
 @keras_nlp_export("keras_nlp.models.T5Backbone")
@@ -79,6 +78,8 @@ class T5Backbone(Backbone):
         layer_norm_epsilon=1e-06,
         **kwargs,
     ):
+        assert_tf_backend(self.__class__.__name__)
+
         # Encoder inputs
         encoder_token_ids = keras.Input(
             shape=(None,), dtype="int32", name="encoder_token_ids"
@@ -112,8 +113,7 @@ class T5Backbone(Backbone):
             name="encoder_embedding_dropout",
         )(token_embedding)
 
-        # Encoder attention mask is just our padding mask.
-        encoder_attention_mask = encoder_padding_mask[:, tf.newaxis, :]
+        encoder_attention_mask = encoder_padding_mask[:, None, :]
 
         position_bias = None
         for i in range(num_layers):

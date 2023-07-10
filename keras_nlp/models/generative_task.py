@@ -13,9 +13,13 @@
 # limitations under the License.
 """Base class for Generative Task models."""
 
+import itertools
+
 import tensorflow as tf
 
+from keras_nlp.backend import config
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.task import Task
 from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.tensor_utils import tensor_to_list
@@ -54,15 +58,80 @@ class GenerativeTask(Task):
         if self.generate_function is not None:
             return self.generate_function
 
-        if self.run_eagerly:
-            self.generate_function = self.generate_step
-        else:
+        self.generate_function = self.generate_step
+        if config.backend() == "torch":
+            import torch
+
+            def wrapped_generate_function(
+                inputs,
+                end_token_id=None,
+            ):
+                with torch.no_grad():
+                    return self.generate_step(inputs, end_token_id)
+
+            self.generate_function = wrapped_generate_function
+        elif config.backend() == "tensorflow" and not self.run_eagerly:
             # `jit_compile` is a property of keras.Model after TF 2.12.
             # Use `getattr()` for backwards compatibility.
             jit_compile = getattr(self, "jit_compile", True)
             self.generate_function = tf.function(
                 self.generate_step, jit_compile=jit_compile
             )
+        elif config.backend() == "jax" and not self.run_eagerly:
+            import jax
+
+            @jax.jit
+            def compiled_generate_function(inputs, end_token_id, state):
+                (
+                    sampler_variables,
+                    trainable_variables,
+                    non_trainable_variables,
+                ) = state
+                mapping = itertools.chain(
+                    zip(self._sampler.variables, sampler_variables),
+                    zip(self.trainable_variables, trainable_variables),
+                    zip(self.non_trainable_variables, non_trainable_variables),
+                )
+
+                with keras.StatelessScope(state_mapping=mapping) as scope:
+                    outputs = self.generate_step(inputs, end_token_id)
+
+                # Get updated sampler variables from the stateless scope.
+                sampler_variables = []
+                for v in self._sampler.variables:
+                    new_v = scope.get_current_value(v)
+                    sampler_variables.append(new_v if new_v is not None else v)
+                state = (
+                    sampler_variables,
+                    trainable_variables,
+                    non_trainable_variables,
+                )
+                return outputs, state
+
+            def wrapped_generate_function(
+                inputs,
+                end_token_id=None,
+            ):
+                # Create an explicit tuple of all variable state.
+                state = (
+                    self._sampler.variables,
+                    self.trainable_variables,
+                    self.non_trainable_variables,
+                )
+                inputs = tf.nest.map_structure(ops.convert_to_tensor, inputs)
+                outputs, state = compiled_generate_function(
+                    inputs,
+                    end_token_id,
+                    state,
+                )
+                # Only assign the sampler variables (random seeds), as other
+                # model variables should never be updated in generation.
+                for ref_v, v in zip(self._sampler.variables, state[0]):
+                    ref_v.assign(v)
+                return outputs
+
+            self.generate_function = wrapped_generate_function
+
         return self.generate_function
 
     def _normalize_generate_inputs(

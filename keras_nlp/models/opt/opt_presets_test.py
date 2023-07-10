@@ -14,9 +14,9 @@
 """Tests for loading pretrained model presets."""
 
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 
+from keras_nlp.backend import ops
 from keras_nlp.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.models.opt.opt_tokenizer import OPTTokenizer
 from keras_nlp.tests.test_case import TestCase
@@ -42,8 +42,8 @@ class OPTPresetSmokeTest(TestCase):
     )
     def test_backbone_output(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[133, 2119, 6219, 23602, 4]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1, 1]]),
+            "token_ids": ops.array([[133, 2119, 6219, 23602, 4]]),
+            "padding_mask": ops.array([[1, 1, 1, 1, 1]]),
         }
         model = OPTBackbone.from_preset(
             "opt_125m_en", load_weights=load_weights
@@ -95,12 +95,12 @@ class OPTPresetFullTest(TestCase):
         for preset in OPTBackbone.presets:
             model = OPTBackbone.from_preset(preset, load_weights=load_weights)
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 1024),
                     dtype="int64",
                     maxval=model.vocabulary_size,
                 ),
-                "padding_mask": tf.constant([1] * 1024, shape=(1, 1024)),
+                "padding_mask": ops.array([1] * 1024, shape=(1, 1024)),
             }
             model(input_data)
 

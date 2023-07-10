@@ -148,6 +148,7 @@ class FNetPreprocessorTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self):
         input_data = tf.constant(["the quick brown fox"])
         inputs = keras.Input(dtype="string", shape=())

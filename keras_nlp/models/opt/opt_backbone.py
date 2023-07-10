@@ -18,6 +18,7 @@ import copy
 
 from tensorflow.experimental import dtensor
 from tensorflow.experimental.dtensor import Layout
+from tensorflow.keras.dtensor.experimental import LayoutMap
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
@@ -217,7 +218,7 @@ class OPTBackbone(Backbone):
         _, model_dim = mesh.dim_names
         unshard_dim = dtensor.UNSHARDED
 
-        layout_map = keras.dtensor.experimental.LayoutMap(mesh=mesh)
+        layout_map = LayoutMap(mesh=mesh)
         # Embedding sharding
         layout_map[r".*embeddings"] = Layout([unshard_dim, model_dim], mesh)
 

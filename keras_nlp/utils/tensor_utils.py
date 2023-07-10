@@ -90,7 +90,9 @@ def convert_to_ragged_batch(inputs):
     if isinstance(inputs, (list, tuple)):
         if isinstance(inputs[0], (list, tuple)):
             rectangular = len(set([len(row) for row in inputs])) == 1
-            rows = [tf.convert_to_tensor(row) for row in inputs]
+            rows = [
+                tf.convert_to_tensor(row, dtype_hint="int32") for row in inputs
+            ]
             inputs = tf.ragged.stack(rows).with_row_splits_dtype("int64")
         else:
             inputs = tf.convert_to_tensor(inputs)
@@ -136,7 +138,7 @@ def assert_tf_text_installed(symbol_name):
 
 def assert_tf_backend(symbol_name):
     if config.backend() != "tensorflow":
-        raise ImportError(
+        raise RuntimeError(
             f"{symbol_name} requires the `tensorflow` backend. "
             "Please set `KERAS_BACKEND=tensorflow` when running your program."
         )

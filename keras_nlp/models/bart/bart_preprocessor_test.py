@@ -168,6 +168,7 @@ class BartPreprocessorTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self):
         input_data = {
             "encoder_text": tf.constant([" airplane at airport"]),

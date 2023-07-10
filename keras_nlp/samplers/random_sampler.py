@@ -66,11 +66,15 @@ class RandomSampler(Sampler):
     ):
         super().__init__(**kwargs)
         self.seed = seed
+        self.seed_generator = random.SeedGenerator(seed)
 
     def get_next_token(self, probabilities):
         # Sample the next token from the probability distribution.
         next_token_id = random.categorical(
-            ops.log(probabilities), 1, seed=self.seed, dtype="int32"
+            ops.log(probabilities),
+            1,
+            seed=self.seed,
+            dtype="int32",
         )
         return ops.squeeze(next_token_id, axis=-1)
 

@@ -48,39 +48,26 @@ class OPTTokenizer(BytePairTokenizer):
             merge entities separated by a space.
 
     Examples:
+    ```python
+    # Unbatched input.
+    tokenizer = keras_nlp.models.OPTTokenizer.from_preset(
+        "opt_125m_en",
+    )
+    tokenizer("The quick brown fox jumped.")
 
-    Batched inputs.
-    >>> vocab = {"<pad>": 1, "</s>": 2, "a": 3, "Ġquick": 4, "Ġfox": 5}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.OPTTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
-    ... )
-    >>> tokenizer(["a quick fox", "a fox quick"])
-    <tf.RaggedTensor [[3, 4, 5], [3, 5, 4]]>
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
 
-    Unbatched input.
-    >>> vocab = {"<pad>": 1, "</s>": 2, "a": 3, "Ġquick": 4, "Ġfox": 5}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.OPTTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
-    ... )
-    >>> tokenizer("a quick fox")
-    <tf.Tensor: shape=(4,), dtype=int32, numpy=array([3, 4, 5], dtype=int32)>
+    # Detokenization.
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
 
-    Detokenization.
-    >>> vocab = {"<pad>": 1, "</s>": 2, "Ġquick": 4, "Ġfox": 5}
-    >>> merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
-    >>> merges += ["Ġ f", "o x", "Ġf ox"]
-    >>> tokenizer = keras_nlp.models.OPTTokenizer(
-    ...     vocabulary=vocab,
-    ...     merges=merges,
-    ... )
-    >>> tokenizer.detokenize(tokenizer(" quick fox")).numpy().decode('utf-8')
-    ' quick fox'
+    # Custom vocabulary.
+    vocab = {"<pad>": 1, "</s>": 2, "Ġquick": 4, "Ġfox": 5}
+    merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+    merges += ["Ġ f", "o x", "Ġf ox"]
+    tokenizer = keras_nlp.models.OPTTokenizer(vocabulary=vocab, merges=merges)
+    tokenizer("The quick brown fox jumped.")
+    ```
     """
 
     def __init__(

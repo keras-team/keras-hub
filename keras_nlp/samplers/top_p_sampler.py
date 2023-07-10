@@ -79,6 +79,7 @@ class TopPSampler(Sampler):
         self.p = p
         self.k = k
         self.seed = seed
+        self.seed_generator = random.SeedGenerator(seed)
 
     def get_next_token(self, probabilities):
         cutoff = ops.shape(probabilities)[1]
@@ -105,7 +106,7 @@ class TopPSampler(Sampler):
         sorted_next_token = random.categorical(
             ops.log(probabilities),
             1,
-            seed=self.seed,
+            seed=self.seed_generator,
             dtype="int32",
         )
         output = ops.take_along_axis(sorted_indices, sorted_next_token, axis=-1)
