@@ -27,15 +27,7 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-      - name: Setup SSH Keys and known_hosts
-        env:
-            SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-        run: |
-            ssh-agent -a $SSH_AUTH_SOCK > /dev/null
-            ssh-add - <<< "${{ secrets.KERAS_CORE }}"
       - name: Install dependencies
-        env:
-            SSH_AUTH_SOCK: /tmp/ssh_agent.sock
         run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
@@ -70,15 +62,7 @@ jobs:
         key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
         restore-keys: |
           ${{ runner.os }}-pip-
-    - name: Setup SSH Keys and known_hosts
-      env:
-          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-      run: |
-          ssh-agent -a $SSH_AUTH_SOCK > /dev/null
-          ssh-add - <<< "${{ secrets.KERAS_CORE }}"
     - name: Install dependencies
-      env:
-          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
       run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
