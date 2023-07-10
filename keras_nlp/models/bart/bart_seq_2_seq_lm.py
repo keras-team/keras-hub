@@ -338,7 +338,10 @@ class BartSeq2SeqLM(GenerativeTask):
         hidden_states = x
 
         logits = tf.matmul(
-            hidden_states,
+            tf.cast(
+                hidden_states,
+                self.backbone.get_layer("token_embedding").embeddings.dtype,
+            ),
             self.backbone.get_layer("token_embedding").embeddings,
             transpose_b=True,
         )
