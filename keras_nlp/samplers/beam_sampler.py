@@ -53,14 +53,14 @@ class BeamSampler(Sampler):
 
     def next(prompt, cache, index):
         prompt_batch_size = tf.shape(prompt)[0]
-        hidden_states = tf.ones((prompt_batch_size, 10))
+        hidden_states = np.ones((prompt_batch_size, 10))
         # A uniform distribution over our alphabet.
-        logits = tf.ones((prompt_batch_size, vocab_size))
+        logits = np.ones((prompt_batch_size, vocab_size))
         return logits, hidden_states, cache
 
     output = keras_nlp.samplers.BeamSampler()(
         next=next,
-        prompt=tf.fill((batch_size, length), char_lookup["z"]),
+        prompt=np.full((batch_size, length), char_lookup["z"], dtype="int32"),
         index=5,
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
@@ -76,14 +76,14 @@ class BeamSampler(Sampler):
 
     def next(prompt, cache, index):
         prompt_batch_size = tf.shape(prompt)[0]
-        hidden_states = tf.ones((prompt_batch_size, 10))
+        hidden_states = np.ones((prompt_batch_size, 10))
         # A uniform distribution over our alphabet.
-        logits = tf.ones((batch_size, vocab_size))
+        logits = np.ones((batch_size, vocab_size))
         return logits, hidden_states, cache
 
     beams, probs = keras_nlp.samplers.BeamSampler(return_all_beams=True)(
         next=next,
-        prompt=tf.fill((batch_size, length,), char_lookup['z']),
+        prompt=np.full((batch_size, length,), char_lookup['z'], dtype="int32"),
         index=5,
     )
 

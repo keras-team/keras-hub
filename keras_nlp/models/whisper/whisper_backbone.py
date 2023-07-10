@@ -81,10 +81,10 @@ class WhisperBackbone(Backbone):
 
     ```python
     input_data = {
-        "encoder_features": tf.ones(shape=(1, 12, 80), dtype="int64"),
-        "decoder_token_ids": tf.ones(shape=(1, 12), dtype="int64"),
-        "decoder_padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0], shape=(1, 12)
+        "encoder_features": np.ones(shape=(1, 12, 80), dtype="int32"),
+        "decoder_token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "decoder_padding_mask": np.array(
+            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]
         ),
     }
 

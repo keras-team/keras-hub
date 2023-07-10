@@ -45,14 +45,14 @@ class TopKSampler(Sampler):
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
     def next(prompt, cache, index):
-        hidden_states = tf.ones((batch_size, 10))
+        hidden_states = np.ones((batch_size, 10))
         # A uniform distribution over our alphabet.
-        logits = tf.ones((batch_size, vocab_size))
+        logits = np.ones((batch_size, vocab_size))
         return logits, hidden_states, cache
 
     output = keras_nlp.samplers.TopKSampler(k=3)(
         next=next,
-        prompt=tf.fill((batch_size, length,), char_lookup['z']),
+        prompt=np.full((batch_size, length,), char_lookup['z'], dtypes="int32"),
         index=5,
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])

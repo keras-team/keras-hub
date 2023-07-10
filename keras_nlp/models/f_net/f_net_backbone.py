@@ -70,10 +70,8 @@ class FNetBackbone(Backbone):
     Examples:
     ```python
     input_data = {
-        "token_ids": tf.ones(shape=(1, 12), dtype="int64"),
-        "segment_ids": tf.constant(
-            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "segment_ids": np.array([[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]]),
     }
 
     # Pretrained BERT encoder.

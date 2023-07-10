@@ -65,13 +65,13 @@ class BartBackbone(Backbone):
     Examples:
     ```python
     input_data = {
-        "encoder_token_ids": tf.ones(shape=(1, 12), dtype="int64"),
-        "encoder_padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
+        "encoder_token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "encoder_padding_mask": np.array(
+            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]
         ),
-        "decoder_token_ids": tf.ones(shape=(1, 12), dtype="int64"),
-        "decoder_padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0], shape=(1, 12)
+        "decoder_token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "decoder_padding_mask": np.array(
+            [[1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0]]
         ),
     }
 

@@ -109,12 +109,12 @@ class BartSeq2SeqLM(GenerativeTask):
     # "The quick brown fox", and the decoder inputs to "The fast". Use
     # `"padding_mask"` to indicate values that should not be overridden.
     prompt = {
-        "encoder_token_ids": tf.constant([[0, 133, 2119, 6219, 23602, 2, 1, 1]]),
-        "encoder_padding_mask": tf.constant(
+        "encoder_token_ids": np.array([[0, 133, 2119, 6219, 23602, 2, 1, 1]]),
+        "encoder_padding_mask": np.array(
             [[True, True, True, True, True, True, False, False]]
         ),
-        "decoder_token_ids": tf.constant([[2, 0, 133, 1769, 2, 1, 1]]),
-        "decoder_padding_mask": tf.constant([[True, True, True, True, False, False]])
+        "decoder_token_ids": np.array([[2, 0, 133, 1769, 2, 1, 1]]),
+        "decoder_padding_mask": np.array([[True, True, True, True, False, False]])
     }
 
     bart_lm = keras_nlp.models.BartSeq2SeqLM.from_preset(
@@ -137,13 +137,13 @@ class BartSeq2SeqLM(GenerativeTask):
     Call `fit()` without preprocessing.
     ```python
     x = {
-        "encoder_token_ids": tf.constant([[0, 133, 2119, 2, 1]] * 2),
-        "encoder_padding_mask": tf.constant([[1, 1, 1, 1, 0]] * 2),
-        "decoder_token_ids": tf.constant([[2, 0, 133, 1769, 2]] * 2),
-        "decoder_padding_mask": tf.constant([[1, 1, 1, 1, 1]] * 2),
+        "encoder_token_ids": np.array([[0, 133, 2119, 2, 1]] * 2),
+        "encoder_padding_mask": np.array([[1, 1, 1, 1, 0]] * 2),
+        "decoder_token_ids": np.array([[2, 0, 133, 1769, 2]] * 2),
+        "decoder_padding_mask": np.array([[1, 1, 1, 1, 1]] * 2),
     }
-    y = tf.constant([[0, 133, 1769, 2, 1]] * 2)
-    sw = tf.constant([[1, 1, 1, 1, 0]] * 2)
+    y = np.array([[0, 133, 1769, 2, 1]] * 2)
+    sw = np.array([[1, 1, 1, 1, 0]] * 2)
 
     bart_lm = keras_nlp.models.BartSeq2SeqLM.from_preset(
         "bart_base_en",
