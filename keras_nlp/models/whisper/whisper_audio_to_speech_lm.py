@@ -14,6 +14,7 @@
 """Whisper Seq2Seq LM (Language Model)."""
 
 import copy
+import os
 
 import tensorflow as tf
 from tensorflow import keras
@@ -27,6 +28,7 @@ from keras_nlp.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.models.whisper.whisper_presets import backbone_presets
 from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras_nlp_export("keras_nlp.models.WhisperAudioToSpeechLM")
@@ -411,3 +413,86 @@ class WhisperAudioToSpeechLM(GenerativeTask):
             "decoder_token_ids": decoder_token_ids,
             "decoder_padding_mask": decoder_padding_mask,
         }
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        load_weights=True,
+        language=None,
+        task=None,
+        no_timestamps=True,
+        **kwargs,
+    ):
+        """Instantiate `WhisperAudioToSpeechLM` model from preset architecture and weights.
+
+        Args:
+            preset: string. Must be one of "{{preset_names}}".
+            load_weights: Whether to load pre-trained weights into model.
+                Defaults to `True`.
+            language: string, language token (eg., `"<|en|>"`). Should only be
+                passed if your tokenizer is multilingual.
+            task: string, task name. One of `"transcribe"`, `"translate"`.
+                Should only be passed if your tokenizer is multilingual.
+            no_timestamps: bool. If True, `"<|no_timestamps|>"` will be added as
+                a special token to your input.
+
+        Examples:
+        ```python
+        # Load architecture and weights from preset
+        model = WhisperAudioToSpeechLM.from_preset("{{example_preset_name}}")
+
+        # Load randomly initialized model from preset architecture
+        model = WhisperAudioToSpeechLM.from_preset(
+            "{{example_preset_name}}",
+            load_weights=False
+        )
+        ```
+        """
+        if not cls.presets:
+            raise NotImplementedError(
+                "No presets have been created for this class."
+            )
+
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+
+        if "preprocessor" not in kwargs:
+            kwargs["preprocessor"] = cls.preprocessor_cls.from_preset(
+                preset,
+                language=language,
+                task=task,
+                no_timestamps=no_timestamps,
+            )
+
+        # Check if preset is backbone-only model
+        if preset in cls.backbone_cls.presets:
+            backbone = cls.backbone_cls.from_preset(preset, load_weights)
+            return cls(backbone, **kwargs)
+
+        # Otherwise must be one of class presets
+        metadata = cls.presets[preset]
+        config = metadata["config"]
+        model = cls.from_config({**config, **kwargs})
+
+        if not load_weights:
+            return model
+
+        weights = keras.utils.get_file(
+            "model.h5",
+            metadata["weights_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["weights_hash"],
+        )
+
+        model.load_weights(weights)
+        return model
+
+
+format_docstring(
+    example_preset_name=next(iter(backbone_presets), ""),
+    preset_names='", "'.join(backbone_presets),
+)(WhisperAudioToSpeechLM.from_preset.__func__)
