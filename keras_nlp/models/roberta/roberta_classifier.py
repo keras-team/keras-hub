@@ -15,15 +15,13 @@
 
 import copy
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_backbone import roberta_kernel_initializer
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_presets import backbone_presets
 from keras_nlp.models.task import Task
-from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -89,10 +87,8 @@ class RobertaClassifier(Task):
     Preprocessed integer data.
     ```python
     features = {
-        "token_ids": tf.ones(shape=(2, 12), dtype="int64"),
-        "padding_mask": tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2, shape=(2, 12)
-        ),
+        "token_ids": np.ones(shape=(2, 12), dtype="int32"),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]] * 2),
     }
     labels = [0, 3]
 
@@ -188,7 +184,7 @@ class RobertaClassifier(Task):
             ),
             optimizer=keras.optimizers.Adam(2e-5),
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=is_xla_compatible(self),
+            jit_compile=True,
         )
 
     def get_config(self):

@@ -13,10 +13,13 @@
 # limitations under the License.
 """Whisper tokenizer."""
 
+import copy
 import json
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.models.whisper.whisper_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
+from keras_nlp.utils.python_utils import classproperty
 
 
 def _load_dict(dict_or_path):
@@ -110,9 +113,9 @@ class WhisperTokenizer(BytePairTokenizer):
         self.translate_token_id = special_tokens[translate_token]
         self.transcribe_token_id = special_tokens[transcribe_token]
 
+        # TODO: Add language tokens to `unsplittable_tokens` once we figure
+        # out the performance issue with a large list.
         unsplittable_tokens = list(special_tokens.keys())
-        if language_tokens is not None:
-            unsplittable_tokens += list(language_tokens.keys())
 
         super().__init__(
             vocabulary=vocabulary,
@@ -139,3 +142,7 @@ class WhisperTokenizer(BytePairTokenizer):
             }
         )
         return config
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)

@@ -17,9 +17,8 @@ import os
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_masked_lm import (
     DistilBertMaskedLM,
@@ -30,9 +29,10 @@ from keras_nlp.models.distil_bert.distil_bert_masked_lm_preprocessor import (
 from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
-class DistilBertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
+class DistilBertMaskedLMTest(TestCase):
     def setUp(self):
         # Setup model.
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
@@ -55,12 +55,10 @@ class DistilBertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             preprocessor=self.preprocessor,
         )
 
-        self.raw_batch = tf.constant(
-            [
-                "the quick brown fox.",
-                "the slow brown fox.",
-            ]
-        )
+        self.raw_batch = [
+            "the quick brown fox.",
+            "the slow brown fox.",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
             self.raw_batch
@@ -91,17 +89,11 @@ class DistilBertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         )
         self.masked_lm.fit(self.preprocessed_dataset)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model_output = self.masked_lm.predict(self.raw_batch)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        self.masked_lm.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        self.masked_lm.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.

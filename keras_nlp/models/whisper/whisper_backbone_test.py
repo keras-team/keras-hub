@@ -17,13 +17,15 @@ import os
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.whisper.whisper_backbone import WhisperBackbone
+from keras_nlp.tests.test_case import TestCase
 
 
-class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
+@pytest.mark.tf_only
+class WhisperBackboneTest(TestCase):
     def setUp(self):
         self.backbone = WhisperBackbone(
             vocabulary_size=10,
@@ -35,9 +37,9 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
             max_decoder_sequence_length=6,
         )
         self.input_batch = {
-            "encoder_features": tf.ones((2, 5, 80), dtype="float32"),
-            "decoder_token_ids": tf.ones((2, 5), dtype="int32"),
-            "decoder_padding_mask": tf.ones((2, 5), dtype="int32"),
+            "encoder_features": ops.ones((2, 5, 80), dtype="float32"),
+            "decoder_token_ids": ops.ones((2, 5), dtype="int32"),
+            "decoder_padding_mask": ops.ones((2, 5), dtype="int32"),
         }
 
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
@@ -60,11 +62,13 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def test_variable_sequence_length_call_whisper(self):
         for seq_length in (2, 3, 4):
             input_data = {
-                "encoder_features": tf.ones(
+                "encoder_features": ops.ones(
                     (2, seq_length, 80), dtype="float32"
                 ),
-                "decoder_token_ids": tf.ones((2, seq_length), dtype="int32"),
-                "decoder_padding_mask": tf.ones((2, seq_length), dtype="int32"),
+                "decoder_token_ids": ops.ones((2, seq_length), dtype="int32"),
+                "decoder_padding_mask": ops.ones(
+                    (2, seq_length), dtype="int32"
+                ),
             }
             self.backbone(input_data)
 
@@ -73,8 +77,8 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
         self.backbone.predict(self.input_dataset)
 
     def test_serialization(self):
-        new_backbone = keras.utils.deserialize_keras_object(
-            keras.utils.serialize_keras_object(self.backbone)
+        new_backbone = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(self.backbone)
         )
         self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 
@@ -96,17 +100,11 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
             )._cross_attention_layer._key_dense.bias
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large  # Saving is slow, so mark these large.
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model_output = self.backbone(self.input_batch)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        self.backbone.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        self.backbone.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
@@ -126,7 +124,7 @@ class WhisperBackboneTest(tf.test.TestCase, parameterized.TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-class WhisperBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+class WhisperBackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.backbone = WhisperBackbone(
@@ -140,7 +138,7 @@ class WhisperBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
             )
 
         self.input_batch = {
-            "encoder_features": tf.ones(
+            "encoder_features": ops.ones(
                 (
                     8,
                     self.backbone.max_encoder_sequence_length,
@@ -148,10 +146,10 @@ class WhisperBackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
                 ),
                 dtype="int32",
             ),
-            "decoder_token_ids": tf.ones(
+            "decoder_token_ids": ops.ones(
                 (8, self.backbone.max_decoder_sequence_length), dtype="int32"
             ),
-            "decoder_padding_mask": tf.ones(
+            "decoder_padding_mask": ops.ones(
                 (8, self.backbone.max_decoder_sequence_length), dtype="int32"
             ),
         }

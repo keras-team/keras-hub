@@ -12,20 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.layers.cached_multi_head_attention import (
+from keras_nlp.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
-from keras_nlp.layers.f_net_encoder import FNetEncoder
-from keras_nlp.layers.masked_lm_head import MaskedLMHead
-from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
-from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
-from keras_nlp.layers.position_embedding import PositionEmbedding
-from keras_nlp.layers.random_deletion import RandomDeletion
-from keras_nlp.layers.random_swap import RandomSwap
-from keras_nlp.layers.sine_position_encoding import SinePositionEncoding
-from keras_nlp.layers.start_end_packer import StartEndPacker
-from keras_nlp.layers.token_and_position_embedding import (
+from keras_nlp.layers.modeling.f_net_encoder import FNetEncoder
+from keras_nlp.layers.modeling.masked_lm_head import MaskedLMHead
+from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
+from keras_nlp.layers.modeling.sine_position_encoding import (
+    SinePositionEncoding,
+)
+from keras_nlp.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
-from keras_nlp.layers.transformer_decoder import TransformerDecoder
-from keras_nlp.layers.transformer_encoder import TransformerEncoder
+from keras_nlp.layers.modeling.transformer_decoder import TransformerDecoder
+from keras_nlp.layers.modeling.transformer_encoder import TransformerEncoder
+from keras_nlp.layers.preprocessing.masked_lm_mask_generator import (
+    MaskedLMMaskGenerator,
+)
+from keras_nlp.layers.preprocessing.multi_segment_packer import (
+    MultiSegmentPacker,
+)
+from keras_nlp.layers.preprocessing.random_deletion import RandomDeletion
+from keras_nlp.layers.preprocessing.random_swap import RandomSwap
+from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker

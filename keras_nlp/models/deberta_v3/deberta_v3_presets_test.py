@@ -14,9 +14,9 @@
 """Tests for loading pretrained model presets."""
 
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 
+from keras_nlp.backend import ops
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_classifier import (
     DebertaV3Classifier,
@@ -25,10 +25,12 @@ from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
     DebertaV3Preprocessor,
 )
 from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+@pytest.mark.tf_only
+class DebertaV3PresetSmokeTest(TestCase):
     """
     A smoke test for DeBERTa presets we run continuously.
 
@@ -66,8 +68,8 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_backbone_output(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[0, 581, 63773, 2]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+            "token_ids": ops.array([[0, 581, 63773, 2]]),
+            "padding_mask": ops.array([[1, 1, 1, 1]]),
         }
         model = DebertaV3Backbone.from_preset(
             "deberta_v3_extra_small_en", load_weights=load_weights
@@ -82,7 +84,7 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         ("preset_weights", True), ("random_weights", False)
     )
     def test_classifier_output(self, load_weights):
-        input_data = tf.constant(["The quick brown fox."])
+        input_data = ["The quick brown fox."]
         model = DebertaV3Classifier.from_preset(
             "deberta_v3_extra_small_en",
             num_classes=2,
@@ -96,8 +98,8 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_classifier_output_without_preprocessing(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[0, 581, 63773, 2]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+            "token_ids": ops.array([[0, 581, 63773, 2]]),
+            "padding_mask": ops.array([[1, 1, 1, 1]]),
         }
         model = DebertaV3Classifier.from_preset(
             "deberta_v3_extra_small_en",
@@ -132,7 +134,8 @@ class DebertaV3PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class DebertaV3PresetFullTest(tf.test.TestCase, parameterized.TestCase):
+@pytest.mark.tf_only
+class DebertaV3PresetFullTest(TestCase):
     """
     Test the full enumeration of our preset.
 
@@ -150,10 +153,10 @@ class DebertaV3PresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 preset, load_weights=load_weights
             )
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 512), dtype="int64", maxval=model.vocabulary_size
                 ),
-                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+                "padding_mask": ops.array([1] * 512, shape=(1, 512)),
             }
             model(input_data)
 
@@ -167,7 +170,7 @@ class DebertaV3PresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 num_classes=4,
                 load_weights=load_weights,
             )
-            input_data = tf.constant(["This quick brown fox"])
+            input_data = ["The quick brown fox."]
             classifier.predict(input_data)
 
     @parameterized.named_parameters(
@@ -182,12 +185,12 @@ class DebertaV3PresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 preprocessor=None,
             )
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 512),
                     dtype="int64",
                     maxval=classifier.backbone.vocabulary_size,
                 ),
-                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+                "padding_mask": ops.array([1] * 512, shape=(1, 512)),
             }
             classifier.predict(input_data)
 

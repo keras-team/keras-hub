@@ -16,13 +16,14 @@
 
 import copy
 
-from tensorflow import keras
 from tensorflow.experimental import dtensor
 from tensorflow.experimental.dtensor import Layout
+from tensorflow.keras.dtensor.experimental import LayoutMap
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers.position_embedding import PositionEmbedding
-from keras_nlp.layers.transformer_decoder import TransformerDecoder
+from keras_nlp.backend import keras
+from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
+from keras_nlp.layers.modeling.transformer_decoder import TransformerDecoder
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
@@ -68,10 +69,8 @@ class GPT2Backbone(Backbone):
     Example usage:
     ```python
     input_data = {
-        "token_ids": tf.ones(shape=(1, 12), dtype="int64"),
-        "padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
     }
 
     # Pretrained GPT-2 decoder.
@@ -239,7 +238,7 @@ class GPT2Backbone(Backbone):
         _, model_dim = mesh.dim_names
         unshard_dim = dtensor.UNSHARDED
 
-        layout_map = keras.dtensor.experimental.LayoutMap(mesh=mesh)
+        layout_map = LayoutMap(mesh=mesh)
         # Embedding sharding
         layout_map[r".*embeddings"] = Layout([unshard_dim, model_dim], mesh)
 

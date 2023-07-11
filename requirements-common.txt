@@ -1,3 +1,7 @@
+keras-core
+# Consider handling GPU here.
+torch>=2.0.1+cpu
+jax[cpu]
 # Tooling.
 astor
 numpy~=1.23.2  # Numpy 1.24 breaks tests on ragged tensors
@@ -11,6 +15,7 @@ pytest-cov
 build
 namex
 regex
+rich
 # Optional deps.
 rouge-score
 sentencepiece

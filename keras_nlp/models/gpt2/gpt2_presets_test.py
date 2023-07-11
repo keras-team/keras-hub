@@ -14,15 +14,16 @@
 """Tests for loading pretrained model presets."""
 
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 
+from keras_nlp.backend import ops
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+class GPT2PresetSmokeTest(TestCase):
     """
     A smoke test for GPT-2 presets we run continuously.
 
@@ -41,8 +42,8 @@ class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_backbone_output(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[1169, 2068, 7586, 21831, 13]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1, 1]]),
+            "token_ids": ops.array([[1169, 2068, 7586, 21831, 13]]),
+            "padding_mask": ops.array([[1, 1, 1, 1, 1]]),
         }
         model = GPT2Backbone.from_preset(
             "gpt2_base_en", load_weights=load_weights
@@ -78,7 +79,7 @@ class GPT2PresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class GPT2PresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class GPT2PresetFullTest(TestCase):
     """
     Test the full enumeration of our preset.
 
@@ -94,12 +95,12 @@ class GPT2PresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in GPT2Backbone.presets:
             model = GPT2Backbone.from_preset(preset, load_weights=load_weights)
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 1024),
                     dtype="int64",
                     maxval=model.vocabulary_size,
                 ),
-                "padding_mask": tf.constant([1] * 1024, shape=(1, 1024)),
+                "padding_mask": ops.array([1] * 1024, shape=(1, 1024)),
             }
             model(input_data)
 

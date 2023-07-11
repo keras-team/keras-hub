@@ -14,9 +14,9 @@
 """Tests for loading pretrained model presets."""
 
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 
+from keras_nlp.backend import ops
 from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_classifier import (
     DistilBertClassifier,
@@ -27,10 +27,11 @@ from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
 from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+class DistilBertPresetSmokeTest(TestCase):
     """
     A smoke test for DistilBERT presets we run continuously.
 
@@ -60,8 +61,8 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_backbone_output(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[101, 1996, 4248, 102]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+            "token_ids": ops.array([[101, 1996, 4248, 102]]),
+            "padding_mask": ops.array([[1, 1, 1, 1]]),
         }
         model = DistilBertBackbone.from_preset(
             "distil_bert_base_en_uncased", load_weights=load_weights
@@ -75,7 +76,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         ("preset_weights", True), ("random_weights", False)
     )
     def test_classifier_output(self, load_weights):
-        input_data = tf.constant(["The quick brown fox."])
+        input_data = ["The quick brown fox."]
         model = DistilBertClassifier.from_preset(
             "distil_bert_base_en_uncased",
             num_classes=2,
@@ -88,8 +89,8 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_classifier_output_without_preprocessing(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[101, 1996, 4248, 102]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+            "token_ids": ops.array([[101, 1996, 4248, 102]]),
+            "padding_mask": ops.array([[1, 1, 1, 1]]),
         }
         model = DistilBertClassifier.from_preset(
             "distil_bert_base_en_uncased",
@@ -123,7 +124,7 @@ class DistilBertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class DistilBertPresetFullTest(TestCase):
     """
     Tests the full enumeration of our preset.
 
@@ -141,10 +142,10 @@ class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 preset, load_weights=load_weights
             )
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 512), dtype="int64", maxval=model.vocabulary_size
                 ),
-                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+                "padding_mask": ops.array([1] * 512, shape=(1, 512)),
             }
             model(input_data)
 
@@ -158,7 +159,7 @@ class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 num_classes=2,
                 load_weights=load_weights,
             )
-            input_data = tf.constant(["This quick brown fox"])
+            input_data = ["This quick brown fox."]
             classifier.predict(input_data)
 
     @parameterized.named_parameters(
@@ -173,12 +174,12 @@ class DistilBertPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 preprocessor=None,
             )
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 512),
                     dtype="int64",
                     maxval=classifier.backbone.vocabulary_size,
                 ),
-                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+                "padding_mask": ops.array([1] * 512, shape=(1, 512)),
             }
             classifier.predict(input_data)
 
