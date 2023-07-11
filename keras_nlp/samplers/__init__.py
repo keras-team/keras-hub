@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tensorflow import keras
-
+from keras_nlp.backend import keras
 from keras_nlp.samplers.beam_sampler import BeamSampler
 from keras_nlp.samplers.contrastive_sampler import ContrastiveSampler
 from keras_nlp.samplers.greedy_sampler import GreedySampler

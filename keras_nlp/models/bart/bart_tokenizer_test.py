@@ -13,17 +13,17 @@
 # limitations under the License.
 
 """Tests for BART tokenizer."""
-
 import os
 
+import pytest
 import tensorflow as tf
-from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class BartTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class BartTokenizerTest(TestCase):
     def setUp(self):
         vocab = {
             "<s>": 0,
@@ -58,7 +58,7 @@ class BartTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output, [0, 3, 4, 5, 3, 6, 0, 1])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant([" airplane at airport", " kohli is the best"])
+        input_data = [" airplane at airport", " kohli is the best"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[3, 4, 5, 3, 6], [7, 8, 9, 10, 11]])
 
@@ -74,21 +74,25 @@ class BartTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         with self.assertRaises(ValueError):
             BartTokenizer(vocabulary=["a", "b", "c"], merges=[])
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_serialization(self):
+        config = keras.saving.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.saving.deserialize_keras_object(config)
+        self.assertEqual(
+            new_tokenizer.get_config(),
+            self.tokenizer.get_config(),
+        )
+
+    @pytest.mark.large  # Saving is slow, so mark these large.
+    @pytest.mark.tf_only
+    def test_saved_model(self):
         input_data = tf.constant([" airplane at airport"])
 
         inputs = keras.Input(dtype="string", shape=())
         outputs = self.tokenizer(inputs)
         model = keras.Model(inputs, outputs)
 
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
 
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(

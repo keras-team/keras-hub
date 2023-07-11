@@ -14,21 +14,21 @@
 
 import os
 
+import pytest
 import tensorflow as tf
-from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
-class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class WordPieceTokenizerTest(TestCase):
     def test_tokenize(self):
         input_data = ["the quick brown fox."]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox", "."]
         tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
-        self.assertIsInstance(call_output, tf.RaggedTensor)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6, 7]])
         self.assertAllEqual(tokenize_output, [[1, 2, 3, 4, 5, 6, 7]])
 
@@ -39,7 +39,6 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             vocabulary=vocab_data, sequence_length=10
         )
         call_output = tokenizer(input_data)
-        self.assertIsInstance(call_output, tf.Tensor)
         self.assertAllEqual(call_output, [[1, 2, 3, 4, 5, 6, 7, 0, 0, 0]])
 
     def test_string_tokenize(self):
@@ -49,15 +48,16 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(
             call_output,
-            tf.ragged.constant([["the", "qu", "##ick", "br", "##own", "fox"]]),
+            [["the", "qu", "##ick", "br", "##own", "fox"]],
         )
 
     def test_detokenize(self):
-        input_data = [[1, 2, 3, 4, 5, 6]]
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
         tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
-        detokenize_output = tokenizer.detokenize(input_data)
-        self.assertAllEqual(detokenize_output, ["the quick brown fox"])
+        outputs = tokenizer.detokenize([1, 2, 3, 4, 5, 6])
+        self.assertAllEqual(outputs, "the quick brown fox")
+        outputs = tokenizer.detokenize([[1, 2, 3, 4, 5, 6], [1, 6]])
+        self.assertAllEqual(outputs, ["the quick brown fox", "the fox"])
 
     def test_accessors(self):
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
@@ -92,7 +92,7 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(
             call_output,
-            tf.ragged.constant([["qu", "@@ick", "br", "@@own", "@UNK@"]]),
+            [["qu", "@@ick", "br", "@@own", "@UNK@"]],
         )
 
     def test_cjk_tokens(self):
@@ -102,7 +102,7 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(
             call_output,
-            tf.ragged.constant([["ah", "半", "推", "zz"]]),
+            [["ah", "半", "推", "zz"]],
         )
 
     def test_lowercase(self):
@@ -156,6 +156,7 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [1, 2, 3, 4, 5, 6])
 
+    @pytest.mark.tf_only
     def test_functional_model(self):
         input_data = tf.constant(["the quick brown fox"])
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
@@ -207,11 +208,8 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             cloned_tokenizer(input_data),
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    @pytest.mark.tf_only
+    def test_saved_model(self):
         input_data = tf.constant(["quick brOWN whale"])
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]
         tokenizer = WordPieceTokenizer(
@@ -224,10 +222,8 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),

@@ -14,17 +14,19 @@
 """Tests for loading pretrained model presets."""
 
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 
+from keras_nlp.backend import ops
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_classifier import FNetClassifier
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
+@pytest.mark.tf_only
+class FNetPresetSmokeTest(TestCase):
     """
     A smoke test for FNet presets we run continuously.
 
@@ -54,9 +56,9 @@ class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_backbone_output(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[101, 1996, 4248, 102]]),
-            "segment_ids": tf.constant([[0, 0, 0, 0]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+            "token_ids": ops.array([[101, 1996, 4248, 102]]),
+            "segment_ids": ops.array([[0, 0, 0, 0]]),
+            "padding_mask": ops.array([[1, 1, 1, 1]]),
         }
         model = FNetBackbone.from_preset(
             "f_net_base_en", load_weights=load_weights
@@ -77,7 +79,7 @@ class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         ("load_weights", True), ("no_load_weights", False)
     )
     def test_classifier_output(self, load_weights):
-        input_data = tf.constant(["The quick brown fox."])
+        input_data = ["The quick brown fox."]
         model = FNetClassifier.from_preset(
             "f_net_base_en",
             num_classes=2,
@@ -110,7 +112,7 @@ class FNetPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
 
 
 @pytest.mark.extra_large
-class FNetPresetFullTest(tf.test.TestCase, parameterized.TestCase):
+class FNetPresetFullTest(TestCase):
     """
     Test the full enumeration of our preset.
 
@@ -126,12 +128,10 @@ class FNetPresetFullTest(tf.test.TestCase, parameterized.TestCase):
         for preset in FNetBackbone.presets:
             model = FNetBackbone.from_preset(preset, load_weights=load_weights)
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 512), dtype="int64", maxval=model.vocabulary_size
                 ),
-                "segment_ids": tf.constant(
-                    [0] * 200 + [1] * 312, shape=(1, 512)
-                ),
+                "segment_ids": ops.array([0] * 200 + [1] * 312, shape=(1, 512)),
             }
             model(input_data)
 
@@ -145,7 +145,7 @@ class FNetPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 num_classes=2,
                 load_weights=load_weights,
             )
-            input_data = tf.constant(["This quick brown fox"])
+            input_data = ["The quick brown fox."]
             classifier.predict(input_data)
 
     @parameterized.named_parameters(
@@ -160,15 +160,13 @@ class FNetPresetFullTest(tf.test.TestCase, parameterized.TestCase):
                 load_weights=load_weights,
             )
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 512),
                     dtype="int64",
                     maxval=classifier.backbone.vocabulary_size,
                 ),
-                "segment_ids": tf.constant(
-                    [0] * 200 + [1] * 312, shape=(1, 512)
-                ),
-                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+                "segment_ids": ops.array([0] * 200 + [1] * 312, shape=(1, 512)),
+                "padding_mask": ops.array([1] * 512, shape=(1, 512)),
             }
             classifier.predict(input_data)
 

@@ -14,13 +14,14 @@
 """Contrastive Sampler."""
 
 import tensorflow as tf
-from tensorflow import keras
 from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import call_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
+from keras_nlp.utils.tensor_utils import assert_tf_backend
 
 
 @format_docstring(call_args=call_args_docstring)
@@ -55,16 +56,16 @@ class ContrastiveSampler(Sampler):
 
     def next(prompt, cache, index):
         prompt_batch_size = tf.shape(prompt)[0]
-        hidden_states = tf.ones((prompt_batch_size, hidden_size))
+        hidden_states = np.ones((prompt_batch_size, hidden_size))
         # A uniform distribution over our alphabet.
-        logits = tf.ones((prompt_batch_size, vocab_size))
+        logits = np.ones((prompt_batch_size, vocab_size))
         return logits, hidden_states, cache
 
     output = keras_nlp.samplers.ContrastiveSampler()(
         next=next,
-        prompt=tf.fill((batch_size, length), char_lookup["z"]),
+        prompt=np.full((batch_size, length), char_lookup["z"], dtype="int32"),
         index=index,
-        hidden_states=tf.ones([batch_size, index, hidden_size]),
+        hidden_states=np.ones([batch_size, index, hidden_size]),
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
     # >>> "zzzzzeeeeeee"
@@ -78,6 +79,10 @@ class ContrastiveSampler(Sampler):
         seed=None,
         **kwargs,
     ):
+        # Temporarily turn off beam search in other backends.
+        # No technical blockers here, just need tf -> ops rewrite.
+        assert_tf_backend(self.__class__.__name__)
+
         super().__init__(**kwargs)
         self.k = k
         self.alpha = alpha

@@ -14,9 +14,10 @@
 import os
 
 import tensorflow as tf
-from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.utils.pipeline_model import PipelineModel
 
 
@@ -61,7 +62,9 @@ class DataPipeline(PipelineModel):
         self.dense = keras.layers.Dense(1)
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
-        return tf.strings.to_number(x), tf.strings.to_number(x), sample_weight
+        x = tf.strings.to_number(x)
+        y = x
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def call(self, inputs):
         return self.dense(inputs)
@@ -84,11 +87,11 @@ class FunctionalPipeline(PipelineModel):
         return cls(**config)
 
 
-class TestNoopPipelineModel(tf.test.TestCase, parameterized.TestCase):
+class TestNoopPipelineModel(TestCase):
     def test_fit(self):
-        x = tf.random.uniform((8, 5))
-        y = tf.random.uniform((8, 1))
-        sw = tf.random.uniform((8, 1))
+        x = ops.random.uniform((8, 5))
+        y = ops.random.uniform((8, 1))
+        sw = ops.random.uniform((8, 1))
         model = NoopPipeline()
         model.compile(loss="mse")
         # With sample weight.
@@ -99,9 +102,9 @@ class TestNoopPipelineModel(tf.test.TestCase, parameterized.TestCase):
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     def test_evaluate(self):
-        x = tf.random.uniform((8, 5))
-        y = tf.random.uniform((8, 1))
-        sw = tf.random.uniform((8, 1))
+        x = ops.random.uniform((8, 5))
+        y = ops.random.uniform((8, 1))
+        sw = ops.random.uniform((8, 1))
         model = NoopPipeline()
         model.compile(loss="mse")
         # With sample weight.
@@ -112,16 +115,16 @@ class TestNoopPipelineModel(tf.test.TestCase, parameterized.TestCase):
         model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     def test_predict(self):
-        x = tf.random.uniform((8, 5))
+        x = ops.random.uniform((8, 5))
         model = NoopPipeline()
         model.compile(loss="mse")
         model.predict(x=x, batch_size=8)
         model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
 
     def test_on_batch(self):
-        x = tf.random.uniform((8, 5))
-        y = tf.random.uniform((8, 1))
-        sw = tf.random.uniform((8, 1))
+        x = ops.random.uniform((8, 5))
+        y = ops.random.uniform((8, 1))
+        sw = ops.random.uniform((8, 1))
         model = NoopPipeline()
         model.compile(loss="mse")
         # With sample weight.
@@ -132,18 +135,12 @@ class TestNoopPipelineModel(tf.test.TestCase, parameterized.TestCase):
         model.test_on_batch(x=x, y=y)
         model.predict_on_batch(x=x)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model = NoopPipeline()
-        x = tf.random.uniform((8, 5))
+        x = ops.random.uniform((8, 5))
         model_output = model.predict(x)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(
             path, custom_objects={"NoopPipeline": NoopPipeline}
         )
@@ -155,11 +152,11 @@ class TestNoopPipelineModel(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
-class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
+class TestFeaturePreprocessingModel(TestCase):
     def test_fit_with_preprocessing(self):
-        x = tf.strings.as_string(tf.random.uniform((100, 5)))
-        y = tf.random.uniform((100, 1))
-        sw = tf.random.uniform((100, 1))
+        x = tf.strings.as_string(ops.random.uniform((100, 5)))
+        y = ops.random.uniform((100, 1))
+        sw = ops.random.uniform((100, 1))
         model = FeaturePipeline()
         model.compile(loss="mse")
         # With sample weight.
@@ -170,9 +167,9 @@ class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     def test_fit_no_preprocessing(self):
-        x = tf.random.uniform((100, 5))
-        y = tf.random.uniform((100, 1))
-        sw = tf.random.uniform((100, 1))
+        x = ops.random.uniform((100, 5))
+        y = ops.random.uniform((100, 1))
+        sw = ops.random.uniform((100, 1))
         model = FeaturePipeline(include_preprocessing=False)
         model.compile(loss="mse")
         # With sample weight.
@@ -183,9 +180,9 @@ class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     def test_evaluate_with_preprocessing(self):
-        x = tf.strings.as_string(tf.random.uniform((100, 5)))
-        y = tf.random.uniform((100, 1))
-        sw = tf.random.uniform((100, 1))
+        x = tf.strings.as_string(ops.random.uniform((100, 5)))
+        y = ops.random.uniform((100, 1))
+        sw = ops.random.uniform((100, 1))
         model = FeaturePipeline()
         model.compile(loss="mse")
         # With sample weight.
@@ -196,9 +193,9 @@ class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     def test_evaluate_no_preprocessing(self):
-        x = tf.random.uniform((100, 5))
-        y = tf.random.uniform((100, 1))
-        sw = tf.random.uniform((100, 1))
+        x = ops.random.uniform((100, 5))
+        y = ops.random.uniform((100, 1))
+        sw = ops.random.uniform((100, 1))
         model = FeaturePipeline(include_preprocessing=False)
         model.compile(loss="mse")
         # With sample weight.
@@ -209,23 +206,23 @@ class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     def test_predict_with_preprocessing(self):
-        x = tf.strings.as_string(tf.random.uniform((100, 5)))
+        x = tf.strings.as_string(ops.random.uniform((100, 5)))
         model = FeaturePipeline()
         model.compile(loss="mse")
         model.predict(x=x, batch_size=8)
         model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
 
     def test_predict_no_preprocessing(self):
-        x = tf.random.uniform((100, 5))
+        x = ops.random.uniform((100, 5))
         model = FeaturePipeline(include_preprocessing=False)
         model.compile(loss="mse")
         model.predict(x=x, batch_size=8)
         model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
 
     def test_on_batch(self):
-        x = tf.strings.as_string(tf.random.uniform((8, 5)))
-        y = tf.random.uniform((8, 1))
-        sw = tf.random.uniform((8, 1))
+        x = tf.strings.as_string(ops.random.uniform((8, 5)))
+        y = ops.random.uniform((8, 1))
+        sw = ops.random.uniform((8, 1))
         model = FeaturePipeline()
         model.compile(loss="mse")
         # With sample weight.
@@ -237,9 +234,9 @@ class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model.predict_on_batch(x=x)
 
     def test_on_batch_no_preprocessing(self):
-        x = tf.random.uniform((8, 5))
-        y = tf.random.uniform((8, 1))
-        sw = tf.random.uniform((8, 1))
+        x = ops.random.uniform((8, 5))
+        y = ops.random.uniform((8, 1))
+        sw = ops.random.uniform((8, 1))
         model = FeaturePipeline(include_preprocessing=False)
         model.compile(loss="mse")
         # With sample weight.
@@ -248,20 +245,13 @@ class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         # Without sample weight.
         model.train_on_batch(x=x, y=y)
         model.test_on_batch(x=x, y=y)
-        model.predict_on_batch(x=x)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model = FeaturePipeline()
-        x = tf.strings.as_string(tf.random.uniform((8, 5)))
+        x = tf.strings.as_string(ops.random.uniform((8, 5)))
         model_output = model.predict(x)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(
             path, custom_objects={"FeaturePipeline": FeaturePipeline}
         )
@@ -273,11 +263,11 @@ class TestFeaturePreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
-class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
+class TestLabelPreprocessingModel(TestCase):
     def test_fit_with_preprocessing(self):
-        x = tf.random.uniform((100, 5))
-        y = tf.strings.as_string(tf.random.uniform((100, 1)))
-        sw = tf.random.uniform((100, 1))
+        x = ops.random.uniform((100, 5))
+        y = tf.strings.as_string(ops.random.uniform((100, 1)))
+        sw = ops.random.uniform((100, 1))
         model = LabelPipeline()
         model.compile(loss="mse")
         # With sample weight.
@@ -288,9 +278,9 @@ class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     def test_fit_no_preprocessing(self):
-        x = tf.random.uniform((100, 5))
-        y = tf.random.uniform((100, 1))
-        sw = tf.random.uniform((100, 1))
+        x = ops.random.uniform((100, 5))
+        y = ops.random.uniform((100, 1))
+        sw = ops.random.uniform((100, 1))
         model = LabelPipeline(include_preprocessing=False)
         model.compile(loss="mse")
         # With sample weight.
@@ -301,9 +291,9 @@ class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     def test_evaluate_with_preprocessing(self):
-        x = tf.random.uniform((100, 5))
-        y = tf.strings.as_string(tf.random.uniform((100, 1)))
-        sw = tf.random.uniform((100, 1))
+        x = ops.random.uniform((100, 5))
+        y = tf.strings.as_string(ops.random.uniform((100, 1)))
+        sw = ops.random.uniform((100, 1))
         model = LabelPipeline()
         model.compile(loss="mse")
         # With sample weight.
@@ -314,9 +304,9 @@ class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     def test_evaluate_no_preprocessing(self):
-        x = tf.random.uniform((100, 5))
-        y = tf.random.uniform((100, 1))
-        sw = tf.random.uniform((100, 1))
+        x = ops.random.uniform((100, 5))
+        y = ops.random.uniform((100, 1))
+        sw = ops.random.uniform((100, 1))
         model = LabelPipeline(include_preprocessing=False)
         model.compile(loss="mse")
         # With sample weight.
@@ -327,16 +317,16 @@ class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     def test_predict_with_preprocessing(self):
-        x = tf.random.uniform((100, 5))
+        x = ops.random.uniform((100, 5))
         model = LabelPipeline()
         model.compile(loss="mse")
         model.predict(x=x, batch_size=8)
         model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
 
     def test_on_batch(self):
-        x = tf.random.uniform((8, 5))
-        y = tf.strings.as_string(tf.random.uniform((8, 1)))
-        sw = tf.random.uniform((8, 1))
+        x = ops.random.uniform((8, 5))
+        y = tf.strings.as_string(ops.random.uniform((8, 1)))
+        sw = ops.random.uniform((8, 1))
         model = LabelPipeline()
         model.compile(loss="mse")
         # With sample weight.
@@ -348,9 +338,9 @@ class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model.predict_on_batch(x=x)
 
     def test_on_batch_no_preprocessing(self):
-        x = tf.random.uniform((8, 5))
-        y = tf.random.uniform((8, 1))
-        sw = tf.random.uniform((8, 1))
+        x = ops.random.uniform((8, 5))
+        y = ops.random.uniform((8, 1))
+        sw = ops.random.uniform((8, 1))
         model = LabelPipeline(include_preprocessing=False)
         model.compile(loss="mse")
         # With sample weight.
@@ -361,18 +351,12 @@ class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model.test_on_batch(x=x, y=y)
         model.predict_on_batch(x=x)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model = LabelPipeline()
-        x = tf.random.uniform((8, 5))
+        x = ops.random.uniform((8, 5))
         model_output = model.predict(x)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(
             path, custom_objects={"LabelPipeline": LabelPipeline}
         )
@@ -384,53 +368,53 @@ class TestLabelPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
-class TestDataPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
+class TestDataPreprocessingModel(TestCase):
     def test_fit_with_preprocessing(self):
-        data = tf.strings.as_string(tf.random.uniform((100, 1)))
+        data = tf.strings.as_string(ops.random.uniform((100, 1)))
         model = DataPipeline()
         model.compile(loss="mse")
         model.fit(x=data, batch_size=8)
         model.fit(tf.data.Dataset.from_tensor_slices(data).batch(8))
 
     def test_fit_no_preprocessing(self):
-        x = tf.random.uniform((100, 1))
-        y = tf.random.uniform((100, 1))
+        x = ops.random.uniform((100, 1))
+        y = ops.random.uniform((100, 1))
         model = DataPipeline(include_preprocessing=False)
         model.compile(loss="mse")
         model.fit(x=x, y=y, batch_size=8)
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     def test_evaluate_with_preprocessing(self):
-        data = tf.strings.as_string(tf.random.uniform((100, 1)))
+        data = tf.strings.as_string(ops.random.uniform((100, 1)))
         model = DataPipeline()
         model.compile(loss="mse")
         model.evaluate(x=data, batch_size=8)
         model.evaluate(tf.data.Dataset.from_tensor_slices(data).batch(8))
 
     def test_evaluate_no_preprocessing(self):
-        x = tf.random.uniform((100, 1))
-        y = tf.random.uniform((100, 1))
+        x = ops.random.uniform((100, 1))
+        y = ops.random.uniform((100, 1))
         model = DataPipeline(include_preprocessing=False)
         model.compile(loss="mse")
         model.evaluate(x=x, y=y, batch_size=8)
         model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     def test_predict_with_preprocessing(self):
-        x = tf.strings.as_string(tf.random.uniform((100, 1)))
+        x = tf.strings.as_string(ops.random.uniform((100, 1)))
         model = DataPipeline()
         model.compile(loss="mse")
         model.predict(x=x, batch_size=8)
         model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
 
     def test_predict_no_preprocessing(self):
-        x = tf.random.uniform((100, 1))
+        x = ops.random.uniform((100, 1))
         model = DataPipeline(include_preprocessing=False)
         model.compile(loss="mse")
         model.predict(x=x, batch_size=8)
         model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
 
     def test_on_batch(self):
-        data = tf.strings.as_string(tf.random.uniform((8, 1)))
+        data = tf.strings.as_string(ops.random.uniform((8, 1)))
         model = DataPipeline()
         model.compile(loss="mse")
         # With sample weight.
@@ -442,9 +426,9 @@ class TestDataPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model.predict_on_batch(x=data)
 
     def test_on_batch_no_preprocessing(self):
-        x = tf.random.uniform((8, 1))
-        y = tf.random.uniform((8, 1))
-        sw = tf.random.uniform((8, 1))
+        x = ops.random.uniform((8, 1))
+        y = ops.random.uniform((8, 1))
+        sw = ops.random.uniform((8, 1))
         model = DataPipeline(include_preprocessing=False)
         model.compile(loss="mse")
         # With sample weight.
@@ -455,18 +439,12 @@ class TestDataPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         model.test_on_batch(x=x, y=y)
         model.predict_on_batch(x=x)
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model = DataPipeline()
-        data = tf.strings.as_string(tf.random.uniform((8, 1)))
+        data = tf.strings.as_string(ops.random.uniform((8, 1)))
         model_output = model.predict(data)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(
             path, custom_objects={"DataPipeline": DataPipeline}
         )
@@ -478,11 +456,11 @@ class TestDataPreprocessingModel(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
-class TestFunctional(tf.test.TestCase, parameterized.TestCase):
+class TestFunctional(TestCase):
     def test_fit(self):
-        x = tf.strings.as_string(tf.random.uniform((100, 5)))
-        y = tf.random.uniform((100, 1))
-        sw = tf.random.uniform((100, 1))
+        x = tf.strings.as_string(ops.random.uniform((100, 5)))
+        y = ops.random.uniform((100, 1))
+        sw = ops.random.uniform((100, 1))
 
         model = FunctionalPipeline()
         model.compile(loss="mse")
@@ -494,9 +472,9 @@ class TestFunctional(tf.test.TestCase, parameterized.TestCase):
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
     def test_fit_no_preprocessing(self):
-        x = tf.random.uniform((100, 5))
-        y = tf.random.uniform((100, 1))
-        sw = tf.random.uniform((100, 1))
+        x = ops.random.uniform((100, 5))
+        y = ops.random.uniform((100, 1))
+        sw = ops.random.uniform((100, 1))
         model = FunctionalPipeline(include_preprocessing=False)
         model.compile(loss="mse")
         # With sample weight.
@@ -506,18 +484,12 @@ class TestFunctional(tf.test.TestCase, parameterized.TestCase):
         model.fit(x=x, y=y, batch_size=8)
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model = FunctionalPipeline()
-        x = tf.strings.as_string(tf.random.uniform((8, 5)))
+        x = tf.strings.as_string(ops.random.uniform((8, 5)))
         model_output = model.predict(x)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(
             path, custom_objects={"FunctionalPipeline": FunctionalPipeline}
         )
@@ -529,12 +501,12 @@ class TestFunctional(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(model_output, restored_output)
 
 
-class TestFitArguments(tf.test.TestCase):
+class TestFitArguments(TestCase):
     def test_validation_data(self):
-        x = tf.strings.as_string(tf.random.uniform((80, 5)))
-        y = tf.random.uniform((80, 1))
-        val_x = tf.strings.as_string(tf.random.uniform((20, 5)))
-        val_y = tf.random.uniform((20, 1))
+        x = tf.strings.as_string(ops.random.uniform((80, 5)))
+        y = ops.random.uniform((80, 1))
+        val_x = tf.strings.as_string(ops.random.uniform((20, 5)))
+        val_y = ops.random.uniform((20, 1))
 
         model = FeaturePipeline()
         model.compile(loss="mse")
@@ -548,8 +520,8 @@ class TestFitArguments(tf.test.TestCase):
         )
 
     def test_validation_split(self):
-        x = tf.strings.as_string(tf.random.uniform((100, 5)))
-        y = tf.random.uniform((100, 1))
+        x = tf.strings.as_string(ops.random.uniform((100, 5)))
+        y = ops.random.uniform((100, 1))
 
         model = FeaturePipeline()
         model.compile(loss="mse")
@@ -557,9 +529,9 @@ class TestFitArguments(tf.test.TestCase):
         model.fit(x=x, y=y, validation_split=0.2, batch_size=8)
 
     def test_error_dataset_and_invalid_arguments(self):
-        x = tf.strings.as_string(tf.random.uniform((100, 5)))
-        y = tf.random.uniform((100, 1))
-        sw = tf.random.uniform((100, 1))
+        x = tf.strings.as_string(ops.random.uniform((100, 5)))
+        y = ops.random.uniform((100, 1))
+        sw = ops.random.uniform((100, 1))
         ds = tf.data.Dataset.from_tensor_slices((x, y))
 
         model = FeaturePipeline()
@@ -574,7 +546,7 @@ class TestFitArguments(tf.test.TestCase):
             model.fit(ds, sample_weight=sw)
 
 
-class TestInputErrors(tf.test.TestCase):
+class TestInputErrors(TestCase):
     def test_unbatched_input_raises(self):
         model = FeaturePipeline()
         with self.assertRaisesRegex(ValueError, "must have a batch dimension"):

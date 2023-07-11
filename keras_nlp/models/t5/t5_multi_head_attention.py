@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import tensorflow as tf
-from tensorflow import keras
 from tensorflow.compiler.tf2xla.python.xla import dynamic_slice
+
+from keras_nlp.backend import keras
 
 
 def shape_list(tensor):
@@ -81,7 +82,6 @@ class T5MultiHeadAttention(keras.layers.Layer):
         )
         self.dropout_layer = keras.layers.Dropout(dropout)
 
-    def build(self, input_shape):
         if self.use_relative_attention_bias:
             self.relative_attention_bias = self.add_weight(
                 name="embeddings",

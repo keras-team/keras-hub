@@ -13,11 +13,11 @@
 # limitations under the License.
 """Base sampler class."""
 
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import config
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.utils.python_utils import format_docstring
 
 call_args_docstring = """next: A function which takes in the
@@ -77,12 +77,12 @@ class Sampler:
 
     def next(prompt, cache, index):
         # return a uniform distribution over our alphabet.
-        logits = tf.ones((batch_size, vocab_size))
+        logits = ops.ones((batch_size, vocab_size))
         return logits, None, cache
 
     output = keras_nlp.samplers.GreedySampler()(
         next=next,
-        prompt=tf.fill((batch_size, length,), char_lookup['z']),
+        prompt=ops.fill((batch_size, length,), char_lookup['z']),
         index=5,
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
@@ -95,6 +95,22 @@ class Sampler:
         temperature=1.0,
     ):
         self.temperature = temperature
+        self._seed_generators = []
+
+    def __setattr__(self, name, value):
+        # We could update to the `Tracker` class from keras-core if our needs
+        # become more advanced (e.g. list assignment, nested trackables). For
+        # now, we only track `SeedGenerator` instances directly on the sampler.
+        if isinstance(value, random.SeedGenerator):
+            self._seed_generators.append(value)
+        return super().__setattr__(name, value)
+
+    @property
+    def variables(self):
+        variables = []
+        for sg in self._seed_generators:
+            variables.append(sg.state)
+        return variables
 
     def __call__(
         self,
@@ -106,14 +122,15 @@ class Sampler:
         end_token_id=None,
         hidden_states=None,
     ):
-        max_length = tf.shape(prompt)[-1]
+        max_length = ops.shape(prompt)[-1]
         # Make sure `max_length` and `index` are the same dtype.
-        index = tf.cast(index, max_length.dtype)
+        index = ops.cast(index, "int32")
+        max_length = ops.cast(max_length, "int32")
         if mask is None:
-            mask = tf.zeros_like(prompt, dtype="bool")
+            mask = ops.zeros_like(prompt, dtype="bool")
         else:
-            mask = tf.cast(mask, dtype="bool")
-        # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
+            mask = ops.cast(mask, dtype="bool")
+        # `ops.while_loop` will not accept `None` as a value for `loop_vars`.
         cache = () if cache is None else cache
 
         def cond(prompt, cache, index):
@@ -121,8 +138,8 @@ class Sampler:
                 return True
             # Stop if all sequences have produced a *new* end_token_id.
             end_tokens = (prompt == end_token_id) & (~mask)
-            prompt_done = tf.reduce_any(end_tokens, axis=-1)
-            return not tf.reduce_all(prompt_done)
+            prompt_done = ops.any(end_tokens, axis=-1)
+            return ops.logical_not(ops.all(prompt_done))
 
         def body(prompt, cache, index):
             # Compute the softmax distribution for the next token.
@@ -131,24 +148,57 @@ class Sampler:
             # Compute the next token.
             next_token = self.get_next_token(probabilities)
             # Don't overwrite anywhere mask is True.
-            next_token = tf.cast(next_token, prompt.dtype)
-            # Ensure shape is `[None]`, otherwise it causes issues after
-            # converting to TFLite.
-            next_token = tf.ensure_shape(next_token, [None])
-            next_token = tf.where(mask[:, index], prompt[:, index], next_token)
+            next_token = ops.cast(next_token, prompt.dtype)
+            next_token = ops.where(mask[:, index], prompt[:, index], next_token)
             # Update the prompt with the next token.
-            next_token = next_token[:, tf.newaxis]
-            prompt = dynamic_update_slice(prompt, next_token, [0, index])
+            next_token = next_token[:, None]
+            prompt = ops.slice_update(prompt, [0, index], next_token)
+
             # Return the next prompt, cache and incremented index.
             return (prompt, cache, index + 1)
 
-        prompt, _, _ = tf.while_loop(
-            cond=cond,
-            body=body,
+        prompt, _, _ = self.run_loop(
+            cond,
+            body,
             loop_vars=(prompt, cache, index),
             maximum_iterations=(max_length - index),
         )
         return prompt
+
+    def run_loop(self, cond, body, loop_vars=None, maximum_iterations=None):
+        """Run ops.while_loops with a `StatelessScope` if necessary."""
+        if config.backend() == "jax":
+
+            def stateless_cond(variables, *loop_vars):
+                return cond(*loop_vars)
+
+            def stateless_body(variables, *loop_vars):
+                mapping = zip(self.variables, variables)
+                with keras.StatelessScope(state_mapping=mapping) as scope:
+                    loop_vars = body(*loop_vars)
+
+                variables = []
+                for v in self.variables:
+                    new_v = scope.get_current_value(v)
+                    variables.append(new_v if new_v is not None else v)
+                return variables, *loop_vars
+
+            variables = [ops.convert_to_tensor(v) for v in self.variables]
+            variables, *loop_vars = ops.while_loop(
+                cond=stateless_cond,
+                body=stateless_body,
+                loop_vars=(variables, *loop_vars),
+                maximum_iterations=maximum_iterations,
+            )
+            [ref_v.assign(v) for ref_v, v in zip(self.variables, variables)]
+        else:
+            loop_vars = ops.while_loop(
+                cond=cond,
+                body=body,
+                loop_vars=(loop_vars),
+                maximum_iterations=maximum_iterations,
+            )
+        return loop_vars
 
     def get_next_token(self, probabilities):
         """Get the next token.
