@@ -51,10 +51,12 @@ setup(
     author_email="keras-nlp@google.com",
     license="Apache License 2.0",
     install_requires=[
+        "keras-core",
         "absl-py",
         "numpy",
         "packaging",
         "regex",
+        "rich",
         # Don't require tensorflow-text on MacOS, there are no binaries for ARM.
         # Also, we rely on tensorflow *transitively* through tensorflow-text.
         # This avoid a slowdown during `pip install keras-nlp` where pip would

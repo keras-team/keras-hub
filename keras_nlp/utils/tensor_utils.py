@@ -12,13 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
 import tensorflow as tf
 
-try:
-    import pandas as pd
-except ImportError:
-    pd = None
+from keras_nlp.backend import config
+from keras_nlp.backend import ops
 
 try:
     import tensorflow_text as tf_text
@@ -50,20 +47,77 @@ def tensor_to_list(inputs):
         list_outputs = inputs.numpy()
         if inputs.shape.rank != 0:
             list_outputs = list_outputs.tolist()
+    if inputs.dtype == tf.string:
+        list_outputs = _decode_strings_to_utf8(list_outputs)
     return list_outputs
 
 
-def tensor_to_string_list(inputs):
-    """Detokenize and convert tensor to nested lists of python strings.
+def convert_to_backend_tensor_or_python_list(x):
+    """
+    Convert a tensor to the backend friendly representation of the data.
 
-    This is a convenience method which converts each byte string to a python
-    string.
+    This wraps `ops.convert_to_tensor` to account for the fact that torch and
+    jax both lack native types for ragged and string data.
+
+    If we encounter one of these types in torch or jax, we will instead covert
+    the tensor to simple pythonic types (lists of strings).
+    """
+    if isinstance(x, tf.RaggedTensor) or x.dtype == tf.string:
+        return tensor_to_list(x)
+    return ops.convert_to_tensor(x)
+
+
+def convert_to_ragged_batch(inputs):
+    """Convert pythonic or numpy-like input to a 2-D `tf.RaggedTensor`.
+
+    This is useful for text preprocessing layers which deal with already
+    tokenized or split text.
 
     Args:
-        inputs: Input tensor, or dict/list/tuple of input tensors.
+        inputs: A pythonic or numpy-like input to covert. This input should
+            represent a possibly batched list of token sequences.
+
+    Returns:
+        An `(inputs, unbatched, rectangular)` tuple, where `inputs` is a
+        2-D `tf.RaggedTensor`, `unbatched` is `True` if the inputs were
+        origianlly rank 1, and `rectangular` is `True` if the inputs rows are
+        all of equal lengths.
     """
-    list_outputs = tensor_to_list(inputs)
-    return _decode_strings_to_utf8(list_outputs)
+    rectangular = True
+    # `tf.keras.layers.Layer` does a weird conversion in __call__, where a list
+    # of lists of ints will become a list of list of scalar tensors. We could
+    # clean this up if we no longer need to care about that case.
+    if isinstance(inputs, (list, tuple)):
+        if isinstance(inputs[0], (list, tuple)):
+            rectangular = len(set([len(row) for row in inputs])) == 1
+            rows = [
+                tf.convert_to_tensor(row, dtype_hint="int32") for row in inputs
+            ]
+            inputs = tf.ragged.stack(rows).with_row_splits_dtype("int64")
+        else:
+            inputs = tf.convert_to_tensor(inputs)
+    elif isinstance(inputs, tf.RaggedTensor):
+        rectangular = False
+    elif hasattr(inputs, "__array__"):
+        inputs = tf.convert_to_tensor(inputs)
+    elif not isinstance(inputs, tf.RaggedTensor):
+        raise ValueError(
+            f"Unknown tensor type. Tensor input can be passed as "
+            "tensors, numpy arrays, or python lists. Received: "
+            f"`type(inputs)={type(inputs)}`"
+        )
+    if inputs.shape.rank < 1 or inputs.shape.rank > 2:
+        raise ValueError(
+            f"Tokenized tensor input should be rank 1 (unbatched) or "
+            f"rank 2 (batched). Received: `inputs.shape={input.shape}`"
+        )
+    unbatched = inputs.shape.rank == 1
+    rectangular = rectangular or unbatched
+    if unbatched:
+        inputs = tf.expand_dims(inputs, 0)
+    if isinstance(inputs, tf.Tensor):
+        inputs = tf.RaggedTensor.from_tensor(inputs)
+    return inputs, unbatched, rectangular
 
 
 def truncate_at_token(inputs, token, mask):
@@ -75,7 +129,6 @@ def truncate_at_token(inputs, token, mask):
 
 
 def assert_tf_text_installed(symbol_name):
-    """Detokenize and convert tensor to nested lists of python strings."""
     if tf_text is None:
         raise ImportError(
             f"{symbol_name} requires the `tensorflow-text` package. "
@@ -83,11 +136,16 @@ def assert_tf_text_installed(symbol_name):
         )
 
 
+def assert_tf_backend(symbol_name):
+    if config.backend() != "tensorflow":
+        raise RuntimeError(
+            f"{symbol_name} requires the `tensorflow` backend. "
+            "Please set `KERAS_BACKEND=tensorflow` when running your program."
+        )
+
+
 def is_tensor_type(x):
-    if pd is None:
-        return isinstance(x, (tf.Tensor, np.ndarray))
-    else:
-        return isinstance(x, (tf.Tensor, np.ndarray, pd.Series, pd.DataFrame))
+    return hasattr(x, "__array__")
 
 
 def is_floating_dtype(dtype):

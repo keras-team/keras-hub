@@ -22,9 +22,9 @@ import numpy as np
 import pytest
 import sentencepiece
 import tensorflow as tf
-from tensorflow import keras
 
 import keras_nlp
+from keras_nlp.backend import keras
 from keras_nlp.tests.doc_tests import docstring_lib
 from keras_nlp.tests.doc_tests import fenced_docstring_lib
 from keras_nlp.tests.doc_tests.fenced_docstring_lib import (
@@ -48,6 +48,7 @@ def docstring_module(pytestconfig):
     return pytestconfig.getoption("docstring_module")
 
 
+@pytest.mark.tf_only
 def test_docstrings(docstring_module):
     keras_nlp_modules = find_modules()
     # As of this writing, it doesn't seem like pytest support load_tests
@@ -86,6 +87,7 @@ def test_docstrings(docstring_module):
     assert result.wasSuccessful()
 
 
+@pytest.mark.tf_only
 @pytest.mark.extra_large
 @pytest.mark.skipif(
     astor is None,

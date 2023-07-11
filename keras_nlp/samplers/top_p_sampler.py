@@ -13,9 +13,9 @@
 # limitations under the License.
 """Top-p Sampler."""
 
-import tensorflow as tf
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import call_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
@@ -53,14 +53,14 @@ class TopPSampler(Sampler):
     batch_size, length, vocab_size = 1, 12, len(int_lookup)
 
     def next(prompt, cache, index):
-        hidden_states = tf.ones((batch_size, 10))
+        hidden_states = np.ones((batch_size, 10))
         # A uniform distribution over our alphabet.
-        logits = tf.ones((batch_size, vocab_size))
+        logits = np.ones((batch_size, vocab_size))
         return logits, hidden_states, cache
 
     output = keras_nlp.samplers.TopPSampler(p=0.1)(
         next=next,
-        prompt=tf.fill((batch_size, length,), char_lookup['z']),
+        prompt=np.full((batch_size, length,), char_lookup['z'], dtype="int32"),
         index=5,
     )
     print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
@@ -79,33 +79,38 @@ class TopPSampler(Sampler):
         self.p = p
         self.k = k
         self.seed = seed
+        self.seed_generator = random.SeedGenerator(seed)
 
     def get_next_token(self, probabilities):
-        cutoff = tf.shape(probabilities)[1]
+        cutoff = ops.shape(probabilities)[1]
         if self.k is not None:
             # If `k` is set, only sample from top `k` tokens.
-            cutoff = tf.math.minimum(cutoff, self.k)
-        sorted_preds, sorted_indices = tf.math.top_k(
+            cutoff = self.k
+        sorted_preds, sorted_indices = ops.top_k(
             probabilities, k=cutoff, sorted=True
         )
         # Calculate cumulative probability distribution.
-        cumulative_probabilities = tf.math.cumsum(sorted_preds, axis=-1)
+        cumulative_probabilities = ops.cumsum(sorted_preds, axis=-1)
         # Create a mask for the tokens to keep.
         keep_mask = cumulative_probabilities <= self.p
         # Shift to include the last token that exceed p.
-        shifted_keep_mask = tf.concat(
-            [tf.ones_like(keep_mask[:, :1]), keep_mask[:, :-1]], axis=-1
+        shifted_keep_mask = ops.concatenate(
+            [ops.ones_like(keep_mask[:, :1]), keep_mask[:, :-1]], axis=-1
         )
         # Filter out unmasked tokens and sample from filtered distribution.
-        probabilities = tf.where(
+        probabilities = ops.where(
             shifted_keep_mask,
             sorted_preds,
-            tf.zeros(tf.shape(sorted_preds), dtype=sorted_preds.dtype),
+            ops.zeros(ops.shape(sorted_preds), dtype=sorted_preds.dtype),
         )
-        sorted_next_token = tf.random.categorical(
-            tf.math.log(probabilities), 1, seed=self.seed
+        sorted_next_token = random.categorical(
+            ops.log(probabilities),
+            1,
+            seed=self.seed_generator,
+            dtype="int32",
         )
-        return tf.gather_nd(sorted_indices, sorted_next_token, batch_dims=1)
+        output = ops.take_along_axis(sorted_indices, sorted_next_token, axis=-1)
+        return ops.squeeze(output, axis=-1)
 
     def get_config(self):
         config = super().get_config()

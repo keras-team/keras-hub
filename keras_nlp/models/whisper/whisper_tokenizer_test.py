@@ -13,17 +13,18 @@
 # limitations under the License.
 
 """Tests for Whisper preprocessing layers."""
-
 import os
 
+import pytest
 import tensorflow as tf
-from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class WhisperTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+@pytest.mark.tf_only
+class WhisperTokenizerTest(TestCase):
     def setUp(self):
         self.vocab = {
             "Ġair": 0,
@@ -68,16 +69,8 @@ class WhisperTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [0, 1, 2, 0, 3])
 
-    def test_tokenize_special_tokens(self):
-        input_data = (
-            "<|startoftranscript|><|en|><|transcribe|><|notimestamps|> "
-            "airplane at airport<|endoftext|>"
-        )
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [9, 14, 12, 11, 0, 1, 2, 0, 3, 10])
-
     def test_tokenize_batch(self):
-        input_data = tf.constant([" airplane at airport", " kohli is the best"])
+        input_data = [" airplane at airport", " kohli is the best"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[0, 1, 2, 0, 3], [4, 5, 6, 7, 8]])
 
@@ -112,21 +105,17 @@ class WhisperTokenizerTest(tf.test.TestCase, parameterized.TestCase):
                 vocabulary=["a", "b", "c"], merges=[], special_tokens={}
             )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
+    @pytest.mark.large  # Saving is slow, so mark these large.
+    @pytest.mark.tf_only
+    def test_saved_model(self):
         input_data = tf.constant([" airplane at airport"])
 
         inputs = keras.Input(dtype="string", shape=())
         outputs = self.tokenizer(inputs)
         model = keras.Model(inputs, outputs)
 
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
 
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(

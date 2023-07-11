@@ -17,7 +17,9 @@
 from absl import logging
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
+from keras_nlp.layers.preprocessing.masked_lm_mask_generator import (
+    MaskedLMMaskGenerator,
+)
 from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
     XLMRobertaPreprocessor,
 )

@@ -13,15 +13,17 @@
 # limitations under the License.
 
 """Tests for Bleu."""
-
+import pytest
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.metrics.bleu import Bleu
+from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.byte_tokenizer import ByteTokenizer
 
 
-class BleuTest(tf.test.TestCase):
+@pytest.mark.tf_only
+class BleuTest(TestCase):
     def test_initialization(self):
         bleu = Bleu()
         result = bleu.result()
@@ -142,12 +144,11 @@ class BleuTest(tf.test.TestCase):
 
     def test_model_compile(self):
         inputs = keras.Input(shape=(), dtype="string")
-        outputs = tf.identity(inputs)
+        outputs = keras.layers.Identity()(inputs)
         model = keras.Model(inputs, outputs)
-
         model.compile(metrics=[Bleu()])
 
-        x = tf.constant(
+        y_pred = x = tf.constant(
             [
                 "He He He eats sweet apple which is a fruit.",
                 "I love Silicon Valley, it's one of my favourite shows.",
@@ -160,7 +161,7 @@ class BleuTest(tf.test.TestCase):
             ]
         )
 
-        output = model.evaluate(x, y, return_dict=True)
+        output = model.compute_metrics(x, y, y_pred, sample_weight=None)
         self.assertAlmostEqual(output["bleu"], 0.243, delta=1e-3)
 
     def test_reset_state(self):

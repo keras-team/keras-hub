@@ -15,24 +15,34 @@
 
 import copy
 
-import tensorflow as tf
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.bart.bart_backbone import BartBackbone
 from keras_nlp.models.bart.bart_presets import backbone_presets
 from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
-from keras_nlp.models.task import Task
-from keras_nlp.samplers.serialization import get as get_sampler
-from keras_nlp.utils.keras_utils import is_xla_compatible
+from keras_nlp.models.generative_task import GenerativeTask
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.tensor_utils import tensor_to_string_list
+
+
+# TODO: Extend and factor this out into keras_nlp.layers.
+class ReverseEmbedding(keras.layers.Layer):
+    def __init__(self, embedding, **kwargs):
+        super().__init__(**kwargs)
+        self.embedding = embedding
+
+    def call(self, inputs):
+        kernel = ops.transpose(ops.convert_to_tensor(self.embedding.embeddings))
+        return ops.matmul(inputs, kernel)
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0],) + (self.embedding.embeddings.shape[0],)
 
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLM")
-class BartSeq2SeqLM(Task):
+class BartSeq2SeqLM(GenerativeTask):
     """An end-to-end BART model for seq2seq language modeling.
 
     A seq2seq language model (LM) is an encoder-decoder model which is used for
@@ -99,12 +109,12 @@ class BartSeq2SeqLM(Task):
     # "The quick brown fox", and the decoder inputs to "The fast". Use
     # `"padding_mask"` to indicate values that should not be overridden.
     prompt = {
-        "encoder_token_ids": tf.constant([[0, 133, 2119, 6219, 23602, 2, 1, 1]]),
-        "encoder_padding_mask": tf.constant(
+        "encoder_token_ids": np.array([[0, 133, 2119, 6219, 23602, 2, 1, 1]]),
+        "encoder_padding_mask": np.array(
             [[True, True, True, True, True, True, False, False]]
         ),
-        "decoder_token_ids": tf.constant([[2, 0, 133, 1769, 2, 1, 1]]),
-        "decoder_padding_mask": tf.constant([[True, True, True, True, False, False]])
+        "decoder_token_ids": np.array([[2, 0, 133, 1769, 2, 1, 1]]),
+        "decoder_padding_mask": np.array([[True, True, True, True, False, False]])
     }
 
     bart_lm = keras_nlp.models.BartSeq2SeqLM.from_preset(
@@ -127,13 +137,13 @@ class BartSeq2SeqLM(Task):
     Call `fit()` without preprocessing.
     ```python
     x = {
-        "encoder_token_ids": tf.constant([[0, 133, 2119, 2, 1]] * 2),
-        "encoder_padding_mask": tf.constant([[1, 1, 1, 1, 0]] * 2),
-        "decoder_token_ids": tf.constant([[2, 0, 133, 1769, 2]] * 2),
-        "decoder_padding_mask": tf.constant([[1, 1, 1, 1, 1]] * 2),
+        "encoder_token_ids": np.array([[0, 133, 2119, 2, 1]] * 2),
+        "encoder_padding_mask": np.array([[1, 1, 1, 1, 0]] * 2),
+        "decoder_token_ids": np.array([[2, 0, 133, 1769, 2]] * 2),
+        "decoder_padding_mask": np.array([[1, 1, 1, 1, 1]] * 2),
     }
-    y = tf.constant([[0, 133, 1769, 2, 1]] * 2)
-    sw = tf.constant([[1, 1, 1, 1, 0]] * 2)
+    y = np.array([[0, 133, 1769, 2, 1]] * 2)
+    sw = np.array([[1, 1, 1, 1, 0]] * 2)
 
     bart_lm = keras_nlp.models.BartSeq2SeqLM.from_preset(
         "bart_base_en",
@@ -194,11 +204,10 @@ class BartSeq2SeqLM(Task):
         x = backbone(inputs)["decoder_sequence_output"]
         # Use token embedding weights to project from the token representation
         # to vocabulary logits.
-        outputs = tf.matmul(
-            x,
-            backbone.token_embedding.embeddings,
-            transpose_b=True,
-        )
+        outputs = ReverseEmbedding(
+            backbone.token_embedding,
+            name="reverse_embedding",
+        )(x)
 
         # Instantiate using Functional API Model constructor.
         super().__init__(
@@ -218,7 +227,7 @@ class BartSeq2SeqLM(Task):
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(2e-5),
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=is_xla_compatible(self),
+            jit_compile=True,
         )
 
     @classproperty
@@ -307,11 +316,11 @@ class BartSeq2SeqLM(Task):
 
         # Every decoder layer has a separate cache for the self-attention layer
         # and the cross-attention layer. We update all of them separately.
-        self_attention_caches = tf.unstack(self_attention_cache, axis=1)
-        cross_attention_caches = tf.unstack(cross_attention_cache, axis=1)
+        self_attention_caches = []
+        cross_attention_caches = []
         for i in range(self.backbone.num_layers):
-            current_self_attention_cache = self_attention_caches[i]
-            current_cross_attention_cache = cross_attention_caches[i]
+            current_self_attention_cache = self_attention_cache[:, i, ...]
+            current_cross_attention_cache = cross_attention_cache[:, i, ...]
 
             (
                 x,
@@ -328,22 +337,17 @@ class BartSeq2SeqLM(Task):
             )
 
             if self_attention_cache_update_index is not None:
-                self_attention_caches[i] = next_self_attention_cache
+                self_attention_caches.append(next_self_attention_cache)
             if cross_attention_cache_update_index is not None:
-                cross_attention_caches[i] = next_cross_attention_cache
+                cross_attention_caches.append(next_cross_attention_cache)
 
         if self_attention_cache_update_index is not None:
-            self_attention_cache = tf.stack(self_attention_caches, axis=1)
+            self_attention_cache = ops.stack(self_attention_caches, axis=1)
         if cross_attention_cache_update_index is not None:
-            cross_attention_cache = tf.stack(cross_attention_caches, axis=1)
+            cross_attention_cache = ops.stack(cross_attention_caches, axis=1)
 
         hidden_states = x
-
-        logits = tf.matmul(
-            hidden_states,
-            self.backbone.get_layer("token_embedding").embeddings,
-            transpose_b=True,
-        )
+        logits = self.get_layer("reverse_embedding")(x)
         return (
             logits,
             hidden_states,
@@ -377,9 +381,9 @@ class BartSeq2SeqLM(Task):
 
     def _initialize_cache(self, encoder_token_ids, decoder_token_ids):
         """Initializes empty self-attention cache and cross-attention cache."""
-        batch_size = tf.shape(encoder_token_ids)[0]
-        encoder_max_length = tf.shape(encoder_token_ids)[1]
-        decoder_max_length = tf.shape(decoder_token_ids)[1]
+        batch_size = ops.shape(encoder_token_ids)[0]
+        encoder_max_length = ops.shape(encoder_token_ids)[1]
+        decoder_max_length = ops.shape(decoder_token_ids)[1]
 
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_heads
@@ -393,10 +397,10 @@ class BartSeq2SeqLM(Task):
             num_heads,
             head_dim,
         ]
-        self_attention_cache = tf.zeros(shape, dtype=self.compute_dtype)
+        self_attention_cache = ops.zeros(shape, dtype=self.compute_dtype)
 
         shape[3] = encoder_max_length
-        cross_attention_cache = tf.zeros(shape, dtype=self.compute_dtype)
+        cross_attention_cache = ops.zeros(shape, dtype=self.compute_dtype)
 
         return (self_attention_cache, cross_attention_cache)
 
@@ -433,42 +437,6 @@ class BartSeq2SeqLM(Task):
             cross_attention_cache,
         )
 
-    def compile(
-        self,
-        *args,
-        run_eagerly=False,
-        jit_compile=True,
-        sampler="top_k",
-        **kwargs,
-    ):
-        xla_compatible = is_xla_compatible(self)
-        super().compile(
-            *args,
-            run_eagerly=run_eagerly,
-            # Only `jit_compile` if not eager and in a compatible environment.
-            jit_compile=jit_compile and xla_compatible and not run_eagerly,
-            **kwargs,
-        )
-        self._sampler = get_sampler(sampler)
-        # Clear the compiled generate function.
-        self.generate_function = None
-
-    def make_generate_function(self):
-        """Create or return the compiled generation function."""
-        if self.generate_function is not None:
-            return self.generate_function
-
-        if self.run_eagerly:
-            self.generate_function = self.generate_step
-        else:
-            # `jit_compile` is a property of keras.Model after TF 2.12.
-            # Use `getattr()` for backwards compatibility.
-            jit_compile = getattr(self, "jit_compile", True)
-            self.generate_function = tf.function(
-                self.generate_step, jit_compile=jit_compile
-            )
-        return self.generate_function
-
     def generate_step(
         self,
         inputs,
@@ -502,7 +470,7 @@ class BartSeq2SeqLM(Task):
             inputs["decoder_padding_mask"],
         )
 
-        batch_size = tf.shape(encoder_token_ids)[0]
+        batch_size = ops.shape(encoder_token_ids)[0]
 
         # Create and seed cache with a single forward pass.
         (
@@ -514,24 +482,21 @@ class BartSeq2SeqLM(Task):
             encoder_token_ids, encoder_padding_mask, decoder_token_ids
         )
         # Compute the lengths of all user inputted tokens ids.
-        row_lengths = tf.math.reduce_sum(
-            tf.cast(decoder_padding_mask, "int32"), axis=-1
-        )
+        row_lengths = ops.sum(ops.cast(decoder_padding_mask, "int32"), axis=-1)
         # Start at the first index that has no user inputted id.
-        index = tf.math.reduce_min(row_lengths)
+        index = ops.min(row_lengths)
 
         def next(prompt, cache, index):
             # The cache index is the index of our previous token.
             cache_index = index - 1
-            prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
-
-            num_samples = tf.shape(prompt)[0]
+            num_samples = ops.shape(prompt)[0]
+            prompt = ops.slice(prompt, [0, cache_index], [num_samples, 1])
 
             def repeat_tensor(x):
                 """Repeats tensors along batch axis to match dim for beam search."""
-                if tf.shape(x)[0] == num_samples:
+                if ops.shape(x)[0] == num_samples:
                     return x
-                return tf.repeat(x, repeats=num_samples // batch_size, axis=0)
+                return ops.repeat(x, repeats=num_samples // batch_size, axis=0)
 
             logits, hidden_states, cache, _ = self.call_decoder_with_cache(
                 encoder_hidden_states=repeat_tensor(encoder_hidden_states),
@@ -543,8 +508,8 @@ class BartSeq2SeqLM(Task):
                 cross_attention_cache_update_index=None,
             )
             return (
-                tf.squeeze(logits, axis=1),
-                tf.squeeze(hidden_states, axis=1),
+                ops.squeeze(logits, axis=1),
+                ops.squeeze(hidden_states, axis=1),
                 cache,
             )
 
@@ -565,154 +530,19 @@ class BartSeq2SeqLM(Task):
             end_locations = (decoder_token_ids == end_token_id) & (
                 ~decoder_padding_mask
             )
-            end_locations = tf.cast(end_locations, "int32")
+            end_locations = ops.cast(end_locations, "int32")
             # Use cumsum to get ones in all locations after `end_locations`.
-            overflow = tf.math.cumsum(end_locations, exclusive=True, axis=-1)
+            cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
+            overflow = cumsum - end_locations
             # Our padding mask is the inverse of these overflow locations.
-            decoder_padding_mask = ~tf.cast(overflow, "bool")
+            decoder_padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
         else:
             # Without early stopping, all locations will have been updated.
-            decoder_padding_mask = tf.ones_like(decoder_token_ids, dtype="bool")
+            decoder_padding_mask = ops.ones_like(
+                decoder_token_ids, dtype="bool"
+            )
 
         return {
             "decoder_token_ids": decoder_token_ids,
             "decoder_padding_mask": decoder_padding_mask,
         }
-
-    def _normalize_generate_inputs(
-        self,
-        inputs,
-    ):
-        """Normalizes user input to the generate function.
-
-        This function converts all inputs to tensors, adds a batch dimension if
-        necessary, and returns a iterable "dataset like" object (either an
-        actual `tf.data.Dataset` or a list with a single batch element).
-        """
-        input_is_scalar = False
-
-        if isinstance(inputs, tf.data.Dataset):
-            return inputs, input_is_scalar
-
-        def normalize(x):
-            x_is_scalar = False
-            if isinstance(x, str) or isinstance(x, list):
-                x = tf.convert_to_tensor(x)
-
-            if isinstance(x, tf.Tensor) and x.shape.rank == 0:
-                x_is_scalar = True
-                x = x[tf.newaxis]
-
-            return x, x_is_scalar
-
-        if isinstance(inputs, dict):
-            for key in inputs:
-                inputs[key], input_is_scalar = normalize(inputs[key])
-        else:
-            inputs, input_is_scalar = normalize(inputs)
-
-        # We avoid converting to a dataset purely for speed, for a single batch
-        # of input, creating a dataset would add significant overhead.
-        return [inputs], input_is_scalar
-
-    def _normalize_generate_outputs(
-        self,
-        outputs,
-        input_is_scalar,
-    ):
-        """Normalizes user output from the generate function.
-
-        This function converts the output to numpy (for integer output), or
-        python strings (for string output). If a batch dimension was added to
-        the input, it is removed from the output (so generate can be string in,
-        string out).
-        """
-
-        def normalize(x):
-            x = tf.concat(x, axis=0)
-            x = tf.squeeze(x, 0) if input_is_scalar else x
-            is_string = x.dtype == tf.string
-            # Convert outputs to a friendly pythonic type. For numerical outputs
-            # that is numpy, for string outputs that is `list` and `str`.
-            return tensor_to_string_list(x) if is_string else x.numpy()
-
-        if isinstance(outputs[0], dict):
-            return {
-                "decoder_token_ids": normalize(
-                    [x["decoder_token_ids"] for x in outputs]
-                ),
-                "decoder_padding_mask": normalize(
-                    [x["decoder_padding_mask"] for x in outputs]
-                ),
-            }
-        return normalize([x for x in outputs])
-
-    def generate(
-        self,
-        inputs,
-        max_length=None,
-    ):
-        """Generates text conditioned on the encoder inputs.
-
-        This method generates text based on given `inputs`. The sampling method
-        used for generation can be set in the `compile` method.
-
-        If `inputs` is a `tf.data.Dataset`, outputs will be generated
-        "batch-by-batch" and concatenated. Otherwise, all inputs will be handled
-        as a single batch.
-
-        If a `preprocessor` is attached to the model, `inputs` can either be
-        strings (encoder inputs), or a dictionary with `"encoder_text"` and
-        `"decoder_text"` as keys and strings for values. The returned sequences
-        will be strings. Otherwise, `inputs` should be preprocessed before
-        calling `generate()` and the returned sequences will be token IDs.
-
-        Args:
-            inputs: a single input, batch of inputs, or `tf.data.Dataset` of
-                batched inputs. If a preprocessor is attached, each input can be
-                a simple string for basic conditional generation, or a
-                dictionary with keys `"encoder_text"` and `"decoder_text"` to
-                specify a prompt. If a preprocessor is not attached, input
-                batches should have the same structure as when directly calling
-                the model.
-            max_length: int. The max length of generated sequence.
-            add_start_token: bool. Whether to add the start token to `prompt`.
-        """
-
-        # Setup our three main passes.
-        # 1. Optionally preprocessing strings to dense integer tensors.
-        # 2. Generate new tokens via a compiled function on dense tensors.
-        # 3. Optionally postprocess dense integer tensors back to string.
-        generate_function = self.make_generate_function()
-        end_token_id = None
-        if self.preprocessor is not None:
-            end_token_id = self.preprocessor.tokenizer.end_token_id
-
-        def preprocess(x):
-            return self.preprocessor.generate_preprocess(
-                x, sequence_length=max_length
-            )
-
-        def generate(x):
-            return generate_function(x, end_token_id=end_token_id)
-
-        def postprocess(x):
-            return self.preprocessor.generate_postprocess(x)
-
-        # Normalize inputs, apply our three passes, and normalize outputs.
-        inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
-
-        if self.preprocessor is not None:
-            if isinstance(inputs, tf.data.Dataset):
-                inputs = inputs.map(preprocess, tf.data.AUTOTUNE)
-                inputs = inputs.prefetch(tf.data.AUTOTUNE)
-            else:
-                # Fast path for non-dataset, single-batch input.
-                inputs = [preprocess(x) for x in inputs]
-
-        outputs = [generate(x) for x in inputs]
-
-        if self.preprocessor is not None:
-            outputs = [postprocess(x) for x in outputs]
-
-        return self._normalize_generate_outputs(outputs, input_is_scalar)

@@ -13,13 +13,12 @@
 # limitations under the License.
 
 
-import platform
 import sys
 
 import tensorflow as tf
 from absl import logging
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.utils.tensor_utils import is_tensor_type
 
 
@@ -100,19 +99,6 @@ def convert_inputs_to_list_of_tensor_segments(x):
             f"list of tensors. Received `x={x}`"
         )
     return x
-
-
-def is_xla_compatible(model):
-    """Determine if model and platform xla-compatible."""
-    return not (
-        platform.system() == "Darwin" and "arm" in platform.processor().lower()
-    ) and not isinstance(
-        model.distribute_strategy,
-        (
-            tf.compat.v1.distribute.experimental.TPUStrategy,
-            tf.distribute.TPUStrategy,
-        ),
-    )
 
 
 def print_msg(message, line_break=True):

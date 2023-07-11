@@ -13,20 +13,20 @@
 # limitations under the License.
 
 """Tests for FNet tokenizer."""
-
 import io
 import os
 
 import pytest
 import sentencepiece
 import tensorflow as tf
-from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class FNetTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+@pytest.mark.tf_only
+class FNetTokenizerTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
@@ -57,14 +57,14 @@ class FNetTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output, [2, 10, 6, 8])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant(["the quick brown fox", "the earth is round"])
+        input_data = ["the quick brown fox", "the earth is round"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[2, 10, 6, 8], [2, 7, 9, 11]])
 
     def test_detokenize(self):
-        input_data = tf.constant([[2, 10, 6, 8]])
+        input_data = [[2, 10, 6, 8]]
         output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, tf.constant(["the quick brown fox"]))
+        self.assertEqual(output, ["the quick brown fox"])
 
     def test_vocabulary_size(self):
         tokenizer = FNetTokenizer(proto=self.proto)
@@ -84,29 +84,24 @@ class FNetTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             FNetTokenizer(proto=bytes_io.getvalue())
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_tokenizer.get_config(),
             self.tokenizer.get_config(),
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saved_model(self, save_format, filename):
+    @pytest.mark.tf_only
+    def test_saved_model(self):
         input_data = tf.constant(["the quick brown fox"])
 
         inputs = keras.Input(dtype="string", shape=())
         outputs = self.tokenizer(inputs)
         model = keras.Model(inputs, outputs)
 
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
 
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
