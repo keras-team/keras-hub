@@ -34,9 +34,7 @@ class RotaryEmbedding(keras.layers.Layer):
         rotary_dim = ops.cast(rotary_dim, "float32")
 
         range = ops.arange(0, rotary_dim, 2, "float32")
-        inverse_freq = 1.0 / (
-            self.max_wavelength ** (range / rotary_dim)
-        )
+        inverse_freq = 1.0 / (self.max_wavelength ** (range / rotary_dim))
 
         tensor = ops.arange(seq_len, dtype=inverse_freq.dtype)
         freqs = ops.einsum("i, j -> ij", tensor, inverse_freq)
@@ -46,7 +44,9 @@ class RotaryEmbedding(keras.layers.Layer):
 
     def call(self, query, key):
         rotary_dim = ops.shape(query)[-1]
-        cos_emb, sin_emb = self._compute_cos_sin_embedding(key, rotary_dim, seq_dim=1)
+        cos_emb, sin_emb = self._compute_cos_sin_embedding(
+            key, rotary_dim, seq_dim=1
+        )
         query = self._apply_rotary_pos_emb(query, cos_emb, sin_emb)
         key = self._apply_rotary_pos_emb(key, cos_emb, sin_emb)
 
