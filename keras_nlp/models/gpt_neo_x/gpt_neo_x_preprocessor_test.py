@@ -18,16 +18,16 @@ import os
 
 import pytest
 import tensorflow as tf
+from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_preprocessor import (
     GPTNeoXPreprocessor,
 )
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
-from keras_nlp.tests.test_case import TestCase
 
 
-class GPTNeoXPreprocessorTest(TestCase):
+class GPTNeoXPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.vocab = {
             "!": 0,
@@ -112,17 +112,22 @@ class GPTNeoXPreprocessorTest(TestCase):
             self.preprocessor.get_config(),
         )
 
+    @parameterized.named_parameters(
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
+    )
     @pytest.mark.large
-    @pytest.mark.tf_only
-    def test_saved_model(self):
+    def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["airplane at airport"])
 
         inputs = keras.Input(dtype="string", shape=())
         outputs = self.preprocessor(inputs)
         model = keras.Model(inputs, outputs)
 
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        model.save(path, save_format=save_format, **kwargs)
 
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(

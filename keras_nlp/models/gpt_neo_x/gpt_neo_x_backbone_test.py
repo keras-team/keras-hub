@@ -17,6 +17,7 @@ import os
 
 import pytest
 import tensorflow as tf
+from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
@@ -24,7 +25,6 @@ from keras_nlp.models import GPTNeoXBackbone
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class GPTNeoXTest(TestCase):
     def setUp(self):
         self.backbone = GPTNeoXBackbone(
@@ -72,11 +72,17 @@ class GPTNeoXTest(TestCase):
         )
         self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 
+    @parameterized.named_parameters(
+        ("tf_format", "tf", "model"),
+        ("keras_format", "keras_v3", "model.keras"),
+    )
     @pytest.mark.large
-    def test_saved_model(self):
+    def test_saved_model(self, save_format, filename):
         model_output = self.backbone(self.input_batch)
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        self.backbone.save(path, save_format="keras_v3")
+        path = os.path.join(self.get_temp_dir(), filename)
+        # Don't save traces in the tf format, we check compilation elsewhere.
+        kwargs = {"save_traces": False} if save_format == "tf" else {}
+        self.backbone.save(path, save_format=save_format, **kwargs)
         restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
@@ -104,7 +110,7 @@ class GPTNeoXBackboneTPUTest(TestCase):
             "token_ids": ops.ones((2, 5), dtype="int32"),
             "padding_mask": ops.ones((2, 5), dtype="int32"),
         }
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(
+        self.input_dataset = ops.data.Dataset.from_tensor_slices(
             self.input_batch
         ).batch(2)
 

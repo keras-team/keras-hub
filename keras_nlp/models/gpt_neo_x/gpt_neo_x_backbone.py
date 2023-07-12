@@ -15,7 +15,6 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_decoder import GPTNeoXDecoder
-from keras_nlp.utils.tensor_utils import assert_tf_backend
 
 
 def _gpt_neo_x_kernel_initializer(stddev=0.02):
@@ -24,7 +23,7 @@ def _gpt_neo_x_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.GPTNeoXBackbone")
 class GPTNeoXBackbone(Backbone):
-    """GPT-NeoX core network with hyperparameters.
+    """GPT-2 core network with hyperparameters.
 
     This network implements a Transformer-based decoder network,
     Generative Pretrained Transformer-Neo-X (GPTNeoX), as described in
@@ -75,8 +74,6 @@ class GPTNeoXBackbone(Backbone):
         max_sequence_length=512,
         **kwargs,
     ):
-        assert_tf_backend(self.__class__.__name__)
-
         # Inputs
         token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
         padding_mask = keras.Input(
