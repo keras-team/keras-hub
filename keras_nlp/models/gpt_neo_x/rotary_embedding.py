@@ -20,6 +20,23 @@ class RotaryEmbedding(keras.layers.Layer):
         super().__init__(**kwargs)
         self.max_wavelength = max_wavelength
 
+    def build(self, rotary_dim):
+        self.rotary_dim = rotary_dim
+        self.built = True
+
+    def __call__(self, query, key):
+        if not self.built:
+            rotary_dim = query.shape[-1]
+            self.build(rotary_dim)
+        return super().__call__(query, key)
+
+    def call(self, query, key):
+        cos_emb, sin_emb = self._compute_cos_sin_embedding(key, seq_dim=1)
+        query = self._apply_rotary_pos_emb(query, cos_emb, sin_emb)
+        key = self._apply_rotary_pos_emb(key, cos_emb, sin_emb)
+
+        return query, key
+
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
         cos_emb = cos_emb[:, : ops.shape(tensor)[1], :, :]
         sin_emb = sin_emb[:, : ops.shape(tensor)[1], :, :]
@@ -29,11 +46,11 @@ class RotaryEmbedding(keras.layers.Layer):
 
         return (tensor * cos_emb) + (half_rot_tensor * sin_emb)
 
-    def _compute_cos_sin_embedding(self, x, rotary_dim, seq_dim=1):
+    def _compute_cos_sin_embedding(self, x, seq_dim=1):
         seq_len = ops.shape(x)[seq_dim]
-        rotary_dim = ops.cast(rotary_dim, "float32")
+        rotary_dim = ops.cast(self.rotary_dim, "float32")
 
-        range = ops.arange(0, rotary_dim, 2, "float32")
+        range = ops.arange(0, self.rotary_dim, 2, "float32")
         inverse_freq = 1.0 / (self.max_wavelength ** (range / rotary_dim))
 
         tensor = ops.arange(seq_len, dtype=inverse_freq.dtype)
@@ -41,16 +58,6 @@ class RotaryEmbedding(keras.layers.Layer):
         embedding = ops.concatenate((freqs, freqs), axis=-1)[None, :, None, :]
 
         return ops.cos(embedding), ops.sin(embedding)
-
-    def call(self, query, key):
-        rotary_dim = ops.shape(query)[-1]
-        cos_emb, sin_emb = self._compute_cos_sin_embedding(
-            key, rotary_dim, seq_dim=1
-        )
-        query = self._apply_rotary_pos_emb(query, cos_emb, sin_emb)
-        key = self._apply_rotary_pos_emb(key, cos_emb, sin_emb)
-
-        return query, key
 
     def get_config(self):
         config = super().get_config()
