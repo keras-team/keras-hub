@@ -15,8 +15,6 @@
 """GPTNeoX preprocessor layer."""
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
-
-# from keras_nlp.models.gpt_neo_x.gpt_neo_x_presets import backbone_presets
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (

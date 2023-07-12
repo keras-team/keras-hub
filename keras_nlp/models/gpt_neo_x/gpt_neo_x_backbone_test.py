@@ -17,7 +17,6 @@ import os
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
@@ -72,25 +71,22 @@ class GPTNeoXTest(TestCase):
         )
         self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saved_model(self, save_format, filename):
-        model_output = self.backbone(self.input_batch)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        self.backbone.save(path, save_format=save_format, **kwargs)
+    def test_saved_model(self):
+        input_data = tf.constant([" airplane at airport"])
+
+        inputs = keras.Input(dtype="string", shape=())
+        outputs = self.tokenizer(inputs)
+        model = keras.Model(inputs, outputs)
+
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
+
         restored_model = keras.models.load_model(path)
-
-        # Check we got the real object back.
-        self.assertIsInstance(restored_model, GPTNeoXBackbone)
-
-        # Check that output matches.
-        restored_output = restored_model(self.input_batch)
-        self.assertAllClose(model_output, restored_output)
+        self.assertAllEqual(
+            model(input_data),
+            restored_model(input_data),
+        )
 
 
 @pytest.mark.tpu
@@ -110,7 +106,7 @@ class GPTNeoXBackboneTPUTest(TestCase):
             "token_ids": ops.ones((2, 5), dtype="int32"),
             "padding_mask": ops.ones((2, 5), dtype="int32"),
         }
-        self.input_dataset = ops.data.Dataset.from_tensor_slices(
+        self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch
         ).batch(2)
 

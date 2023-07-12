@@ -30,10 +30,10 @@ class GPTNeoXTokenizer(BytePairTokenizer):
     This tokenizer does not provide truncation or padding of inputs.
 
     If input is a batch of strings (rank > 0), the layer will output a
-    `ops.RaggedTensor` where the last dimension of the output is ragged.
+    `tf.RaggedTensor` where the last dimension of the output is ragged.
 
     If input is a scalar string (rank == 0), the layer will output a dense
-    `ops.Tensor` with static shape `[None]`.
+    `tf.Tensor` with static shape `[None]`.
 
     Args:
         vocabulary: string or dict, maps token to integer ids. If it is a

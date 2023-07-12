@@ -124,9 +124,7 @@ class GPTNeoXAttention(keras.layers.Layer):
         self, query, key, value, attention_mask=None, training=None
     ):
         attention_scores = ops.einsum("aecd,abcd->acbe", key, query)
-        # norm_factor = ops.sqrt(
-        #     ops.constant(self.attn_head_size, dtype="float32")
-        # )
+
         norm_factor = math.sqrt(self.attn_head_size)
         attention_scores /= norm_factor
 

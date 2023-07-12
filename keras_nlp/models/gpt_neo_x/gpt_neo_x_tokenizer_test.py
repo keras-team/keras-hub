@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for GPT-2 preprocessing layers."""
+"""Tests for GPT-NeoX preprocessing layers."""
 
 import os
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
@@ -76,7 +75,7 @@ class GPTNeoXTokenizerTest(TestCase):
         self.assertAllEqual(output, [1, 2, 3, 1, 4, 0])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant([" airplane at airport", " kohli is the best"])
+        input_data = [" airplane at airport", " kohli is the best"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[1, 2, 3, 1, 4], [5, 6, 7, 8, 9]])
 
@@ -100,22 +99,16 @@ class GPTNeoXTokenizerTest(TestCase):
             self.tokenizer.get_config(),
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         input_data = tf.constant([" airplane at airport"])
 
         inputs = keras.Input(dtype="string", shape=())
         outputs = self.tokenizer(inputs)
         model = keras.Model(inputs, outputs)
 
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
 
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(

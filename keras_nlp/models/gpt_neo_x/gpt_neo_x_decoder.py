@@ -100,7 +100,6 @@ class GPTNeoXDecoder(keras.layers.Layer):
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
-        # self._self_attention_layer.build(decoder_sequence_shape)
 
         self._self_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
@@ -184,7 +183,6 @@ class GPTNeoXDecoder(keras.layers.Layer):
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )
-        # if use_causal_mask:
         batch_size = ops.shape(decoder_sequence)[0]
         input_length = output_length = ops.shape(decoder_sequence)[1]
 
