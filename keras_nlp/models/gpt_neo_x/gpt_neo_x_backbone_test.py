@@ -73,20 +73,17 @@ class GPTNeoXTest(TestCase):
 
     @pytest.mark.large
     def test_saved_model(self):
-        input_data = tf.constant([" airplane at airport"])
-
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = self.tokenizer(inputs)
-        model = keras.Model(inputs, outputs)
-
+        model_output = self.backbone(self.input_batch)
         path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-
+        self.backbone.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
-        self.assertAllEqual(
-            model(input_data),
-            restored_model(input_data),
-        )
+
+        # Check we got the real object back.
+        self.assertIsInstance(restored_model, GPTNeoXBackbone)
+
+        # Check that output matches.
+        restored_output = restored_model(self.input_batch)
+        self.assertAllClose(model_output, restored_output)
 
 
 @pytest.mark.tpu
