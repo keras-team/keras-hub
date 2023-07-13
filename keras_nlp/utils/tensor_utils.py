@@ -27,7 +27,7 @@ def _decode_strings_to_utf8(inputs):
     """Recursively decodes to list of strings with 'utf-8' encoding."""
     if isinstance(inputs, bytes):
         # Handles the case when the input is a scalar string.
-        return inputs.decode("utf-8")
+        return inputs.decode("utf-8", errors="ignore")
     else:
         # Recursively iterate when input is a list.
         return [_decode_strings_to_utf8(x) for x in inputs]
