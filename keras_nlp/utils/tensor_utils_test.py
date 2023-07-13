@@ -51,6 +51,11 @@ class TensorToListTest(TestCase):
         detokenize_output = tensor_to_list(input_data)
         self.assertEqual(detokenize_output, "▀▁▂▃")
 
+    def test_string_with_utf8_error(self):
+        input_data = tf.constant([b"hello\xf2\xf1\x91\xe5"])
+        detokenize_output = tensor_to_list(input_data)
+        self.assertEqual(detokenize_output, ["hello"])
+
 
 class ConvertToRaggedBatch(TestCase):
     def test_convert_1d_python(self):
