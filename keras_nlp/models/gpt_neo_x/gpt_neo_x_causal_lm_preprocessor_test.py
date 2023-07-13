@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for GPT2 causal LM preprocessor layer."""
+"""Tests for GPTNeoX causal LM preprocessor layer."""
 import os
 
 import pytest

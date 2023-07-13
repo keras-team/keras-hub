@@ -139,12 +139,6 @@ class GPTNeoXDecoder(keras.layers.Layer):
         )
         self.built = True
 
-    def __call__(self, decoder_sequence, **kwargs):
-        if not self.built:
-            decoder_sequence_shape = decoder_sequence.shape
-            self.build(decoder_sequence_shape)
-        return super().__call__(decoder_sequence, **kwargs)
-
     def call(
         self,
         decoder_sequence,

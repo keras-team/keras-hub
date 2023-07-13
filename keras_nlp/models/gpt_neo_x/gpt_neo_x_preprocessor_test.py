@@ -115,10 +115,10 @@ class GPTNeoXPreprocessorTest(TestCase):
     @pytest.mark.large
     @pytest.mark.tf_only
     def test_saved_model(self):
-        input_data = tf.constant([" airplane at airport"])
+        input_data = tf.constant(["airplane at airport"])
 
         inputs = keras.Input(dtype="string", shape=())
-        outputs = self.tokenizer(inputs)
+        outputs = self.preprocessor(inputs)
         model = keras.Model(inputs, outputs)
 
         path = os.path.join(self.get_temp_dir(), "model.keras")
@@ -126,6 +126,6 @@ class GPTNeoXPreprocessorTest(TestCase):
 
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
-            model(input_data),
-            restored_model(input_data),
+            model(input_data)["token_ids"],
+            restored_model(input_data)["token_ids"],
         )
