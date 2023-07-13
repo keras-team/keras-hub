@@ -17,9 +17,8 @@ import os
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
     DistilBertTokenizer,
 )
@@ -39,7 +38,7 @@ class DistilBertTokenizerTest(TestCase):
         self.assertAllEqual(output, [5, 6, 7, 8, 1])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant(["THE QUICK BROWN FOX.", "THE FOX."])
+        input_data = ["THE QUICK BROWN FOX.", "THE FOX."]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[5, 6, 7, 8, 1], [5, 8, 1]])
 
@@ -62,28 +61,23 @@ class DistilBertTokenizerTest(TestCase):
             DistilBertTokenizer(vocabulary=["a", "b", "c"])
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_tokenizer.get_config(),
             self.tokenizer.get_config(),
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saved_model(self, save_format, filename):
+    @pytest.mark.tf_only
+    def test_saved_model(self):
         input_data = tf.constant(["THE QUICK BROWN FOX."])
         tokenizer = DistilBertTokenizer(vocabulary=self.vocab)
         inputs = keras.Input(dtype="string", shape=())
         outputs = tokenizer(inputs)
         model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
         self.assertAllEqual(
             model(input_data),

@@ -16,9 +16,8 @@
 
 import copy
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.f_net_encoder import FNetEncoder
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.models.backbone import Backbone
@@ -71,10 +70,8 @@ class FNetBackbone(Backbone):
     Examples:
     ```python
     input_data = {
-        "token_ids": tf.ones(shape=(1, 12), dtype="int64"),
-        "segment_ids": tf.constant(
-            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "segment_ids": np.array([[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]]),
     }
 
     # Pretrained BERT encoder.

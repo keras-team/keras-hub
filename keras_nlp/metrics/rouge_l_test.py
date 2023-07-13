@@ -13,12 +13,14 @@
 # limitations under the License.
 
 """Tests for RougeL."""
+import pytest
 import tensorflow as tf
 
 from keras_nlp.metrics.rouge_l import RougeL
 from keras_nlp.tests.test_case import TestCase
 
 
+@pytest.mark.tf_only
 class RougeLTest(TestCase):
     def test_initialization(self):
         rouge = RougeL()

@@ -16,9 +16,8 @@
 
 import copy
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.masked_lm_head import MaskedLMHead
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.models.albert.albert_backbone import albert_kernel_initializer
@@ -27,7 +26,6 @@ from keras_nlp.models.albert.albert_masked_lm_preprocessor import (
 )
 from keras_nlp.models.albert.albert_presets import backbone_presets
 from keras_nlp.models.task import Task
-from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -83,14 +81,10 @@ class AlbertMaskedLM(Task):
     ```python
     # Create preprocessed batch where 0 is the mask token.
     features = {
-        "token_ids": tf.constant(
-            [[1, 2, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
-        ),
-        "padding_mask": tf.constant(
-            [[1, 1, 1, 1, 1, 1, 1, 1]] * 2, shape=(2, 8)
-        ),
-        "mask_positions": tf.constant([[2, 4]] * 2, shape=(2, 2)),
-        "segment_ids": tf.constant([[0, 0, 0, 0, 0, 0, 0, 0]] * 2, shape=(2, 8))
+        "token_ids": np.array([[1, 2, 0, 4, 0, 6, 7, 8]] * 2),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1]] * 2),
+        "mask_positions": np.array([[2, 4]] * 2),
+        "segment_ids": np.array([[0, 0, 0, 0, 0, 0, 0, 0]] * 2),
     }
     # Labels are the original masked values.
     labels = [[3, 5]] * 2
@@ -136,7 +130,7 @@ class AlbertMaskedLM(Task):
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(5e-5),
             weighted_metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=is_xla_compatible(self),
+            jit_compile=True,
         )
 
     @classproperty

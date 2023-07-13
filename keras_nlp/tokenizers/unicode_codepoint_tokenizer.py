@@ -17,6 +17,7 @@ import tensorflow as tf
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers import tokenizer
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
+from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.utils.tensor_utils import is_integer_dtype
 
 try:
@@ -83,28 +84,29 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     Basic Usage.
     >>> inputs = "Unicode Tokenizer"
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer()
-    >>> tokenizer(inputs)
-    <tf.Tensor: shape=(17,), dtype=int32, numpy=
+    >>> outputs = tokenizer(inputs)
+    >>> np.array(outputs)
     array([117, 110, 105,  99, 111, 100, 101,  32, 116, 111, 107, 101, 110,
-        105, 122, 101, 114], dtype=int32)>
+        105, 122, 101, 114], dtype=int32)
 
     Ragged outputs.
-    >>> inputs = ["Book", "पुस्तक", "کتاب"]
+    >>> inputs = ["पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer()
-    >>> tokenizer(inputs)
-    <tf.RaggedTensor [[98, 111, 111, 107],
-        [2346, 2369, 2360, 2381, 2340, 2325],
-        [1705, 1578, 1575, 1576]]>
+    >>> seq1, seq2 = tokenizer(inputs)
+    >>> np.array(seq1)
+    array([2346, 2369, 2360, 2381, 2340, 2325], dtype=int32)
+    >>> np.array(seq2)
+    array([1705, 1578, 1575, 1576], dtype=int32)
 
     Dense outputs.
-    >>> inputs = ["Book", "पुस्तक", "کتاب"]
+    >>> inputs = ["पुस्तक", "کتاب"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
     ...     sequence_length=8)
-    >>> tokenizer(inputs)
-    <tf.Tensor: shape=(3, 8), dtype=int32, numpy=
-    array([[  98,  111,  111,  107,    0,    0,    0,    0],
-        [2346, 2369, 2360, 2381, 2340, 2325,    0,    0],
-        [1705, 1578, 1575, 1576,    0,    0,    0,    0]], dtype=int32)>
+    >>> seq1, seq2 = tokenizer(inputs)
+    >>> np.array(seq1)
+    array([2346, 2369, 2360, 2381, 2340, 2325,    0,    0], dtype=int32)
+    >>> np.array(seq2)
+    array([1705, 1578, 1575, 1576,    0,    0,    0,    0], dtype=int32)
 
     Tokenize, then batch for ragged outputs.
     >>> inputs = ["Book", "पुस्तक", "کتاب"]
@@ -156,29 +158,30 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     >>> inputs = ["I Like to Travel a Lot", "मैं किताबें पढ़ना पसंद करता हूं"]
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
     ...     sequence_length=5)
-    >>> tokenizer(inputs)
-    <tf.Tensor: shape=(5,), dtype=int32,
-        numpy=array([[ 105,   32,  108,  105,  107],
-       [2350, 2376, 2306,   32, 2325]], dtype=int32)>
+    >>> outputs = tokenizer(inputs)
+    >>> np.array(outputs)
+    array([[ 105,   32,  108,  105,  107],
+           [2350, 2376, 2306,   32, 2325]], dtype=int32)
 
     Tokenization with vocabulary_size.
     >>> latin_ext_cutoff = 592
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
     ...     vocabulary_size=latin_ext_cutoff)
-    >>> tokenizer("¿Cómo estás?")
-    <tf.Tensor: shape=(10,), dtype=int32,
-    numpy=array([191,  99, 243, 109, 111,  32, 101, 115, 116, 225, 115,  63],
-    dtype=int32)>
-    >>> tokenizer("आप कैसे हैं")
-    <tf.Tensor: shape=(11,), dtype=int32,
-    numpy=array([591, 591,  32, 591, 591, 591, 591,  32, 591, 591, 591],
-    dtype=int32)>
+    >>> outputs = tokenizer("¿Cómo estás?")
+    >>> np.array(outputs)
+    array([191,  99, 243, 109, 111,  32, 101, 115, 116, 225, 115,  63],
+          dtype=int32)
+    >>> outputs = tokenizer("आप कैसे हैं")
+    >>> np.array(outputs)
+    array([591, 591,  32, 591, 591, 591, 591,  32, 591, 591, 591],
+          dtype=int32)
 
     Detokenization.
     >>> inputs = tf.constant([110, 105, 110, 106,  97], dtype="int32")
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer()
-    >>> tokenizer.detokenize(inputs)
-    <tf.Tensor: shape=(), dtype=string, numpy=b'ninja'>
+    >>> outputs = tokenizer.detokenize(inputs)
+    >>> np.array(outputs).astype("U")
+    array('ninja', dtype='<U5')
 
     Detokenization with padding.
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
@@ -196,8 +199,9 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
     >>> inputs = tf.constant([110, 105, 10000000, 110, 106,  97])
     >>> tokenizer = keras_nlp.tokenizers.UnicodeCodepointTokenizer(
     ...     errors="replace", replacement_char=88)
-    >>> tokenizer.detokenize(inputs).numpy().decode('utf-8')
-    'niXnja'
+    >>> outputs = tokenizer.detokenize(inputs)
+    >>> np.array(outputs).astype("U")
+    array('niXnja', dtype='<U6')
     """
 
     def __init__(
@@ -316,11 +320,14 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
+        inputs, unbatched, _ = convert_to_ragged_batch(inputs)
         inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
-        encoded_string = tf.strings.unicode_encode(
+        outputs = tf.strings.unicode_encode(
             inputs,
             errors=self.errors,
             replacement_char=self.replacement_char,
             output_encoding=self.output_encoding,
         )
-        return encoded_string
+        if unbatched:
+            outputs = tf.squeeze(outputs, 0)
+        return outputs

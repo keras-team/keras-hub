@@ -14,7 +14,7 @@
 
 import types
 
-from tensorflow import keras
+from keras_nlp.backend import keras
 
 try:
     import namex

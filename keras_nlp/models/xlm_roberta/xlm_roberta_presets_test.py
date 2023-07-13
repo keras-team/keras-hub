@@ -14,9 +14,9 @@
 """Tests for loading pretrained model presets."""
 
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 
+from keras_nlp.backend import ops
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_classifier import (
     XLMRobertaClassifier,
@@ -61,8 +61,8 @@ class XLMRobertaPresetSmokeTest(TestCase):
     )
     def test_backbone_output(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[0, 581, 63773, 2]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+            "token_ids": ops.array([[0, 581, 63773, 2]]),
+            "padding_mask": ops.array([[1, 1, 1, 1]]),
         }
         model = XLMRobertaBackbone.from_preset(
             "xlm_roberta_base_multi", load_weights=load_weights
@@ -77,7 +77,7 @@ class XLMRobertaPresetSmokeTest(TestCase):
         ("preset_weights", True), ("random_weights", False)
     )
     def test_classifier_output(self, load_weights):
-        input_data = tf.constant(["The quick brown fox."])
+        input_data = ["The quick brown fox."]
         model = XLMRobertaClassifier.from_preset(
             "xlm_roberta_base_multi", num_classes=2, load_weights=load_weights
         )
@@ -89,8 +89,8 @@ class XLMRobertaPresetSmokeTest(TestCase):
     )
     def test_classifier_output_without_preprocessing(self, load_weights):
         input_data = {
-            "token_ids": tf.constant([[0, 581, 63773, 2]]),
-            "padding_mask": tf.constant([[1, 1, 1, 1]]),
+            "token_ids": ops.array([[0, 581, 63773, 2]]),
+            "padding_mask": ops.array([[1, 1, 1, 1]]),
         }
         model = XLMRobertaClassifier.from_preset(
             "xlm_roberta_base_multi",
@@ -143,10 +143,10 @@ class XLMRobertaPresetFullTest(TestCase):
                 preset, load_weights=load_weights
             )
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 512), dtype="int64", maxval=model.vocabulary_size
                 ),
-                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+                "padding_mask": ops.array([1] * 512, shape=(1, 512)),
             }
             model(input_data)
 
@@ -160,7 +160,7 @@ class XLMRobertaPresetFullTest(TestCase):
                 num_classes=4,
                 load_weights=load_weights,
             )
-            input_data = tf.constant(["This quick brown fox"])
+            input_data = ["The quick brown fox."]
             classifier.predict(input_data)
 
     @parameterized.named_parameters(
@@ -177,12 +177,12 @@ class XLMRobertaPresetFullTest(TestCase):
                 preprocessor=None,
             )
             input_data = {
-                "token_ids": tf.random.uniform(
+                "token_ids": ops.random.uniform(
                     shape=(1, 512),
                     dtype="int64",
                     maxval=classifier.backbone.vocabulary_size,
                 ),
-                "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
+                "padding_mask": ops.array([1] * 512, shape=(1, 512)),
             }
             classifier.predict(input_data)
 

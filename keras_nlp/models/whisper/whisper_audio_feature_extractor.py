@@ -16,9 +16,9 @@ import copy
 
 import numpy as np
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.models.whisper.whisper_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -86,6 +86,10 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
                 )
 
         super().__init__(**kwargs)
+
+        self._convert_input_args = False
+        self._allow_non_tensor_positional_args = True
+        self.built = True
 
         self.num_mels = num_mels
         self.num_fft_bins = num_fft_bins

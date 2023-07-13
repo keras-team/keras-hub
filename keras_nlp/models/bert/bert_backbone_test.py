@@ -17,9 +17,9 @@ import os
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.tests.test_case import TestCase
 
@@ -35,9 +35,9 @@ class BertBackboneTest(TestCase):
             max_sequence_length=5,
         )
         self.input_batch = {
-            "token_ids": tf.ones((2, 5), dtype="int32"),
-            "segment_ids": tf.ones((2, 5), dtype="int32"),
-            "padding_mask": tf.ones((2, 5), dtype="int32"),
+            "token_ids": ops.ones((2, 5), dtype="int32"),
+            "segment_ids": ops.ones((2, 5), dtype="int32"),
+            "padding_mask": ops.ones((2, 5), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch
@@ -57,9 +57,9 @@ class BertBackboneTest(TestCase):
     def test_variable_sequence_length_call_bert(self):
         for seq_length in (2, 3, 4):
             input_data = {
-                "token_ids": tf.ones((2, seq_length), dtype="int32"),
-                "segment_ids": tf.ones((2, seq_length), dtype="int32"),
-                "padding_mask": tf.ones((2, seq_length), dtype="int32"),
+                "token_ids": ops.ones((2, seq_length), dtype="int32"),
+                "segment_ids": ops.ones((2, seq_length), dtype="int32"),
+                "padding_mask": ops.ones((2, seq_length), dtype="int32"),
             }
             self.backbone(input_data)
 
@@ -68,22 +68,16 @@ class BertBackboneTest(TestCase):
         self.backbone.predict(self.input_dataset)
 
     def test_serialization(self):
-        new_backbone = keras.utils.deserialize_keras_object(
-            keras.utils.serialize_keras_object(self.backbone)
+        new_backbone = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(self.backbone)
         )
         self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saved_model(self, save_format, filename):
+    def test_saved_model(self):
         model_output = self.backbone(self.input_batch)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        self.backbone.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        self.backbone.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.
@@ -91,9 +85,7 @@ class BertBackboneTest(TestCase):
 
         # Check that output matches.
         restored_output = restored_model(self.input_batch)
-        self.assertAllClose(
-            model_output["pooled_output"], restored_output["pooled_output"]
-        )
+        self.assertAllClose(model_output, restored_output)
 
 
 @pytest.mark.tpu
@@ -110,9 +102,9 @@ class BertBackboneTPUTest(TestCase):
                 max_sequence_length=128,
             )
         self.input_batch = {
-            "token_ids": tf.ones((8, 128), dtype="int32"),
-            "segment_ids": tf.ones((8, 128), dtype="int32"),
-            "padding_mask": tf.ones((8, 128), dtype="int32"),
+            "token_ids": ops.ones((8, 128), dtype="int32"),
+            "segment_ids": ops.ones((8, 128), dtype="int32"),
+            "padding_mask": ops.ones((8, 128), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch

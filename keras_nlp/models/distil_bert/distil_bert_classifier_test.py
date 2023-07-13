@@ -17,9 +17,9 @@ import os
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_classifier import (
     DistilBertClassifier,
@@ -60,15 +60,13 @@ class DistilBertClassifierTest(TestCase):
             hidden_dim=4,
         )
 
-        self.raw_batch = tf.constant(
-            [
-                "the quick brown fox.",
-                "the slow brown fox.",
-            ]
-        )
+        self.raw_batch = [
+            "the quick brown fox.",
+            "the slow brown fox.",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, tf.ones((2,)))
+            (self.raw_batch, ops.ones((2,)))
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
@@ -82,7 +80,7 @@ class DistilBertClassifierTest(TestCase):
         # Assert predictions match.
         self.assertAllClose(preds1, preds2)
         # Assert valid softmax output.
-        self.assertAllClose(tf.reduce_sum(preds2, axis=-1), [1.0, 1.0])
+        self.assertAllClose(ops.sum(preds2, axis=-1), [1.0, 1.0])
 
     def test_classifier_fit(self):
         self.classifier.fit(self.raw_dataset)
@@ -103,8 +101,8 @@ class DistilBertClassifierTest(TestCase):
             self.backbone,
             num_classes=2,
         )
-        config = keras.utils.serialize_keras_object(original)
-        restored = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(original)
+        restored = keras.saving.deserialize_keras_object(config)
         self.assertEqual(restored.get_config(), original.get_config())
         # With options.
         original = DistilBertClassifier(
@@ -116,21 +114,15 @@ class DistilBertClassifierTest(TestCase):
             name="test",
             trainable=False,
         )
-        config = keras.utils.serialize_keras_object(original)
-        restored = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(original)
+        restored = keras.saving.deserialize_keras_object(config)
         self.assertEqual(restored.get_config(), original.get_config())
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saving_model(self, save_format, filename):
+    def test_saving_model(self):
         model_output = self.classifier.predict(self.raw_batch)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        self.classifier.save(path, save_format=save_format, **kwargs)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        self.classifier.save(path, save_format="keras_v3")
         restored_model = keras.models.load_model(path)
 
         # Check we got the real object back.

@@ -13,6 +13,7 @@
 # limitations under the License.
 # Copyright 2023 The KerasNLP Authors
 #
+from keras_nlp.backend import ops
 from keras_nlp.tests.test_case import TestCase
 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +30,6 @@ from keras_nlp.tests.test_case import TestCase
 """Tests for loading pretrained model presets."""
 
 import pytest
-import tensorflow as tf
 from absl.testing import parameterized
 
 from keras_nlp.models.bart.bart_backbone import BartBackbone
@@ -58,10 +58,10 @@ class BartPresetSmokeTest(TestCase):
     )
     def test_backbone_output(self, load_weights):
         input_data = {
-            "encoder_token_ids": tf.constant([[0, 133, 2119, 2]]),
-            "encoder_padding_mask": tf.constant([[1, 1, 1, 1]]),
-            "decoder_token_ids": tf.constant([[0, 7199, 14, 2119, 2]]),
-            "decoder_padding_mask": tf.constant([[1, 1, 1, 1, 1]]),
+            "encoder_token_ids": ops.array([[0, 133, 2119, 2]]),
+            "encoder_padding_mask": ops.array([[1, 1, 1, 1]]),
+            "decoder_token_ids": ops.array([[0, 7199, 14, 2119, 2]]),
+            "decoder_padding_mask": ops.array([[1, 1, 1, 1, 1]]),
         }
         model = BartBackbone.from_preset(
             "bart_base_en", load_weights=load_weights
@@ -116,20 +116,20 @@ class BartPresetFullTest(TestCase):
         for preset in BartBackbone.presets:
             model = BartBackbone.from_preset(preset, load_weights=load_weights)
             input_data = {
-                "encoder_token_ids": tf.random.uniform(
+                "encoder_token_ids": ops.random.uniform(
                     shape=(1, 1024),
                     dtype="int64",
                     maxval=model.vocabulary_size,
                 ),
-                "encoder_padding_mask": tf.constant(
+                "encoder_padding_mask": ops.array(
                     [1] * 768 + [0] * 256, shape=(1, 1024)
                 ),
-                "decoder_token_ids": tf.random.uniform(
+                "decoder_token_ids": ops.random.uniform(
                     shape=(1, 1024),
                     dtype="int64",
                     maxval=model.vocabulary_size,
                 ),
-                "decoder_padding_mask": tf.constant(
+                "decoder_padding_mask": ops.array(
                     [1] * 489 + [0] * 535, shape=(1, 1024)
                 ),
             }

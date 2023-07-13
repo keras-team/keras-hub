@@ -19,9 +19,8 @@ import os
 import pytest
 import sentencepiece
 import tensorflow as tf
-from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm import (
     XLMRobertaMaskedLM,
@@ -78,9 +77,10 @@ class XLMRobertaMaskedLMTest(TestCase):
             preprocessor=self.preprocessor,
         )
 
-        self.raw_batch = tf.constant(
-            ["the quick brown fox", "the slow brown fox"]
-        )
+        self.raw_batch = [
+            "the quick brown fox",
+            "the slow brown fox",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
             self.raw_batch
@@ -109,21 +109,17 @@ class XLMRobertaMaskedLMTest(TestCase):
         self.masked_lm.fit(self.preprocessed_dataset)
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.masked_lm)
-        new_classifier = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.masked_lm)
+        new_classifier = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_classifier.get_config(),
             self.masked_lm.get_config(),
         )
 
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
     @pytest.mark.large
-    def test_saved_model(self, save_format, filename):
-        save_path = os.path.join(self.get_temp_dir(), filename)
-        self.masked_lm.save(save_path, save_format=save_format)
+    def test_saved_model(self):
+        save_path = os.path.join(self.get_temp_dir(), "model.keras")
+        self.masked_lm.save(save_path, save_format="keras_v3")
         restored_model = keras.models.load_model(save_path)
 
         # Check we got the real object back.

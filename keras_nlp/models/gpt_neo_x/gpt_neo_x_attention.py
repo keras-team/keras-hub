@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.gpt_neo_x.rotary_embedding import RotaryEmbedding
 from keras_nlp.utils.keras_utils import clone_initializer
 
@@ -62,9 +62,8 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.dropout = dropout
         self.attn_head_size = hidden_dim // num_heads
         self.rotary_max_wavelength = rotary_max_wavelength
-        self.rotary_embedding = RotaryEmbedding(
-            self.rotary_percentage, rotary_max_wavelength
-        )
+        self.rotary_dim = int(self.attn_head_size * rotary_percentage)
+        self.rotary_embedding = RotaryEmbedding(rotary_max_wavelength)
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.max_sequence_length = max_sequence_length
@@ -148,7 +147,19 @@ class GPTNeoXAttention(keras.layers.Layer):
         ]
         value = query_key_value[..., 2 * self.attn_head_size :]
 
-        query, key = self.rotary_embedding(query, key)
+        query_rot, query_pass = (
+            query[..., : self.rotary_dim],
+            query[..., self.rotary_dim :],
+        )
+        key_rot, key_pass = (
+            key[..., : self.rotary_dim],
+            key[..., self.rotary_dim :],
+        )
+
+        query_rot, key_rot = self.rotary_embedding(query_rot, key_rot)
+
+        query = tf.concat((query_rot, query_pass), axis=-1)
+        key = tf.concat((key_rot, key_pass), axis=-1)
 
         attention_output = self._compute_attention(
             query=query,

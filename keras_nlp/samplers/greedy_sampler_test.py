@@ -13,9 +13,11 @@
 # limitations under the License.
 """Tests for Greedy sampler."""
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
+from keras_nlp.backend import ops
 from keras_nlp.samplers.greedy_sampler import GreedySampler
 from keras_nlp.tests.test_case import TestCase
 
@@ -32,32 +34,33 @@ class GreedySamplerTest(TestCase):
 
         def next(prompt, cache, index):
             # Dummy hidden states.
-            hidden_states = tf.ones([self.batch_size, 5])
+            hidden_states = ops.ones([self.batch_size, 5])
             # Return a distribution favoring the next char in cache.
-            logits = tf.one_hot(cache[:, index], self.vocab_size) * 1e9
+            logits = ops.one_hot(cache[:, index], self.vocab_size) * 1e9
             return logits, hidden_states, cache
 
         self.next = next
         self.sampler = GreedySampler(temperature=1.0)
 
     def join_as_string(self, x):
-        return ["".join([self.int_lookup[i] for i in s]) for s in x.numpy()]
+        x = ops.convert_to_numpy(x)
+        return ["".join([self.int_lookup[i] for i in s]) for s in x]
 
     def test_stateless_call(self):
         def next(prompt, cache, index):
             # Dummy hidden states.
-            hidden_states = tf.ones([self.batch_size, 5])
+            hidden_states = ops.ones([self.batch_size, 5])
             # Return a distribution favoring the first token in the vocab.
             logits = (
-                tf.one_hot(
-                    tf.zeros(self.batch_size, dtype="int32"),
+                ops.one_hot(
+                    ops.zeros(self.batch_size, dtype="int32"),
                     self.vocab_size,
                 )
                 * 1e9
             )
             return logits, hidden_states, cache
 
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
             next=next,
             prompt=prompt,
@@ -67,8 +70,8 @@ class GreedySamplerTest(TestCase):
 
     def test_stateful_call(self):
         cache_chars = list("sequentially")
-        cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        cache = ops.array([[self.char_lookup[c] for c in cache_chars]])
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
             next=self.next,
             prompt=prompt,
@@ -78,8 +81,8 @@ class GreedySamplerTest(TestCase):
 
     def test_early_stopping(self):
         cache_chars = list("sequentially")
-        cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        cache = ops.array([[self.char_lookup[c] for c in cache_chars]])
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
             next=self.next,
             prompt=prompt,
@@ -91,27 +94,28 @@ class GreedySamplerTest(TestCase):
     def test_is_greedy(self):
         def next(prompt, cache, index):
             # Dummy hidden states.
-            hidden_states = tf.ones([self.batch_size, 5])
+            hidden_states = ops.ones([self.batch_size, 5])
             # Return a distribution where each id is progressively less likely.
-            logits = tf.range(self.vocab_size, 0, -1, dtype="float32")
-            logits = tf.repeat(logits[tf.newaxis, :], self.batch_size, axis=0)
+            logits = ops.arange(self.vocab_size, 0, -1, dtype="float32")
+            logits = ops.repeat(logits[None, :], self.batch_size, axis=0)
             return logits, hidden_states, cache
 
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
         output = self.sampler(
             next=next,
             prompt=prompt,
         )
-        output_ids = set(output[0].numpy())
+        output_ids = set(ops.convert_to_numpy(output[0]))
         self.assertContainsSubset(output_ids, [0])
 
     @parameterized.named_parameters(
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
+    @pytest.mark.tf_only
     def test_compilation(self, jit_compile):
         cache_chars = list("sequentially")
-        cache = tf.constant([[self.char_lookup[c] for c in cache_chars]])
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        cache = ops.array([[self.char_lookup[c] for c in cache_chars]])
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
 
         @tf.function(jit_compile=jit_compile)
         def generate(prompt, cache):

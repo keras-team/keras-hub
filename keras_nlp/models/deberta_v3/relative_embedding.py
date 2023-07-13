@@ -15,7 +15,8 @@
 """Relative embedding layer."""
 
 import tensorflow as tf
-from tensorflow import keras
+
+from keras_nlp.backend import keras
 
 
 class RelativeEmbedding(keras.layers.Layer):
@@ -87,3 +88,6 @@ class RelativeEmbedding(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0],) + (self.bucket_size * 2, self.hidden_dim)

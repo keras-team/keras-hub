@@ -14,9 +14,8 @@
 
 """Creates an Embedding Layer and adds Positional Embeddings"""
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.utils.keras_utils import clone_initializer
 
@@ -48,7 +47,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
 
     Examples:
     ```python
-    inputs = tf.ones(shape=(1, 50), dtype="int64")
+    inputs = np.ones(shape=(1, 50), dtype="int32")
     embedding_layer = keras_nlp.layers.TokenAndPositionEmbedding(
         vocabulary_size=10_000,
         sequence_length=50,
@@ -104,6 +103,12 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         )
         self.supports_masking = self.token_embedding.supports_masking
 
+    def build(self, input_shape):
+        input_shape = tuple(input_shape)
+        self.token_embedding.build(input_shape)
+        self.position_embedding.build(input_shape + (self.embedding_dim,))
+        self.built = True
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -130,3 +135,6 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
 
     def compute_mask(self, inputs, mask=None):
         return self.token_embedding.compute_mask(inputs, mask=mask)
+
+    def compute_output_shape(self, input_shape):
+        return tuple(input_shape) + (self.embedding_dim,)

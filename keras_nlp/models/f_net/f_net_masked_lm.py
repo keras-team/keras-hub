@@ -13,9 +13,8 @@
 # limitations under the License.
 import copy
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.masked_lm_head import MaskedLMHead
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_backbone import f_net_kernel_initializer
@@ -24,7 +23,6 @@ from keras_nlp.models.f_net.f_net_masked_lm_preprocessor import (
 )
 from keras_nlp.models.f_net.f_net_presets import backbone_presets
 from keras_nlp.models.task import Task
-from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -81,13 +79,9 @@ class FNetMaskedLM(Task):
     ```python
     # Create a preprocessed dataset where 0 is the mask token.
     features = {
-        "token_ids": tf.constant(
-            [[1, 2, 0, 4, 0, 6, 7, 8]] * 2, shape=(2, 8)
-        ),
-        "segment_ids": tf.constant(
-            [[0, 0, 0, 1, 1, 1, 0, 0]] * 2, shape=(2, 8)
-        ),
-        "mask_positions": tf.constant([[2, 4]] * 2, shape=(2, 2))
+        "token_ids": np.array([[1, 2, 0, 4, 0, 6, 7, 8]] * 2),
+        "segment_ids": np.array([[0, 0, 0, 1, 1, 1, 0, 0]] * 2),
+        "mask_positions": np.array([[2, 4]] * 2)
     }
     # Labels are the original masked values.
     labels = [[3, 5]] * 2
@@ -135,7 +129,7 @@ class FNetMaskedLM(Task):
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(5e-5),
             weighted_metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=is_xla_compatible(self),
+            jit_compile=True,
         )
 
     @classproperty
