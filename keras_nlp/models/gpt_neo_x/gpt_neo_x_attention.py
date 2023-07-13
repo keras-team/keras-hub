@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import math
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
@@ -125,7 +124,10 @@ class GPTNeoXAttention(keras.layers.Layer):
     ):
         attention_scores = ops.einsum("aecd,abcd->acbe", key, query)
 
-        norm_factor = math.sqrt(self.attn_head_size)
+        norm_factor = ops.sqrt(
+            ops.convert_to_tensor(self.attn_head_size, self.compute_dtype)
+        )
+
         attention_scores /= norm_factor
 
         attention_scores = self._masked_softmax(
