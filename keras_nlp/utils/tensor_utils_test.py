@@ -51,3 +51,8 @@ class TensorToStringListTest(TestCase):
         input_data = tf.constant("▀▁▂▃")
         detokenize_output = tensor_to_string_list(input_data)
         self.assertEqual(detokenize_output, "▀▁▂▃")
+
+    def test_detokenize_to_strings_decode_utf8(self):
+        input_data = tf.constant([b"hello\xf2\xf1\x91\xe5"])
+        detokenize_output = tensor_to_string_list(input_data)
+        self.assertEqual(detokenize_output, ["hello"])
