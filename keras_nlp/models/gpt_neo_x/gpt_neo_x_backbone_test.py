@@ -24,7 +24,6 @@ from keras_nlp.models import GPTNeoXBackbone
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class GPTNeoXTest(TestCase):
     def setUp(self):
         self.backbone = GPTNeoXBackbone(

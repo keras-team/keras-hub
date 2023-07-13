@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for GPT-2 preprocessing layers."""
+"""Tests for GPT-NeoX preprocessing layers."""
+
 import os
 
 import pytest

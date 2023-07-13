@@ -11,9 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import tensorflow as tf
-
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.layers.modeling.transformer_layer_utils import (
     compute_causal_mask,
 )
@@ -85,9 +84,11 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.supports_masking = True
         self.rotary_percentage = rotary_percentage
+        self._decoder_sequence_shape = None
 
-    def build(self, input_shape):
-        hidden_dim = input_shape[-1]
+    def build(self, decoder_sequence_shape):
+        self._decoder_sequence_shape = decoder_sequence_shape
+        hidden_dim = decoder_sequence_shape[-1]
         # Self attention layers.
         self._self_attention_layer = GPTNeoXAttention(
             num_heads=self.num_heads,
@@ -103,6 +104,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
         self._self_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
+        self._self_attention_layernorm.build(decoder_sequence_shape)
 
         self._self_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,
@@ -115,19 +117,27 @@ class GPTNeoXDecoder(keras.layers.Layer):
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
+        self._feedforward_intermediate_dense.build(decoder_sequence_shape)
+
         self._feedforward_output_dense = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
 
+        intermediate_shape = list(decoder_sequence_shape)
+        intermediate_shape[-1] = self.intermediate_dim
+        self._feedforward_output_dense.build(tuple(intermediate_shape))
+
         self._feedforward_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
+        self._feedforward_layernorm.build(decoder_sequence_shape)
 
         self._feedforward_dropout = keras.layers.Dropout(
             rate=self.dropout,
         )
+        self.built = True
 
     def call(
         self,
@@ -135,18 +145,9 @@ class GPTNeoXDecoder(keras.layers.Layer):
         decoder_padding_mask=None,
         decoder_attention_mask=None,
     ):
-        # Compute self attention mask.
-        batch_size = tf.shape(decoder_sequence)[0]
-        input_length = output_length = tf.shape(decoder_sequence)[1]
-
-        self_attention_mask = compute_causal_mask(
-            batch_size, input_length, output_length, 0
-        )
-        decoder_mask = merge_padding_and_attention_mask(
+        self_attention_mask = self._compute_self_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )
-        if decoder_mask is not None:
-            self_attention_mask = tf.minimum(decoder_mask, self_attention_mask)
 
         residual = decoder_sequence
 
@@ -167,6 +168,28 @@ class GPTNeoXDecoder(keras.layers.Layer):
 
         return feedforward_output + attention_output + residual
 
+    def _compute_self_attention_mask(
+        self,
+        decoder_sequence,
+        decoder_padding_mask,
+        decoder_attention_mask,
+    ):
+        decoder_mask = merge_padding_and_attention_mask(
+            decoder_sequence, decoder_padding_mask, decoder_attention_mask
+        )
+        batch_size = ops.shape(decoder_sequence)[0]
+        input_length = output_length = ops.shape(decoder_sequence)[1]
+
+        causal_mask = compute_causal_mask(
+            batch_size, input_length, output_length, 0
+        )
+
+        return (
+            ops.minimum(decoder_mask, causal_mask)
+            if decoder_mask is not None
+            else causal_mask
+        )
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -185,6 +208,10 @@ class GPTNeoXDecoder(keras.layers.Layer):
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
                 ),
+                "decoder_sequence_shape": self._decoder_sequence_shape,
             }
         )
         return config
+
+    def compute_output_shape(self, decoder_sequence_shape):
+        return decoder_sequence_shape

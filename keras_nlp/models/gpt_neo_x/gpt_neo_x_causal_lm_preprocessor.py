@@ -30,7 +30,7 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 @keras_nlp_export("keras_nlp.models.GPTNeoXCausalLMPreprocessor")
 class GPTNeoXCausalLMPreprocessor(GPTNeoXPreprocessor):
-    """GPTNeoX Causal LM preprocessor.
+    """GPT-NeoX Causal LM preprocessor.
 
     This preprocessing layer is meant for use with
     `keras_nlp.models.GPTNeoXCausalLM`. By default, it will take in batches of

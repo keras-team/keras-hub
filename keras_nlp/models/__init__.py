@@ -79,6 +79,9 @@ from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
 from keras_nlp.models.gpt2.gpt2_preprocessor import GPT2Preprocessor
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_backbone import GPTNeoXBackbone
+from keras_nlp.models.gpt_neo_x.gpt_neo_x_preprocessor import (
+    GPTNeoXPreprocessor,
+)
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
 from keras_nlp.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.models.opt.opt_causal_lm import OPTCausalLM
