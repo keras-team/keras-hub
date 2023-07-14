@@ -214,8 +214,8 @@ class DisentangledSelfAttention(keras.layers.Layer):
         # If `rel_pos[i][j]` is out of bounds, assign value `mid`.
         abs_pos = ops.where(
             condition=(rel_pos < mid) & (rel_pos > -mid),
-            x=mid - 1,
-            y=ops.abs(rel_pos),
+            x1=mid - 1,
+            x2=ops.abs(rel_pos),
         )
 
         def _get_log_pos(abs_pos, mid):
@@ -231,8 +231,8 @@ class DisentangledSelfAttention(keras.layers.Layer):
 
         bucket_pos = ops.where(
             condition=abs_pos <= mid,
-            x=rel_pos,
-            y=log_pos * sign,
+            x1=rel_pos,
+            x2=log_pos * sign,
         )
         bucket_pos = ops.cast(bucket_pos, dtype="int64")
 
