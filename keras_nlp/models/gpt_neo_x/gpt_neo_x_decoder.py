@@ -144,9 +144,15 @@ class GPTNeoXDecoder(keras.layers.Layer):
         decoder_sequence,
         decoder_padding_mask=None,
         decoder_attention_mask=None,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
     ):
         self_attention_mask = self._compute_self_attention_mask(
-            decoder_sequence, decoder_padding_mask, decoder_attention_mask
+            decoder_sequence=decoder_sequence,
+            decoder_padding_mask=decoder_padding_mask,
+            decoder_attention_mask=decoder_attention_mask,
+            self_attention_cache=self_attention_cache,
+            self_attention_cache_update_index=self_attention_cache_update_index,
         )
 
         residual = decoder_sequence
@@ -154,9 +160,11 @@ class GPTNeoXDecoder(keras.layers.Layer):
         x = self._self_attention_layernorm(decoder_sequence)
 
         # Self attention block.
-        x = self._self_attention_layer(
+        x, self_attention_cache = self._self_attention_layer(
             hidden_states=x,
             attention_mask=self_attention_mask,
+            cache=self_attention_cache,
+            cache_update_index=self_attention_cache_update_index,
         )
         x = self._self_attention_dropout(x)
         attention_output = x
@@ -165,25 +173,40 @@ class GPTNeoXDecoder(keras.layers.Layer):
         x = self._feedforward_intermediate_dense(x)
         x = self._feedforward_output_dense(x)
         feedforward_output = x
+        x = feedforward_output + attention_output + residual
 
-        return feedforward_output + attention_output + residual
+        if self_attention_cache is not None:
+            return (x, self_attention_cache)
+        else:
+            return x
 
     def _compute_self_attention_mask(
         self,
         decoder_sequence,
         decoder_padding_mask,
         decoder_attention_mask,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
     ):
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )
         batch_size = ops.shape(decoder_sequence)[0]
         input_length = output_length = ops.shape(decoder_sequence)[1]
+        # We need to handle a rectangular causal mask when doing cached
+        # decoding. For generative inference, `decoder_sequence` will
+        # generally be length 1, and `cache` will be the full generation length.
+        if self_attention_cache is not None:
+            input_length = ops.shape(self_attention_cache)[2]
 
         causal_mask = compute_causal_mask(
-            batch_size, input_length, output_length, 0
+            batch_size,
+            input_length,
+            output_length,
+            0
+            if self_attention_cache_update_index is None
+            else self_attention_cache_update_index,
         )
-
         return (
             ops.minimum(decoder_mask, causal_mask)
             if decoder_mask is not None
