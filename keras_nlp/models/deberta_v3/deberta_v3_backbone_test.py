@@ -24,7 +24,6 @@ from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class DebertaV3BackboneTest(TestCase):
     def setUp(self):
         self.backbone = DebertaV3Backbone(
@@ -64,7 +63,7 @@ class DebertaV3BackboneTest(TestCase):
             }
             output = self.backbone(input_data)
             self.assertAllEqual(
-                tf.shape(output),
+                ops.shape(output),
                 [2, seq_length, self.backbone.hidden_dim],
             )
 
@@ -95,7 +94,6 @@ class DebertaV3BackboneTest(TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-@pytest.mark.tf_only
 class DebertaV3BackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
