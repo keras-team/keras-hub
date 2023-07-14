@@ -80,7 +80,9 @@ class TopKSampler(Sampler):
         )
         # Sample the next token from the probability distribution.
         sample_indices = random.categorical(
-            ops.log(top_k_pred),
+            # tf does not support half precision multinomial sampling, so make
+            # sure we have full precision here.
+            ops.cast(ops.log(top_k_pred), "float32"),
             1,
             seed=self.seed_generator,
             dtype="int32",
