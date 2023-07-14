@@ -24,7 +24,6 @@ from keras_nlp.models.gpt_neo_x.gpt_neo_x_causal_lm_preprocessor import (
 from keras_nlp.utils.python_utils import classproperty
 
 
-# TODO: Extend and factor this out into keras_nlp.layers.
 class ReverseEmbedding(keras.layers.Layer):
     def __init__(self, embedding, **kwargs):
         super().__init__(**kwargs)
