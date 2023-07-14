@@ -145,7 +145,7 @@ class GPTNeoXAttention(keras.layers.Layer):
     def call(
         self,
         hidden_states,
-        attention_mask,
+        attention_mask=None,
         cache=None,
         cache_update_index=None,
         training=None,
@@ -190,7 +190,8 @@ class GPTNeoXAttention(keras.layers.Layer):
             key[..., self.rotary_dim :],
         )
 
-        query_rot, key_rot = self.rotary_embedding(query_rot, key_rot)
+        query_rot = self.rotary_embedding(query_rot)
+        key_rot = self.rotary_embedding(key_rot)
 
         query = ops.concatenate((query_rot, query_pass), axis=-1)
         key = ops.concatenate((key_rot, key_pass), axis=-1)
