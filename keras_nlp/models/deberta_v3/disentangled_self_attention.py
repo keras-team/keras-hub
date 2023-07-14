@@ -149,7 +149,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
         if attention_mask is not None:
             mask_expansion_axis = -3
             for _ in range(
-                attention_scores.shape.rank - attention_mask.shape.rank
+                len(attention_scores.shape) - len(attention_mask.shape)
             ):
                 attention_mask = ops.expand_dims(
                     attention_mask, axis=mask_expansion_axis
