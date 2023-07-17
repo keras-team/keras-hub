@@ -65,5 +65,5 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         x2 = tf.nest.map_structure(convert_to_numpy, x2)
         super().assertEqual(x1, x2, msg=msg)
 
-    def assertIsInstance(self, obj, cls, msg):
+    def assertIsInstance(self, obj, cls, msg=None):
         super().assertIsInstance(convert_to_numpy(obj), cls, msg=msg)
