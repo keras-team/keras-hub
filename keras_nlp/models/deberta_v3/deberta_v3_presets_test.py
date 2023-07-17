@@ -29,7 +29,6 @@ from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-@pytest.mark.tf_only
 class DebertaV3PresetSmokeTest(TestCase):
     """
     A smoke test for DeBERTa presets we run continuously.
@@ -134,7 +133,6 @@ class DebertaV3PresetSmokeTest(TestCase):
 
 
 @pytest.mark.extra_large
-@pytest.mark.tf_only
 class DebertaV3PresetFullTest(TestCase):
     """
     Test the full enumeration of our preset.

@@ -14,9 +14,8 @@
 
 """Relative embedding layer."""
 
-import tensorflow as tf
-
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 
 
 class RelativeEmbedding(keras.layers.Layer):
@@ -64,14 +63,16 @@ class RelativeEmbedding(keras.layers.Layer):
         )
 
     def call(self, inputs):
-        batch_size = tf.shape(inputs)[0]
+        batch_size = ops.shape(inputs)[0]
 
-        rel_embeddings = self.rel_embeddings[tf.newaxis, :]
+        rel_embeddings = ops.expand_dims(
+            ops.convert_to_tensor(self.rel_embeddings), axis=0
+        )
         rel_embeddings = self.layer_norm(rel_embeddings)
 
         # Repeat `rel_embeddings` along axis = 0 `batch_size` times. The
         # resultant shape is `(batch_size, bucket_size * 2, hidden_dim)`.
-        rel_embeddings = tf.repeat(rel_embeddings, repeats=batch_size, axis=0)
+        rel_embeddings = ops.repeat(rel_embeddings, repeats=batch_size, axis=0)
 
         return rel_embeddings
 

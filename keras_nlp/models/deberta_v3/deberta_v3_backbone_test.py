@@ -15,16 +15,15 @@
 
 import os
 
+import numpy as np
 import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
-from keras_nlp.backend import ops
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class DebertaV3BackboneTest(TestCase):
     def setUp(self):
         self.backbone = DebertaV3Backbone(
@@ -38,8 +37,8 @@ class DebertaV3BackboneTest(TestCase):
         )
         self.batch_size = 8
         self.input_batch = {
-            "token_ids": ops.ones((2, 5), dtype="int32"),
-            "padding_mask": ops.ones((2, 5), dtype="int32"),
+            "token_ids": np.ones((2, 5), dtype="int32"),
+            "padding_mask": np.ones((2, 5), dtype="int32"),
         }
 
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
@@ -59,12 +58,12 @@ class DebertaV3BackboneTest(TestCase):
     def test_variable_sequence_length_call_deberta(self):
         for seq_length in (2, 3, 4):
             input_data = {
-                "token_ids": ops.ones((2, seq_length), dtype="int32"),
-                "padding_mask": ops.ones((2, seq_length), dtype="int32"),
+                "token_ids": np.ones((2, seq_length), dtype="int32"),
+                "padding_mask": np.ones((2, seq_length), dtype="int32"),
             }
             output = self.backbone(input_data)
             self.assertAllEqual(
-                tf.shape(output),
+                ops.shape(output),
                 [2, seq_length, self.backbone.hidden_dim],
             )
 
@@ -95,7 +94,6 @@ class DebertaV3BackboneTest(TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-@pytest.mark.tf_only
 class DebertaV3BackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
@@ -109,8 +107,8 @@ class DebertaV3BackboneTPUTest(TestCase):
                 bucket_size=2,
             )
         self.input_batch = {
-            "token_ids": ops.ones((2, 5), dtype="int32"),
-            "padding_mask": ops.ones((2, 5), dtype="int32"),
+            "token_ids": np.ones((2, 5), dtype="int32"),
+            "padding_mask": np.ones((2, 5), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch

@@ -30,7 +30,6 @@ from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class DebertaV3MaskedLMTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()

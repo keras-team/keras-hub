@@ -16,6 +16,7 @@
 import io
 import os
 
+import numpy as np
 import pytest
 import sentencepiece
 import tensorflow as tf
@@ -33,7 +34,6 @@ from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class DebertaV3ClassifierTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
@@ -83,7 +83,7 @@ class DebertaV3ClassifierTest(TestCase):
         ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, ops.ones((2,)))
+            (self.raw_batch, np.ones((2,)))
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 

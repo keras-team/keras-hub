@@ -16,9 +16,8 @@
 
 import math
 
-import tensorflow as tf
-
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
@@ -150,9 +149,9 @@ class DisentangledSelfAttention(keras.layers.Layer):
         if attention_mask is not None:
             mask_expansion_axis = -3
             for _ in range(
-                attention_scores.shape.rank - attention_mask.shape.rank
+                len(attention_scores.shape) - len(attention_mask.shape)
             ):
-                attention_mask = tf.expand_dims(
+                attention_mask = ops.expand_dims(
                     attention_mask, axis=mask_expansion_axis
                 )
         return self._softmax(attention_scores, attention_mask)
@@ -173,12 +172,12 @@ class DisentangledSelfAttention(keras.layers.Layer):
         which is used to compute the attended outputs.
         """
 
-        attention_scores = tf.einsum(
+        attention_scores = ops.einsum(
             "aecd,abcd->acbe",
             key,
             query,
         )
-        attention_scores = tf.multiply(attention_scores, self.scale_factor)
+        attention_scores = ops.multiply(attention_scores, self.scale_factor)
 
         rel_embeddings = self._position_dropout_layer(
             rel_embeddings,
@@ -200,53 +199,55 @@ class DisentangledSelfAttention(keras.layers.Layer):
         attention_scores = self._attn_dropout_layer(
             attention_scores, training=training
         )
-        attention_output = tf.einsum("acbe,aecd->abcd", attention_scores, value)
+        attention_output = ops.einsum(
+            "acbe,aecd->abcd", attention_scores, value
+        )
 
         return attention_output, attention_scores
 
     def _make_log_bucket_position(self, rel_pos):
         dtype = rel_pos.dtype
-        sign = tf.math.sign(rel_pos)
+        sign = ops.sign(rel_pos)
         mid = self.bucket_size // 2
-        mid = tf.cast(mid, dtype=dtype)
+        mid = ops.cast(mid, dtype=dtype)
 
         # If `rel_pos[i][j]` is out of bounds, assign value `mid`.
-        abs_pos = tf.where(
+        abs_pos = ops.where(
             condition=(rel_pos < mid) & (rel_pos > -mid),
-            x=mid - 1,
-            y=tf.math.abs(rel_pos),
+            x1=mid - 1,
+            x2=ops.abs(rel_pos),
         )
 
         def _get_log_pos(abs_pos, mid):
-            numerator = tf.math.log(abs_pos / mid)
-            numerator = numerator * tf.cast(mid - 1, dtype=numerator.dtype)
-            denominator = tf.math.log((self.max_position_embeddings - 1) / mid)
-            val = tf.math.ceil(numerator / denominator)
-            val = tf.cast(val, dtype=mid.dtype)
+            numerator = ops.log(abs_pos / mid)
+            numerator = numerator * ops.cast(mid - 1, dtype=numerator.dtype)
+            denominator = ops.log((self.max_position_embeddings - 1) / mid)
+            val = ops.ceil(numerator / denominator)
+            val = ops.cast(val, dtype=mid.dtype)
             val = val + mid
             return val
 
         log_pos = _get_log_pos(abs_pos, mid)
 
-        bucket_pos = tf.where(
+        bucket_pos = ops.where(
             condition=abs_pos <= mid,
-            x=rel_pos,
-            y=log_pos * sign,
+            x1=rel_pos,
+            x2=log_pos * sign,
         )
-        bucket_pos = tf.cast(bucket_pos, dtype="int64")
+        bucket_pos = ops.cast(bucket_pos, dtype="int64")
 
         return bucket_pos
 
     def _get_rel_pos(self, num_positions):
-        ids = tf.range(num_positions, dtype="int64")
-        query_ids = ids[:, tf.newaxis]
-        key_ids = ids[tf.newaxis, :]
-        key_ids = tf.repeat(key_ids, repeats=num_positions, axis=0)
+        ids = ops.arange(num_positions, dtype="int64")
+        query_ids = ops.expand_dims(ids, axis=-1)
+        key_ids = ops.expand_dims(ids, axis=0)
+        key_ids = ops.repeat(key_ids, repeats=num_positions, axis=0)
 
         rel_pos = query_ids - key_ids
         rel_pos = self._make_log_bucket_position(rel_pos)
 
-        rel_pos = rel_pos[tf.newaxis, tf.newaxis, :, :]
+        rel_pos = ops.expand_dims(ops.expand_dims(rel_pos, axis=0), axis=0)
         return rel_pos
 
     def _compute_disentangled_attention(
@@ -257,8 +258,8 @@ class DisentangledSelfAttention(keras.layers.Layer):
     ):
         """Computes relative attention scores (p2c and c2p)."""
 
-        batch_size = tf.shape(query)[0]
-        num_positions = tf.shape(query)[1]
+        batch_size = ops.shape(query)[0]
+        num_positions = ops.shape(query)[1]
 
         rel_pos = self._get_rel_pos(num_positions)
 
@@ -269,15 +270,13 @@ class DisentangledSelfAttention(keras.layers.Layer):
         pos_key = self._key_dense(rel_embeddings)
 
         # c2p
-        c2p_attn_scores = tf.einsum(
+        c2p_attn_scores = ops.einsum(
             "aecd,abcd->acbe",
             pos_key,
             query,
         )
-        c2p_pos = tf.clip_by_value(
-            rel_pos + rel_attn_span, 0, rel_attn_span * 2 - 1
-        )
-        c2p_pos = tf.broadcast_to(
+        c2p_pos = ops.clip(rel_pos + rel_attn_span, 0, rel_attn_span * 2 - 1)
+        c2p_pos = ops.broadcast_to(
             c2p_pos,
             shape=(
                 batch_size,
@@ -287,24 +286,22 @@ class DisentangledSelfAttention(keras.layers.Layer):
             ),
         )
 
-        c2p_attn_scores = tf.gather(
+        c2p_attn_scores = ops.take_along_axis(
             c2p_attn_scores,
             indices=c2p_pos,
-            batch_dims=3,
+            axis=3,
         )
-        c2p_attn_scores = tf.multiply(c2p_attn_scores, self.scale_factor)
+        c2p_attn_scores = ops.multiply(c2p_attn_scores, self.scale_factor)
         score += c2p_attn_scores
 
         # p2c
-        p2c_attn_scores = tf.einsum(
+        p2c_attn_scores = ops.einsum(
             "aecd,abcd->acbe",
             pos_query,
             key,
         )
-        p2c_pos = tf.clip_by_value(
-            -rel_pos + rel_attn_span, 0, rel_attn_span * 2 - 1
-        )
-        p2c_pos = tf.broadcast_to(
+        p2c_pos = ops.clip(-rel_pos + rel_attn_span, 0, rel_attn_span * 2 - 1)
+        p2c_pos = ops.broadcast_to(
             p2c_pos,
             shape=(
                 batch_size,
@@ -313,13 +310,13 @@ class DisentangledSelfAttention(keras.layers.Layer):
                 num_positions,
             ),
         )
-        p2c_attn_scores = tf.gather(
+        p2c_attn_scores = ops.take_along_axis(
             p2c_attn_scores,
             indices=p2c_pos,
-            batch_dims=3,
+            axis=3,
         )
-        p2c_attn_scores = tf.transpose(p2c_attn_scores, [0, 1, 3, 2])
-        p2c_attn_scores = tf.multiply(p2c_attn_scores, self.scale_factor)
+        p2c_attn_scores = ops.transpose(p2c_attn_scores, [0, 1, 3, 2])
+        p2c_attn_scores = ops.multiply(p2c_attn_scores, self.scale_factor)
         score += p2c_attn_scores
 
         return score
@@ -348,11 +345,11 @@ class DisentangledSelfAttention(keras.layers.Layer):
         )
 
         # Reshape `attention_output` to `(batch_size, sequence_length, hidden_dim)`.
-        attention_output = tf.reshape(
+        attention_output = ops.reshape(
             attention_output,
             [
-                tf.shape(attention_output)[0],
-                tf.shape(attention_output)[1],
+                ops.shape(attention_output)[0],
+                ops.shape(attention_output)[1],
                 self.hidden_dim,
             ],
         )
