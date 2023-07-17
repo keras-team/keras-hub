@@ -15,11 +15,11 @@
 
 import os
 
+import numpy as np
 import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
-from keras_nlp.backend import ops
 from keras_nlp.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.tests.test_case import TestCase
 
@@ -37,9 +37,9 @@ class WhisperBackboneTest(TestCase):
             max_decoder_sequence_length=6,
         )
         self.input_batch = {
-            "encoder_features": ops.ones((2, 5, 80), dtype="float32"),
-            "decoder_token_ids": ops.ones((2, 5), dtype="int32"),
-            "decoder_padding_mask": ops.ones((2, 5), dtype="int32"),
+            "encoder_features": np.ones((2, 5, 80), dtype="float32"),
+            "decoder_token_ids": np.ones((2, 5), dtype="int32"),
+            "decoder_padding_mask": np.ones((2, 5), dtype="int32"),
         }
 
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
@@ -62,13 +62,11 @@ class WhisperBackboneTest(TestCase):
     def test_variable_sequence_length_call_whisper(self):
         for seq_length in (2, 3, 4):
             input_data = {
-                "encoder_features": ops.ones(
+                "encoder_features": np.ones(
                     (2, seq_length, 80), dtype="float32"
                 ),
-                "decoder_token_ids": ops.ones((2, seq_length), dtype="int32"),
-                "decoder_padding_mask": ops.ones(
-                    (2, seq_length), dtype="int32"
-                ),
+                "decoder_token_ids": np.ones((2, seq_length), dtype="int32"),
+                "decoder_padding_mask": np.ones((2, seq_length), dtype="int32"),
             }
             self.backbone(input_data)
 
@@ -138,7 +136,7 @@ class WhisperBackboneTPUTest(TestCase):
             )
 
         self.input_batch = {
-            "encoder_features": ops.ones(
+            "encoder_features": np.ones(
                 (
                     8,
                     self.backbone.max_encoder_sequence_length,
@@ -146,10 +144,10 @@ class WhisperBackboneTPUTest(TestCase):
                 ),
                 dtype="int32",
             ),
-            "decoder_token_ids": ops.ones(
+            "decoder_token_ids": np.ones(
                 (8, self.backbone.max_decoder_sequence_length), dtype="int32"
             ),
-            "decoder_padding_mask": ops.ones(
+            "decoder_padding_mask": np.ones(
                 (8, self.backbone.max_decoder_sequence_length), dtype="int32"
             ),
         }

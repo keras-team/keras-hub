@@ -15,6 +15,7 @@
 """Tests for XLM-RoBERTa backbone models."""
 import os
 
+import numpy as np
 import pytest
 import tensorflow as tf
 
@@ -35,8 +36,8 @@ class XLMRobertaBackboneTest(TestCase):
             max_sequence_length=5,
         )
         self.input_batch = {
-            "token_ids": ops.ones((2, 5), dtype="int32"),
-            "padding_mask": ops.ones((2, 5), dtype="int32"),
+            "token_ids": np.ones((2, 5), dtype="int32"),
+            "padding_mask": np.ones((2, 5), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch
@@ -56,8 +57,8 @@ class XLMRobertaBackboneTest(TestCase):
     def test_variable_sequence_length_call_xlm_roberta(self):
         for seq_length in (2, 3, 4):
             input_data = {
-                "token_ids": ops.ones((2, seq_length), dtype="int32"),
-                "padding_mask": ops.ones((2, seq_length), dtype="int32"),
+                "token_ids": np.ones((2, seq_length), dtype="int32"),
+                "padding_mask": np.ones((2, seq_length), dtype="int32"),
             }
             output = self.backbone(input_data)
             self.assertAllEqual(
@@ -104,8 +105,8 @@ class XLMRobertaBackboneTPUTest(TestCase):
                 max_sequence_length=128,
             )
         self.input_batch = {
-            "token_ids": ops.ones((8, 128), dtype="int32"),
-            "padding_mask": ops.ones((8, 128), dtype="int32"),
+            "token_ids": np.ones((8, 128), dtype="int32"),
+            "padding_mask": np.ones((8, 128), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch

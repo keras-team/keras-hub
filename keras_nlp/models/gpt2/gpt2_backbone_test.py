@@ -15,11 +15,11 @@
 
 import os
 
+import numpy as np
 import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
-from keras_nlp.backend import ops
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.tests.test_case import TestCase
 
@@ -35,9 +35,9 @@ class GPT2Test(TestCase):
             max_sequence_length=5,
         )
         self.input_batch = {
-            "token_ids": ops.ones((2, 5), dtype="int32"),
-            "segment_ids": ops.ones((2, 5), dtype="int32"),
-            "padding_mask": ops.ones((2, 5), dtype="int32"),
+            "token_ids": np.ones((2, 5), dtype="int32"),
+            "segment_ids": np.ones((2, 5), dtype="int32"),
+            "padding_mask": np.ones((2, 5), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch
@@ -57,8 +57,8 @@ class GPT2Test(TestCase):
     def test_variable_sequence_length(self):
         for seq_length in (2, 3, 4):
             input_data = {
-                "token_ids": ops.ones((2, seq_length), dtype="int32"),
-                "padding_mask": ops.ones((2, seq_length), dtype="int32"),
+                "token_ids": np.ones((2, seq_length), dtype="int32"),
+                "padding_mask": np.ones((2, seq_length), dtype="int32"),
             }
             self.backbone(input_data)
 
@@ -118,8 +118,8 @@ class GPT2BackboneTPUTest(TestCase):
                 max_sequence_length=5,
             )
         self.input_batch = {
-            "token_ids": ops.ones((2, 5), dtype="int32"),
-            "padding_mask": ops.ones((2, 5), dtype="int32"),
+            "token_ids": np.ones((2, 5), dtype="int32"),
+            "padding_mask": np.ones((2, 5), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch
