@@ -29,7 +29,7 @@ To add/update dependency for GPU tests:
 - Add/update dependency to `requirements.txt`
 - Create a `Dockerfile` with the following contents:
   ```
-  FROM tensorflow/tensorflow:2.11.0-gpu
+  FROM tensorflow/tensorflow:2.12.0-gpu
   RUN apt-get -y update
   RUN apt-get -y install git
   RUN git clone https://github.com/keras-team/keras-nlp.git
@@ -61,6 +61,7 @@ To add/update dependency for GPU tests:
   RUN git clone https://github.com/keras-team/keras-nlp.git
   RUN cd keras-nlp
   RUN pip install -r keras-nlp/requirements.txt
+  RUN pip install torch
   ```
 
 ### Run TPU Testing
