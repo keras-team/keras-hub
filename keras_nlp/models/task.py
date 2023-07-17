@@ -16,8 +16,10 @@
 import os
 
 import keras_core
-import rich
 import tensorflow as tf
+from rich import console as rich_console
+from rich import markup
+from rich import table as rich_table
 
 from keras_nlp.backend import keras
 from keras_nlp.utils.keras_utils import print_msg
@@ -266,30 +268,30 @@ class Task(PipelineModel):
         if self.preprocessor:
             # Create a rich console for printing. Capture for non-interactive logging.
             if print_fn:
-                console = rich.console.Console(
+                console = rich_console.Console(
                     highlight=False, force_terminal=False, color_system=None
                 )
                 console.begin_capture()
             else:
-                console = rich.console.Console(highlight=False)
+                console = rich_console.Console(highlight=False)
 
-            column_1 = rich.table.Column(
+            column_1 = rich_table.Column(
                 "Tokenizer (type)",
                 justify="left",
                 width=int(0.5 * line_length),
             )
-            column_2 = rich.table.Column(
+            column_2 = rich_table.Column(
                 "Vocab #",
                 justify="right",
                 width=int(0.5 * line_length),
             )
-            table = rich.table.Table(
+            table = rich_table.Table(
                 column_1, column_2, width=line_length, show_lines=True
             )
             tokenizer = self.preprocessor.tokenizer
-            tokenizer_name = rich.markup.escape(tokenizer.name)
+            tokenizer_name = markup.escape(tokenizer.name)
             tokenizer_class = highlight_symbol(
-                rich.markup.escape(tokenizer.__class__.__name__)
+                markup.escape(tokenizer.__class__.__name__)
             )
             table.add_row(
                 f"{tokenizer_name} ({tokenizer_class})",
@@ -297,7 +299,7 @@ class Task(PipelineModel):
             )
 
             # Print the to the console.
-            preprocessor_name = rich.markup.escape(self.preprocessor.name)
+            preprocessor_name = markup.escape(self.preprocessor.name)
             console.print(bold_text(f'Preprocessor: "{preprocessor_name}"'))
             console.print(table)
 
