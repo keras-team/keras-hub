@@ -15,11 +15,11 @@
 
 import os
 
+import numpy as np
 import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
-from keras_nlp.backend import ops
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.tests.test_case import TestCase
 
@@ -36,8 +36,8 @@ class FNetBackboneTest(TestCase):
             num_segments=4,
         )
         self.input_batch = {
-            "token_ids": ops.ones((2, 5), dtype="int32"),
-            "segment_ids": ops.ones((2, 5), dtype="int32"),
+            "token_ids": np.ones((2, 5), dtype="int32"),
+            "segment_ids": np.ones((2, 5), dtype="int32"),
         }
 
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
@@ -53,8 +53,8 @@ class FNetBackboneTest(TestCase):
     def test_variable_sequence_length_call_f_net(self):
         for seq_length in (2, 3, 4):
             input_data = {
-                "token_ids": ops.ones((2, seq_length), dtype="int32"),
-                "segment_ids": ops.ones((2, seq_length), dtype="int32"),
+                "token_ids": np.ones((2, seq_length), dtype="int32"),
+                "segment_ids": np.ones((2, seq_length), dtype="int32"),
             }
             self.backbone(input_data)
 
@@ -99,8 +99,8 @@ class FNetBackboneTPUTest(TestCase):
                 num_segments=4,
             )
         self.input_batch = {
-            "token_ids": ops.ones((8, 128), dtype="int32"),
-            "segment_ids": ops.ones((8, 128), dtype="int32"),
+            "token_ids": np.ones((8, 128), dtype="int32"),
+            "segment_ids": np.ones((8, 128), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch

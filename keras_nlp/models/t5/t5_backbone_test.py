@@ -15,11 +15,11 @@
 
 import os
 
+import numpy as np
 import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
-from keras_nlp.backend import ops
 from keras_nlp.models.t5.t5_backbone import T5Backbone
 from keras_nlp.tests.test_case import TestCase
 
@@ -37,16 +37,16 @@ class T5Test(TestCase):
         self.batch_size = 2
         seq_length = 3
         self.input_batch = {
-            "encoder_token_ids": ops.ones(
+            "encoder_token_ids": np.ones(
                 (self.batch_size, seq_length), dtype="int32"
             ),
-            "encoder_padding_mask": ops.ones(
+            "encoder_padding_mask": np.ones(
                 (self.batch_size, seq_length), dtype="int32"
             ),
-            "decoder_token_ids": ops.ones(
+            "decoder_token_ids": np.ones(
                 (self.batch_size, seq_length), dtype="int32"
             ),
-            "decoder_padding_mask": ops.ones(
+            "decoder_padding_mask": np.ones(
                 (self.batch_size, seq_length), dtype="int32"
             ),
         }
@@ -70,16 +70,16 @@ class T5Test(TestCase):
     def test_variable_sequence_length_call_t5(self):
         for seq_length in (2, 3, 4):
             input_data = {
-                "encoder_token_ids": ops.ones(
+                "encoder_token_ids": np.ones(
                     (self.batch_size, seq_length), dtype="int32"
                 ),
-                "encoder_padding_mask": ops.ones(
+                "encoder_padding_mask": np.ones(
                     (self.batch_size, seq_length), dtype="int32"
                 ),
-                "decoder_token_ids": ops.ones(
+                "decoder_token_ids": np.ones(
                     (self.batch_size, seq_length), dtype="int32"
                 ),
-                "decoder_padding_mask": ops.ones(
+                "decoder_padding_mask": np.ones(
                     (self.batch_size, seq_length), dtype="int32"
                 ),
             }
@@ -126,8 +126,8 @@ class T5BackboneTPUTest(TestCase):
                 intermediate_dim=4,
             )
         self.input_batch = {
-            "token_ids": ops.ones((8, 4), dtype="int32"),
-            "padding_mask": ops.ones((8, 4), dtype="int32"),
+            "token_ids": np.ones((8, 4), dtype="int32"),
+            "padding_mask": np.ones((8, 4), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch

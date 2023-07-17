@@ -15,6 +15,7 @@
 
 import os
 
+import numpy as np
 import pytest
 import tensorflow as tf
 
@@ -66,7 +67,7 @@ class DistilBertClassifierTest(TestCase):
         ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, ops.ones((2,)))
+            (self.raw_batch, np.ones((2,)))
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
