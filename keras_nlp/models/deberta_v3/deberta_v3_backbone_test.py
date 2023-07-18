@@ -20,6 +20,7 @@ import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.tests.test_case import TestCase
 
