@@ -133,6 +133,8 @@ class GPTNeoXBackbone(Backbone):
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
+        self.rotary_percentage = rotary_percentage
+        self.rotary_max_wavelength = rotary_max_wavelength
         self.max_sequence_length = max_sequence_length
         self.layer_norm_epsilon = layer_norm_epsilon
 
@@ -146,6 +148,8 @@ class GPTNeoXBackbone(Backbone):
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
+                "rotary_percentage": self.rotary_percentage,
+                "rotary_max_wavelength": self.rotary_max_wavelength,
                 "max_sequence_length": self.max_sequence_length,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
             }
