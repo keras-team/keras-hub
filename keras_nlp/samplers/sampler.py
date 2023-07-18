@@ -144,7 +144,9 @@ class Sampler:
         def body(prompt, cache, index):
             # Compute the softmax distribution for the next token.
             logits, _, cache = next(prompt, cache, index)
-            probabilities = keras.activations.softmax(logits / self.temperature)
+            # Always compute softmax in full precision.
+            logits = ops.cast(logits / self.temperature, "float32")
+            probabilities = ops.softmax(logits / self.temperature, axis=-1)
             # Compute the next token.
             next_token = self.get_next_token(probabilities)
             # Don't overwrite anywhere mask is True.
