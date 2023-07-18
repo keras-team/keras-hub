@@ -15,8 +15,9 @@
 
 import os
 
+import numpy as np
+
 from keras_nlp.backend import keras
-from keras_nlp.backend import ops
 from keras_nlp.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
@@ -67,8 +68,8 @@ class TokenAndPositionEmbeddingTest(TestCase):
         outputs = test_layer(inputs)
         model = keras.Model(inputs, outputs)
 
-        input_data = ops.ones((2, sequence_length), dtype="int32")
-        expected_output_data = ops.ones((2, sequence_length, embedding_dim)) * 2
+        input_data = np.ones((2, sequence_length), dtype="int32")
+        expected_output_data = np.ones((2, sequence_length, embedding_dim)) * 2
         output_data = model.predict(input_data)
         self.assertAllClose(output_data, expected_output_data)
 
@@ -79,7 +80,7 @@ class TokenAndPositionEmbeddingTest(TestCase):
             embedding_dim=3,
             mask_zero=True,
         )
-        input_data = ops.array([[1, 0], [1, 0]])
+        input_data = np.array([[1, 0], [1, 0]])
         mask = input_data != 0
         outputs = test_layer(input_data)
         self.assertAllEqual(outputs._keras_mask, mask)
@@ -97,7 +98,7 @@ class TokenAndPositionEmbeddingTest(TestCase):
         outputs = test_layer(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)
 
-        data = ops.zeros(shape=[2, sequence_length])
+        data = np.zeros(shape=[2, sequence_length])
         model(data)
 
         path = os.path.join(self.get_temp_dir(), "model.keras")

@@ -83,7 +83,6 @@ def convert_to_ragged_batch(inputs):
         origianlly rank 1, and `rectangular` is `True` if the inputs rows are
         all of equal lengths.
     """
-    rectangular = True
     # `tf.keras.layers.Layer` does a weird conversion in __call__, where a list
     # of lists of ints will become a list of list of scalar tensors. We could
     # clean this up if we no longer need to care about that case.
@@ -96,11 +95,15 @@ def convert_to_ragged_batch(inputs):
             inputs = tf.ragged.stack(rows).with_row_splits_dtype("int64")
         else:
             inputs = tf.convert_to_tensor(inputs)
+            rectangular = True
+    elif isinstance(inputs, tf.Tensor):
+        rectangular = True
     elif isinstance(inputs, tf.RaggedTensor):
         rectangular = False
     elif hasattr(inputs, "__array__"):
-        inputs = tf.convert_to_tensor(inputs)
-    elif not isinstance(inputs, tf.RaggedTensor):
+        inputs = tf.convert_to_tensor(ops.convert_to_numpy(inputs))
+        rectangular = True
+    else:
         raise ValueError(
             f"Unknown tensor type. Tensor input can be passed as "
             "tensors, numpy arrays, or python lists. Received: "

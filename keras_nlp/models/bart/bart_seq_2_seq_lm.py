@@ -527,8 +527,9 @@ class BartSeq2SeqLM(GenerativeTask):
         if end_token_id is not None:
             # Build a mask of `end_token_id` locations not in the original
             # prompt (not in locations where `decoder_padding_mask` is True).
-            end_locations = (decoder_token_ids == end_token_id) & (
-                ~decoder_padding_mask
+            end_locations = ops.logical_and(
+                ops.equal(decoder_token_ids, end_token_id),
+                ops.logical_not(decoder_padding_mask),
             )
             end_locations = ops.cast(end_locations, "int32")
             # Use cumsum to get ones in all locations after `end_locations`.

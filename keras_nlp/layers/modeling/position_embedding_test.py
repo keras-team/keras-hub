@@ -15,6 +15,8 @@
 
 import os
 
+import numpy as np
+
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.layers.modeling import position_embedding
@@ -139,7 +141,7 @@ class PositionEmbeddingTest(TestCase):
         # have the same batch cardinality as outputs. In practice, this layer
         # should be used inside a model, where it can be projected when added to
         # another tensor.
-        input_data = ops.ones(shape=[1, input_length, feature_size])
+        input_data = np.ones(shape=[1, input_length, feature_size])
         output_data = model.predict(input_data)
 
         self.assertAllEqual([1, input_length, feature_size], output_data.shape)
@@ -156,12 +158,12 @@ class PositionEmbeddingTest(TestCase):
         model = keras.Model(inputs=inputs, outputs=outputs)
 
         batch_size = 2
-        data = ops.zeros(shape=[batch_size, max_sequence_length, feature_size])
+        data = np.zeros(shape=[batch_size, max_sequence_length, feature_size])
         model(data)
         model_output = model.predict(data)
-        expected_output = ops.broadcast_to(
-            ops.reshape(
-                ops.arange(max_sequence_length * feature_size),
+        expected_output = np.broadcast_to(
+            np.reshape(
+                np.arange(max_sequence_length * feature_size),
                 [max_sequence_length, feature_size],
             ),
             [batch_size, max_sequence_length, feature_size],
@@ -212,7 +214,7 @@ class PositionEmbeddingTest(TestCase):
         outputs = test_layer(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)
 
-        data = ops.zeros(shape=[2, max_sequence_length, feature_size])
+        data = np.zeros(shape=[2, max_sequence_length, feature_size])
         model(data)
 
         path = os.path.join(self.get_temp_dir(), "model.keras")
