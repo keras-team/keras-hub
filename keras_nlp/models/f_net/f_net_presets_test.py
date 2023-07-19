@@ -25,7 +25,6 @@ from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
-@pytest.mark.tf_only
 class FNetPresetSmokeTest(TestCase):
     """
     A smoke test for FNet presets we run continuously.

@@ -28,7 +28,6 @@ from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class FNetMaskedLMTest(TestCase):
     def setUp(self):
         # Setup Model.
@@ -86,17 +85,17 @@ class FNetMaskedLMTest(TestCase):
     def test_valid_call_classifier(self):
         self.masked_lm(self.preprocessed_batch)
 
-    def test_classifier_predict(self):
+    def test_predict(self):
         # self.masked_lm.predict(self.raw_batch)
         self.masked_lm.preprocessor = None
         self.masked_lm.predict(self.preprocessed_batch)
 
-    def test_classifier_fit(self):
+    def test_fit(self):
         self.masked_lm.fit(self.raw_dataset)
         self.masked_lm.preprocessor = None
         self.masked_lm.fit(self.preprocessed_dataset)
 
-    def test_classifier_fit_no_xla(self):
+    def test_fit_no_xla(self):
         self.masked_lm.preprocessor = None
         self.masked_lm.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),

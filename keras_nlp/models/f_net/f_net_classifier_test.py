@@ -16,7 +16,6 @@
 import io
 import os
 
-import numpy as np
 import pytest
 import sentencepiece
 import tensorflow as tf
@@ -30,7 +29,6 @@ from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class FNetClassifierTest(TestCase):
     def setUp(self):
         # Setup Model
@@ -83,7 +81,7 @@ class FNetClassifierTest(TestCase):
         ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, np.ones((2,)))
+            (self.raw_batch, ops.ones((2,)))
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
