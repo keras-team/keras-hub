@@ -1,4 +1,4 @@
-keras-core
+keras-core==0.1.0
 # Consider handling GPU here.
 torch>=2.0.1+cpu
 jax[cpu]
