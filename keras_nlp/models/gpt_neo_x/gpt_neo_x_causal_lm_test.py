@@ -41,7 +41,7 @@ class GPTNeoXCausalLMTest(TestCase):
             "port": 5,
             "<|endoftext|>": 6,
         }
-        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b",   "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
         self.preprocessor = GPTNeoXCausalLMPreprocessor(
@@ -51,9 +51,9 @@ class GPTNeoXCausalLMTest(TestCase):
         self.backbone = GPTNeoXBackbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
             num_layers=2,
-            num_heads=2,
-            hidden_dim=4,
-            intermediate_dim=8,
+            num_heads=4,
+            hidden_dim=32,
+            intermediate_dim=32,
             max_sequence_length=self.preprocessor.packer.sequence_length,
         )
         self.causal_lm = GPTNeoXCausalLM(
