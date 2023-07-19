@@ -41,7 +41,7 @@ class GPTNeoXCausalLMTest(TestCase):
             "port": 5,
             "<|endoftext|>": 6,
         }
-        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b",   "a i", "p l", "n e"]
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
         self.preprocessor = GPTNeoXCausalLMPreprocessor(

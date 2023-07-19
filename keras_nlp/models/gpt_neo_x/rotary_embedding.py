@@ -26,7 +26,9 @@ class RotaryEmbedding(keras.layers.Layer):
         cos_emb, sin_emb = self._compute_cos_sin_embedding(
             hidden_states, rotary_dim, seq_dim=1
         )
-        hidden_states_rot_emb = self._apply_rotary_pos_emb(hidden_states, cos_emb, sin_emb)
+        hidden_states_rot_emb = self._apply_rotary_pos_emb(
+            hidden_states, cos_emb, sin_emb
+        )
 
         return hidden_states_rot_emb
 
