@@ -74,7 +74,7 @@ class GPTNeoXAttention(keras.layers.Layer):
             output_shape=(None, self.num_heads, 3 * self.attn_head_size),
             bias_axes="de",
             **self._get_common_kwargs_for_sublayer(use_bias=True),
-            name="query",
+            name="query_key_value",
         )
         self._qkv_dense.build(input_shape)
 
