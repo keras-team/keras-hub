@@ -57,6 +57,15 @@ def _convert_inputs_to_dataset(
 
     inputs = pack_x_y_sample_weight(x, y, sample_weight)
     try:
+
+        def convert(x):
+            if isinstance(x, (tf.Tensor, tf.RaggedTensor)):
+                return x
+            if hasattr(x, "__array__"):
+                return ops.convert_to_numpy(x)
+            return x
+
+        inputs = tf.nest.map_structure(convert, inputs)
         ds = tf.data.Dataset.from_tensor_slices(inputs)
     except ValueError as e:
         # If our inputs are unbatched, re-raise with a more friendly error

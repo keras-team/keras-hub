@@ -31,6 +31,7 @@ from keras_nlp.tests.test_case import TestCase
 
 
 @pytest.mark.large
+@pytest.mark.tf_only  # TODO: jax OOM.
 class XLMRobertaPresetSmokeTest(TestCase):
     """
     A smoke test for XLM-RoBERTa presets we run continuously.

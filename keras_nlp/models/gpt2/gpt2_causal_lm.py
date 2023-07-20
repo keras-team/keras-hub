@@ -329,7 +329,10 @@ class GPT2CausalLM(GenerativeTask):
         if end_token_id is not None:
             # Build a mask of `end_token_id` locations not in the original
             # prompt (not in locations where `padding_mask` is True).
-            end_locations = (token_ids == end_token_id) & (~padding_mask)
+            end_locations = ops.logical_and(
+                ops.equal(token_ids, end_token_id),
+                ops.logical_not(padding_mask),
+            )
             end_locations = ops.cast(end_locations, "int32")
             # Use cumsum to get ones in all locations after end_locations.
             cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")

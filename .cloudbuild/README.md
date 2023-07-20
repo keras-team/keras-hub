@@ -28,20 +28,40 @@ gcloud config set project keras-team-test
 To add/update dependency for GPU tests:
 - Add/update dependency to `requirements.txt`
 - Create a `Dockerfile` with the following contents:
-
   ```
-  FROM tensorflow/tensorflow:2.11.0-gpu
+  FROM tensorflow/tensorflow:2.12.0-gpu
   RUN apt-get -y update
   RUN apt-get -y install git
   RUN git clone https://github.com/keras-team/keras-nlp.git
   RUN cd keras-nlp
   RUN pip install -r keras-nlp/requirements.txt
   ```
-
 - Run the following command from the directory with your `Dockerfile`:
-
   ```
-  gcloud builds submit --region=us-west1 --tag us-west1-docker.pkg.dev/keras-team-test/keras-nlp-test/keras-nlp-image:deps --timeout=30m
+  gcloud builds submit --region=us-west1 --tag us-west1-docker.pkg.dev/keras-team-test/keras-nlp-test/keras-nlp-image-tensorflow:deps --timeout=30m
+  ```
+- Repeat the last two steps for Jax and Torch (replacing "tensorflow" with "jax"
+ or "torch" in the docker image target name). `Dockerfile` for jax:
+  ```
+  FROM nvidia/cuda:11.7.1-base-ubuntu20.04
+  RUN apt-get update
+  RUN apt-get install -y python3 python3-pip
+  RUN apt-get install -y git
+  RUN git clone https://github.com/keras-team/keras-nlp.git
+  RUN cd keras-nlp
+  RUN pip install -r keras-nlp/requirements.txt
+  RUN pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+  ```
+  and for torch:
+  ```
+  FROM nvidia/cuda:11.7.1-base-ubuntu20.04
+  RUN apt-get update
+  RUN apt-get install -y python3 python3-pip
+  RUN apt-get install -y git
+  RUN git clone https://github.com/keras-team/keras-nlp.git
+  RUN cd keras-nlp
+  RUN pip install -r keras-nlp/requirements.txt
+  RUN pip install torch
   ```
 
 ### Run TPU Testing

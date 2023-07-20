@@ -184,12 +184,19 @@ class GenerativeTask(Task):
         """
 
         def normalize(x):
-            x = tf.concat(x, axis=0)
-            x = tf.squeeze(x, 0) if input_is_scalar else x
-            is_string = x.dtype == tf.string
-            # Convert outputs to a friendly pythonic type. For numerical outputs
-            # that is numpy, for string outputs that is `list` and `str`.
-            return tensor_to_list(x) if is_string else x.numpy()
+            if isinstance(x[0], list):
+                outputs = []
+                for batch in x:
+                    for e in batch:
+                        outputs.append(e)
+                return outputs[0] if input_is_scalar else outputs
+            if isinstance(x[0], tf.Tensor) and x[0].dtype == tf.string:
+                outputs = tf.concat(x, axis=0)
+                outputs = tf.squeeze(outputs, 0) if input_is_scalar else outputs
+                return tensor_to_list(outputs)
+            outputs = ops.concatenate(x, axis=0)
+            outputs = ops.squeeze(outputs, 0) if input_is_scalar else outputs
+            return ops.convert_to_numpy(outputs)
 
         if isinstance(outputs[0], dict):
             normalized = {}

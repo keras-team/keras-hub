@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
 import tensorflow as tf
 
+from keras_nlp.backend import ops
 from keras_nlp.layers.preprocessing.masked_lm_mask_generator import (
     MaskedLMMaskGenerator,
 )
@@ -143,7 +143,7 @@ class MaskedLMMaskGeneratorTest(TestCase):
         )
         outputs = masked_lm_masker([unselectable_token_ids])
         # Verify that no token is masked out.
-        self.assertEqual(np.sum(np.array(outputs["mask_weights"])), 0)
+        self.assertEqual(ops.sum(outputs["mask_weights"]), 0)
 
     def test_config(self):
         unselectable_token_ids = [

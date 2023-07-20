@@ -65,6 +65,8 @@ jobs:
     - name: Install dependencies
       run: |
           pip install -r requirements.txt --progress-bar off
+          pip install torch>=2.0.1+cpu --progress-bar off
+          pip install jax[cpu] --progress-bar off
           pip install --no-deps -e "." --progress-bar off
     - name: Test with pytest
       env:

@@ -68,10 +68,9 @@ class GPTNeoXDecoder(keras.layers.Layer):
         rotary_percentage=0.25,
         rotary_max_wavelength=10000,
         max_sequence_length=512,
-        name=None,
         **kwargs,
     ):
-        super().__init__(name=name, **kwargs)
+        super().__init__(**kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.dropout = dropout
@@ -100,6 +99,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
+        self._self_attention_layer.build(decoder_sequence_shape)
 
         self._self_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,

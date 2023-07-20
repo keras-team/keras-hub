@@ -18,7 +18,6 @@ import os
 
 import pytest
 import tensorflow as tf
-from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
@@ -26,9 +25,10 @@ from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
 )
 from keras_nlp.models.whisper.whisper_preprocessor import WhisperPreprocessor
 from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class WhisperPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class WhisperPreprocessorTest(TestCase):
     def setUp(self):
         self.num_mels = 80
         self.num_fft_bins = 400
