@@ -54,7 +54,11 @@ class DebertaV3MaskedLMTest(TestCase):
         proto = bytes_io.getvalue()
         self.preprocessor = DebertaV3MaskedLMPreprocessor(
             DebertaV3Tokenizer(proto=proto),
-            mask_selection_length=2,
+            # Simplify our testing by masking every available token.
+            mask_selection_rate=1.0,
+            mask_token_rate=1.0,
+            random_token_rate=0.0,
+            mask_selection_length=5,
             sequence_length=5,
         )
         self.backbone = DebertaV3Backbone(

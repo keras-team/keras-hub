@@ -35,11 +35,11 @@ class BertMaskedLMTest(TestCase):
         self.vocab += ["the", "quick", "brown", "fox", "."]
         self.preprocessor = BertMaskedLMPreprocessor(
             BertTokenizer(vocabulary=self.vocab),
-            # Simplify out testing by masking every available token.
+            # Simplify our testing by masking every available token.
             mask_selection_rate=1.0,
             mask_token_rate=1.0,
             random_token_rate=0.0,
-            mask_selection_length=2,
+            mask_selection_length=5,
             sequence_length=5,
         )
         self.backbone = BertBackbone(
