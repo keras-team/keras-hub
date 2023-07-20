@@ -39,8 +39,12 @@ class DistilBertMaskedLMTest(TestCase):
         self.vocab += ["the", "quick", "brown", "fox", "."]
         self.preprocessor = DistilBertMaskedLMPreprocessor(
             DistilBertTokenizer(vocabulary=self.vocab),
+            # Simplify our testing by masking every available token.
+            mask_selection_rate=1.0,
+            mask_token_rate=1.0,
+            random_token_rate=0.0,
+            mask_selection_length=5,
             sequence_length=5,
-            mask_selection_length=2,
         )
         self.backbone = DistilBertBackbone(
             vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),

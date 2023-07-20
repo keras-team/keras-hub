@@ -38,7 +38,7 @@ class DistilBertMaskedLMPreprocessorTest(TestCase):
             tokenizer=DistilBertTokenizer(
                 vocabulary=self.vocab,
             ),
-            # Simplify out testing by masking every available token.
+            # Simplify our testing by masking every available token.
             mask_selection_rate=1.0,
             mask_token_rate=1.0,
             random_token_rate=0.0,
