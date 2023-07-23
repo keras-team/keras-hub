@@ -64,9 +64,11 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         )
         pos_emb = pos_emb[:, None, :]
 
+
         if bsz is not None:
-            import tensorflow as tf
-            pos_emb = tf.tile(pos_emb, [1, bsz, 1])
+            # import tensorflow as tf
+            # pos_emb = tf.tile(pos_emb, [1, bsz, 1])
+            pos_emb = ops.zeros([ops.shape(pos_emb)[0], ops.shape(pos_emb)[1]*bsz, ops.shape(pos_emb)[2]])
 
         return pos_emb
 

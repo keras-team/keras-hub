@@ -276,8 +276,9 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
 
         if attn_mask_g is not None:
             attn_mask_g = ops.cast(attn_mask_g > 0, dtype=attn_mask_g.dtype)
-            import tensorflow as tf
-            attn_mask_h = -tf.eye(qlen, dtype=attn_mask_g.dtype)
+            # import tensorflow as tf
+            # attn_mask_h = -tf.eye(qlen, dtype=attn_mask_g.dtype)
+            attn_mask_h = -ops.zeros([qlen, qlen], dtype=attn_mask_g.dtype)
 
             if mlen > 0:
                 attn_mask_h = ops.concatenate(

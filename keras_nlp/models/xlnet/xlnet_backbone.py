@@ -89,13 +89,13 @@ class XLNetBackbone(Backbone):
     Examples:
     ```python
     input_data = {
-        "token_ids": ops.constant(
+        "token_ids": np.array(
             [460, 5272, 1758, 4905, 9, 4, 3], shape=(1, 7),
         ),
-        "segment_ids": tf.constant(
+        "segment_ids": np.array(
             [0, 0, 0, 0, 0, 0, 2], shape=(1, 7),
         ),
-        "padding_mask": tf.constant(
+        "padding_mask": np.array(
             [1, 1, 1, 1, 1, 1, 1], shape=(1, 7)
         ),
     }
