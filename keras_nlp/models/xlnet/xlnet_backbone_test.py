@@ -14,12 +14,17 @@
 """Test for XLNet backbone models."""
 
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 import pytest
 import tensorflow as tf
+import numpy as np
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import ops
+from keras_nlp.backend import keras
+
+import pytest
 from keras_nlp.models.xlnet.xlnet_backbone import XLNetBackbone
 
 
@@ -34,19 +39,12 @@ class XLNetTest(tf.test.TestCase, parameterized.TestCase):
         )
 
         self.input_batch = {
-            "token_ids": tf.ones((2, 7), dtype="int32"),
-            "padding_mask": tf.ones((2, 7), dtype="int32"),
-            "token_type_ids": tf.ones((2, 7), dtype="int32"),
-            "target_mapping": tf.random.uniform(shape=(2, 5, 7)),
-            "perm_mask": tf.random.uniform(
-                minval=0, maxval=2, shape=(2, 7, 7), dtype=tf.int64
-            ),
-            "mems": tf.random.uniform((2, 7, 2, 2), dtype=tf.float64),
+            "token_ids": np.ones((2, 7), dtype="int32"),
+            "padding_mask": np.ones((2, 7), dtype="int32"),
+            "segment_ids": np.ones((2, 7), dtype="int32"),
         }
 
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(
-            self.input_batch
-        ).batch(2)
+        self.input_dataset = tf.data.Dataset.from_tensor_slices(self.input_batch).batch(2)
 
     def test_valid_call_xlnet(self):
         self.backbone(self.input_batch)
@@ -60,17 +58,7 @@ class XLNetTest(tf.test.TestCase, parameterized.TestCase):
             input_data = {
                 "token_ids": tf.ones((2, seq_length), dtype=tf.int32),
                 "padding_mask": tf.ones((2, seq_length), dtype=tf.int32),
-                "token_type_ids": tf.ones((2, seq_length), dtype=tf.int32),
-                "target_mapping": tf.random.uniform(
-                    shape=(2, 1, seq_length), dtype=tf.float32
-                ),
-                "perm_mask": tf.random.uniform(
-                    minval=0,
-                    maxval=2,
-                    shape=(2, seq_length, seq_length),
-                    dtype=tf.int64,
-                ),
-                "mems": tf.random.uniform((2, 7, 2, 2), dtype=tf.float64),
+                "segment_ids": tf.ones((2, seq_length), dtype=tf.int32),
             }
             self.backbone(input_data)
 
@@ -120,14 +108,7 @@ class XLNetTPUTest(tf.test.TestCase, parameterized.TestCase):
         self.input_batch = {
             "token_ids": tf.ones((2, 7), dtype="int32"),
             "padding_mask": tf.ones((2, 7), dtype="int32"),
-            "token_type_ids": tf.ones((2, 7), dtype="int32"),
-            "target_mapping": tf.random.uniform(
-                minval=0, maxval=2, shape=(2, 5, 7), dtype=tf.int64
-            ),
-            "perm_mask": tf.random.uniform(
-                minval=0, maxval=2, shape=(2, 7, 7), dtype=tf.int64
-            ),
-            "mems": tf.random.uniform((2, 7, 64, 2), dtype=tf.float64),
+            "segment_ids": tf.ones((2, 7), dtype="int32"),
         }
 
         self.input_dataset = tf.data.Dataset.from_tensor_slices(

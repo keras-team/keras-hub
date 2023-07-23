@@ -13,8 +13,6 @@
 # limitations under the License.
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
 import copy
 import h5py
 import numpy as np
@@ -42,7 +40,7 @@ with open(SAVE_PATH, "wb") as p:
 
 tokenizer = XLNetTokenizer.from_pretrained(PRESET)
 string = "An input text string."
-tokens = tokenizer(string, return_tensors="tf")
+tokens = tokenizer(string, return_tensors="tf", return_attention_mask=True)
 # tokens["target_mapping"] = tf.random.uniform(
 #     minval=0, maxval=2, shape=(1, 5, 7), dtype=tf.int32
 # )

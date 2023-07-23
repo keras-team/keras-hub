@@ -12,12 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 """XLNet Content and Query Embedding implementation based on `keras.layers.Layer`."""
 
-import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import ops
+from keras_nlp.backend import keras
 
 class ContentAndQueryEmbedding(keras.layers.Layer):
     """
@@ -59,27 +58,28 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         self._built = None
 
     def positional_embedding(self, pos_seq, inv_freq, bsz=None):
-        sinusoid_inp = tf.einsum("i,d->id", pos_seq, inv_freq)
-        pos_emb = tf.concat(
-            [tf.sin(sinusoid_inp), tf.cos(sinusoid_inp)], axis=-1
+        sinusoid_inp = ops.einsum("i,d->id", pos_seq, inv_freq)
+        pos_emb = ops.concatenate(
+            [ops.sin(sinusoid_inp), ops.cos(sinusoid_inp)], axis=-1
         )
         pos_emb = pos_emb[:, None, :]
 
         if bsz is not None:
+            import tensorflow as tf
             pos_emb = tf.tile(pos_emb, [1, bsz, 1])
 
         return pos_emb
 
     def relative_positional_encoding(self, qlen, klen, bsz=None, clamp_len=-1):
         """create relative positional encoding."""
-        freq_seq = tf.range(0, self.hidden_dim, 2.0)
+        freq_seq = ops.arange(0, self.hidden_dim, 2.0)
         inv_freq = 1 / (10000 ** (freq_seq / self.hidden_dim))
 
         beg, end = klen, -qlen
 
-        fwd_pos_seq = tf.range(beg, end, -1.0)
+        fwd_pos_seq = ops.arange(beg, end, -1.0)
         if clamp_len > 0:
-            fwd_pos_seq = tf.clip_by_value(fwd_pos_seq, -clamp_len, clamp_len)
+            fwd_pos_seq = ops.clip(fwd_pos_seq, x_min=-clamp_len, x_max=clamp_len)
         pos_emb = self.positional_embedding(fwd_pos_seq, inv_freq, bsz)
 
         return pos_emb
@@ -105,7 +105,7 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
 
         mlen = 0 if mlen is None else mlen
 
-        bsz, qlen = tf.shape(token_id_input)[0], tf.shape(token_id_input)[1]
+        bsz, qlen = ops.shape(token_id_input)[0], ops.shape(token_id_input)[1]
         klen = mlen + qlen
 
         # Word embeddings and prepare h & g hidden states
@@ -115,9 +115,9 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         # Positional encoding
         pos_emb = self.relative_positional_encoding(qlen, klen, bsz=bsz)
         pos_emb = self.dropout_layer(pos_emb)
-        pos_emb = tf.reshape(
+        pos_emb = ops.reshape(
             pos_emb,
-            [tf.shape(pos_emb)[1], tf.shape(pos_emb)[0], tf.shape(pos_emb)[2]],
+            [ops.shape(pos_emb)[1], ops.shape(pos_emb)[0], ops.shape(pos_emb)[2]],
         )
 
         return word_emb, pos_emb

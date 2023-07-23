@@ -14,8 +14,8 @@
 """XLNet backbone model."""
 
 
-import tensorflow as tf
-from tensorflow import keras
+from keras_nlp.backend import ops
+from keras_nlp.backend import keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.backbone import Backbone
@@ -29,9 +29,9 @@ def cache_mem(curr_out, prev_mem):
     if prev_mem is None:
         new_mem = curr_out
     else:
-        new_mem = tf.concat([prev_mem, curr_out], 1)
+        new_mem = ops.concatenate([prev_mem, curr_out], 1)
 
-    return tf.stop_gradient(new_mem)
+    return ops.stop_gradient(new_mem)
 
 
 @keras_nlp_export("keras_nlp.models.XLNetBackbone")
@@ -89,18 +89,15 @@ class XLNetBackbone(Backbone):
     Examples:
     ```python
     input_data = {
-        "token_ids": tf.constant(
+        "token_ids": ops.constant(
             [460, 5272, 1758, 4905, 9, 4, 3], shape=(1, 7),
         ),
-        "token_type_ids": tf.constant(
+        "segment_ids": tf.constant(
             [0, 0, 0, 0, 0, 0, 2], shape=(1, 7),
         ),
         "padding_mask": tf.constant(
             [1, 1, 1, 1, 1, 1, 1], shape=(1, 7)
         ),
-        "target_mapping": tf.random.uniform(minval=0, maxval=2, shape=(1, 5, 7), dtype=tf.int64),
-        "perm_mask": tf.random.uniform(minval=0, maxval=2, shape=(1, 7, 7), dtype=tf.int64),
-        "mems": tf.random.uniform((12, 7, 1, 768), dtype=tf.float64)
     }
 
     # Randomly initialized XLNet encoder with a custom config
@@ -152,12 +149,10 @@ class XLNetBackbone(Backbone):
         preprocessing_outputs = XLNetEncoderBlockPreprocessingLayer(hidden_dim=hidden_dim,
                                                                     kernel_initializer_range=kernel_initializer_range,
                                                                     name="encoder_block_preprocess")(
+            token_id_input=token_id_input,
             word_emb=word_emb,
-            pos_emb=pos_emb,
             padding_mask=padding_mask,
             segment_ids=segment_ids,
-            bsz=tf.shape(token_id_input)[0],
-            qlen=tf.shape(token_id_input)[1],
         )
 
         output_h, output_g, _, seg_mat, attn_mask_h, attn_mask_g = preprocessing_outputs

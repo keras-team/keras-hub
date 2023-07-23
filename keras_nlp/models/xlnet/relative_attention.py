@@ -17,8 +17,8 @@
 import math
 import string
 
-import tensorflow as tf
-from tensorflow import keras
+from keras_nlp.backend import ops
+from keras_nlp.backend import keras
 
 from keras_nlp.api_export import keras_nlp_export
 
@@ -61,15 +61,15 @@ def _get_output_shape(output_rank, known_last_dims):
 def _rel_shift(x, klen=-1):
     """Performs relative shift to form the relative attention score."""
 
-    x = tf.transpose(x, perm=[2, 3, 0, 1])
-    x_size = tf.shape(x)
+    x = ops.transpose(x, [2, 3, 0, 1])
+    x_size = ops.shape(x)
 
-    x = tf.reshape(x, [x_size[1], x_size[0], x_size[2], x_size[3]])
-    x = tf.slice(x, [1, 0, 0, 0], [-1, -1, -1, -1])
-    x = tf.reshape(x, [x_size[0], x_size[1] - 1, x_size[2], x_size[3]])
-    x = tf.slice(x, [0, 0, 0, 0], [-1, klen, -1, -1])
+    x = ops.reshape(x, [x_size[1], x_size[0], x_size[2], x_size[3]])
+    x = ops.slice(x, [1, 0, 0, 0], [-1, -1, -1, -1])
+    x = ops.reshape(x, [x_size[0], x_size[1] - 1, x_size[2], x_size[3]])
+    x = ops.slice(x, [0, 0, 0, 0], [-1, klen, -1, -1])
 
-    x = tf.transpose(x, perm=[2, 3, 0, 1])
+    x = ops.transpose(x, [2, 3, 0, 1])
 
     return x
 
@@ -125,33 +125,32 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
         self._use_bias = False
         super()._build_from_signature(query=query, value=value, key=key)
 
-        with tf.init_scope():
-            free_dims = self._query_shape.rank - 1
-            _, _, output_rank = _build_proj_equation(
-                free_dims, bound_dims=2, output_dims=1
-            )
-            self._output_dense = keras.layers.EinsumDense(
-                "ibnd,hnd->ibh",
-                output_shape=_get_output_shape(
-                    output_rank - 1, [self._query_shape[-1]]
-                ),
-                bias_axes=None,
-                name="attention_output",
-                **self._get_common_kwargs_for_sublayer(),
-            )
+        free_dims = self._query_shape.rank - 1
+        _, _, output_rank = _build_proj_equation(
+            free_dims, bound_dims=2, output_dims=1
+        )
+        self._output_dense = keras.layers.EinsumDense(
+            "ibnd,hnd->ibh",
+            output_shape=_get_output_shape(
+                output_rank - 1, [self._query_shape[-1]]
+            ),
+            bias_axes=None,
+            name="attention_output",
+            **self._get_common_kwargs_for_sublayer(),
+        )
 
-            einsum_equation, _, output_rank = _build_proj_equation(
-                self._key_shape.rank - 1, bound_dims=1, output_dims=2
-            )
-            self._encoding_dense = keras.layers.EinsumDense(
-                einsum_equation,
-                output_shape=_get_output_shape(
-                    output_rank - 1, [self._num_heads, self._key_dim]
-                ),
-                bias_axes=None,
-                name="encoding",
-                **self._get_common_kwargs_for_sublayer(),
-            )
+        einsum_equation, _, output_rank = _build_proj_equation(
+            self._key_shape.rank - 1, bound_dims=1, output_dims=2
+        )
+        self._encoding_dense = keras.layers.EinsumDense(
+            einsum_equation,
+            output_shape=_get_output_shape(
+                output_rank - 1, [self._num_heads, self._key_dim]
+            ),
+            bias_axes=None,
+            name="encoding",
+            **self._get_common_kwargs_for_sublayer(),
+        )
 
     def _get_common_kwargs_for_sublayer(self):
         common_kwargs = dict(
@@ -211,31 +210,31 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
             attention_output: Multi-headed output of attention computation of shape
                 `[B, S, num_heads, key_dim]`.
         """
-        content_attention = tf.einsum(
+        content_attention = ops.einsum(
             self._dot_product_equation, key, query + content_attention_bias
         )
-        positional_attention = tf.einsum(
+        positional_attention = ops.einsum(
             self._dot_product_equation,
             position,
             query + positional_attention_bias,
         )
         positional_attention = _rel_shift(
-            positional_attention, klen=tf.shape(content_attention)[3]
+            positional_attention, klen=ops.shape(content_attention)[3]
         )
 
         if segment_matrix is not None:
-            segment_attention = tf.einsum(
+            segment_attention = ops.einsum(
                 "bind,snd->bnis",
                 query + segment_attention_bias,
                 segment_encoding,
             )
-            target_shape = tf.shape(positional_attention)
-            segment_attention = tf.where(
-                tf.broadcast_to(
-                    tf.expand_dims(segment_matrix, 1), target_shape
+            target_shape = ops.shape(positional_attention)
+            segment_attention = ops.where(
+                ops.broadcast_to(
+                    ops.expand_dims(segment_matrix, 1), target_shape
                 ),
-                tf.broadcast_to(segment_attention[:, :, :, 1:], target_shape),
-                tf.broadcast_to(segment_attention[:, :, :, :1], target_shape),
+                ops.broadcast_to(segment_attention[:, :, :, 1:], target_shape),
+                ops.broadcast_to(segment_attention[:, :, :, :1], target_shape),
             )
             attention_sum = (
                 content_attention + positional_attention + segment_attention
@@ -243,7 +242,7 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
         else:
             attention_sum = content_attention + positional_attention
 
-        attention_scores = tf.multiply(
+        attention_scores = ops.multiply(
             attention_sum, 1.0 / math.sqrt(float(self._key_dim))
         )
 
@@ -253,7 +252,7 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
 
         attention_output = self._dropout_layer(attention_scores)
 
-        attention_output = tf.einsum(
+        attention_output = ops.einsum(
             self._combine_equation, attention_output, value
         )
 
@@ -310,8 +309,8 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
         if key is None:
             key = value
         if state is not None and state.shape.ndims > 1:
-            value = tf.concat([state, value], 1)
-            key = tf.concat([state, key], 1)
+            value = ops.concatenate([state, value], 1)
+            key = ops.concatenate([state, key], 1)
 
         # `query` = [B, T, N ,H]
         query = self._query_dense(query)
@@ -450,7 +449,7 @@ class TwoStreamRelativeAttention(MultiHeadRelativeAttention):
                 content_stream, content_stream, content_stream
             )
         if state is not None and state.shape.ndims > 1:
-            content_and_memory_stream = tf.concat([state, content_stream], 1)
+            content_and_memory_stream = ops.concatenate([state, content_stream], 1)
         else:
             content_and_memory_stream = content_stream
 
@@ -486,7 +485,7 @@ class TwoStreamRelativeAttention(MultiHeadRelativeAttention):
         if query_stream is not None:
             query = self._query_dense(query_stream)
             if target_mapping is not None:
-                query = tf.einsum("bmnd,bml->blnd", query, target_mapping)
+                query = ops.einsum("bmnd,bml->blnd", query, target_mapping)
                 query_attention_output = self.compute_attention(
                     query=query,
                     key=key,
@@ -499,7 +498,7 @@ class TwoStreamRelativeAttention(MultiHeadRelativeAttention):
                     segment_attention_bias=segment_attention_bias,
                     attention_mask=query_attention_mask,
                 )
-                query_attention_output = tf.einsum(
+                query_attention_output = ops.einsum(
                     "blnd,bml->bmnd", query_attention_output, target_mapping
                 )
             else:

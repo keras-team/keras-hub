@@ -15,8 +15,8 @@
 
 """XLNet Encoder block implementation based on `keras.layers.Layer`."""
 
-import tensorflow as tf
-from tensorflow import keras
+from keras_nlp.backend import ops
+from keras_nlp.backend import keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.xlnet.relative_attention import TwoStreamRelativeAttention
@@ -110,12 +110,12 @@ class XLNetEncoder(keras.layers.Layer):
         self.layer_norm_ff = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon, name="layer_norm_ff"
         )
-        self.feedforward_intermediate_dense = tf.keras.layers.Dense(
+        self.feedforward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             kernel_initializer=self.kernel_initializer,
             name="feedforward_intermediate_dense",
         )
-        self.feedforward_output_dense = tf.keras.layers.Dense(
+        self.feedforward_output_dense = keras.layers.Dense(
             self.hidden_dim,
             kernel_initializer=self.kernel_initializer,
             name="feedforward_output_dense",
@@ -233,12 +233,10 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
 
     def call(
         self,
+        token_id_input,
         word_emb,
-        pos_emb,
         padding_mask,
         segment_ids,
-        bsz,
-        qlen,
         mlen=None,
         perm_mask=None,
         target_mapping=None,
@@ -247,14 +245,15 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
             self.build((1, 1))
             self._built = True
 
+        bsz, qlen = ops.shape(token_id_input)[0], ops.shape(token_id_input)[1]
         mlen = 0 if mlen is None else mlen
 
         padding_mask = 1 - padding_mask
-        padding_mask = tf.reshape(
-            padding_mask, [tf.shape(padding_mask)[1], tf.shape(padding_mask)[0]]
+        padding_mask = ops.reshape(
+            padding_mask, [ops.shape(padding_mask)[1], ops.shape(padding_mask)[0]]
         )
-        perm_mask = tf.transpose(perm_mask, [1, 2, 0]) if perm_mask is not None else perm_mask
-        target_mapping = tf.transpose(target_mapping, [1, 2, 0]) if target_mapping is not None else target_mapping
+        perm_mask = ops.transpose(perm_mask, [1, 2, 0]) if perm_mask is not None else perm_mask
+        target_mapping = ops.transpose(target_mapping, [1, 2, 0]) if target_mapping is not None else target_mapping
 
         if padding_mask is not None and perm_mask is not None:
             data_mask = padding_mask[None] + perm_mask
@@ -267,27 +266,29 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
 
         if data_mask is not None:
             if mlen > 0:
-                mems_mask = tf.zeros([tf.shape(data_mask)[0], mlen, bsz])
-                data_mask = tf.concat(
-                    [tf.cast(mems_mask, dtype=tf.int32), data_mask], axis=1
+                mems_mask = ops.zeros([ops.shape(data_mask)[0], mlen, bsz])
+                data_mask = ops.concatenate(
+                    [ops.cast(mems_mask, dtype="int32"), data_mask], axis=1
                 )
             attn_mask_g = data_mask[:, :, :, None]
         else:
             attn_mask_g = None
 
         if attn_mask_g is not None:
-            attn_mask_g = tf.cast(attn_mask_g > 0, dtype=attn_mask_g.dtype)
+            attn_mask_g = ops.cast(attn_mask_g > 0, dtype=attn_mask_g.dtype)
+            import tensorflow as tf
             attn_mask_h = -tf.eye(qlen, dtype=attn_mask_g.dtype)
+
             if mlen > 0:
-                attn_mask_h = tf.concat(
+                attn_mask_h = ops.concatenate(
                     [
-                        tf.zeros([qlen, mlen], dtype=attn_mask_h.dtype),
+                        ops.zeros([qlen, mlen], dtype=attn_mask_h.dtype),
                         attn_mask_h,
                     ],
                     axis=-1,
                 )
 
-            attn_mask_h = tf.cast(
+            attn_mask_h = ops.cast(
                 (attn_mask_g + attn_mask_h[:, :, None, None]) > 0,
                 dtype=attn_mask_h.dtype,
             )
@@ -297,30 +298,30 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
         # Prepare h & g hidden states
         output_h = word_emb
         if target_mapping is not None:
-            word_emb_q = tf.tile(
-                self.mask_emb, [tf.shape(target_mapping)[0], bsz, 1]
+            word_emb_q = ops.tile(
+                self.mask_emb, [ops.shape(target_mapping)[0], bsz, 1]
             )
             output_g = self.dropout_layer(word_emb_q)
         else:
             output_g = None
 
         segment_ids = (
-            tf.transpose(segment_ids, perm=(1, 0))
+            ops.transpose(segment_ids, [1, 0])
             if segment_ids is not None
             else None
         )
         # Segment embedding
         if segment_ids is not None:
             if mlen > 0:
-                mem_pad = tf.zeros([mlen, bsz], dtype=segment_ids.dtype)
-                cat_ids = tf.concat([mem_pad, segment_ids], 0)
+                mem_pad = ops.zeros([mlen, bsz], dtype=segment_ids.dtype)
+                cat_ids = ops.concatenate([mem_pad, segment_ids], 0)
             else:
                 cat_ids = segment_ids
 
             # `1` indicates not in the same segment [qlen x klen x bsz]
-            seg_mat = tf.cast(
-                tf.logical_not(
-                    tf.equal(segment_ids[:, None], cat_ids[None, :])
+            seg_mat = ops.cast(
+                ops.logical_not(
+                    ops.equal(segment_ids[:, None], cat_ids[None, :])
                 ),
                 dtype=segment_ids.dtype,
             )
@@ -329,12 +330,12 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
 
         # to make sure inputs suitable for TwoStreamRelativeAttention
         output_g = (
-            tf.reshape(
+            ops.reshape(
                 output_g,
                 [
-                    tf.shape(output_g)[1],
-                    tf.shape(output_g)[0],
-                    tf.shape(output_g)[2],
+                    ops.shape(output_g)[1],
+                    ops.shape(output_g)[0],
+                    ops.shape(output_g)[2],
                 ],
             )
             if output_g is not None
@@ -342,39 +343,39 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
         )
         attn_mask_h = (
             1.0
-            - tf.cast(
-                tf.transpose(tf.squeeze(attn_mask_h, -1), perm=[2, 0, 1]),
-                tf.float32,
+            - ops.cast(
+                ops.transpose(ops.squeeze(attn_mask_h, -1), [2, 0, 1]),
+                "float32",
             )
             if attn_mask_h is not None
             else None
         )
         attn_mask_g = (
             1.0
-            - tf.cast(
-                tf.transpose(tf.squeeze(attn_mask_g, -1), perm=[2, 0, 1]),
-                tf.float32,
+            - ops.cast(
+                ops.transpose(ops.squeeze(attn_mask_g, -1), [2, 0, 1]),
+                "float32",
             )
             if attn_mask_g is not None
             else None
         )
 
         seg_mat = (
-            tf.cast(tf.transpose(seg_mat, perm=[2, 0, 1]), dtype=tf.bool)
+            ops.cast(ops.transpose(seg_mat, [2, 0, 1]), dtype="bool")
             if seg_mat is not None
             else None
         )
         target_mapping = (
-            tf.cast(
-                tf.reshape(
+            ops.cast(
+                ops.reshape(
                     target_mapping,
                     [
-                        tf.shape(target_mapping)[2],
-                        tf.shape(target_mapping)[0],
-                        tf.shape(target_mapping)[1],
+                        ops.shape(target_mapping)[2],
+                        ops.shape(target_mapping)[0],
+                        ops.shape(target_mapping)[1],
                     ],
                 ),
-                tf.float32,
+                "float32",
             )
             if target_mapping is not None
             else None
