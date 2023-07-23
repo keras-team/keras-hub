@@ -12,19 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import copy
+import os
+
 import h5py
 import numpy as np
 import requests
 import tensorflow as tf
 from transformers import TFXLNetModel
 from transformers import XLNetTokenizer
+
 from keras_nlp.models import XLNetBackbone
 
 check_mems = False
 
-PRESET = "xlnet-base-cased"
+PRESET = "xlnet-large-cased"
 CKPT = f"https://huggingface.co/{PRESET}"
 SAVE_PATH = "./tf_weights.h5"
 
@@ -288,7 +290,9 @@ if check_mems:
         print(
             f"Outputs matching or not for Mem {i} : ",
             np.allclose(
-                hf_preds["mems"][i].numpy().reshape(-1, hf_model.config.d_model),
+                hf_preds["mems"][i]
+                .numpy()
+                .reshape(-1, hf_model.config.d_model),
                 knlp_preds["new_mems"][i]
                 .numpy()
                 .reshape(-1, hf_model.config.d_model),

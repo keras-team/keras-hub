@@ -11,8 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """Test for XLNet backbone models."""
 
+
+import os
 
 import numpy as np
 import pytest
@@ -22,6 +25,7 @@ from keras_nlp.backend import keras
 from keras_nlp.models.xlnet.xlnet_backbone import XLNetBackbone
 from keras_nlp.tests.test_case import TestCase
 
+
 class XLNetTest(TestCase):
     def setUp(self):
         self.backbone = XLNetBackbone(
@@ -30,7 +34,7 @@ class XLNetTest(TestCase):
             num_heads=2,
             hidden_dim=2,
             intermediate_dim=4,
-            name="xlnet_backbone"
+            name="xlnet_backbone",
         )
 
         self.input_batch = {

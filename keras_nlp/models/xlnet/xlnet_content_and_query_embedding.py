@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""XLNet Content and Query Embedding implementation based on `keras.layers.Layer`."""
+"""XLNet Content and Query Embedding implementation"""
 
 
-from keras_nlp.backend import ops
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
+
 
 class ContentAndQueryEmbedding(keras.layers.Layer):
     """
@@ -24,9 +25,6 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
 
     This class creates Content and Query Embeddings for XLNet model
     which is later used in XLNet ENcoder.
-
-    In addition to that, it also creates relative_positional_encoding
-    and processes attention masks for both states.
 
     Args:
         vocabulary_size: int, number of tokens in the vocabulary.
@@ -39,16 +37,12 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         **kwargs: other keyword arguments.
 
     References:
-     - [XLNet: Generalized Autoregressive Pretraining for Language Understanding](https://arxiv.org/abs/1906.08237)
+     - [XLNet: Generalized Autoregressive Pretraining for Language Understanding]
+     (https://arxiv.org/abs/1906.08237)
     """
 
     def __init__(
-        self,
-        vocabulary_size,
-        hidden_dim,
-        dropout,
-        name=None,
-        **kwargs
+        self, vocabulary_size, hidden_dim, dropout, name=None, **kwargs
     ):
         super().__init__(name=name, **kwargs)
         self.vocabulary_size = vocabulary_size
@@ -64,11 +58,10 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         )
         pos_emb = pos_emb[:, None, :]
 
-
         if bsz is not None:
-            # import tensorflow as tf
-            # pos_emb = tf.tile(pos_emb, [1, bsz, 1])
-            pos_emb = ops.zeros([ops.shape(pos_emb)[0], ops.shape(pos_emb)[1]*bsz, ops.shape(pos_emb)[2]])
+            import tensorflow as tf
+
+            pos_emb = tf.tile(pos_emb, [1, bsz, 1])
 
         return pos_emb
 
@@ -81,7 +74,9 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
 
         fwd_pos_seq = ops.arange(beg, end, -1.0)
         if clamp_len > 0:
-            fwd_pos_seq = ops.clip(fwd_pos_seq, x_min=-clamp_len, x_max=clamp_len)
+            fwd_pos_seq = ops.clip(
+                fwd_pos_seq, x_min=-clamp_len, x_max=clamp_len
+            )
         pos_emb = self.positional_embedding(fwd_pos_seq, inv_freq, bsz)
 
         return pos_emb
@@ -119,7 +114,11 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         pos_emb = self.dropout_layer(pos_emb)
         pos_emb = ops.reshape(
             pos_emb,
-            [ops.shape(pos_emb)[1], ops.shape(pos_emb)[0], ops.shape(pos_emb)[2]],
+            [
+                ops.shape(pos_emb)[1],
+                ops.shape(pos_emb)[0],
+                ops.shape(pos_emb)[2],
+            ],
         )
 
         return word_emb, pos_emb

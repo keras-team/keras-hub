@@ -11,18 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """XLNet backbone model."""
 
 
-from keras_nlp.backend import ops
-from keras_nlp.backend import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.xlnet.xlnet_content_and_query_embedding import (
     ContentAndQueryEmbedding,
 )
-from keras_nlp.models.xlnet.xlnet_encoder import XLNetEncoder, XLNetEncoderBlockPreprocessingLayer
+from keras_nlp.models.xlnet.xlnet_encoder import XLNetEncoder
+from keras_nlp.models.xlnet.xlnet_encoder import (
+    XLNetEncoderBlockPreprocessingLayer,
+)
 
 
 def cache_mem(curr_out, prev_mem):
@@ -40,9 +43,9 @@ class XLNetBackbone(Backbone):
 
     This class implements a XLNet Transformer.
 
-    The default constructor gives a fully customizable, randomly initialized XLNet
-    encoder with any number of layers, heads, and embedding dimensions. To load
-    preset architectures and weights, use the `from_preset` constructor.
+    The default constructor gives a fully customizable, randomly initialized
+    XLNet encoder with any number of layers, heads, and embedding dimensions.
+    To load preset architectures and weights, use the `from_preset` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
     warranties or conditions of any kind.
@@ -68,26 +71,24 @@ class XLNetBackbone(Backbone):
         **kwargs: other keyword arguments.
 
     Call Args:
-        token_ids: Indices of input sequence tokens in the vocabulary of shape `[batch_size, sequence_length]`.
-        token_type_ids: Segment token indices to indicate first and second portions of the inputs of shape
+        token_ids: Indices of input sequence tokens in the vocabulary of shape
             `[batch_size, sequence_length]`.
-        padding_mask: Mask to avoid performing attention on padding token indices of shape `[batch_size, sequence_length]`.
-        target_mapping: Optional `Tensor` which denotes mask to indicate the output tokens to use of shape
-            `[batch_size, num_predict, sequence_length]`. If `target_mapping[k, i, j] = 1`, the i-th predict in batch k
-            is on the j-th token. Only used during pretraining.
-        perm_mask: Optional `Tensor` which denotes mask to indicate the attention pattern for each input token of shape
-            `[batch_size, sequence_length, sequence_length]`. Only used during pretraining.
-        mems: Optional `Tensor` of shape `[batch_size, sequence_length(of previous hidden state), hidden_dim, num_layers]`
-            to denote the previous hidden states. If passed, this is also attended over as in Transformer-XL.
+        segment_ids: Segment token indices to indicate first and second portions
+            of the inputs of shape `[batch_size, sequence_length]`.
+        padding_mask: Mask to avoid performing attention on padding token indices
+            of shape `[batch_size, sequence_length]`.
 
     Returns:
-        last_hidden_state: last hidden state of query state of shape `[batch_size, num_predict, hidden_dim]` if query state is not None
-            otherwise last hidden state of content of shape `[batch_size, sequence_length, hidden_dim]`.
-        new_mems: new memory units returned by the model. These are the conatenated
-            tensors of previous mems and hidden states of most recent pass.
+        last_hidden_state: last hidden state of query state of shape
+            `[batch_size, num_predict, hidden_dim]` if query state is not None
+            otherwise last hidden state of content of shape
+            `[batch_size, sequence_length, hidden_dim]`.
 
     Examples:
     ```python
+    import numpy as np
+    from keras_nlp.models import XLNetBackbone
+
     input_data = {
         "token_ids": np.array(
             [460, 5272, 1758, 4905, 9, 4, 3], shape=(1, 7),
@@ -146,16 +147,25 @@ class XLNetBackbone(Backbone):
         )(token_id_input=token_id_input)
 
         # Apply EncoderBlock Preprocessing Layer
-        preprocessing_outputs = XLNetEncoderBlockPreprocessingLayer(hidden_dim=hidden_dim,
-                                                                    kernel_initializer_range=kernel_initializer_range,
-                                                                    name="encoder_block_preprocess")(
+        preprocessing_outputs = XLNetEncoderBlockPreprocessingLayer(
+            hidden_dim=hidden_dim,
+            kernel_initializer_range=kernel_initializer_range,
+            name="encoder_block_preprocess",
+        )(
             token_id_input=token_id_input,
             word_emb=word_emb,
             padding_mask=padding_mask,
             segment_ids=segment_ids,
         )
 
-        output_h, output_g, _, seg_mat, attn_mask_h, attn_mask_g = preprocessing_outputs
+        (
+            output_h,
+            output_g,
+            _,
+            seg_mat,
+            attn_mask_h,
+            attn_mask_g,
+        ) = preprocessing_outputs
 
         # Encoders
         head_dim = hidden_dim // num_heads

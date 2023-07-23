@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 """XLNet Encoder block implementation based on `keras.layers.Layer`."""
 
-from keras_nlp.backend import ops
-from keras_nlp.backend import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.xlnet.relative_attention import TwoStreamRelativeAttention
 
 
@@ -61,7 +60,8 @@ class XLNetEncoder(keras.layers.Layer):
         **kwargs: other keyword arguments.
 
     References:
-     - [XLNet: Generalized Autoregressive Pretraining for Language Understanding](https://arxiv.org/abs/1906.08237)
+     - [XLNet: Generalized Autoregressive Pretraining for Language Understanding]
+     (https://arxiv.org/abs/1906.08237)
     """
 
     def __init__(
@@ -160,7 +160,6 @@ class XLNetEncoder(keras.layers.Layer):
         mems=None,
         target_mapping=None,
     ):
-
         # rel_attn
         attn_out_h, attn_out_g = self.relative_attention(
             content_stream=output_h,
@@ -207,12 +206,26 @@ class XLNetEncoder(keras.layers.Layer):
 
         return ff_out_h, None
 
+
 class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
-    def __init__(self,
-                 hidden_dim,
-                 kernel_initializer_range,
-                 **kwargs
-                 ):
+    """
+    Preprocessing Layer for XLNet Encoder Block.
+
+    This layer creates relative_positional_encoding and processes attention
+    masks for both states during the forward pass. It binds all the complex
+    logic required by the XLNet Encoder.
+
+    In addition to that it also processes perm_mask and target_mapping tensors
+    during pretraining and when mems are used.
+
+    Args:
+        hidden_dim: int, the size hidden states.
+        kernel_initializer_range: int, defaults to 0.02. The kernel initializer
+            range for the dense and relative attention layers.
+        **kwargs: other keyword arguments.
+    """
+
+    def __init__(self, hidden_dim, kernel_initializer_range, **kwargs):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
         self.kernel_initializer_range = kernel_initializer_range
@@ -250,10 +263,19 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
 
         padding_mask = 1 - padding_mask
         padding_mask = ops.reshape(
-            padding_mask, [ops.shape(padding_mask)[1], ops.shape(padding_mask)[0]]
+            padding_mask,
+            [ops.shape(padding_mask)[1], ops.shape(padding_mask)[0]],
         )
-        perm_mask = ops.transpose(perm_mask, [1, 2, 0]) if perm_mask is not None else perm_mask
-        target_mapping = ops.transpose(target_mapping, [1, 2, 0]) if target_mapping is not None else target_mapping
+        perm_mask = (
+            ops.transpose(perm_mask, [1, 2, 0])
+            if perm_mask is not None
+            else perm_mask
+        )
+        target_mapping = (
+            ops.transpose(target_mapping, [1, 2, 0])
+            if target_mapping is not None
+            else target_mapping
+        )
 
         if padding_mask is not None and perm_mask is not None:
             data_mask = padding_mask[None] + perm_mask
@@ -276,9 +298,9 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
 
         if attn_mask_g is not None:
             attn_mask_g = ops.cast(attn_mask_g > 0, dtype=attn_mask_g.dtype)
-            # import tensorflow as tf
-            # attn_mask_h = -tf.eye(qlen, dtype=attn_mask_g.dtype)
-            attn_mask_h = -ops.zeros([qlen, qlen], dtype=attn_mask_g.dtype)
+            import tensorflow as tf
+
+            attn_mask_h = -tf.eye(qlen, dtype=attn_mask_g.dtype)
 
             if mlen > 0:
                 attn_mask_h = ops.concatenate(
@@ -299,7 +321,9 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
         # Prepare h & g hidden states
         output_h = word_emb
         if target_mapping is not None:
-            word_emb_q = ops.tile(
+            import tensorflow as tf
+
+            word_emb_q = tf.tile(
                 self.mask_emb, [ops.shape(target_mapping)[0], bsz, 1]
             )
             output_g = self.dropout_layer(word_emb_q)

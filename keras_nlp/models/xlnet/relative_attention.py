@@ -17,16 +17,17 @@
 import math
 import string
 
-from keras_nlp.backend import ops
-from keras_nlp.backend import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 
 _CHR_IDX = string.ascii_lowercase
 
 
 def _build_proj_equation(free_dims, bound_dims, output_dims):
-    """Builds an einsum equation for projections inside multi-head attention."""
+    """
+    Builds an einsum equation for projections inside multi-head attention.
+    """
     input_str = ""
     kernel_str = ""
     output_str = ""
@@ -59,7 +60,9 @@ def _get_output_shape(output_rank, known_last_dims):
 
 
 def _rel_shift(x, klen=-1):
-    """Performs relative shift to form the relative attention score."""
+    """
+    Performs relative shift to form the relative attention score.
+    """
 
     x = ops.transpose(x, [2, 3, 0, 1])
     x_size = ops.shape(x)
@@ -82,14 +85,16 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
     `keras.layers.MultiHeadAttention` layer.
 
     When it calculates attention logits, position encoding is projected to form
-    relative keys. The logits are composed by shifted relative logits and content
-    logits.
+    relative keys. The logits are composed by shifted relative logits and
+    content logits.
 
-    We use the notations `B`, `T`, `S`, `M`, `L`, `dim`, `num_heads` below, where
+    We use the notations `B`, `T`, `S`, `M`, `L`, `dim`, `num_heads` below,
+    where
     `B` is the batch dimension, `T` is the target sequence length,
     `S` in the source sequence length, `M` is the length of the state or memory,
-    `L` is the length of relative positional encoding, `dim` is the dimensionality of
-    the encoder layers and `num_heads` is the number of attention heads.
+    `L` is the length of relative positional encoding, `dim` is the
+    dimensionality of the encoder layers and `num_heads` is the number of
+    attention heads.
 
     Attributes:
         kernel_initializer: The kernel initializer. Defaults to glorot_uniform.
@@ -97,25 +102,26 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
     Args:
         query: Query `Tensor` of shape `[B, T, dim]`.
         value: Value `Tensor` of shape `[B, S, dim]`.
-        content_attention_bias: Bias `Tensor` for content based attention of shape
-            `[num_heads, dim]`.
-        positional_attention_bias: Bias `Tensor` for position based attention of
+        content_attention_bias: Bias `Tensor` for content based attention of
             shape `[num_heads, dim]`.
-        key: Optional key `Tensor` of shape `[B, S, dim]`. If not given, will use
-            `value` for both `key` and `value`, which is the most common case.
-        relative_position_encoding: Relative positional encoding `Tensor` of shape
-            `[B, L, dim]`.
-        segment_matrix: Optional `Tensor` representing segmentation IDs used in
-            XLNet of shape `[B, S, S + M]`.
-        segment_encoding: Optional `Tensor` representing the segmentation encoding
-            as used in XLNet of shape `[2, num_heads, dim]`.
-        segment_attention_bias: Optional trainable bias parameter added to the query
-            had when calculating the segment-based attention score used in XLNet of
-            shape `[num_heads, dim]`.
-        state: Optional `Tensor` of shape `[B, M, dim]`. If passed, this is also attended
-            over as in Transformer XL.
-        attention_mask: A boolean mask of shape `[B, T, S]` that prevents attention
-            to certain positions.
+        positional_attention_bias: Bias `Tensor` for position based attention
+            of shape `[num_heads, dim]`.
+        key: Optional key `Tensor` of shape `[B, S, dim]`. If not given, will
+            use `value` for both `key` and `value`, which is the most common
+            case.
+        relative_position_encoding: Relative positional encoding `Tensor` of
+            shape `[B, L, dim]`.
+        segment_matrix: Optional `Tensor` representing segmentation IDs used
+            in XLNet of shape `[B, S, S + M]`.
+        segment_encoding: Optional `Tensor` representing the segmentation
+            encoding as used in XLNet of shape `[2, num_heads, dim]`.
+        segment_attention_bias: Optional trainable bias parameter added to the
+            query had when calculating the segment-based attention score used
+            in XLNet of shape `[num_heads, dim]`.
+        state: Optional `Tensor` of shape `[B, M, dim]`. If passed, this is
+            also attended over as in Transformer XL.
+        attention_mask: A boolean mask of shape `[B, T, S]` that prevents
+            attention to certain positions.
     """
 
     def __init__(self, kernel_initializer="glorot_uniform", **kwargs):
@@ -179,36 +185,39 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
     ):
         """Computes the attention.
 
-        This function defines the computation inside `call` with projected multihead Q, K, V, R inputs.
+        This function defines the computation inside `call` with projected
+        multihead Q, K, V, R inputs.
 
-        We use the notations `B`, `T`, `S`, `M`, `L`, `num_heads`, `key_dim` below, where
+        We use the notations `B`, `T`, `S`, `M`, `L`, `num_heads`, `key_dim`
+        below, where
         `B` is the batch dimension, `T` is the target sequence length,
-        `S` in the source sequence length, `M` is the length of the state or memory,
-        `L` is the length of relative positional encoding, `num_heads` is number of
-        attention heads and `key_dim` is size of each attention head for query and key.
+        `S` in the source sequence length, `M` is the length of the state,
+        `L` is the length of relative positional encoding, `num_heads` is
+        number of attention heads and `key_dim` is size of each attention head
+        for query and key.
 
         Args:
             query: Projected query `Tensor` of shape `[B, T, num_heads, key_dim]`.
             key: Projected key `Tensor` of shape `[B, S + M, num_heads, key_dim]`.
             value: Projected value `Tensor` of shape `[B, S + M, num_heads, key_dim]`.
             position: Projected position `Tensor` of shape `[B, L, num_heads, key_dim]`.
-            content_attention_bias: Trainable bias parameter added to the query head
-                when calculating the content-based attention score.
-            positional_attention_bias: Trainable bias parameter added to the query
-                head when calculating the position-based attention score.
-            segment_matrix: Optional `Tensor` representing segmentation IDs used in
-                XLNet.
+            content_attention_bias: Trainable bias parameter added to the query
+                head when calculating the content-based attention score.
+            positional_attention_bias: Trainable bias parameter added to the
+                query head when calculating the position-based attention score.
+            segment_matrix: Optional `Tensor` representing segmentation IDs
+                used in XLNet.
             segment_encoding: Optional trainable `Tensor` representing the
                 segmentation encoding as used in XLNet.
-            segment_attention_bias: Optional trainable bias parameter added to the
-                query had when calculating the segment-based attention score used in
-                XLNet.
-            attention_mask: (default None) Optional mask that is added to attention
-                logits. If state is not None, the mask source sequence dimension should
-                extend M.
+            segment_attention_bias: Optional trainable bias parameter added
+                to the query had when calculating the segment-based attention
+                score used in XLNet.
+            attention_mask: (default None) Optional mask that is added to
+                attention logits. If state is not None, the mask source sequence
+                dimension should extend M.
         Returns:
-            attention_output: Multi-headed output of attention computation of shape
-                `[B, S, num_heads, key_dim]`.
+            attention_output: Multi-headed output of attention computation of
+                shape `[B, S, num_heads, key_dim]`.
         """
         content_attention = ops.einsum(
             self._dot_product_equation, key, query + content_attention_bias
@@ -282,25 +291,25 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
         Args:
             query: attention input.
             value: attention input.
-            content_attention_bias: A trainable bias parameter added to the query head
-                when calculating the content-based attention score.
-            positional_attention_bias: A trainable bias parameter added to the query
-                head when calculating the position-based attention score.
+            content_attention_bias: A trainable bias parameter added to the
+                query head when calculating the content-based attention score.
+            positional_attention_bias: A trainable bias parameter added to the
+                query head when calculating the position-based attention score.
             key: attention input.
-            relative_position_encoding: relative positional encoding for key and
-                value.
-            segment_matrix: Optional `Tensor` representing segmentation IDs used in
-                XLNet.
-            segment_encoding: Optional `Tensor` representing the segmentation encoding
-                as used in XLNet.
-            segment_attention_bias: Optional trainable bias parameter added to the
-                query had when calculating the segment-based attention score used in
-                XLNet.
-            state: (default None) optional state. If passed, this is also attended
-                over as in TransformerXL.
-            attention_mask: (default None) Optional mask that is added to attention
-                logits. If state is not None, the mask source sequence dimension should
-                extend M.
+            relative_position_encoding: relative positional encoding for key
+                and value.
+            segment_matrix: Optional `Tensor` representing segmentation IDs
+                used in XLNet.
+            segment_encoding: Optional `Tensor` representing the segmentation
+                encoding as used in XLNet.
+            segment_attention_bias: Optional trainable bias parameter added to
+                the query had when calculating the segment-based attention
+                score used in XLNet.
+            state: (default None) optional state. If passed, this is also
+                attended over as in TransformerXL.
+            attention_mask: (default None) Optional mask that is added to
+                attention logits. If state is not None, the mask source sequence
+                dimension should extend M.
         Returns:
             attention_output: The result of the computation, of shape [B, T, E].
         """
@@ -356,7 +365,8 @@ class TwoStreamRelativeAttention(MultiHeadRelativeAttention):
     This layer shares the same build signature as `keras.layers.MultiHeadAttention`
     but has different input/output projections.
 
-    We use the notations `B`, `T`, `S`, `M`, `L`, `E`, `P`, `dim`, `num_heads` below, where
+    We use the notations `B`, `T`, `S`, `M`, `L`, `E`, `P`, `dim`, `num_heads`
+    below, where
     `B` is the batch dimension, `T` is the target sequence length,
     `S` in the source sequence length, `M` is the length of the state or memory,
     `L` is the length of relative positional encoding, `E` is the last dimension
@@ -371,21 +381,23 @@ class TwoStreamRelativeAttention(MultiHeadRelativeAttention):
             shape `[num_heads, dim]`.
         query_stream: `Tensor` of shape `[B, P, dim]`.
         target_mapping: `Tensor` of shape `[B, P, S]`.
-        relative_position_encoding: Relative positional encoding `Tensor` of shape
-            `[B, L, dim]`.
+        relative_position_encoding: Relative positional encoding `Tensor` of
+            shape `[B, L, dim]`.
         segment_matrix: Optional `Tensor` representing segmentation IDs used in
             XLNet of shape `[B, S, S + M]`.
         segment_encoding: Optional `Tensor` representing the segmentation
             encoding as used in XLNet of shape `[2, num_heads, dim]`.
         segment_attention_bias: Optional trainable bias parameter added to the
-            query had when calculating the segment-based attention score used in
-            XLNet of shape `[num_heads, dim]`.
+            query had when calculating the segment-based attention score used
+            in XLNet of shape `[num_heads, dim]`.
         state: Optional `Tensor` of shape `[B, M, E]`.
             If passed, this is also attended over as in Transformer XL.
         content_attention_mask: a boolean mask of shape `[B, T, S]` that
-            prevents attention to certain positions for content attention computation.
+            prevents attention to certain positions for content attention
+            computation.
         query_attention_mask: a boolean mask of shape `[B, T, S]` that
-            prevents attention to certain position for query attention computation.
+            prevents attention to certain position for query attention
+            computation.
     """
 
     def call(
@@ -414,32 +426,33 @@ class TwoStreamRelativeAttention(MultiHeadRelativeAttention):
             content_stream: The content representation, commonly referred to as h.
                 This serves a similar role to the standard hidden states in
                 Transformer-XL.
-            content_attention_bias: A trainable bias parameter added to the query head
-                when calculating the content-based attention score.
-            positional_attention_bias: A trainable bias parameter added to the query
-                head when calculating the position-based attention score.
-            query_stream: The query representation, commonly referred to as g. This
-                only has access to contextual information and position, but not content.
-                If not provided, then this is MultiHeadRelativeAttention with
-                self-attention.
-            relative_position_encoding: relative positional encoding for key and
-                value.
-            target_mapping: Optional `Tensor` representing the target mapping used in
-                partial prediction.
-            segment_matrix: Optional `Tensor` representing segmentation IDs used in
-                XLNet.
-            segment_encoding: Optional `Tensor` representing the segmentation encoding
-                as used in XLNet.
-            segment_attention_bias: Optional trainable bias parameter added to the
-                query head when calculating the segment-based attention score.
-            state: (default None) optional state. If passed, this is also attended
-                over as in TransformerXL and XLNet.
-            content_attention_mask: (default None) Optional mask that is added to
-                content attention logits. If state is not None, the mask source sequence
-                dimension should extend M.
-            query_attention_mask: (default None) Optional mask that is added to query
-                attention logits. If state is not None, the mask source sequence
-                dimension should extend M.
+            content_attention_bias: A trainable bias parameter added to the query
+                head when calculating the content-based attention score.
+            positional_attention_bias: A trainable bias parameter added to the
+                query head when calculating the position-based attention score.
+            query_stream: The query representation, commonly referred to as g.
+                This only has access to contextual information and position, but
+                not content. If not provided, then this is MultiHeadRelativeAttention
+                with self-attention.
+            relative_position_encoding: relative positional encoding for key
+                and value.
+            target_mapping: Optional `Tensor` representing the target mapping
+                used in partial prediction.
+            segment_matrix: Optional `Tensor` representing segmentation IDs
+                used in XLNet.
+            segment_encoding: Optional `Tensor` representing the segmentation
+                encoding as used in XLNet.
+            segment_attention_bias: Optional trainable bias parameter added
+                to the query head when calculating the segment-based attention
+                score.
+            state: (default None) optional state. If passed, this is also
+                attended over as in TransformerXL and XLNet.
+            content_attention_mask: (default None) Optional mask that is added
+                to content attention logits. If state is not None, the mask
+                source sequence dimension should extend M.
+            query_attention_mask: (default None) Optional mask that is added to
+                query attention logits. If state is not None, the mask source
+                sequence dimension should extend M.
         Returns:
             content_attention_output, query_attention_output: the results of the
                 computation, both of shape `[B, T, E]`.
@@ -449,7 +462,9 @@ class TwoStreamRelativeAttention(MultiHeadRelativeAttention):
                 content_stream, content_stream, content_stream
             )
         if state is not None and state.shape.ndims > 1:
-            content_and_memory_stream = ops.concatenate([state, content_stream], 1)
+            content_and_memory_stream = ops.concatenate(
+                [state, content_stream], 1
+            )
         else:
             content_and_memory_stream = content_stream
 
