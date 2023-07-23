@@ -20,9 +20,10 @@ from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.xlnet.relative_attention import TwoStreamRelativeAttention
-from keras_nlp.models.xlnet.xlnet_content_and_query_embedding import (
-    xlnet_kernel_initializer,
-)
+
+
+def xlnet_kernel_initializer(stddev=0.02):
+    return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
 @keras_nlp_export("keras_nlp.layers.XLNetEncoder")
@@ -159,6 +160,7 @@ class XLNetEncoder(keras.layers.Layer):
         mems=None,
         target_mapping=None,
     ):
+
         # rel_attn
         attn_out_h, attn_out_g = self.relative_attention(
             content_stream=output_h,
@@ -204,3 +206,185 @@ class XLNetEncoder(keras.layers.Layer):
             return ff_out_h, ff_out_g
 
         return ff_out_h, None
+
+class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
+    def __init__(self,
+                 hidden_dim,
+                 kernel_initializer_range,
+                 **kwargs
+                 ):
+        super().__init__(**kwargs)
+        self.hidden_dim = hidden_dim
+        self.kernel_initializer_range = kernel_initializer_range
+        self.kernel_initializer = xlnet_kernel_initializer(
+            self.kernel_initializer_range
+        )
+
+        self._built = None
+
+    def build(self, input_shape):
+        self.mask_emb = self.add_weight(
+            shape=(1, 1, self.hidden_dim),
+            initializer=self.kernel_initializer,
+            trainable=True,
+            name="mask_emb",
+        )
+        super().build(input_shape)
+
+    def call(
+        self,
+        word_emb,
+        pos_emb,
+        padding_mask,
+        segment_ids,
+        bsz,
+        qlen,
+        mlen=None,
+        perm_mask=None,
+        target_mapping=None,
+    ):
+        if not self._built:
+            self.build((1, 1))
+            self._built = True
+
+        mlen = 0 if mlen is None else mlen
+
+        padding_mask = 1 - padding_mask
+        padding_mask = tf.reshape(
+            padding_mask, [tf.shape(padding_mask)[1], tf.shape(padding_mask)[0]]
+        )
+        perm_mask = tf.transpose(perm_mask, [1, 2, 0]) if perm_mask is not None else perm_mask
+        target_mapping = tf.transpose(target_mapping, [1, 2, 0]) if target_mapping is not None else target_mapping
+
+        if padding_mask is not None and perm_mask is not None:
+            data_mask = padding_mask[None] + perm_mask
+        elif padding_mask is not None and perm_mask is None:
+            data_mask = padding_mask[None]
+        elif padding_mask is None and perm_mask is not None:
+            data_mask = perm_mask
+        else:
+            data_mask = None
+
+        if data_mask is not None:
+            if mlen > 0:
+                mems_mask = tf.zeros([tf.shape(data_mask)[0], mlen, bsz])
+                data_mask = tf.concat(
+                    [tf.cast(mems_mask, dtype=tf.int32), data_mask], axis=1
+                )
+            attn_mask_g = data_mask[:, :, :, None]
+        else:
+            attn_mask_g = None
+
+        if attn_mask_g is not None:
+            attn_mask_g = tf.cast(attn_mask_g > 0, dtype=attn_mask_g.dtype)
+            attn_mask_h = -tf.eye(qlen, dtype=attn_mask_g.dtype)
+            if mlen > 0:
+                attn_mask_h = tf.concat(
+                    [
+                        tf.zeros([qlen, mlen], dtype=attn_mask_h.dtype),
+                        attn_mask_h,
+                    ],
+                    axis=-1,
+                )
+
+            attn_mask_h = tf.cast(
+                (attn_mask_g + attn_mask_h[:, :, None, None]) > 0,
+                dtype=attn_mask_h.dtype,
+            )
+        else:
+            attn_mask_h = None
+
+        # Prepare h & g hidden states
+        output_h = word_emb
+        if target_mapping is not None:
+            word_emb_q = tf.tile(
+                self.mask_emb, [tf.shape(target_mapping)[0], bsz, 1]
+            )
+            output_g = self.dropout_layer(word_emb_q)
+        else:
+            output_g = None
+
+        segment_ids = (
+            tf.transpose(segment_ids, perm=(1, 0))
+            if segment_ids is not None
+            else None
+        )
+        # Segment embedding
+        if segment_ids is not None:
+            if mlen > 0:
+                mem_pad = tf.zeros([mlen, bsz], dtype=segment_ids.dtype)
+                cat_ids = tf.concat([mem_pad, segment_ids], 0)
+            else:
+                cat_ids = segment_ids
+
+            # `1` indicates not in the same segment [qlen x klen x bsz]
+            seg_mat = tf.cast(
+                tf.logical_not(
+                    tf.equal(segment_ids[:, None], cat_ids[None, :])
+                ),
+                dtype=segment_ids.dtype,
+            )
+        else:
+            seg_mat = None
+
+        # to make sure inputs suitable for TwoStreamRelativeAttention
+        output_g = (
+            tf.reshape(
+                output_g,
+                [
+                    tf.shape(output_g)[1],
+                    tf.shape(output_g)[0],
+                    tf.shape(output_g)[2],
+                ],
+            )
+            if output_g is not None
+            else None
+        )
+        attn_mask_h = (
+            1.0
+            - tf.cast(
+                tf.transpose(tf.squeeze(attn_mask_h, -1), perm=[2, 0, 1]),
+                tf.float32,
+            )
+            if attn_mask_h is not None
+            else None
+        )
+        attn_mask_g = (
+            1.0
+            - tf.cast(
+                tf.transpose(tf.squeeze(attn_mask_g, -1), perm=[2, 0, 1]),
+                tf.float32,
+            )
+            if attn_mask_g is not None
+            else None
+        )
+
+        seg_mat = (
+            tf.cast(tf.transpose(seg_mat, perm=[2, 0, 1]), dtype=tf.bool)
+            if seg_mat is not None
+            else None
+        )
+        target_mapping = (
+            tf.cast(
+                tf.reshape(
+                    target_mapping,
+                    [
+                        tf.shape(target_mapping)[2],
+                        tf.shape(target_mapping)[0],
+                        tf.shape(target_mapping)[1],
+                    ],
+                ),
+                tf.float32,
+            )
+            if target_mapping is not None
+            else None
+        )
+
+        return (
+            output_h,
+            output_g,
+            target_mapping,
+            seg_mat,
+            attn_mask_h,
+            attn_mask_g,
+        )

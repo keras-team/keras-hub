@@ -12,17 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
+import copy
 import h5py
 import numpy as np
 import requests
 import tensorflow as tf
 from transformers import TFXLNetModel
 from transformers import XLNetTokenizer
-
 from keras_nlp.models import XLNetBackbone
+
+check_mems = False
 
 PRESET = "xlnet-base-cased"
 CKPT = f"https://huggingface.co/{PRESET}"
@@ -31,6 +33,7 @@ SAVE_PATH = "./tf_weights.h5"
 # create HF model
 hf_model = TFXLNetModel.from_pretrained(PRESET)
 
+print(tf.test.is_gpu_available())
 
 with open(SAVE_PATH, "wb") as p:
     response = requests.get(CKPT + "/resolve/main/tf_model.h5")
@@ -40,32 +43,35 @@ with open(SAVE_PATH, "wb") as p:
 tokenizer = XLNetTokenizer.from_pretrained(PRESET)
 string = "An input text string."
 tokens = tokenizer(string, return_tensors="tf")
-tokens["target_mapping"] = tf.random.uniform(
-    minval=0, maxval=2, shape=(1, 5, 7), dtype=tf.int32
-)
-tokens["perm_mask"] = tf.random.uniform(
-    minval=0, maxval=2, shape=(1, 7, 7), dtype=tf.int32
-)
-tokens["mems"] = tf.random.uniform(
-    shape=(hf_model.config.n_layer, 7, 1, hf_model.config.d_model),
-    dtype=tf.float32,
-)
+# tokens["target_mapping"] = tf.random.uniform(
+#     minval=0, maxval=2, shape=(1, 5, 7), dtype=tf.int32
+# )
+# tokens["perm_mask"] = tf.random.uniform(
+#     minval=0, maxval=2, shape=(1, 7, 7), dtype=tf.int32
+# )
+# tokens["mems"] = tf.random.uniform(
+#     shape=(hf_model.config.n_layer, 7, 1, hf_model.config.d_model),
+#     dtype=tf.float32,
+# )
 
 tokenized_hf = copy.deepcopy(tokens)
 tokenized_knlp = copy.deepcopy(tokens)
 
-tokenized_hf["target_mapping"] = tf.cast(
-    tokenized_hf["target_mapping"], tf.float32
-)
-tokenized_hf["perm_mask"] = tf.cast(tokenized_hf["perm_mask"], tf.float32)
+# tokenized_hf["target_mapping"] = tf.cast(
+#     tokenized_hf["target_mapping"], tf.float32
+# )
+# tokenized_hf["perm_mask"] = tf.cast(tokenized_hf["perm_mask"], tf.float32)
 
 tokenized_knlp["token_ids"] = tokenized_knlp["input_ids"]
 tokenized_knlp["padding_mask"] = tokenized_knlp["attention_mask"]
+tokenized_knlp["segment_ids"] = tokenized_knlp["token_type_ids"]
+
 # since we use batch_size at index 0 for keras_nlp we must change the shape
-tokenized_knlp["mems"] = tf.transpose(tokenized_knlp["mems"], perm=[2, 1, 3, 0])
+# tokenized_knlp["mems"] = tf.transpose(tokenized_knlp["mems"], perm=[2, 1, 3, 0])
 
 del tokenized_knlp["attention_mask"]
 del tokenized_knlp["input_ids"]
+del tokenized_knlp["token_type_ids"]
 
 # create keras_nlp model
 knlp_model = XLNetBackbone(
@@ -91,6 +97,7 @@ except:
 
 # mask emb
 mask_emb = np.array(file_hf["transformer"][member]["transformer"]["mask_emb:0"])
+
 # word emb
 word_embed = np.array(
     file_hf["transformer"][member]["transformer"]["word_embedding"]["weight:0"]
@@ -98,7 +105,7 @@ word_embed = np.array(
 knlp_model.get_layer("content_query_embedding").word_embed.embeddings.assign(
     word_embed
 )
-knlp_model.get_layer("content_query_embedding").mask_emb.assign(mask_emb)
+knlp_model.get_layer("encoder_block_preprocess").mask_emb.assign(mask_emb)
 
 
 # Encoders
@@ -257,6 +264,8 @@ for i in range(hf_model.config.n_layer):
 
 file_hf.close()
 
+print("Model Weights Loaded!")
+
 hf_preds = hf_model(tokenized_hf, training=False)
 print(hf_preds["last_hidden_state"])
 
@@ -276,16 +285,17 @@ print(
     ),
 )
 
-for i in range(hf_model.config.n_layer):
-    print(
-        f"Outputs matching or not for Mem {i} : ",
-        np.allclose(
-            hf_preds["mems"][i].numpy().reshape(-1, hf_model.config.d_model),
-            knlp_preds["new_mems"][i]
-            .numpy()
-            .reshape(-1, hf_model.config.d_model),
-            atol=1e-3,
-        ),
-    )
+if check_mems:
+    for i in range(hf_model.config.n_layer):
+        print(
+            f"Outputs matching or not for Mem {i} : ",
+            np.allclose(
+                hf_preds["mems"][i].numpy().reshape(-1, hf_model.config.d_model),
+                knlp_preds["new_mems"][i]
+                .numpy()
+                .reshape(-1, hf_model.config.d_model),
+                atol=1e-3,
+            ),
+        )
 
 os.remove(SAVE_PATH)

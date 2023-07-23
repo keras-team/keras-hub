@@ -22,7 +22,7 @@ from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.xlnet.xlnet_content_and_query_embedding import (
     ContentAndQueryEmbedding,
 )
-from keras_nlp.models.xlnet.xlnet_encoder import XLNetEncoder
+from keras_nlp.models.xlnet.xlnet_encoder import XLNetEncoder, XLNetEncoderBlockPreprocessingLayer
 
 
 def cache_mem(curr_out, prev_mem):
@@ -136,58 +136,35 @@ class XLNetBackbone(Backbone):
         padding_mask = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
-        token_type_id = keras.Input(
-            shape=(None,), dtype="int32", name="token_type_ids"
-        )
-        mems = tf.keras.Input(
-            shape=(None, None, None), dtype="float32", name="mems"
-        )
-
-        # Only used during pretraining
-        perm_mask = keras.Input(
-            shape=(
-                None,
-                None,
-            ),
-            dtype="int32",
-            name="perm_mask",
-        )
-        target_mapping = keras.Input(
-            shape=(None, None), dtype="int32", name="target_mapping"
+        segment_ids = keras.Input(
+            shape=(None,), dtype="int32", name="segment_ids"
         )
 
         # Content and Query Embedding
-        embedding_outputs = ContentAndQueryEmbedding(
+        word_emb, pos_emb = ContentAndQueryEmbedding(
             vocabulary_size=vocabulary_size,
             hidden_dim=hidden_dim,
             dropout=dropout,
-            kernel_initializer_range=kernel_initializer_range,
             name="content_query_embedding",
-        )(
-            token_id_input=token_id_input,
-            perm_mask=perm_mask,
-            token_type_id=token_type_id,
-            mems=mems,
+        )(token_id_input=token_id_input)
+
+        # Apply EncoderBlock Preprocessing Layer
+        preprocessing_outputs = XLNetEncoderBlockPreprocessingLayer(hidden_dim=hidden_dim,
+                                                                    kernel_initializer_range=kernel_initializer_range,
+                                                                    name="encoder_block_preprocess")(
+            word_emb=word_emb,
+            pos_emb=pos_emb,
             padding_mask=padding_mask,
-            target_mapping=target_mapping,
+            segment_ids=segment_ids,
+            bsz=tf.shape(token_id_input)[0],
+            qlen=tf.shape(token_id_input)[1],
         )
-        (
-            output_h,
-            output_g,
-            pos_emb,
-            tgt_map,
-            seg_mat,
-            mems_opt,
-            attn_mask_h,
-            attn_mask_g,
-        ) = embedding_outputs
+
+        output_h, output_g, _, seg_mat, attn_mask_h, attn_mask_g = preprocessing_outputs
 
         # Encoders
-        new_mems = ()
         head_dim = hidden_dim // num_heads
         for i in range(num_layers):
-            new_mems = new_mems + (cache_mem(output_h, mems_opt[:, :, :, i]),)
-
             output_h, output_g = XLNetEncoder(
                 num_heads=num_heads,
                 hidden_dim=hidden_dim,
@@ -203,27 +180,20 @@ class XLNetBackbone(Backbone):
                 output_h=output_h,
                 output_g=output_g,
                 pos_emb=pos_emb,
-                target_mapping=tgt_map,
-                seg_mat=seg_mat,
-                mems=mems_opt[:, :, :, i],
                 attn_mask_h=attn_mask_h,
                 attn_mask_g=attn_mask_g,
+                seg_mat=seg_mat,
             )
 
-        output = keras.layers.Dropout(dropout)(
-            output_g if output_g is not None else output_h
-        )
+        output = keras.layers.Dropout(dropout)(output_h)
 
         super().__init__(
             inputs={
                 "token_ids": token_id_input,
                 "padding_mask": padding_mask,
-                "token_type_ids": token_type_id,
-                "mems": mems,
-                "perm_mask": perm_mask,
-                "target_mapping": target_mapping,
+                "segment_ids": segment_ids,
             },
-            outputs={"last_hidden_state": output, "new_mems": new_mems},
+            outputs={"last_hidden_state": output},
             **kwargs,
         )
 
