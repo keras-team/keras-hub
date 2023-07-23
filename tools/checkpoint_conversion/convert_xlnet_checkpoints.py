@@ -26,7 +26,7 @@ from keras_nlp.models import XLNetBackbone
 
 check_mems = False
 
-PRESET = "xlnet-large-cased"
+PRESET = "xlnet-base-cased"
 CKPT = f"https://huggingface.co/{PRESET}"
 SAVE_PATH = "./tf_weights.h5"
 
