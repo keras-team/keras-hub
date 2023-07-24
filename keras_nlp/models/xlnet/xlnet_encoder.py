@@ -233,7 +233,7 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
             self.kernel_initializer_range
         )
 
-        self._built = None
+        # self._built = None
 
     def build(self, input_shape):
         self.mask_emb = self.add_weight(
@@ -254,9 +254,9 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
         perm_mask=None,
         target_mapping=None,
     ):
-        if not self._built:
-            self.build((1, 1))
-            self._built = True
+        # if not self._built:
+        #     self.build((1, 1))
+        #     self._built = True
 
         bsz, qlen = ops.shape(token_id_input)[0], ops.shape(token_id_input)[1]
         mlen = 0 if mlen is None else mlen
