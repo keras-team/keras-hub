@@ -332,9 +332,12 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
         output_h = word_emb
         if target_mapping is not None:
             word_emb_q = ops.repeat(
-                ops.repeat(self.mask_emb, [ops.shape(target_mapping)[0]], axis=0),
-                [bsz], axis=1)
-
+                ops.repeat(
+                    self.mask_emb, [ops.shape(target_mapping)[0]], axis=0
+                ),
+                [bsz],
+                axis=1,
+            )
 
             output_g = self.dropout_layer(word_emb_q)
         else:
