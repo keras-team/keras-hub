@@ -299,7 +299,8 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
         if attn_mask_g is not None:
             attn_mask_g = ops.cast(attn_mask_g > 0, dtype=attn_mask_g.dtype)
 
-            # Since ops.eye doesnt support tf Tensor as input.
+            # Since ops.eye doesn't support tensorflow Tensor as input.
+            # we need to create custom function here.
             attn_mask_h = ops.zeros([qlen, qlen], dtype=attn_mask_g.dtype)
             updates = ops.ones([qlen], dtype=attn_mask_g.dtype)
             indices = ops.transpose(
@@ -330,11 +331,11 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
         # Prepare h & g hidden states
         output_h = word_emb
         if target_mapping is not None:
-            import tensorflow as tf
+            word_emb_q = ops.repeat(
+                ops.repeat(self.mask_emb, [ops.shape(target_mapping)[0]], axis=0),
+                [bsz], axis=1)
 
-            word_emb_q = tf.tile(
-                self.mask_emb, [ops.shape(target_mapping)[0], bsz, 1]
-            )
+
             output_g = self.dropout_layer(word_emb_q)
         else:
             output_g = None
