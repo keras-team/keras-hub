@@ -15,11 +15,9 @@
 import io
 import os
 
-import pytest
 import sentencepiece
 import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 
@@ -114,18 +112,6 @@ class SentencePieceTokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             tokenizer.id_to_token(-1)
 
-    @pytest.mark.tf_only
-    def test_functional_model(self):
-        input_data = tf.constant(["the quick brown fox."])
-        tokenizer = SentencePieceTokenizer(
-            proto=self.proto,
-        )
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = tokenizer.detokenize(tokenizer.tokenize(inputs))
-        model = keras.Model(inputs, outputs)
-        model_output = model(input_data)
-        self.assertAllEqual(model_output, ["the quick brown fox."])
-
     def test_from_file(self):
         filepath = os.path.join(self.get_temp_dir(), "model.txt")
         input_data = ["the quick brown fox."]
@@ -190,24 +176,4 @@ class SentencePieceTokenizerTest(TestCase):
         self.assertAllEqual(
             original_tokenizer(input_data),
             cloned_tokenizer(input_data),
-        )
-
-    @pytest.mark.tf_only
-    def test_saved_model(self):
-        filepath = os.path.join(self.get_temp_dir(), "model.txt")
-        input_data = tf.constant(["the quick brown whale."])
-        with tf.io.gfile.GFile(filepath, "wb") as file:
-            file.write(self.proto)
-        tokenizer = SentencePieceTokenizer(
-            proto=filepath,
-        )
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = tokenizer(inputs)
-        model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-        restored_model = keras.models.load_model(path)
-        self.assertAllEqual(
-            model(input_data),
-            restored_model(input_data),
         )

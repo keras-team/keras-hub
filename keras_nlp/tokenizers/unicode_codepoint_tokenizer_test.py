@@ -12,12 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 
-import pytest
 import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.unicode_codepoint_tokenizer import (
     UnicodeCodepointTokenizer,
@@ -236,27 +233,6 @@ class UnicodeCodepointTokenizerTest(TestCase):
         ]
         self.assertAllEqual(output, exp_output)
 
-    @pytest.mark.tf_only
-    def test_functional_model(self):
-        input_data = tf.constant(
-            ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
-        )
-        tokenizer = UnicodeCodepointTokenizer()
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = tokenizer.detokenize(tokenizer.tokenize(inputs))
-        model = keras.Model(inputs, outputs)
-        model_output = model(input_data)
-        self.assertAllEqual(
-            model_output,
-            [
-                b"ninja",
-                b"samurai",
-                b"\xe2\x96\x80\xe2\x96\x81\xe2\x96\x82\xe2\x96\x83",
-                b"keras",
-                b"tensorflow",
-            ],
-        )
-
     def test_load_model_with_config(self):
         input_data = tf.constant(["hello"])
 
@@ -332,27 +308,4 @@ class UnicodeCodepointTokenizerTest(TestCase):
         self.assertEqual(
             tokenize_different_encoding.get_config(),
             exp_config_different_encoding,
-        )
-
-    @pytest.mark.tf_only
-    def test_saved_model(self):
-        input_data = tf.constant(["ninjas and samurais", "time travel"])
-
-        tokenizer = UnicodeCodepointTokenizer(
-            name="unicode_character_tokenizer_config_gen",
-            lowercase=False,
-            sequence_length=20,
-            normalization_form="NFKC",
-            errors="replace",
-            vocabulary_size=None,
-        )
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = tokenizer(inputs)
-        model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-        restored_model = keras.models.load_model(path)
-        self.assertAllEqual(
-            model(input_data),
-            restored_model(input_data),
         )

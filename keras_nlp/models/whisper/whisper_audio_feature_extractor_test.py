@@ -13,9 +13,7 @@
 # limitations under the License.
 """Tests for Whisper audio feature extractor."""
 
-import os
 
-import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
@@ -76,22 +74,4 @@ class WhisperAudioFeatureExtractorTest(TestCase):
         self.assertEqual(
             new_audio_feature_extractor.get_config(),
             self.audio_feature_extractor.get_config(),
-        )
-
-    @pytest.mark.large  # Saving is slow, so mark these large.
-    @pytest.mark.tf_only
-    def test_saved_model(self):
-        audio_tensor = tf.ones((2, 200), dtype="float32")
-
-        inputs = keras.Input(dtype="float32", shape=(None,))
-        outputs = self.audio_feature_extractor(inputs)
-        model = keras.Model(inputs, outputs)
-
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-
-        restored_model = keras.models.load_model(path)
-        self.assertAllEqual(
-            model(audio_tensor),
-            restored_model(audio_tensor),
         )

@@ -66,16 +66,6 @@ class Tokenizer(PreprocessingLayer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def __new__(cls, *args, **kwargs):
-        # Wrap the `tokenize` and `detokenize` methods so they route through
-        # __call__. This is needed for functional model support.
-        obj = super().__new__(cls, *args, **kwargs)
-        obj._tokenize_without_call = obj.tokenize
-        obj._detokenize_without_call = obj.detokenize
-        obj.tokenize = obj._tokenize_with_call
-        obj.detokenize = obj._detokenize_with_call
-        return obj
-
     def tokenize(self, inputs, *args, **kwargs):
         """Transform input tensors of strings into output tokens.
 
@@ -131,18 +121,5 @@ class Tokenizer(PreprocessingLayer):
             f"{self.__class__.__name__}."
         )
 
-    def _tokenize_with_call(self, *args, **kwargs):
-        return self(*args, mode="tokenize", **kwargs)
-
-    def _detokenize_with_call(self, *args, **kwargs):
-        return self(*args, mode="detokenize", **kwargs)
-
-    def call(self, *args, mode="tokenize", training=None, **kwargs):
-        if mode == "tokenize":
-            return self._tokenize_without_call(*args, **kwargs)
-        elif mode == "detokenize":
-            return self._detokenize_without_call(*args, **kwargs)
-        else:
-            raise ValueError(
-                f"Unsupported tokenizer mode. Received: mode={mode}"
-            )
+    def call(self, inputs, *args, training=None, **kwargs):
+        return self.tokenize(inputs, *args, **kwargs)
