@@ -58,7 +58,6 @@ class GPTNeoXCausalLM(GenerativeTask):
         preprocessor: A `keras_nlp.models.GPTNeoXCausalLMPreprocessor` or `None`.
             If `None`, this model will not apply preprocessing, and inputs
             should be preprocessed before calling the model.
-
     """
 
     def __init__(
@@ -120,8 +119,8 @@ class GPTNeoXCausalLM(GenerativeTask):
         Args:
             token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
             cache: a dense float Tensor, the cache of key and value.
-            cache_update_index: int, or int Tensor. The index of current inputs in the
-                whole sequence.
+            cache_update_index: int, or int Tensor. The index of current inputs
+            in the whole sequence.
 
         Returns:
             A (logits, hidden_states, cache) tuple. Where `logits` is the
@@ -216,7 +215,10 @@ class GPTNeoXCausalLM(GenerativeTask):
         if end_token_id is not None:
             # Build a mask of `end_token_id` locations not in the original
             # prompt (not in locations where `padding_mask` is True).
-            end_locations = (token_ids == end_token_id) & (~padding_mask)
+            end_locations = ops.logical_and(
+                ops.equal(token_ids, end_token_id),
+                ops.logical_not(padding_mask),
+            )
             end_locations = ops.cast(end_locations, "int32")
             # Use cumsum to get ones in all locations after end_locations.
             cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
