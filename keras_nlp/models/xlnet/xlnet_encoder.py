@@ -93,8 +93,7 @@ class XLNetEncoder(keras.layers.Layer):
         )
 
 
-    def build(self,
-              input_shape):
+    def build(self, input_shape):
         # Attention Part
         self.relative_attention = TwoStreamRelativeAttention(
             num_heads=self.num_heads,
@@ -107,23 +106,32 @@ class XLNetEncoder(keras.layers.Layer):
         self.layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon, name="layer_norm_rel_attn"
         )
+        self.layer_norm.build(input_shape)
+
         self.dropout_attn = keras.layers.Dropout(self.dropout)
 
         # Feed-Forward Part
         self.layer_norm_ff = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon, name="layer_norm_ff"
         )
+        self.layer_norm_ff.build(input_shape)
+
         self.feedforward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             kernel_initializer=self.kernel_initializer,
             name="feedforward_intermediate_dense",
         )
+        self.feedforward_intermediate_dense.build(input_shape)
+
         self.feedforward_output_dense = keras.layers.Dense(
             self.hidden_dim,
             kernel_initializer=self.kernel_initializer,
             name="feedforward_output_dense",
         )
+        self.feedforward_output_dense.build(self.feedforward_intermediate_dense.compute_output_shape(input_shape))
+
         self.dropout_ff = keras.layers.Dropout(self.dropout)
+
         self.activation_function_ff = keras.activations.get(self.activation)
 
         self.content_attention_bias = self.add_weight(
@@ -132,24 +140,28 @@ class XLNetEncoder(keras.layers.Layer):
             trainable=True,
             name="content_attention_bias",
         )
+
         self.positional_attention_bias = self.add_weight(
             shape=(self.num_heads, self.head_dim),
             initializer=self.bias_initializer,
             trainable=True,
             name="positional_attention_bias",
         )
+
         self.segment_attention_bias = self.add_weight(
             shape=(self.num_heads, self.head_dim),
             initializer=self.bias_initializer,
             trainable=True,
             name="segment_attention_bias",
         )
+
         self.segment_encoding = self.add_weight(
             shape=(2, self.num_heads, self.head_dim),
             initializer=self.kernel_initializer,
             trainable=True,
             name="segment_encoding",
         )
+
         super().build(input_shape)
 
     def call(
