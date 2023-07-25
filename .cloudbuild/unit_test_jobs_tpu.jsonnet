@@ -10,7 +10,7 @@ local unittest = base.BaseTest {
   frameworkPrefix: "tf",
   modelName: "keras-nlp",
   mode: "unit-tests",
-  timeout: 3600, # 1 hour, in seconds
+  timeout: 7200, # 2 hours, in seconds
 
   // Set up runtime environment.
   image: image,
