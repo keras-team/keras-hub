@@ -33,7 +33,7 @@ SAVE_PATH = "./tf_weights.h5"
 # create HF model
 hf_model = TFXLNetModel.from_pretrained(PRESET)
 
-print(tf.test.is_gpu_available())
+print(f"GPU Available or not : {tf.test.is_gpu_available()}")
 
 with open(SAVE_PATH, "wb") as p:
     response = requests.get(CKPT + "/resolve/main/tf_model.h5")

@@ -152,20 +152,13 @@ class XLNetBackbone(Backbone):
             kernel_initializer_range=kernel_initializer_range,
             name="encoder_block_preprocess",
         )(
-            token_id_input=token_id_input,
-            word_emb=word_emb,
+
             padding_mask=padding_mask,
             segment_ids=segment_ids,
         )
 
-        (
-            output_h,
-            output_g,
-            _,
-            seg_mat,
-            attn_mask_h,
-            attn_mask_g,
-        ) = preprocessing_outputs
+        seg_mat, attn_mask_h, attn_mask_g = preprocessing_outputs
+        output_h = word_emb
 
         # Encoders
         head_dim = hidden_dim // num_heads
@@ -183,10 +176,9 @@ class XLNetBackbone(Backbone):
                 name=f"xlnet_encoder_{i}",
             )(
                 output_h=output_h,
-                output_g=output_g,
-                pos_emb=pos_emb,
                 attn_mask_h=attn_mask_h,
                 attn_mask_g=attn_mask_g,
+                pos_emb=pos_emb,
                 seg_mat=seg_mat,
             )
 

@@ -92,7 +92,9 @@ class XLNetEncoder(keras.layers.Layer):
             self.kernel_initializer_range
         )
 
-    def build(self, input_shape):
+
+    def build(self,
+              input_shape):
         # Attention Part
         self.relative_attention = TwoStreamRelativeAttention(
             num_heads=self.num_heads,
@@ -101,6 +103,7 @@ class XLNetEncoder(keras.layers.Layer):
             bias_initializer=self.bias_initializer,
             name="rel_attn",
         )
+
         self.layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon, name="layer_norm_rel_attn"
         )
@@ -152,14 +155,15 @@ class XLNetEncoder(keras.layers.Layer):
     def call(
         self,
         output_h,
-        output_g,
         attn_mask_h,
         attn_mask_g,
         pos_emb,
-        seg_mat=None,
+        seg_mat,
+        output_g=None,
         mems=None,
         target_mapping=None,
     ):
+
         # rel_attn
         attn_out_h, attn_out_g = self.relative_attention(
             content_stream=output_h,
@@ -175,6 +179,7 @@ class XLNetEncoder(keras.layers.Layer):
             target_mapping=target_mapping,
             state=mems,
         )
+
         attn_out_h = self.dropout_attn(attn_out_h)
         attn_out_h = attn_out_h + output_h
         attn_out_h = self.layer_norm(attn_out_h)
@@ -206,6 +211,240 @@ class XLNetEncoder(keras.layers.Layer):
 
         return ff_out_h, None
 
+    def compute_output_shape(self,
+                             output_h_shape,
+                             pos_emb_shape,
+                             attn_mask_h_shape,
+                             attn_mask_g_shape,
+                             seg_mat_shape,
+                             output_g_shape=None
+                             ):
+        return [output_h_shape, output_h_shape]
+
+
+
+
+# class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
+#     """
+#     Preprocessing Layer for XLNet Encoder Block.
+#
+#     This layer creates relative_positional_encoding and processes attention
+#     masks for both states during the forward pass. It binds all the complex
+#     logic required by the XLNet Encoder.
+#
+#     In addition to that it also processes perm_mask and target_mapping tensors
+#     during pretraining and when mems are used.
+#
+#     Args:
+#         hidden_dim: int, the size hidden states.
+#         kernel_initializer_range: int, defaults to 0.02. The kernel initializer
+#             range for the dense and relative attention layers.
+#         **kwargs: other keyword arguments.
+#     """
+#
+#     def __init__(self, hidden_dim, kernel_initializer_range, **kwargs):
+#         super().__init__(**kwargs)
+#         self.hidden_dim = hidden_dim
+#         self.kernel_initializer_range = kernel_initializer_range
+#         self.kernel_initializer = xlnet_kernel_initializer(
+#             self.kernel_initializer_range
+#         )
+#
+#         # self._built = None
+#
+#     def build(self, input_shape):
+#         self.mask_emb = self.add_weight(
+#             shape=(1, 1, self.hidden_dim),
+#             initializer=self.kernel_initializer,
+#             trainable=True,
+#             name="mask_emb",
+#         )
+#         super().build(input_shape)
+#
+#     def call(
+#         self,
+#         token_id_input,
+#         word_emb,
+#         padding_mask,
+#         segment_ids,
+#         mlen=None,
+#         perm_mask=None,
+#         target_mapping=None,
+#     ):
+#         # if not self._built:
+#         #     self.build((1, 1))
+#         #     self._built = True
+#
+#         bsz, qlen = ops.shape(token_id_input)[0], ops.shape(token_id_input)[1]
+#         mlen = 0 if mlen is None else mlen
+#
+#         padding_mask = 1 - padding_mask
+#         padding_mask = ops.reshape(
+#             padding_mask,
+#             [ops.shape(padding_mask)[1], ops.shape(padding_mask)[0]],
+#         )
+#         perm_mask = (
+#             ops.transpose(perm_mask, [1, 2, 0])
+#             if perm_mask is not None
+#             else perm_mask
+#         )
+#         target_mapping = (
+#             ops.transpose(target_mapping, [1, 2, 0])
+#             if target_mapping is not None
+#             else target_mapping
+#         )
+#
+#         if padding_mask is not None and perm_mask is not None:
+#             data_mask = padding_mask[None] + perm_mask
+#         elif padding_mask is not None and perm_mask is None:
+#             data_mask = padding_mask[None]
+#         elif padding_mask is None and perm_mask is not None:
+#             data_mask = perm_mask
+#         else:
+#             data_mask = None
+#
+#         if data_mask is not None:
+#             if mlen > 0:
+#                 mems_mask = ops.zeros([ops.shape(data_mask)[0], mlen, bsz])
+#                 data_mask = ops.concatenate(
+#                     [ops.cast(mems_mask, dtype="int32"), data_mask], axis=1
+#                 )
+#             attn_mask_g = data_mask[:, :, :, None]
+#         else:
+#             attn_mask_g = None
+#
+#         if attn_mask_g is not None:
+#             attn_mask_g = ops.cast(attn_mask_g > 0, dtype=attn_mask_g.dtype)
+#
+#             # Since ops.eye doesn't support tensorflow Tensor as input.
+#             # we need to create custom function here.
+#             attn_mask_h = ops.zeros([qlen, qlen], dtype=attn_mask_g.dtype)
+#             updates = ops.ones([qlen], dtype=attn_mask_g.dtype)
+#             indices = ops.transpose(
+#                 ops.array(
+#                     [ops.arange(qlen), ops.arange(qlen)],
+#                     dtype=attn_mask_g.dtype,
+#                 ),
+#                 [1, 0],
+#             )
+#             attn_mask_h = -ops.scatter_update(attn_mask_h, indices, updates)
+#
+#             if mlen > 0:
+#                 attn_mask_h = ops.concatenate(
+#                     [
+#                         ops.zeros([qlen, mlen], dtype=attn_mask_h.dtype),
+#                         attn_mask_h,
+#                     ],
+#                     axis=-1,
+#                 )
+#
+#             attn_mask_h = ops.cast(
+#                 (attn_mask_g + attn_mask_h[:, :, None, None]) > 0,
+#                 dtype=attn_mask_h.dtype,
+#             )
+#         else:
+#             attn_mask_h = None
+#
+#         # Prepare h & g hidden states
+#         output_h = word_emb
+#         if target_mapping is not None:
+#             word_emb_q = ops.repeat(
+#                 ops.repeat(
+#                     self.mask_emb, [ops.shape(target_mapping)[0]], axis=0
+#                 ),
+#                 [bsz],
+#                 axis=1,
+#             )
+#
+#             output_g = self.dropout_layer(word_emb_q)
+#         else:
+#             output_g = None
+#
+#         segment_ids = (
+#             ops.transpose(segment_ids, [1, 0])
+#             if segment_ids is not None
+#             else None
+#         )
+#         # Segment embedding
+#         if segment_ids is not None:
+#             if mlen > 0:
+#                 mem_pad = ops.zeros([mlen, bsz], dtype=segment_ids.dtype)
+#                 cat_ids = ops.concatenate([mem_pad, segment_ids], 0)
+#             else:
+#                 cat_ids = segment_ids
+#
+#             # `1` indicates not in the same segment [qlen x klen x bsz]
+#             seg_mat = ops.cast(
+#                 ops.logical_not(
+#                     ops.equal(segment_ids[:, None], cat_ids[None, :])
+#                 ),
+#                 dtype=segment_ids.dtype,
+#             )
+#         else:
+#             seg_mat = None
+#
+#         # to make sure inputs suitable for TwoStreamRelativeAttention
+#         output_g = (
+#             ops.reshape(
+#                 output_g,
+#                 [
+#                     ops.shape(output_g)[1],
+#                     ops.shape(output_g)[0],
+#                     ops.shape(output_g)[2],
+#                 ],
+#             )
+#             if output_g is not None
+#             else None
+#         )
+#         attn_mask_h = (
+#             1.0
+#             - ops.cast(
+#                 ops.transpose(ops.squeeze(attn_mask_h, -1), [2, 0, 1]),
+#                 "float32",
+#             )
+#             if attn_mask_h is not None
+#             else None
+#         )
+#         attn_mask_g = (
+#             1.0
+#             - ops.cast(
+#                 ops.transpose(ops.squeeze(attn_mask_g, -1), [2, 0, 1]),
+#                 "float32",
+#             )
+#             if attn_mask_g is not None
+#             else None
+#         )
+#
+#         seg_mat = (
+#             ops.cast(ops.transpose(seg_mat, [2, 0, 1]), dtype="bool")
+#             if seg_mat is not None
+#             else None
+#         )
+#         target_mapping = (
+#             ops.cast(
+#                 ops.reshape(
+#                     target_mapping,
+#                     [
+#                         ops.shape(target_mapping)[2],
+#                         ops.shape(target_mapping)[0],
+#                         ops.shape(target_mapping)[1],
+#                     ],
+#                 ),
+#                 "float32",
+#             )
+#             if target_mapping is not None
+#             else None
+#         )
+#
+#         return (
+#             output_h,
+#             output_g,
+#             target_mapping,
+#             seg_mat,
+#             attn_mask_h,
+#             attn_mask_g,
+#         )
+
 
 class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
     """
@@ -233,8 +472,6 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
             self.kernel_initializer_range
         )
 
-        # self._built = None
-
     def build(self, input_shape):
         self.mask_emb = self.add_weight(
             shape=(1, 1, self.hidden_dim),
@@ -246,19 +483,11 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
 
     def call(
         self,
-        token_id_input,
-        word_emb,
         padding_mask,
         segment_ids,
         mlen=None,
-        perm_mask=None,
-        target_mapping=None,
     ):
-        # if not self._built:
-        #     self.build((1, 1))
-        #     self._built = True
-
-        bsz, qlen = ops.shape(token_id_input)[0], ops.shape(token_id_input)[1]
+        bsz, qlen = ops.shape(padding_mask)[0], ops.shape(padding_mask)[1]
         mlen = 0 if mlen is None else mlen
 
         padding_mask = 1 - padding_mask
@@ -266,164 +495,64 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
             padding_mask,
             [ops.shape(padding_mask)[1], ops.shape(padding_mask)[0]],
         )
-        perm_mask = (
-            ops.transpose(perm_mask, [1, 2, 0])
-            if perm_mask is not None
-            else perm_mask
+
+        data_mask = ops.expand_dims(padding_mask, 0)
+
+        if mlen > 0:
+            mems_mask = ops.zeros([ops.shape(data_mask)[0], mlen, bsz])
+            data_mask = ops.concatenate(
+                [ops.cast(mems_mask, dtype="int32"), data_mask], axis=1
+            )
+        attn_mask_g = ops.expand_dims(data_mask, -1)
+
+        attn_mask_g = ops.cast(attn_mask_g > 0, dtype=attn_mask_g.dtype)
+
+        # Since ops.eye doesn't support tensorflow Tensor as input.
+        # we need to create custom function here.
+        attn_mask_h = ops.zeros([qlen, qlen], dtype=attn_mask_g.dtype)
+        updates = ops.ones([qlen], dtype=attn_mask_g.dtype)
+        indices = ops.transpose(ops.vstack([ops.arange(qlen), ops.arange(qlen)]))
+        attn_mask_h = -ops.scatter_update(attn_mask_h, indices, updates)
+
+        if mlen > 0:
+            attn_mask_h = ops.concatenate(
+                [
+                    ops.zeros([qlen, mlen], dtype=attn_mask_h.dtype),
+                    attn_mask_h,
+                ],
+                axis=-1,
+            )
+
+        attn_mask_h = ops.cast(
+            (attn_mask_g + ops.expand_dims(ops.expand_dims(attn_mask_h, -1), -1)) > 0,
+            dtype=attn_mask_h.dtype,
         )
-        target_mapping = (
-            ops.transpose(target_mapping, [1, 2, 0])
-            if target_mapping is not None
-            else target_mapping
+
+        # Prepare seg_mat
+        segment_ids = ops.transpose(segment_ids, [1, 0])
+
+        if mlen > 0:
+            mem_pad = ops.zeros([mlen, bsz], dtype=segment_ids.dtype)
+            cat_ids = ops.concatenate([mem_pad, segment_ids], 0)
+        else:
+            cat_ids = segment_ids
+
+        # `1` indicates not in the same segment [qlen x klen x bsz]
+        seg_mat = ops.cast(
+            ops.logical_not(
+                # ops.equal(ops.expand_dims(segment_ids, -1), ops.expand_dims(cat_ids, 0))
+                ops.equal(segment_ids[:, None], cat_ids[None, :])
+            ),
+            dtype=segment_ids.dtype,
         )
 
-        if padding_mask is not None and perm_mask is not None:
-            data_mask = padding_mask[None] + perm_mask
-        elif padding_mask is not None and perm_mask is None:
-            data_mask = padding_mask[None]
-        elif padding_mask is None and perm_mask is not None:
-            data_mask = perm_mask
-        else:
-            data_mask = None
-
-        if data_mask is not None:
-            if mlen > 0:
-                mems_mask = ops.zeros([ops.shape(data_mask)[0], mlen, bsz])
-                data_mask = ops.concatenate(
-                    [ops.cast(mems_mask, dtype="int32"), data_mask], axis=1
-                )
-            attn_mask_g = data_mask[:, :, :, None]
-        else:
-            attn_mask_g = None
-
-        if attn_mask_g is not None:
-            attn_mask_g = ops.cast(attn_mask_g > 0, dtype=attn_mask_g.dtype)
-
-            # Since ops.eye doesn't support tensorflow Tensor as input.
-            # we need to create custom function here.
-            attn_mask_h = ops.zeros([qlen, qlen], dtype=attn_mask_g.dtype)
-            updates = ops.ones([qlen], dtype=attn_mask_g.dtype)
-            indices = ops.transpose(
-                ops.array(
-                    [ops.arange(qlen), ops.arange(qlen)],
-                    dtype=attn_mask_g.dtype,
-                ),
-                [1, 0],
-            )
-            attn_mask_h = -ops.scatter_update(attn_mask_h, indices, updates)
-
-            if mlen > 0:
-                attn_mask_h = ops.concatenate(
-                    [
-                        ops.zeros([qlen, mlen], dtype=attn_mask_h.dtype),
-                        attn_mask_h,
-                    ],
-                    axis=-1,
-                )
-
-            attn_mask_h = ops.cast(
-                (attn_mask_g + attn_mask_h[:, :, None, None]) > 0,
-                dtype=attn_mask_h.dtype,
-            )
-        else:
-            attn_mask_h = None
-
-        # Prepare h & g hidden states
-        output_h = word_emb
-        if target_mapping is not None:
-            word_emb_q = ops.repeat(
-                ops.repeat(
-                    self.mask_emb, [ops.shape(target_mapping)[0]], axis=0
-                ),
-                [bsz],
-                axis=1,
-            )
-
-            output_g = self.dropout_layer(word_emb_q)
-        else:
-            output_g = None
-
-        segment_ids = (
-            ops.transpose(segment_ids, [1, 0])
-            if segment_ids is not None
-            else None
-        )
-        # Segment embedding
-        if segment_ids is not None:
-            if mlen > 0:
-                mem_pad = ops.zeros([mlen, bsz], dtype=segment_ids.dtype)
-                cat_ids = ops.concatenate([mem_pad, segment_ids], 0)
-            else:
-                cat_ids = segment_ids
-
-            # `1` indicates not in the same segment [qlen x klen x bsz]
-            seg_mat = ops.cast(
-                ops.logical_not(
-                    ops.equal(segment_ids[:, None], cat_ids[None, :])
-                ),
-                dtype=segment_ids.dtype,
-            )
-        else:
-            seg_mat = None
 
         # to make sure inputs suitable for TwoStreamRelativeAttention
-        output_g = (
-            ops.reshape(
-                output_g,
-                [
-                    ops.shape(output_g)[1],
-                    ops.shape(output_g)[0],
-                    ops.shape(output_g)[2],
-                ],
-            )
-            if output_g is not None
-            else None
-        )
-        attn_mask_h = (
-            1.0
-            - ops.cast(
-                ops.transpose(ops.squeeze(attn_mask_h, -1), [2, 0, 1]),
-                "float32",
-            )
-            if attn_mask_h is not None
-            else None
-        )
-        attn_mask_g = (
-            1.0
-            - ops.cast(
-                ops.transpose(ops.squeeze(attn_mask_g, -1), [2, 0, 1]),
-                "float32",
-            )
-            if attn_mask_g is not None
-            else None
-        )
+        attn_mask_h = 1.0 - ops.cast(ops.transpose(ops.squeeze(attn_mask_h, -1), [2, 0, 1]), "float32")
+        attn_mask_g = 1.0 - ops.cast(ops.transpose(ops.squeeze(attn_mask_g, -1), [2, 0, 1]), "float32")
+        seg_mat = ops.cast(ops.transpose(seg_mat, [2, 0, 1]), dtype="bool")
 
-        seg_mat = (
-            ops.cast(ops.transpose(seg_mat, [2, 0, 1]), dtype="bool")
-            if seg_mat is not None
-            else None
-        )
-        target_mapping = (
-            ops.cast(
-                ops.reshape(
-                    target_mapping,
-                    [
-                        ops.shape(target_mapping)[2],
-                        ops.shape(target_mapping)[0],
-                        ops.shape(target_mapping)[1],
-                    ],
-                ),
-                "float32",
-            )
-            if target_mapping is not None
-            else None
-        )
+        return seg_mat, attn_mask_h, attn_mask_g
 
-        return (
-            output_h,
-            output_g,
-            target_mapping,
-            seg_mat,
-            attn_mask_h,
-            attn_mask_g,
-        )
+    def compute_output_shape(self, padding_mask_shape, segment_ids_shape):
+        return [(None, None, None), (None, None, None), (None, None, None)]

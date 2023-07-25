@@ -20,6 +20,7 @@ import string
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
+from keras_core.layers import EinsumDense
 
 _CHR_IDX = string.ascii_lowercase
 
@@ -66,72 +67,131 @@ def _rel_shift(x, klen=-1):
 
     x = ops.transpose(x, [2, 3, 0, 1])
     x_size = ops.shape(x)
-
     x = ops.reshape(x, [x_size[1], x_size[0], x_size[2], x_size[3]])
-    x = ops.slice(x, [1, 0, 0, 0], [-1, -1, -1, -1])
+    # x = ops.slice(x, [1, 0, 0, 0], [-1, -1, -1, -1])
+    x = ops.slice(x, [1, 0, 0, 0], [x_size[1]-1, x_size[0], x_size[2], x_size[3]])
     x = ops.reshape(x, [x_size[0], x_size[1] - 1, x_size[2], x_size[3]])
-    x = ops.slice(x, [0, 0, 0, 0], [-1, klen, -1, -1])
+    # x = ops.slice(x, [0, 0, 0, 0], [-1, klen, -1, -1])
+    x = ops.slice(x, [0, 0, 0, 0], [x_size[0], klen, x_size[2], x_size[3]])
 
     x = ops.transpose(x, [2, 3, 0, 1])
 
     return x
 
 
-@keras_nlp_export("keras_nlp.layers.MultiHeadRelativeAttention")
-class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
-    """A multi-head attention layer with relative attention + position encoding.
+@keras_nlp_export("keras_nlp.layers.TwoStreamRelativeAttention")
+class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
+    """Two-stream relative self-attention for XLNet.
 
-    This layer shares the same input/output projections as the common
-    `keras.layers.MultiHeadAttention` layer.
+    In XLNet, each token has two associated vectors at each self-attention layer,
+    the content stream (h) and the query stream (g). The content stream is the
+    self-attention stream as in Transformer XL and represents the context and
+    content (the token itself). The query stream only has access to contextual
+    information and the position, but not the content.
 
-    When it calculates attention logits, position encoding is projected to form
-    relative keys. The logits are composed by shifted relative logits and
-    content logits.
+    This layer shares the same build signature as `keras.layers.MultiHeadAttention`
+    but has different input/output projections.
 
-    We use the notations `B`, `T`, `S`, `M`, `L`, `dim`, `num_heads` below,
-    where
+    We use the notations `B`, `T`, `S`, `M`, `L`, `E`, `P`, `dim`, `num_heads`
+    below, where
     `B` is the batch dimension, `T` is the target sequence length,
     `S` in the source sequence length, `M` is the length of the state or memory,
-    `L` is the length of relative positional encoding, `dim` is the
-    dimensionality of the encoder layers and `num_heads` is the number of
-    attention heads.
-
-    Attributes:
-        kernel_initializer: The kernel initializer. Defaults to glorot_uniform.
+    `L` is the length of relative positional encoding, `E` is the last dimension
+    of query input, `P` is the number of predictions, `dim` is the dimensionality
+    of the encoder layers. and `num_heads` is the number of attention heads.
 
     Args:
-        query: Query `Tensor` of shape `[B, T, dim]`.
-        value: Value `Tensor` of shape `[B, S, dim]`.
-        content_attention_bias: Bias `Tensor` for content based attention of
+        content_stream: `Tensor` of shape `[B, T, dim]`.
+        content_attention_bias: Bias `Tensor` for content based attention of shape
+            `[num_heads, dim]`.
+        positional_attention_bias: Bias `Tensor` for position based attention of
             shape `[num_heads, dim]`.
-        positional_attention_bias: Bias `Tensor` for position based attention
-            of shape `[num_heads, dim]`.
-        key: Optional key `Tensor` of shape `[B, S, dim]`. If not given, will
-            use `value` for both `key` and `value`, which is the most common
-            case.
+        query_stream: `Tensor` of shape `[B, P, dim]`.
+        target_mapping: `Tensor` of shape `[B, P, S]`.
         relative_position_encoding: Relative positional encoding `Tensor` of
             shape `[B, L, dim]`.
-        segment_matrix: Optional `Tensor` representing segmentation IDs used
-            in XLNet of shape `[B, S, S + M]`.
+        segment_matrix: Optional `Tensor` representing segmentation IDs used in
+            XLNet of shape `[B, S, S + M]`.
         segment_encoding: Optional `Tensor` representing the segmentation
             encoding as used in XLNet of shape `[2, num_heads, dim]`.
         segment_attention_bias: Optional trainable bias parameter added to the
             query had when calculating the segment-based attention score used
             in XLNet of shape `[num_heads, dim]`.
-        state: Optional `Tensor` of shape `[B, M, dim]`. If passed, this is
-            also attended over as in Transformer XL.
-        attention_mask: A boolean mask of shape `[B, T, S]` that prevents
-            attention to certain positions.
+        state: Optional `Tensor` of shape `[B, M, E]`.
+            If passed, this is also attended over as in Transformer XL.
+        content_attention_mask: a boolean mask of shape `[B, T, S]` that
+            prevents attention to certain positions for content attention
+            computation.
+        query_attention_mask: a boolean mask of shape `[B, T, S]` that
+            prevents attention to certain position for query attention
+            computation.
     """
 
     def __init__(self, kernel_initializer="glorot_uniform", **kwargs):
         super().__init__(kernel_initializer=kernel_initializer, **kwargs)
+        self._built = False
 
-    def _build_from_signature(self, query, value, key=None):
+    def _get_common_kwargs_for_sublayer(self):
+        common_kwargs = dict(
+            kernel_initializer=self._kernel_initializer,
+            bias_initializer=self._bias_initializer,
+            kernel_regularizer=self._kernel_regularizer,
+            bias_regularizer=self._bias_regularizer,
+            activity_regularizer=self._activity_regularizer,
+            kernel_constraint=self._kernel_constraint,
+            bias_constraint=self._bias_constraint,
+        )
+        return common_kwargs
+
+    def build(self, content_stream_shape):
         self._use_bias = False
-        super()._build_from_signature(query=query, value=value, key=key)
 
-        free_dims = self._query_shape.rank - 1
+        self._query_shape = content_stream_shape
+        self._key_shape = content_stream_shape
+        self._value_shape = content_stream_shape
+
+        free_dims = len(self._query_shape) - 1
+        einsum_equation, bias_axes, output_rank = _build_proj_equation(
+            free_dims, bound_dims=1, output_dims=2
+        )
+        self._query_dense = keras.layers.EinsumDense(
+            einsum_equation,
+            output_shape=_get_output_shape(
+                output_rank - 1, [self._num_heads, self._key_dim]
+            ),
+            bias_axes=bias_axes if self._use_bias else None,
+            name="query",
+            **self._get_common_kwargs_for_sublayer(),
+        )
+        einsum_equation, bias_axes, output_rank = _build_proj_equation(
+            len(self._key_shape) - 1, bound_dims=1, output_dims=2
+        )
+        self._key_dense = keras.layers.EinsumDense(
+            einsum_equation,
+            output_shape=_get_output_shape(
+                output_rank - 1, [self._num_heads, self._key_dim]
+            ),
+            bias_axes=bias_axes if self._use_bias else None,
+            name="key",
+            **self._get_common_kwargs_for_sublayer(),
+        )
+        einsum_equation, bias_axes, output_rank = _build_proj_equation(
+            len(self._value_shape) - 1, bound_dims=1, output_dims=2
+        )
+        self._value_dense = keras.layers.EinsumDense(
+            einsum_equation,
+            output_shape=_get_output_shape(
+                output_rank - 1, [self._num_heads, self._value_dim]
+            ),
+            bias_axes=bias_axes if self._use_bias else None,
+            name="value",
+            **self._get_common_kwargs_for_sublayer(),
+        )
+
+        self._build_attention(output_rank)
+
+
+        free_dims = len(self._query_shape) - 1
         _, _, output_rank = _build_proj_equation(
             free_dims, bound_dims=2, output_dims=1
         )
@@ -146,7 +206,7 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
         )
 
         einsum_equation, _, output_rank = _build_proj_equation(
-            self._key_shape.rank - 1, bound_dims=1, output_dims=2
+            len(self._key_shape) - 1, bound_dims=1, output_dims=2
         )
         self._encoding_dense = keras.layers.EinsumDense(
             einsum_equation,
@@ -158,17 +218,7 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
             **self._get_common_kwargs_for_sublayer(),
         )
 
-    def _get_common_kwargs_for_sublayer(self):
-        common_kwargs = dict(
-            kernel_initializer=self._kernel_initializer,
-            bias_initializer=self._bias_initializer,
-            kernel_regularizer=self._kernel_regularizer,
-            bias_regularizer=self._bias_regularizer,
-            activity_regularizer=self._activity_regularizer,
-            kernel_constraint=self._kernel_constraint,
-            bias_constraint=self._bias_constraint,
-        )
-        return common_kwargs
+        self._built = True
 
     def compute_attention(
         self,
@@ -267,146 +317,14 @@ class MultiHeadRelativeAttention(keras.layers.MultiHeadAttention):
 
         return attention_output
 
-    def call(
-        self,
-        query,
-        value,
-        content_attention_bias,
-        positional_attention_bias,
-        key=None,
-        relative_position_encoding=None,
-        segment_matrix=None,
-        segment_encoding=None,
-        segment_attention_bias=None,
-        state=None,
-        attention_mask=None,
-    ):
-        """Compute multi-head relative attention over inputs.
-
-        We use the notations `B`, `T`, `E`, `M` below, where
-        `B` is the batch dimension, `T` is the target sequence length,
-        `E` is the last dimension of query input and `M` is the length
-        of the state or memory.
-
-        Args:
-            query: attention input.
-            value: attention input.
-            content_attention_bias: A trainable bias parameter added to the
-                query head when calculating the content-based attention score.
-            positional_attention_bias: A trainable bias parameter added to the
-                query head when calculating the position-based attention score.
-            key: attention input.
-            relative_position_encoding: relative positional encoding for key
-                and value.
-            segment_matrix: Optional `Tensor` representing segmentation IDs
-                used in XLNet.
-            segment_encoding: Optional `Tensor` representing the segmentation
-                encoding as used in XLNet.
-            segment_attention_bias: Optional trainable bias parameter added to
-                the query had when calculating the segment-based attention
-                score used in XLNet.
-            state: (default None) optional state. If passed, this is also
-                attended over as in TransformerXL.
-            attention_mask: (default None) Optional mask that is added to
-                attention logits. If state is not None, the mask source sequence
-                dimension should extend M.
-        Returns:
-            attention_output: The result of the computation, of shape [B, T, E].
-        """
-        if not self._built_from_signature:
-            self._build_from_signature(query, value, key=key)
-        if key is None:
-            key = value
-        if state is not None and state.shape.ndims > 1:
-            value = ops.concatenate([state, value], 1)
-            key = ops.concatenate([state, key], 1)
-
-        # `query` = [B, T, N ,H]
-        query = self._query_dense(query)
-
-        # `key` = [B, S + M, N, H]
-        key = self._key_dense(key)
-
-        # `value` = [B, S + M, N, H]
-        value = self._value_dense(value)
-
-        # `position` = [B, L, N, H]
-        position = self._encoding_dense(relative_position_encoding)
-
-        attention_output = self.compute_attention(
-            query=query,
-            key=key,
-            value=value,
-            position=position,
-            content_attention_bias=content_attention_bias,
-            positional_attention_bias=positional_attention_bias,
-            segment_matrix=segment_matrix,
-            segment_encoding=segment_encoding,
-            segment_attention_bias=segment_attention_bias,
-            attention_mask=attention_mask,
-        )
-
-        # `attention_output` = [B, S, N, H]
-        attention_output = self._output_dense(attention_output)
-
-        return attention_output
-
-
-@keras_nlp_export("keras_nlp.layers.TwoStreamRelativeAttention")
-class TwoStreamRelativeAttention(MultiHeadRelativeAttention):
-    """Two-stream relative self-attention for XLNet.
-
-    In XLNet, each token has two associated vectors at each self-attention layer,
-    the content stream (h) and the query stream (g). The content stream is the
-    self-attention stream as in Transformer XL and represents the context and
-    content (the token itself). The query stream only has access to contextual
-    information and the position, but not the content.
-
-    This layer shares the same build signature as `keras.layers.MultiHeadAttention`
-    but has different input/output projections.
-
-    We use the notations `B`, `T`, `S`, `M`, `L`, `E`, `P`, `dim`, `num_heads`
-    below, where
-    `B` is the batch dimension, `T` is the target sequence length,
-    `S` in the source sequence length, `M` is the length of the state or memory,
-    `L` is the length of relative positional encoding, `E` is the last dimension
-    of query input, `P` is the number of predictions, `dim` is the dimensionality
-    of the encoder layers. and `num_heads` is the number of attention heads.
-
-    Args:
-        content_stream: `Tensor` of shape `[B, T, dim]`.
-        content_attention_bias: Bias `Tensor` for content based attention of shape
-            `[num_heads, dim]`.
-        positional_attention_bias: Bias `Tensor` for position based attention of
-            shape `[num_heads, dim]`.
-        query_stream: `Tensor` of shape `[B, P, dim]`.
-        target_mapping: `Tensor` of shape `[B, P, S]`.
-        relative_position_encoding: Relative positional encoding `Tensor` of
-            shape `[B, L, dim]`.
-        segment_matrix: Optional `Tensor` representing segmentation IDs used in
-            XLNet of shape `[B, S, S + M]`.
-        segment_encoding: Optional `Tensor` representing the segmentation
-            encoding as used in XLNet of shape `[2, num_heads, dim]`.
-        segment_attention_bias: Optional trainable bias parameter added to the
-            query had when calculating the segment-based attention score used
-            in XLNet of shape `[num_heads, dim]`.
-        state: Optional `Tensor` of shape `[B, M, E]`.
-            If passed, this is also attended over as in Transformer XL.
-        content_attention_mask: a boolean mask of shape `[B, T, S]` that
-            prevents attention to certain positions for content attention
-            computation.
-        query_attention_mask: a boolean mask of shape `[B, T, S]` that
-            prevents attention to certain position for query attention
-            computation.
-    """
 
     def call(
         self,
         content_stream,
         content_attention_bias,
         positional_attention_bias,
-        query_stream,
         relative_position_encoding,
+        query_stream=None,
         target_mapping=None,
         segment_matrix=None,
         segment_encoding=None,
@@ -457,11 +375,11 @@ class TwoStreamRelativeAttention(MultiHeadRelativeAttention):
             content_attention_output, query_attention_output: the results of the
                 computation, both of shape `[B, T, E]`.
         """
-        if not self._built_from_signature:
-            self._build_from_signature(
-                content_stream, content_stream, content_stream
-            )
-        if state is not None and state.shape.ndims > 1:
+
+        if not self._built:
+            self.build(ops.shape(content_stream))
+
+        if state is not None and len(state.shape) > 1:
             content_and_memory_stream = ops.concatenate(
                 [state, content_stream], 1
             )
