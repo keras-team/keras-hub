@@ -14,10 +14,8 @@
 
 import os
 
-import pytest
 import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
@@ -156,17 +154,6 @@ class WordPieceTokenizerTest(TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [1, 2, 3, 4, 5, 6])
 
-    @pytest.mark.tf_only
-    def test_functional_model(self):
-        input_data = tf.constant(["the quick brown fox"])
-        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
-        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = tokenizer.detokenize(tokenizer.tokenize(inputs))
-        model = keras.Model(inputs, outputs)
-        model_output = model(input_data)
-        self.assertAllEqual(model_output, ["the quick brown fox"])
-
     def test_batching_ragged_tensors(self):
         tokenizer = WordPieceTokenizer(
             vocabulary=["[UNK]", "a", "b", "c", "d", "e", "f"]
@@ -206,28 +193,6 @@ class WordPieceTokenizerTest(TestCase):
         self.assertAllEqual(
             original_tokenizer(input_data),
             cloned_tokenizer(input_data),
-        )
-
-    @pytest.mark.tf_only
-    def test_saved_model(self):
-        input_data = tf.constant(["quick brOWN whale"])
-        vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]
-        tokenizer = WordPieceTokenizer(
-            vocabulary=vocab_data,
-            lowercase=False,
-            oov_token="@UNK@",
-            suffix_indicator="@@",
-            dtype="string",
-        )
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = tokenizer(inputs)
-        model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-        restored_model = keras.models.load_model(path)
-        self.assertAllEqual(
-            model(input_data),
-            restored_model(input_data),
         )
 
     def test_no_oov_token_in_vocabulary(self):

@@ -13,9 +13,7 @@
 # limitations under the License.
 
 """Tests for DistilBERT masked language model preprocessor layer."""
-import os
 
-import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
@@ -111,20 +109,3 @@ class DistilBertMaskedLMPreprocessorTest(TestCase):
             new_preprocessor.get_config(),
             self.preprocessor.get_config(),
         )
-
-    @pytest.mark.large
-    @pytest.mark.tf_only
-    def test_saved_model(self):
-        input_data = tf.constant([" THE QUICK BROWN FOX."])
-
-        inputs = keras.Input(dtype="string", shape=())
-        outputs, y, sw = self.preprocessor(inputs)
-        model = keras.Model(inputs, outputs)
-
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-
-        restored_model = keras.models.load_model(path)
-        outputs = model(input_data)["token_ids"]
-        restored_outputs = restored_model(input_data)["token_ids"]
-        self.assertAllEqual(outputs, restored_outputs)

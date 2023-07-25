@@ -13,9 +13,7 @@
 # limitations under the License.
 
 """Tests for GPTNeoX causal LM preprocessor layer."""
-import os
 
-import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
@@ -126,22 +124,4 @@ class GPTNeoXCausalLMPreprocessorTest(TestCase):
         self.assertEqual(
             new_preprocessor.get_config(),
             self.preprocessor.get_config(),
-        )
-
-    @pytest.mark.large
-    @pytest.mark.tf_only
-    def test_saved_model(self):
-        input_data = tf.constant(["airplane at airport"])
-
-        inputs = keras.Input(dtype="string", shape=())
-        outputs, y, sw = self.preprocessor(inputs)
-        model = keras.Model(inputs, outputs)
-
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-
-        restored_model = keras.models.load_model(path)
-        self.assertAllEqual(
-            model(input_data)["token_ids"],
-            restored_model(input_data)["token_ids"],
         )

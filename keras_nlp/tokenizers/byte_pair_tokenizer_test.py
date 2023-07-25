@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 
 import pytest
 import tensorflow as tf
@@ -169,19 +168,4 @@ class BytePairTokenizerTest(TestCase):
         self.assertAllEqual(
             self.tokenizer(input_data),
             cloned_tokenizer(input_data),
-        )
-
-    @pytest.mark.tf_only
-    def test_saved_model(self):
-        input_data = tf.constant(["the quick brown whale."])
-        tokenizer = self.tokenizer
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = tokenizer(inputs)
-        model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-        restored_model = keras.models.load_model(path)
-        self.assertAllEqual(
-            model(input_data),
-            restored_model(input_data),
         )

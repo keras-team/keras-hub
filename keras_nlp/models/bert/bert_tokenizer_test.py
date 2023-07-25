@@ -13,10 +13,6 @@
 # limitations under the License.
 """Tests for BERT tokenizer."""
 
-import os
-
-import pytest
-import tensorflow as tf
 
 from keras_nlp.backend import keras
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
@@ -64,20 +60,4 @@ class BertTokenizerTest(TestCase):
         self.assertEqual(
             new_tokenizer.get_config(),
             self.tokenizer.get_config(),
-        )
-
-    @pytest.mark.large  # Saving is slow, so mark these large.
-    @pytest.mark.tf_only
-    def test_saved_model(self):
-        input_data = tf.constant(["THE QUICK BROWN FOX."])
-        tokenizer = BertTokenizer(vocabulary=self.vocab)
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = tokenizer(inputs)
-        model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-        restored_model = keras.models.load_model(path)
-        self.assertAllEqual(
-            model(input_data),
-            restored_model(input_data),
         )

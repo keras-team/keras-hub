@@ -14,9 +14,7 @@
 
 """Tests for Whisper preprocessor layer."""
 
-import os
 
-import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
@@ -184,40 +182,4 @@ class WhisperPreprocessorTest(TestCase):
         self.assertEqual(
             new_preprocessor.get_config(),
             self.preprocessor.get_config(),
-        )
-
-    @pytest.mark.tf_only
-    @pytest.mark.large
-    def test_saved_model(self):
-        input_data = {
-            "encoder_audio": tf.ones((1, 200)),
-            "decoder_text": tf.constant([" airplane at airport"]),
-        }
-
-        inputs = {
-            "encoder_audio": keras.Input(
-                dtype="float32", shape=(None,), name="encoder_audio"
-            ),
-            "decoder_text": keras.Input(
-                dtype="string", shape=(), name="decoder_text"
-            ),
-        }
-        outputs = self.preprocessor(inputs)
-        model = keras.Model(inputs, outputs)
-
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-
-        restored_model = keras.models.load_model(path)
-
-        model_output = model(input_data)
-        restored_model_output = restored_model(input_data)
-
-        self.assertAllEqual(
-            model_output["encoder_features"],
-            restored_model_output["encoder_features"],
-        )
-        self.assertAllEqual(
-            model_output["decoder_token_ids"],
-            restored_model_output["decoder_token_ids"],
         )

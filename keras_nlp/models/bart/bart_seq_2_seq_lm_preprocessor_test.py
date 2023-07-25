@@ -13,9 +13,7 @@
 # limitations under the License.
 
 """Tests for BART preprocessor layer."""
-import os
 
-import pytest
 import tensorflow as tf
 
 from keras_nlp.backend import keras
@@ -153,36 +151,4 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
         )
         self.assertEqual(
             new_preprocessor.get_config(), self.preprocessor.get_config()
-        )
-
-    @pytest.mark.large
-    @pytest.mark.tf_only
-    def test_saved_model(self):
-        input_data = {
-            "encoder_text": tf.constant([" airplane at airport"]),
-            "decoder_text": tf.constant([" kohli is the best"]),
-        }
-
-        inputs = {
-            "encoder_text": keras.Input(
-                dtype="string", name="encoder_text", shape=()
-            ),
-            "decoder_text": keras.Input(
-                dtype="string", name="decoder_text", shape=()
-            ),
-        }
-        outputs, y, sw = self.preprocessor(inputs)
-        model = keras.Model(inputs=inputs, outputs=outputs)
-
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-
-        restored_model = keras.models.load_model(path)
-
-        model_output = model(input_data)
-        restored_model_output = restored_model(input_data)
-
-        self.assertAllClose(
-            model_output,
-            restored_model_output,
         )

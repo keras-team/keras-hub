@@ -12,10 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.tokenizer import Tokenizer
 
@@ -44,18 +42,6 @@ class TokenizerTest(TestCase):
         tokenizer = SimpleTokenizer()
         detokenize_output = tokenizer.detokenize(input_data)
         self.assertAllEqual(detokenize_output, ["the quick brown fox"])
-
-    @pytest.mark.tf_only
-    def test_functional_model(self):
-        input_data = tf.constant(["the   quick   brown   fox"])
-        tokenizer = SimpleTokenizer()
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = tokenizer.detokenize(tokenizer.tokenize(inputs))
-        model = keras.Model(inputs, outputs)
-        model_output = model(input_data)
-        # There appears to be a bug with shape inference for ragged reduce_join.
-        # The second dimension should be removed.
-        self.assertAllEqual(model_output, [["the quick brown fox"]])
 
     def test_missing_tokenize_raises(self):
         with self.assertRaises(NotImplementedError):

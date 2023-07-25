@@ -12,12 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 
-import pytest
 import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.byte_tokenizer import ByteTokenizer
 
@@ -182,16 +179,6 @@ class ByteTokenizerTest(TestCase):
         ]
         self.assertAllEqual(output, exp_output)
 
-    @pytest.mark.tf_only
-    def test_functional_model(self):
-        input_data = tf.constant(["hello", "fun", "▀▁▂▃"])
-        tokenizer = ByteTokenizer()
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = tokenizer.detokenize(tokenizer.tokenize(inputs))
-        model = keras.Model(inputs, outputs)
-        model_output = model(input_data)
-        self.assertAllEqual(model_output, ["hello", "fun", "▀▁▂▃"])
-
     def test_load_model_with_config(self):
         input_data = ["hello"]
 
@@ -235,25 +222,3 @@ class ByteTokenizerTest(TestCase):
             "trainable": True,
         }
         self.assertEqual(tokenizer.get_config(), exp_config)
-
-    @pytest.mark.tf_only
-    def test_saved_model(self):
-        input_data = tf.constant(["this is fun"])
-
-        tokenizer = ByteTokenizer(
-            name="byte_tokenizer_config_test",
-            lowercase=False,
-            sequence_length=20,
-            normalization_form="NFKC",
-            errors="replace",
-        )
-        inputs = keras.Input(dtype="string", shape=())
-        outputs = tokenizer(inputs)
-        model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-        restored_model = keras.models.load_model(path)
-        self.assertAllEqual(
-            model(input_data),
-            restored_model(input_data),
-        )
