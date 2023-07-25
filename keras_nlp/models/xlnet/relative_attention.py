@@ -20,7 +20,6 @@ import string
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
-from keras_core.layers import EinsumDense
 
 _CHR_IDX = string.ascii_lowercase
 
@@ -68,10 +67,10 @@ def _rel_shift(x, klen=-1):
     x = ops.transpose(x, [2, 3, 0, 1])
     x_size = ops.shape(x)
     x = ops.reshape(x, [x_size[1], x_size[0], x_size[2], x_size[3]])
-    # x = ops.slice(x, [1, 0, 0, 0], [-1, -1, -1, -1])
-    x = ops.slice(x, [1, 0, 0, 0], [x_size[1]-1, x_size[0], x_size[2], x_size[3]])
+    x = ops.slice(
+        x, [1, 0, 0, 0], [x_size[1] - 1, x_size[0], x_size[2], x_size[3]]
+    )
     x = ops.reshape(x, [x_size[0], x_size[1] - 1, x_size[2], x_size[3]])
-    # x = ops.slice(x, [0, 0, 0, 0], [-1, klen, -1, -1])
     x = ops.slice(x, [0, 0, 0, 0], [x_size[0], klen, x_size[2], x_size[3]])
 
     x = ops.transpose(x, [2, 3, 0, 1])
@@ -190,7 +189,6 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
 
         self._build_attention(output_rank)
 
-
         free_dims = len(self._query_shape) - 1
         _, _, output_rank = _build_proj_equation(
             free_dims, bound_dims=2, output_dims=1
@@ -247,10 +245,14 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
         for query and key.
 
         Args:
-            query: Projected query `Tensor` of shape `[B, T, num_heads, key_dim]`.
-            key: Projected key `Tensor` of shape `[B, S + M, num_heads, key_dim]`.
-            value: Projected value `Tensor` of shape `[B, S + M, num_heads, key_dim]`.
-            position: Projected position `Tensor` of shape `[B, L, num_heads, key_dim]`.
+            query: Projected query `Tensor` of shape
+                `[B, T, num_heads, key_dim]`.
+            key: Projected key `Tensor` of shape
+                `[B, S + M, num_heads, key_dim]`.
+            value: Projected value `Tensor` of shape
+                `[B, S + M, num_heads, key_dim]`.
+            position: Projected position `Tensor` of shape
+                `[B, L, num_heads, key_dim]`.
             content_attention_bias: Trainable bias parameter added to the query
                 head when calculating the content-based attention score.
             positional_attention_bias: Trainable bias parameter added to the
@@ -317,7 +319,6 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
 
         return attention_output
 
-
     def call(
         self,
         content_stream,
@@ -350,8 +351,8 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
                 query head when calculating the position-based attention score.
             query_stream: The query representation, commonly referred to as g.
                 This only has access to contextual information and position, but
-                not content. If not provided, then this is MultiHeadRelativeAttention
-                with self-attention.
+                not content. If not provided, then this is
+                MultiHeadRelativeAttention with self-attention.
             relative_position_encoding: relative positional encoding for key
                 and value.
             target_mapping: Optional `Tensor` representing the target mapping
@@ -371,6 +372,7 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
             query_attention_mask: (default None) Optional mask that is added to
                 query attention logits. If state is not None, the mask source
                 sequence dimension should extend M.
+
         Returns:
             content_attention_output, query_attention_output: the results of the
                 computation, both of shape `[B, T, E]`.

@@ -152,7 +152,6 @@ class XLNetBackbone(Backbone):
             kernel_initializer_range=kernel_initializer_range,
             name="encoder_block_preprocess",
         )(
-
             padding_mask=padding_mask,
             segment_ids=segment_ids,
         )

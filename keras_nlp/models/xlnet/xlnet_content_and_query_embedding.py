@@ -49,8 +49,6 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         self.hidden_dim = hidden_dim
         self.dropout = dropout
 
-        # self._built = None
-
     def positional_embedding(self, pos_seq, inv_freq, bsz=None):
         sinusoid_inp = ops.einsum("i,d->id", pos_seq, inv_freq)
         pos_emb = ops.concatenate(
@@ -94,10 +92,6 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         token_id_input,
         mlen=None,
     ):
-        # if not self._built:
-        #     self.build((1, 1))
-        #     self._built = True
-
         mlen = 0 if mlen is None else mlen
 
         bsz, qlen = ops.shape(token_id_input)[0], ops.shape(token_id_input)[1]
