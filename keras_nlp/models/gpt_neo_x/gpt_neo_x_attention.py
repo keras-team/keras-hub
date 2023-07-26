@@ -74,7 +74,7 @@ class GPTNeoXAttention(keras.layers.Layer):
             output_shape=(None, self.num_heads, 3 * self.attn_head_size),
             bias_axes="de",
             **self._get_common_kwargs_for_sublayer(use_bias=True),
-            name="query",
+            name="query_key_value",
         )
         self._qkv_dense.build(input_shape)
 
@@ -145,16 +145,41 @@ class GPTNeoXAttention(keras.layers.Layer):
     def call(
         self,
         hidden_states,
-        attention_mask,
+        attention_mask=None,
+        cache=None,
+        cache_update_index=None,
         training=None,
     ):
         query_key_value = self._qkv_dense(hidden_states)
 
         query = query_key_value[..., : self.attn_head_size]
-        key = query_key_value[
-            ..., self.attn_head_size : 2 * self.attn_head_size
-        ]
-        value = query_key_value[..., 2 * self.attn_head_size :]
+
+        if cache is not None:
+            key_cache = cache[:, 0, ...]
+            value_cache = cache[:, 1, ...]
+            if cache_update_index is None:
+                key = key_cache
+                value = value_cache
+            else:
+                key_update = query_key_value[
+                    ..., self.attn_head_size : 2 * self.attn_head_size
+                ]
+                value_update = query_key_value[..., 2 * self.attn_head_size :]
+                start = [0, cache_update_index, 0, 0]
+                key = ops.slice_update(key_cache, start, key_update)
+                value = ops.slice_update(value_cache, start, value_update)
+                cache = ops.stack((key, value), axis=1)
+        else:
+            if cache_update_index is not None:
+                raise ValueError(
+                    "`cache_update_index` should not be set if `cache` is "
+                    f"`None`. Received: cache={cache}, "
+                    f"cache_update_index={cache_update_index}"
+                )
+            key = query_key_value[
+                ..., self.attn_head_size : 2 * self.attn_head_size
+            ]
+            value = query_key_value[..., 2 * self.attn_head_size :]
 
         query_rot, query_pass = (
             query[..., : self.rotary_dim],
@@ -165,7 +190,8 @@ class GPTNeoXAttention(keras.layers.Layer):
             key[..., self.rotary_dim :],
         )
 
-        query_rot, key_rot = self.rotary_embedding(query_rot, key_rot)
+        query_rot = self.rotary_embedding(query_rot)
+        key_rot = self.rotary_embedding(key_rot)
 
         query = ops.concatenate((query_rot, query_pass), axis=-1)
         key = ops.concatenate((key_rot, key_pass), axis=-1)
@@ -190,7 +216,7 @@ class GPTNeoXAttention(keras.layers.Layer):
 
         attention_output = self._output_dense(attention_output)
 
-        return attention_output
+        return attention_output, cache
 
     def get_config(self):
         config = super().get_config()

@@ -20,16 +20,15 @@ class RotaryEmbedding(keras.layers.Layer):
         super().__init__(**kwargs)
         self.max_wavelength = max_wavelength
 
-    def call(self, query, key):
-        rotary_dim = ops.shape(query)[-1]
+    def call(self, inputs):
+        rotary_dim = ops.shape(inputs)[-1]
 
         cos_emb, sin_emb = self._compute_cos_sin_embedding(
-            key, rotary_dim, seq_dim=1
+            inputs, rotary_dim, seq_dim=1
         )
-        query = self._apply_rotary_pos_emb(query, cos_emb, sin_emb)
-        key = self._apply_rotary_pos_emb(key, cos_emb, sin_emb)
+        outputs = self._apply_rotary_pos_emb(inputs, cos_emb, sin_emb)
 
-        return query, key
+        return outputs
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
         cos_emb = cos_emb[:, : ops.shape(tensor)[1], :, :]
@@ -63,3 +62,6 @@ class RotaryEmbedding(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
