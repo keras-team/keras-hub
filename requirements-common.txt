@@ -1,4 +1,4 @@
-keras-core==0.1.0
+keras-core
 # Tooling.
 astor
 numpy~=1.23.2  # Numpy 1.24 breaks tests on ragged tensors
