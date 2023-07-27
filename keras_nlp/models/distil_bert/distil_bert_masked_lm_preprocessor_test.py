@@ -50,7 +50,7 @@ class DistilBertMaskedLMPreprocessorTest(TestCase):
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(x["token_ids"], [2, 4, 4, 4, 4, 4, 3, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0])
-        self.assertAllEqual(x["mask_positions"], [1, 2, 3, 4, 5])
+        self.assertAllEqual(x["masked_positions"], [1, 2, 3, 4, 5])
         self.assertAllEqual(y, [5, 6, 7, 8, 1])
         self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0, 1.0])
 
@@ -60,7 +60,7 @@ class DistilBertMaskedLMPreprocessorTest(TestCase):
         x, y, sw = self.preprocessor(input_data)
         self.assertAllEqual(x["token_ids"], [[2, 4, 4, 4, 4, 4, 3, 0]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4)
-        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4, 5]] * 4)
+        self.assertAllEqual(x["masked_positions"], [[1, 2, 3, 4, 5]] * 4)
         self.assertAllEqual(y, [[5, 6, 7, 8, 1]] * 4)
         self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0, 1.0]] * 4)
 
@@ -71,7 +71,7 @@ class DistilBertMaskedLMPreprocessorTest(TestCase):
         x, y, sw = ds.batch(4).take(1).get_single_element()
         self.assertAllEqual(x["token_ids"], [[2, 4, 4, 4, 4, 4, 3, 0]] * 4)
         self.assertAllEqual(x["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0]] * 4)
-        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4, 5]] * 4)
+        self.assertAllEqual(x["masked_positions"], [[1, 2, 3, 4, 5]] * 4)
         self.assertAllEqual(y, [[5, 6, 7, 8, 1]] * 4)
         self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0, 1.0]] * 4)
 
@@ -82,7 +82,7 @@ class DistilBertMaskedLMPreprocessorTest(TestCase):
         x, y, sw = self.preprocessor((sentence_one, sentence_two))
         self.assertAllEqual(x["token_ids"], [2, 4, 4, 3, 4, 4, 4, 3])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1])
-        self.assertAllEqual(x["mask_positions"], [1, 2, 4, 5, 6])
+        self.assertAllEqual(x["masked_positions"], [1, 2, 4, 5, 6])
         self.assertAllEqual(y, [5, 6, 7, 8, 1])
         self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0, 1.0])
 
@@ -98,7 +98,7 @@ class DistilBertMaskedLMPreprocessorTest(TestCase):
         x, y, sw = no_mask_preprocessor(input_data)
         self.assertAllEqual(x["token_ids"], [2, 5, 6, 7, 8, 1, 3, 0])
         self.assertAllEqual(x["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0])
-        self.assertAllEqual(x["mask_positions"], [0, 0, 0, 0, 0])
+        self.assertAllEqual(x["masked_positions"], [0, 0, 0, 0, 0])
         self.assertAllEqual(y, [0, 0, 0, 0, 0])
         self.assertAllEqual(sw, [0.0, 0.0, 0.0, 0.0, 0.0])
 

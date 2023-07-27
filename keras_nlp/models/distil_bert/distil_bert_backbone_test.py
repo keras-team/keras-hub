@@ -56,7 +56,7 @@ class DistilBertTest(TestCase):
         for seq_length in (2, 3, 4):
             input_data = {
                 "token_ids": np.ones((2, seq_length), dtype="int32"),
-                "mask_positions": np.ones((2, seq_length), dtype="int32"),
+                "masked_positions": np.ones((2, seq_length), dtype="int32"),
                 "padding_mask": np.ones((2, seq_length), dtype="int32"),
             }
             self.backbone(input_data)

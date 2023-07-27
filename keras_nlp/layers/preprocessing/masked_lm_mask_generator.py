@@ -52,7 +52,7 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
         mask_token_id: int. The id of mask token.
         mask_selection_length: int. Maximum number of tokens
             selected for  masking in each sequence. If set, the output
-            `mask_positions`, `mask_ids` and `mask_weights` will be padded
+            `masked_positions`, `mask_ids` and `mask_weights` will be padded
             to dense tensors of length `mask_selection_length`, otherwise
             the output will be a RaggedTensor. Defaults to `None`.
         unselectable_token_ids: A list of tokens id that should not be
@@ -72,14 +72,14 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
         A Dict with 4 keys:
             token_ids: Tensor or RaggedTensor, has the same type and shape of
                 input. Sequence after getting masked.
-            mask_positions: Tensor, or RaggedTensor if `mask_selection_length`
+            masked_positions: Tensor, or RaggedTensor if `mask_selection_length`
                 is None. The positions of token_ids getting masked.
             mask_ids: Tensor, or RaggedTensor if  `mask_selection_length` is
                 None. The original token ids at masked positions.
             mask_weights: Tensor, or RaggedTensor if `mask_selection_length` is
-                None. `mask_weights` has the same shape as `mask_positions` and
+                None. `mask_weights` has the same shape as `masked_positions` and
                 `mask_ids`. Each element in `mask_weights` should be 0 or 1,
-                1 means the corresponding position in `mask_positions` is an
+                1 means the corresponding position in `masked_positions` is an
                 actual mask, 0 means it is a pad.
 
     Examples:
@@ -172,7 +172,7 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
 
         (
             token_ids,
-            mask_positions,
+            masked_positions,
             mask_ids,
         ) = tf_text.mask_language_model(
             inputs,
@@ -184,24 +184,24 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
             # If we converted the input from dense to ragged, convert back.
             token_ids = token_ids.to_tensor()
 
-        mask_weights = tf.ones_like(mask_positions, self.compute_dtype)
+        mask_weights = tf.ones_like(masked_positions, self.compute_dtype)
         # If `mask_selection_length` is set, convert to dense.
         if self.mask_selection_length:
             target_shape = tf.cast([-1, self.mask_selection_length], "int64")
-            mask_positions = mask_positions.to_tensor(shape=target_shape)
+            masked_positions = masked_positions.to_tensor(shape=target_shape)
             mask_ids = mask_ids.to_tensor(shape=target_shape)
             mask_weights = mask_weights.to_tensor(shape=target_shape)
 
         if unbatched:
             # If inputs is 1D, we format the output to be 1D as well.
             token_ids = tf.squeeze(token_ids, axis=0)
-            mask_positions = tf.squeeze(mask_positions, axis=0)
+            masked_positions = tf.squeeze(masked_positions, axis=0)
             mask_ids = tf.squeeze(mask_ids, axis=0)
             mask_weights = tf.squeeze(mask_weights, axis=0)
 
         return {
             "token_ids": token_ids,
-            "mask_positions": mask_positions,
+            "masked_positions": masked_positions,
             "mask_ids": mask_ids,
             "mask_weights": mask_weights,
         }

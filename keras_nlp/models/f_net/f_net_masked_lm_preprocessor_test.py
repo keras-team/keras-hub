@@ -63,7 +63,7 @@ class FNetMaskedLMPreprocessorTest(TestCase):
         self.assertAllEqual(
             x["token_ids"], [1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]
         )
-        self.assertAllEqual(x["mask_positions"], [1, 2, 3, 4])
+        self.assertAllEqual(x["masked_positions"], [1, 2, 3, 4])
         self.assertAllEqual(y, [5, 10, 6, 8])
         self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0])
 
@@ -74,7 +74,7 @@ class FNetMaskedLMPreprocessorTest(TestCase):
         self.assertAllEqual(
             x["token_ids"], [[1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]] * 4
         )
-        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4]] * 4)
+        self.assertAllEqual(x["masked_positions"], [[1, 2, 3, 4]] * 4)
         self.assertAllEqual(y, [[5, 10, 6, 8]] * 4)
         self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0]] * 4)
 
@@ -86,7 +86,7 @@ class FNetMaskedLMPreprocessorTest(TestCase):
         self.assertAllEqual(
             x["token_ids"], [[1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]] * 4
         )
-        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4]] * 4)
+        self.assertAllEqual(x["masked_positions"], [[1, 2, 3, 4]] * 4)
         self.assertAllEqual(y, [[5, 10, 6, 8]] * 4)
         self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0]] * 4)
 
@@ -98,7 +98,7 @@ class FNetMaskedLMPreprocessorTest(TestCase):
         self.assertAllEqual(
             x["token_ids"], [1, 4, 4, 2, 4, 4, 2, 0, 0, 0, 0, 0]
         )
-        self.assertAllEqual(x["mask_positions"], [1, 2, 4, 5])
+        self.assertAllEqual(x["masked_positions"], [1, 2, 4, 5])
         self.assertAllEqual(y, [5, 10, 6, 8])
         self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0])
 
@@ -115,7 +115,7 @@ class FNetMaskedLMPreprocessorTest(TestCase):
         self.assertAllEqual(
             x["token_ids"], [1, 5, 10, 6, 8, 2, 0, 0, 0, 0, 0, 0]
         )
-        self.assertAllEqual(x["mask_positions"], [0, 0, 0, 0])
+        self.assertAllEqual(x["masked_positions"], [0, 0, 0, 0])
         self.assertAllEqual(y, [0, 0, 0, 0])
         self.assertAllEqual(sw, [0.0, 0.0, 0.0, 0.0])
 

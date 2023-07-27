@@ -54,7 +54,7 @@ class MaskedLMMaskGeneratorTest(TestCase):
         inputs = [[5, 3, 2], [1, 2, 3, 4]]
         x = masked_lm_masker(inputs)
         self.assertAllEqual(x["token_ids"], [[1, 1, 1], [1, 1, 1, 1]])
-        self.assertAllEqual(x["mask_positions"], [[0, 1, 2, 0], [0, 1, 2, 3]])
+        self.assertAllEqual(x["masked_positions"], [[0, 1, 2, 0], [0, 1, 2, 3]])
         self.assertAllEqual(x["mask_ids"], [[5, 3, 2, 0], [1, 2, 3, 4]])
 
     def test_mask_dense(self):
@@ -69,7 +69,7 @@ class MaskedLMMaskGeneratorTest(TestCase):
         inputs = [[5, 3, 2, 4], [1, 2, 3, 4]]
         x = masked_lm_masker(inputs)
         self.assertAllEqual(x["token_ids"], [[1, 1, 1, 1], [1, 1, 1, 1]])
-        self.assertAllEqual(x["mask_positions"], [[0, 1, 2, 3], [0, 1, 2, 3]])
+        self.assertAllEqual(x["masked_positions"], [[0, 1, 2, 3], [0, 1, 2, 3]])
         self.assertAllEqual(x["mask_ids"], [[5, 3, 2, 4], [1, 2, 3, 4]])
 
     def test_unbatched(self):
@@ -84,7 +84,7 @@ class MaskedLMMaskGeneratorTest(TestCase):
         inputs = [5, 3, 2, 4]
         x = masked_lm_masker(inputs)
         self.assertAllEqual(x["token_ids"], [1, 1, 1, 1])
-        self.assertAllEqual(x["mask_positions"], [0, 1, 2, 3])
+        self.assertAllEqual(x["masked_positions"], [0, 1, 2, 3])
         self.assertAllEqual(x["mask_ids"], [5, 3, 2, 4])
 
     def test_random_replacement(self):
@@ -99,7 +99,7 @@ class MaskedLMMaskGeneratorTest(TestCase):
         inputs = [5, 3, 2, 4]
         x = masked_lm_masker(inputs)
         self.assertNotAllEqual(x["token_ids"], [1, 1, 1, 1])
-        self.assertAllEqual(x["mask_positions"], [0, 1, 2, 3])
+        self.assertAllEqual(x["masked_positions"], [0, 1, 2, 3])
         self.assertAllEqual(x["mask_ids"], [5, 3, 2, 4])
 
     def test_number_of_masked_position_as_expected(self):
@@ -116,7 +116,7 @@ class MaskedLMMaskGeneratorTest(TestCase):
             mask_selection_length=mask_selection_length,
         )
         outputs = masked_lm_masker(inputs)
-        self.assertEqual(tf.reduce_sum(outputs["mask_positions"]), 0)
+        self.assertEqual(tf.reduce_sum(outputs["masked_positions"]), 0)
 
     def test_invalid_mask_token(self):
         with self.assertRaisesRegex(ValueError, "Mask token id should be*"):

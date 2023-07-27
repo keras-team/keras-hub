@@ -72,7 +72,7 @@ class XLMRobertaMaskedLMPreprocessorTest(TestCase):
         self.assertAllEqual(
             x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
         )
-        self.assertAllEqual(x["mask_positions"], [1, 2, 3, 0, 0])
+        self.assertAllEqual(x["masked_positions"], [1, 2, 3, 0, 0])
         self.assertAllEqual(y, [7, 9, 11, 0, 0])
         self.assertAllEqual(sw, [1.0, 1.0, 1.0, 0.0, 0.0])
 
@@ -86,7 +86,7 @@ class XLMRobertaMaskedLMPreprocessorTest(TestCase):
         self.assertAllEqual(
             x["padding_mask"], [[1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]] * 13
         )
-        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 0, 0]] * 13)
+        self.assertAllEqual(x["masked_positions"], [[1, 2, 3, 0, 0]] * 13)
         self.assertAllEqual(y, [[7, 9, 11, 0, 0]] * 13)
         self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 0.0, 0.0]] * 13)
 
@@ -101,7 +101,7 @@ class XLMRobertaMaskedLMPreprocessorTest(TestCase):
         self.assertAllEqual(
             x["padding_mask"], [[1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]] * 13
         )
-        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 0, 0]] * 13)
+        self.assertAllEqual(x["masked_positions"], [[1, 2, 3, 0, 0]] * 13)
         self.assertAllEqual(y, [[7, 9, 11, 0, 0]] * 13)
         self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 0.0, 0.0]] * 13)
 
@@ -116,7 +116,7 @@ class XLMRobertaMaskedLMPreprocessorTest(TestCase):
         self.assertAllEqual(
             x["padding_mask"], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
         )
-        self.assertAllEqual(x["mask_positions"], [4, 0, 0, 0, 0])
+        self.assertAllEqual(x["masked_positions"], [4, 0, 0, 0, 0])
         self.assertAllEqual(y, [12, 0, 0, 0, 0])
         self.assertAllEqual(sw, [1.0, 0.0, 0.0, 0.0, 0.0])
 
@@ -136,7 +136,7 @@ class XLMRobertaMaskedLMPreprocessorTest(TestCase):
         self.assertAllEqual(
             x["padding_mask"], [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0]
         )
-        self.assertAllEqual(x["mask_positions"], [0, 0, 0, 0, 0])
+        self.assertAllEqual(x["masked_positions"], [0, 0, 0, 0, 0])
         self.assertAllEqual(y, [0, 0, 0, 0, 0])
         self.assertAllEqual(sw, [0.0, 0.0, 0.0, 0.0, 0.0])
 

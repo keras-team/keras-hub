@@ -84,7 +84,7 @@ class RobertaMaskedLM(Task):
     features = {
         "token_ids": np.array([[1, 2, 0, 4, 0, 6, 7, 8]] * 2),
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1]] * 2),
-        "mask_positions": np.array([[2, 4]] * 2)
+        "masked_positions": np.array([[2, 4]] * 2)
     }
     # Labels are the original masked values.
     labels = [[3, 5]] * 2
@@ -106,8 +106,8 @@ class RobertaMaskedLM(Task):
     ):
         inputs = {
             **backbone.input,
-            "mask_positions": keras.Input(
-                shape=(None,), dtype="int32", name="mask_positions"
+            "masked_positions": keras.Input(
+                shape=(None,), dtype="int32", name="masked_positions"
             ),
         }
         backbone_outputs = backbone(backbone.input)
@@ -117,7 +117,7 @@ class RobertaMaskedLM(Task):
             intermediate_activation="gelu",
             kernel_initializer=roberta_kernel_initializer(),
             name="mlm_head",
-        )(backbone_outputs, inputs["mask_positions"])
+        )(backbone_outputs, inputs["masked_positions"])
 
         # Instantiate using Functional API Model constructor
         super().__init__(

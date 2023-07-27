@@ -27,7 +27,7 @@ class MaskedLMHead(keras.layers.Layer):
 
      - `inputs`: which should be a tensor of encoded tokens with shape
        `(batch_size, sequence_length, encoding_dim)`.
-     - `mask_positions`: which should be a tensor of integer positions to
+     - `masked_positions`: which should be a tensor of integer positions to
        predict with shape `(batch_size, masks_per_sequence)`.
 
     The token encodings should usually be the last output of an encoder model,
@@ -80,7 +80,7 @@ class MaskedLMHead(keras.layers.Layer):
         size=(batch_size, seq_length, encoding_size),
     )
     # Generate random positions and labels
-    mask_positions = np.random.randint(
+    masked_positions = np.random.randint(
         seq_length, size=(batch_size, mask_length),
     )
     mask_ids = np.random.randint(
@@ -91,7 +91,7 @@ class MaskedLMHead(keras.layers.Layer):
     mask_preds = keras_nlp.layers.MaskedLMHead(
         vocabulary_size=vocab_size,
         activation="softmax",
-    )(encoded_tokens, mask_positions=mask_positions)
+    )(encoded_tokens, masked_positions=masked_positions)
     # Calculate a loss.
     keras.losses.sparse_categorical_crossentropy(mask_ids, mask_preds)
     ```

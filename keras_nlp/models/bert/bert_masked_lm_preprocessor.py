@@ -184,7 +184,7 @@ class BertMaskedLMPreprocessor(BertPreprocessor):
             "token_ids": masker_outputs["token_ids"],
             "padding_mask": padding_mask,
             "segment_ids": segment_ids,
-            "mask_positions": masker_outputs["mask_positions"],
+            "masked_positions": masker_outputs["masked_positions"],
         }
         y = masker_outputs["mask_ids"]
         sample_weight = masker_outputs["mask_weights"]

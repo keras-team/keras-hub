@@ -114,7 +114,7 @@ class RobertaPresetSmokeTest(TestCase):
         input_data = {
             "token_ids": ops.array([[101, 1996, 4248, 102]]),
             "padding_mask": ops.array([[1, 1, 1, 1]]),
-            "mask_positions": ops.array([[0, 0]]),
+            "masked_positions": ops.array([[0, 0]]),
         }
         model = RobertaMaskedLM.from_preset(
             "roberta_base_en",
@@ -235,7 +235,7 @@ class RobertaPresetFullTest(TestCase):
                     maxval=classifier.backbone.vocabulary_size,
                 ),
                 "padding_mask": ops.array([1] * 512, shape=(1, 512)),
-                "mask_positions": ops.array([1] * 128, shape=(1, 128)),
+                "masked_positions": ops.array([1] * 128, shape=(1, 128)),
             }
             classifier.predict(input_data)
 
