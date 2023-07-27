@@ -63,7 +63,7 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.attn_head_size = hidden_dim // num_heads
         self.rotary_max_wavelength = rotary_max_wavelength
         self.rotary_dim = int(self.attn_head_size * rotary_percentage)
-        self.rotary_embedding = RotaryEmbedding(rotary_max_wavelength)
+        self.rotary_embedding = RotaryEmbedding(max_wavelength=rotary_max_wavelength)
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.max_sequence_length = max_sequence_length
