@@ -55,7 +55,16 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
             [ops.sin(sinusoid_inp), ops.cos(sinusoid_inp)], axis=-1
         )
         pos_emb = ops.expand_dims(pos_emb, 1)
-        pos_emb = ops.ones([ops.shape(pos_emb)[0], ops.shape(pos_emb)[1]*bsz, ops.shape(pos_emb)[2]]) * pos_emb
+        pos_emb = (
+            ops.ones(
+                [
+                    ops.shape(pos_emb)[0],
+                    ops.shape(pos_emb)[1] * bsz,
+                    ops.shape(pos_emb)[2],
+                ]
+            )
+            * pos_emb
+        )
 
         return pos_emb
 
@@ -115,4 +124,7 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         return word_emb, pos_emb
 
     def compute_output_shape(self, token_id_input_shape):
-        return [token_id_input_shape + (self.hidden_dim, ), (token_id_input_shape[0], 1, self.hidden_dim)]
+        return [
+            token_id_input_shape + (self.hidden_dim,),
+            (token_id_input_shape[0], 1, self.hidden_dim),
+        ]

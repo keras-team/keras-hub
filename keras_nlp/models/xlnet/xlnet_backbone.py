@@ -28,13 +28,19 @@ from keras_nlp.models.xlnet.xlnet_encoder import (
 )
 
 
-def cache_mem(curr_out, prev_mem):
-    if prev_mem is None:
-        new_mem = curr_out
-    else:
-        new_mem = ops.concatenate([prev_mem, curr_out], 1)
+class CacheMEMS(keras.layers.Layer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-    return ops.stop_gradient(new_mem)
+    def call(self, curr_out, prev_mems=None):
+        if prev_mems is not None:
+            curr_out = ops.concatenate([prev_mems, curr_out], 1)
+
+        curr_out = ops.expand_dims(curr_out, 0)
+        return ops.stop_gradient(curr_out)
+
+    def compute_output_shape(self, curr_out_shape):
+        return curr_out_shape
 
 
 @keras_nlp_export("keras_nlp.models.XLNetBackbone")
@@ -83,6 +89,8 @@ class XLNetBackbone(Backbone):
             `[batch_size, num_predict, hidden_dim]` if query state is not None
             otherwise last hidden state of content of shape
             `[batch_size, sequence_length, hidden_dim]`.
+        new_mems: new memory units returned by the model. These are the conatenated
+            tensors of previous mems and hidden states of most recent pass.
 
     Examples:
     ```python
@@ -160,8 +168,12 @@ class XLNetBackbone(Backbone):
         output_h = word_emb
 
         # Encoders
+        new_mems = []
         head_dim = hidden_dim // num_heads
         for i in range(num_layers):
+            # Add the hidden_states as mems to `new_mems`
+            new_mems.append(CacheMEMS()(output_h))
+
             output_h, output_g = XLNetEncoder(
                 num_heads=num_heads,
                 hidden_dim=hidden_dim,
@@ -182,6 +194,7 @@ class XLNetBackbone(Backbone):
             )
 
         output = keras.layers.Dropout(dropout)(output_h)
+        new_mems = keras.layers.Concatenate(axis=0)(new_mems)
 
         super().__init__(
             inputs={
@@ -189,7 +202,7 @@ class XLNetBackbone(Backbone):
                 "padding_mask": padding_mask,
                 "segment_ids": segment_ids,
             },
-            outputs={"last_hidden_state": output},
+            outputs={"last_hidden_state": output, "new_mems": new_mems},
             **kwargs,
         )
 
