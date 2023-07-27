@@ -22,6 +22,7 @@ from keras_nlp.backend import ops
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import call_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
+from keras_nlp.utils.tensor_utils import tensor_to_list
 
 
 @format_docstring(call_args=call_args_docstring)
@@ -118,7 +119,7 @@ class BeamSampler(Sampler):
     ):
         batch_size, max_length = ops.shape(prompt)[0], ops.shape(prompt)[1]
         # Make sure max length and start index are the same dtype.
-        index = ops.cast(index, max_length.dtype)
+        # index = ops.cast(index, max_length.dtype)
 
         def create_beams(x):
             """Add initial beam state."""
@@ -126,12 +127,16 @@ class BeamSampler(Sampler):
 
         def flatten_beams(x):
             """Combine the beam dim and batch dim."""
-            flat_shape = [batch_size * self.num_beams] + x.shape.as_list()[2:]
+            flat_shape = [batch_size * self.num_beams] + tensor_to_list(
+                x.shape
+            )[2:]
             return ops.reshape(x, new_shape=flat_shape)
 
         def unflatten_beams(x):
             """Separate the beam dim and batch dim."""
-            unflat_shape = [batch_size, self.num_beams] + x.shape.as_list()[1:]
+            unflat_shape = [batch_size, self.num_beams] + tensor_to_list(
+                x.shape
+            )[1:]
             return ops.reshape(x, new_shape=unflat_shape)
 
         if mask is None:
@@ -184,6 +189,7 @@ class BeamSampler(Sampler):
 
             def gather_beams(x):
                 x = unflatten_beams(x)
+                print(x.shape, beam_indices.shape)
                 x = ops.take_along_axis(x, beam_indices, axis=1)
                 return flatten_beams(x)
 
