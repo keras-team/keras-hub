@@ -24,7 +24,6 @@ from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class FNetBackboneTest(TestCase):
     def setUp(self):
         self.backbone = FNetBackbone(

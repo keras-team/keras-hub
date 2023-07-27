@@ -15,15 +15,12 @@
 
 import os
 
-import pytest
-
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.layers.modeling import f_net_encoder
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class FNetEncoderTest(TestCase):
     def test_valid_call(self):
         encoder = f_net_encoder.FNetEncoder(intermediate_dim=4)

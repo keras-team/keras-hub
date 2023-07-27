@@ -30,7 +30,6 @@ from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class FNetClassifierTest(TestCase):
     def setUp(self):
         # Setup Model

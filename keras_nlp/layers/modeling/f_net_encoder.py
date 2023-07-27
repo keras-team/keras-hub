@@ -14,12 +14,11 @@
 
 """FNet encoder block implementation based on `keras.layers.Layer`."""
 
-import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.utils.keras_utils import clone_initializer
-from keras_nlp.utils.tensor_utils import assert_tf_backend
 
 
 @keras_nlp_export("keras_nlp.layers.FNetEncoder")
@@ -62,12 +61,12 @@ class FNetEncoder(keras.layers.Layer):
         intermediate_dim=64)
 
     # Create a simple model containing the encoder.
-    input = keras.Input(shape=[10, 64])
+    input = keras.Input(shape=(10, 64))
     output = encoder(input)
     model = keras.Model(inputs=input, outputs=output)
 
     # Call encoder on the inputs.
-    input_data = tf.random.uniform(shape=[1, 10, 64])
+    input_data = np.random.uniform(size=(1, 10, 64))
     output = model(input_data)
     ```
 
@@ -86,8 +85,6 @@ class FNetEncoder(keras.layers.Layer):
         name=None,
         **kwargs
     ):
-        assert_tf_backend(self.__class__.__name__)
-
         super().__init__(name=name, **kwargs)
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
@@ -141,11 +138,9 @@ class FNetEncoder(keras.layers.Layer):
 
         def fourier_transform(input):
             # Apply FFT on the input and take the real part.
-            # Before we apply fourier transform, let's convert the dtype of the
-            # input tensor to complex64.
-            x = tf.cast(input, tf.complex64)
-            mixing_output = tf.math.real(tf.signal.fft2d(x))
-            return tf.cast(mixing_output, input.dtype)
+            real_in, imaginary_in = (input, ops.zeros_like(input))
+            real_out, _ = ops.fft2((real_in, imaginary_in))
+            return real_out
 
         def add_and_norm(input1, input2, norm_layer):
             return norm_layer(input1 + input2)
