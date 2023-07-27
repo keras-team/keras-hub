@@ -18,15 +18,14 @@ from keras_nlp.backend import ops
 class RotaryEmbedding(keras.layers.Layer):
     """Rotary positional encoding layer.
 
-    Tbjs layer encodes absolute positional information with rotation
-    matrix and naturally incorporates explicit relative position
-    dependency in self-attention formulation. This layer calculates
-    the rotary encoding with a mix of sine and cosine functions with
-    geometrically increasing wavelengths. Defined and formulized
-    in [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864v4).
+    This layer encodes absolute positional information with rotation
+    matrix. It calculates the rotary encoding with a mix of sine and
+    cosine functions with geometrically increasing wavelengths.
+    Defined and formulated in [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864v4).
     Takes as input the query and key tensors. The input must have shape
-    [batch_size, num_heads, sequence_length, query_length]. This layer will return
-    new query and key tensors after applying rotational encoding.
+    [batch_size, num_heads, sequence_length, query_length]. This layer
+    will return new query and key tensors after applying rotational
+    encoding.
 
     Args:
         percentage: float. The percentage of attn_head_size over which rotation
@@ -43,8 +42,8 @@ class RotaryEmbedding(keras.layers.Layer):
     sequence_length = 256
     query_length = 256
     query = tf.ones((batch_size, num_heads, sequence_length, query_length))
-    rot_emb = RotaryEmbedding()
-    query_rot = rot_emb(query)
+    rot_emb_layer = RotaryEmbedding()
+    query_rot = rot_emb_layer(query)
     ```
 
     References:
