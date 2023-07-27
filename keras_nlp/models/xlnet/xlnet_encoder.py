@@ -297,12 +297,9 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
 
         # Since ops.eye doesn't support tensorflow Tensor as input.
         # we need to create custom function here.
-        attn_mask_h = ops.zeros([qlen, qlen], dtype=attn_mask_g.dtype)
-        updates = ops.ones([qlen], dtype=attn_mask_g.dtype)
-        indices = ops.transpose(
-            ops.vstack([ops.arange(qlen), ops.arange(qlen)])
-        )
-        attn_mask_h = -ops.scatter_update(attn_mask_h, indices, updates)
+        n = ops.expand_dims(ops.arange(qlen), -1)
+        m = ops.arange(qlen)
+        attn_mask_h = -ops.cast(ops.where(n == m, 1, 0), attn_mask_g.dtype)
 
         if mlen > 0:
             attn_mask_h = ops.concatenate(

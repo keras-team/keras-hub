@@ -54,10 +54,8 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         pos_emb = ops.concatenate(
             [ops.sin(sinusoid_inp), ops.cos(sinusoid_inp)], axis=-1
         )
-        pos_emb = pos_emb[:, None, :]
-
-        if bsz is not None:
-            pos_emb = ops.repeat(pos_emb, [bsz], axis=1)
+        pos_emb = ops.expand_dims(pos_emb, 1)
+        pos_emb = ops.ones([ops.shape(pos_emb)[0], ops.shape(pos_emb)[1]*bsz, ops.shape(pos_emb)[2]]) * pos_emb
 
         return pos_emb
 
@@ -83,6 +81,7 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
             output_dim=self.hidden_dim,
             name="word_embedding",
         )
+        self.word_embed.build(input_shape)
         self.dropout_layer = keras.layers.Dropout(self.dropout)
 
         super().build(input_shape)
@@ -114,3 +113,6 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         )
 
         return word_emb, pos_emb
+
+    def compute_output_shape(self, token_id_input_shape):
+        return [token_id_input_shape + (self.hidden_dim, ), (token_id_input_shape[0], 1, self.hidden_dim)]
