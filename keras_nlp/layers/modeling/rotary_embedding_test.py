@@ -18,7 +18,6 @@ from keras_nlp.tests.test_case import TestCase
 
 
 class RotaryEmbeddingTest(TestCase):
-
     def test_valid_shape(self):
         pos_encoding = RotaryEmbedding()
         input = ops.ones(shape=[2, 4, 1])
