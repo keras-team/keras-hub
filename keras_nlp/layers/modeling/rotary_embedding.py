@@ -50,6 +50,7 @@ class RotaryEmbedding(keras.layers.Layer):
     References:
      - [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864v4)
     """
+
     def __init__(self, max_wavelength=10000, **kwargs):
         super().__init__(**kwargs)
         self.max_wavelength = max_wavelength
