@@ -212,6 +212,7 @@ class BeamSampler(Sampler):
 
         if self.return_all_beams:
             sorted_indices = ops.argsort(all_log_probs, axis=-1)
+            sorted_indices = ops.flip(sorted_indices, axis=-1)
             sorted_log_probs = ops.take_along_axis(
                 all_log_probs, sorted_indices, axis=-1
             )
