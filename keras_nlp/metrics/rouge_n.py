@@ -46,16 +46,14 @@ class RougeN(RougeBase):
 
     Examples:
 
-    1. Various Input Types.
-    1.1. Python string.
+    1. Python string.
     >>> rouge_n = keras_nlp.metrics.RougeN(order=2)
     >>> y_true = "the tiny little cat was found under the big funny bed"
     >>> y_pred = "the cat was under the bed"
     >>> rouge_n(y_true, y_pred)["f1_score"]
     <tf.Tensor: shape=(), dtype=float32, numpy=0.26666668>
 
-    1.2. rank 1 inputs.
-    a. Python list.
+    2. List inputs.
     >>> rouge_n = keras_nlp.metrics.RougeN(order=2)
     >>> y_true = [
     ...     "the tiny little cat was found under the big funny bed",
@@ -68,66 +66,31 @@ class RougeN(RougeBase):
     >>> rouge_n(y_true, y_pred)["f1_score"]
     <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>
 
-    b. Tensor.
+    3. 2D inputs.
     >>> rouge_n = keras_nlp.metrics.RougeN(order=2)
-    >>> y_true = tf.constant(
-    ...     [
-    ...         "the tiny little cat was found under the big funny bed",
-    ...         "i really love contributing to KerasNLP",
-    ...     ]
-    ... )
-    >>> y_pred = tf.constant(
-    ...     [
-    ...         "the cat was under the bed",
-    ...         "i love contributing to KerasNLP",
-    ...     ]
-    ... )
+    >>> y_true =[
+    ...     ["the tiny little cat was found under the big funny bed"],
+    ...     ["i really love contributing to KerasNLP"],
+    ... ]
+    >>> y_pred =[
+    ...     ["the cat was under the bed"],
+    ...     ["i love contributing to KerasNLP"],
+    ... ]
     >>> rouge_n(y_true, y_pred)["f1_score"]
     <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>
 
-    1.3. rank 2 inputs.
-    >>> rouge_n = keras_nlp.metrics.RougeN(order=2)
-    >>> y_true = tf.constant(
-    ...     [
-    ...         ["the tiny little cat was found under the big funny bed"],
-    ...         ["i really love contributing to KerasNLP"],
-    ...     ]
-    ... )
-    >>> y_pred = tf.constant(
-    ...     [
-    ...         ["the cat was under the bed"],
-    ...         ["i love contributing to KerasNLP"],
-    ...     ]
-    ... )
-    >>> rouge_n(y_true, y_pred)["f1_score"]
-    <tf.Tensor: shape=(), dtype=float32, numpy=0.4666667>
-
-    2. Consider trigrams for calculating ROUGE-N.
+    4. Trigrams.
     >>> rouge_n = keras_nlp.metrics.RougeN(order=3)
-    >>> y_true = tf.constant(
-    ...     [
-    ...         "the tiny little cat was found under the big funny bed",
-    ...         "i really love contributing to KerasNLP",
-    ...     ]
-    ... )
-    >>> y_pred = tf.constant(
-    ...     [
-    ...         "the cat was under the bed",
-    ...         "i love contributing to KerasNLP",
-    ...     ]
-    ... )
+    >>> y_true = [
+    ...     "the tiny little cat was found under the big funny bed",
+    ...     "i really love contributing to KerasNLP",
+    ... ]
+    >>> y_pred = [
+    ...     "the cat was under the bed",
+    ...     "i love contributing to KerasNLP",
+    ... ]
     >>> rouge_n(y_true, y_pred)["f1_score"]
     <tf.Tensor: shape=(), dtype=float32, numpy=0.2857143>
-
-    3. Pass the metric to `model.compile()`.
-    >>> inputs = keras.Input(shape=(), dtype='string')
-    >>> outputs = keras.layers.Identity()(inputs)
-    >>> model = keras.Model(inputs, outputs)
-    >>> model.compile(metrics=[keras_nlp.metrics.RougeN()])
-    >>> y_pred = x = tf.constant(["hello this is fun"])
-    >>> y = tf.constant(["hello this is awesome"])
-    >>> model.compute_metrics(x, y, y_pred, sample_weight=None)["f1_score"]
-    0.6666666865348816
     """
 
     def __init__(

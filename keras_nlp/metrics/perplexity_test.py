@@ -13,14 +13,11 @@
 # limitations under the License.
 
 """Tests for Perplexity."""
-import pytest
-import tensorflow as tf
-
+from keras_nlp.backend import ops
 from keras_nlp.metrics.perplexity import Perplexity
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class PerplexityTest(TestCase):
     def test_vars_after_initializing_class(self):
         perplexity = Perplexity()
@@ -28,8 +25,8 @@ class PerplexityTest(TestCase):
 
     def test_from_logits_without_masking(self):
         perplexity = Perplexity(from_logits=True)
-        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
-        y_pred = tf.constant(
+        y_true = ops.array([[1, 3, 0], [2, 1, 3]])
+        y_pred = ops.array(
             [
                 [
                     [1.034, 4.797, 2.82, 1.154],
@@ -50,8 +47,8 @@ class PerplexityTest(TestCase):
     def test_from_logits_with_sample_weight(self):
         perplexity = Perplexity(from_logits=True)
 
-        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
-        y_pred = tf.constant(
+        y_true = ops.array([[1, 3, 0], [2, 1, 3]])
+        y_pred = ops.array(
             [
                 [
                     [1.034, 4.797, 2.82, 1.154],
@@ -65,7 +62,7 @@ class PerplexityTest(TestCase):
                 ],
             ]
         )
-        sample_wt = tf.cast(y_true != 0, "int32")
+        sample_wt = ops.cast(y_true != 0, "int32")
 
         perplexity_val = perplexity(y_true, y_pred, sample_wt)
         self.assertAlmostEqual(perplexity_val, 2.8789, delta=1e-3)
@@ -73,8 +70,8 @@ class PerplexityTest(TestCase):
     def test_from_logits_with_mask_token_id(self):
         perplexity = Perplexity(from_logits=True, mask_token_id=0)
 
-        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
-        y_pred = tf.constant(
+        y_true = ops.array([[1, 3, 0], [2, 1, 3]])
+        y_pred = ops.array(
             [
                 [
                     [1.034, 4.797, 2.82, 1.154],
@@ -95,8 +92,8 @@ class PerplexityTest(TestCase):
     def test_from_logits_with_mask_token_id_and_sample_weight(self):
         perplexity = Perplexity(from_logits=True, mask_token_id=0)
 
-        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
-        y_pred = tf.constant(
+        y_true = ops.array([[1, 3, 0], [2, 1, 3]])
+        y_pred = ops.array(
             [
                 [
                     [1.034, 4.797, 2.82, 1.154],
@@ -110,7 +107,7 @@ class PerplexityTest(TestCase):
                 ],
             ]
         )
-        sample_weight = tf.constant([[0.5, 0.1, 0.9], [1, 0.7, 0.5]])
+        sample_weight = ops.array([[0.5, 0.1, 0.9], [1, 0.7, 0.5]])
 
         perplexity_val = perplexity(y_true, y_pred, sample_weight)
         self.assertAlmostEqual(perplexity_val, 2.9442, delta=1e-3)
@@ -118,8 +115,8 @@ class PerplexityTest(TestCase):
     def test_two_inputs_from_logits(self):
         perplexity = Perplexity(from_logits=True, mask_token_id=0)
 
-        y_true_1 = tf.constant([[1, 3, 0], [2, 1, 3]])
-        y_pred_1 = tf.constant(
+        y_true_1 = ops.array([[1, 3, 0], [2, 1, 3]])
+        y_pred_1 = ops.array(
             [
                 [
                     [1.034, 4.797, 2.82, 1.154],
@@ -137,8 +134,8 @@ class PerplexityTest(TestCase):
         perplexity_val = perplexity(y_true_1, y_pred_1)
         self.assertAlmostEqual(perplexity_val, 2.8789, delta=1e-3)
 
-        y_true_2 = tf.constant([[2, 0, 0], [1, 2, 3]])
-        y_pred_2 = tf.constant(
+        y_true_2 = ops.array([[2, 0, 0], [1, 2, 3]])
+        y_pred_2 = ops.array(
             [
                 [
                     [2.887, 0.885, 2.973, 2.582],
@@ -158,8 +155,8 @@ class PerplexityTest(TestCase):
     def test_from_probs_with_sample_weight(self):
         perplexity = Perplexity(from_logits=False)
 
-        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
-        y_pred = tf.constant(
+        y_true = ops.array([[1, 3, 0], [2, 1, 3]])
+        y_pred = ops.array(
             [
                 [
                     [1.034, 4.797, 2.82, 1.154],
@@ -173,9 +170,9 @@ class PerplexityTest(TestCase):
                 ],
             ]
         )
-        y_prob = tf.nn.softmax(y_pred, axis=-1)
+        y_prob = ops.softmax(y_pred, axis=-1)
 
-        sample_wt = tf.cast(y_true != 0, "int32")
+        sample_wt = ops.cast(y_true != 0, "int32")
 
         perplexity_val = perplexity(y_true, y_prob, sample_wt)
         self.assertAlmostEqual(perplexity_val, 2.8789, delta=1e-3)
@@ -183,8 +180,8 @@ class PerplexityTest(TestCase):
     def test_from_probs_with_pad_token(self):
         perplexity = Perplexity(from_logits=False, mask_token_id=0)
 
-        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
-        y_pred = tf.constant(
+        y_true = ops.array([[1, 3, 0], [2, 1, 3]])
+        y_pred = ops.array(
             [
                 [
                     [1.034, 4.797, 2.82, 1.154],
@@ -198,14 +195,14 @@ class PerplexityTest(TestCase):
                 ],
             ]
         )
-        y_prob = tf.nn.softmax(y_pred, axis=-1)
+        y_prob = ops.softmax(y_pred, axis=-1)
 
         perplexity_val = perplexity(y_true, y_prob)
         self.assertAlmostEqual(perplexity_val, 2.8789, delta=1e-3)
 
     def test_reset_state(self):
-        y_true = tf.constant([[1, 3, 0], [2, 1, 3]])
-        y_pred = tf.constant(
+        y_true = ops.array([[1, 3, 0], [2, 1, 3]])
+        y_pred = ops.array(
             [
                 [
                     [1.034, 4.797, 2.82, 1.154],
@@ -231,8 +228,8 @@ class PerplexityTest(TestCase):
     def test_update_state(self):
         perplexity = Perplexity(from_logits=True, mask_token_id=0)
 
-        y_true_1 = tf.constant([[1, 3, 0], [2, 1, 3]])
-        y_pred_1 = tf.constant(
+        y_true_1 = ops.array([[1, 3, 0], [2, 1, 3]])
+        y_pred_1 = ops.array(
             [
                 [
                     [1.034, 4.797, 2.82, 1.154],
@@ -251,8 +248,8 @@ class PerplexityTest(TestCase):
         perplexity_val = perplexity.result()
         self.assertAlmostEqual(perplexity_val, 2.8789, delta=1e-3)
 
-        y_true_2 = tf.constant([[2, 0, 0], [1, 2, 3]])
-        y_pred_2 = tf.constant(
+        y_true_2 = ops.array([[2, 0, 0], [1, 2, 3]])
+        y_pred_2 = ops.array(
             [
                 [
                     [2.887, 0.885, 2.973, 2.582],

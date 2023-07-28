@@ -18,7 +18,6 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
-from keras_nlp.utils.tensor_utils import assert_tf_backend
 from keras_nlp.utils.tensor_utils import is_floating_dtype
 
 
@@ -67,13 +66,6 @@ class EditDistance(keras.metrics.Metric):
     >>> edit_distance(y_true, y_pred)
     <tf.Tensor: shape=(), dtype=float32, numpy=0.36363637>
 
-    Rank 1 tensor.
-    >>> edit_distance = keras_nlp.metrics.EditDistance()
-    >>> y_true = tf.strings.split("the tiny little cat was found under the big funny bed")
-    >>> y_pred = tf.strings.split("the cat was found under the bed")
-    >>> edit_distance(y_true, y_pred)
-    <tf.Tensor: shape=(), dtype=float32, numpy=0.36363637>
-
     Nested Python list.
     >>> edit_distance = keras_nlp.metrics.EditDistance()
     >>> y_true = [
@@ -86,19 +78,6 @@ class EditDistance(keras.metrics.Metric):
     ... ]
     >>> edit_distance(y_true, y_pred)
     <tf.Tensor: shape=(), dtype=float32, numpy=0.73333335>
-
-    Rank 2 tensor.
-    >>> edit_distance = keras_nlp.metrics.EditDistance()
-    >>> y_true = tf.strings.split([
-    ...     "the tiny little cat was found under the big funny bed",
-    ...     "it is sunny today",
-    ... ])
-    >>> y_pred = tf.strings.split([
-    ...     "the cat was found under the bed",
-    ...     "it is sunny but with a hint of cloud cover",
-    ... ])
-    >>> edit_distance(y_true, y_pred)
-    <tf.Tensor: shape=(), dtype=float32, numpy=0.73333335>
     """
 
     def __init__(
@@ -108,8 +87,6 @@ class EditDistance(keras.metrics.Metric):
         name="edit_distance",
         **kwargs,
     ):
-        assert_tf_backend(self.__class__.__name__)
-
         super().__init__(name=name, dtype=dtype, **kwargs)
 
         if not is_floating_dtype(dtype):

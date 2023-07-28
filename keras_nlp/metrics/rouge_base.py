@@ -15,12 +15,10 @@
 """ROUGE metric."""
 
 
-import types
-
 import tensorflow as tf
 
 from keras_nlp.backend import keras
-from keras_nlp.utils.tensor_utils import assert_tf_backend
+from keras_nlp.backend import ops
 from keras_nlp.utils.tensor_utils import is_floating_dtype
 from keras_nlp.utils.tensor_utils import tensor_to_list
 
@@ -62,8 +60,6 @@ class RougeBase(keras.metrics.Metric):
         name="rouge",
         **kwargs,
     ):
-        assert_tf_backend(self.__class__.__name__)
-
         super().__init__(name=name, dtype=dtype, **kwargs)
 
         if rouge_scorer is None:
@@ -123,27 +119,6 @@ class RougeBase(keras.metrics.Metric):
             name="number_of_samples",
         )
 
-    def __new__(cls, *args, **kwargs):
-        # Temporary workaround for Keras bug with dictionary return types.
-        # Wraps `result()` with a python dictionary that also supports variable
-        # assignment. We have to do this with __new__ because the base metric
-        # class wraps the `results()` method.
-        # TODO: Remove this snippet of code once the Keras bug is fixed.
-        obj = super().__new__(cls)
-
-        class MetricDict(dict):
-            """A dictionary that supports variable assignment."""
-
-            pass
-
-        def wrap_result(result_fn):
-            return tf.__internal__.decorator.make_decorator(
-                result_fn, lambda obj, *args: MetricDict(result_fn(*args))
-            )
-
-        obj.result = types.MethodType(wrap_result(obj.result), obj)
-        return obj
-
     def update_state(self, y_true, y_pred, sample_weight=None):
         # Three possible shapes for y_true and y_pred: Python string,
         # [batch_size] and [batch_size, 1]. In the latter two cases, we have
@@ -182,23 +157,16 @@ class RougeBase(keras.metrics.Metric):
             score = self._rouge_scorer.score(reference, hypothesis)[
                 self.variant
             ]
-            return tf.cast(
-                tf.constant([score.precision, score.recall, score.fmeasure]),
-                dtype=self.dtype,
-            )
+            return score.precision, score.recall, score.fmeasure
 
         for batch_idx in range(batch_size):
-            score = tf.py_function(
-                func=calculate_rouge_score,
-                inp=[y_true[batch_idx], y_pred[batch_idx]],
-                Tout=self.dtype,
-            )
+            score = calculate_rouge_score(y_true[batch_idx], y_pred[batch_idx])
             self._rouge_precision.assign_add(score[0])
             self._rouge_recall.assign_add(score[1])
             self._rouge_f1_score.assign_add(score[2])
 
         self._number_of_samples.assign_add(
-            tf.cast(batch_size, dtype=self.dtype)
+            ops.cast(batch_size, dtype=self.dtype)
         )
 
     def result(self):

@@ -14,11 +14,9 @@
 
 """Perplexity metric."""
 
-import tensorflow as tf
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
-from keras_nlp.utils.tensor_utils import assert_tf_backend
+from keras_nlp.backend import ops
 from keras_nlp.utils.tensor_utils import is_floating_dtype
 
 
@@ -48,46 +46,40 @@ class Perplexity(keras.metrics.Metric):
 
     1. Calculate perplexity by calling update_state() and result().
     1.1. `sample_weight`, and `mask_token_id` are not provided.
-    >>> tf.random.set_seed(42)
+    >>> np.random.seed(42)
     >>> perplexity = keras_nlp.metrics.Perplexity(name="perplexity")
-    >>> target = tf.random.uniform(
-    ...     shape=[2, 5],  maxval=10, dtype="int32", seed=42)
-    >>> logits = tf.random.uniform(shape=(2, 5, 10), seed=42)
+    >>> target = np.random.randint(10, size=[2, 5])
+    >>> logits = np.random.uniform(size=(2, 5, 10))
     >>> perplexity.update_state(target, logits)
     >>> perplexity.result()
-    <tf.Tensor: shape=(), dtype=float32, numpy=11.8781595>
+    <tf.Tensor: shape=(), dtype=float32, numpy=14.352535>
 
     1.2. `sample_weight` specified (masking token with ID 0).
-    >>> tf.random.set_seed(42)
+    >>> np.random.seed(42)
     >>> perplexity = keras_nlp.metrics.Perplexity(name="perplexity")
-    >>> target = tf.random.uniform(
-    ...     shape=[2, 5],  maxval=10, dtype="int32", seed=42)
-    >>> logits = tf.random.uniform(shape=(2, 5, 10), seed=42)
-    >>> sample_weight = tf.cast(
-    ...     tf.math.logical_not(tf.equal(target, 0)), "float32")
+    >>> target = np.random.randint(10, size=[2, 5])
+    >>> logits = np.random.uniform(size=(2, 5, 10))
+    >>> sample_weight = (target != 0).astype("float32")
     >>> perplexity.update_state(target, logits, sample_weight)
     >>> perplexity.result()
-    <tf.Tensor: shape=(), dtype=float32, numpy=13.1128>
+    <tf.Tensor: shape=(), dtype=float32, numpy=14.352535>
 
     2. Call perplexity directly.
-    >>> tf.random.set_seed(42)
+    >>> np.random.seed(42)
     >>> perplexity = keras_nlp.metrics.Perplexity(name="perplexity")
-    >>> target = tf.random.uniform(
-    ...     shape=[2, 5],  maxval=10, dtype="int32", seed=42)
-    >>> logits = tf.random.uniform(shape=(2, 5, 10), seed=42)
+    >>> target = np.random.randint(10, size=[2, 5])
+    >>> logits = np.random.uniform(size=(2, 5, 10))
     >>> perplexity(target, logits)
-    <tf.Tensor: shape=(), dtype=float32, numpy=11.8781595>
+    <tf.Tensor: shape=(), dtype=float32, numpy=14.352535>
 
     3. Provide the padding token ID and let the class compute the mask on its
        own.
-    >>> tf.random.set_seed(42)
-    >>> perplexity = keras_nlp.metrics.Perplexity(
-    ...     name="perplexity", mask_token_id=0)
-    >>> target = tf.random.uniform(
-    ...     shape=[2, 5],  maxval=10, dtype="int32", seed=42)
-    >>> logits = tf.random.uniform(shape=(2, 5, 10), seed=42)
+    >>> np.random.seed(42)
+    >>> perplexity = keras_nlp.metrics.Perplexity(mask_token_id=0)
+    >>> target = np.random.randint(10, size=[2, 5])
+    >>> logits = np.random.uniform(size=(2, 5, 10))
     >>> perplexity(target, logits)
-    <tf.Tensor: shape=(), dtype=float32, numpy=13.1128>
+    <tf.Tensor: shape=(), dtype=float32, numpy=14.352535>
     """
 
     def __init__(
@@ -98,8 +90,6 @@ class Perplexity(keras.metrics.Metric):
         name="perplexity",
         **kwargs,
     ):
-        assert_tf_backend(self.__class__.__name__)
-
         if not is_floating_dtype(dtype):
             raise ValueError(
                 "`dtype` must be a floating point type. "
@@ -131,39 +121,39 @@ class Perplexity(keras.metrics.Metric):
     def update_state(self, y_true, y_pred, sample_weight=None):
         # y_true shape: (batch_size, seq_len)
         # y_pred shape: (batch_size, seq_len, vocab_size)
-        y_true = tf.cast(y_true, self.dtype)
-        y_pred = tf.cast(y_pred, self.dtype)
+        y_true = ops.cast(y_true, self.dtype)
+        y_pred = ops.cast(y_pred, self.dtype)
 
         if sample_weight is not None:
-            sample_weight = tf.cast(sample_weight, self.dtype)
+            sample_weight = ops.cast(sample_weight, self.dtype)
 
-        batch_size = tf.cast(tf.shape(y_true)[0], self.dtype)
+        batch_size = ops.cast(ops.shape(y_true)[0], self.dtype)
 
         if self.mask_token_id is not None:
-            mask = tf.cast(
-                tf.math.logical_not(tf.equal(y_true, self.mask_token_id)),
+            mask = ops.cast(
+                ops.logical_not(ops.equal(y_true, self.mask_token_id)),
                 self.dtype,
             )
             if sample_weight is None:
                 sample_weight = mask
             else:
-                sample_weight = tf.multiply(mask, sample_weight)
+                sample_weight = ops.multiply(mask, sample_weight)
 
         # Calculate the Cross Entropy Loss.
-        crossentropy_value = tf.cast(
+        crossentropy_value = ops.cast(
             self._crossentropy(y_true, y_pred, sample_weight=sample_weight),
             self.dtype,
         )  # scalar
 
         # Divide the loss by the number of non-masked tokens
         if sample_weight is not None:
-            crossentropy_value = crossentropy_value / tf.reduce_sum(
+            crossentropy_value = crossentropy_value / ops.sum(
                 sample_weight
             )  # scalar
         else:
             crossentropy_value = crossentropy_value / (
-                tf.cast(tf.shape(y_true)[0], self.dtype)
-                * tf.cast(tf.shape(y_true)[1], self.dtype)
+                ops.cast(ops.shape(y_true)[0], self.dtype)
+                * ops.cast(ops.shape(y_true)[1], self.dtype)
             )  # scalar
 
         self._aggregate_crossentropy.assign_add(batch_size * crossentropy_value)
@@ -172,7 +162,7 @@ class Perplexity(keras.metrics.Metric):
     def result(self):
         if self._number_of_samples == 0:
             return 0.0
-        perplexity_score = tf.exp(
+        perplexity_score = ops.exp(
             self._aggregate_crossentropy / self._number_of_samples
         )
         return perplexity_score
