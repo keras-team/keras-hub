@@ -11,10 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 
 
+@keras_nlp_export("keras_nlp.layers.RotaryEmbedding")
 class RotaryEmbedding(keras.layers.Layer):
     """Rotary positional encoding layer.
 
@@ -38,53 +40,61 @@ class RotaryEmbedding(keras.layers.Layer):
 
     ```python
     batch_size = 16
-    num_heads = 8
+    feature_length = 18
     sequence_length = 256
-    query_length = 256
-    query = tf.ones((batch_size, num_heads, sequence_length, query_length))
+
+    tensor = tf.ones((batch_size, sequence_length, feature_length))
     rot_emb_layer = RotaryEmbedding()
-    query_rot = rot_emb_layer(query)
+    tensor_rot = rot_emb_layer(tensor)
     ```
 
     References:
      - [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864v4)
     """
 
-    def __init__(self, max_wavelength=10000, **kwargs):
+    def __init__(
+        self, max_wavelength=10000, sequence_axis=1, feature_axis=-1, **kwargs
+    ):
         super().__init__(**kwargs)
         self.max_wavelength = max_wavelength
+        self.sequence_axis = sequence_axis
+        self.feature_axis = feature_axis
 
     def call(self, inputs):
         rotary_dim = ops.shape(inputs)[-1]
 
-        cos_emb, sin_emb = self._compute_cos_sin_embedding(
-            inputs, rotary_dim, seq_dim=1
-        )
+        cos_emb, sin_emb = self._compute_cos_sin_embedding(inputs, rotary_dim)
         outputs = self._apply_rotary_pos_emb(inputs, cos_emb, sin_emb)
 
         return outputs
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
-        cos_emb = cos_emb[:, : ops.shape(tensor)[1], :, :]
-        sin_emb = sin_emb[:, : ops.shape(tensor)[1], :, :]
-
-        x1, x2 = ops.split(tensor, 2, axis=-1)
-        half_rot_tensor = ops.concatenate((-x2, x1), axis=-1)
+        x1, x2 = ops.split(tensor, 2, axis=self.feature_axis)
+        half_rot_tensor = ops.concatenate((-x2, x1), axis=self.feature_axis)
 
         return (tensor * cos_emb) + (half_rot_tensor * sin_emb)
 
-    def _compute_cos_sin_embedding(self, x, rotary_dim, seq_dim=1):
-        seq_len = ops.shape(x)[seq_dim]
-
-        range = ops.arange(0, rotary_dim, 2, self.compute_dtype)
+    def _compute_cos_sin_embedding(self, x, rotary_dim):
+        freq_range = ops.arange(0, rotary_dim, 2, self.compute_dtype)
         inverse_freq = 1.0 / (
             self.max_wavelength
-            ** (range / ops.cast(rotary_dim, self.compute_dtype))
+            ** (freq_range / ops.cast(rotary_dim, self.compute_dtype))
         )
 
+        seq_len = ops.shape(x)[self.sequence_axis]
         tensor = ops.arange(seq_len, dtype=inverse_freq.dtype)
-        freqs = ops.einsum("i, j -> ij", tensor, inverse_freq)
-        embedding = ops.concatenate((freqs, freqs), axis=-1)[None, :, None, :]
+        freq = ops.einsum("i, j -> ij", tensor, inverse_freq)
+        embedding = ops.concatenate((freq, freq), axis=self.feature_axis)
+
+        def get_axis(axis):
+            return axis if axis > 0 else len(x.shape) + axis
+
+        feature_axis = get_axis(self.feature_axis)
+        sequence_axis = get_axis(self.sequence_axis)
+
+        for axis in range(len(ops.shape(x))):
+            if axis != sequence_axis and axis != feature_axis:
+                embedding = ops.expand_dims(embedding, axis)
 
         return ops.cos(embedding), ops.sin(embedding)
 
