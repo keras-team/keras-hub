@@ -121,7 +121,8 @@ class ContrastiveSampler(Sampler):
         # Compute initial logits.
         logits, _, cache = next(prompt, cache, index)
         # `ops.while_loop` will not accept `None` as a value for `loop_vars`.
-        cache = () if cache is None else cache
+        has_cache = cache is not None
+        cache = cache if has_cache else ()
 
         def cond(prompt, cache, index, logits, hidden_states):
             if end_token_id is None:
@@ -140,7 +141,9 @@ class ContrastiveSampler(Sampler):
             prompt_beams = create_beams(prompt)
             mask_beams = create_beams(mask)
             hidden_states_beams = create_beams(hidden_states)
-            cache_beams = tf.nest.map_structure(create_beams, cache)
+            cache_beams = None
+            if has_cache:
+                cache_beams = tf.nest.map_structure(create_beams, cache)
 
             # Get top-k candidate tokens and their probabilities.
             top_k_probabilities, top_k_indices = ops.top_k(
@@ -190,7 +193,6 @@ class ContrastiveSampler(Sampler):
             unflat_next_hidden_states = unflatten_beams(
                 next_hidden_states_beams
             )
-            unflat_cache = tf.nest.map_structure(unflatten_beams, cache_beams)
             best_token_indices = ops.argmax(unflat_score, axis=1)
 
             def gather_best_token(beams):
@@ -210,7 +212,9 @@ class ContrastiveSampler(Sampler):
             # next iteration step.
             logits = gather_best_token(unflat_next_logits)
             next_hidden_states = gather_best_token(unflat_next_hidden_states)
-            cache = tf.nest.map_structure(gather_best_token, unflat_cache)
+            if has_cache:
+                cache = tf.nest.map_structure(unflatten_beams, cache_beams)
+                cache = tf.nest.map_structure(gather_best_token, cache)
 
             hidden_states = ops.slice_update(
                 hidden_states,
