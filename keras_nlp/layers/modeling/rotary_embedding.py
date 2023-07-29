@@ -53,34 +53,38 @@ class RotaryEmbedding(keras.layers.Layer):
     """
 
     def __init__(
-        self, max_wavelength=10000, sequence_axis=1, feature_axis=-1, **kwargs
+        self,
+        max_wavelength=10000,
+        scaling_factor=1.0,
+        sequence_axis=1,
+        feature_axis=-1,
+        **kwargs
     ):
         super().__init__(**kwargs)
         self.max_wavelength = max_wavelength
         self.sequence_axis = sequence_axis
         self.feature_axis = feature_axis
+        self.scaling_factor = scaling_factor
 
     def call(self, inputs):
         rotary_dim = ops.shape(inputs)[-1]
-
         cos_emb, sin_emb = self._compute_cos_sin_embedding(inputs, rotary_dim)
-        outputs = self._apply_rotary_pos_emb(inputs, cos_emb, sin_emb)
-
-        return outputs
+        return self._apply_rotary_pos_emb(inputs, cos_emb, sin_emb)
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
         x1, x2 = ops.split(tensor, 2, axis=self.feature_axis)
         half_rot_tensor = ops.concatenate((-x2, x1), axis=self.feature_axis)
-
         return (tensor * cos_emb) + (half_rot_tensor * sin_emb)
 
     def _compute_cos_sin_embedding(self, x, rotary_dim):
         freq_range = ops.arange(0, rotary_dim, 2, self.compute_dtype)
+        freq_range = freq_range / ops.cast(
+            self.scaling_factor, self.compute_dtype
+        )
         inverse_freq = 1.0 / (
             self.max_wavelength
             ** (freq_range / ops.cast(rotary_dim, self.compute_dtype))
         )
-
         seq_len = ops.shape(x)[self.sequence_axis]
         tensor = ops.arange(seq_len, dtype=inverse_freq.dtype)
         freq = ops.einsum("i, j -> ij", tensor, inverse_freq)
@@ -103,6 +107,7 @@ class RotaryEmbedding(keras.layers.Layer):
         config.update(
             {
                 "max_wavelength": self.max_wavelength,
+                "scaling_factor": self.scaling_factor,
             }
         )
         return config
