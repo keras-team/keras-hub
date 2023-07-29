@@ -92,7 +92,7 @@ class RotaryEmbedding(keras.layers.Layer):
         feature_axis = get_axis(self.feature_axis)
         sequence_axis = get_axis(self.sequence_axis)
 
-        for axis in range(len(ops.shape(x))):
+        for axis in range(len(x.shape)):
             if axis != sequence_axis and axis != feature_axis:
                 embedding = ops.expand_dims(embedding, axis)
 
