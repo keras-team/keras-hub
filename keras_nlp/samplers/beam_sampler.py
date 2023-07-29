@@ -176,7 +176,7 @@ class BeamSampler(Sampler):
             next_token = flatten_beams(indices % vocab_size)
             # We need `ensure_shape` as `top_k` will change the static shape.
             next_log_probs = flatten_beams(next_log_probs)
-            # Work around tensor shape when not using XLA.
+            # Work around for top_k output shape on tf backend.
             if isinstance(log_probs, tf.Tensor):
                 log_probs = tf.ensure_shape(next_log_probs, log_probs.shape)
             else:
