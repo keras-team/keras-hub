@@ -22,7 +22,6 @@ from keras_nlp.samplers.beam_sampler import BeamSampler
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class BeamSamplerTest(TestCase):
     def setUp(self):
         super().setUp()
