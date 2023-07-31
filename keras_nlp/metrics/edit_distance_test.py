@@ -21,7 +21,6 @@ from keras_nlp.metrics.edit_distance import EditDistance
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class EditDistanceTest(TestCase):
     def test_initialization(self):
         edit_distance = EditDistance()
@@ -51,17 +50,29 @@ class EditDistanceTest(TestCase):
         edit_distance_val = edit_distance(y_true, y_pred)
         self.assertAlmostEqual(edit_distance_val, 0.733, delta=1e-3)
 
-    def test_rank_1_tensor_input_normalize(self):
-        edit_distance = EditDistance()
-        y_true = tf.strings.split(
-            "the tiny little cat was found under the big funny bed"
-        )
-        y_pred = tf.strings.split("the cat was found under the bed")
+    def test_1d_list_input_normalize_false(self):
+        edit_distance = EditDistance(normalize=False)
+        y_true = "the tiny little cat was found under the big funny bed".split()
+        y_pred = "the cat was found under the bed".split()
 
         edit_distance_val = edit_distance(y_true, y_pred)
-        self.assertAlmostEqual(edit_distance_val, 0.364, delta=1e-3)
+        self.assertAlmostEqual(edit_distance_val, 4.0, delta=1e-3)
 
-    def test_rank_2_tensor_input_normalize(self):
+    def test_2d_list_input_normalize_false(self):
+        edit_distance = EditDistance(normalize=False)
+        y_true = [
+            "the tiny little cat was found under the big funny bed".split(),
+            "it is sunny today".split(),
+        ]
+        y_pred = [
+            "the cat was found under the bed".split(),
+            "it is sunny but with a hint of cloud cover".split(),
+        ]
+
+        edit_distance_val = edit_distance(y_true, y_pred)
+        self.assertAlmostEqual(edit_distance_val, 5.5, delta=1e-3)
+
+    def test_tensor_input(self):
         edit_distance = EditDistance()
         y_true = tf.strings.split(
             [
@@ -79,34 +90,7 @@ class EditDistanceTest(TestCase):
         edit_distance_val = edit_distance(y_true, y_pred)
         self.assertAlmostEqual(edit_distance_val, 0.733, delta=1e-3)
 
-    def test_rank_1_tensor_input_normalize_false(self):
-        edit_distance = EditDistance(normalize=False)
-        y_true = tf.strings.split(
-            "the tiny little cat was found under the big funny bed"
-        )
-        y_pred = tf.strings.split("the cat was found under the bed")
-
-        edit_distance_val = edit_distance(y_true, y_pred)
-        self.assertAlmostEqual(edit_distance_val, 4.0, delta=1e-3)
-
-    def test_rank_2_tensor_input_normalize_false(self):
-        edit_distance = EditDistance(normalize=False)
-        y_true = tf.strings.split(
-            [
-                "the tiny little cat was found under the big funny bed",
-                "it is sunny today",
-            ]
-        )
-        y_pred = tf.strings.split(
-            [
-                "the cat was found under the bed",
-                "it is sunny but with a hint of cloud cover",
-            ]
-        )
-
-        edit_distance_val = edit_distance(y_true, y_pred)
-        self.assertAlmostEqual(edit_distance_val, 5.5, delta=1e-3)
-
+    @pytest.mark.tf_only  # string model output only applies to tf.
     def test_model_compile_normalize(self):
         inputs = keras.Input(shape=(None,), dtype="string")
         outputs = keras.layers.Identity()(inputs)
@@ -122,6 +106,7 @@ class EditDistanceTest(TestCase):
         output = model.compute_metrics(x, y, y_pred, sample_weight=None)
         self.assertAlmostEqual(output["edit_distance"], 0.364, delta=1e-3)
 
+    @pytest.mark.tf_only  # string model output only applies to tf.
     def test_model_compile_normalize_false(self):
         inputs = keras.Input(shape=(None,), dtype="string")
         outputs = keras.layers.Identity()(inputs)
@@ -137,20 +122,26 @@ class EditDistanceTest(TestCase):
         output = model.compute_metrics(x, y, y_pred, sample_weight=None)
         self.assertAlmostEqual(output["edit_distance"], 4.0, delta=1e-3)
 
-    def test_reset_state_normalize(self):
+    def test_rank_1_tensor_input_normalize(self):
         edit_distance = EditDistance()
         y_true = tf.strings.split(
-            [
-                "the tiny little cat was found under the big funny bed",
-                "it is sunny today",
-            ]
+            "the tiny little cat was found under the big funny bed"
         )
-        y_pred = tf.strings.split(
-            [
-                "the cat was found under the bed",
-                "it is sunny but with a hint of cloud cover",
-            ]
-        )
+        y_pred = tf.strings.split("the cat was found under the bed")
+
+        edit_distance_val = edit_distance(y_true, y_pred)
+        self.assertAlmostEqual(edit_distance_val, 0.364, delta=1e-3)
+
+    def test_reset_state_normalize(self):
+        edit_distance = EditDistance()
+        y_true = [
+            "the tiny little cat was found under the big funny bed".split(),
+            "it is sunny today".split(),
+        ]
+        y_pred = [
+            "the cat was found under the bed".split(),
+            "it is sunny but with a hint of cloud cover".split(),
+        ]
 
         edit_distance.update_state(y_true, y_pred)
         edit_distance_val = edit_distance.result()
@@ -162,18 +153,14 @@ class EditDistanceTest(TestCase):
 
     def test_update_state_normalize(self):
         edit_distance = EditDistance()
-        y_true_1 = tf.strings.split(
-            [
-                "the tiny little cat was found under the big funny bed",
-                "it is sunny today",
-            ]
-        )
-        y_pred_1 = tf.strings.split(
-            [
-                "the cat was found under the bed",
-                "it is sunny but with a hint of cloud cover",
-            ]
-        )
+        y_true_1 = [
+            "the tiny little cat was found under the big funny bed".split(),
+            "it is sunny today".split(),
+        ]
+        y_pred_1 = [
+            "the cat was found under the bed".split(),
+            "it is sunny but with a hint of cloud cover".split(),
+        ]
 
         edit_distance.update_state(y_true_1, y_pred_1)
         edit_distance_val = edit_distance.result()
@@ -188,18 +175,14 @@ class EditDistanceTest(TestCase):
 
     def test_update_state_normalize_false(self):
         edit_distance = EditDistance(normalize=False)
-        y_true_1 = tf.strings.split(
-            [
-                "the tiny little cat was found under the big funny bed",
-                "it is sunny today",
-            ]
-        )
-        y_pred_1 = tf.strings.split(
-            [
-                "the cat was found under the bed",
-                "it is sunny but with a hint of cloud cover",
-            ]
-        )
+        y_true_1 = [
+            "the tiny little cat was found under the big funny bed".split(),
+            "it is sunny today".split(),
+        ]
+        y_pred_1 = [
+            "the cat was found under the bed".split(),
+            "it is sunny but with a hint of cloud cover".split(),
+        ]
 
         edit_distance.update_state(y_true_1, y_pred_1)
         edit_distance_val = edit_distance.result()

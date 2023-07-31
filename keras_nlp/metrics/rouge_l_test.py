@@ -13,14 +13,12 @@
 # limitations under the License.
 
 """Tests for RougeL."""
-import pytest
 import tensorflow as tf
 
 from keras_nlp.metrics.rouge_l import RougeL
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class RougeLTest(TestCase):
     def test_initialization(self):
         rouge = RougeL()
@@ -77,35 +75,13 @@ class RougeLTest(TestCase):
             {"precision": 1.0, "recall": 0.689393, "f1_score": 0.807486},
         )
 
-    def test_rank_2_input(self):
-        rouge = RougeL(use_stemmer=False)
-        y_true = tf.constant(
-            [
-                ["the tiny little cat was found under the big funny bed"],
-                ["i really love contributing to KerasNLP"],
-            ]
-        )
-        y_pred = tf.constant(
-            [["the cat was under the bed"], ["i love contributing to KerasNLP"]]
-        )
-
-        rouge_val = rouge(y_true, y_pred)
-        self.assertAllClose(
-            rouge_val,
-            {"precision": 1.0, "recall": 0.689393, "f1_score": 0.807486},
-        )
-
     def test_reset_state(self):
         rouge = RougeL()
-        y_true = tf.constant(
-            ["hey, this is great fun", "i love contributing to KerasNLP"]
-        )
-        y_pred = tf.constant(
-            [
-                "great fun indeed",
-                "KerasNLP is awesome, i love contributing to it",
-            ]
-        )
+        y_true = ["hey, this is great fun", "i love contributing to KerasNLP"]
+        y_pred = [
+            "great fun indeed",
+            "KerasNLP is awesome, i love contributing to it",
+        ]
 
         rouge.update_state(y_true, y_pred)
         rouge_val = rouge.result()
@@ -123,15 +99,14 @@ class RougeLTest(TestCase):
 
     def test_update_state(self):
         rouge = RougeL()
-        y_true_1 = tf.constant(
-            [
-                "the tiny little cat was found under the big funny bed",
-                "i really love contributing to KerasNLP",
-            ]
-        )
-        y_pred_1 = tf.constant(
-            ["the cat was under the bed", "i love contributing to KerasNLP"]
-        )
+        y_true_1 = [
+            "the tiny little cat was found under the big funny bed",
+            "i really love contributing to KerasNLP",
+        ]
+        y_pred_1 = [
+            "the cat was under the bed",
+            "i love contributing to KerasNLP",
+        ]
 
         rouge.update_state(y_true_1, y_pred_1)
         rouge_val = rouge.result()
@@ -140,8 +115,8 @@ class RougeLTest(TestCase):
             {"precision": 1.0, "recall": 0.689393, "f1_score": 0.807486},
         )
 
-        y_true_2 = tf.constant(["what is your favourite show"])
-        y_pred_2 = tf.constant(["my favourite show is silicon valley"])
+        y_true_2 = ["what is your favourite show"]
+        y_pred_2 = ["my favourite show is silicon valley"]
 
         rouge.update_state(y_true_2, y_pred_2)
         rouge_val = rouge.result()

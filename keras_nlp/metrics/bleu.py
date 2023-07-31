@@ -21,7 +21,7 @@ import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
-from keras_nlp.utils.tensor_utils import assert_tf_backend
+from keras_nlp.backend import ops
 from keras_nlp.utils.tensor_utils import is_floating_dtype
 from keras_nlp.utils.tensor_utils import tensor_to_list
 
@@ -112,8 +112,6 @@ class Bleu(keras.metrics.Metric):
         name="bleu",
         **kwargs,
     ):
-        assert_tf_backend(self.__class__.__name__)
-
         super().__init__(name=name, dtype=dtype, **kwargs)
 
         if not is_floating_dtype(dtype):
@@ -290,8 +288,10 @@ class Bleu(keras.metrics.Metric):
         )
 
     def _calculate_bleu_score(self, references, translation):
-        references = tensor_to_list(references)
-        translation = tensor_to_list(translation)
+        if isinstance(references, (tf.Tensor, tf.RaggedTensor)):
+            references = tensor_to_list(references)
+        if isinstance(translation, (tf.Tensor, tf.RaggedTensor)):
+            translation = tensor_to_list(translation)
 
         matches = self._matches.numpy()
         possible_matches = self._possible_matches.numpy()
@@ -315,11 +315,11 @@ class Bleu(keras.metrics.Metric):
             smooth=self.smooth,
         )
         return (
-            tf.constant(bleu_score, dtype=self.dtype),
-            tf.constant(matches, dtype=self.dtype),
-            tf.constant(possible_matches, dtype=self.dtype),
-            tf.constant(translation_length, dtype=self.dtype),
-            tf.constant(reference_length, dtype=self.dtype),
+            bleu_score,
+            matches,
+            possible_matches,
+            translation_length,
+            reference_length,
         )
 
     def update_state(self, y_true, y_pred, sample_weight=None):
@@ -357,11 +357,7 @@ class Bleu(keras.metrics.Metric):
             possible_matches,
             translation_length,
             reference_length,
-        ) = tf.py_function(
-            func=self._calculate_bleu_score,
-            inp=[y_true, y_pred],
-            Tout=[self.dtype, self.dtype, self.dtype, self.dtype, self.dtype],
-        )
+        ) = self._calculate_bleu_score(y_true, y_pred)
 
         self._matches.assign(matches)
         self._possible_matches.assign(possible_matches)
@@ -374,10 +370,10 @@ class Bleu(keras.metrics.Metric):
 
     def reset_state(self):
         self._matches.assign(
-            tf.zeros(shape=(self.max_order,), dtype=self.dtype)
+            ops.zeros(shape=(self.max_order,), dtype=self.dtype)
         )
         self._possible_matches.assign(
-            tf.zeros(shape=(self.max_order,), dtype=self.dtype)
+            ops.zeros(shape=(self.max_order,), dtype=self.dtype)
         )
         self._translation_length.assign(0.0)
         self._reference_length.assign(0.0)
