@@ -29,7 +29,7 @@ class MaskedLMHeadTest(TestCase):
         )
         encoded_tokens = keras.Input(shape=(10, 16))
         positions = keras.Input(shape=(5,), dtype="int32")
-        outputs = head(encoded_tokens, masked_positions=positions)
+        outputs = head(encoded_tokens, mask_positions=positions)
         model = keras.Model((encoded_tokens, positions), outputs)
 
         token_data = ops.random.uniform(shape=(4, 10, 16))
@@ -48,7 +48,7 @@ class MaskedLMHeadTest(TestCase):
         # need to support this in the layer.
         sequence = keras.Input(shape=(10, 32))
         positions = keras.Input(shape=(5,), dtype="int32")
-        outputs = head(sequence, masked_positions=positions)
+        outputs = head(sequence, mask_positions=positions)
         model = keras.Model((sequence, positions), outputs)
         sequence_data = ops.random.uniform(shape=(4, 10, 32))
         position_data = ops.random.randint(minval=0, maxval=10, shape=(4, 5))
@@ -106,7 +106,7 @@ class MaskedLMHeadTest(TestCase):
         )
         encoded_tokens = keras.Input(shape=(10, 16))
         positions = keras.Input(shape=(5,), dtype="int32")
-        outputs = head(encoded_tokens, masked_positions=positions)
+        outputs = head(encoded_tokens, mask_positions=positions)
         model = keras.Model((encoded_tokens, positions), outputs)
 
         token_data = ops.random.uniform(shape=(4, 10, 16))
@@ -126,7 +126,7 @@ class MaskedLMHeadTest(TestCase):
         )
         encoded_tokens = keras.Input(shape=(10, 16))
         positions = keras.Input(shape=(5,), dtype="int32")
-        outputs = head(encoded_tokens, masked_positions=positions)
+        outputs = head(encoded_tokens, mask_positions=positions)
         model = keras.Model((encoded_tokens, positions), outputs)
 
         token_data = ops.random.uniform(shape=(4, 10, 16))

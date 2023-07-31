@@ -123,7 +123,6 @@ class MaskedLMHead(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
-        self._built = False
 
         if vocabulary_size is None and embedding_weights is None:
             raise ValueError(
@@ -142,7 +141,7 @@ class MaskedLMHead(keras.layers.Layer):
                 )
             self.vocabulary_size = shape[0]
 
-    def build(self, inputs_shape, masked_positions_shape=None):
+    def build(self, inputs_shape):
         if self.embedding_weights is not None:
             feature_size = self.embedding_weights.shape[-1]
         else:
@@ -157,12 +156,13 @@ class MaskedLMHead(keras.layers.Layer):
         self._layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
-        if masked_positions_shape:
-            gather_length = masked_positions_shape[1]
-            shape = (inputs_shape[0], gather_length, inputs_shape[-1])
-            self._dense.build(shape)
-            shape = (inputs_shape[0], gather_length, feature_size)
-            self._layer_norm.build(shape)
+        # The gather length does not affect any of our built variables, so
+        # we can pass any value here.
+        gather_length = None
+        shape = (inputs_shape[0], gather_length, inputs_shape[-1])
+        self._dense.build(shape)
+        shape = (inputs_shape[0], gather_length, feature_size)
+        self._layer_norm.build(shape)
         if self.embedding_weights is None:
             self._kernel = self.add_weight(
                 name="output_kernel",
@@ -177,10 +177,10 @@ class MaskedLMHead(keras.layers.Layer):
             dtype=self.dtype,
         )
 
-    def call(self, inputs, masked_positions):
+    def call(self, inputs, mask_positions):
         # Gather the encoded tokens at the masked indices.
-        masked_positions = ops.expand_dims(masked_positions, axis=-1)
-        x = ops.take_along_axis(inputs, masked_positions, axis=1)
+        mask_positions = ops.expand_dims(mask_positions, axis=-1)
+        x = ops.take_along_axis(inputs, mask_positions, axis=1)
 
         # Apply a trainable linear transformation and a layer norm.
         x = self._dense(x)
@@ -221,7 +221,9 @@ class MaskedLMHead(keras.layers.Layer):
         )
         return config
 
-    def compute_output_shape(self, inputs_shape, masked_positions_shape):
-        output_shape = list(masked_positions_shape)
-        output_shape[-1] = self.vocabulary_size
-        return tuple(output_shape)
+    # TODO: restore this after https://github.com/keras-team/keras-core/pull/632
+    # is in a release!
+    # def compute_output_shape(self, inputs_shape, mask_positions_shape):
+    #     output_shape = list(mask_positions_shape)
+    #     output_shape[-1] = self.vocabulary_size
+    #     return tuple(output_shape)
