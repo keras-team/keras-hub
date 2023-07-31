@@ -22,7 +22,6 @@ from keras_nlp.samplers.contrastive_sampler import ContrastiveSampler
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class ContrastiveSamplerTest(TestCase):
     def setUp(self):
         super().setUp()

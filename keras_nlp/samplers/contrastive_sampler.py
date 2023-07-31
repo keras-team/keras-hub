@@ -14,14 +14,13 @@
 """Contrastive Sampler."""
 
 import tensorflow as tf
-from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import call_args_docstring
 from keras_nlp.utils.python_utils import format_docstring
-from keras_nlp.utils.tensor_utils import assert_tf_backend
 
 
 @format_docstring(call_args=call_args_docstring)
@@ -79,10 +78,6 @@ class ContrastiveSampler(Sampler):
         seed=None,
         **kwargs,
     ):
-        # Temporarily turn off beam search in other backends.
-        # No technical blockers here, just need tf -> ops rewrite.
-        assert_tf_backend(self.__class__.__name__)
-
         super().__init__(**kwargs)
         self.k = k
         self.alpha = alpha
@@ -103,39 +98,39 @@ class ContrastiveSampler(Sampler):
                 "`ContrastiveSampler` requires passing a `hidden_states`, but"
                 "received `None`."
             )
-        batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
-        # Make sure max length and start index are the same dtype.
-        index = tf.cast(index, max_length.dtype)
+        batch_size, max_length = ops.shape(prompt)[0], ops.shape(prompt)[1]
+        index = ops.cast(index, "int32")
 
         def create_beams(x):
             """Add initial beam state."""
-            x = tf.repeat(x, self.k, axis=0)
-            flat_shape = [batch_size * self.k] + x.shape.as_list()[1:]
-            return tf.reshape(x, shape=flat_shape)
+            x = ops.repeat(x, self.k, axis=0)
+            flat_shape = (batch_size * self.k,) + tuple(x.shape)[1:]
+            return ops.reshape(x, flat_shape)
 
         def flatten_beams(x):
             """Combine the beam dim and batch dim."""
-            flat_shape = [batch_size * self.k] + x.shape.as_list()[2:]
-            return tf.reshape(x, shape=flat_shape)
+            flat_shape = (batch_size * self.k,) + tuple(x.shape)[2:]
+            return ops.reshape(x, flat_shape)
 
         def unflatten_beams(x):
             """Separate the beam dim and batch dim."""
-            unflat_shape = [batch_size, self.k] + x.shape.as_list()[1:]
-            return tf.reshape(x, shape=unflat_shape)
+            unflat_shape = (batch_size, self.k) + tuple(x.shape)[1:]
+            return ops.reshape(x, unflat_shape)
 
-        mask = tf.zeros_like(prompt, dtype="bool") if mask is None else mask
+        mask = ops.zeros_like(prompt, dtype="bool") if mask is None else mask
         # Compute initial logits.
         logits, _, cache = next(prompt, cache, index)
-        # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
-        cache = () if cache is None else cache
+        # `ops.while_loop` will not accept `None` as a value for `loop_vars`.
+        has_cache = cache is not None
+        cache = cache if has_cache else ()
 
         def cond(prompt, cache, index, logits, hidden_states):
             if end_token_id is None:
                 return True
             # Stop if all sequences have produced a *new* end_token_id.
             end_tokens = (prompt == end_token_id) & (~mask)
-            prompt_done = tf.reduce_any(end_tokens, axis=-1)
-            return not tf.reduce_all(prompt_done)
+            prompt_done = ops.any(end_tokens, axis=-1)
+            return ops.logical_not(ops.all(prompt_done))
 
         def body(prompt, cache, index, logits, hidden_states):
             # Compute the softmax distribution for the next token.
@@ -146,23 +141,25 @@ class ContrastiveSampler(Sampler):
             prompt_beams = create_beams(prompt)
             mask_beams = create_beams(mask)
             hidden_states_beams = create_beams(hidden_states)
-            cache_beams = tf.nest.map_structure(create_beams, cache)
+            cache_beams = None
+            if has_cache:
+                cache_beams = tf.nest.map_structure(create_beams, cache)
 
             # Get top-k candidate tokens and their probabilities.
-            top_k_probabilities, top_k_indices = tf.math.top_k(
+            top_k_probabilities, top_k_indices = ops.top_k(
                 probabilities, k=self.k, sorted=False
             )
             next_token_probabilities = flatten_beams(top_k_probabilities)
             next_token = flatten_beams(top_k_indices)
-            next_token = tf.cast(next_token, prompt.dtype)
-            next_token = tf.where(
+            next_token = ops.cast(next_token, prompt.dtype)
+            next_token = ops.where(
                 mask_beams[:, index], prompt_beams[:, index], next_token
             )
 
             # Update the prompt with the next token.
-            next_token = next_token[:, tf.newaxis]
-            prompt_beams = dynamic_update_slice(
-                prompt_beams, next_token, [0, index]
+            next_token = ops.expand_dims(next_token, -1)
+            prompt_beams = ops.slice_update(
+                prompt_beams, [0, index], next_token
             )
 
             # Compute the logits and hidden states for top-k candidate tokens.
@@ -175,14 +172,13 @@ class ContrastiveSampler(Sampler):
             similarity_scores = self.similarity(
                 hidden_states_beams, next_hidden_states_beams
             )
-            max_similarity_scores = tf.cast(
-                tf.reduce_max(similarity_scores[:, :index], axis=1),
+            # Replace all future indices with -1, the lowest similarity score.
+            score_mask = ops.expand_dims(ops.arange(max_length) < index, 0)
+            similarity_scores = ops.where(score_mask, similarity_scores, -1)
+            max_similarity_scores = ops.cast(
+                ops.max(similarity_scores, axis=1),
                 dtype=next_token_probabilities.dtype,
             )
-            if index == 0:
-                # If the index is 0, there is no previous states so we set
-                # `max_similarity_scores` the same for all beams.
-                max_similarity_scores = tf.zeros_like(max_similarity_scores)
             # The final score of each candidate token is weighted sum of
             # probability and similarity against previous tokens.
             accumulated_scores = (
@@ -197,16 +193,18 @@ class ContrastiveSampler(Sampler):
             unflat_next_hidden_states = unflatten_beams(
                 next_hidden_states_beams
             )
-            unflat_cache = tf.nest.map_structure(unflatten_beams, cache_beams)
-            best_token_indices = tf.math.argmax(unflat_score, axis=1)
+            best_token_indices = ops.argmax(unflat_score, axis=1)
 
             def gather_best_token(beams):
-                return tf.gather(
+                indices = best_token_indices
+                for axis in range(1, len(beams.shape)):
+                    indices = ops.expand_dims(indices, axis=axis)
+                best = ops.take_along_axis(
                     beams,
-                    best_token_indices,
+                    indices,
                     axis=1,
-                    batch_dims=1,
                 )
+                return ops.squeeze(best, axis=1)
 
             prompt = gather_best_token(unflat_prompt)
             # We avoid recomputing forward pass for each token by updating the
@@ -214,16 +212,18 @@ class ContrastiveSampler(Sampler):
             # next iteration step.
             logits = gather_best_token(unflat_next_logits)
             next_hidden_states = gather_best_token(unflat_next_hidden_states)
-            cache = tf.nest.map_structure(gather_best_token, unflat_cache)
+            if has_cache:
+                cache = tf.nest.map_structure(unflatten_beams, cache_beams)
+                cache = tf.nest.map_structure(gather_best_token, cache)
 
-            hidden_states = dynamic_update_slice(
+            hidden_states = ops.slice_update(
                 hidden_states,
-                next_hidden_states[:, tf.newaxis, :],
                 [0, index, 0],
+                next_hidden_states[:, None, :],
             )
             return (prompt, cache, index + 1, logits, hidden_states)
 
-        prompt, _, _, _, _ = tf.while_loop(
+        prompt, _, _, _, _ = self.run_loop(
             cond=cond,
             body=body,
             loop_vars=(prompt, cache, index, logits, hidden_states),
@@ -232,10 +232,10 @@ class ContrastiveSampler(Sampler):
         return prompt
 
     def similarity(self, h1, h2):
-        h2 = h2[..., tf.newaxis]
-        return tf.squeeze(tf.matmul(h1, h2), axis=-1) / (
-            tf.norm(h1, axis=-1) * tf.norm(h2, axis=-2)
-        )
+        h2 = ops.expand_dims(h2, -1)
+        h1_norm = ops.sqrt(ops.sum(h1 * h1, axis=-1))
+        h2_norm = ops.sqrt(ops.sum(h2 * h2, axis=-2))
+        return ops.squeeze(ops.matmul(h1, h2), axis=-1) / (h1_norm * h2_norm)
 
     def get_config(self):
         config = super().get_config()
