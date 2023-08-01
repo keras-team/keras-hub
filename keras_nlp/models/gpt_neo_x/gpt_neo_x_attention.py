@@ -14,7 +14,7 @@
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
-from keras_nlp.models.gpt_neo_x.rotary_embedding import RotaryEmbedding
+from keras_nlp.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
@@ -63,7 +63,9 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.attn_head_size = hidden_dim // num_heads
         self.rotary_max_wavelength = rotary_max_wavelength
         self.rotary_dim = int(self.attn_head_size * rotary_percentage)
-        self.rotary_embedding = RotaryEmbedding(rotary_max_wavelength)
+        self.rotary_embedding_layer = RotaryEmbedding(
+            max_wavelength=rotary_max_wavelength
+        )
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.max_sequence_length = max_sequence_length
@@ -190,8 +192,8 @@ class GPTNeoXAttention(keras.layers.Layer):
             key[..., self.rotary_dim :],
         )
 
-        query_rot = self.rotary_embedding(query_rot)
-        key_rot = self.rotary_embedding(key_rot)
+        query_rot = self.rotary_embedding_layer(query_rot)
+        key_rot = self.rotary_embedding_layer(key_rot)
 
         query = ops.concatenate((query_rot, query_pass), axis=-1)
         key = ops.concatenate((key_rot, key_pass), axis=-1)
