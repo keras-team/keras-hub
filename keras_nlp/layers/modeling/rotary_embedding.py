@@ -20,14 +20,12 @@ from keras_nlp.backend import ops
 class RotaryEmbedding(keras.layers.Layer):
     """Rotary positional encoding layer.
 
-    This layer encodes absolute positional information with rotation
+    This layer encodes absolute positional information with a rotation
     matrix. It calculates the rotary encoding with a mix of sine and
     cosine functions with geometrically increasing wavelengths.
     Defined and formulated in [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864v4).
-    Takes as input the query and key tensors. The input must have shape
-    [batch_size, num_heads, sequence_length, query_length]. This layer
-    will return new query and key tensors after applying rotational
-    encoding.
+    The input must be a tensor with shape [batch_size, sequence_length, feature_dim].
+    This layer will return new tensor after applying rotational encoding.
 
     Args:
         percentage: float. The percentage of attn_head_size over which rotation
@@ -35,6 +33,9 @@ class RotaryEmbedding(keras.layers.Layer):
         max_wavelength: int. The maximum angular wavelength of the sine/cosine
             curves, as described in Attention is All You Need. Defaults to
             `10000`.
+        scaling_factor: float. The scaling factor used to scale frequency range
+        sequence_axis: int. Sequence axis in the input tensor
+        feature_axis: int. Feature axis in the input tensor
 
     Examples:
 
@@ -42,9 +43,13 @@ class RotaryEmbedding(keras.layers.Layer):
     batch_size = 16
     feature_length = 18
     sequence_length = 256
+    num_heads = 8
 
     tensor = tf.ones((batch_size, sequence_length, feature_length))
     rot_emb_layer = RotaryEmbedding()
+    tensor_rot = rot_emb_layer(tensor)
+
+    tensor = tf.ones((batch_size, sequence_length, num_heads, feature_length))
     tensor_rot = rot_emb_layer(tensor)
     ```
 
@@ -108,6 +113,8 @@ class RotaryEmbedding(keras.layers.Layer):
             {
                 "max_wavelength": self.max_wavelength,
                 "scaling_factor": self.scaling_factor,
+                "sequence_axis": self.sequence_axis,
+                "feature_axis": self.feature_axis,
             }
         )
         return config

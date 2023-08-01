@@ -76,7 +76,6 @@ class RotaryEmbeddingTest(TestCase):
         input = ops.ones(shape=[1, 4, 6])
         output = model(input)
 
-        print(output)
         # comapre position encoding values for position 0 and 3
         expected_0 = [1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000]
         expected_3 = [-1.1311, 0.8515, 0.9935, -0.8489, 1.1291, 1.0064]
@@ -86,16 +85,22 @@ class RotaryEmbeddingTest(TestCase):
     def test_get_config_and_from_config(self):
         embedding_layer = RotaryEmbedding(
             max_wavelength=1000,
+            scaling_factor=2.0,
+            sequence_axis=1,
+            feature_axis=-1,
         )
         config = embedding_layer.get_config()
-        expected_config_subset = {
+        expected_config = {
             "max_wavelength": 1000,
+            "scaling_factor": 2.0,
+            "sequence_axis": 1,
+            "feature_axis": -1,
         }
-        self.assertEqual(config, {**config, **expected_config_subset})
+        self.assertEqual(config, {**config, **expected_config})
         restored_embedding_layer = RotaryEmbedding.from_config(config)
         self.assertEqual(
             restored_embedding_layer.get_config(),
-            {**config, **expected_config_subset},
+            {**config, **expected_config},
         )
 
     def test_float16_dtype(self):
@@ -105,5 +110,5 @@ class RotaryEmbeddingTest(TestCase):
         inputs = keras.Input(shape=(seq_length, hidden_size))
         outputs = embedding_layer(inputs)
 
-        # output dtype for this layer should be tf.float16.
+        # output dtype for this layer should be float16.
         self.assertEqual(outputs.dtype, "float16")
