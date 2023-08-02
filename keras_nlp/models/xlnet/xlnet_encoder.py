@@ -169,21 +169,21 @@ class XLNetEncoder(keras.layers.Layer):
 
     def call(
         self,
-        output_h,
-        attn_mask_h,
-        attn_mask_g,
+        output_content,
+        attn_mask_content,
+        attn_mask_query,
         pos_emb,
         seg_mat,
-        output_g=None,
+        output_query=None,
         mems=None,
         target_mapping=None,
     ):
         # rel_attn
-        attn_out_h, attn_out_g = self.relative_attention(
-            content_stream=output_h,
-            query_stream=output_g,
-            content_attention_mask=attn_mask_h,
-            query_attention_mask=attn_mask_g,
+        attn_out_content, attn_out_query = self.relative_attention(
+            content_stream=output_content,
+            query_stream=output_query,
+            content_attention_mask=attn_mask_content,
+            query_attention_mask=attn_mask_query,
             relative_position_encoding=pos_emb,
             content_attention_bias=self.content_attention_bias,
             positional_attention_bias=self.positional_attention_bias,
@@ -194,56 +194,55 @@ class XLNetEncoder(keras.layers.Layer):
             state=mems,
         )
 
-        attn_out_h = self.dropout_attn(attn_out_h)
-        attn_out_h = attn_out_h + output_h
-        attn_out_h = self.layer_norm(attn_out_h)
+        attn_out_content = self.dropout_attn(attn_out_content)
+        attn_out_content = attn_out_content + output_content
+        attn_out_content = self.layer_norm(attn_out_content)
 
-        if attn_out_g is not None:
-            attn_out_g = self.dropout_attn(attn_out_g)
-            attn_out_g = attn_out_g + output_g
-            attn_out_g = self.layer_norm(attn_out_g)
+        if attn_out_query is not None:
+            attn_out_query = self.dropout_attn(attn_out_query)
+            attn_out_query = attn_out_query + output_query
+            attn_out_query = self.layer_norm(attn_out_query)
 
         # feed-forward
-        ff_out_h = attn_out_h
-        ff_out_h = self.feedforward_intermediate_dense(ff_out_h)
-        ff_out_h = self.activation_function_ff(ff_out_h)
-        ff_out_h = self.dropout_ff(ff_out_h)
-        ff_out_h = self.feedforward_output_dense(ff_out_h)
-        ff_out_h = self.dropout_ff(ff_out_h)
-        ff_out_h = self.layer_norm_ff(ff_out_h + attn_out_h)
+        ff_out_content = attn_out_content
+        ff_out_content = self.feedforward_intermediate_dense(ff_out_content)
+        ff_out_content = self.activation_function_ff(ff_out_content)
+        ff_out_content = self.dropout_ff(ff_out_content)
+        ff_out_content = self.feedforward_output_dense(ff_out_content)
+        ff_out_content = self.dropout_ff(ff_out_content)
+        ff_out_content = self.layer_norm_ff(ff_out_content + attn_out_content)
 
-        if attn_out_g is not None:
-            ff_out_g = attn_out_g
-            ff_out_g = self.feedforward_intermediate_dense(ff_out_g)
-            ff_out_g = self.activation_function_ff(ff_out_g)
-            ff_out_g = self.dropout_ff(ff_out_g)
-            ff_out_g = self.feedforward_output_dense(ff_out_g)
-            ff_out_g = self.dropout_ff(ff_out_g)
-            ff_out_g = self.layer_norm_ff(ff_out_g + attn_out_g)
+        if attn_out_query is not None:
+            ff_out_query = attn_out_query
+            ff_out_query = self.feedforward_intermediate_dense(ff_out_query)
+            ff_out_query = self.activation_function_ff(ff_out_query)
+            ff_out_query = self.dropout_ff(ff_out_query)
+            ff_out_query = self.feedforward_output_dense(ff_out_query)
+            ff_out_query = self.dropout_ff(ff_out_query)
+            ff_out_query = self.layer_norm_ff(ff_out_query + attn_out_query)
 
-            return ff_out_h, ff_out_g
+            return ff_out_content, ff_out_query
 
-        return ff_out_h, None
+        return ff_out_content, None
 
     def compute_output_shape(
         self,
-        output_h_shape,
+        output_content_shape,
         pos_emb_shape,
-        attn_mask_h_shape,
-        attn_mask_g_shape,
+        attn_mask_content_shape,
+        attn_mask_query_shape,
         seg_mat_shape,
-        output_g_shape=None,
+        output_query_shape=None,
     ):
-        return [output_h_shape, output_h_shape]
+        return [output_content_shape, output_content_shape]
 
 
-class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
+class XLNetAttentionMaskLayer(keras.layers.Layer):
     """
-    Preprocessing Layer for XLNet Encoder Block.
+    Attention Mask Layer for XLNet Encoder Block.
 
-    This layer creates segment matrix and processes attention masks for both
-    states during the forward pass. It binds all the complex logic required
-    by the XLNet Encoder.
+    This layer processes attention masks for both content state and query state
+     during the forward pass.
 
     Args:
         hidden_dim: int, the size hidden states.
@@ -272,7 +271,6 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
     def call(
         self,
         padding_mask,
-        segment_ids,
         mlen=None,
     ):
         bsz, qlen = ops.shape(padding_mask)[0], ops.shape(padding_mask)[1]
@@ -291,33 +289,69 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
             data_mask = ops.concatenate(
                 [ops.cast(mems_mask, dtype="int32"), data_mask], axis=1
             )
-        attn_mask_g = ops.expand_dims(data_mask, -1)
+        attn_mask_query = ops.expand_dims(data_mask, -1)
 
-        attn_mask_g = ops.cast(attn_mask_g > 0, dtype=attn_mask_g.dtype)
+        attn_mask_query = ops.cast(
+            attn_mask_query > 0, dtype=attn_mask_query.dtype
+        )
 
         # Since ops.eye doesn't support tensorflow Tensor as input.
         # we need to create custom function here.
         n = ops.expand_dims(ops.arange(qlen), -1)
         m = ops.arange(qlen)
-        attn_mask_h = -ops.cast(ops.where(n == m, 1, 0), attn_mask_g.dtype)
+        attn_mask_content = -ops.cast(
+            ops.where(n == m, 1, 0), attn_mask_query.dtype
+        )
 
         if mlen > 0:
-            attn_mask_h = ops.concatenate(
+            attn_mask_content = ops.concatenate(
                 [
-                    ops.zeros([qlen, mlen], dtype=attn_mask_h.dtype),
-                    attn_mask_h,
+                    ops.zeros([qlen, mlen], dtype=attn_mask_content.dtype),
+                    attn_mask_content,
                 ],
                 axis=-1,
             )
 
-        attn_mask_h = ops.cast(
+        attn_mask_content = ops.cast(
             (
-                attn_mask_g
-                + ops.expand_dims(ops.expand_dims(attn_mask_h, -1), -1)
+                attn_mask_query
+                + ops.expand_dims(ops.expand_dims(attn_mask_content, -1), -1)
             )
             > 0,
-            dtype=attn_mask_h.dtype,
+            dtype=attn_mask_content.dtype,
         )
+
+        # to make sure inputs suitable for TwoStreamRelativeAttention
+        attn_mask_content = 1.0 - ops.cast(
+            ops.transpose(ops.squeeze(attn_mask_content, -1), [2, 0, 1]),
+            "float32",
+        )
+        attn_mask_query = 1.0 - ops.cast(
+            ops.transpose(ops.squeeze(attn_mask_query, -1), [2, 0, 1]),
+            "float32",
+        )
+
+        return attn_mask_content, attn_mask_query
+
+    def compute_output_shape(self, padding_mask_shape):
+        return [padding_mask_shape, padding_mask_shape]
+
+
+class XLNetSegmentMatrixLayer(keras.layers.Layer):
+    """
+    This layer creates Segment Matrix for XLNet Encoder.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def call(
+        self,
+        segment_ids,
+        mlen=None,
+    ):
+        bsz = ops.shape(segment_ids)[0]
+        mlen = 0 if mlen is None else mlen
 
         # Prepare seg_mat
         segment_ids = ops.transpose(segment_ids, [1, 0])
@@ -335,15 +369,9 @@ class XLNetEncoderBlockPreprocessingLayer(keras.layers.Layer):
         )
 
         # to make sure inputs suitable for TwoStreamRelativeAttention
-        attn_mask_h = 1.0 - ops.cast(
-            ops.transpose(ops.squeeze(attn_mask_h, -1), [2, 0, 1]), "float32"
-        )
-        attn_mask_g = 1.0 - ops.cast(
-            ops.transpose(ops.squeeze(attn_mask_g, -1), [2, 0, 1]), "float32"
-        )
         seg_mat = ops.cast(ops.transpose(seg_mat, [2, 0, 1]), dtype="bool")
 
-        return seg_mat, attn_mask_h, attn_mask_g
+        return seg_mat
 
-    def compute_output_shape(self, padding_mask_shape, segment_ids_shape):
-        return [(None, None, None), (None, None, None), (None, None, None)]
+    def compute_output_shape(self, segment_ids_shape):
+        return segment_ids_shape

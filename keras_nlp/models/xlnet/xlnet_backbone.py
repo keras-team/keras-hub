@@ -17,30 +17,13 @@
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
-from keras_nlp.backend import ops
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.xlnet.xlnet_content_and_query_embedding import (
     ContentAndQueryEmbedding,
 )
+from keras_nlp.models.xlnet.xlnet_encoder import XLNetAttentionMaskLayer
 from keras_nlp.models.xlnet.xlnet_encoder import XLNetEncoder
-from keras_nlp.models.xlnet.xlnet_encoder import (
-    XLNetEncoderBlockPreprocessingLayer,
-)
-
-
-class CacheMEMS(keras.layers.Layer):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def call(self, curr_out, prev_mems=None):
-        if prev_mems is not None:
-            curr_out = ops.concatenate([prev_mems, curr_out], 1)
-
-        curr_out = ops.expand_dims(curr_out, 0)
-        return ops.stop_gradient(curr_out)
-
-    def compute_output_shape(self, curr_out_shape):
-        return curr_out_shape
+from keras_nlp.models.xlnet.xlnet_encoder import XLNetSegmentMatrixLayer
 
 
 @keras_nlp_export("keras_nlp.models.XLNetBackbone")
@@ -89,8 +72,6 @@ class XLNetBackbone(Backbone):
             `[batch_size, num_predict, hidden_dim]` if query state is not None
             otherwise last hidden state of content of shape
             `[batch_size, sequence_length, hidden_dim]`.
-        new_mems: new memory units returned by the model. These are the conatenated
-            tensors of previous mems and hidden states of most recent pass.
 
     Examples:
     ```python
@@ -154,27 +135,23 @@ class XLNetBackbone(Backbone):
             name="content_query_embedding",
         )(token_id_input=token_id_input)
 
-        # Apply EncoderBlock Preprocessing Layer
-        preprocessing_outputs = XLNetEncoderBlockPreprocessingLayer(
+        # Apply XLNetAttentionMaskLayer and XLNetSegmentMatrixLayer Layers
+        # to get the processed attention masks and segment matrix.
+        attn_mask_content, attn_mask_query = XLNetAttentionMaskLayer(
             hidden_dim=hidden_dim,
             kernel_initializer_range=kernel_initializer_range,
-            name="encoder_block_preprocess",
-        )(
-            padding_mask=padding_mask,
-            segment_ids=segment_ids,
+            name="encoder_block_attn_mask_layer",
+        )(padding_mask)
+        seg_mat = XLNetSegmentMatrixLayer(name="encoder_block_seg_mat_layer")(
+            segment_ids
         )
 
-        seg_mat, attn_mask_h, attn_mask_g = preprocessing_outputs
-        output_h = word_emb
+        output_content = word_emb
 
         # Encoders
-        new_mems = []
         head_dim = hidden_dim // num_heads
         for i in range(num_layers):
-            # Add the hidden_states as mems to `new_mems`
-            new_mems.append(CacheMEMS()(output_h))
-
-            output_h, output_g = XLNetEncoder(
+            output_content, output_query = XLNetEncoder(
                 num_heads=num_heads,
                 hidden_dim=hidden_dim,
                 head_dim=head_dim,
@@ -186,15 +163,14 @@ class XLNetBackbone(Backbone):
                 bias_initializer=bias_initializer,
                 name=f"xlnet_encoder_{i}",
             )(
-                output_h=output_h,
-                attn_mask_h=attn_mask_h,
-                attn_mask_g=attn_mask_g,
+                output_content=output_content,
+                attn_mask_content=attn_mask_content,
+                attn_mask_query=attn_mask_query,
                 pos_emb=pos_emb,
                 seg_mat=seg_mat,
             )
 
-        output = keras.layers.Dropout(dropout)(output_h)
-        new_mems = keras.layers.Concatenate(axis=0)(new_mems)
+        output = keras.layers.Dropout(dropout)(output_content)
 
         super().__init__(
             inputs={
@@ -202,7 +178,7 @@ class XLNetBackbone(Backbone):
                 "padding_mask": padding_mask,
                 "segment_ids": segment_ids,
             },
-            outputs={"last_hidden_state": output, "new_mems": new_mems},
+            outputs={"last_hidden_state": output},
             **kwargs,
         )
 

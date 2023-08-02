@@ -24,7 +24,7 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
     Content and Query Embedding.
 
     This class creates Content and Query Embeddings for XLNet model
-    which is later used in XLNet ENcoder.
+    which is later used in XLNet Encoder.
 
     Args:
         vocabulary_size: int, number of tokens in the vocabulary.

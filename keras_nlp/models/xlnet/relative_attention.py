@@ -128,7 +128,6 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
 
     def __init__(self, kernel_initializer="glorot_uniform", **kwargs):
         super().__init__(kernel_initializer=kernel_initializer, **kwargs)
-        self._built = False
 
     def _get_common_kwargs_for_sublayer(self):
         common_kwargs = dict(
@@ -162,6 +161,8 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
             name="query",
             **self._get_common_kwargs_for_sublayer(),
         )
+        self._query_dense.build(self._query_shape)
+
         einsum_equation, bias_axes, output_rank = _build_proj_equation(
             len(self._key_shape) - 1, bound_dims=1, output_dims=2
         )
@@ -174,6 +175,8 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
             name="key",
             **self._get_common_kwargs_for_sublayer(),
         )
+        self._key_dense.build(self._key_shape)
+
         einsum_equation, bias_axes, output_rank = _build_proj_equation(
             len(self._value_shape) - 1, bound_dims=1, output_dims=2
         )
@@ -186,8 +189,7 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
             name="value",
             **self._get_common_kwargs_for_sublayer(),
         )
-
-        self._build_attention(output_rank)
+        self._value_dense.build(self._value_shape)
 
         free_dims = len(self._query_shape) - 1
         _, _, output_rank = _build_proj_equation(
@@ -202,6 +204,9 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
             name="attention_output",
             **self._get_common_kwargs_for_sublayer(),
         )
+        self._output_dense.build(
+            self._value_dense.compute_output_shape(self._value_dim)
+        )
 
         einsum_equation, _, output_rank = _build_proj_equation(
             len(self._key_shape) - 1, bound_dims=1, output_dims=2
@@ -215,8 +220,10 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
             name="encoding",
             **self._get_common_kwargs_for_sublayer(),
         )
+        self._encoding_dense.build(self._key_shape)
 
-        self._built = True
+        self._build_attention(output_rank)
+        self.built = True
 
     def compute_attention(
         self,
@@ -377,9 +384,6 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
             content_attention_output, query_attention_output: the results of the
                 computation, both of shape `[B, T, E]`.
         """
-
-        if not self._built:
-            self.build(ops.shape(content_stream))
 
         if state is not None and len(state.shape) > 1:
             content_and_memory_stream = ops.concatenate(

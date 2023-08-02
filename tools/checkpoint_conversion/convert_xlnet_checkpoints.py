@@ -43,31 +43,13 @@ with open(SAVE_PATH, "wb") as p:
 tokenizer = XLNetTokenizer.from_pretrained(PRESET)
 string = "An input text string."
 tokens = tokenizer(string, return_tensors="tf", return_attention_mask=True)
-# tokens["target_mapping"] = tf.random.uniform(
-#     minval=0, maxval=2, shape=(1, 5, 7), dtype=tf.int32
-# )
-# tokens["perm_mask"] = tf.random.uniform(
-#     minval=0, maxval=2, shape=(1, 7, 7), dtype=tf.int32
-# )
-# tokens["mems"] = tf.random.uniform(
-#     shape=(hf_model.config.n_layer, 7, 1, hf_model.config.d_model),
-#     dtype=tf.float32,
-# )
 
 tokenized_hf = copy.deepcopy(tokens)
 tokenized_knlp = copy.deepcopy(tokens)
 
-# tokenized_hf["target_mapping"] = tf.cast(
-#     tokenized_hf["target_mapping"], tf.float32
-# )
-# tokenized_hf["perm_mask"] = tf.cast(tokenized_hf["perm_mask"], tf.float32)
-
 tokenized_knlp["token_ids"] = tokenized_knlp["input_ids"]
 tokenized_knlp["padding_mask"] = tokenized_knlp["attention_mask"]
 tokenized_knlp["segment_ids"] = tokenized_knlp["token_type_ids"]
-
-# since we use batch_size at index 0 for keras_nlp we must change the shape
-# tokenized_knlp["mems"] = tf.transpose(tokenized_knlp["mems"], perm=[2, 1, 3, 0])
 
 del tokenized_knlp["attention_mask"]
 del tokenized_knlp["input_ids"]
@@ -105,8 +87,7 @@ word_embed = np.array(
 knlp_model.get_layer("content_query_embedding").word_embed.embeddings.assign(
     word_embed
 )
-knlp_model.get_layer("encoder_block_preprocess").mask_emb.assign(mask_emb)
-
+knlp_model.get_layer("encoder_block_attn_mask_layer").mask_emb.assign(mask_emb)
 
 # Encoders
 for i in range(hf_model.config.n_layer):
