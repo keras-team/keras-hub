@@ -15,6 +15,9 @@
 
 import os
 
+import tensorflow as tf
+from absl.testing import parameterized
+
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.layers.modeling import masked_lm_head
@@ -35,6 +38,30 @@ class MaskedLMHeadTest(TestCase):
         token_data = ops.random.uniform(shape=(4, 10, 16))
         position_data = ops.random.randint(minval=0, maxval=10, shape=(4, 5))
         model((token_data, position_data))
+
+    @parameterized.named_parameters(
+        ("bfloat16", tf.bfloat16),
+        ("float16", tf.float16),
+        ("float32", tf.float32),
+        ("float64", tf.float64),
+    )
+    def test_valid_call_with_dtype(self, dtype):
+        head = masked_lm_head.MaskedLMHead(
+            vocabulary_size=100,
+            activation="softmax",
+            dtype=dtype,
+        )
+        encoded_tokens = keras.Input(shape=(10, 16))
+        positions = keras.Input(shape=(5,), dtype="int32")
+        outputs = head(encoded_tokens, masked_positions=positions)
+        model = keras.Model((encoded_tokens, positions), outputs)
+
+        token_data = ops.random.uniform(shape=(4, 10, 16))
+        position_data = ops.random.randint(minval=0, maxval=10, shape=(4, 5))
+        model((token_data, position_data))
+
+        for w in head.weights:
+            self.assertEqual(w.dtype, dtype, "Wrong type: " + w.name)
 
     def test_valid_call_with_embedding_weights(self):
         embedding = keras.layers.Embedding(100, 16)
@@ -103,6 +130,32 @@ class MaskedLMHeadTest(TestCase):
     def test_one_train_step(self):
         head = masked_lm_head.MaskedLMHead(
             vocabulary_size=100,
+        )
+        encoded_tokens = keras.Input(shape=(10, 16))
+        positions = keras.Input(shape=(5,), dtype="int32")
+        outputs = head(encoded_tokens, masked_positions=positions)
+        model = keras.Model((encoded_tokens, positions), outputs)
+
+        token_data = ops.random.uniform(shape=(4, 10, 16))
+        position_data = ops.random.randint(minval=0, maxval=10, shape=(4, 5))
+        label_data = ops.random.randint(minval=0, maxval=2, shape=(4, 5, 1))
+
+        loss = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+        optimizer = keras.optimizers.Adam()
+        model.compile(loss=loss, optimizer=optimizer)
+        loss = model.train_on_batch(x=(token_data, position_data), y=label_data)
+        self.assertGreater(loss, 0)
+
+    @parameterized.named_parameters(
+        ("bfloat16", tf.bfloat16),
+        ("float16", tf.float16),
+        ("float32", tf.float32),
+        ("float64", tf.float64),
+    )
+    def test_one_train_step_with_dtype(self, dtype):
+        head = masked_lm_head.MaskedLMHead(
+            vocabulary_size=100,
+            dtype=dtype,
         )
         encoded_tokens = keras.Input(shape=(10, 16))
         positions = keras.Input(shape=(5,), dtype="int32")

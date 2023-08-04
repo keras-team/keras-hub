@@ -153,9 +153,11 @@ class MaskedLMHead(keras.layers.Layer):
             activation=self.intermediate_activation,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
+            dtype=self._dtype_policy,
         )
         self._layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            dtype=self._dtype_policy,
         )
         if masked_positions_shape:
             gather_length = masked_positions_shape[1]
@@ -181,18 +183,25 @@ class MaskedLMHead(keras.layers.Layer):
         # Gather the encoded tokens at the masked indices.
         masked_positions = ops.expand_dims(masked_positions, axis=-1)
         x = ops.take_along_axis(inputs, masked_positions, axis=1)
+        print("XXX/1", x.dtype)
 
         # Apply a trainable linear transformation and a layer norm.
         x = self._dense(x)
+        print("XXX/2", x.dtype)
         x = self._layer_norm(x)
+        print("XXX/3", x.dtype)
 
         # Transform encodings to vocabulary_size predictions.
         if self.embedding_weights is None:
             kernel = self._kernel
+            print("XXX/4", kernel)
         else:
             kernel = ops.cast(self.embedding_weights, self.compute_dtype)
+            print("XXX/5", kernel)
             kernel = ops.transpose(kernel)
+            print("XXX/6", kernel)
         outputs = ops.matmul(x, kernel)
+        print("XXX", outputs.dtype, self._bias.dtype)
         outputs = outputs + self._bias
 
         # Apply a final activation.
