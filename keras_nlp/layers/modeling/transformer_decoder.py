@@ -148,6 +148,12 @@ class TransformerDecoder(keras.layers.Layer):
         hidden_dim = decoder_sequence_shape[-1]
         # Attention head size is `hidden_dim` over the number of heads.
         head_dim = int(hidden_dim // self.num_heads)
+        if head_dim == 0:
+            raise ValueError(
+                "Attention `head_dim` computed cannot be zero. "
+                f"The `hidden_dim` value of {hidden_dim} has to be equal to "
+                f"or greater than `num_heads` value of {self.num_heads}."
+            )
 
         # Self attention layers.
         self._self_attention_layer = CachedMultiHeadAttention(
