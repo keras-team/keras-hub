@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import tensorflow as tf
+import tree
 
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
@@ -43,7 +44,7 @@ class PreprocessingLayer(keras.layers.Layer):
             is_tf_backend = config.backend() == "tensorflow"
             is_in_tf_graph = not tf.executing_eagerly()
             if not is_tf_backend and not is_in_tf_graph:
-                outputs = tf.nest.map_structure(
+                outputs = tree.map_structure(
                     convert_to_backend_tensor_or_python_list, outputs
                 )
 

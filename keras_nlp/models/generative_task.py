@@ -16,6 +16,7 @@
 import itertools
 
 import tensorflow as tf
+import tree
 
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
@@ -118,7 +119,7 @@ class GenerativeTask(Task):
                     self.trainable_variables,
                     self.non_trainable_variables,
                 )
-                inputs = tf.nest.map_structure(ops.convert_to_tensor, inputs)
+                inputs = tree.map_structure(ops.convert_to_tensor, inputs)
                 outputs, state = compiled_generate_function(
                     inputs,
                     end_token_id,

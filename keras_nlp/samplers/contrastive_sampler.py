@@ -13,7 +13,7 @@
 # limitations under the License.
 """Contrastive Sampler."""
 
-import tensorflow as tf
+import tree
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
@@ -143,7 +143,7 @@ class ContrastiveSampler(Sampler):
             hidden_states_beams = create_beams(hidden_states)
             cache_beams = None
             if has_cache:
-                cache_beams = tf.nest.map_structure(create_beams, cache)
+                cache_beams = tree.map_structure(create_beams, cache)
 
             # Get top-k candidate tokens and their probabilities.
             top_k_probabilities, top_k_indices = ops.top_k(
@@ -213,8 +213,8 @@ class ContrastiveSampler(Sampler):
             logits = gather_best_token(unflat_next_logits)
             next_hidden_states = gather_best_token(unflat_next_hidden_states)
             if has_cache:
-                cache = tf.nest.map_structure(unflatten_beams, cache_beams)
-                cache = tf.nest.map_structure(gather_best_token, cache)
+                cache = tree.map_structure(unflatten_beams, cache_beams)
+                cache = tree.map_structure(gather_best_token, cache)
 
             hidden_states = ops.slice_update(
                 hidden_states,
