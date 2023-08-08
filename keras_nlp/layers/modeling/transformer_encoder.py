@@ -95,7 +95,7 @@ class TransformerEncoder(keras.layers.Layer):
         bias_initializer="zeros",
         normalize_first=False,
         name=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(name=name, **kwargs)
         self.intermediate_dim = intermediate_dim
@@ -113,6 +113,12 @@ class TransformerEncoder(keras.layers.Layer):
         hidden_dim = inputs_shape[-1]
         # Attention head size is `hidden_dim` over the number of heads.
         key_dim = int(hidden_dim // self.num_heads)
+        if key_dim == 0:
+            raise ValueError(
+                "Attention `key_dim` computed cannot be zero. "
+                f"The `hidden_dim` value of {hidden_dim} has to be equal to "
+                f"or greater than `num_heads` value of {self.num_heads}."
+            )
 
         # Self attention layers.
         self._self_attention_layer = keras.layers.MultiHeadAttention(
