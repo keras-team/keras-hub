@@ -251,7 +251,7 @@ hf_preds = hf_model(tokenized_hf, training=False)
 print(hf_preds["last_hidden_state"])
 
 knlp_preds = knlp_model(tokenized_knlp, training=False)
-print(knlp_preds["last_hidden_state"], end="\n\n")
+print(knlp_preds, end="\n\n")
 
 print(
     "Outputs matching or not for Last Hidden State : ",
@@ -259,13 +259,12 @@ print(
         hf_preds["last_hidden_state"]
         .numpy()
         .reshape(-1, hf_model.config.d_model),
-        knlp_preds["last_hidden_state"]
-        .numpy()
-        .reshape(-1, hf_model.config.d_model),
+        knlp_preds.numpy().reshape(-1, hf_model.config.d_model),
         atol=1e-3,
     ),
 )
 
+# won't work since the recent version of the model doesn't return any mems!
 if check_mems:
     for i in range(hf_model.config.n_layer):
         print(

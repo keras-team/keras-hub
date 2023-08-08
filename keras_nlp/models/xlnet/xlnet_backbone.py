@@ -55,9 +55,6 @@ class XLNetBackbone(Backbone):
         bias_initializer: string or `keras.initializers` initializer,
             defaults to "zeros". The bias initializer for
             the dense and multiheaded relative attention layers.
-        layer_norm_epsilon: float, defaults to 1e-12. The epsilon value in layer
-            normalization components.
-        **kwargs: other keyword arguments.
 
     Call Args:
         token_ids: Indices of input sequence tokens in the vocabulary of shape
@@ -66,12 +63,6 @@ class XLNetBackbone(Backbone):
             of the inputs of shape `[batch_size, sequence_length]`.
         padding_mask: Mask to avoid performing attention on padding token indices
             of shape `[batch_size, sequence_length]`.
-
-    Returns:
-        last_hidden_state: last hidden state of query state of shape
-            `[batch_size, num_predict, hidden_dim]` if query state is not None
-            otherwise last hidden state of content of shape
-            `[batch_size, sequence_length, hidden_dim]`.
 
     Examples:
     ```python
@@ -113,7 +104,6 @@ class XLNetBackbone(Backbone):
         activation="gelu",
         kernel_initializer_range=0.02,
         bias_initializer="zeros",
-        layer_norm_epsilon=1e-12,
         **kwargs,
     ):
         # Inputs
@@ -158,7 +148,7 @@ class XLNetBackbone(Backbone):
                 intermediate_dim=intermediate_dim,
                 dropout=dropout,
                 activation=activation,
-                layer_norm_epsilon=layer_norm_epsilon,
+                layer_norm_epsilon=1e-12,
                 kernel_initializer_range=kernel_initializer_range,
                 bias_initializer=bias_initializer,
                 name=f"xlnet_encoder_{i}",
@@ -178,7 +168,7 @@ class XLNetBackbone(Backbone):
                 "padding_mask": padding_mask,
                 "segment_ids": segment_ids,
             },
-            outputs={"last_hidden_state": output},
+            outputs=output,
             **kwargs,
         )
 
@@ -192,7 +182,6 @@ class XLNetBackbone(Backbone):
         self.activation = activation
         self.kernel_initializer_range = kernel_initializer_range
         self.bias_initializer = bias_initializer
-        self.layer_norm_epsilon = layer_norm_epsilon
 
     def get_config(self):
         config = super().get_config()
@@ -203,11 +192,10 @@ class XLNetBackbone(Backbone):
                 "num_heads": self.num_heads,
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
-                "dropout": self.layer_norm_epsilon,
+                "dropout": self.dropout,
                 "activation": self.activation,
                 "kernel_initializer_range": self.kernel_initializer_range,
                 "bias_initializer": self.bias_initializer,
-                "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )
         return config
