@@ -26,7 +26,7 @@ class MaskedLMHead(keras.layers.Layer):
     This layer takes two inputs:
 
      - `inputs`: which should be a tensor of encoded tokens with shape
-       `(batch_size, sequence_length, encoding_dim)`.
+       `(batch_size, sequence_length, hidden_dim)`.
      - `mask_positions`: which should be a tensor of integer positions to
        predict with shape `(batch_size, masks_per_sequence)`.
 
@@ -46,11 +46,9 @@ class MaskedLMHead(keras.layers.Layer):
 
     Args:
         vocabulary_size: The total size of the vocabulary for predictions.
-        embedding_weights: Optional. The weights of the word embedding used
-            to transform input token ids. The transpose of this weight matrix
-            will be used to project a token embedding vector to a prediction
-            over all input words, as described
-            [here](https://arxiv.org/abs/1608.05859).
+        token_embedding: Optional. A `keras_nlp.layers.ReversibleEmbedding`
+            instance. If passed, the layer will be used to project from the
+            `hidden_dim` of the model to the output `vocabulary_size`.
         intermediate_activation: The activation function of inner dense layer.
         activation: The activation function for the outputs of the layer.
             Usually either `None` (return logits), or `"softmax"`
@@ -63,37 +61,32 @@ class MaskedLMHead(keras.layers.Layer):
         bias_initializer: string or `keras.initializers` initializer.
             The bias initializer for the dense and multiheaded
             attention layers. Defaults to `"zeros"`.
-        name: string. The name of the layer. Defaults to `None`.
-        **kwargs: other keyword arguments.
 
     Examples:
 
     ```python
-    batch_size = 32
+    batch_size = 16
     vocab_size = 100
-    encoding_size = 32
+    hidden_dim = 32
     seq_length = 50
-    mask_length = 10
 
-    # Generate a random encoding.
-    encoded_tokens = np.random.normal(
-        size=(batch_size, seq_length, encoding_size),
-    )
-    # Generate random positions and labels
-    mask_positions = np.random.randint(
-        seq_length, size=(batch_size, mask_length),
-    )
-    mask_ids = np.random.randint(
-        vocab_size, size=(batch_size, mask_length),
-    )
+    # Generate random inputs.
+    token_ids = np.random.randint(vocab_size, size=(batch_size, seq_length))
+    # Choose random positions as the masked inputs.
+    mask_positions = np.random.randint(seq_length, size=(batch_size, 5))
 
-    # Predict an output word for each masked input token.
-    mask_preds = keras_nlp.layers.MaskedLMHead(
+    # Embed tokens in a `hidden_dim` feature space.
+    token_embedding = keras_nlp.layers.ReversibleEmbedding(
+        vocab_size,
+        hidden_dim,
+    )
+    hidden_states = token_embedding(token_ids)
+
+    preds = keras_nlp.layers.MaskedLMHead(
         vocabulary_size=vocab_size,
+        token_embedding=token_embedding,
         activation="softmax",
-    )(encoded_tokens, mask_positions=mask_positions)
-    # Calculate a loss.
-    keras.losses.sparse_categorical_crossentropy(mask_ids, mask_preds)
+    )(hidden_states, mask_positions)
     ```
 
     References:
@@ -103,19 +96,18 @@ class MaskedLMHead(keras.layers.Layer):
     def __init__(
         self,
         vocabulary_size=None,
-        embedding_weights=None,
+        token_embedding=None,
         intermediate_activation="relu",
         activation=None,
         layer_norm_epsilon=1e-05,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
-        name=None,
         **kwargs,
     ):
-        super().__init__(name=name, **kwargs)
+        super().__init__(**kwargs)
 
         self.vocabulary_size = vocabulary_size
-        self.embedding_weights = embedding_weights
+        self.token_embedding = token_embedding
         self.intermediate_activation = keras.activations.get(
             intermediate_activation
         )
@@ -124,26 +116,25 @@ class MaskedLMHead(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
 
-        if vocabulary_size is None and embedding_weights is None:
+        if vocabulary_size is None and token_embedding is None:
             raise ValueError(
-                "One of `vocabulary_size` or `embedding_weights` must be set. "
-                "Received: `vocabulary_size=None`, `embedding_weights=None`"
+                "One of `vocabulary_size` or `token_embedding` must be set. "
+                "Received: `vocabulary_size=None`, `token_embedding=None`"
             )
 
-        if embedding_weights is not None:
-            shape = embedding_weights.shape
-            if vocabulary_size is not None and vocabulary_size != shape[0]:
+        if token_embedding:
+            if vocabulary_size and vocabulary_size != token_embedding.input_dim:
                 raise ValueError(
-                    "`vocabulary_size` should match the first dimension of the "
-                    "shape of `embedding_weights`. Received: "
+                    "`vocabulary_size` should match the input dimension of the "
+                    "of `token_embedding`. Received: "
                     f"`vocabulary_size={vocabulary_size}`, "
-                    f"`embedding_weights.shape={shape}`"
+                    f"`token_embedding.input_dim={token_embedding.input_dim}`"
                 )
-            self.vocabulary_size = shape[0]
+            self.vocabulary_size = token_embedding.input_dim
 
     def build(self, inputs_shape, mask_positions_shape=None):
-        if self.embedding_weights is not None:
-            feature_size = self.embedding_weights.shape[-1]
+        if self.token_embedding is not None:
+            feature_size = self.token_embedding.output_dim
         else:
             feature_size = inputs_shape[-1]
 
@@ -163,7 +154,7 @@ class MaskedLMHead(keras.layers.Layer):
         self._dense.build(shape)
         shape = (inputs_shape[0], gather_length, feature_size)
         self._layer_norm.build(shape)
-        if self.embedding_weights is None:
+        if self.token_embedding is None:
             self._kernel = self.add_weight(
                 name="output_kernel",
                 shape=[feature_size, self.vocabulary_size],
@@ -187,12 +178,10 @@ class MaskedLMHead(keras.layers.Layer):
         x = self._layer_norm(x)
 
         # Transform encodings to vocabulary_size predictions.
-        if self.embedding_weights is None:
-            kernel = self._kernel
+        if self.token_embedding:
+            outputs = self.token_embedding(x, reverse=True)
         else:
-            kernel = ops.cast(self.embedding_weights, self.compute_dtype)
-            kernel = ops.transpose(kernel)
-        outputs = ops.matmul(x, kernel)
+            outputs = ops.matmul(x, self._kernel)
         outputs = outputs + self._bias
 
         # Apply a final activation.
@@ -201,11 +190,22 @@ class MaskedLMHead(keras.layers.Layer):
 
         return outputs
 
+    @classmethod
+    def from_config(cls, config):
+        embedding = config.get("token_embedding")
+        if embedding:
+            config["token_embedding"] = keras.layers.deserialize(embedding)
+        return super().from_config(config)
+
     def get_config(self):
         config = super().get_config()
+        embedding_config = None
+        if self.token_embedding:
+            embedding_config = keras.layers.serialize(self.token_embedding)
         config.update(
             {
                 "vocabulary_size": self.vocabulary_size,
+                "token_embedding": embedding_config,
                 "intermediate_activation": keras.activations.serialize(
                     self.intermediate_activation
                 ),

@@ -108,7 +108,7 @@ class AlbertMaskedLM(Task):
         backbone_outputs = backbone(backbone.input)
         outputs = MaskedLMHead(
             vocabulary_size=backbone.vocabulary_size,
-            embedding_weights=backbone.token_embedding.embeddings,
+            token_embedding=backbone.token_embedding,
             intermediate_activation=lambda x: keras.activations.gelu(
                 x, approximate=True
             ),

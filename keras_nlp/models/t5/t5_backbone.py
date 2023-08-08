@@ -16,6 +16,7 @@
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.models.t5.t5_transformer_layer import T5TransformerLayer
@@ -63,6 +64,9 @@ class T5Backbone(Backbone):
             recent versions do. Defaults to `True`.
         layer_norm_epsilon: float. Epsilon factor to be used in the
             layer normalization layers in the Transformer layers.
+        tie_embedding_weights: boolean. If `True`, the weights of the token
+            embedding and the weights projecting language model outputs from
+            `hidden_dim`
     """
 
     def __init__(
@@ -76,6 +80,7 @@ class T5Backbone(Backbone):
         activation="gelu",
         use_gated_activation=True,
         layer_norm_epsilon=1e-06,
+        tie_embedding_weights=False,
         **kwargs,
     ):
         assert_tf_backend(self.__class__.__name__)
@@ -97,9 +102,10 @@ class T5Backbone(Backbone):
         )
 
         # Token embedding layer. This layer is shared by encoder and decoder.
-        token_embedding_layer = keras.layers.Embedding(
+        token_embedding_layer = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
+            tie_weights=tie_embedding_weights,
             embeddings_initializer=keras.initializers.TruncatedNormal(1.0),
             name="token_embedding",
         )
@@ -210,6 +216,8 @@ class T5Backbone(Backbone):
         self.activation = keras.activations.get(activation)
         self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
+        self.tie_embedding_weights = tie_embedding_weights
+        self.token_embedding = token_embedding_layer
 
     def get_config(self):
         config = super().get_config()
@@ -223,13 +231,10 @@ class T5Backbone(Backbone):
                 "activation": keras.activations.serialize(self.activation),
                 "dropout": self.dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
+                "tie_embedding_weights": self.tie_embedding_weights,
             }
         )
         return config
-
-    @property
-    def token_embedding(self):
-        return self.get_layer("token_embedding")
 
     @classproperty
     def presets(cls):

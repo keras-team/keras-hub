@@ -27,20 +27,6 @@ from keras_nlp.models.generative_task import GenerativeTask
 from keras_nlp.utils.python_utils import classproperty
 
 
-# TODO: Extend and factor this out into keras_nlp.layers.
-class ReverseEmbedding(keras.layers.Layer):
-    def __init__(self, embedding, **kwargs):
-        super().__init__(**kwargs)
-        self.embedding = embedding
-
-    def call(self, inputs):
-        kernel = ops.transpose(ops.convert_to_tensor(self.embedding.embeddings))
-        return ops.matmul(inputs, kernel)
-
-    def compute_output_shape(self, input_shape):
-        return (input_shape[0],) + (self.embedding.embeddings.shape[0],)
-
-
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLM")
 class BartSeq2SeqLM(GenerativeTask):
     """An end-to-end BART model for seq2seq language modeling.
@@ -201,13 +187,8 @@ class BartSeq2SeqLM(GenerativeTask):
         **kwargs,
     ):
         inputs = backbone.input
-        x = backbone(inputs)["decoder_sequence_output"]
-        # Use token embedding weights to project from the token representation
-        # to vocabulary logits.
-        outputs = ReverseEmbedding(
-            backbone.token_embedding,
-            name="reverse_embedding",
-        )(x)
+        hidden_states = backbone(inputs)["decoder_sequence_output"]
+        outputs = backbone.token_embedding(hidden_states, reverse=True)
 
         # Instantiate using Functional API Model constructor.
         super().__init__(
@@ -347,7 +328,7 @@ class BartSeq2SeqLM(GenerativeTask):
             cross_attention_cache = ops.stack(cross_attention_caches, axis=1)
 
         hidden_states = x
-        logits = self.get_layer("reverse_embedding")(x)
+        logits = self.backbone.token_embedding(hidden_states, reverse=True)
         return (
             logits,
             hidden_states,

@@ -209,13 +209,14 @@ class WhisperBackbone(Backbone):
         # ====== Decoder ======
 
         # Embed tokens and positions.
-        x = TokenAndPositionEmbedding(
+        embedding_layer = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
             sequence_length=max_decoder_sequence_length,
             embedding_dim=hidden_dim,
             embeddings_initializer=whisper_kernel_initializer(),
             name="decoder_token_and_position_embedding",
-        )(decoder_token_id_input)
+        )
+        x = embedding_layer(decoder_token_id_input)
 
         # Apply dropout to embeddings.
         x = keras.layers.Dropout(
@@ -275,6 +276,7 @@ class WhisperBackbone(Backbone):
         self.dropout = dropout
         self.max_encoder_sequence_length = max_encoder_sequence_length
         self.max_decoder_sequence_length = max_decoder_sequence_length
+        self.token_embedding = embedding_layer
 
     def get_config(self):
         config = super().get_config()
@@ -292,12 +294,6 @@ class WhisperBackbone(Backbone):
             }
         )
         return config
-
-    @property
-    def token_embedding(self):
-        return self.get_layer(
-            "decoder_token_and_position_embedding"
-        ).token_embedding
 
     @classproperty
     def presets(cls):
