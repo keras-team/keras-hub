@@ -259,30 +259,26 @@ class XLNetAttentionMaskLayer(keras.layers.Layer):
             self.kernel_initializer_range
         )
 
-    def build(self, input_shape):
+    def build(self, inputs_shape):
         self.mask_emb = self.add_weight(
             shape=(1, 1, self.hidden_dim),
             initializer=self.kernel_initializer,
             trainable=True,
             name="mask_emb",
         )
-        super().build(input_shape)
+        self.built = True
 
-    def call(
-        self,
-        padding_mask,
-        mlen=None,
-    ):
-        bsz, qlen = ops.shape(padding_mask)[0], ops.shape(padding_mask)[1]
+    def call(self, inputs, mlen=None):
+        bsz, qlen = ops.shape(inputs)[0], ops.shape(inputs)[1]
         mlen = 0 if mlen is None else mlen
 
-        padding_mask = 1 - padding_mask
-        padding_mask = ops.reshape(
-            padding_mask,
-            [ops.shape(padding_mask)[1], ops.shape(padding_mask)[0]],
+        inputs = 1 - inputs
+        inputs = ops.reshape(
+            inputs,
+            [ops.shape(inputs)[1], ops.shape(inputs)[0]],
         )
 
-        data_mask = ops.expand_dims(padding_mask, 0)
+        data_mask = ops.expand_dims(inputs, 0)
 
         if mlen > 0:
             mems_mask = ops.zeros([ops.shape(data_mask)[0], mlen, bsz])
@@ -342,14 +338,7 @@ class XLNetSegmentMatrixLayer(keras.layers.Layer):
     This layer creates Segment Matrix for XLNet Encoder.
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def call(
-        self,
-        segment_ids,
-        mlen=None,
-    ):
+    def call(self, segment_ids, mlen=None):
         bsz = ops.shape(segment_ids)[0]
         mlen = 0 if mlen is None else mlen
 
