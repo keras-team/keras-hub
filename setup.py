@@ -57,6 +57,7 @@ setup(
         "packaging",
         "regex",
         "rich",
+        "dm-tree",
         # Don't require tensorflow-text on MacOS, there are no binaries for ARM.
         # Also, we rely on tensorflow *transitively* through tensorflow-text.
         # This avoid a slowdown during `pip install keras-nlp` where pip would

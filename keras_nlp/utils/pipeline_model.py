@@ -18,6 +18,7 @@ import functools
 import math
 
 import tensorflow as tf
+import tree
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
@@ -65,7 +66,7 @@ def _convert_inputs_to_dataset(
                 return ops.convert_to_numpy(x)
             return x
 
-        inputs = tf.nest.map_structure(convert, inputs)
+        inputs = tree.map_structure(convert, inputs)
         ds = tf.data.Dataset.from_tensor_slices(inputs)
     except ValueError as e:
         # If our inputs are unbatched, re-raise with a more friendly error
@@ -92,7 +93,7 @@ def _train_validation_split(arrays, validation_split):
     def _can_split(t):
         return is_tensor_type(t) or t is None
 
-    flat_arrays = tf.nest.flatten(arrays)
+    flat_arrays = tree.flatten(arrays)
     unsplitable = [type(t) for t in flat_arrays if not _can_split(t)]
     if unsplitable:
         raise ValueError(
@@ -129,10 +130,10 @@ def _train_validation_split(arrays, validation_split):
             return t
         return t[start:end]
 
-    train_arrays = tf.nest.map_structure(
+    train_arrays = tree.map_structure(
         functools.partial(_split, start=0, end=split_at), arrays
     )
-    val_arrays = tf.nest.map_structure(
+    val_arrays = tree.map_structure(
         functools.partial(_split, start=split_at, end=batch_dim), arrays
     )
 

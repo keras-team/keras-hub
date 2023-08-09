@@ -14,6 +14,7 @@
 """Beam Sampler."""
 
 import tensorflow as tf
+import tree
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
@@ -141,7 +142,7 @@ class BeamSampler(Sampler):
         cache = cache if has_cache else ()
         # Add extra sequences for each beam.
         prompt, mask = create_beams(prompt), create_beams(mask)
-        cache = tf.nest.map_structure(create_beams, cache)
+        cache = tree.map_structure(create_beams, cache)
         # Setup the initial beam log-likelihoods.
         # On the first loop, make sure only the original beam is considered.
         log_probs = ops.array(
@@ -192,7 +193,7 @@ class BeamSampler(Sampler):
 
             prompt = gather_beams(prompt)
             if has_cache:
-                cache = tf.nest.map_structure(gather_beams, cache)
+                cache = tree.map_structure(gather_beams, cache)
 
             # Update each beam with the next token.
             next_token = ops.cast(next_token, prompt.dtype)

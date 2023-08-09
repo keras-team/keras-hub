@@ -16,7 +16,6 @@
 import os
 
 import keras_core
-import tensorflow as tf
 from rich import console as rich_console
 from rich import markup
 from rich import table as rich_table
@@ -45,7 +44,7 @@ class Task(PipelineModel):
         loss, and a `None` or `"softmax"` activation.
         """
         # Only handle a single loss.
-        if tf.nest.is_nested(loss):
+        if isinstance(loss, (dict, list, tuple)):
             return
         # Only handle tasks with activation.
         if not hasattr(self, "activation"):
