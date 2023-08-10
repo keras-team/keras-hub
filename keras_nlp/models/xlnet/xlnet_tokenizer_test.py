@@ -15,6 +15,7 @@
 """Tests for XLNET tokenizer."""
 
 import io
+
 import sentencepiece
 import tensorflow as tf
 
@@ -42,12 +43,11 @@ class XLNetTokenizerTest(TestCase):
             bos_piece="<s>",
             eos_piece="</s>",
             unk_piece="<unk>",
-            user_defined_symbols=["<mask>", "<cls>", "<sep>"]
+            user_defined_symbols=["<mask>", "<cls>", "<sep>"],
         )
         self.proto = bytes_io.getvalue()
 
         self.tokenizer = XLNetTokenizer(proto=self.proto)
-        print(self.tokenizer.get_vocabulary())
 
     def test_tokenize(self):
         input_data = "the quick brown fox"
@@ -57,17 +57,19 @@ class XLNetTokenizerTest(TestCase):
     def test_tokenize_batch(self):
         input_data = ["the quick brown fox", "the earth is round"]
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[7, 12, 8, 10, 6, 5], [7, 9, 11, 13, 6, 5]])
+        self.assertAllEqual(
+            output, [[7, 12, 8, 10, 6, 5], [7, 9, 11, 13, 6, 5]]
+        )
 
     def test_detokenize(self):
         input_data = [[7, 12, 8, 10, 6, 5]]
         output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, ["the quick brown fox<sep><cls>"])
+        self.assertEqual(output, ["the quick brown fox"])
 
     def test_detokenize_mask_token(self):
         input_data = [[7, 12, 8, 10, 6, 5, self.tokenizer.mask_token_id]]
         output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, ["the quick brown fox<sep><cls><mask>"])
+        self.assertEqual(output, ["the quick brown fox"])
 
     def test_vocabulary_size(self):
         self.assertEqual(self.tokenizer.vocabulary_size(), 14)
