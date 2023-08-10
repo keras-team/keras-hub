@@ -127,3 +127,4 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
 )
 from keras_nlp.models.xlnet.xlnet_backbone import XLNetBackbone
+from keras_nlp.models.xlnet.xlnet_tokenizer import XLNetTokenizer
