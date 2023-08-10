@@ -50,9 +50,9 @@ class XLNetTokenizerTest(TestCase):
         self.tokenizer = XLNetTokenizer(proto=self.proto)
 
     def test_tokenize(self):
-        input_data = "the quick brown fox"
+        input_data = ["the quick brown fox"]
         output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [7, 12, 8, 10, 6, 5])
+        self.assertAllEqual(output, [[7, 12, 8, 10, 6, 5]])
 
     def test_tokenize_batch(self):
         input_data = ["the quick brown fox", "the earth is round"]
