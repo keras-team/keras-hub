@@ -116,6 +116,7 @@ class Task(PipelineModel):
         return {
             "backbone": keras.layers.serialize(self.backbone),
             "preprocessor": keras.layers.serialize(self.preprocessor),
+            "add_lora_layers": self.backbone.has_lora_layers,
             "name": self.name,
         }
 
