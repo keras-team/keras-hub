@@ -15,15 +15,19 @@
 import os
 
 from keras_nlp.backend import keras
+from keras_nlp.layers.modeling.lora_dense import LoraDense
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras.saving.register_keras_serializable(package="keras_nlp")
 class Backbone(keras.Model):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, add_lora_layers=False, **kwargs):
         super().__init__(*args, **kwargs)
         self._token_embedding = None
+        self.has_lora_layers = False
+        if add_lora_layers:
+            self.add_lora_layers()
 
     def __setattr__(self, name, value):
         # Work around torch setattr for properties.
@@ -48,12 +52,70 @@ class Backbone(keras.Model):
         self._token_embedding = value
         self._setattr_tracking = True
 
+    @property
+    def lora_layer_paths(self):
+        """Path to model layers to replace with lora adapaters.
+
+        Should be overridden by subclasses who store key/value paths under
+        different names.
+        """
+        return ["_query_dense", "_value_dense"]
+
+    def add_lora_layers(self, rank=8, alpha=32):
+        """Add lora layers, and freeze all other weights in a model.
+
+        Adding lora layers will dramatically reduce the number of trainable
+        parameters in a model, reducing the memory requirements for `fit()`.
+        """
+        if self.has_lora_layers:
+            return
+        self.has_lora_layers = True
+
+        # Add `LoraDense` adapter layers.
+        for layer in self._flatten_layers(include_self=False):
+            if not layer._flatten_layers(include_self=False):
+                layer.trainable = False
+            for path in self.lora_layer_paths:
+                dense = getattr(layer, path, None)
+                if dense:
+                    lora_dense = LoraDense(dense, rank=rank, alpha=alpha)
+                    setattr(layer, path, lora_dense)
+
+        # Clear compile cache.
+        if self.compiled:
+            self.compile_from_config(self.get_compile_config())
+
+    def merge_lora_layers(self):
+        """Merge lora updates back into the original dense kernels.
+
+        Removing lora layers will "squash" all kernel updates back into the
+        original dense layers. Removing any slowdown during inference caused by
+        the additional parameters.
+        """
+        if not self.has_lora_layers:
+            return
+        self.has_lora_layers = False
+
+        # Merge lora weights back into dense layers.
+        for layer in self._flatten_layers(include_self=False):
+            layer.trainable = True
+            for path in self.lora_layer_paths:
+                lora_dense = getattr(layer, path, None)
+                if lora_dense and isinstance(lora_dense, LoraDense):
+                    dense = lora_dense.merge_weights()
+                    setattr(layer, path, dense)
+
+        # Clear compile cache.
+        if self.compiled:
+            self.compile_from_config(self.get_compile_config())
+
     def get_config(self):
         # Don't chain to super here. The default `get_config()` for functional
         # models is nested and cannot be passed to our Backbone constructors.
         return {
             "name": self.name,
             "trainable": self.trainable,
+            "add_lora_layers": self.has_lora_layers,
         }
 
     @classmethod
