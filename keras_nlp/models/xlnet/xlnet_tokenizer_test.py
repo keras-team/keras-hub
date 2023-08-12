@@ -61,6 +61,22 @@ class XLNetTokenizerTest(TestCase):
             output, [[7, 12, 8, 10, 6, 5], [7, 9, 11, 13, 6, 5]]
         )
 
+    def test_tokenize_ds(self):
+        input_ds = tf.data.Dataset.from_tensor_slices(
+            ["the quick brown fox", "the earth is round"]
+        )
+        input_ds = input_ds.map(self.tokenizer)
+        outputs = []
+        for each_item in input_ds.take(2):
+            self.assertTrue(isinstance(each_item, tf.RaggedTensor))
+            outputs.append(each_item.to_tensor())
+
+        outputs = tf.squeeze(tf.convert_to_tensor(outputs), 1)
+        self.assertAllEqual(
+            outputs,
+            tf.convert_to_tensor([[7, 12, 8, 10, 6, 5], [7, 9, 11, 13, 6, 5]]),
+        )
+
     def test_detokenize(self):
         input_data = [[7, 12, 8, 10, 6, 5]]
         output = self.tokenizer.detokenize(input_data)
