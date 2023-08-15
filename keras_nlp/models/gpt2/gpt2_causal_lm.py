@@ -27,20 +27,6 @@ from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
 
 
-# TODO: Extend and factor this out into keras_nlp.layers.
-class ReverseEmbedding(keras.layers.Layer):
-    def __init__(self, embedding, **kwargs):
-        super().__init__(**kwargs)
-        self.embedding = embedding
-
-    def call(self, inputs):
-        kernel = ops.transpose(ops.convert_to_tensor(self.embedding.embeddings))
-        return ops.matmul(inputs, kernel)
-
-    def compute_output_shape(self, input_shape):
-        return (input_shape[0],) + (self.embedding.embeddings.shape[0],)
-
-
 @keras_nlp_export("keras_nlp.models.GPT2CausalLM")
 class GPT2CausalLM(GenerativeTask):
     """An end-to-end GPT2 model for causal langauge modeling.
@@ -171,13 +157,8 @@ class GPT2CausalLM(GenerativeTask):
         **kwargs,
     ):
         inputs = backbone.input
-        x = backbone(inputs)
-        # Use token embedding weights to project from the token representation
-        # to vocabulary logits.
-        outputs = ReverseEmbedding(
-            backbone.token_embedding,
-            name="reverse_embedding",
-        )(x)
+        hidden_states = backbone(inputs)
+        outputs = backbone.token_embedding(hidden_states, reverse=True)
 
         # Instantiate using Functional API Model constructor.
         super().__init__(
@@ -255,9 +236,8 @@ class GPT2CausalLM(GenerativeTask):
             )
             caches.append(next_cache)
         cache = ops.stack(caches, axis=1)
-        x = self.backbone.get_layer("layer_norm")(x)
-        hidden_states = x
-        logits = self.get_layer("reverse_embedding")(x)
+        hidden_states = x = self.backbone.get_layer("layer_norm")(x)
+        logits = self.backbone.get_layer("token_embedding")(x, reverse=True)
         return logits, hidden_states, cache
 
     def _build_cache(self, token_ids):

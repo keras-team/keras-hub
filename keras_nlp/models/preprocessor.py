@@ -31,9 +31,8 @@ class Preprocessor(PreprocessingLayer):
     def __setattr__(self, name, value):
         # Work around torch setattr for properties.
         if name in ["tokenizer"]:
-            object.__setattr__(self, name, value)
-        else:
-            super().__setattr__(name, value)
+            return object.__setattr__(self, name, value)
+        return super().__setattr__(name, value)
 
     @property
     def tokenizer(self):

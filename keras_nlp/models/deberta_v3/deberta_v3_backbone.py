@@ -18,6 +18,7 @@ import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.models.deberta_v3.disentangled_attention_encoder import (
@@ -118,12 +119,13 @@ class DebertaV3Backbone(Backbone):
         )
 
         # Embed tokens.
-        x = keras.layers.Embedding(
+        token_embedding_layer = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=deberta_kernel_initializer(),
             name="token_embedding",
-        )(token_id_input)
+        )
+        x = token_embedding_layer(token_id_input)
 
         # Normalize and apply dropout to embeddings.
         x = keras.layers.LayerNormalization(
@@ -184,6 +186,7 @@ class DebertaV3Backbone(Backbone):
         self.max_sequence_length = max_sequence_length
         self.bucket_size = bucket_size
         self.start_token_index = 0
+        self.token_embedding = token_embedding_layer
 
     def get_config(self):
         config = super().get_config()
@@ -200,10 +203,6 @@ class DebertaV3Backbone(Backbone):
             }
         )
         return config
-
-    @property
-    def token_embedding(self):
-        return self.get_layer("token_embedding")
 
     @classproperty
     def presets(cls):

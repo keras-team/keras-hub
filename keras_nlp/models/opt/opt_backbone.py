@@ -106,13 +106,14 @@ class OPTBackbone(Backbone):
         )
 
         # Embed tokens and positions.
-        x = TokenAndPositionEmbedding(
+        embedding_layer = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
             embedding_dim=hidden_dim,
             embeddings_initializer=opt_kernel_initializer(),
             name="embeddings",
-        )(token_ids)
+        )
+        x = embedding_layer(token_ids)
 
         # Apply successive transformer decoder blocks.
         for i in range(num_layers):
@@ -153,6 +154,7 @@ class OPTBackbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
+        self.token_embedding = embedding_layer.token_embedding
 
     def get_config(self):
         return {
@@ -164,10 +166,6 @@ class OPTBackbone(Backbone):
             "dropout": self.dropout,
             "max_sequence_length": self.max_sequence_length,
         }
-
-    @property
-    def token_embedding(self):
-        return self.get_layer("embeddings").token_embedding
 
     @classproperty
     def presets(cls):

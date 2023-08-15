@@ -16,6 +16,7 @@
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_decoder import GPTNeoXDecoder
 
@@ -84,12 +85,13 @@ class GPTNeoXBackbone(Backbone):
         )
 
         # Embed tokens
-        token_embedding = keras.layers.Embedding(
+        token_embedding_layer = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=_gpt_neo_x_kernel_initializer(stddev=0.01),
             name="token_embedding",
-        )(token_ids)
+        )
+        token_embedding = token_embedding_layer(token_ids)
 
         x = keras.layers.Dropout(
             dropout,
@@ -140,6 +142,7 @@ class GPTNeoXBackbone(Backbone):
         self.rotary_max_wavelength = rotary_max_wavelength
         self.max_sequence_length = max_sequence_length
         self.layer_norm_epsilon = layer_norm_epsilon
+        self.token_embedding = token_embedding_layer
 
     def get_config(self):
         config = super().get_config()
@@ -158,7 +161,3 @@ class GPTNeoXBackbone(Backbone):
             }
         )
         return config
-
-    @property
-    def token_embedding(self):
-        return self.get_layer("token_embedding")
