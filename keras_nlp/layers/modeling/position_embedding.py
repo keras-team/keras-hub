@@ -36,6 +36,15 @@ class PositionEmbedding(keras.layers.Layer):
             to `"glorot_uniform"`.
         seq_axis: The axis of the input tensor where we add the embeddings.
 
+    Call args:
+        inputs: The tensor inputs to compute an embedding for, with shape
+            `(batch_size, sequence_length, hidden_dim)`. Only the input shape
+            will be used, as the position embedding does not depend on the
+            input sequence content.
+        start_index: An integer or integer tensor. The starting position to
+            compute the position embedding from. This is useful during cached
+            decoding, where each position is predicted separately in a loop.
+
     Examples:
 
     Called directly on input.
