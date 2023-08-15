@@ -20,6 +20,7 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.f_net_encoder import FNetEncoder
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
+from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.f_net.f_net_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
@@ -112,7 +113,7 @@ class FNetBackbone(Backbone):
         )
 
         # Embed tokens, positions, and segment ids.
-        token_embedding_layer = keras.layers.Embedding(
+        token_embedding_layer = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=f_net_kernel_initializer(),
@@ -200,6 +201,7 @@ class FNetBackbone(Backbone):
         self.max_sequence_length = max_sequence_length
         self.num_segments = num_segments
         self.cls_token_index = cls_token_index
+        self.token_embedding = token_embedding_layer
 
     def get_config(self):
         config = super().get_config()
@@ -215,10 +217,6 @@ class FNetBackbone(Backbone):
             }
         )
         return config
-
-    @property
-    def token_embedding(self):
-        return self.get_layer("token_embedding")
 
     @classproperty
     def presets(cls):

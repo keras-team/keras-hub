@@ -17,6 +17,7 @@
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
+from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
@@ -62,6 +63,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         vocabulary_size,
         sequence_length,
         embedding_dim,
+        tie_weights=True,
         embeddings_initializer="glorot_uniform",
         mask_zero=False,
         **kwargs
@@ -85,9 +87,10 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         self.embeddings_initializer = keras.initializers.get(
             embeddings_initializer
         )
-        self.token_embedding = keras.layers.Embedding(
+        self.token_embedding = ReversibleEmbedding(
             vocabulary_size,
             embedding_dim,
+            tie_weights=tie_weights,
             embeddings_initializer=clone_initializer(
                 self.embeddings_initializer
             ),
@@ -119,6 +122,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
                 "embeddings_initializer": keras.initializers.serialize(
                     self.embeddings_initializer
                 ),
+                "tie_weights": self.token_embedding.tie_weights,
                 "mask_zero": self.token_embedding.mask_zero,
             },
         )

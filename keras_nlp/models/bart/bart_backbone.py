@@ -19,6 +19,7 @@ import copy
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
+from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.layers.modeling.transformer_decoder import TransformerDecoder
 from keras_nlp.layers.modeling.transformer_encoder import TransformerEncoder
 from keras_nlp.models.backbone import Backbone
@@ -120,7 +121,7 @@ class BartBackbone(Backbone):
         )
 
         # Token embedding layer. This layer is shared by encoder and decoder.
-        token_embedding_layer = keras.layers.Embedding(
+        token_embedding_layer = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=bart_kernel_initializer(),
@@ -240,6 +241,7 @@ class BartBackbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
+        self.token_embedding = token_embedding_layer
 
     def get_config(self):
         config = super().get_config()
@@ -256,10 +258,6 @@ class BartBackbone(Backbone):
         )
 
         return config
-
-    @property
-    def token_embedding(self):
-        return self.get_layer("token_embedding")
 
     @classproperty
     def presets(cls):

@@ -160,6 +160,7 @@ class RobertaBackbone(Backbone):
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
         self.start_token_index = 0
+        self.token_embedding = embedding_layer.token_embedding
 
     def get_config(self):
         config = super().get_config()
@@ -175,10 +176,6 @@ class RobertaBackbone(Backbone):
             }
         )
         return config
-
-    @property
-    def token_embedding(self):
-        return self.get_layer("embeddings").token_embedding
 
     @classproperty
     def presets(cls):

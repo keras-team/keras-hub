@@ -89,9 +89,8 @@ class Task(PipelineModel):
     def __setattr__(self, name, value):
         # Work around torch setattr for properties.
         if name in ["backbone", "preprocessor"]:
-            object.__setattr__(self, name, value)
-        else:
-            super().__setattr__(name, value)
+            return object.__setattr__(self, name, value)
+        return super().__setattr__(name, value)
 
     @property
     def backbone(self):
