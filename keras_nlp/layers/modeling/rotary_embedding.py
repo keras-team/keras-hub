@@ -74,9 +74,11 @@ class RotaryEmbedding(keras.layers.Layer):
         self.feature_axis = feature_axis
         self.scaling_factor = scaling_factor
 
-    def call(self, inputs):
+    def call(self, inputs, start_index=0):
         rotary_dim = ops.shape(inputs)[-1]
-        cos_emb, sin_emb = self._compute_cos_sin_embedding(inputs, rotary_dim)
+        cos_emb, sin_emb = self._compute_cos_sin_embedding(
+            inputs, rotary_dim, start_index
+        )
         return self._apply_rotary_pos_emb(inputs, cos_emb, sin_emb)
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
@@ -84,7 +86,7 @@ class RotaryEmbedding(keras.layers.Layer):
         half_rot_tensor = ops.concatenate((-x2, x1), axis=self.feature_axis)
         return (tensor * cos_emb) + (half_rot_tensor * sin_emb)
 
-    def _compute_cos_sin_embedding(self, x, rotary_dim):
+    def _compute_cos_sin_embedding(self, x, rotary_dim, start_index):
         freq_range = ops.arange(0, rotary_dim, 2, dtype="float32")
         freq_range = ops.cast(freq_range, self.compute_dtype)
         freq_range = freq_range / ops.cast(
@@ -95,7 +97,7 @@ class RotaryEmbedding(keras.layers.Layer):
             ** (freq_range / ops.cast(rotary_dim, self.compute_dtype))
         )
         seq_len = ops.shape(x)[self.sequence_axis]
-        tensor = ops.arange(seq_len, dtype="float32")
+        tensor = ops.arange(seq_len, dtype="float32") + start_index
         tensor = ops.cast(tensor, dtype=inverse_freq.dtype)
         freq = ops.einsum("i, j -> ij", tensor, inverse_freq)
         embedding = ops.concatenate((freq, freq), axis=self.feature_axis)

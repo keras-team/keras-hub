@@ -63,18 +63,19 @@ class SinePositionEncoding(keras.layers.Layer):
         super().__init__(**kwargs)
         self.max_wavelength = max_wavelength
 
-    def call(self, inputs):
+    def call(self, inputs, start_index=0):
         shape = ops.shape(inputs)
         seq_length = shape[-2]
         hidden_size = shape[-1]
-        position = ops.cast(ops.arange(seq_length), self.compute_dtype)
+        positions = ops.arange(seq_length)
+        positions = ops.cast(positions + start_index, self.compute_dtype)
         min_freq = ops.cast(1 / self.max_wavelength, dtype=self.compute_dtype)
         timescales = ops.power(
             min_freq,
             ops.cast(2 * (ops.arange(hidden_size) // 2), self.compute_dtype)
             / ops.cast(hidden_size, self.compute_dtype),
         )
-        angles = ops.expand_dims(position, 1) * ops.expand_dims(timescales, 0)
+        angles = ops.expand_dims(positions, 1) * ops.expand_dims(timescales, 0)
         # even indices are sine, odd are cosine
         cos_mask = ops.cast(ops.arange(hidden_size) % 2, self.compute_dtype)
         sin_mask = 1 - cos_mask
