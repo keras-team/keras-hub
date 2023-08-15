@@ -82,6 +82,19 @@ class RotaryEmbeddingTest(TestCase):
         self.assertAllClose(output[0, 0, :], expected_0, atol=0.01, rtol=0.01)
         self.assertAllClose(output[0, 3, :], expected_3, atol=0.01, rtol=0.01)
 
+    def test_start_index(self):
+        batch_size, seq_length, feature_size = 2, 3, 4
+        layer = RotaryEmbedding(seq_length)
+        data = ops.random.uniform(shape=(batch_size, seq_length, feature_size))
+        full_output = layer(data)
+        sequential_output = ops.zeros((batch_size, seq_length, feature_size))
+        for i in range(seq_length):
+            parial_output = layer(data[:, i : i + 1, :], start_index=i)
+            sequential_output = ops.slice_update(
+                sequential_output, (0, i, 0), parial_output
+            )
+        self.assertAllClose(full_output, sequential_output)
+
     def test_get_config_and_from_config(self):
         embedding_layer = RotaryEmbedding(
             max_wavelength=1000,
