@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Disentangled self-attention layer."""
-
 import math
 
 from keras_nlp.backend import keras

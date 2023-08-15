@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for Start End Packer layer."""
-
-
 import tensorflow as tf
 
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker

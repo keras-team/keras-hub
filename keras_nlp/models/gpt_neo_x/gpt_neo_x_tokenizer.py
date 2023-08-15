@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""GptNeoX tokenizer"""
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer

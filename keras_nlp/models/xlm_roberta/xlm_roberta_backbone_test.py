@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for XLM-RoBERTa backbone models."""
 import os
 
 import numpy as np

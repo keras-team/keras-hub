@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Disentangled attention encoder block implementation based on `keras.layers.Layer`."""
-
 from keras_nlp.backend import keras
 from keras_nlp.models.deberta_v3.disentangled_self_attention import (
     DisentangledSelfAttention,
