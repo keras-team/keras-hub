@@ -37,6 +37,13 @@ class SinePositionEncoding(keras.layers.Layer):
             curves, as described in Attention is All You Need. Defaults to
             `10000`.
 
+    Call args:
+        inputs: The tensor inputs to compute an embedding for, with shape
+            `(batch_size, sequence_length, hidden_dim)`.
+        start_index: An integer or integer tensor. The starting position to
+            compute the encoding from. This is useful during cached decoding,
+            where each position is predicted separately in a loop.
+
     Examples:
     ```python
     # create a simple embedding layer with sinusoidal positional encoding
@@ -63,18 +70,19 @@ class SinePositionEncoding(keras.layers.Layer):
         super().__init__(**kwargs)
         self.max_wavelength = max_wavelength
 
-    def call(self, inputs):
+    def call(self, inputs, start_index=0):
         shape = ops.shape(inputs)
         seq_length = shape[-2]
         hidden_size = shape[-1]
-        position = ops.cast(ops.arange(seq_length), self.compute_dtype)
+        positions = ops.arange(seq_length)
+        positions = ops.cast(positions + start_index, self.compute_dtype)
         min_freq = ops.cast(1 / self.max_wavelength, dtype=self.compute_dtype)
         timescales = ops.power(
             min_freq,
             ops.cast(2 * (ops.arange(hidden_size) // 2), self.compute_dtype)
             / ops.cast(hidden_size, self.compute_dtype),
         )
-        angles = ops.expand_dims(position, 1) * ops.expand_dims(timescales, 0)
+        angles = ops.expand_dims(positions, 1) * ops.expand_dims(timescales, 0)
         # even indices are sine, odd are cosine
         cos_mask = ops.cast(ops.arange(hidden_size) % 2, self.compute_dtype)
         sin_mask = 1 - cos_mask
