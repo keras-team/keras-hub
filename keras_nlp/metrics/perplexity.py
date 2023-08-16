@@ -160,10 +160,10 @@ class Perplexity(keras.metrics.Metric):
         self._number_of_samples.assign_add(batch_size)
 
     def result(self):
-        if self._number_of_samples == 0:
-            return 0.0
-        perplexity_score = ops.exp(
-            self._aggregate_crossentropy / self._number_of_samples
+        perplexity_score = ops.where(
+            ops.equal(self._number_of_samples, 0),
+            0,
+            ops.exp(self._aggregate_crossentropy / self._number_of_samples),
         )
         return perplexity_score
 
