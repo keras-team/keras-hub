@@ -17,7 +17,6 @@ from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.transformer_layer_utils import (
     compute_causal_mask,
 )
-from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.models.t5.t5_multi_head_attention import T5MultiHeadAttention
 
 
@@ -46,7 +45,9 @@ class T5TransformerLayer(keras.layers.Layer):
             dropout,
             use_relative_attention_bias=use_relative_attention_bias,
         )
-        self.self_attention_layernorm = T5LayerNorm(layer_norm_epsilon)
+        self.self_attention_layernorm = keras.layers.LayerNormalization(
+            epsilon=layer_norm_epsilon, rms_scaling=True
+        )
         self.self_attention_dropout = keras.layers.Dropout(dropout)
 
         if self.is_decoder:
@@ -57,7 +58,9 @@ class T5TransformerLayer(keras.layers.Layer):
                 dropout,
                 use_relative_attention_bias=False,
             )
-            self.cross_attention_layernorm = T5LayerNorm(layer_norm_epsilon)
+            self.cross_attention_layernorm = keras.layers.LayerNormalization(
+                epsilon=layer_norm_epsilon, rms_scaling=True
+            )
             self.cross_attention_dropout = keras.layers.Dropout(dropout)
 
         self.input_projector = keras.layers.Dense(
@@ -86,7 +89,9 @@ class T5TransformerLayer(keras.layers.Layer):
                 mean=0, stddev=intermediate_dim**-0.5
             ),
         )
-        self.layer_norm = T5LayerNorm(epsilon=layer_norm_epsilon)
+        self.layer_norm = keras.layers.LayerNormalization(
+            epsilon=layer_norm_epsilon, rms_scaling=True
+        )
         self.dropout_layer = keras.layers.Dropout(dropout)
 
     def call(

@@ -18,7 +18,6 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
-from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.models.t5.t5_transformer_layer import T5TransformerLayer
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.tensor_utils import assert_tf_backend
@@ -141,8 +140,9 @@ class T5Backbone(Backbone):
                 use_causal_mask=False,
             )
 
-        x = T5LayerNorm(
+        x = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
+            rms_scaling=True,
             name="encoder_output_layer_norm",
         )(x)
         x = keras.layers.Dropout(
@@ -184,8 +184,9 @@ class T5Backbone(Backbone):
                 use_causal_mask=True,
             )
 
-        x = T5LayerNorm(
+        x = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
+            rms_scaling=True,
             name="decoder_output_layer_norm",
         )(x)
         x = keras.layers.Dropout(
