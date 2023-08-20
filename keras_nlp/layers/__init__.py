@@ -21,6 +21,7 @@ from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.layers.modeling.sine_position_encoding import (
     SinePositionEncoding,
 )
+from keras_nlp.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_nlp.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
