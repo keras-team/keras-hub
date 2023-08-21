@@ -98,16 +98,19 @@ class GPTNeoXDecoder(keras.layers.Layer):
             max_sequence_length=self.max_sequence_length,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            name="self_attention",
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
-        self._self_attention_layernorm = keras.layers.LayerNormalization(
+        self._self_attention_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            name="self_attention_layer_norm",
         )
-        self._self_attention_layernorm.build(decoder_sequence_shape)
+        self._self_attention_layer_norm.build(decoder_sequence_shape)
 
         self._self_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,
+            name="self_attention_dropout",
         )
 
         # Feedforward layers.
@@ -116,6 +119,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            name="feedforward_intermediate_dense",
         )
         self._feedforward_intermediate_dense.build(decoder_sequence_shape)
 
@@ -123,19 +127,22 @@ class GPTNeoXDecoder(keras.layers.Layer):
             hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            name="feedforward_output_dense",
         )
 
         intermediate_shape = list(decoder_sequence_shape)
         intermediate_shape[-1] = self.intermediate_dim
         self._feedforward_output_dense.build(tuple(intermediate_shape))
 
-        self._feedforward_layernorm = keras.layers.LayerNormalization(
+        self._feedforward_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            name="feedforward_layer_norm",
         )
-        self._feedforward_layernorm.build(decoder_sequence_shape)
+        self._feedforward_layer_norm.build(decoder_sequence_shape)
 
         self._feedforward_dropout = keras.layers.Dropout(
             rate=self.dropout,
+            name="feedforward_dropout",
         )
         self.built = True
 
@@ -157,7 +164,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
 
         residual = decoder_sequence
 
-        x = self._self_attention_layernorm(decoder_sequence)
+        x = self._self_attention_layer_norm(decoder_sequence)
 
         # Self attention block.
         x, self_attention_cache = self._self_attention_layer(
@@ -169,7 +176,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
         x = self._self_attention_dropout(x)
         attention_output = x
 
-        x = self._feedforward_layernorm(decoder_sequence)
+        x = self._feedforward_layer_norm(decoder_sequence)
         x = self._feedforward_intermediate_dense(x)
         x = self._feedforward_output_dense(x)
         feedforward_output = x

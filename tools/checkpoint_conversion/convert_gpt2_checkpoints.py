@@ -148,10 +148,10 @@ def convert_checkpoints(num_params):
 
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._self_attention_layernorm.gamma.assign(weights[f"model/h{i}/ln_1/g"])
+        )._self_attention_layer_norm.gamma.assign(weights[f"model/h{i}/ln_1/g"])
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._self_attention_layernorm.beta.assign(weights[f"model/h{i}/ln_1/b"])
+        )._self_attention_layer_norm.beta.assign(weights[f"model/h{i}/ln_1/b"])
 
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
@@ -177,10 +177,10 @@ def convert_checkpoints(num_params):
 
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._feedforward_layernorm.gamma.assign(weights[f"model/h{i}/ln_2/g"])
+        )._feedforward_layer_norm.gamma.assign(weights[f"model/h{i}/ln_2/g"])
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._feedforward_layernorm.beta.assign(weights[f"model/h{i}/ln_2/b"])
+        )._feedforward_layer_norm.beta.assign(weights[f"model/h{i}/ln_2/b"])
 
     keras_nlp_model.get_layer("layer_norm").gamma.assign(
         weights["model/ln_f/g"]

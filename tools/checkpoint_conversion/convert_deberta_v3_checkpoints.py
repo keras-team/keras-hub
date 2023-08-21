@@ -205,14 +205,14 @@ def convert_checkpoints(keras_nlp_model, hf_model):
 
         keras_nlp_model.get_layer(
             f"disentangled_attention_encoder_layer_{i}"
-        )._self_attention_layernorm.gamma.assign(
+        )._self_attention_layer_norm.gamma.assign(
             hf_wts[
                 f"encoder.layer.{i}.attention.output.LayerNorm.weight"
             ].numpy()
         )
         keras_nlp_model.get_layer(
             f"disentangled_attention_encoder_layer_{i}"
-        )._self_attention_layernorm.beta.assign(
+        )._self_attention_layer_norm.beta.assign(
             hf_wts[f"encoder.layer.{i}.attention.output.LayerNorm.bias"].numpy()
         )
 
@@ -244,12 +244,12 @@ def convert_checkpoints(keras_nlp_model, hf_model):
 
         keras_nlp_model.get_layer(
             f"disentangled_attention_encoder_layer_{i}"
-        )._feedforward_layernorm.gamma.assign(
+        )._feedforward_layer_norm.gamma.assign(
             hf_wts[f"encoder.layer.{i}.output.LayerNorm.weight"].numpy()
         )
         keras_nlp_model.get_layer(
             f"disentangled_attention_encoder_layer_{i}"
-        )._feedforward_layernorm.beta.assign(
+        )._feedforward_layer_norm.beta.assign(
             hf_wts[f"encoder.layer.{i}.output.LayerNorm.bias"].numpy()
         )
 

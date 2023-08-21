@@ -49,7 +49,7 @@ class MaskedLMHead(keras.layers.Layer):
         token_embedding: Optional. A `keras_nlp.layers.ReversibleEmbedding`
             instance. If passed, the layer will be used to project from the
             `hidden_dim` of the model to the output `vocabulary_size`.
-        intermediate_activation: The activation function of inner dense layer.
+        intermediate_activation: The activation function of intermediate dense layer.
         activation: The activation function for the outputs of the layer.
             Usually either `None` (return logits), or `"softmax"`
             (return probabilities).
@@ -138,22 +138,24 @@ class MaskedLMHead(keras.layers.Layer):
         else:
             feature_size = inputs_shape[-1]
 
-        self._dense = keras.layers.Dense(
+        self._intermediate_dense = keras.layers.Dense(
             feature_size,
             activation=self.intermediate_activation,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
+            name="intermediate_dense",
         )
-        self._layer_norm = keras.layers.LayerNormalization(
+        self._intermediate_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            name="intermediate_layer_norm",
         )
         # The gather length does not affect any of our built variables, so
         # we can pass any value here.
         gather_length = None
         shape = (inputs_shape[0], gather_length, inputs_shape[-1])
-        self._dense.build(shape)
+        self._intermediate_dense.build(shape)
         shape = (inputs_shape[0], gather_length, feature_size)
-        self._layer_norm.build(shape)
+        self._intermediate_layer_norm.build(shape)
         if self.token_embedding is None:
             self._kernel = self.add_weight(
                 name="output_kernel",
@@ -174,8 +176,8 @@ class MaskedLMHead(keras.layers.Layer):
         x = ops.take_along_axis(inputs, mask_positions, axis=1)
 
         # Apply a trainable linear transformation and a layer norm.
-        x = self._dense(x)
-        x = self._layer_norm(x)
+        x = self._intermediate_dense(x)
+        x = self._intermediate_layer_norm(x)
 
         # Transform encodings to vocabulary_size predictions.
         if self.token_embedding:

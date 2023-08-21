@@ -108,25 +108,25 @@ for layer_index in range(cfg["num_layers"]):
     # LAYERNORM
     keras_model.get_layer(
         f"transformer_layer_{layer_index}"
-    )._self_attention_layernorm.gamma.assign(
+    )._self_attention_layer_norm.gamma.assign(
         hf_wts[f"layers.{layer_index}.input_layernorm.weight"]
     )
 
     keras_model.get_layer(
         f"transformer_layer_{layer_index}"
-    )._self_attention_layernorm.beta.assign(
+    )._self_attention_layer_norm.beta.assign(
         hf_wts[f"layers.{layer_index}.input_layernorm.bias"]
     )
 
     keras_model.get_layer(
         f"transformer_layer_{layer_index}"
-    )._feedforward_layernorm.gamma.assign(
+    )._feedforward_layer_norm.gamma.assign(
         hf_wts[f"layers.{layer_index}.post_attention_layernorm.weight"]
     )
 
     keras_model.get_layer(
         f"transformer_layer_{layer_index}"
-    )._feedforward_layernorm.beta.assign(
+    )._feedforward_layer_norm.beta.assign(
         hf_wts[f"layers.{layer_index}.post_attention_layernorm.bias"]
     )
 

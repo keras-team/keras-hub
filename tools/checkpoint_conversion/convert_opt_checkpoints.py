@@ -129,12 +129,12 @@ def convert_weights(hf_model):
         # Attention LayerNorm
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._self_attention_layernorm.gamma.assign(
+        )._self_attention_layer_norm.gamma.assign(
             hf_model.model.decoder.layers[i].self_attn_layer_norm.gamma
         )
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._self_attention_layernorm.beta.assign(
+        )._self_attention_layer_norm.beta.assign(
             hf_model.model.decoder.layers[i].self_attn_layer_norm.beta
         )
 
@@ -165,12 +165,12 @@ def convert_weights(hf_model):
         # FF LayerNorm
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._feedforward_layernorm.gamma.assign(
+        )._feedforward_layer_norm.gamma.assign(
             hf_model.model.decoder.layers[i].final_layer_norm.gamma
         )
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._feedforward_layernorm.beta.assign(
+        )._feedforward_layer_norm.beta.assign(
             hf_model.model.decoder.layers[i].final_layer_norm.beta
         )
 

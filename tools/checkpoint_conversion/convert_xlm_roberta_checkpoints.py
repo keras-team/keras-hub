@@ -187,14 +187,14 @@ def convert_checkpoints(size):
         # Attention LayerNorm
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._self_attention_layernorm.gamma.assign(
+        )._self_attention_layer_norm.gamma.assign(
             pt_model[
                 f"decoder.sentence_encoder.layers.{i}.self_attn_layer_norm.weight"
             ].numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._self_attention_layernorm.beta.assign(
+        )._self_attention_layer_norm.beta.assign(
             pt_model[
                 f"decoder.sentence_encoder.layers.{i}.self_attn_layer_norm.bias"
             ].numpy()
@@ -231,14 +231,14 @@ def convert_checkpoints(size):
         # FF LayerNorm
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._feedforward_layernorm.gamma.assign(
+        )._feedforward_layer_norm.gamma.assign(
             pt_model[
                 f"decoder.sentence_encoder.layers.{i}.final_layer_norm.weight"
             ].numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._feedforward_layernorm.beta.assign(
+        )._feedforward_layer_norm.beta.assign(
             pt_model[
                 f"decoder.sentence_encoder.layers.{i}.final_layer_norm.bias"
             ].numpy()
