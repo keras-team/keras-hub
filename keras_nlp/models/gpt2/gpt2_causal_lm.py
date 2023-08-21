@@ -29,7 +29,7 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras_nlp_export("keras_nlp.models.GPT2CausalLM")
 class GPT2CausalLM(GenerativeTask):
-    """An end-to-end GPT2 model for causal langauge modeling.
+    """An end-to-end GPT2 model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous
     tokens. This task setup can be used to train the model unsupervised on
@@ -329,7 +329,7 @@ class GPT2CausalLM(GenerativeTask):
 
     @classmethod
     def create_layout_map(cls, mesh):
-        """Create a DTensor layout map for an GPT2CausalLM.
+        """Create a DTensor layout map for a GPT2CausalLM.
 
         Given a DTensor mesh describing a list of devices, this method returns a
         DTensor layout map for creating a `keras_nlp.models.GPT2CausalLM`

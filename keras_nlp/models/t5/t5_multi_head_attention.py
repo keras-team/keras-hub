@@ -312,7 +312,7 @@ class T5MultiHeadAttention(keras.layers.Layer):
             weights, training=training
         )  # (batch_size, num_heads, query_length, key_length)
 
-        # Opitonally mask heads
+        # Optionally mask heads
         if layer_head_mask is not None:
             weights = tf.reshape(layer_head_mask, (1, -1, 1, 1)) * weights
 

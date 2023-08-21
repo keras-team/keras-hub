@@ -32,7 +32,7 @@ class MultiSegmentPacker(PreprocessingLayer):
     """Packs multiple sequences into a single fixed width model input.
 
     This layer packs multiple input sequences into a single fixed width sequence
-    containing start and end delimeters, forming an dense input suitable for a
+    containing start and end delimeters, forming a dense input suitable for a
     classification task for BERT and BERT-like models.
 
     Takes as input a tuple of token segments. Each tuple element should contain
