@@ -105,7 +105,7 @@ class GPTNeoXCausalLMPreprocessor(GPTNeoXPreprocessor):
         or tensor strings, tokenizes and packs the input, and computes a padding
         mask masking all inputs not filled in with a padded value.
 
-        Unlike calling the the layer for training, this method does not compute
+        Unlike calling the layer for training, this method does not compute
         labels and will never append a `tokenizer.end_token_id` to the end of
         the sequence (as generation is expected to continue at the end of the
         inputted prompt).

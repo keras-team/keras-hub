@@ -63,7 +63,7 @@ class SinePositionEncodingTest(TestCase):
         inputs = keras.Input(shape=(None, seq_length, hidden_size))
         outputs = pos_encoding(inputs)
 
-        # When using muliple dimensions before sequence length, the output is
+        # When using multiple dimensions before sequence length, the output is
         # expected to be the same as the input shape in all dimensions.
         expected_output_shape = (None, None, seq_length, hidden_size)
         self.assertEqual(expected_output_shape, outputs.shape)

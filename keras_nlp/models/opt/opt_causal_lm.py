@@ -28,7 +28,7 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras_nlp_export("keras_nlp.models.OPTCausalLM")
 class OPTCausalLM(GenerativeTask):
-    """An end-to-end OPT model for causal langauge modeling.
+    """An end-to-end OPT model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous
     tokens. This task setup can be used to train the model unsupervised on

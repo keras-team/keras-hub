@@ -29,7 +29,7 @@ class MaskedLMHead(keras.layers.Layer):
        predict with shape `(batch_size, masks_per_sequence)`.
 
     The token encodings should usually be the last output of an encoder model,
-    and mask positions should be the interger positions you would like to
+    and mask positions should be the integer positions you would like to
     predict for the MaskedLM task.
 
     The layer will first gather the token encodings at the mask positions. These

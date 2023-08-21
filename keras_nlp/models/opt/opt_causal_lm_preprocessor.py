@@ -138,7 +138,7 @@ class OPTCausalLMPreprocessor(OPTPreprocessor):
         or tensor strings, tokenizes and packs the input, and computes a padding
         mask masking all inputs not filled in with a padded value.
 
-        Unlike calling the the layer for training, this method does not compute
+        Unlike calling the layer for training, this method does not compute
         labels and will never append a `tokenizer.end_token_id` to the end of
         the sequence (as generation is expected to continue at the end of the
         inputted prompt).
@@ -160,7 +160,7 @@ class OPTCausalLMPreprocessor(OPTPreprocessor):
         """Covert integer token output to strings for generation.
 
         This method reverses `generate_preprocess()`, by first removing all
-        padding and start/end tokens, and then converting the interger sequence
+        padding and start/end tokens, and then converting the integer sequence
         back to a string.
         """
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]

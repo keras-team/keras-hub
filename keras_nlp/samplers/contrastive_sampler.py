@@ -184,7 +184,7 @@ class ContrastiveSampler(Sampler):
                 (1 - self.alpha) * next_token_probabilities
                 - self.alpha * max_similarity_scores
             )
-            # Unflatten varibles to shape [batch_size, self.k, ...] for
+            # Unflatten variables to shape [batch_size, self.k, ...] for
             # gather purpose.
             unflat_score = unflatten_beams(accumulated_scores)
             unflat_prompt = unflatten_beams(prompt_beams)

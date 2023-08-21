@@ -25,7 +25,7 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras_nlp_export("keras_nlp.models.GPTNeoXCausalLM")
 class GPTNeoXCausalLM(GenerativeTask):
-    """An end-to-end GPTNeoX model for causal langauge modeling.
+    """An end-to-end GPTNeoX model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous
     tokens. This task setup can be used to train the model unsupervised on

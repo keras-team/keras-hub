@@ -77,7 +77,7 @@ class RobertaClassifier(Task):
         optimizer=keras.optimizers.Adam(5e-5),
         jit_compile=True,
     )
-    # Access backbone programatically (e.g., to change `trainable`).
+    # Access backbone programmatically (e.g., to change `trainable`).
     classifier.backbone.trainable = False
     # Fit again.
     classifier.fit(x=features, y=labels, batch_size=2)

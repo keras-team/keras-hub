@@ -73,7 +73,7 @@ class DebertaV3MaskedLM(Task):
         optimizer=keras.optimizers.Adam(5e-5),
         jit_compile=True,
     )
-    # Access backbone programatically (e.g., to change `trainable`).
+    # Access backbone programmatically (e.g., to change `trainable`).
     masked_lm.backbone.trainable = False
     # Fit again.
     masked_lm.fit(x=features, batch_size=2)

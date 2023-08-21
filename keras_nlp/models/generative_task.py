@@ -231,7 +231,7 @@ class GenerativeTask(Task):
                 `preprocessor` is attached to the model, `inputs` should match
                 the structure expected by the `preprocessor` layer. If a
                 `preprocessor` is not attached, `inputs` should match the
-                structure expected the the `backbone` model.
+                structure expected the `backbone` model.
             max_length: Optional. int. The max length of the generated sequence.
                 Will default to the max configured `sequence_length` of the
                 `preprocessor`. If `preprocessor` is `None`, `inputs` should be
