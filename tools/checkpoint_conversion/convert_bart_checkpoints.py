@@ -61,10 +61,10 @@ def convert_checkpoints(hf_model):
     ).position_embeddings.assign(hf_wts["encoder.embed_positions.weight"][2:])
 
     keras_nlp_model.get_layer("encoder_embeddings_layer_norm").gamma.assign(
-        hf_wts["encoder.layernorm_embedding.weight"]
+        hf_wts["encoder.layer_norm_embedding.weight"]
     )
     keras_nlp_model.get_layer("encoder_embeddings_layer_norm").beta.assign(
-        hf_wts["encoder.layernorm_embedding.bias"]
+        hf_wts["encoder.layer_norm_embedding.bias"]
     )
 
     for i in range(keras_nlp_model.num_layers):
@@ -133,12 +133,12 @@ def convert_checkpoints(hf_model):
 
         keras_nlp_model.get_layer(
             f"transformer_encoder_layer_{i}"
-        )._self_attention_layernorm.gamma.assign(
+        )._self_attention_layer_norm.gamma.assign(
             hf_wts[f"encoder.layers.{i}.self_attn_layer_norm.weight"].numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_encoder_layer_{i}"
-        )._self_attention_layernorm.beta.assign(
+        )._self_attention_layer_norm.beta.assign(
             hf_wts[f"encoder.layers.{i}.self_attn_layer_norm.bias"].numpy()
         )
 
@@ -167,12 +167,12 @@ def convert_checkpoints(hf_model):
 
         keras_nlp_model.get_layer(
             f"transformer_encoder_layer_{i}"
-        )._feedforward_layernorm.gamma.assign(
+        )._feedforward_layer_norm.gamma.assign(
             hf_wts[f"encoder.layers.{i}.final_layer_norm.weight"].numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_encoder_layer_{i}"
-        )._feedforward_layernorm.beta.assign(
+        )._feedforward_layer_norm.beta.assign(
             hf_wts[f"encoder.layers.{i}.final_layer_norm.bias"].numpy()
         )
 
@@ -183,10 +183,10 @@ def convert_checkpoints(hf_model):
     ).position_embeddings.assign(hf_wts["decoder.embed_positions.weight"][2:])
 
     keras_nlp_model.get_layer("decoder_embeddings_layer_norm").gamma.assign(
-        hf_wts["decoder.layernorm_embedding.weight"]
+        hf_wts["decoder.layer_norm_embedding.weight"]
     )
     keras_nlp_model.get_layer("decoder_embeddings_layer_norm").beta.assign(
-        hf_wts["decoder.layernorm_embedding.bias"]
+        hf_wts["decoder.layer_norm_embedding.bias"]
     )
 
     for i in range(keras_nlp_model.num_layers):
@@ -255,12 +255,12 @@ def convert_checkpoints(hf_model):
 
         keras_nlp_model.get_layer(
             f"transformer_decoder_layer_{i}"
-        )._self_attention_layernorm.gamma.assign(
+        )._self_attention_layer_norm.gamma.assign(
             hf_wts[f"decoder.layers.{i}.self_attn_layer_norm.weight"].numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_decoder_layer_{i}"
-        )._self_attention_layernorm.beta.assign(
+        )._self_attention_layer_norm.beta.assign(
             hf_wts[f"decoder.layers.{i}.self_attn_layer_norm.bias"].numpy()
         )
 
@@ -329,12 +329,12 @@ def convert_checkpoints(hf_model):
 
         keras_nlp_model.get_layer(
             f"transformer_decoder_layer_{i}"
-        )._cross_attention_layernorm.gamma.assign(
+        )._cross_attention_layer_norm.gamma.assign(
             hf_wts[f"decoder.layers.{i}.encoder_attn_layer_norm.weight"].numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_decoder_layer_{i}"
-        )._cross_attention_layernorm.beta.assign(
+        )._cross_attention_layer_norm.beta.assign(
             hf_wts[f"decoder.layers.{i}.encoder_attn_layer_norm.bias"].numpy()
         )
 
@@ -363,12 +363,12 @@ def convert_checkpoints(hf_model):
 
         keras_nlp_model.get_layer(
             f"transformer_decoder_layer_{i}"
-        )._feedforward_layernorm.gamma.assign(
+        )._feedforward_layer_norm.gamma.assign(
             hf_wts[f"decoder.layers.{i}.final_layer_norm.weight"].numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_decoder_layer_{i}"
-        )._feedforward_layernorm.beta.assign(
+        )._feedforward_layer_norm.beta.assign(
             hf_wts[f"decoder.layers.{i}.final_layer_norm.bias"].numpy()
         )
 

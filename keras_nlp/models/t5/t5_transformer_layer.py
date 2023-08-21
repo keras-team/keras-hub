@@ -45,8 +45,9 @@ class T5TransformerLayer(keras.layers.Layer):
             num_heads,
             dropout,
             use_relative_attention_bias=use_relative_attention_bias,
+            name="self_attention",
         )
-        self.self_attention_layernorm = T5LayerNorm(layer_norm_epsilon)
+        self.self_attention_layer_norm = T5LayerNorm(layer_norm_epsilon)
         self.self_attention_dropout = keras.layers.Dropout(dropout)
 
         if self.is_decoder:
@@ -56,8 +57,9 @@ class T5TransformerLayer(keras.layers.Layer):
                 num_heads,
                 dropout,
                 use_relative_attention_bias=False,
+                name="cross_attention",
             )
-            self.cross_attention_layernorm = T5LayerNorm(layer_norm_epsilon)
+            self.cross_attention_layer_norm = T5LayerNorm(layer_norm_epsilon)
             self.cross_attention_dropout = keras.layers.Dropout(dropout)
 
         self.input_projector = keras.layers.Dense(
@@ -109,7 +111,7 @@ class T5TransformerLayer(keras.layers.Layer):
         x = hidden_states  # Intermediate result.
 
         residual = x
-        x = self.self_attention_layernorm(x)
+        x = self.self_attention_layer_norm(x)
         x, position_bias = self.self_attention(
             x,
             mask=attention_mask,
@@ -121,7 +123,7 @@ class T5TransformerLayer(keras.layers.Layer):
 
         if self.is_decoder:
             residual = x
-            x = self.cross_attention_layernorm(x)
+            x = self.cross_attention_layer_norm(x)
             x, _ = self.cross_attention(
                 x,
                 key_value_states=encoder_hidden_states,

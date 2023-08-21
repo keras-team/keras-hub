@@ -197,12 +197,12 @@ def convert_checkpoints(keras_nlp_model, hf_model):
 
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._self_attention_layernorm.gamma.assign(
+        )._self_attention_layer_norm.gamma.assign(
             hf_wts[f"transformer.layer.{i}.sa_layer_norm.weight"].numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._self_attention_layernorm.beta.assign(
+        )._self_attention_layer_norm.beta.assign(
             hf_wts[f"transformer.layer.{i}.sa_layer_norm.bias"].numpy()
         )
 
@@ -234,12 +234,12 @@ def convert_checkpoints(keras_nlp_model, hf_model):
 
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._feedforward_layernorm.gamma.assign(
+        )._feedforward_layer_norm.gamma.assign(
             hf_wts[f"transformer.layer.{i}.output_layer_norm.weight"].numpy()
         )
         keras_nlp_model.get_layer(
             f"transformer_layer_{i}"
-        )._feedforward_layernorm.beta.assign(
+        )._feedforward_layer_norm.beta.assign(
             hf_wts[f"transformer.layer.{i}.output_layer_norm.bias"].numpy()
         )
 

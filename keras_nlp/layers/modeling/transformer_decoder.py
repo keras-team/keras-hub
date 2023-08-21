@@ -173,10 +173,10 @@ class TransformerDecoder(keras.layers.Layer):
                 query_shape=decoder_sequence_shape,
                 value_shape=decoder_sequence_shape,
             )
-        self._self_attention_layernorm = keras.layers.LayerNormalization(
+        self._self_attention_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
-        self._self_attention_layernorm.build(decoder_sequence_shape)
+        self._self_attention_layer_norm.build(decoder_sequence_shape)
         self._self_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,
         )
@@ -202,10 +202,10 @@ class TransformerDecoder(keras.layers.Layer):
                     query_shape=encoder_sequence_shape,
                     value_shape=encoder_sequence_shape,
                 )
-            self._cross_attention_layernorm = keras.layers.LayerNormalization(
+            self._cross_attention_layer_norm = keras.layers.LayerNormalization(
                 epsilon=self.layer_norm_epsilon,
             )
-            self._cross_attention_layernorm.build(encoder_sequence_shape)
+            self._cross_attention_layer_norm.build(encoder_sequence_shape)
             self._cross_attention_dropout = keras.layers.Dropout(
                 rate=self.dropout,
             )
@@ -226,10 +226,10 @@ class TransformerDecoder(keras.layers.Layer):
         intermediate_shape = list(decoder_sequence_shape)
         intermediate_shape[-1] = self.intermediate_dim
         self._feedforward_output_dense.build(tuple(intermediate_shape))
-        self._feedforward_layernorm = keras.layers.LayerNormalization(
+        self._feedforward_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
-        self._feedforward_layernorm.build(decoder_sequence_shape)
+        self._feedforward_layer_norm.build(decoder_sequence_shape)
         self._feedforward_dropout = keras.layers.Dropout(
             rate=self.dropout,
         )
@@ -364,7 +364,7 @@ class TransformerDecoder(keras.layers.Layer):
         # Self attention block.
         residual = x
         if self.normalize_first:
-            x = self._self_attention_layernorm(x)
+            x = self._self_attention_layer_norm(x)
         x, self_attention_cache = self._self_attention_layer(
             query=x,
             value=x,
@@ -375,7 +375,7 @@ class TransformerDecoder(keras.layers.Layer):
         x = self._self_attention_dropout(x)
         x = x + residual
         if not self.normalize_first:
-            x = self._self_attention_layernorm(x)
+            x = self._self_attention_layer_norm(x)
 
         # Cross attention is optional.
         if has_cross_attention:
@@ -387,7 +387,7 @@ class TransformerDecoder(keras.layers.Layer):
             # Cross attention block.
             residual = x
             if self.normalize_first:
-                x = self._cross_attention_layernorm(x)
+                x = self._cross_attention_layer_norm(x)
             x, cross_attention_cache = self._cross_attention_layer(
                 query=x,
                 value=encoder_sequence,
@@ -398,18 +398,18 @@ class TransformerDecoder(keras.layers.Layer):
             x = self._cross_attention_dropout(x)
             x = x + residual
             if not self.normalize_first:
-                x = self._cross_attention_layernorm(x)
+                x = self._cross_attention_layer_norm(x)
 
         # Feedforward block.
         residual = x
         if self.normalize_first:
-            x = self._feedforward_layernorm(x)
+            x = self._feedforward_layer_norm(x)
         x = self._feedforward_intermediate_dense(x)
         x = self._feedforward_output_dense(x)
         x = self._feedforward_dropout(x)
         x = x + residual
         if not self.normalize_first:
-            x = self._feedforward_layernorm(x)
+            x = self._feedforward_layer_norm(x)
 
         if self_attention_cache is not None:
             if has_cross_attention:

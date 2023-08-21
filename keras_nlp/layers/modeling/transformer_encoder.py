@@ -127,6 +127,7 @@ class TransformerEncoder(keras.layers.Layer):
             dropout=self.dropout,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            name="self_attention_layer",
         )
         if hasattr(self._self_attention_layer, "_build_from_signature"):
             self._self_attention_layer._build_from_signature(
@@ -138,30 +139,34 @@ class TransformerEncoder(keras.layers.Layer):
                 query_shape=inputs_shape,
                 value_shape=inputs_shape,
             )
-        self._self_attention_layernorm = keras.layers.LayerNormalization(
+        self._self_attention_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            name="self_attention_layer_norm",
         )
-        self._self_attention_layernorm.build(inputs_shape)
+        self._self_attention_layer_norm.build(inputs_shape)
         self._self_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,
+            name="self_attention_dropout",
         )
 
         # Feedforward layers.
-        self._feedforward_layernorm = keras.layers.LayerNormalization(
+        self._feedforward_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
-        self._feedforward_layernorm.build(inputs_shape)
+        self._feedforward_layer_norm.build(inputs_shape)
         self._feedforward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            name="feedforward_intermediate_dense",
         )
         self._feedforward_intermediate_dense.build(inputs_shape)
         self._feedforward_output_dense = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            name="feedforward_output_dense",
         )
         intermediate_shape = list(inputs_shape)
         intermediate_shape[-1] = self.intermediate_dim
@@ -197,7 +202,7 @@ class TransformerEncoder(keras.layers.Layer):
         # Self attention block.
         residual = x
         if self.normalize_first:
-            x = self._self_attention_layernorm(x)
+            x = self._self_attention_layer_norm(x)
         x = self._self_attention_layer(
             query=x,
             value=x,
@@ -206,18 +211,18 @@ class TransformerEncoder(keras.layers.Layer):
         x = self._self_attention_dropout(x)
         x = x + residual
         if not self.normalize_first:
-            x = self._self_attention_layernorm(x)
+            x = self._self_attention_layer_norm(x)
 
         # Feedforward block.
         residual = x
         if self.normalize_first:
-            x = self._feedforward_layernorm(x)
+            x = self._feedforward_layer_norm(x)
         x = self._feedforward_intermediate_dense(x)
         x = self._feedforward_output_dense(x)
         x = self._feedforward_dropout(x)
         x = x + residual
         if not self.normalize_first:
-            x = self._feedforward_layernorm(x)
+            x = self._feedforward_layer_norm(x)
 
         return x
 

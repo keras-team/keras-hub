@@ -95,14 +95,12 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
                 self.embeddings_initializer
             ),
             mask_zero=mask_zero,
-            name="token_embedding"
-            + str(keras.backend.get_uid("token_embedding")),
+            name="token_embedding",
         )
         self.position_embedding = PositionEmbedding(
             sequence_length=sequence_length,
             initializer=clone_initializer(self.embeddings_initializer),
-            name="position_embedding"
-            + str(keras.backend.get_uid("position_embedding")),
+            name="position_embedding",
         )
         self.supports_masking = self.token_embedding.supports_masking
 
