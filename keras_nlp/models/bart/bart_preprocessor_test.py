@@ -74,6 +74,22 @@ class BartPreprocessorTest(TestCase):
             output["decoder_padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 0]
         )
 
+    def test_key_order(self):
+        self.assertAllClose(
+            self.preprocessor(
+                {
+                    "encoder_text": " airplane at airport",
+                    "decoder_text": " kohli is the best",
+                }
+            ),
+            self.preprocessor(
+                {
+                    "decoder_text": " kohli is the best",
+                    "encoder_text": " airplane at airport",
+                }
+            ),
+        )
+
     def test_tokenize_list_of_strings(self):
         input_data = {
             "encoder_text": [" airplane at airport"] * 4,

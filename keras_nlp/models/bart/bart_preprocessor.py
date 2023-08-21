@@ -179,7 +179,7 @@ class BartPreprocessor(Preprocessor):
     def call(self, x, y=None, sample_weight=None):
         if not (
             isinstance(x, dict)
-            and ["encoder_text", "decoder_text"] == list(x.keys())
+            and all(k in x for k in ("encoder_text", "decoder_text"))
         ):
             raise ValueError(
                 '`x` must be a dictionary, containing the keys `"encoder_text"`'
