@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""BERT masked language model preprocessor layer."""
-
 from absl import logging
 
 from keras_nlp.api_export import keras_nlp_export

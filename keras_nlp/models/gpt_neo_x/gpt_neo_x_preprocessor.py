@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""GPTNeoX preprocessor layer."""
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer

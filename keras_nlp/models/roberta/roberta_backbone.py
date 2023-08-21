@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""RoBERTa backbone model."""
-
 import copy
 
 from keras_nlp.api_export import keras_nlp_export

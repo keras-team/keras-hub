@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for GPT-2 preprocessing layers."""
-
-
 from keras_nlp.backend import keras
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.tests.test_case import TestCase

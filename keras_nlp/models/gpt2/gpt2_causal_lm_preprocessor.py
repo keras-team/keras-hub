@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""GPT2 Causal LM preprocessor layer."""
-
 import tensorflow as tf
 from absl import logging
 

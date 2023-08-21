@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""T5 tokenizer."""
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 

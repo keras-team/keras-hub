@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for GPT-NeoX preprocessing layers."""
-
-
 from keras_nlp.backend import keras
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
 from keras_nlp.tests.test_case import TestCase

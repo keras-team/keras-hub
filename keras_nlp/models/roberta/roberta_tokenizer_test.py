@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for RoBERTa tokenizer."""
-
-
 from keras_nlp.backend import keras
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.tests.test_case import TestCase

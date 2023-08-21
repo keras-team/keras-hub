@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for BERT tokenizer."""
-
 
 from keras_nlp.backend import keras
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
