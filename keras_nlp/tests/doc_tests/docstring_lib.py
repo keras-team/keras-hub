@@ -144,7 +144,7 @@ class DoctestOutputChecker(doctest.OutputChecker, object):
         The numeric comparison will fail if either:
 
             * The wrong number of floats are found.
-            * The float values are not within tolerence.
+            * The float values are not within tolerance.
 
         Args:
             want: The output in the docstring.
