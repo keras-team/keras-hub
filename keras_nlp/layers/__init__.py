@@ -18,6 +18,7 @@ from keras_nlp.layers.modeling.cached_multi_head_attention import (
 from keras_nlp.layers.modeling.f_net_encoder import FNetEncoder
 from keras_nlp.layers.modeling.masked_lm_head import MaskedLMHead
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
+from keras_nlp.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_nlp.layers.modeling.sine_position_encoding import (
     SinePositionEncoding,
 )
