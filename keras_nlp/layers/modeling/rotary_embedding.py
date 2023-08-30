@@ -56,12 +56,12 @@ class RotaryEmbedding(keras.layers.Layer):
     num_heads = 8
 
     # No multi-head dimension.
-    tensor = tf.ones((batch_size, sequence_length, feature_length))
+    tensor = np.ones((batch_size, sequence_length, feature_length))
     rot_emb_layer = RotaryEmbedding()
     tensor_rot = rot_emb_layer(tensor)
 
     # With multi-head dimension.
-    tensor = tf.ones((batch_size, sequence_length, num_heads, feature_length))
+    tensor = np.ones((batch_size, sequence_length, num_heads, feature_length))
     tensor_rot = rot_emb_layer(tensor)
     ```
 
