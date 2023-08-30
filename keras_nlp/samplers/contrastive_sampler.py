@@ -103,17 +103,17 @@ class ContrastiveSampler(Sampler):
         def create_beams(x):
             """Add initial beam state."""
             x = ops.repeat(x, self.k, axis=0)
-            flat_shape = (batch_size * self.k,) + tuple(x.shape)[1:]
+            flat_shape = (batch_size * self.k,) + ops.shape(x)[1:]
             return ops.reshape(x, flat_shape)
 
         def flatten_beams(x):
             """Combine the beam dim and batch dim."""
-            flat_shape = (batch_size * self.k,) + tuple(x.shape)[2:]
+            flat_shape = (batch_size * self.k,) + ops.shape(x)[2:]
             return ops.reshape(x, flat_shape)
 
         def unflatten_beams(x):
             """Separate the beam dim and batch dim."""
-            unflat_shape = (batch_size, self.k) + tuple(x.shape)[1:]
+            unflat_shape = (batch_size, self.k) + ops.shape(x)[1:]
             return ops.reshape(x, unflat_shape)
 
         mask = ops.zeros_like(prompt, dtype="bool") if mask is None else mask
