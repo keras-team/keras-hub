@@ -124,12 +124,12 @@ class BeamSampler(Sampler):
 
         def flatten_beams(x):
             """Combine the beam dim and batch dim."""
-            flat_shape = (batch_size * self.num_beams,) + tuple(x.shape)[2:]
+            flat_shape = (batch_size * self.num_beams,) + ops.shape(x)[2:]
             return ops.reshape(x, flat_shape)
 
         def unflatten_beams(x):
             """Separate the beam dim and batch dim."""
-            unflat_shape = (batch_size, self.num_beams) + tuple(x.shape)[1:]
+            unflat_shape = (batch_size, self.num_beams) + ops.shape(x)[1:]
             return ops.reshape(x, unflat_shape)
 
         if mask is None:
