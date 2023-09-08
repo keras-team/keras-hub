@@ -167,6 +167,7 @@ class MaskedLMHead(keras.layers.Layer):
             initializer=self.bias_initializer,
             dtype=self.dtype,
         )
+        self.built = True
 
     def call(self, inputs, mask_positions):
         # Avoid auto-converting numpy int arrays to float tensors.

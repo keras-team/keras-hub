@@ -100,8 +100,7 @@ class PositionEmbedding(keras.layers.Layer):
             initializer=self.initializer,
             trainable=True,
         )
-
-        super().build(inputs_shape)
+        self.built = True
 
     def call(self, inputs, start_index=0):
         shape = ops.shape(inputs)
