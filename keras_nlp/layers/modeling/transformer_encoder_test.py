@@ -25,7 +25,7 @@ class TransformerEncoderTest(TestCase):
         ("without_norm_first", False),
         ("with_norm_first", True),
     )
-    def test_basics(self, normalize_first):
+    def test_layer_behaviors(self, normalize_first):
         self.run_layer_test(
             layer_cls=TransformerEncoder,
             init_kwargs={

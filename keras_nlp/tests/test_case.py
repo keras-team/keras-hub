@@ -133,7 +133,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
             model = TestModel(layer)
             model.compile(optimizer="sgd", loss="mse", jit_compile=True)
-            print(input_data)
             model.fit(input_data, output_data, verbose=0)
 
         if config.multi_backend():

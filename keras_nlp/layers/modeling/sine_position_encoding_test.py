@@ -21,7 +21,7 @@ from keras_nlp.tests.test_case import TestCase
 
 
 class SinePositionEncodingTest(TestCase):
-    def test_basics(self):
+    def test_layer_behaviors(self):
         self.run_layer_test(
             layer_cls=SinePositionEncoding,
             init_kwargs={
@@ -31,7 +31,7 @@ class SinePositionEncodingTest(TestCase):
             expected_output_shape=(2, 4, 6),
         )
 
-    def test_basics_4d(self):
+    def test_layer_behaviors_4d(self):
         self.run_layer_test(
             layer_cls=SinePositionEncoding,
             init_kwargs={

@@ -28,7 +28,7 @@ class ReversibleEmbeddingTest(TestCase):
         ("tie_weights", True),
         ("untie_weights", False),
     )
-    def test_basics_tied(self, tie_weights):
+    def test_layer_behaviors_tied(self, tie_weights):
         self.run_layer_test(
             layer_cls=ReversibleEmbedding,
             init_kwargs={

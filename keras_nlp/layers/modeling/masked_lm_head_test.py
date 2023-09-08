@@ -19,7 +19,7 @@ from keras_nlp.tests.test_case import TestCase
 
 
 class MaskedLMHeadTest(TestCase):
-    def test_basics(self):
+    def test_layer_behaviors(self):
         self.run_layer_test(
             layer_cls=MaskedLMHead,
             init_kwargs={
@@ -38,7 +38,7 @@ class MaskedLMHeadTest(TestCase):
             expected_num_trainable_weights=6,
         )
 
-    def test_basics_with_embedding(self):
+    def test_layer_behaviors_with_embedding(self):
         embedding = ReversibleEmbedding(100, 16)
         embedding.build((4, 10))
         self.run_layer_test(

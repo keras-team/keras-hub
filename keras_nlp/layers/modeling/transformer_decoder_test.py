@@ -24,7 +24,7 @@ class TransformerDecoderTest(TestCase):
         ("without_norm_first", False),
         ("with_norm_first", True),
     )
-    def test_basics(self, normalize_first):
+    def test_layer_behaviors(self, normalize_first):
         self.run_layer_test(
             layer_cls=TransformerDecoder,
             init_kwargs={
@@ -46,7 +46,7 @@ class TransformerDecoderTest(TestCase):
         ("without_norm_first", False),
         ("with_norm_first", True),
     )
-    def test_basics_with_cross_attention(self, normalize_first):
+    def test_layer_behaviors_with_cross_attention(self, normalize_first):
         pass
         self.run_layer_test(
             layer_cls=TransformerDecoder,

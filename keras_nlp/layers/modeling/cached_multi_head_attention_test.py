@@ -20,7 +20,7 @@ from keras_nlp.tests.test_case import TestCase
 
 
 class CachedMultiHeadAttentionTest(TestCase):
-    def test_basics(self):
+    def test_layer_behaviors(self):
         self.run_layer_test(
             layer_cls=CachedMultiHeadAttention,
             init_kwargs={
