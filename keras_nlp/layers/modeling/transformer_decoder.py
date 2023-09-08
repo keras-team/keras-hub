@@ -370,13 +370,17 @@ class TransformerDecoder(keras.layers.Layer):
         residual = x
         if self.normalize_first:
             x = self._self_attention_layer_norm(x)
-        x, self_attention_cache = self._self_attention_layer(
+        attention_output = self._self_attention_layer(
             query=x,
             value=x,
             attention_mask=self_attention_mask,
             cache=self_attention_cache,
             cache_update_index=self_attention_cache_update_index,
         )
+        if self_attention_cache is None:
+            x = attention_output
+        else:
+            x, self_attention_cache = attention_output
         x = self._self_attention_dropout(x)
         x = x + residual
         if not self.normalize_first:
@@ -393,13 +397,17 @@ class TransformerDecoder(keras.layers.Layer):
             residual = x
             if self.normalize_first:
                 x = self._cross_attention_layer_norm(x)
-            x, cross_attention_cache = self._cross_attention_layer(
+            attention_output = self._cross_attention_layer(
                 query=x,
                 value=encoder_sequence,
                 attention_mask=cross_attention_mask,
                 cache=cross_attention_cache,
                 cache_update_index=cross_attention_cache_update_index,
             )
+            if self_attention_cache is None:
+                x = attention_output
+            else:
+                x, self_attention_cache = attention_output
             x = self._cross_attention_dropout(x)
             x = x + residual
             if not self.normalize_first:

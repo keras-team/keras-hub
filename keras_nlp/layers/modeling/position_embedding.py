@@ -92,8 +92,8 @@ class PositionEmbedding(keras.layers.Layer):
         )
         return config
 
-    def build(self, input_shape):
-        feature_size = input_shape[-1]
+    def build(self, inputs_shape):
+        feature_size = inputs_shape[-1]
         self.position_embeddings = self.add_weight(
             name="embeddings",
             shape=[self.sequence_length, feature_size],
@@ -101,7 +101,7 @@ class PositionEmbedding(keras.layers.Layer):
             trainable=True,
         )
 
-        super().build(input_shape)
+        super().build(inputs_shape)
 
     def call(self, inputs, start_index=0):
         shape = ops.shape(inputs)

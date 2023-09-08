@@ -138,4 +138,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             self._combine_equation, attention_scores, value
         )
         attention_output = self._output_dense(attention_output)
-        return attention_output, cache
+
+        if cache is not None:
+            return attention_output, cache
+        return attention_output
