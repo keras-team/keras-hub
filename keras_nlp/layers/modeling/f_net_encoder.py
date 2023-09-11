@@ -125,6 +125,7 @@ class FNetEncoder(keras.layers.Layer):
             self._intermediate_dense.compute_output_shape(inputs_shape)
         )
         self._output_dropout = keras.layers.Dropout(rate=self.dropout)
+        self.built = True
 
     def call(self, inputs):
         """Forward pass of the FNetEncoder.

@@ -21,16 +21,25 @@ from keras_nlp.tests.test_case import TestCase
 
 
 class SinePositionEncodingTest(TestCase):
-    def test_valid_call(self):
-        pos_encoding = SinePositionEncoding()
-        model = keras.Sequential(
-            [
-                keras.Input(shape=(4, 6)),
-                pos_encoding,
-            ]
+    def test_layer_behaviors(self):
+        self.run_layer_test(
+            layer_cls=SinePositionEncoding,
+            init_kwargs={
+                "max_wavelength": 10000,
+            },
+            input_data=ops.random.uniform(shape=(2, 4, 6)),
+            expected_output_shape=(2, 4, 6),
         )
-        input = ops.random.uniform(shape=[2, 4, 6])
-        model(input)
+
+    def test_layer_behaviors_4d(self):
+        self.run_layer_test(
+            layer_cls=SinePositionEncoding,
+            init_kwargs={
+                "max_wavelength": 10000,
+            },
+            input_data=ops.random.uniform(shape=(1, 2, 4, 6)),
+            expected_output_shape=(1, 2, 4, 6),
+        )
 
     def test_static_layer_output_shape(self):
         pos_encoding = SinePositionEncoding()
@@ -97,21 +106,6 @@ class SinePositionEncodingTest(TestCase):
                 sequential_output, (0, i, 0), parial_output
             )
         self.assertAllClose(full_output, sequential_output)
-
-    def test_get_config_and_from_config(self):
-        pos_encoding = SinePositionEncoding(
-            max_wavelength=1000,
-        )
-        config = pos_encoding.get_config()
-        expected_config_subset = {
-            "max_wavelength": 1000,
-        }
-        self.assertEqual(config, {**config, **expected_config_subset})
-        restored_pos_encoding = SinePositionEncoding.from_config(config)
-        self.assertEqual(
-            restored_pos_encoding.get_config(),
-            {**config, **expected_config_subset},
-        )
 
     def test_float16_dtype(self):
         pos_encoding = SinePositionEncoding(dtype="float16")

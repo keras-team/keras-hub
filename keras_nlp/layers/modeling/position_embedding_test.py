@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
 import numpy as np
 
 from keras_nlp.backend import keras
@@ -30,42 +28,27 @@ def custom_init(shape, dtype=None):
 
 
 class PositionEmbeddingTest(TestCase):
-    def test_static_layer_output_shape(self):
-        # Create a 3-dimensional input (the first dimension is implicit).
-        sequence_length = 21
-        feature_size = 30
-        test_layer = PositionEmbedding(sequence_length=sequence_length)
-        input_tensor = keras.Input(shape=(sequence_length, feature_size))
-        output_tensor = test_layer(input_tensor)
-
-        # When using static position embedding shapes, the output is expected
-        # to be the same as the input shape in all dimensions save batch.
-        expected_output_shape = (None, sequence_length, feature_size)
-        self.assertEqual(expected_output_shape, output_tensor.shape)
-        # The output dtype for this layer should match the compute dtype.
-        self.assertEqual(test_layer.compute_dtype, output_tensor.dtype)
-
-    def test_more_than_3_dimensions_static(self):
-        # Create a 4-dimensional input (the first dimension is implicit).
-        sequence_length = 21
-        feature_size = 30
-        test_layer = PositionEmbedding(sequence_length=sequence_length)
-        input_tensor = keras.Input(
-            shape=(feature_size, sequence_length, feature_size)
+    def test_layer_behaviors(self):
+        self.run_layer_test(
+            layer_cls=PositionEmbedding,
+            init_kwargs={
+                "sequence_length": 21,
+            },
+            input_data=ops.random.uniform(shape=(4, 21, 30)),
+            expected_output_shape=(4, 21, 30),
+            expected_num_trainable_weights=1,
         )
-        output_tensor = test_layer(input_tensor)
 
-        # When using static position embedding shapes, the output is expected
-        # to be the same as the input shape in all dimensions save batch.
-        expected_output_shape = (
-            None,
-            feature_size,
-            sequence_length,
-            feature_size,
+    def test_layer_behaviors_4d(self):
+        self.run_layer_test(
+            layer_cls=PositionEmbedding,
+            init_kwargs={
+                "sequence_length": 21,
+            },
+            input_data=ops.random.uniform(shape=(4, 5, 21, 30)),
+            expected_output_shape=(4, 5, 21, 30),
+            expected_num_trainable_weights=1,
         )
-        self.assertEqual(expected_output_shape, output_tensor.shape)
-        # The output dtype for this layer should match the compute dtype.
-        self.assertEqual(test_layer.compute_dtype, output_tensor.dtype)
 
     def test_float16_dtype(self):
         # Create a 3-dimensional input (the first dimension is implicit).
@@ -171,54 +154,3 @@ class PositionEmbeddingTest(TestCase):
                 sequential_output, (0, i, 0), parial_output
             )
         self.assertAllClose(full_output, sequential_output)
-
-    def test_one_training_step(self):
-        max_sequence_length = 4
-        feature_size = 3
-        inputs = keras.Input(shape=(max_sequence_length, feature_size))
-        test_layer = PositionEmbedding(sequence_length=max_sequence_length)
-        outputs = test_layer(inputs)
-        model = keras.Model(inputs=inputs, outputs=outputs)
-
-        batch_size = 2
-        data = ops.random.uniform(
-            shape=[batch_size, max_sequence_length, feature_size]
-        )
-        label = ops.random.uniform(
-            shape=[batch_size, max_sequence_length, feature_size]
-        )
-
-        loss = keras.losses.MeanSquaredError()
-        optimizer = keras.optimizers.Adam()
-        model.compile(loss=loss, optimizer=optimizer)
-        loss = model.train_on_batch(x=data, y=label)
-        self.assertGreater(loss, 0)
-
-    def test_get_config_and_from_config(self):
-        max_sequence_length = 40
-        test_layer = PositionEmbedding(
-            sequence_length=max_sequence_length,
-            initializer="zeros",
-        )
-        config = test_layer.get_config()
-        restored = PositionEmbedding.from_config(config)
-        self.assertEqual(restored.get_config(), config)
-
-    def test_saved_model(self):
-        max_sequence_length = 4
-        feature_size = 6
-        test_layer = PositionEmbedding(sequence_length=max_sequence_length)
-        inputs = keras.Input(shape=(max_sequence_length, feature_size))
-        outputs = test_layer(inputs)
-        model = keras.Model(inputs=inputs, outputs=outputs)
-
-        data = np.zeros(shape=[2, max_sequence_length, feature_size])
-        model(data)
-
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-        loaded_model = keras.models.load_model(path)
-
-        model_output = model.predict(data)
-        loaded_model_output = loaded_model.predict(data)
-        self.assertAllClose(model_output, loaded_model_output)

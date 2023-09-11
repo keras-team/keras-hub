@@ -28,15 +28,19 @@ class ReversibleEmbeddingTest(TestCase):
         ("tie_weights", True),
         ("untie_weights", False),
     )
-    def test_valid_call(self, tie_weights):
-        embedding = ReversibleEmbedding(100, 32, tie_weights=tie_weights)
-        inputs = keras.Input(shape=(10,))
-        hidden_states = embedding(inputs)
-        outputs = embedding(hidden_states, reverse=True)
-        model = keras.Model(inputs, outputs)
-
-        input_data = ops.random.uniform(shape=(4, 10))
-        model(input_data)
+    def test_layer_behaviors_tied(self, tie_weights):
+        self.run_layer_test(
+            layer_cls=ReversibleEmbedding,
+            init_kwargs={
+                "input_dim": 100,
+                "output_dim": 32,
+                "tie_weights": tie_weights,
+                "embeddings_initializer": "HeNormal",
+            },
+            input_data=ops.random.randint(minval=0, maxval=100, shape=(4, 10)),
+            expected_output_shape=(4, 10, 32),
+            expected_num_trainable_weights=1 if tie_weights else 2,
+        )
 
     def test_correctness(self):
         layer = ReversibleEmbedding(input_dim=3, output_dim=2)
@@ -50,17 +54,6 @@ class ReversibleEmbeddingTest(TestCase):
         layer.embeddings.assign(np.array([[0.0, 0.0], [2.0, 2.0], [3.0, 3.0]]))
         out = layer(np.array(([[1.0, 1.0]])), reverse=True)
         self.assertAllClose(out, np.array([[0.0, 4.0, 6.0]]))
-
-    def test_config(self):
-        original = ReversibleEmbedding(
-            100,
-            32,
-            tie_weights=False,
-            embeddings_initializer="HeNormal",
-        )
-        restored = ReversibleEmbedding.from_config(original.get_config())
-        restored.set_weights(original.get_weights())
-        self.assertEqual(restored.get_config(), original.get_config())
 
     def test_tied_checkpoint_untied_weights(self):
         embedding = ReversibleEmbedding(100, 16, tie_weights=True)
@@ -80,23 +73,3 @@ class ReversibleEmbeddingTest(TestCase):
 
         input_data = ops.ones(shape=(4, 10), dtype="int32")
         self.assertAllClose(untied_model(input_data), tied_model(input_data))
-
-    @parameterized.named_parameters(
-        ("tie_weights", True),
-        ("untie_weights", False),
-    )
-    def test_saved_model(self, tie_weights):
-        embedding = ReversibleEmbedding(100, 16, tie_weights=tie_weights)
-        inputs = keras.Input(shape=(10,), dtype="int32")
-        hidden_states = embedding(inputs)
-        outputs = embedding(hidden_states, reverse=True)
-        model = keras.Model(inputs, outputs)
-
-        input_data = ops.ones(shape=(4, 10), dtype="int32")
-        model_output = model(input_data)
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-        restored_model = keras.models.load_model(path)
-
-        restored_output = restored_model(input_data)
-        self.assertAllClose(model_output, restored_output)

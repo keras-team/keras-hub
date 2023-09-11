@@ -19,28 +19,28 @@ from keras_nlp.tests.test_case import TestCase
 
 
 class RotaryEmbeddingTest(TestCase):
-    def test_valid_call(self):
-        embedding_layer = RotaryEmbedding()
-        model = keras.Sequential(
-            [
-                keras.Input(shape=(4, 6)),
-                embedding_layer,
-            ]
+    def test_layer_behaviors(self):
+        self.run_layer_test(
+            layer_cls=RotaryEmbedding,
+            init_kwargs={
+                "max_wavelength": 1000,
+                "scaling_factor": 2.0,
+                "sequence_axis": 1,
+                "feature_axis": -1,
+            },
+            input_data=ops.random.uniform(shape=(2, 4, 6)),
+            expected_output_shape=(2, 4, 6),
         )
-        input = ops.ones(shape=[2, 4, 6])
-        model(input)
 
-    def test_static_layer_output_shape(self):
-        embedding_layer = RotaryEmbedding()
-        seq_length = 100
-        hidden_size = 32
-        inputs = keras.Input(shape=(seq_length, hidden_size))
-        outputs = embedding_layer(inputs)
-
-        # When using static positional encoding shapes, the output is expected
-        # to be the same as the input shape in all dimensions.
-        expected_output_shape = (None, seq_length, hidden_size)
-        self.assertEqual(expected_output_shape, outputs.shape)
+    def test_layer_behaviors_4d(self):
+        self.run_layer_test(
+            layer_cls=RotaryEmbedding,
+            init_kwargs={
+                "max_wavelength": 1000,
+            },
+            input_data=ops.random.uniform(shape=(2, 8, 4, 6)),
+            expected_output_shape=(2, 8, 4, 6),
+        )
 
     def test_dynamic_layer_output_shape(self):
         embedding_layer = RotaryEmbedding()
@@ -95,27 +95,6 @@ class RotaryEmbeddingTest(TestCase):
                 sequential_output, (0, i, 0), parial_output
             )
         self.assertAllClose(full_output, sequential_output)
-
-    def test_get_config_and_from_config(self):
-        embedding_layer = RotaryEmbedding(
-            max_wavelength=1000,
-            scaling_factor=2.0,
-            sequence_axis=1,
-            feature_axis=-1,
-        )
-        config = embedding_layer.get_config()
-        expected_config = {
-            "max_wavelength": 1000,
-            "scaling_factor": 2.0,
-            "sequence_axis": 1,
-            "feature_axis": -1,
-        }
-        self.assertEqual(config, {**config, **expected_config})
-        restored_embedding_layer = RotaryEmbedding.from_config(config)
-        self.assertEqual(
-            restored_embedding_layer.get_config(),
-            {**config, **expected_config},
-        )
 
     def test_float16_dtype(self):
         embedding_layer = RotaryEmbedding(dtype="float16")

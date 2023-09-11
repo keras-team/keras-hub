@@ -167,8 +167,11 @@ class MaskedLMHead(keras.layers.Layer):
             initializer=self.bias_initializer,
             dtype=self.dtype,
         )
+        self.built = True
 
     def call(self, inputs, mask_positions):
+        # Avoid auto-converting numpy int arrays to float tensors.
+        mask_positions = ops.convert_to_tensor(mask_positions, dtype="int")
         # Gather the encoded tokens at the masked indices.
         mask_positions = ops.expand_dims(mask_positions, axis=-1)
         x = ops.take_along_axis(inputs, mask_positions, axis=1)
@@ -222,6 +225,4 @@ class MaskedLMHead(keras.layers.Layer):
         return config
 
     def compute_output_shape(self, inputs_shape, mask_positions_shape):
-        output_shape = list(mask_positions_shape)
-        output_shape[-1] = self.vocabulary_size
-        return tuple(output_shape)
+        return mask_positions_shape + (self.vocabulary_size,)

@@ -67,6 +67,7 @@ class SinePositionEncoding(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
         self.max_wavelength = max_wavelength
+        self.built = True
 
     def call(self, inputs, start_index=0):
         shape = ops.shape(inputs)

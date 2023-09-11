@@ -20,10 +20,21 @@ from keras_nlp.tests.test_case import TestCase
 
 
 class CachedMultiHeadAttentionTest(TestCase):
-    def test_valid_call(self):
-        layer = CachedMultiHeadAttention(num_heads=2, key_dim=4)
-        x = ops.random.uniform(shape=(2, 2, 8))
-        layer(query=x, value=x)
+    def test_layer_behaviors(self):
+        self.run_layer_test(
+            layer_cls=CachedMultiHeadAttention,
+            init_kwargs={
+                "num_heads": 2,
+                "key_dim": 4,
+            },
+            input_data={
+                "query": ops.random.uniform(shape=(2, 4, 6)),
+                "value": ops.random.uniform(shape=(2, 4, 6)),
+            },
+            expected_output_shape=(2, 4, 6),
+            expected_num_trainable_weights=8,
+            expected_num_non_trainable_variables=1,
+        )
 
     def test_cache_call_is_correct(self):
         batch_size = 2

@@ -82,6 +82,7 @@ class RotaryEmbedding(keras.layers.Layer):
         self.sequence_axis = sequence_axis
         self.feature_axis = feature_axis
         self.scaling_factor = scaling_factor
+        self.built = True
 
     def call(self, inputs, start_index=0):
         rotary_dim = ops.shape(inputs)[-1]

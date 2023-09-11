@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
 import numpy as np
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
@@ -24,53 +23,20 @@ from keras_nlp.tests.test_case import TestCase
 
 
 class TokenAndPositionEmbeddingTest(TestCase):
-    def test_get_config_and_from_config(self):
-        token_and_position_embed = TokenAndPositionEmbedding(
-            vocabulary_size=5,
-            sequence_length=10,
-            embedding_dim=32,
+    def test_layer_behaviors(self):
+        self.run_layer_test(
+            layer_cls=TokenAndPositionEmbedding,
+            init_kwargs={
+                "vocabulary_size": 5,
+                "sequence_length": 4,
+                "embedding_dim": 3,
+                "embeddings_initializer": keras.initializers.Constant(1.0),
+            },
+            input_data=ops.random.randint(minval=0, maxval=5, shape=(2, 4)),
+            expected_output_shape=(2, 4, 3),
+            expected_output_data=ops.ones((2, 4, 3)) * 2,
+            expected_num_trainable_weights=2,
         )
-
-        config = token_and_position_embed.get_config()
-
-        expected_config_subset = {
-            "embeddings_initializer": keras.initializers.serialize(
-                keras.initializers.GlorotUniform()
-            ),
-            "mask_zero": False,
-        }
-
-        self.assertEqual(config, {**config, **expected_config_subset})
-
-        restored_token_and_position_embed = (
-            TokenAndPositionEmbedding.from_config(config)
-        )
-
-        self.assertEqual(
-            restored_token_and_position_embed.get_config(),
-            {**config, **expected_config_subset},
-        )
-
-    def test_dense_tensor(self):
-        vocabulary_size = 5
-        sequence_length = 4
-        embedding_dim = 3
-        test_layer = TokenAndPositionEmbedding(
-            vocabulary_size=vocabulary_size,
-            sequence_length=sequence_length,
-            embedding_dim=embedding_dim,
-            embeddings_initializer=keras.initializers.Constant(1.0),
-        )
-        # Create a 2-dimensional input
-        # (the first dimension is implicit).
-        inputs = keras.Input(shape=(sequence_length,), dtype="int32")
-        outputs = test_layer(inputs)
-        model = keras.Model(inputs, outputs)
-
-        input_data = np.ones((2, sequence_length), dtype="int32")
-        expected_output_data = np.ones((2, sequence_length, embedding_dim)) * 2
-        output_data = model.predict(input_data)
-        self.assertAllClose(output_data, expected_output_data)
 
     def test_mask_propagation(self):
         test_layer = TokenAndPositionEmbedding(
@@ -83,27 +49,3 @@ class TokenAndPositionEmbeddingTest(TestCase):
         mask = input_data != 0
         outputs = test_layer(input_data)
         self.assertAllEqual(outputs._keras_mask, mask)
-
-    def test_saved_model(self):
-        vocabulary_size = 5
-        sequence_length = 4
-        embedding_dim = 3
-        test_layer = TokenAndPositionEmbedding(
-            vocabulary_size=vocabulary_size,
-            sequence_length=sequence_length,
-            embedding_dim=embedding_dim,
-        )
-        inputs = keras.Input(shape=(sequence_length,))
-        outputs = test_layer(inputs)
-        model = keras.Model(inputs=inputs, outputs=outputs)
-
-        data = np.zeros(shape=[2, sequence_length])
-        model(data)
-
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        model.save(path, save_format="keras_v3")
-        loaded_model = keras.models.load_model(path)
-
-        model_output = model.predict(data)
-        loaded_model_output = loaded_model.predict(data)
-        self.assertAllClose(model_output, loaded_model_output)
