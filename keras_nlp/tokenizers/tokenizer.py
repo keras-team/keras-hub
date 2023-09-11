@@ -115,9 +115,9 @@ class Tokenizer(PreprocessingLayer):
         )
 
     def token_to_id(self, token: str) -> int:
-        """Convert an integer id to a string token."""
+        """Convert a string token to an integer id."""
         raise NotImplementedError(
-            "No implementation of `id_to_token()` was found for "
+            "No implementation of `token_to_id()` was found for "
             f"{self.__class__.__name__}."
         )
 
