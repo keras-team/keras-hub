@@ -62,7 +62,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         sequence_length,
         embedding_dim,
         tie_weights=True,
-        embeddings_initializer="glorot_uniform",
+        embeddings_initializer="uniform",
         mask_zero=False,
         **kwargs
     ):
