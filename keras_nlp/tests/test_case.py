@@ -67,6 +67,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         x2 = tree.map_structure(convert_to_comparible_type, x2)
         super().assertAllEqual(x1, x2, msg=msg)
 
+    def assertDType(self, x, expected_dtype, msg=None):
+        input_dtype = standardize_dtype(x.dtype)
+        super().assertEqual(input_dtype, expected_dtype, msg=msg)
+
     def run_layer_test(
         self,
         layer_cls,
@@ -78,6 +82,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         expected_num_non_trainable_weights=0,
         expected_num_non_trainable_variables=0,
         run_training_check=True,
+        run_mixed_precision_check=True,
     ):
         # Serialization test.
         layer = layer_cls(**init_kwargs)
@@ -167,6 +172,27 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         if run_training_check:
             run_training_step(layer, input_data, output_data)
+
+        # Never test mixed precision on torch CPU. Torch lacks support.
+        if run_mixed_precision_check and config.backend() == "torch":
+            import torch
+
+            run_mixed_precision_check = torch.cuda.is_available()
+
+        if run_mixed_precision_check:
+            layer = layer_cls(**{**init_kwargs, "dtype": "mixed_float16"})
+            if isinstance(input_data, dict):
+                output_data = layer(**input_data)
+            else:
+                output_data = layer(input_data)
+            for tensor in tree.flatten(output_data):
+                dtype = standardize_dtype(tensor.dtype)
+                if "float" in dtype:
+                    self.assertEqual(dtype, "float16")
+            for weight in layer.weights:
+                dtype = standardize_dtype(weight.dtype)
+                if "float" in dtype:
+                    self.assertEqual(dtype, "float32")
 
     def run_class_serialization_test(self, instance):
         # get_config roundtrip

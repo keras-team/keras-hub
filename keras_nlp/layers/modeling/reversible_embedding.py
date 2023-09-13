@@ -49,6 +49,9 @@ class ReversibleEmbedding(keras.layers.Embedding):
             the `embeddings` matrix (see `keras.constraints`).
         mask_zero: Boolean, whether or not the input value 0 is a special
             "padding" value that should be masked out.
+        reverse_dtype: The dtype for the reverse projection computation.
+            For stability, it is usually best to use full precision even when
+            working with half or mixed precision training.
 
     Call args:
         inputs: The tensor inputs to the layer.
@@ -87,6 +90,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
         embeddings_regularizer=None,
         embeddings_constraint=None,
         mask_zero=False,
+        reverse_dtype="float32",
         **kwargs,
     ):
         super().__init__(
@@ -99,6 +103,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
             **kwargs,
         )
         self.tie_weights = tie_weights
+        self.reverse_dtype = reverse_dtype
 
     def build(self, inputs_shape=None):
         super().build(inputs_shape)
@@ -114,12 +119,12 @@ class ReversibleEmbedding(keras.layers.Embedding):
     def call(self, inputs, reverse=False):
         if reverse:
             if self.tie_weights:
-                reverse_embeddings = ops.transpose(
-                    ops.convert_to_tensor(self.embeddings)
-                )
+                kernel = ops.transpose(ops.convert_to_tensor(self.embeddings))
             else:
-                reverse_embeddings = self.reverse_embeddings
-            return ops.matmul(inputs, reverse_embeddings)
+                kernel = self.reverse_embeddings
+            inputs = ops.cast(inputs, self.reverse_dtype)
+            kernel = ops.cast(kernel, self.reverse_dtype)
+            return ops.matmul(inputs, kernel)
 
         return super().call(inputs)
 
@@ -128,6 +133,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
         config.update(
             {
                 "tie_weights": self.tie_weights,
+                "reverse_dtype": self.reverse_dtype,
             }
         )
         return config

@@ -15,7 +15,6 @@
 import tree
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import call_args_docstring
@@ -131,7 +130,7 @@ class ContrastiveSampler(Sampler):
 
         def body(prompt, cache, index, logits, hidden_states):
             # Compute the softmax distribution for the next token.
-            probabilities = keras.activations.softmax(logits / self.temperature)
+            probabilities = self.compute_probabilities(logits)
 
             # Replicate for `self.k` times to find the best token in top-k
             # candidates.

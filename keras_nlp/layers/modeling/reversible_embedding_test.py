@@ -73,3 +73,15 @@ class ReversibleEmbeddingTest(TestCase):
 
         input_data = ops.ones(shape=(4, 10), dtype="int32")
         self.assertAllClose(untied_model(input_data), tied_model(input_data))
+
+    def test_reverse_dtype(self):
+        embedding = ReversibleEmbedding(100, 16, reverse_dtype="float32")
+        input_data = ops.ones(shape=(4, 10, 16))
+        output_data = embedding(input_data, reverse=True)
+        self.assertEqual(output_data.shape, (4, 10, 100))
+        self.assertDType(output_data, "float32")
+        embedding = ReversibleEmbedding(100, 16, reverse_dtype="float16")
+        input_data = ops.ones(shape=(4, 10, 16))
+        output_data = embedding(input_data, reverse=True)
+        self.assertEqual(output_data.shape, (4, 10, 100))
+        self.assertDType(output_data, "float16")

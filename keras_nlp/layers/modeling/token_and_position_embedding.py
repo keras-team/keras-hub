@@ -93,11 +93,13 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
                 self.embeddings_initializer
             ),
             mask_zero=mask_zero,
+            dtype=self.dtype_policy,
             name="token_embedding",
         )
         self.position_embedding = PositionEmbedding(
             sequence_length=sequence_length,
             initializer=clone_initializer(self.embeddings_initializer),
+            dtype=self.dtype_policy,
             name="position_embedding",
         )
         self.supports_masking = self.token_embedding.supports_masking
