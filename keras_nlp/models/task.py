@@ -246,6 +246,17 @@ class Task(PipelineModel):
         **kwargs,
     ):
         """Override `model.summary()` to show a preprocessor if set."""
+
+        # Compat fixes for tf.keras.
+        if not hasattr(self, "compiled"):
+            self.compiled = getattr(self.optimizer, "_is_compiled", False)
+        if (
+            self.compiled
+            and self.optimizer
+            and not hasattr(self.optimizer, "built")
+        ):
+            self.optimizer.built = getattr(self.optimizer, "_built", False)
+
         # Below is copied from keras-core for now.
         # We should consider an API contract.
         line_length = line_length or 108
