@@ -17,7 +17,8 @@ import json
 import tensorflow as tf
 import tree
 from absl.testing import parameterized
-from keras_core.src.backend import standardize_dtype
+from keras_core.backend import is_float_dtype
+from keras_core.backend import standardize_dtype
 
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
@@ -67,7 +68,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         x2 = tree.map_structure(convert_to_comparible_type, x2)
         super().assertAllEqual(x1, x2, msg=msg)
 
-    def assertDType(self, x, expected_dtype, msg=None):
+    def assertDTypeEqual(self, x, expected_dtype, msg=None):
         input_dtype = standardize_dtype(x.dtype)
         super().assertEqual(input_dtype, expected_dtype, msg=msg)
 
@@ -186,13 +187,11 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             else:
                 output_data = layer(input_data)
             for tensor in tree.flatten(output_data):
-                dtype = standardize_dtype(tensor.dtype)
-                if "float" in dtype:
-                    self.assertEqual(dtype, "float16")
+                if is_float_dtype(tensor.dtype):
+                    self.assertDTypeEqual(tensor, "float16")
             for weight in layer.weights:
-                dtype = standardize_dtype(weight.dtype)
-                if "float" in dtype:
-                    self.assertEqual(dtype, "float32")
+                if is_float_dtype(weight.dtype):
+                    self.assertDTypeEqual(weight, "float32")
 
     def run_class_serialization_test(self, instance):
         # get_config roundtrip
