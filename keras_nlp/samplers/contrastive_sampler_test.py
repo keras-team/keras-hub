@@ -140,8 +140,9 @@ class ContrastiveSamplerTest(TestCase):
             # Set the hidden states for `best_token_id` as [1, 1, ..., 1], so it
             # gets the max similarity penality score.
             mask_of_best_token = prompt[:, index - 1] == best_token_id
-            random_states = np.random.uniform(
-                size=[batch_size, self.hidden_dim]
+            random_states = ops.convert_to_tensor(
+                np.random.uniform(size=[batch_size, self.hidden_dim]),
+                dtype="float32",
             ) * (1 - ops.cast(mask_of_best_token, dtype="float32")[:, None])
             hidden_states = (
                 ops.ones([batch_size, self.hidden_dim])
