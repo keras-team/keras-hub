@@ -1,5 +1,5 @@
 # Library deps.
-keras-core
+keras-core>=0.1.6
 dm-tree
 regex
 rich
