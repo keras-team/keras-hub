@@ -125,4 +125,4 @@ class Tokenizer(PreprocessingLayer):
         return self.tokenize(inputs, *args, **kwargs)
 
     def compute_output_shape(self, inputs_shape):
-        return tuple(inputs_shape) + (self.sequence_length,)
+        return tuple(inputs_shape)
