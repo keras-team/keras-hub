@@ -71,7 +71,7 @@ setup(
         ],
     },
     # Supported Python versions
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Programming Language :: Python :: 3",

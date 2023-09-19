@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
@@ -139,8 +140,9 @@ class ContrastiveSamplerTest(TestCase):
             # Set the hidden states for `best_token_id` as [1, 1, ..., 1], so it
             # gets the max similarity penality score.
             mask_of_best_token = prompt[:, index - 1] == best_token_id
-            random_states = ops.random.uniform(
-                [batch_size, self.hidden_dim]
+            random_states = ops.convert_to_tensor(
+                np.random.uniform(size=[batch_size, self.hidden_dim]),
+                dtype="float32",
             ) * (1 - ops.cast(mask_of_best_token, dtype="float32")[:, None])
             hidden_states = (
                 ops.ones([batch_size, self.hidden_dim])

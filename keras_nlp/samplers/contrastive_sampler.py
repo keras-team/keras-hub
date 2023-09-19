@@ -74,13 +74,11 @@ class ContrastiveSampler(Sampler):
         self,
         k=5,
         alpha=0.6,
-        seed=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.k = k
         self.alpha = alpha
-        self.seed = seed
 
     def __call__(
         self,
@@ -242,7 +240,6 @@ class ContrastiveSampler(Sampler):
             {
                 "k": self.k,
                 "alpha": self.alpha,
-                "seed": self.seed,
             }
         )
         return config

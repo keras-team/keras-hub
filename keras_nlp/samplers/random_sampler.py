@@ -72,7 +72,7 @@ class RandomSampler(Sampler):
         next_token_id = random.categorical(
             ops.log(probabilities),
             1,
-            seed=self.seed,
+            seed=self.seed_generator,
             dtype="int32",
         )
         return ops.squeeze(next_token_id, axis=-1)
