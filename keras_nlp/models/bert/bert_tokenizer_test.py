@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.backend import keras
+import pytest
+
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.tests.test_case import TestCase
 
@@ -22,40 +23,40 @@ class BertTokenizerTest(TestCase):
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
         self.vocab += ["the", "quick", "brown", "fox"]
-        self.tokenizer = BertTokenizer(vocabulary=self.vocab)
+        self.init_kwargs = {"vocabulary": self.vocab}
+        self.input_data = ["THE QUICK BROWN FOX.", "THE FOX."]
 
-    def test_tokenize(self):
-        input_data = "THE QUICK BROWN FOX."
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [5, 6, 7, 8, 1])
-
-    def test_tokenize_batch(self):
-        input_data = ["THE QUICK BROWN FOX.", "THE FOX."]
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[5, 6, 7, 8, 1], [5, 8, 1]])
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=BertTokenizer,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output=[[5, 6, 7, 8, 1], [5, 8, 1]],
+        )
 
     def test_lowercase(self):
-        input_data = "THE QUICK BROWN FOX."
         tokenizer = BertTokenizer(vocabulary=self.vocab, lowercase=True)
-        output = tokenizer(input_data)
-        self.assertAllEqual(output, [9, 10, 11, 12, 1])
-
-    def test_detokenize(self):
-        input_tokens = [[5, 6, 7, 8]]
-        output = self.tokenizer.detokenize(input_tokens)
-        self.assertAllEqual(output, ["THE QUICK BROWN FOX"])
-
-    def test_vocabulary_size(self):
-        self.assertEqual(self.tokenizer.vocabulary_size(), 13)
+        output = tokenizer(self.input_data)
+        self.assertAllEqual(output, [[9, 10, 11, 12, 1], [9, 12, 1]])
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             BertTokenizer(vocabulary=["a", "b", "c"])
 
-    def test_serialization(self):
-        config = keras.saving.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.saving.deserialize_keras_object(config)
-        self.assertEqual(
-            new_tokenizer.get_config(),
-            self.tokenizer.get_config(),
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=BertTokenizer,
+            preset="bert_tiny_en_uncased",
+            input_data=["The quick brown fox."],
+            expected_output=[[1996, 4248, 2829, 4419, 1012]],
         )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in BertTokenizer.presets:
+            self.run_preset_test(
+                cls=BertTokenizer,
+                preset=preset,
+                input_data=self.input_data,
+            )

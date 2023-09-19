@@ -21,7 +21,7 @@ from keras_nlp.tests.test_case import TestCase
 class MaskedLMHeadTest(TestCase):
     def test_layer_behaviors(self):
         self.run_layer_test(
-            layer_cls=MaskedLMHead,
+            cls=MaskedLMHead,
             init_kwargs={
                 "vocabulary_size": 100,
                 "activation": "softmax",
@@ -42,7 +42,7 @@ class MaskedLMHeadTest(TestCase):
         embedding = ReversibleEmbedding(100, 16)
         embedding.build((4, 10))
         self.run_layer_test(
-            layer_cls=MaskedLMHead,
+            cls=MaskedLMHead,
             init_kwargs={
                 "vocabulary_size": 100,
                 "activation": "softmax",
