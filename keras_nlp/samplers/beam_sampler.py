@@ -16,7 +16,6 @@ import tensorflow as tf
 import tree
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.samplers.sampler import Sampler
 from keras_nlp.samplers.sampler import call_args_docstring
@@ -161,7 +160,7 @@ class BeamSampler(Sampler):
             # Compute the softmax distribution for the next token.
             logits, _, cache = next(prompt, cache, index)
             vocab_size = ops.shape(logits)[-1]
-            probs = keras.activations.softmax(logits / self.temperature)
+            probs = self.compute_probabilities(logits)
 
             # Compute the running log-likelihood of each new candidate.
             next_log_probs = ops.log(probs) + log_probs[..., None]

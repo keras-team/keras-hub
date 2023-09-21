@@ -143,7 +143,7 @@ class Sampler:
         def body(prompt, cache, index):
             # Compute the softmax distribution for the next token.
             logits, _, cache = next(prompt, cache, index)
-            probabilities = keras.activations.softmax(logits / self.temperature)
+            probabilities = self.compute_probabilities(logits)
             # Compute the next token.
             next_token = self.get_next_token(probabilities)
             # Don't overwrite anywhere mask is True.
@@ -163,6 +163,17 @@ class Sampler:
             maximum_iterations=(max_length - index),
         )
         return prompt
+
+    def compute_probabilities(self, logits):
+        """Compute token probabilities from logits.
+
+        This will always be done in full precision, regardless of dtype, and
+        scale by `temperature`.
+        """
+        logits_dtype = logits.dtype
+        logits = ops.cast(logits, "float32")
+        probs = keras.activations.softmax(logits / self.temperature)
+        return ops.cast(probs, logits_dtype)
 
     def run_loop(self, cond, body, loop_vars=None, maximum_iterations=None):
         """Run ops.while_loops with a `StatelessScope` if necessary."""

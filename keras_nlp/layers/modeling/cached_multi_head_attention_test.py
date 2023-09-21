@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.backend import config
 from keras_nlp.backend import ops
 from keras_nlp.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
@@ -34,6 +35,9 @@ class CachedMultiHeadAttentionTest(TestCase):
             expected_output_shape=(2, 4, 6),
             expected_num_trainable_weights=8,
             expected_num_non_trainable_variables=1,
+            # tf.keras does not handle mixed precision correctly when not set
+            # globally.
+            run_mixed_precision_check=config.multi_backend(),
         )
 
     def test_cache_call_is_correct(self):

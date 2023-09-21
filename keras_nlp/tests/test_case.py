@@ -17,7 +17,8 @@ import json
 import tensorflow as tf
 import tree
 from absl.testing import parameterized
-from keras_core.src.backend import standardize_dtype
+from keras_core.backend import is_float_dtype
+from keras_core.backend import standardize_dtype
 
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
@@ -67,6 +68,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         x2 = tree.map_structure(convert_to_comparible_type, x2)
         super().assertAllEqual(x1, x2, msg=msg)
 
+    def assertDTypeEqual(self, x, expected_dtype, msg=None):
+        input_dtype = standardize_dtype(x.dtype)
+        super().assertEqual(input_dtype, expected_dtype, msg=msg)
+
     def run_layer_test(
         self,
         layer_cls,
@@ -78,6 +83,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         expected_num_non_trainable_weights=0,
         expected_num_non_trainable_variables=0,
         run_training_check=True,
+        run_mixed_precision_check=True,
     ):
         # Serialization test.
         layer = layer_cls(**init_kwargs)
@@ -167,6 +173,25 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         if run_training_check:
             run_training_step(layer, input_data, output_data)
+
+        # Never test mixed precision on torch CPU. Torch lacks support.
+        if run_mixed_precision_check and config.backend() == "torch":
+            import torch
+
+            run_mixed_precision_check = torch.cuda.is_available()
+
+        if run_mixed_precision_check:
+            layer = layer_cls(**{**init_kwargs, "dtype": "mixed_float16"})
+            if isinstance(input_data, dict):
+                output_data = layer(**input_data)
+            else:
+                output_data = layer(input_data)
+            for tensor in tree.flatten(output_data):
+                if is_float_dtype(tensor.dtype):
+                    self.assertDTypeEqual(tensor, "float16")
+            for weight in layer.weights:
+                if is_float_dtype(weight.dtype):
+                    self.assertDTypeEqual(weight, "float32")
 
     def run_class_serialization_test(self, instance):
         # get_config roundtrip

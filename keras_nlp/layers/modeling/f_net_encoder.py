@@ -97,11 +97,13 @@ class FNetEncoder(keras.layers.Layer):
         # Layer Norm layers.
         self._mixing_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
             name="mixing_layer_norm",
         )
         self._mixing_layer_norm.build(inputs_shape)
         self._output_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
             name="output_layer_norm",
         )
         self._output_layer_norm.build(inputs_shape)
@@ -112,6 +114,7 @@ class FNetEncoder(keras.layers.Layer):
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            dtype=self.dtype_policy,
             name="intermediate_dense",
         )
         self._intermediate_dense.build(inputs_shape)
@@ -119,12 +122,17 @@ class FNetEncoder(keras.layers.Layer):
             feature_size,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            dtype=self.dtype_policy,
             name="output_dense",
         )
         self._output_dense.build(
             self._intermediate_dense.compute_output_shape(inputs_shape)
         )
-        self._output_dropout = keras.layers.Dropout(rate=self.dropout)
+        self._output_dropout = keras.layers.Dropout(
+            rate=self.dropout,
+            dtype=self.dtype_policy,
+            name="output_dropout",
+        )
         self.built = True
 
     def call(self, inputs):
@@ -140,9 +148,12 @@ class FNetEncoder(keras.layers.Layer):
 
         def fourier_transform(input):
             # Apply FFT on the input and take the real part.
+            input_dtype = input.dtype
+            # FFT transforms do not support float16.
+            input = ops.cast(input, "float32")
             real_in, imaginary_in = (input, ops.zeros_like(input))
             real_out, _ = ops.fft2((real_in, imaginary_in))
-            return real_out
+            return ops.cast(real_out, input_dtype)
 
         def add_and_norm(input1, input2, norm_layer):
             return norm_layer(input1 + input2)

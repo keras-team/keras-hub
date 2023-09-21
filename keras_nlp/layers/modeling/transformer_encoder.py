@@ -92,10 +92,9 @@ class TransformerEncoder(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         normalize_first=False,
-        name=None,
         **kwargs,
     ):
-        super().__init__(name=name, **kwargs)
+        super().__init__(**kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.dropout = dropout
@@ -125,6 +124,7 @@ class TransformerEncoder(keras.layers.Layer):
             dropout=self.dropout,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            dtype=self.dtype_policy,
             name="self_attention_layer",
         )
         if hasattr(self._self_attention_layer, "_build_from_signature"):
@@ -139,17 +139,21 @@ class TransformerEncoder(keras.layers.Layer):
             )
         self._self_attention_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
             name="self_attention_layer_norm",
         )
         self._self_attention_layer_norm.build(inputs_shape)
         self._self_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,
+            dtype=self.dtype_policy,
             name="self_attention_dropout",
         )
 
         # Feedforward layers.
         self._feedforward_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="feedforward_layer_norm",
         )
         self._feedforward_layer_norm.build(inputs_shape)
         self._feedforward_intermediate_dense = keras.layers.Dense(
@@ -157,6 +161,7 @@ class TransformerEncoder(keras.layers.Layer):
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            dtype=self.dtype_policy,
             name="feedforward_intermediate_dense",
         )
         self._feedforward_intermediate_dense.build(inputs_shape)
@@ -164,6 +169,7 @@ class TransformerEncoder(keras.layers.Layer):
             hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            dtype=self.dtype_policy,
             name="feedforward_output_dense",
         )
         intermediate_shape = list(inputs_shape)
@@ -171,6 +177,8 @@ class TransformerEncoder(keras.layers.Layer):
         self._feedforward_output_dense.build(tuple(intermediate_shape))
         self._feedforward_dropout = keras.layers.Dropout(
             rate=self.dropout,
+            dtype=self.dtype_policy,
+            name="feedforward_dropout",
         )
         self.built = True
 
