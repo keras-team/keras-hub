@@ -53,7 +53,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
             For stability, it is usually best to use full precision even when
             working with half or mixed precision training.
 
-    Call args:
+    Call arguments:
         inputs: The tensor inputs to the layer.
         reverse: Boolean. If `True` the layer will perform a linear projection
             from `output_dim` to `input_dim`, instead of a normal embedding
@@ -69,7 +69,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
     # Generate random inputs.
     token_ids = np.random.randint(vocab_size, size=(batch_size, seq_length))
 
-    embedding = keras.layers.Embedding(vocab_size, hidden_dim)
+    embedding = keras_nlp.layers.ReversibleEmbedding(vocab_size, hidden_dim)
     # Embed tokens to shape `(batch_size, seq_length, hidden_dim)`.
     hidden_states = embedding(token_ids)
     # Project hidden states to shape `(batch_size, seq_length, vocab_size)`.
