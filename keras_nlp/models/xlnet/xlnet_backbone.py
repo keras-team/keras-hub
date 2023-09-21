@@ -53,7 +53,7 @@ class XLNetBackbone(Backbone):
             defaults to "zeros". The bias initializer for
             the dense and multiheaded relative attention layers.
 
-    Call Args:
+    Call arguments:
         token_ids: Indices of input sequence tokens in the vocabulary of shape
             `[batch_size, sequence_length]`.
         segment_ids: Segment token indices to indicate first and second portions

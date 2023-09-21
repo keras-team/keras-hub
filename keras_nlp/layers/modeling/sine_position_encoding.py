@@ -35,7 +35,7 @@ class SinePositionEncoding(keras.layers.Layer):
             curves, as described in Attention is All You Need. Defaults to
             `10000`.
 
-    Call args:
+    Call arguments:
         inputs: The tensor inputs to compute an embedding for, with shape
             `(batch_size, sequence_length, hidden_dim)`.
         start_index: An integer or integer tensor. The starting position to

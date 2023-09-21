@@ -39,7 +39,7 @@ class RotaryEmbedding(keras.layers.Layer):
         sequence_axis: int. Sequence axis in the input tensor.
         feature_axis: int. Feature axis in the input tensor.
 
-    Call args:
+    Call arguments:
         inputs: The tensor inputs to apply the embedding to. This can have
             any shape, but must contain both a sequence and feature axis. The
             rotary embedding will be applied to `inputs` and returned.

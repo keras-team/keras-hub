@@ -34,7 +34,7 @@ class PositionEmbedding(keras.layers.Layer):
             to `"glorot_uniform"`.
         seq_axis: The axis of the input tensor where we add the embeddings.
 
-    Call args:
+    Call arguments:
         inputs: The tensor inputs to compute an embedding for, with shape
             `(batch_size, sequence_length, hidden_dim)`. Only the input shape
             will be used, as the position embedding does not depend on the
