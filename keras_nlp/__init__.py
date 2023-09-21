@@ -28,4 +28,4 @@ from keras_nlp import tokenizers
 from keras_nlp import utils
 
 # This is the global source of truth for the version number.
-__version__ = "0.6.0.dev0"
+__version__ = "0.7.0.dev0"
