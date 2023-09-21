@@ -15,7 +15,6 @@
 import math
 import string
 
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 
@@ -76,7 +75,6 @@ def _rel_shift(x, klen=-1):
     return x
 
 
-@keras_nlp_export("keras_nlp.layers.TwoStreamRelativeAttention")
 class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
     """Two-stream relative self-attention for XLNet.
 

@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.models.xlnet.relative_attention import TwoStreamRelativeAttention
@@ -22,7 +21,6 @@ def xlnet_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.layers.XLNetEncoder")
 class XLNetEncoder(keras.layers.Layer):
     """
     XLNet Encoder.
