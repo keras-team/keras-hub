@@ -1,7 +1,13 @@
-# Core deps.
-tensorflow~=2.13.0
-tensorflow-text~=2.13.0
-tensorflow-datasets
+# Tensorflow.
+tensorflow==2.14.0
+tensorflow-text==2.14.0.rc0
 
-# Common deps.
+# Torch.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.0.1
+torchvision==0.15.2
+
+# Jax.
+jax[cpu]==0.4.14
+
 -r requirements-common.txt
