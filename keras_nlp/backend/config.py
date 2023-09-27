@@ -15,9 +15,11 @@
 import json
 import os
 
-import keras_core
+import keras
+from packaging import version
 
 _MULTI_BACKEND = False
+_IS_KERAS_3 = False
 
 # Set Keras base dir path given KERAS_HOME env variable, if applicable.
 # Otherwise either ~/.keras or /tmp.
@@ -59,16 +61,32 @@ if not os.path.exists(_config_path):
         # Except permission denied.
         pass
 
-# Use keras-core if KERAS_BACKEND is set in the environment.
+# If KERAS_BACKEND is set in the environment use multi-backend keras.
 if "KERAS_BACKEND" in os.environ and os.environ["KERAS_BACKEND"]:
     _MULTI_BACKEND = True
 
+# If keras is version 3, use multi-backend keras (our only option).
+_IS_KERAS_3 = version.parse(keras.__version__) >= version.parse("3.0.0")
+if _IS_KERAS_3:
+    _MULTI_BACKEND = True
+
+
+def keras_3():
+    """Check if Keras 3 is installed."""
+    return _IS_KERAS_3
+
 
 def multi_backend():
-    """Check if keras_core is enabled."""
+    """Check if multi-backend Keras is enabled."""
     return _MULTI_BACKEND
 
 
 def backend():
     """Check the backend framework."""
-    return "tensorflow" if not multi_backend() else keras_core.config.backend()
+    if not multi_backend():
+        return "tensorflow"
+    if not keras_3():
+        import keras_core
+
+        return keras_core.config.backend()
+    return keras.config.backend()

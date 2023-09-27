@@ -20,6 +20,7 @@ from absl.testing import parameterized
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.tests.test_case import TestCase
 
@@ -38,7 +39,7 @@ class ReversibleEmbeddingTest(TestCase):
                 "tie_weights": tie_weights,
                 "embeddings_initializer": "HeNormal",
             },
-            input_data=ops.random.randint(minval=0, maxval=100, shape=(4, 10)),
+            input_data=random.randint(minval=0, maxval=100, shape=(4, 10)),
             expected_output_shape=(4, 10, 32),
             expected_num_trainable_weights=1 if tie_weights else 2,
         )

@@ -16,6 +16,7 @@ from absl.testing import parameterized
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.layers.modeling.transformer_encoder import TransformerEncoder
 from keras_nlp.tests.test_case import TestCase
 
@@ -37,7 +38,7 @@ class TransformerEncoderTest(TestCase):
                 "kernel_initializer": "HeNormal",
                 "bias_initializer": "Zeros",
             },
-            input_data=ops.random.uniform(shape=(2, 4, 6)),
+            input_data=random.uniform(shape=(2, 4, 6)),
             expected_output_shape=(2, 4, 6),
             expected_num_trainable_weights=16,
             expected_num_non_trainable_variables=3,  # dropout rng seeds
@@ -59,7 +60,7 @@ class TransformerEncoderTest(TestCase):
                 encoder,
             ]
         )
-        input = ops.random.uniform(shape=[2, 4, 6])
+        input = random.uniform(shape=[2, 4, 6])
         model(input)
 
     def test_valid_call_with_mask(self):
@@ -68,7 +69,7 @@ class TransformerEncoderTest(TestCase):
             num_heads=2,
         )
         encoder.build([2, 4, 6])
-        input = ops.random.uniform(shape=[2, 4, 6])
+        input = random.uniform(shape=[2, 4, 6])
         mask = input[:, :, 0] < 0.5
         encoder(input, mask)
 
@@ -86,7 +87,7 @@ class TransformerEncoderTest(TestCase):
             intermediate_dim=4,
             num_heads=2,
         )
-        inputs = ops.random.uniform(shape=[1, 4, 6])
+        inputs = random.uniform(shape=[1, 4, 6])
         mask = ops.array([[True, True, False, False]])
         inputs._keras_mask = mask
         outputs = encoder(inputs)

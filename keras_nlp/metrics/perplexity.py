@@ -15,7 +15,7 @@
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
-from keras_nlp.utils.tensor_utils import is_floating_dtype
+from keras_nlp.utils.tensor_utils import is_float_dtype
 
 
 @keras_nlp_export("keras_nlp.metrics.Perplexity")
@@ -88,7 +88,7 @@ class Perplexity(keras.metrics.Metric):
         name="perplexity",
         **kwargs,
     ):
-        if not is_floating_dtype(dtype):
+        if not is_float_dtype(dtype):
             raise ValueError(
                 "`dtype` must be a floating point type. "
                 f"Received: dtype={dtype}"

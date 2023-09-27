@@ -15,6 +15,7 @@
 from absl.testing import parameterized
 
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.layers.modeling.transformer_decoder import TransformerDecoder
 from keras_nlp.tests.test_case import TestCase
 
@@ -36,7 +37,7 @@ class TransformerDecoderTest(TestCase):
                 "kernel_initializer": "HeNormal",
                 "bias_initializer": "Zeros",
             },
-            input_data=ops.random.uniform(shape=(2, 4, 6)),
+            input_data=random.uniform(shape=(2, 4, 6)),
             expected_output_shape=(2, 4, 6),
             expected_num_trainable_weights=16,
             expected_num_non_trainable_variables=3,  # dropout rng seeds
@@ -60,8 +61,8 @@ class TransformerDecoderTest(TestCase):
                 "bias_initializer": "Zeros",
             },
             input_data={
-                "decoder_sequence": ops.random.uniform(shape=(2, 4, 6)),
-                "encoder_sequence": ops.random.uniform(shape=(2, 4, 6)),
+                "decoder_sequence": random.uniform(shape=(2, 4, 6)),
+                "encoder_sequence": random.uniform(shape=(2, 4, 6)),
             },
             expected_output_shape=(2, 4, 6),
             expected_num_trainable_weights=26,
@@ -106,8 +107,8 @@ class TransformerDecoderTest(TestCase):
             intermediate_dim=4,
             num_heads=2,
         )
-        decoder_sequence = ops.random.uniform(shape=[1, 4, 6])
-        encoder_sequence = ops.random.uniform(shape=[1, 4, 6])
+        decoder_sequence = random.uniform(shape=[1, 4, 6])
+        encoder_sequence = random.uniform(shape=[1, 4, 6])
         mask = ops.array([[True, True, False, False]])
         decoder_sequence._keras_mask = mask
         outputs = decoder(decoder_sequence, encoder_sequence)
@@ -118,7 +119,7 @@ class TransformerDecoderTest(TestCase):
             intermediate_dim=4,
             num_heads=2,
         )
-        decoder_sequence = ops.random.uniform(shape=[1, 4, 6])
+        decoder_sequence = random.uniform(shape=[1, 4, 6])
         mask = ops.array([[True, True, False, False]])
         decoder_sequence._keras_mask = mask
         outputs = decoder(decoder_sequence)
@@ -132,7 +133,7 @@ class TransformerDecoderTest(TestCase):
         hidden_dim = num_heads * key_dim
 
         input_shape = (batch_size, seq_len, hidden_dim)
-        x = ops.random.uniform(shape=input_shape)
+        x = random.uniform(shape=input_shape)
         input_cache = ops.zeros((batch_size, 2, seq_len, num_heads, key_dim))
         outputs = ops.zeros_like(x)
 
@@ -174,6 +175,6 @@ class TransformerDecoderTest(TestCase):
             intermediate_dim=4,
             num_heads=2,
         )
-        decoder_sequence = ops.random.uniform(shape=[1, 4, 6])
-        encoder_sequence = ops.random.uniform(shape=[1, 4, 5])
+        decoder_sequence = random.uniform(shape=[1, 4, 6])
+        encoder_sequence = random.uniform(shape=[1, 4, 5])
         decoder(decoder_sequence, encoder_sequence)

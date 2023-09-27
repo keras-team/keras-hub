@@ -26,7 +26,7 @@ from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
 from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
-from keras_nlp.utils.tensor_utils import is_integer_dtype
+from keras_nlp.utils.tensor_utils import is_int_dtype
 from keras_nlp.utils.tensor_utils import is_string_dtype
 from keras_nlp.utils.tensor_utils import tensor_to_list
 
@@ -113,7 +113,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     ) -> None:
         assert_tf_text_installed(self.__class__.__name__)
 
-        if not is_integer_dtype(dtype) and not is_string_dtype(dtype):
+        if not is_int_dtype(dtype) and not is_string_dtype(dtype):
             raise ValueError(
                 "Output dtype must be an integer type or a string. "
                 f"Received: dtype={dtype}"

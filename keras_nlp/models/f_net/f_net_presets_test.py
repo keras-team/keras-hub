@@ -16,6 +16,7 @@ import pytest
 from absl.testing import parameterized
 
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_classifier import FNetClassifier
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
@@ -126,7 +127,7 @@ class FNetPresetFullTest(TestCase):
         for preset in FNetBackbone.presets:
             model = FNetBackbone.from_preset(preset, load_weights=load_weights)
             input_data = {
-                "token_ids": ops.random.uniform(
+                "token_ids": random.uniform(
                     shape=(1, 512), dtype="int64", maxval=model.vocabulary_size
                 ),
                 "segment_ids": ops.array([0] * 200 + [1] * 312, shape=(1, 512)),
@@ -158,7 +159,7 @@ class FNetPresetFullTest(TestCase):
                 load_weights=load_weights,
             )
             input_data = {
-                "token_ids": ops.random.uniform(
+                "token_ids": random.uniform(
                     shape=(1, 512),
                     dtype="int64",
                     maxval=classifier.backbone.vocabulary_size,

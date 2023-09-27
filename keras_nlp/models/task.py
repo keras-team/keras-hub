@@ -14,11 +14,11 @@
 
 import os
 
-import keras_core
 from rich import console as rich_console
 from rich import markup
 from rich import table as rich_table
 
+from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
@@ -315,11 +315,21 @@ class Task(PipelineModel):
             if print_fn:
                 print_fn(console.end_capture(), line_break=False)
 
-        # Hardcode summary from keras_core for now.
-        keras_core.Model.summary(
-            self,
-            line_length=line_length,
-            positions=positions,
-            print_fn=print_fn,
-            **kwargs,
-        )
+        # Avoid `tf.keras.Model.summary()`, so the above output matches.
+        if config.multi_backend():
+            super().summary(
+                line_length=line_length,
+                positions=positions,
+                print_fn=print_fn,
+                **kwargs,
+            )
+        else:
+            import keras_core
+
+            keras_core.Model.summary(
+                self,
+                line_length=line_length,
+                positions=positions,
+                print_fn=print_fn,
+                **kwargs,
+            )

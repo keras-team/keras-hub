@@ -16,6 +16,7 @@ import pytest
 from absl.testing import parameterized
 
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_classifier import (
     XLMRobertaClassifier,
@@ -143,7 +144,7 @@ class XLMRobertaPresetFullTest(TestCase):
                 preset, load_weights=load_weights
             )
             input_data = {
-                "token_ids": ops.random.uniform(
+                "token_ids": random.uniform(
                     shape=(1, 512), dtype="int64", maxval=model.vocabulary_size
                 ),
                 "padding_mask": ops.array([1] * 512, shape=(1, 512)),
@@ -177,7 +178,7 @@ class XLMRobertaPresetFullTest(TestCase):
                 preprocessor=None,
             )
             input_data = {
-                "token_ids": ops.random.uniform(
+                "token_ids": random.uniform(
                     shape=(1, 512),
                     dtype="int64",
                     maxval=classifier.backbone.vocabulary_size,

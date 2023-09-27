@@ -15,6 +15,7 @@
 import tensorflow as tf
 
 from keras_nlp.backend import config
+from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 
 try:
@@ -151,19 +152,21 @@ def is_tensor_type(x):
     return hasattr(x, "__array__")
 
 
-def is_floating_dtype(dtype):
+def standardize_dtype(dtype):
+    if config.multi_backend():
+        return keras.backend.standardize_dtype(dtype)
     if hasattr(dtype, "name"):
-        dtype = dtype.name
-    return "float" in dtype
+        return dtype.name
+    return dtype
 
 
-def is_integer_dtype(dtype):
-    if hasattr(dtype, "name"):
-        dtype = dtype.name
-    return "int" in dtype
+def is_float_dtype(dtype):
+    return "float" in standardize_dtype(dtype)
+
+
+def is_int_dtype(dtype):
+    return "int" in standardize_dtype(dtype)
 
 
 def is_string_dtype(dtype):
-    if hasattr(dtype, "name"):
-        dtype = dtype.name
-    return "string" in dtype
+    return "string" in standardize_dtype(dtype)

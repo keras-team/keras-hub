@@ -16,6 +16,7 @@ import numpy as np
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.tests.test_case import TestCase
 
@@ -34,7 +35,7 @@ class PositionEmbeddingTest(TestCase):
             init_kwargs={
                 "sequence_length": 21,
             },
-            input_data=ops.random.uniform(shape=(4, 21, 30)),
+            input_data=random.uniform(shape=(4, 21, 30)),
             expected_output_shape=(4, 21, 30),
             expected_num_trainable_weights=1,
         )
@@ -45,7 +46,7 @@ class PositionEmbeddingTest(TestCase):
             init_kwargs={
                 "sequence_length": 21,
             },
-            input_data=ops.random.uniform(shape=(4, 5, 21, 30)),
+            input_data=random.uniform(shape=(4, 5, 21, 30)),
             expected_output_shape=(4, 5, 21, 30),
             expected_num_trainable_weights=1,
         )
@@ -145,7 +146,7 @@ class PositionEmbeddingTest(TestCase):
     def test_start_index(self):
         batch_size, seq_length, feature_size = 2, 3, 4
         layer = PositionEmbedding(seq_length)
-        data = ops.random.uniform(shape=(batch_size, seq_length, feature_size))
+        data = random.uniform(shape=(batch_size, seq_length, feature_size))
         full_output = layer(data)
         sequential_output = ops.zeros((batch_size, seq_length, feature_size))
         for i in range(seq_length):
