@@ -2,13 +2,13 @@
 tensorflow==2.14.0
 tensorflow-text==2.14.0.rc0
 
-# Torch cpu-only version to assist with testing.
+# Torch cpu-only version (needed for testing).
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.0.1
 torchvision==0.15.2
 
 # Jax.
 --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-jax[cuda11_pip]==0.4.14
+jax[cuda11_pip]
 
 -r requirements-common.txt

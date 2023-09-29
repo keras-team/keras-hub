@@ -96,9 +96,13 @@ Next we must setup a python environment with the correct dependencies. We
 recommend using `conda` to set up a base environment, and `pip` to install
 python packages from PyPI. The exact method will depend on your OS.
 
+**Note**: Be careful not to use mix pre-packaged tensorflow and jax libraries in
+`conda` with PyPI packages from `pip`. We recommend pulling *all* KerasNLP
+dependencies via `pip` as described below.
+
 ### Linux (recommended)
 
-For devloping and unit testing the library, a CPU only environment is often
+For developing and unit testing the library, a CPU-only environment is often
 sufficient. For any training or inference with the library, you will quickly
 want accelerator support. The easiest way to get GPU support across all of our
 backends is to set up a few different python environements and pull in all cuda

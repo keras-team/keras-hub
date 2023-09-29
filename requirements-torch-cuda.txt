@@ -7,7 +7,7 @@ tensorflow-text==2.14.0.rc0
 torch==2.0.1+cu117
 torchvision==0.15.2+cu117
 
-# Jax cpu-only version to assist with testing.
-jax[cpu]==0.4.14
+# Jax cpu-only version (needed for testing).
+jax[cpu]
 
 -r requirements-common.txt

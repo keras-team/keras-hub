@@ -2,12 +2,12 @@
 tensorflow[and-cuda]==2.14.0
 tensorflow-text[and-cuda]==2.14.0.rc0
 
-# Torch cpu-only version to assist with testing.
+# Torch cpu-only version (needed for testing).
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.0.1
 torchvision==0.15.2
 
-# Jax cpu-only version to assist with testing.
-jax[cpu]==0.4.14
+# Jax cpu-only version (needed for testing).
+jax[cpu]
 
 -r requirements-common.txt
