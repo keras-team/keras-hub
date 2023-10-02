@@ -1,13 +1,13 @@
-# Tensorflow (always required for preprocessing).
-tensorflow==2.14.0
-tensorflow-text==2.14.0.rc0
+# Tensorflow cpu-only version.
+tensorflow>=2.14.0
+tensorflow-text>=2.14.0.rc0
 
-# Torch cpu-only version (needed for testing).
+# Torch cpu-only version.
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.0.1
-torchvision==0.15.2
+torch>=2.0.1
+torchvision>=0.15.2
 
-# Jax.
+# Jax with cuda support.
 --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 jax[cuda11_pip]
 
