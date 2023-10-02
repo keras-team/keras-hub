@@ -159,3 +159,27 @@ class GPTNeoXBackbone(Backbone):
             }
         )
         return config
+
+    @classmethod
+    def create_layout_map(cls, device_mesh):
+        # We assert the mesh is 2D, and assume the first mesh dim is for data
+        # parallel and the second dim is for model parallel.
+        mesh_shape = device_mesh.shape
+        if len(mesh_shape) != 2:
+            raise ValueError(f"Expect a 2D DeviceMesh, received {device_mesh}")
+        _, model_dim = device_mesh.axis_names
+
+        layout_map = keras.distribution.LayoutMap(device_mesh=device_mesh)
+        # Embedding sharding
+        layout_map[r"embeddings"] = [None, model_dim]
+        # Transformer block sharding
+        layout_map[r"query_key_value/kernel"] = [None, None, model_dim]
+        layout_map[r"query_key_value/bias"] = [model_dim, None]
+        layout_map[r"feedforward_intermediate_dense/kernel"] = [
+            None,
+            model_dim,
+        ]
+        layout_map[r"feedforward_intermediate_dense/bias"] = [model_dim]
+        layout_map[r"feedforward_output_dense/kernel"] = [model_dim, None]
+        layout_map[r"feedforward_output_dense/bias"] = [None]
+        return layout_map
