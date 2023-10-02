@@ -199,12 +199,12 @@ class TransformerDecoder(keras.layers.Layer):
             )
             if hasattr(self._cross_attention_layer, "_build_from_signature"):
                 self._cross_attention_layer._build_from_signature(
-                    query=encoder_sequence_shape,
+                    query=decoder_sequence_shape,
                     value=encoder_sequence_shape,
                 )
             else:
                 self._cross_attention_layer.build(
-                    query_shape=encoder_sequence_shape,
+                    query_shape=decoder_sequence_shape,
                     value_shape=encoder_sequence_shape,
                 )
             self._cross_attention_layer_norm = keras.layers.LayerNormalization(
@@ -212,7 +212,7 @@ class TransformerDecoder(keras.layers.Layer):
                 dtype=self.dtype_policy,
                 name="cross_attention_layer_norm",
             )
-            self._cross_attention_layer_norm.build(encoder_sequence_shape)
+            self._cross_attention_layer_norm.build(decoder_sequence_shape)
             self._cross_attention_dropout = keras.layers.Dropout(
                 rate=self.dropout,
                 dtype=self.dtype_policy,
