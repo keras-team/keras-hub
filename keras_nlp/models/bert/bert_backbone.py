@@ -28,6 +28,10 @@ def bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
+def gelu_approximate(x):
+    return keras.activations.gelu(x, approximate=True)
+
+
 @keras_nlp_export("keras_nlp.models.BertBackbone")
 class BertBackbone(Backbone):
     """A BERT encoder network.
@@ -151,9 +155,7 @@ class BertBackbone(Backbone):
             x = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=True
-                ),
+                activation=gelu_approximate,
                 dropout=dropout,
                 layer_norm_epsilon=1e-12,
                 kernel_initializer=bert_kernel_initializer(),
