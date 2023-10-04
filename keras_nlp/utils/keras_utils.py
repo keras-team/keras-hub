@@ -17,6 +17,7 @@ import sys
 import tensorflow as tf
 from absl import logging
 
+from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.tensor_utils import is_tensor_type
 
@@ -155,3 +156,38 @@ def print_row(fields, positions, print_fn, nested_level=0):
                 line += " " * (positions[col] - len(line))
         line += "|" * nested_level
         print_fn(line)
+
+
+def replace_layer(model, target, replacement):
+    """Replace a layer in a model via setattr.
+
+    This replaces a layer in a model by finding the layers parent, finding the
+    named attribute for the child on the parent, and call `setattr`. This only
+    works for layers that are direct attributes of a parent layer.
+
+    Note that this depends on Keras internals, as there is no public API
+    currently to do such a swap.
+
+    Returns: A boolean indicating if the layer was replaced.
+    """
+    for parent in model._flatten_layers():
+        children = parent._flatten_layers(include_self=False, recursive=False)
+        if target not in children:
+            continue
+
+        # For tensorflow and jax we use `vars` to enumerate all child attrs.
+        # Torch store submodules separately and uses `__getattr__`.
+        if config.backend() == "torch":
+            attrs = parent.named_children()
+        else:
+            attrs = vars(parent).items()
+        for name, value in attrs:
+            if target != value:
+                continue
+            locked = parent._tracker.locked
+            parent._tracker.locked = False
+            setattr(parent, name, replacement)
+            parent._layers[parent._layers.index(target)] = replacement
+            parent._tracker.locked = locked
+            return True
+    return False

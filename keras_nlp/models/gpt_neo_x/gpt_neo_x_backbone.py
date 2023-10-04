@@ -142,6 +142,10 @@ class GPTNeoXBackbone(Backbone):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.token_embedding = token_embedding_layer
 
+    @property
+    def lora_layer_paths(self):
+        return ["query_key_value"]
+
     def get_config(self):
         config = super().get_config()
         config.update(

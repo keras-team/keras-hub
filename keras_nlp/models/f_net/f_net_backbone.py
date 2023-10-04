@@ -201,6 +201,13 @@ class FNetBackbone(Backbone):
         self.cls_token_index = cls_token_index
         self.token_embedding = token_embedding_layer
 
+    @property
+    def lora_layer_paths(self):
+        raise ValueError(
+            "FNet models do not support the lora API (there is no standard "
+            "attention mechanism in FNet)."
+        )
+
     def get_config(self):
         config = super().get_config()
         config.update(
