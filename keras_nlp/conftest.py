@@ -108,9 +108,13 @@ def pytest_collection_modifyitems(config, items):
         not run_tpu,
         reason="need --run_tpu option to run",
     )
-    skip_tf_only = pytest.mark.skipif(
+    tf_only = pytest.mark.skipif(
         not backend_config.backend() == "tensorflow",
         reason="tests only run on tf backend",
+    )
+    multi_backend_only = pytest.mark.skipif(
+        not backend_config.multi_backend(),
+        reason="tests only run on with multi-backend keras",
     )
     for item in items:
         if "large" in item.keywords:
@@ -120,7 +124,9 @@ def pytest_collection_modifyitems(config, items):
         if "tpu" in item.keywords:
             item.add_marker(skip_tpu)
         if "tf_only" in item.keywords:
-            item.add_marker(skip_tf_only)
+            item.add_marker(tf_only)
+        if "multi_backend_only" in item.keywords:
+            item.add_marker(multi_backend_only)
 
 
 # Disable traceback filtering for quicker debugging of tests failures.
