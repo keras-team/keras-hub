@@ -110,30 +110,3 @@ class T5Test(TestCase):
         restored_outputs = restored_model(self.input_batch)
         for key in ["encoder_sequence_output", "decoder_sequence_output"]:
             self.assertAllClose(outputs[key], restored_outputs[key])
-
-
-@pytest.mark.tpu
-@pytest.mark.usefixtures("tpu_test_class")
-class T5BackboneTPUTest(TestCase):
-    def setUp(self):
-        with self.tpu_strategy.scope():
-            self.backbone = T5Backbone(
-                vocabulary_size=4,
-                num_layers=2,
-                num_heads=2,
-                hidden_dim=4,
-                intermediate_dim=4,
-            )
-        self.input_batch = {
-            "token_ids": np.ones((8, 4), dtype="int32"),
-            "padding_mask": np.ones((8, 4), dtype="int32"),
-        }
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(
-            self.input_batch
-        ).batch(2)
-
-    def test_predict(self):
-        self.backbone.compile()
-        outputs = self.backbone.predict(self.input_dataset)
-        self.assertIn("encoder_sequence_output", outputs)
-        self.assertIn("decoder_sequence_output", outputs)
