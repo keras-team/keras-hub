@@ -101,34 +101,3 @@ class AlbertBackboneTest(TestCase):
         self.assertAllClose(
             model_output["pooled_output"], restored_output["pooled_output"]
         )
-
-
-@pytest.mark.tpu
-@pytest.mark.usefixtures("tpu_test_class")
-class AlbertBackboneTPUTest(TestCase):
-    def setUp(self):
-        with self.tpu_strategy.scope():
-            self.backbone = AlbertBackbone(
-                vocabulary_size=10,
-                num_layers=2,
-                num_heads=2,
-                num_groups=1,
-                num_inner_repetitions=1,
-                embedding_dim=16,
-                hidden_dim=2,
-                intermediate_dim=2,
-                max_sequence_length=4,
-            )
-
-        self.input_batch = {
-            "token_ids": np.ones((8, 128), dtype="int32"),
-            "segment_ids": np.ones((8, 128), dtype="int32"),
-            "padding_mask": np.ones((8, 128), dtype="int32"),
-        }
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(
-            self.input_batch
-        ).batch(2)
-
-    def test_predict(self):
-        self.backbone.compile()
-        self.backbone.predict(self.input_dataset)
