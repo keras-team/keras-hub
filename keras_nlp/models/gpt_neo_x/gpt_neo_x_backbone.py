@@ -17,6 +17,7 @@ from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_decoder import GPTNeoXDecoder
+from keras_nlp.utils.keras_utils import gelu_approximate
 
 
 def _gpt_neo_x_kernel_initializer(stddev=0.02):
@@ -106,9 +107,7 @@ class GPTNeoXBackbone(Backbone):
                 rotary_percentage=rotary_percentage,
                 rotary_max_wavelength=rotary_max_wavelength,
                 layer_norm_epsilon=layer_norm_epsilon,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=True
-                ),
+                activation=gelu_approximate,
                 kernel_initializer=_gpt_neo_x_kernel_initializer(stddev=0.02),
                 name=f"transformer_layer_{i}",
             )(x, decoder_padding_mask=padding_mask)

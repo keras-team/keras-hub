@@ -155,3 +155,8 @@ def print_row(fields, positions, print_fn, nested_level=0):
                 line += " " * (positions[col] - len(line))
         line += "|" * nested_level
         print_fn(line)
+
+
+@keras.saving.register_keras_serializable(package="keras_nlp")
+def gelu_approximate(x):
+    return keras.activations.gelu(x, approximate=True)

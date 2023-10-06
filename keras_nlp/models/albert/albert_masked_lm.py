@@ -24,6 +24,7 @@ from keras_nlp.models.albert.albert_masked_lm_preprocessor import (
 )
 from keras_nlp.models.albert.albert_presets import backbone_presets
 from keras_nlp.models.task import Task
+from keras_nlp.utils.keras_utils import gelu_approximate
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -107,9 +108,7 @@ class AlbertMaskedLM(Task):
         outputs = MaskedLMHead(
             vocabulary_size=backbone.vocabulary_size,
             token_embedding=backbone.token_embedding,
-            intermediate_activation=lambda x: keras.activations.gelu(
-                x, approximate=True
-            ),
+            intermediate_activation=gelu_approximate,
             kernel_initializer=albert_kernel_initializer(),
             name="mlm_head",
         )(backbone_outputs["sequence_output"], inputs["mask_positions"])

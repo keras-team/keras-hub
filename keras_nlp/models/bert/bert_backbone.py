@@ -21,15 +21,12 @@ from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.layers.modeling.transformer_encoder import TransformerEncoder
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.bert.bert_presets import backbone_presets
+from keras_nlp.utils.keras_utils import gelu_approximate
 from keras_nlp.utils.python_utils import classproperty
 
 
 def bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
-
-
-def gelu_approximate(x):
-    return keras.activations.gelu(x, approximate=True)
 
 
 @keras_nlp_export("keras_nlp.models.BertBackbone")
