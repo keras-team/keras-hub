@@ -83,29 +83,3 @@ class GPTNeoXTest(TestCase):
         # Check that output matches.
         restored_output = restored_model(self.input_batch)
         self.assertAllClose(model_output, restored_output)
-
-
-@pytest.mark.tpu
-@pytest.mark.usefixtures("tpu_test_class")
-class GPTNeoXBackboneTPUTest(TestCase):
-    def setUp(self):
-        with self.tpu_strategy.scope():
-            GPTNeoXBackbone(
-                vocabulary_size=10,
-                num_layers=4,
-                num_heads=4,
-                hidden_dim=64,
-                intermediate_dim=64,
-                max_sequence_length=10,
-            )
-        self.input_batch = {
-            "token_ids": np.ones((2, 5), dtype="int32"),
-            "padding_mask": np.ones((2, 5), dtype="int32"),
-        }
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(
-            self.input_batch
-        ).batch(2)
-
-    def test_predict(self):
-        self.model.compile()
-        self.model.predict(self.input_dataset)

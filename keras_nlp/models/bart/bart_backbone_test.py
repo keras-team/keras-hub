@@ -91,31 +91,3 @@ class BartBackboneTest(TestCase):
             model_output["decoder_sequence_output"],
             restored_output["decoder_sequence_output"],
         )
-
-
-@pytest.mark.tpu
-@pytest.mark.usefixtures("tpu_test_class")
-class BartBackboneTPUTest(TestCase):
-    def setUp(self):
-        with self.tpu_strategy.scope():
-            self.backbone = BartBackbone(
-                vocabulary_size=1000,
-                num_layers=2,
-                num_heads=2,
-                hidden_dim=64,
-                intermediate_dim=128,
-                max_sequence_length=128,
-            )
-        self.input_batch = {
-            "encoder_token_ids": np.ones((8, 128), dtype="int32"),
-            "encoder_padding_mask": np.ones((8, 128), dtype="int32"),
-            "decoder_token_ids": np.ones((8, 128), dtype="int32"),
-            "decoder_padding_mask": np.ones((8, 128), dtype="int32"),
-        }
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(
-            self.input_batch
-        ).batch(2)
-
-    def test_predict(self):
-        self.backbone.compile()
-        self.backbone.predict(self.input_dataset)

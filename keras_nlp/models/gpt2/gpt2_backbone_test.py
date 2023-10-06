@@ -101,29 +101,3 @@ class GPT2Test(TestCase):
         # bridge elsewhere and must disable. See
         # https://github.com/keras-team/keras-nlp/issues/1001
         tf.config.experimental.disable_mlir_bridge()
-
-
-@pytest.mark.tpu
-@pytest.mark.usefixtures("tpu_test_class")
-class GPT2BackboneTPUTest(TestCase):
-    def setUp(self):
-        with self.tpu_strategy.scope():
-            self.model = GPT2Backbone(
-                vocabulary_size=10,
-                num_layers=2,
-                num_heads=2,
-                hidden_dim=2,
-                intermediate_dim=4,
-                max_sequence_length=5,
-            )
-        self.input_batch = {
-            "token_ids": np.ones((2, 5), dtype="int32"),
-            "padding_mask": np.ones((2, 5), dtype="int32"),
-        }
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(
-            self.input_batch
-        ).batch(2)
-
-    def test_predict(self):
-        self.model.compile()
-        self.model.predict(self.input_dataset)

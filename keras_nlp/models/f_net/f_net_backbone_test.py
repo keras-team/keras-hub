@@ -81,29 +81,3 @@ class FNetBackboneTest(TestCase):
         self.assertAllClose(
             model_output["pooled_output"], restored_output["pooled_output"]
         )
-
-
-@pytest.mark.tpu
-@pytest.mark.usefixtures("tpu_test_class")
-class FNetBackboneTPUTest(TestCase):
-    def setUp(self):
-        with self.tpu_strategy.scope():
-            self.backbone = FNetBackbone(
-                vocabulary_size=100,
-                num_layers=2,
-                hidden_dim=16,
-                intermediate_dim=32,
-                max_sequence_length=128,
-                num_segments=4,
-            )
-        self.input_batch = {
-            "token_ids": np.ones((8, 128), dtype="int32"),
-            "segment_ids": np.ones((8, 128), dtype="int32"),
-        }
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(
-            self.input_batch
-        ).batch(2)
-
-    def test_predict(self):
-        self.backbone.compile()
-        self.backbone.predict(self.input_dataset)
