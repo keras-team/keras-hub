@@ -157,9 +157,7 @@ class BartBackbone(Backbone):
             x = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=False
-                ),
+                activation=keras.activations.gelu,
                 dropout=dropout,
                 layer_norm_epsilon=1e-5,
                 kernel_initializer=bart_kernel_initializer(),
@@ -200,9 +198,7 @@ class BartBackbone(Backbone):
                 intermediate_dim=intermediate_dim,
                 num_heads=num_heads,
                 dropout=dropout,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=False
-                ),
+                activation=keras.activations.gelu,
                 layer_norm_epsilon=1e-5,
                 kernel_initializer=bart_kernel_initializer(),
                 name=f"transformer_decoder_layer_{i}",
