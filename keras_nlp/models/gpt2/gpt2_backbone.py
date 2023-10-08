@@ -25,6 +25,7 @@ from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.layers.modeling.transformer_decoder import TransformerDecoder
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
+from keras_nlp.utils.keras_utils import gelu_approximate
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -139,9 +140,7 @@ class GPT2Backbone(Backbone):
                 num_heads=num_heads,
                 dropout=dropout,
                 layer_norm_epsilon=1e-05,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=True
-                ),
+                activation=gelu_approximate,
                 kernel_initializer=_gpt_2_kernel_initializer(stddev=0.02),
                 normalize_first=True,
                 name=f"transformer_layer_{i}",

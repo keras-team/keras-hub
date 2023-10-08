@@ -21,6 +21,7 @@ from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.f_net.f_net_presets import backbone_presets
+from keras_nlp.utils.keras_utils import gelu_approximate
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -156,9 +157,7 @@ class FNetBackbone(Backbone):
         for i in range(num_layers):
             x = FNetEncoder(
                 intermediate_dim=intermediate_dim,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=True
-                ),
+                activation=gelu_approximate,
                 dropout=dropout,
                 layer_norm_epsilon=1e-12,
                 kernel_initializer=f_net_kernel_initializer(),

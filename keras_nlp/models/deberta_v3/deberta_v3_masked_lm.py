@@ -114,9 +114,7 @@ class DebertaV3MaskedLM(Task):
         outputs = MaskedLMHead(
             vocabulary_size=backbone.vocabulary_size,
             token_embedding=backbone.token_embedding,
-            intermediate_activation=lambda x: keras.activations.gelu(
-                x, approximate=False
-            ),
+            intermediate_activation=keras.activations.gelu,
             kernel_initializer=deberta_kernel_initializer(),
             name="mlm_head",
         )(backbone_outputs, inputs["mask_positions"])

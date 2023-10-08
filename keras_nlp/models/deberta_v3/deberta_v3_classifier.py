@@ -170,7 +170,7 @@ class DebertaV3Classifier(Task):
         x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
         x = keras.layers.Dense(
             hidden_dim,
-            activation=lambda x: keras.activations.gelu(x, approximate=False),
+            activation=keras.activations.gelu,
             name="pooled_dense",
         )(x)
         x = keras.layers.Dropout(backbone.dropout, name="classifier_dropout")(x)

@@ -187,9 +187,7 @@ class WhisperBackbone(Backbone):
             x = WhisperEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=False
-                ),
+                activation=keras.activations.gelu,
                 layer_norm_epsilon=1e-5,
                 dropout=dropout,
                 kernel_initializer=whisper_kernel_initializer(),
@@ -229,9 +227,7 @@ class WhisperBackbone(Backbone):
                 intermediate_dim=intermediate_dim,
                 num_heads=num_heads,
                 dropout=dropout,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=False
-                ),
+                activation=keras.activations.gelu,
                 layer_norm_epsilon=1e-5,
                 kernel_initializer=whisper_kernel_initializer(),
                 normalize_first=True,

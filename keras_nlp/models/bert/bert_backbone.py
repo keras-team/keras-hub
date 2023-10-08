@@ -21,6 +21,7 @@ from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.layers.modeling.transformer_encoder import TransformerEncoder
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.bert.bert_presets import backbone_presets
+from keras_nlp.utils.keras_utils import gelu_approximate
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -151,9 +152,7 @@ class BertBackbone(Backbone):
             x = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
-                activation=lambda x: keras.activations.gelu(
-                    x, approximate=True
-                ),
+                activation=gelu_approximate,
                 dropout=dropout,
                 layer_norm_epsilon=1e-12,
                 kernel_initializer=bert_kernel_initializer(),
