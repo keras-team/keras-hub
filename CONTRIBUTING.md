@@ -81,7 +81,7 @@ Once the pull request is approved, a team member will take care of merging.
 
 ## Setting up an Environment
 
-Python 3.7 or later is required.
+Python 3.9 or later is required.
 
 Setting up your KerasNLP development environment requires you to fork the
 KerasNLP repository and clone it locally. With the
@@ -93,72 +93,57 @@ cd keras-nlp
 ```
 
 Next we must setup a python environment with the correct dependencies. We
-recommend using `conda` to install tensorflow dependencies (such as CUDA), and
-`pip` to install python packages from PyPI. The exact method will depend on your
-OS.
+recommend using `conda` to set up a base environment, and `pip` to install
+python packages from PyPI. The exact method will depend on your OS.
 
-**Note**: Please be careful not to use the `tensorflow` pre-packaged with conda,
-which is incompatible with `tensorflow-text` on PyPi, and follow the
-instructions below.
+**Note**: Be careful not to use mix pre-packaged tensorflow and jax libraries in
+`conda` with PyPI packages from `pip`. We recommend pulling *all* KerasNLP
+dependencies via `pip` as described below.
 
 ### Linux (recommended)
 
-To setup a complete environment with TensorFlow, a local install of keras-nlp,
-and all development tools, run the following or adapt it to suit your needs.
+For developing and unit testing the library, a CPU-only environment is often
+sufficient. For any training or inference with the library, you will quickly
+want accelerator support. The easiest way to get GPU support across all of our
+backends is to set up a few different python environements and pull in all cuda
+dependencies via `pip`.
+
+The shell snippet below will install four conda environments: `keras-nlp-cpu`,
+`keras-nlp-jax`, `keras-nlp-torch`, and `keras-nlp-tensorflow`. The cpu
+environement supports all backends without cuda, and each backend environement
+has cuda support.
 
 ```shell
-# Create and activate conda environment.
-conda create -n keras-nlp python=3.9
-conda activate keras-nlp
+conda create -y -n keras-nlp-cpu python=3.10
+conda activate keras-nlp-cpu
+pip install -r requirements.txt  # install deps
+python pip_build.py --install  # install keras-nlp
 
-# The following can be omitted if GPU support is not required.
-conda install -c conda-forge cudatoolkit-dev=11.2 cudnn=8.1.0
-mkdir -p $CONDA_PREFIX/etc/conda/activate.d/
-echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
-echo 'export XLA_FLAGS=--xla_gpu_cuda_data_dir=$CONDA_PREFIX/' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
-source $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+for backend in "jax" "torch" "tensorflow"; do
+    conda create -y -n keras-nlp-${backend} python=3.10
+    conda activate keras-nlp-${backend}
+    pip install -r requirements-${backend}-cuda.txt  # install deps
+    python pip_build.py --install  # install keras-nlp
+done
+```
 
-# Install dependencies.
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install -e "."
+To activate the jax environment and set keras to use jax, run:
+
+```shell
+conda activate keras-nlp-jax && export KERAS_BACKEND=jax
 ```
 
 ### MacOS
 
-⚠️⚠️⚠️ MacOS binaries are for the M1 architecture are not currently available from
-official sources. You can try experimental development workflow leveraging the
-[tensorflow metal plugin](https://developer.apple.com/metal/tensorflow-plugin/)
-and a [community maintained build](https://github.com/sun1638650145/Libraries-and-Extensions-for-TensorFlow-for-Apple-Silicon)
-of `tensorflow-text`. These binaries are not provided by Google, so proceed at
-your own risk.
+`tensorflow-text` does not release precompiled binaries for MacOS M-series
+chips, though the library does support building from source on MacOS.
 
-#### Experimental instructions for Arm (M1)
+We strongly recommend a Linux development environment for an easy contribution
+experience. To build a dev environement from scratch on MacOS, see the following
+guides:
 
-```shell
-# Create and activate conda environment.
-conda create -n keras-nlp python=3.9
-conda activate keras-nlp
-
-# Install dependencies.
-conda install -c apple tensorflow-deps=2.9
-python -m pip install --upgrade pip
-python -m pip install -r requirements-macos-m1.txt
-python -m pip install -e "."
-```
-
-#### Instructions for x86 (Intel)
-
-```shell
-# Create and activate conda environment.
-conda create -n keras-nlp python=3.9
-conda activate keras-nlp
-
-# Install dependencies.
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install -e "."
-```
+https://developer.apple.com/metal/tensorflow-plugin/
+https://github.com/tensorflow/text
 
 ### Windows
 
