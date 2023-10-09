@@ -86,8 +86,3 @@ def pytest_collection_modifyitems(config, items):
 tf.debugging.disable_traceback_filtering()
 if backend_config.multi_backend():
     keras.config.disable_traceback_filtering()
-
-# One off setup for dtensor tests.
-if not backend_config.multi_backend():
-    keras.backend.experimental.enable_tf_random_generator()
-    keras.utils.set_random_seed(1337)
