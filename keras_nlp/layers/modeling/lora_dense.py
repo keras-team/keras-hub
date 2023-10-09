@@ -40,11 +40,11 @@ class LoraDense(keras.layers.Layer):
     """A LoRA adapter layer for a dense input layer.
 
     This layer implements a low-rank decomposition of a dense transformation, as
-    described in [LoRA: Low-Rand Adaptation Of Large Language Models](https://arxiv.org/pdf/2106.09685.pdf)
-    This layer can be used to replace a dense layer with a layer who's
+    described in [LoRA: Low-Rank Adaptation Of Large Language Models](https://arxiv.org/pdf/2106.09685.pdf)
+    This layer can be used to replace a dense layer with a layer whose
     parameters are mostly frozen.
 
-    By default, this layer takes in a `inner_dense` layer, freezes it's
+    By default, this layer takes in an `inner_dense` layer, freezes its
     parameters, and builds a low-rank decomposed update to sum with the original
     `inner_dense` output. These update parameters can be merged back into the
     `inner_dense` kernel by calling `merge_weights()`.
@@ -56,8 +56,8 @@ class LoraDense(keras.layers.Layer):
             represent a dense transformation on the last axis of the input,
             though adding new axes to the output (e.g. a multi-head axis) is
             allowed.
-        rank: int The inner rank of the decomposed dense transformation. The
-            lower this number, the less trainable parameters the layer will
+        rank: int. The inner rank of the decomposed dense transformation. The
+            lower this number, the fewer trainable parameters the layer will
             have.
         alpha: float. A constant value used for scaling the lora update. The
             lora update to the original dense transformation will be scaled by
@@ -66,7 +66,7 @@ class LoraDense(keras.layers.Layer):
             from layer inputs to the inner `rank` intermediate outputs.
         freeze_kernel: If true, the kernel of the inner dense layer will have
             `trainable` set to False.
-        freeze_bais: If true, the kernel of the inner dense layer will have
+        freeze_bias: If true, the kernel of the inner dense layer will have
             `trainable` set to False.
         **kwargs: other keyword arguments.
 
@@ -112,7 +112,7 @@ class LoraDense(keras.layers.Layer):
         self,
         inner_dense,
         rank=8,
-        alpha=32.0,
+        alpha=8.0,
         lora_a_initializer="variance_scaling",
         freeze_kernel=True,
         freeze_bias=True,

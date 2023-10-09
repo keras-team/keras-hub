@@ -96,6 +96,19 @@ class LoraDenseTest(TestCase):
         self.assertAllClose(lora_output, merged_lora_output)
         self.assertAllClose(lora_output, dense_output)
 
+    def test_freezing(self):
+        inner_dense = keras.layers.Dense(16)
+        layer = LoraDense(inner_dense, freeze_bias=False)
+        layer.build((2, 16))
+        self.assertFalse(inner_dense.kernel.trainable)
+        self.assertTrue(inner_dense.bias.trainable)
+
+        inner_dense = keras.layers.Dense(16)
+        layer = LoraDense(inner_dense)
+        layer.build((2, 16))
+        self.assertFalse(inner_dense.kernel.trainable)
+        self.assertFalse(inner_dense.bias.trainable)
+
     def test_errors_if_not_dense(self):
         with self.assertRaises(ValueError):
             LoraDense(keras.layers.Concatenate())
