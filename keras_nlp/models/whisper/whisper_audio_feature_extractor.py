@@ -18,14 +18,16 @@ import numpy as np
 import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
+from keras_nlp.layers.preprocessing.preprocessing_layer import (
+    PreprocessingLayer,
+)
 from keras_nlp.models.whisper.whisper_presets import backbone_presets
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
 @keras_nlp_export("keras_nlp.models.WhisperAudioFeatureExtractor")
-class WhisperAudioFeatureExtractor(keras.layers.Layer):
+class WhisperAudioFeatureExtractor(PreprocessingLayer):
     """
     Whisper audio feature extractor layer.
 
@@ -163,9 +165,10 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         weights *= enorm[:, np.newaxis]
 
         weights = np.transpose(weights)
-        return tf.constant(weights, dtype=self.dtype)
+        return tf.constant(weights, dtype=self.compute_dtype)
 
     def _extract_audio_features(self, audio):
+        audio = tf.cast(audio, self.compute_dtype)
         # Use "reflection" padding - `tf.signal.stft` uses symmetric padding
         # internally.
         audio = tf.pad(
@@ -246,6 +249,8 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
 
         # Find the log mel spectrogram.
         log_spec = self._extract_audio_features(audio)
+        if rank_1_input:
+            log_spec = tf.squeeze(log_spec, 0)
         return log_spec
 
     def get_config(self):
