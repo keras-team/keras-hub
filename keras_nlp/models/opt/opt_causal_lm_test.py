@@ -171,13 +171,3 @@ class OPTCausalLMTest(TestCase):
         keras.utils.set_random_seed(42)
         restored_output = restored_model.predict(self.raw_batch)
         self.assertAllClose(model_output, restored_output)
-
-    def test_create_layout_map(self):
-        mesh = tf.experimental.dtensor.create_mesh([("batch", 1), ("model", 1)])
-        with OPTCausalLM.create_layout_map(mesh).scope():
-            OPTCausalLM(backbone=self.backbone)
-        # Using DTensor enables the mlir bridge as a side effect. Eventually
-        # this will be default, but for now we have compile errors with the
-        # bridge elsewhere and must disable. See
-        # https://github.com/keras-team/keras-nlp/issues/1001
-        tf.config.experimental.disable_mlir_bridge()
