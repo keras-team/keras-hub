@@ -14,7 +14,6 @@
 
 import copy
 
-import tensorflow as tf
 from absl import logging
 
 from keras_nlp.backend import keras
@@ -277,9 +276,6 @@ class WhisperPreprocessor(Preprocessor):
             )
 
         encoder_features = self.audio_feature_extractor(encoder_audio[0])
-        if encoder_audio[0].shape.rank < 2:
-            encoder_features = tf.squeeze(encoder_features, axis=0)
-
         decoder_sequence_length = (
             decoder_sequence_length or self.decoder_sequence_length
         )

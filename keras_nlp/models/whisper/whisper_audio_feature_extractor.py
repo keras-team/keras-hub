@@ -162,9 +162,10 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
         weights *= enorm[:, np.newaxis]
 
         weights = np.transpose(weights)
-        return tf.constant(weights, dtype=self.dtype)
+        return tf.constant(weights, dtype=self.compute_dtype)
 
     def _extract_audio_features(self, audio):
+        audio = tf.cast(audio, self.compute_dtype)
         # Use "reflection" padding - `tf.signal.stft` uses symmetric padding
         # internally.
         audio = tf.pad(
@@ -245,6 +246,8 @@ class WhisperAudioFeatureExtractor(keras.layers.Layer):
 
         # Find the log mel spectrogram.
         log_spec = self._extract_audio_features(audio)
+        if rank_1_input:
+            log_spec = tf.squeeze(log_spec, 0)
         return log_spec
 
     def get_config(self):

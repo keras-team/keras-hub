@@ -19,7 +19,7 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers import tokenizer
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
 from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
-from keras_nlp.utils.tensor_utils import is_integer_dtype
+from keras_nlp.utils.tensor_utils import is_int_dtype
 
 try:
     import tensorflow_text as tf_text
@@ -165,7 +165,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
     ):
         assert_tf_text_installed(self.__class__.__name__)
 
-        if not is_integer_dtype(dtype):
+        if not is_int_dtype(dtype):
             raise ValueError(
                 "Output dtype must be an integer type. "
                 f"Received: dtype={dtype}"

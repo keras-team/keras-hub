@@ -16,7 +16,7 @@ import tensorflow as tf
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
-from keras_nlp.utils.tensor_utils import is_floating_dtype
+from keras_nlp.utils.tensor_utils import is_float_dtype
 from keras_nlp.utils.tensor_utils import tensor_to_list
 
 try:
@@ -65,7 +65,7 @@ class RougeBase(keras.metrics.Metric):
                 "package. Please install it with `pip install rouge-score`."
             )
 
-        if not is_floating_dtype(dtype):
+        if not is_float_dtype(dtype):
             raise ValueError(
                 "`dtype` must be a floating point type. "
                 f"Received: dtype={dtype}"

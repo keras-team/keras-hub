@@ -42,10 +42,10 @@ class WhisperAudioFeatureExtractorTest(TestCase):
         outputs = self.audio_feature_extractor(audio_tensor)
 
         # Verify shape.
-        self.assertEqual(outputs.shape, (1, 5, self.num_mels))
+        self.assertEqual(outputs.shape, (5, self.num_mels))
         # Verify output.
         expected = [1.1656, 1.0151, -0.8343, -0.8343, -0.8343]
-        self.assertAllClose(outputs[0, :, 0], expected, atol=0.01, rtol=0.01)
+        self.assertAllClose(outputs[:, 0], expected, atol=0.01, rtol=0.01)
 
     def test_batched_inputs(self):
         audio_tensor_1 = tf.ones((2,), dtype="float32")

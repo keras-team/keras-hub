@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import tensorflow as tf
 
 from keras_nlp.backend import keras
@@ -89,8 +90,8 @@ class WhisperPreprocessorTest(TestCase):
 
     def test_unbatched_preprocess(self):
         input_data = {
-            "encoder_audio": tf.ones((200,)),
-            "decoder_text": tf.constant(" airplane at airport"),
+            "encoder_audio": np.ones((200,)),
+            "decoder_text": " airplane at airport",
         }
 
         x = self.preprocessor(input_data)
@@ -106,8 +107,8 @@ class WhisperPreprocessorTest(TestCase):
 
     def test_preprocess_batch(self):
         input_data = {
-            "encoder_audio": tf.ones((4, 200)),
-            "decoder_text": tf.constant([" airplane at airport"] * 4),
+            "encoder_audio": np.ones((4, 200)),
+            "decoder_text": [" airplane at airport"] * 4,
         }
 
         x = self.preprocessor(input_data)
@@ -125,11 +126,11 @@ class WhisperPreprocessorTest(TestCase):
 
     def test_preprocess_labeled_batch(self):
         x = {
-            "encoder_audio": tf.ones((4, 200)),
-            "decoder_text": tf.constant([" airplane at airport"] * 4),
+            "encoder_audio": np.ones((4, 200)),
+            "decoder_text": [" airplane at airport"] * 4,
         }
-        y_in = tf.constant([1] * 4)
-        sw_in = tf.constant([1.0] * 4)
+        y_in = np.ones((4,))
+        sw_in = np.ones((4,))
         x, y, sw = self.preprocessor(x, y_in, sw_in)
         self.assertAllEqual(
             x["encoder_features"].shape, [4, self.output_length, self.num_mels]
@@ -147,8 +148,8 @@ class WhisperPreprocessorTest(TestCase):
 
     def test_preprocess_dataset(self):
         x = {
-            "encoder_audio": tf.ones((4, 200)),
-            "decoder_text": tf.constant([" airplane at airport"] * 4),
+            "encoder_audio": np.ones((4, 200)),
+            "decoder_text": [" airplane at airport"] * 4,
         }
         ds = tf.data.Dataset.from_tensor_slices(x)
         ds = ds.map(self.preprocessor)
@@ -167,8 +168,8 @@ class WhisperPreprocessorTest(TestCase):
 
     def test_sequence_length_override(self):
         input_data = {
-            "encoder_audio": tf.ones((200,)),
-            "decoder_text": tf.constant(" airplane at airport"),
+            "encoder_audio": np.ones((200,)),
+            "decoder_text": " airplane at airport",
         }
         x = self.preprocessor(input_data, decoder_sequence_length=6)
         self.assertAllEqual(x["decoder_token_ids"], [9, 14, 13, 11, 0, 10])

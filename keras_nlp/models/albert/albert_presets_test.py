@@ -16,6 +16,7 @@ import pytest
 from absl.testing import parameterized
 
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.models.albert.albert_classifier import AlbertClassifier
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
@@ -138,7 +139,7 @@ class AlbertPresetFullTest(TestCase):
                 preset, load_weights=load_weights
             )
             input_data = {
-                "token_ids": ops.random.uniform(
+                "token_ids": random.uniform(
                     shape=(1, 512), dtype="int64", maxval=model.vocabulary_size
                 ),
                 "segment_ids": ops.array([0] * 200 + [1] * 312, shape=(1, 512)),
@@ -171,7 +172,7 @@ class AlbertPresetFullTest(TestCase):
                 load_weights=load_weights,
             )
             input_data = {
-                "token_ids": ops.random.uniform(
+                "token_ids": random.uniform(
                     shape=(1, 512),
                     dtype="int64",
                     maxval=classifier.backbone.vocabulary_size,

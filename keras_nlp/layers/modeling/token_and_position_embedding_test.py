@@ -16,6 +16,7 @@ import numpy as np
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.layers.modeling.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
@@ -32,7 +33,7 @@ class TokenAndPositionEmbeddingTest(TestCase):
                 "embedding_dim": 3,
                 "embeddings_initializer": keras.initializers.Constant(1.0),
             },
-            input_data=ops.random.randint(minval=0, maxval=5, shape=(2, 4)),
+            input_data=random.randint(minval=0, maxval=5, shape=(2, 4)),
             expected_output_shape=(2, 4, 3),
             expected_output_data=ops.ones((2, 4, 3)) * 2,
             expected_num_trainable_weights=2,

@@ -14,6 +14,7 @@
 
 import keras_nlp.layers.modeling.transformer_layer_utils as utils
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.tests.test_case import TestCase
 
 
@@ -25,7 +26,7 @@ class TransformerLayerUtilsTest(TestCase):
     def test_merge_padding_and_attention_mask(self):
         padding_mask = ops.array([[1, 1, 0]])
         attention_mask = ops.array([[[0, 0, 1], [0, 1, 0], [1, 0, 0]]])
-        inputs = ops.random.uniform(shape=[1, 3, 2])
+        inputs = random.uniform(shape=[1, 3, 2])
         merged_mask = utils.merge_padding_and_attention_mask(
             inputs,
             padding_mask,
@@ -37,7 +38,7 @@ class TransformerLayerUtilsTest(TestCase):
         with self.assertRaises(ValueError):
             padding_mask = ops.array([[[1, 1, 0], [1, 0, 0]]])
             attention_mask = ops.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]])
-            inputs = ops.random.uniform(shape=[1, 3, 2])
+            inputs = random.uniform(shape=[1, 3, 2])
             utils.merge_padding_and_attention_mask(
                 inputs,
                 padding_mask,
@@ -47,7 +48,7 @@ class TransformerLayerUtilsTest(TestCase):
         with self.assertRaises(ValueError):
             padding_mask = ops.array([[1, 1, 0]])
             attention_mask = ops.array([[0, 0, 1], [1, 0, 0]])
-            inputs = ops.random.uniform(shape=[1, 3, 2])
+            inputs = random.uniform(shape=[1, 3, 2])
             utils.merge_padding_and_attention_mask(
                 inputs,
                 padding_mask,
