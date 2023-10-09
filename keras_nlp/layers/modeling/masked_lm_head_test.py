@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.layers.modeling.masked_lm_head import MaskedLMHead
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.tests.test_case import TestCase
@@ -29,8 +29,8 @@ class MaskedLMHeadTest(TestCase):
                 "bias_initializer": "Zeros",
             },
             input_data={
-                "inputs": ops.random.uniform(shape=(4, 10, 16)),
-                "mask_positions": ops.random.randint(
+                "inputs": random.uniform(shape=(4, 10, 16)),
+                "mask_positions": random.randint(
                     minval=0, maxval=10, shape=(4, 5)
                 ),
             },
@@ -51,8 +51,8 @@ class MaskedLMHeadTest(TestCase):
                 "token_embedding": embedding,
             },
             input_data={
-                "inputs": ops.random.uniform(shape=(4, 10, 16)),
-                "mask_positions": ops.random.randint(
+                "inputs": random.uniform(shape=(4, 10, 16)),
+                "mask_positions": random.randint(
                     minval=0, maxval=10, shape=(4, 5)
                 ),
             },

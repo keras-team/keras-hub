@@ -21,7 +21,7 @@ from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
-from keras_nlp.utils.tensor_utils import is_integer_dtype
+from keras_nlp.utils.tensor_utils import is_int_dtype
 from keras_nlp.utils.tensor_utils import is_string_dtype
 
 
@@ -127,7 +127,7 @@ class RandomSwap(PreprocessingLayer):
         dtype="int32",
         **kwargs,
     ):
-        if not is_integer_dtype(dtype) and not is_string_dtype(dtype):
+        if not is_int_dtype(dtype) and not is_string_dtype(dtype):
             raise ValueError(
                 "Output dtype must be an integer type or a string. "
                 f"Received: dtype={dtype}"

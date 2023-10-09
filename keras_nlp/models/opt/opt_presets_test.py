@@ -16,6 +16,7 @@ import pytest
 from absl.testing import parameterized
 
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.models.opt.opt_tokenizer import OPTTokenizer
 from keras_nlp.tests.test_case import TestCase
@@ -94,7 +95,7 @@ class OPTPresetFullTest(TestCase):
         for preset in OPTBackbone.presets:
             model = OPTBackbone.from_preset(preset, load_weights=load_weights)
             input_data = {
-                "token_ids": ops.random.uniform(
+                "token_ids": random.uniform(
                     shape=(1, 1024),
                     dtype="int64",
                     maxval=model.vocabulary_size,

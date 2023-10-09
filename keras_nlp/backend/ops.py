@@ -12,22 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import keras_core
-import tensorflow as tf
+from keras_nlp.backend import config
 
-from keras_nlp.backend.config import multi_backend
-
-if multi_backend():
-    from keras_core.src.ops import *  # noqa: F403, F401
+if config.keras_3():
+    from keras.ops import *  # noqa: F403, F401
 else:
-    from keras_core.src.backend.tensorflow import *  # noqa: F403, F401
-    from keras_core.src.backend.tensorflow.core import *  # noqa: F403, F401
-    from keras_core.src.backend.tensorflow.math import *  # noqa: F403, F401
-    from keras_core.src.backend.tensorflow.nn import *  # noqa: F403, F401
-    from keras_core.src.backend.tensorflow.numpy import *  # noqa: F403, F401
+    from keras_core.ops import *  # noqa: F403, F401
 
-
-if keras_core.config.backend() == "tensorflow" or not multi_backend():
+if config.backend() == "tensorflow":
+    import tensorflow as tf
+    from tensorflow.experimental import numpy as tfnp
 
     def take_along_axis(x, indices, axis=None):
         # TODO: move this workaround for dynamic shapes into keras-core.
@@ -46,6 +40,4 @@ if keras_core.config.backend() == "tensorflow" or not multi_backend():
                 indices = tf.squeeze(indices, leftover_axes)
             return tf.gather(x, indices, batch_dims=axis)
         # Otherwise, fall back to the tfnp call.
-        return keras_core.src.backend.tensorflow.numpy.take_along_axis(
-            x, indices, axis=axis
-        )
+        return tfnp.take_along_axis(x, indices, axis=axis)

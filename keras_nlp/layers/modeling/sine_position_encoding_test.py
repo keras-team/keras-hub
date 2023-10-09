@@ -14,6 +14,7 @@
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.layers.modeling.sine_position_encoding import (
     SinePositionEncoding,
 )
@@ -27,7 +28,7 @@ class SinePositionEncodingTest(TestCase):
             init_kwargs={
                 "max_wavelength": 10000,
             },
-            input_data=ops.random.uniform(shape=(2, 4, 6)),
+            input_data=random.uniform(shape=(2, 4, 6)),
             expected_output_shape=(2, 4, 6),
         )
 
@@ -37,7 +38,7 @@ class SinePositionEncodingTest(TestCase):
             init_kwargs={
                 "max_wavelength": 10000,
             },
-            input_data=ops.random.uniform(shape=(1, 2, 4, 6)),
+            input_data=random.uniform(shape=(1, 2, 4, 6)),
             expected_output_shape=(1, 2, 4, 6),
         )
 
@@ -85,7 +86,7 @@ class SinePositionEncodingTest(TestCase):
                 pos_encoding,
             ]
         )
-        input = ops.random.uniform(shape=[1, 4, 6])
+        input = random.uniform(shape=[1, 4, 6])
         output = model(input)
 
         # comapre position encoding values for position 0 and 3
@@ -97,7 +98,7 @@ class SinePositionEncodingTest(TestCase):
     def test_start_index(self):
         batch_size, seq_length, feature_size = 2, 3, 4
         layer = SinePositionEncoding()
-        data = ops.random.uniform(shape=(batch_size, seq_length, feature_size))
+        data = random.uniform(shape=(batch_size, seq_length, feature_size))
         full_output = layer(data)
         sequential_output = ops.zeros((batch_size, seq_length, feature_size))
         for i in range(seq_length):

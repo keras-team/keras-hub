@@ -15,6 +15,7 @@
 #
 
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.tests.test_case import TestCase
 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -117,7 +118,7 @@ class BartPresetFullTest(TestCase):
         for preset in BartBackbone.presets:
             model = BartBackbone.from_preset(preset, load_weights=load_weights)
             input_data = {
-                "encoder_token_ids": ops.random.uniform(
+                "encoder_token_ids": random.uniform(
                     shape=(1, 1024),
                     dtype="int64",
                     maxval=model.vocabulary_size,
@@ -125,7 +126,7 @@ class BartPresetFullTest(TestCase):
                 "encoder_padding_mask": ops.array(
                     [1] * 768 + [0] * 256, shape=(1, 1024)
                 ),
-                "decoder_token_ids": ops.random.uniform(
+                "decoder_token_ids": random.uniform(
                     shape=(1, 1024),
                     dtype="int64",
                     maxval=model.vocabulary_size,

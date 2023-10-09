@@ -14,6 +14,7 @@
 
 from keras_nlp.backend import config
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
@@ -29,8 +30,8 @@ class CachedMultiHeadAttentionTest(TestCase):
                 "key_dim": 4,
             },
             input_data={
-                "query": ops.random.uniform(shape=(2, 4, 6)),
-                "value": ops.random.uniform(shape=(2, 4, 6)),
+                "query": random.uniform(shape=(2, 4, 6)),
+                "value": random.uniform(shape=(2, 4, 6)),
             },
             expected_output_shape=(2, 4, 6),
             expected_num_trainable_weights=8,
@@ -48,7 +49,7 @@ class CachedMultiHeadAttentionTest(TestCase):
         hidden_dim = num_heads * key_dim
 
         input_shape = (batch_size, seq_len, hidden_dim)
-        x = ops.random.uniform(shape=input_shape)
+        x = random.uniform(shape=input_shape)
         input_cache = ops.zeros((batch_size, 2, seq_len, num_heads, key_dim))
         # Use a causal mask.
         mask = ops.tril(ops.ones((seq_len, seq_len)))

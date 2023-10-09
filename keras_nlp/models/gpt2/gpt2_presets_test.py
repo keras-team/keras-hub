@@ -16,6 +16,7 @@ import pytest
 from absl.testing import parameterized
 
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.tests.test_case import TestCase
@@ -94,7 +95,7 @@ class GPT2PresetFullTest(TestCase):
         for preset in GPT2Backbone.presets:
             model = GPT2Backbone.from_preset(preset, load_weights=load_weights)
             input_data = {
-                "token_ids": ops.random.uniform(
+                "token_ids": random.uniform(
                     shape=(1, 1024),
                     dtype="int64",
                     maxval=model.vocabulary_size,

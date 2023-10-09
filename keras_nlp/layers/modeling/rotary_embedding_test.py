@@ -14,6 +14,7 @@
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_nlp.tests.test_case import TestCase
 
@@ -28,7 +29,7 @@ class RotaryEmbeddingTest(TestCase):
                 "sequence_axis": 1,
                 "feature_axis": -1,
             },
-            input_data=ops.random.uniform(shape=(2, 4, 6)),
+            input_data=random.uniform(shape=(2, 4, 6)),
             expected_output_shape=(2, 4, 6),
         )
 
@@ -38,7 +39,7 @@ class RotaryEmbeddingTest(TestCase):
             init_kwargs={
                 "max_wavelength": 1000,
             },
-            input_data=ops.random.uniform(shape=(2, 8, 4, 6)),
+            input_data=random.uniform(shape=(2, 8, 4, 6)),
             expected_output_shape=(2, 8, 4, 6),
         )
 
@@ -86,7 +87,7 @@ class RotaryEmbeddingTest(TestCase):
     def test_start_index(self):
         batch_size, seq_length, feature_size = 2, 3, 4
         layer = RotaryEmbedding(seq_length)
-        data = ops.random.uniform(shape=(batch_size, seq_length, feature_size))
+        data = random.uniform(shape=(batch_size, seq_length, feature_size))
         full_output = layer(data)
         sequential_output = ops.zeros((batch_size, seq_length, feature_size))
         for i in range(seq_length):

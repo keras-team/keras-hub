@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.layers.modeling.f_net_encoder import FNetEncoder
 from keras_nlp.tests.test_case import TestCase
 
@@ -29,7 +29,7 @@ class FNetEncoderTest(TestCase):
                 "kernel_initializer": "HeNormal",
                 "bias_initializer": "Zeros",
             },
-            input_data=ops.random.uniform(shape=(2, 4, 6)),
+            input_data=random.uniform(shape=(2, 4, 6)),
             expected_output_shape=(2, 4, 6),
             expected_num_trainable_weights=8,
             expected_num_non_trainable_variables=1,

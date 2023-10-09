@@ -17,12 +17,12 @@ import json
 import tensorflow as tf
 import tree
 from absl.testing import parameterized
-from keras_core.backend import is_float_dtype
-from keras_core.backend import standardize_dtype
 
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
+from keras_nlp.utils.tensor_utils import is_float_dtype
+from keras_nlp.utils.tensor_utils import standardize_dtype
 
 
 def convert_to_comparible_type(x):
@@ -39,7 +39,7 @@ def convert_to_comparible_type(x):
         return tree.map_structure(lambda x: x.decode("utf-8"), x)
     if isinstance(x, (tf.Tensor, tf.RaggedTensor)):
         return x
-    if ops.is_tensor(x):
+    if hasattr(x, "__array__"):
         return ops.convert_to_numpy(x)
     return x
 
