@@ -218,13 +218,13 @@ class LoraDense(keras.layers.Layer):
         config.update(
             {
                 "inner_dense": keras.layers.serialize(self.inner_dense),
-                "rank": keras.layers.serialize(self.rank),
-                "alpha": keras.layers.serialize(self.alpha),
-                "freeze_kernel": keras.layers.serialize(self.freeze_kernel),
-                "freeze_bias": keras.layers.serialize(self.freeze_bias),
+                "rank": self.rank,
+                "alpha": self.alpha,
                 "lora_a_initializer": keras.initializers.serialize(
                     self.lora_a_initializer
                 ),
+                "freeze_kernel": self.freeze_kernel,
+                "freeze_bias": self.freeze_bias,
             }
         )
         return config
