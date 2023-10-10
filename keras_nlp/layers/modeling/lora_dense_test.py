@@ -128,3 +128,8 @@ class LoraDenseTest(TestCase):
             # Input feature dim not summed over.
             einsum = keras.layers.EinsumDense("abc,cde->abcde", (2, 2, 2, 16))
             LoraDense(einsum, rank=4)
+
+        with self.assertRaises(ValueError):
+            # Double summations.
+            einsum = keras.layers.EinsumDense("abcd,cde->abe", (2, 2, 16))
+            LoraDense(einsum, rank=4)

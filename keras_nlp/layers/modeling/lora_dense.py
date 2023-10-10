@@ -20,11 +20,15 @@ from keras_nlp.backend import ops
 
 
 def validate_einsum_equation(equation):
-    left, right, output = re.split(",|->", equation)
     # For simplicity, we greatly restrict possible einsum equations. The final
     # axis of the input must be the first axis of our kernel, and must not
     # appear in our output.
-    valid = left[-1] == right[0] and left[-1] not in output
+    left, right, output = re.split(",|->", equation)
+    valid = (
+        left[-1] == right[0]
+        and left[-1] not in output
+        and set(left[:-1]).isdisjoint(set(right[1:]))
+    )
     if not valid:
         raise ValueError(
             "When passing a `EinsumDense` layer to a `LoraDense` layer, the "
