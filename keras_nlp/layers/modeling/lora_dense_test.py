@@ -15,7 +15,7 @@
 import pytest
 
 from keras_nlp.backend import keras
-from keras_nlp.backend import ops
+from keras_nlp.backend import random
 from keras_nlp.layers.modeling.lora_dense import LoraDense
 from keras_nlp.tests.test_case import TestCase
 
@@ -31,7 +31,7 @@ class LoraDenseTest(TestCase):
                 "alpha": 16,
                 "lora_a_initializer": "HeNormal",
             },
-            input_data=ops.random.uniform(shape=(2, 4, 8)),
+            input_data=random.uniform(shape=(2, 4, 8)),
             expected_output_shape=(2, 4, 16),
             expected_num_trainable_weights=2,
             expected_num_non_trainable_weights=2,
@@ -49,7 +49,7 @@ class LoraDenseTest(TestCase):
                 ),
                 "lora_a_initializer": "HeNormal",
             },
-            input_data=ops.random.uniform(shape=(2, 4, 8)),
+            input_data=random.uniform(shape=(2, 4, 8)),
             expected_output_shape=(2, 4, 2, 16),
             expected_num_trainable_weights=2,
             expected_num_non_trainable_weights=1,
@@ -61,10 +61,10 @@ class LoraDenseTest(TestCase):
         inner_dense = keras.layers.Dense(16)
         layer = LoraDense(inner_dense, rank=4)
         layer.build((2, 16))
-        layer.lora_a.assign(ops.random.uniform(shape=(16, 4)))
-        layer.lora_b.assign(ops.random.uniform(shape=(4, 16)))
+        layer.lora_a.assign(random.uniform(shape=(16, 4)))
+        layer.lora_b.assign(random.uniform(shape=(4, 16)))
 
-        input_data = ops.random.uniform((2, 16))
+        input_data = random.uniform((2, 16))
         lora_output = layer(input_data)
         dense_output = inner_dense(input_data)
         self.assertNotAllClose(lora_output, dense_output)
@@ -82,10 +82,10 @@ class LoraDenseTest(TestCase):
         )
         layer = LoraDense(inner_dense, rank=4)
         layer.build((2, 4, 16))
-        layer.lora_a.assign(ops.random.uniform(shape=(16, 4)))
-        layer.lora_b.assign(ops.random.uniform(shape=(4, 2, 16)))
+        layer.lora_a.assign(random.uniform(shape=(16, 4)))
+        layer.lora_b.assign(random.uniform(shape=(4, 2, 16)))
 
-        input_data = ops.random.uniform((2, 4, 16))
+        input_data = random.uniform((2, 4, 16))
         lora_output = layer(input_data)
         dense_output = inner_dense(input_data)
         self.assertNotAllClose(lora_output, dense_output)
