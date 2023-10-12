@@ -69,9 +69,9 @@ class LoraDense(keras.layers.Layer):
         lora_a_initializer: The initializer to use for the inner projection
             from layer inputs to the inner `rank` intermediate outputs.
         freeze_kernel: If true, the kernel of the inner dense layer will have
-            `trainable` set to False.
+            `trainable` set to `False`.
         freeze_bias: If true, the kernel of the inner dense layer will have
-            `trainable` set to False.
+            `trainable` set to `False`.
         **kwargs: other keyword arguments.
 
     Examples:
