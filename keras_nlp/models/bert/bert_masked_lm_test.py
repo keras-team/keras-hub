@@ -54,7 +54,7 @@ class BertMaskedLMTest(TestCase):
         )
         self.input_data = self.preprocessor(*self.train_data)[0]
 
-    def test_classifier_basics(self):
+    def test_masked_lm_basics(self):
         self.run_task_test(
             cls=BertMaskedLM,
             init_kwargs=self.init_kwargs,

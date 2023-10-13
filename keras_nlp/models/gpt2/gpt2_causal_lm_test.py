@@ -12,13 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 from unittest.mock import patch
 
 import pytest
-import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm import GPT2CausalLM
@@ -31,15 +28,9 @@ from keras_nlp.tests.test_case import TestCase
 
 class GPT2CausalLMTest(TestCase):
     def setUp(self):
-        self.vocab = {
-            "!": 0,
-            "air": 1,
-            "Ġair": 2,
-            "plane": 3,
-            "Ġat": 4,
-            "port": 5,
-            "<|endoftext|>": 6,
-        }
+        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
+        self.vocab += ["<|endoftext|>"]
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
         self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
         self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
@@ -55,66 +46,44 @@ class GPT2CausalLMTest(TestCase):
             intermediate_dim=8,
             max_sequence_length=self.preprocessor.packer.sequence_length,
         )
-        self.causal_lm = GPT2CausalLM(
-            backbone=self.backbone,
-            preprocessor=self.preprocessor,
+        self.init_kwargs = {
+            "preprocessor": self.preprocessor,
+            "backbone": self.backbone,
+        }
+        self.train_data = ([" airplane at airport", " airplane at airport"],)
+        self.input_data = self.preprocessor(*self.train_data)[0]
+
+    def test_causal_lm_basics(self):
+        self.run_task_test(
+            cls=GPT2CausalLM,
+            init_kwargs=self.init_kwargs,
+            train_data=self.train_data,
+            expected_output_shape=(2, 8, 7),
         )
-
-        self.raw_batch = [
-            " airplane at airport",
-            " airplane at airport",
-        ]
-        self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
-        self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            self.raw_batch
-        ).batch(2)
-        self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
-
-    def test_valid_call_causal_lm(self):
-        self.causal_lm(self.preprocessed_batch)
-
-    def test_predict(self):
-        self.causal_lm.predict(self.raw_batch)
-        self.causal_lm.preprocessor = None
-        self.causal_lm.predict(self.preprocessed_batch)
-
-    def test_fit(self):
-        self.causal_lm.fit(self.raw_dataset)
-        self.causal_lm.preprocessor = None
-        self.causal_lm.fit(self.preprocessed_dataset)
-
-    def test_fit_no_xla(self):
-        self.causal_lm.preprocessor = None
-        self.causal_lm.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),
-            jit_compile=False,
-        )
-        self.causal_lm.fit(self.preprocessed_dataset)
 
     def test_generate(self):
+        causal_lm = GPT2CausalLM(**self.init_kwargs)
         # String input.
         prompt = " airplane at airport"
-        output = self.causal_lm.generate(" airplane at airport")
+        output = causal_lm.generate(" airplane at airport")
         self.assertTrue(prompt in output)
-        # String tensor input.
-        self.assertIsInstance(self.causal_lm.generate(self.raw_batch)[0], str)
-        # String dataset input.
-        self.assertIsInstance(self.causal_lm.generate(self.raw_dataset)[0], str)
         # Int tensor input.
-        self.causal_lm.preprocessor = None
-        outputs = self.causal_lm.generate(self.preprocessed_batch)
+        prompt_ids = self.preprocessor.generate_preprocess([prompt])
+        causal_lm.preprocessor = None
+        outputs = causal_lm.generate(prompt_ids)
         # Assert prompt is in output in token id space.
         self.assertAllEqual(
             outputs["token_ids"][:, :5],
-            self.preprocessed_batch["token_ids"][:, :5],
+            prompt_ids["token_ids"][:, :5],
         )
         self.assertAllEqual(
             outputs["padding_mask"][:, :5],
-            self.preprocessed_batch["padding_mask"][:, :5],
+            prompt_ids["padding_mask"][:, :5],
         )
 
     def test_early_stopping(self):
-        call_with_cache = self.causal_lm.call_with_cache
+        causal_lm = GPT2CausalLM(**self.init_kwargs)
+        call_with_cache = causal_lm.call_with_cache
 
         def wrapper(*args, **kwargs):
             """Modify output logits to always favor end_token_id"""
@@ -125,43 +94,37 @@ class GPT2CausalLMTest(TestCase):
             logits = ops.slice_update(logits, (0, 0, index), update)
             return logits, hidden_states, cache
 
-        with patch.object(self.causal_lm, "call_with_cache", wraps=wrapper):
+        with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
             prompt = [" airplane at airport", " airplane"]
-            output = self.causal_lm.generate(prompt)
+            output = causal_lm.generate(prompt)
             # We should immediately abort and output the prompt.
             self.assertEqual(prompt, output)
 
     def test_generate_compilation(self):
+        causal_lm = GPT2CausalLM(**self.init_kwargs)
         # Assert we do not recompile with successive calls.
-        self.causal_lm.generate(self.raw_batch)
-        first_fn = self.causal_lm.generate_function
-        self.causal_lm.generate(self.raw_batch)
-        second_fn = self.causal_lm.generate_function
+        causal_lm.generate(" airplane at airport")
+        first_fn = causal_lm.generate_function
+        causal_lm.generate(" airplane at airport")
+        second_fn = causal_lm.generate_function
         self.assertEqual(first_fn, second_fn)
         # Assert we do recompile after compile is called.
-        self.causal_lm.compile(sampler="greedy")
-        self.assertIsNone(self.causal_lm.generate_function)
-
-    def test_serialization(self):
-        new_causal_lm = keras.saving.deserialize_keras_object(
-            keras.saving.serialize_keras_object(self.causal_lm)
-        )
-        self.assertEqual(
-            new_causal_lm.get_config(), self.causal_lm.get_config()
-        )
+        causal_lm.compile(sampler="greedy")
+        self.assertIsNone(causal_lm.generate_function)
 
     @pytest.mark.large
     def test_saved_model(self):
-        keras.utils.set_random_seed(42)
-        model_output = self.causal_lm.predict(self.raw_batch)
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        self.causal_lm.save(path, save_format="keras_v3")
-        restored_model = keras.models.load_model(path)
+        self.run_model_saving_test(
+            cls=GPT2CausalLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
 
-        # Check we got the real object back.
-        self.assertIsInstance(restored_model, GPT2CausalLM)
-
-        # Check that output matches.
-        keras.utils.set_random_seed(42)
-        restored_output = restored_model.predict(self.raw_batch)
-        self.assertAllClose(model_output, restored_output)
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in GPT2CausalLM.presets:
+            self.run_preset_test(
+                cls=GPT2CausalLM,
+                preset=preset,
+                input_data=self.input_data,
+            )

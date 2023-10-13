@@ -346,7 +346,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         # Test predict.
         output = task.predict(x)
-        if expected_output_shape:
+        if expected_output_shape is not None:
             output_shape = tree.map_structure(lambda x: x.shape, output)
             self.assertAllClose(output_shape, expected_output_shape)
         # With a dataset.
@@ -397,14 +397,14 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             )
             instance(input_data)
 
-        if expected_output:
+        if expected_output is not None:
             self.assertAllClose(output, expected_output)
 
-        if expected_output_shape:
+        if expected_output_shape is not None:
             output_shape = tree.map_structure(lambda x: x.shape, output)
             self.assertAllClose(output_shape, expected_output_shape)
 
-        if expected_partial_output:
+        if expected_partial_output is not None:
             # Allow passing a partial output snippet of the last dimension.
             # We want check stability, but the full output would be too long.
             def compare(actual, expected):
