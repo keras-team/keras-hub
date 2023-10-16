@@ -14,10 +14,9 @@
 
 import io
 
+import pytest
 import sentencepiece
-import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.models.f_net.f_net_masked_lm_preprocessor import (
     FNetMaskedLMPreprocessor,
 )
@@ -27,103 +26,77 @@ from keras_nlp.tests.test_case import TestCase
 
 class FNetMaskedLMPreprocessorTest(TestCase):
     def setUp(self):
+        vocab_data = ["the quick brown fox", "the earth is round"]
         bytes_io = io.BytesIO()
-        vocab_data = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox", "the earth is round"]
-        )
         sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=vocab_data.as_numpy_iterator(),
+            sentence_iterator=iter(vocab_data),
             model_writer=bytes_io,
             vocab_size=12,
             model_type="WORD",
             pad_id=0,
-            bos_id=1,
-            eos_id=2,
-            unk_id=3,
+            unk_id=1,
+            bos_id=2,
+            eos_id=3,
             pad_piece="<pad>",
             unk_piece="<unk>",
             bos_piece="[CLS]",
             eos_piece="[SEP]",
             user_defined_symbols="[MASK]",
         )
-        self.proto = bytes_io.getvalue()
+        self.tokenizer = FNetTokenizer(proto=bytes_io.getvalue())
+        self.init_kwargs = {
+            "tokenizer": self.tokenizer,
+            # Simplify our testing by masking every available token.
+            "mask_selection_rate": 1.0,
+            "mask_token_rate": 1.0,
+            "random_token_rate": 0.0,
+            "mask_selection_length": 4,
+            "sequence_length": 12,
+        }
+        self.input_data = ["the quick brown fox"]
 
-        self.preprocessor = FNetMaskedLMPreprocessor(
-            tokenizer=FNetTokenizer(proto=self.proto),
-            mask_selection_rate=1.0,
-            mask_token_rate=1.0,
-            random_token_rate=0.0,
-            mask_selection_length=4,
-            sequence_length=12,
+    def test_preprocessor_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=FNetMaskedLMPreprocessor,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output=(
+                {
+                    "token_ids": [[2, 4, 4, 4, 4, 3, 0, 0, 0, 0, 0, 0]],
+                    "segment_ids": [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+                    "mask_positions": [[1, 2, 3, 4]],
+                },
+                [[5, 10, 6, 8]],
+                [[1.0, 1.0, 1.0, 1.0]],
+            ),
         )
-
-    def test_preprocess_strings(self):
-        input_data = "the quick brown fox"
-
-        x, y, sw = self.preprocessor(input_data)
-        self.assertAllEqual(
-            x["token_ids"], [1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]
-        )
-        self.assertAllEqual(x["mask_positions"], [1, 2, 3, 4])
-        self.assertAllEqual(y, [5, 10, 6, 8])
-        self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0])
-
-    def test_preprocess_list_of_strings(self):
-        input_data = ["the quick brown fox"] * 4
-
-        x, y, sw = self.preprocessor(input_data)
-        self.assertAllEqual(
-            x["token_ids"], [[1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]] * 4
-        )
-        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4]] * 4)
-        self.assertAllEqual(y, [[5, 10, 6, 8]] * 4)
-        self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0]] * 4)
-
-    def test_preprocess_dataset(self):
-        sentences = tf.constant(["the quick brown fox"] * 4)
-        ds = tf.data.Dataset.from_tensor_slices(sentences)
-        ds = ds.map(self.preprocessor)
-        x, y, sw = ds.batch(4).take(1).get_single_element()
-        self.assertAllEqual(
-            x["token_ids"], [[1, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0]] * 4
-        )
-        self.assertAllEqual(x["mask_positions"], [[1, 2, 3, 4]] * 4)
-        self.assertAllEqual(y, [[5, 10, 6, 8]] * 4)
-        self.assertAllEqual(sw, [[1.0, 1.0, 1.0, 1.0]] * 4)
-
-    def test_mask_multiple_sentences(self):
-        sentence_one = tf.constant("the quick")
-        sentence_two = tf.constant("brown fox")
-
-        x, y, sw = self.preprocessor((sentence_one, sentence_two))
-        self.assertAllEqual(
-            x["token_ids"], [1, 4, 4, 2, 4, 4, 2, 0, 0, 0, 0, 0]
-        )
-        self.assertAllEqual(x["mask_positions"], [1, 2, 4, 5])
-        self.assertAllEqual(y, [5, 10, 6, 8])
-        self.assertAllEqual(sw, [1.0, 1.0, 1.0, 1.0])
 
     def test_no_masking_zero_rate(self):
         no_mask_preprocessor = FNetMaskedLMPreprocessor(
-            self.preprocessor.tokenizer,
+            self.tokenizer,
             mask_selection_rate=0.0,
             mask_selection_length=4,
             sequence_length=12,
         )
-        input_data = "the quick brown fox"
-
-        x, y, sw = no_mask_preprocessor(input_data)
-        self.assertAllEqual(
-            x["token_ids"], [1, 5, 10, 6, 8, 2, 0, 0, 0, 0, 0, 0]
+        input_data = ["the quick brown fox"]
+        self.assertAllClose(
+            no_mask_preprocessor(input_data),
+            (
+                {
+                    "token_ids": [[2, 5, 10, 6, 8, 3, 0, 0, 0, 0, 0, 0]],
+                    "segment_ids": [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+                    "mask_positions": [[0, 0, 0, 0]],
+                },
+                [[0, 0, 0, 0]],
+                [[0.0, 0.0, 0.0, 0.0]],
+            ),
         )
-        self.assertAllEqual(x["mask_positions"], [0, 0, 0, 0])
-        self.assertAllEqual(y, [0, 0, 0, 0])
-        self.assertAllEqual(sw, [0.0, 0.0, 0.0, 0.0])
 
-    def test_serialization(self):
-        config = keras.saving.serialize_keras_object(self.preprocessor)
-        new_preprocessor = keras.saving.deserialize_keras_object(config)
-        self.assertEqual(
-            new_preprocessor.get_config(),
-            self.preprocessor.get_config(),
-        )
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in FNetMaskedLMPreprocessor.presets:
+            self.run_preset_test(
+                cls=FNetMaskedLMPreprocessor,
+                preset=preset,
+                input_data=self.input_data,
+            )

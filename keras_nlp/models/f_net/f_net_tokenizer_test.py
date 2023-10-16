@@ -16,57 +16,40 @@ import io
 
 import pytest
 import sentencepiece
-import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class FNetTokenizerTest(TestCase):
     def setUp(self):
+        vocab_data = ["the quick brown fox", "the earth is round"]
         bytes_io = io.BytesIO()
-        vocab_data = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox", "the earth is round"]
-        )
         sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=vocab_data.as_numpy_iterator(),
+            sentence_iterator=iter(vocab_data),
             model_writer=bytes_io,
             vocab_size=12,
             model_type="WORD",
-            pad_id=3,
-            unk_id=0,
-            bos_id=4,
-            eos_id=5,
+            pad_id=0,
+            unk_id=1,
+            bos_id=2,
+            eos_id=3,
             pad_piece="<pad>",
             unk_piece="<unk>",
             bos_piece="[CLS]",
             eos_piece="[SEP]",
             user_defined_symbols="[MASK]",
         )
-        self.proto = bytes_io.getvalue()
+        self.init_kwargs = {"proto": bytes_io.getvalue()}
+        self.input_data = ["the quick brown fox.", "the earth is round."]
 
-        self.tokenizer = FNetTokenizer(proto=self.proto)
-
-    def test_tokenize(self):
-        input_data = "the quick brown fox"
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [2, 10, 6, 8])
-
-    def test_tokenize_batch(self):
-        input_data = ["the quick brown fox", "the earth is round"]
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[2, 10, 6, 8], [2, 7, 9, 11]])
-
-    def test_detokenize(self):
-        input_data = [[2, 10, 6, 8]]
-        output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, ["the quick brown fox"])
-
-    def test_vocabulary_size(self):
-        tokenizer = FNetTokenizer(proto=self.proto)
-        self.assertEqual(tokenizer.vocabulary_size(), 12)
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=FNetTokenizer,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output=[[5, 10, 6, 1], [5, 7, 9, 1]],
+        )
 
     def test_errors_missing_special_tokens(self):
         bytes_io = io.BytesIO()
@@ -81,10 +64,20 @@ class FNetTokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             FNetTokenizer(proto=bytes_io.getvalue())
 
-    def test_serialization(self):
-        config = keras.saving.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.saving.deserialize_keras_object(config)
-        self.assertEqual(
-            new_tokenizer.get_config(),
-            self.tokenizer.get_config(),
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=FNetTokenizer,
+            preset="f_net_base_en",
+            input_data=["The quick brown fox."],
+            expected_output=[[97, 1467, 5187, 26, 2521, 16678]],
         )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in FNetTokenizer.presets:
+            self.run_preset_test(
+                cls=FNetTokenizer,
+                preset=preset,
+                input_data=self.input_data,
+            )
