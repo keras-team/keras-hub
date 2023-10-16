@@ -14,24 +14,21 @@
 
 import io
 
+import pytest
 import sentencepiece
-import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
 class DebertaV3TokenizerTest(TestCase):
     def setUp(self):
+        vocab_data = ["the quick brown fox", "the earth is round"]
         bytes_io = io.BytesIO()
-        vocab_data = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox", "the earth is round"]
-        )
         sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=vocab_data.as_numpy_iterator(),
+            sentence_iterator=iter(vocab_data),
             model_writer=bytes_io,
-            vocab_size=10,
+            vocab_size=11,
             model_type="WORD",
             pad_id=0,
             bos_id=1,
@@ -42,41 +39,17 @@ class DebertaV3TokenizerTest(TestCase):
             eos_piece="[SEP]",
             unk_piece="[UNK]",
         )
-        self.proto = bytes_io.getvalue()
+        self.tokenizer = DebertaV3Tokenizer(proto=bytes_io.getvalue())
+        self.init_kwargs = {"proto": bytes_io.getvalue()}
+        self.input_data = ["the quick brown fox.", "the earth is round."]
 
-        self.tokenizer = DebertaV3Tokenizer(proto=self.proto)
-
-    def test_tokenize(self):
-        input_data = "the quick brown fox"
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [4, 9, 5, 7])
-
-    def test_tokenize_batch(self):
-        input_data = ["the quick brown fox", "the earth is round"]
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[4, 9, 5, 7], [4, 6, 8, 3]])
-
-    def test_detokenize(self):
-        input_data = [[4, 9, 5, 7]]
-        output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, ["the quick brown fox"])
-
-    def test_detokenize_mask_token(self):
-        input_data = [[4, 9, 5, 7, self.tokenizer.mask_token_id]]
-        output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, ["the quick brown fox"])
-
-    def test_vocabulary_size(self):
-        self.assertEqual(self.tokenizer.vocabulary_size(), 11)
-
-    def test_get_vocabulary_mask_token(self):
-        self.assertEqual(self.tokenizer.get_vocabulary()[10], "[MASK]")
-
-    def test_id_to_token_mask_token(self):
-        self.assertEqual(self.tokenizer.id_to_token(10), "[MASK]")
-
-    def test_token_to_id_mask_token(self):
-        self.assertEqual(self.tokenizer.token_to_id("[MASK]"), 10)
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=DebertaV3Tokenizer,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output=[[4, 9, 5, 3], [4, 6, 8, 3]],
+        )
 
     def test_errors_missing_special_tokens(self):
         bytes_io = io.BytesIO()
@@ -91,10 +64,29 @@ class DebertaV3TokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             DebertaV3Tokenizer(proto=bytes_io.getvalue())
 
-    def test_serialization(self):
-        config = keras.saving.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.saving.deserialize_keras_object(config)
-        self.assertEqual(
-            new_tokenizer.get_config(),
-            self.tokenizer.get_config(),
+    def test_mask_token_handling(self):
+        tokenizer = DebertaV3Tokenizer(**self.init_kwargs)
+        self.assertEqual(tokenizer.get_vocabulary()[11], "[MASK]")
+        self.assertEqual(tokenizer.id_to_token(11), "[MASK]")
+        self.assertEqual(tokenizer.token_to_id("[MASK]"), 11)
+        input_data = [[4, 9, 5, 7, self.tokenizer.mask_token_id]]
+        output = tokenizer.detokenize(input_data)
+        self.assertEqual(output, ["the quick brown fox"])
+
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=DebertaV3Tokenizer,
+            preset="deberta_v3_extra_small_en",
+            input_data=["The quick brown fox."],
+            expected_output=[[279, 1538, 3258, 16123, 260]],
         )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in DebertaV3Tokenizer.presets:
+            self.run_preset_test(
+                cls=DebertaV3Tokenizer,
+                preset=preset,
+                input_data=self.input_data,
+            )
