@@ -14,22 +14,19 @@
 
 import io
 
+import pytest
 import sentencepiece
-import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
 class AlbertTokenizerTest(TestCase):
     def setUp(self):
+        vocab_data = ["the quick brown fox", "the earth is round"]
         bytes_io = io.BytesIO()
-        vocab_data = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox", "the earth is round"]
-        )
         sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=vocab_data.as_numpy_iterator(),
+            sentence_iterator=iter(vocab_data),
             model_writer=bytes_io,
             vocab_size=12,
             model_type="WORD",
@@ -43,28 +40,16 @@ class AlbertTokenizerTest(TestCase):
             eos_piece="[SEP]",
             user_defined_symbols="[MASK]",
         )
-        self.proto = bytes_io.getvalue()
+        self.init_kwargs = {"proto": bytes_io.getvalue()}
+        self.input_data = ["the quick brown fox.", "the earth is round."]
 
-        self.tokenizer = AlbertTokenizer(proto=self.proto)
-
-    def test_tokenize(self):
-        input_data = "the quick brown fox"
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [5, 10, 6, 8])
-
-    def test_tokenize_batch(self):
-        input_data = ["the quick brown fox", "the earth is round"]
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[5, 10, 6, 8], [5, 7, 9, 11]])
-
-    def test_detokenize(self):
-        input_data = [[5, 10, 6, 8]]
-        output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, ["the quick brown fox"])
-
-    def test_vocabulary_size(self):
-        tokenizer = AlbertTokenizer(proto=self.proto)
-        self.assertEqual(tokenizer.vocabulary_size(), 12)
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=AlbertTokenizer,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output=[[5, 10, 6, 1], [5, 7, 9, 1]],
+        )
 
     def test_errors_missing_special_tokens(self):
         bytes_io = io.BytesIO()
@@ -79,10 +64,20 @@ class AlbertTokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             AlbertTokenizer(proto=bytes_io.getvalue())
 
-    def test_serialization(self):
-        config = keras.saving.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.saving.deserialize_keras_object(config)
-        self.assertEqual(
-            new_tokenizer.get_config(),
-            self.tokenizer.get_config(),
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=AlbertTokenizer,
+            preset="albert_base_en_uncased",
+            input_data=["The quick brown fox."],
+            expected_output=[[13, 1, 438, 2231, 886, 2385, 9]],
         )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in AlbertTokenizer.presets:
+            self.run_preset_test(
+                cls=AlbertTokenizer,
+                preset=preset,
+                input_data=self.input_data,
+            )
