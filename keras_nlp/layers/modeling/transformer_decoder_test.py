@@ -27,7 +27,7 @@ class TransformerDecoderTest(TestCase):
     )
     def test_layer_behaviors(self, normalize_first):
         self.run_layer_test(
-            layer_cls=TransformerDecoder,
+            cls=TransformerDecoder,
             init_kwargs={
                 "intermediate_dim": 4,
                 "num_heads": 2,
@@ -50,7 +50,7 @@ class TransformerDecoderTest(TestCase):
     def test_layer_behaviors_with_cross_attention(self, normalize_first):
         pass
         self.run_layer_test(
-            layer_cls=TransformerDecoder,
+            cls=TransformerDecoder,
             init_kwargs={
                 "intermediate_dim": 4,
                 "num_heads": 2,

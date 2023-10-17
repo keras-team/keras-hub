@@ -63,7 +63,7 @@ def convert_to_backend_tensor_or_python_list(x):
     If we encounter one of these types in torch or jax, we will instead covert
     the tensor to simple pythonic types (lists of strings).
     """
-    if isinstance(x, tf.RaggedTensor) or x.dtype == tf.string:
+    if isinstance(x, tf.RaggedTensor) or getattr(x, "dtype", None) == tf.string:
         return tensor_to_list(x)
     return ops.convert_to_tensor(x)
 

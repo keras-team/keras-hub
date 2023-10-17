@@ -32,7 +32,7 @@ class ReversibleEmbeddingTest(TestCase):
     )
     def test_layer_behaviors_tied(self, tie_weights):
         self.run_layer_test(
-            layer_cls=ReversibleEmbedding,
+            cls=ReversibleEmbedding,
             init_kwargs={
                 "input_dim": 100,
                 "output_dim": 32,

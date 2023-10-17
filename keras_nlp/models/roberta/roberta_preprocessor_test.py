@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tensorflow as tf
+import pytest
 
-from keras_nlp.backend import keras
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.tests.test_case import TestCase
@@ -22,123 +21,51 @@ from keras_nlp.tests.test_case import TestCase
 
 class RobertaPreprocessorTest(TestCase):
     def setUp(self):
-        vocab = {
-            "<s>": 0,
-            "<pad>": 1,
-            "</s>": 2,
-            "Ġair": 3,
-            "plane": 4,
-            "Ġat": 5,
-            "port": 6,
-            "Ġkoh": 7,
-            "li": 8,
-            "Ġis": 9,
-            "Ġthe": 10,
-            "Ġbest": 11,
-            "<mask>": 12,
+        self.vocab = ["<s>", "<pad>", "</s>", "air", "Ġair", "plane", "Ġat"]
+        self.vocab += ["port", "<mask>"]
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.tokenizer = RobertaTokenizer(
+            vocabulary=self.vocab, merges=self.merges
+        )
+        self.init_kwargs = {
+            "tokenizer": self.tokenizer,
+            "sequence_length": 8,
         }
+        self.input_data = (
+            [" airplane at airport"],
+            [1],  # Pass through labels.
+            [1.0],  # Pass through sample_weights.
+        )
 
-        merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
-        merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
-        merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
-        merges += ["pla ne"]
-
-        self.preprocessor = RobertaPreprocessor(
-            tokenizer=RobertaTokenizer(
-                vocabulary=vocab,
-                merges=merges,
+    def test_preprocessor_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=RobertaPreprocessor,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output=(
+                {
+                    "token_ids": [[0, 4, 5, 6, 4, 7, 2, 1]],
+                    "padding_mask": [[1, 1, 1, 1, 1, 1, 1, 0]],
+                },
+                [1],  # Pass through labels.
+                [1.0],  # Pass through sample_weights.
             ),
-            sequence_length=12,
-        )
-
-    def test_tokenize_strings(self):
-        input_data = " airplane at airport"
-
-        output = self.preprocessor(input_data)
-        self.assertAllEqual(
-            output["token_ids"], [0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]
-        )
-        self.assertAllEqual(
-            output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]
-        )
-
-    def test_tokenize_list_of_strings(self):
-        input_data = [" airplane at airport"] * 4
-
-        output = self.preprocessor(input_data)
-        self.assertAllEqual(
-            output["token_ids"],
-            [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]] * 4,
-        )
-
-        self.assertAllEqual(
-            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
-        )
-
-    def test_tokenize_labeled_batch(self):
-        x = tf.constant([" airplane at airport"] * 4)
-        y = tf.constant([1] * 4)
-        sw = tf.constant([1.0] * 4)
-        x_out, y_out, sw_out = self.preprocessor(x, y, sw)
-        self.assertAllEqual(
-            x_out["token_ids"], [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]] * 4
-        )
-        self.assertAllEqual(
-            x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
-        )
-        self.assertAllEqual(y_out, y)
-        self.assertAllEqual(sw_out, sw)
-
-    def test_tokenize_labeled_dataset(self):
-        x = tf.constant([" airplane at airport"] * 4)
-        y = tf.constant([1] * 4)
-        sw = tf.constant([1.0] * 4)
-        ds = tf.data.Dataset.from_tensor_slices((x, y, sw))
-        ds = ds.map(self.preprocessor)
-        x_out, y_out, sw_out = ds.batch(4).take(1).get_single_element()
-        self.assertAllEqual(
-            x_out["token_ids"], [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1, 1, 1]] * 4
-        )
-        self.assertAllEqual(
-            x_out["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0]] * 4
-        )
-        self.assertAllEqual(y_out, y)
-        self.assertAllEqual(sw_out, sw)
-
-    def test_tokenize_multiple_sentences(self):
-        sentence_one = tf.constant(" airplane at airport")
-        sentence_two = tf.constant(" kohli is the best")
-
-        output = self.preprocessor((sentence_one, sentence_two))
-        self.assertAllEqual(
-            output["token_ids"], [0, 3, 4, 5, 3, 2, 2, 7, 8, 9, 10, 2]
-        )
-        self.assertAllEqual(
-            output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-        )
-
-    def test_tokenize_multiple_batched_sentences(self):
-        sentence_one = tf.constant([" airplane at airport"] * 4)
-        sentence_two = tf.constant([" kohli is the best"] * 4)
-
-        output = self.preprocessor((sentence_one, sentence_two))
-        self.assertAllEqual(
-            output["token_ids"],
-            [[0, 3, 4, 5, 3, 2, 2, 7, 8, 9, 10, 2]] * 4,
-        )
-        self.assertAllEqual(
-            output["padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]] * 4
         )
 
     def test_errors_for_2d_list_input(self):
+        preprocessor = RobertaPreprocessor(**self.init_kwargs)
         ambiguous_input = [["one", "two"], ["three", "four"]]
         with self.assertRaises(ValueError):
-            self.preprocessor(ambiguous_input)
+            preprocessor(ambiguous_input)
 
-    def test_serialization(self):
-        config = keras.saving.serialize_keras_object(self.preprocessor)
-        new_preprocessor = keras.saving.deserialize_keras_object(config)
-        self.assertEqual(
-            new_preprocessor.get_config(),
-            self.preprocessor.get_config(),
-        )
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in RobertaPreprocessor.presets:
+            self.run_preset_test(
+                cls=RobertaPreprocessor,
+                preset=preset,
+                input_data=self.input_data,
+            )

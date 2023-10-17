@@ -31,7 +31,7 @@ def custom_init(shape, dtype=None):
 class PositionEmbeddingTest(TestCase):
     def test_layer_behaviors(self):
         self.run_layer_test(
-            layer_cls=PositionEmbedding,
+            cls=PositionEmbedding,
             init_kwargs={
                 "sequence_length": 21,
             },
@@ -42,7 +42,7 @@ class PositionEmbeddingTest(TestCase):
 
     def test_layer_behaviors_4d(self):
         self.run_layer_test(
-            layer_cls=PositionEmbedding,
+            cls=PositionEmbedding,
             init_kwargs={
                 "sequence_length": 21,
             },

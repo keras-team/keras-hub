@@ -13,13 +13,10 @@
 # limitations under the License.
 
 import io
-import os
 
 import pytest
 import sentencepiece
-import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_masked_lm import FNetMaskedLM
 from keras_nlp.models.f_net.f_net_masked_lm_preprocessor import (
@@ -31,29 +28,26 @@ from keras_nlp.tests.test_case import TestCase
 
 class FNetMaskedLMTest(TestCase):
     def setUp(self):
-        # Setup Model.
+        # Setup model.
+        vocab_data = ["the quick brown fox", "the earth is round"]
         bytes_io = io.BytesIO()
-        vocab_data = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox", "the slow brown fox"]
-        )
         sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=vocab_data.as_numpy_iterator(),
+            sentence_iterator=iter(vocab_data),
             model_writer=bytes_io,
-            vocab_size=5,
+            vocab_size=12,
             model_type="WORD",
             pad_id=0,
-            bos_id=1,
-            eos_id=2,
-            unk_id=3,
+            unk_id=1,
+            bos_id=2,
+            eos_id=3,
             pad_piece="<pad>",
             unk_piece="<unk>",
             bos_piece="[CLS]",
             eos_piece="[SEP]",
             user_defined_symbols="[MASK]",
         )
-        self.proto = bytes_io.getvalue()
         self.preprocessor = FNetMaskedLMPreprocessor(
-            FNetTokenizer(proto=self.proto),
+            FNetTokenizer(proto=bytes_io.getvalue()),
             # Simplify our testing by masking every available token.
             mask_selection_rate=1.0,
             mask_token_rate=1.0,
@@ -68,60 +62,36 @@ class FNetMaskedLMTest(TestCase):
             intermediate_dim=4,
             max_sequence_length=self.preprocessor.packer.sequence_length,
         )
-        self.masked_lm = FNetMaskedLM(
-            self.backbone,
-            preprocessor=self.preprocessor,
+        self.init_kwargs = {
+            "preprocessor": self.preprocessor,
+            "backbone": self.backbone,
+        }
+        self.train_data = (
+            ["the quick brown fox.", "the slow brown fox."],  # Features.
         )
+        self.input_data = self.preprocessor(*self.train_data)[0]
 
-        self.raw_batch = [
-            "the quick brown fox",
-            "the slow brown fox",
-        ]
-        self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
-        self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            self.raw_batch
-        ).batch(2)
-        self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
-
-    def test_valid_call_classifier(self):
-        self.masked_lm(self.preprocessed_batch)
-
-    def test_predict(self):
-        # self.masked_lm.predict(self.raw_batch)
-        self.masked_lm.preprocessor = None
-        self.masked_lm.predict(self.preprocessed_batch)
-
-    def test_fit(self):
-        self.masked_lm.fit(self.raw_dataset)
-        self.masked_lm.preprocessor = None
-        self.masked_lm.fit(self.preprocessed_dataset)
-
-    def test_fit_no_xla(self):
-        self.masked_lm.preprocessor = None
-        self.masked_lm.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False),
-            jit_compile=False,
-        )
-        self.masked_lm.fit(self.preprocessed_dataset)
-
-    def test_serialization(self):
-        config = keras.saving.serialize_keras_object(self.masked_lm)
-        new_classifier = keras.saving.deserialize_keras_object(config)
-        self.assertEqual(
-            new_classifier.get_config(),
-            self.masked_lm.get_config(),
+    def test_masked_lm_basics(self):
+        self.run_task_test(
+            cls=FNetMaskedLM,
+            init_kwargs=self.init_kwargs,
+            train_data=self.train_data,
+            expected_output_shape=(2, 5, 12),
         )
 
     @pytest.mark.large
     def test_saved_model(self):
-        model_output = self.masked_lm.predict(self.raw_batch)
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        self.masked_lm.save(path, save_format="keras_v3")
-        restored_model = keras.models.load_model(path)
+        self.run_model_saving_test(
+            cls=FNetMaskedLM,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+        )
 
-        # Check we got the real object back.
-        self.assertIsInstance(restored_model, FNetMaskedLM)
-
-        # Check that output matches.
-        restored_output = restored_model.predict(self.raw_batch)
-        self.assertAllClose(model_output, restored_output, atol=0.01, rtol=0.01)
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in FNetMaskedLM.presets:
+            self.run_preset_test(
+                cls=FNetMaskedLM,
+                preset=preset,
+                input_data=self.input_data,
+            )

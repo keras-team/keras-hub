@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import json
+import os
+import re
 
 import tensorflow as tf
 import tree
@@ -74,7 +76,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
     def run_layer_test(
         self,
-        layer_cls,
+        cls,
         init_kwargs,
         input_data,
         expected_output_shape,
@@ -85,9 +87,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         run_training_check=True,
         run_mixed_precision_check=True,
     ):
+        """Run basic tests for a modeling layer."""
         # Serialization test.
-        layer = layer_cls(**init_kwargs)
-        self.run_class_serialization_test(layer)
+        layer = cls(**init_kwargs)
+        self.run_serialization_test(layer)
 
         def run_build_asserts(layer):
             self.assertTrue(layer.built)
@@ -143,7 +146,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         if config.multi_backend():
             # Build test.
-            layer = layer_cls(**init_kwargs)
+            layer = cls(**init_kwargs)
             if isinstance(input_data, dict):
                 shapes = {k + "_shape": v.shape for k, v in input_data.items()}
                 layer.build(**shapes)
@@ -155,7 +158,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             keras_tensor_inputs = tree.map_structure(
                 lambda x: keras.KerasTensor(x.shape, x.dtype), input_data
             )
-            layer = layer_cls(**init_kwargs)
+            layer = cls(**init_kwargs)
             if isinstance(keras_tensor_inputs, dict):
                 keras_tensor_outputs = layer(**keras_tensor_inputs)
             else:
@@ -164,7 +167,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             run_output_asserts(layer, keras_tensor_outputs)
 
         # Eager call test and compiled training test.
-        layer = layer_cls(**init_kwargs)
+        layer = cls(**init_kwargs)
         if isinstance(input_data, dict):
             output_data = layer(**input_data)
         else:
@@ -181,7 +184,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             run_mixed_precision_check = torch.cuda.is_available()
 
         if run_mixed_precision_check:
-            layer = layer_cls(**{**init_kwargs, "dtype": "mixed_float16"})
+            layer = cls(**{**init_kwargs, "dtype": "mixed_float16"})
             if isinstance(input_data, dict):
                 output_data = layer(**input_data)
             else:
@@ -193,7 +196,43 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 if is_float_dtype(weight.dtype):
                     self.assertDTypeEqual(weight, "float32")
 
-    def run_class_serialization_test(self, instance):
+    def run_preprocessing_layer_test(
+        self,
+        cls,
+        init_kwargs,
+        input_data,
+        expected_output=None,
+        batch_size=2,
+    ):
+        """Run basic tests for a preprocessing layer."""
+        layer = cls(**init_kwargs)
+        # Check serialization (without a full save).
+        self.run_serialization_test(layer)
+
+        ds = tf.data.Dataset.from_tensor_slices(input_data)
+
+        # Run with direct call.
+        if isinstance(input_data, tuple):
+            # Mimic tf.data unpacking behavior for preprocessing layers.
+            output = layer(*input_data)
+        else:
+            output = layer(input_data)
+
+        # Run with an unbatched dataset.
+        output_ds = ds.map(layer).ragged_batch(1_000)
+        self.assertAllClose(output, output_ds.get_single_element())
+
+        # Run with a batched dataset.
+        output_ds = ds.batch(1_000).map(layer)
+        self.assertAllClose(output, output_ds.get_single_element())
+
+        if expected_output:
+            self.assertAllClose(output, expected_output)
+
+    def run_serialization_test(self, instance):
+        """Check idempotency of serialize/deserialize.
+
+        Not this is a much faster test than saving."""
         # get_config roundtrip
         cls = instance.__class__
         cfg = instance.get_config()
@@ -223,3 +262,158 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 if "__annotations__" in lst:
                     lst.remove("__annotations__")
             self.assertEqual(ref_dir, new_dir)
+
+    def run_model_saving_test(
+        self,
+        cls,
+        init_kwargs,
+        input_data,
+    ):
+        """Save and load a model from disk and assert output is unchanged."""
+        model = cls(**init_kwargs)
+        model_output = model(input_data)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
+        restored_model = keras.models.load_model(path)
+
+        # Check we got the real object back.
+        self.assertIsInstance(restored_model, cls)
+
+        # Check that output matches.
+        restored_output = restored_model(input_data)
+        self.assertAllClose(model_output, restored_output)
+
+    def run_backbone_test(
+        self,
+        cls,
+        init_kwargs,
+        input_data,
+        expected_output_shape,
+        variable_length_data=None,
+    ):
+        """Run basic tests for a backbone, including compilation."""
+        backbone = cls(**init_kwargs)
+        # Check serialization (without a full save).
+        self.run_serialization_test(backbone)
+
+        # Call model eagerly.
+        output = backbone(input_data)
+        if isinstance(expected_output_shape, dict):
+            for key in expected_output_shape:
+                self.assertEqual(output[key].shape, expected_output_shape[key])
+        else:
+            self.assertEqual(output.shape, expected_output_shape)
+
+        # Check we can embed tokens eagerly.
+        output = backbone.token_embedding(ops.zeros((2, 3), dtype="int32"))
+
+        # Check variable length sequences.
+        if variable_length_data is None:
+            # If no variable length data passed, assume the second axis of all
+            # inputs is our sequence axis and create it ourselves.
+            variable_length_data = [
+                tree.map_structure(lambda x: x[:, :seq_length, ...], input_data)
+                for seq_length in (2, 3, 4)
+            ]
+        for batch in variable_length_data:
+            backbone(batch)
+
+        # Check compiled predict function.
+        backbone.predict(input_data)
+        # Convert to numpy first, torch GPU tensor -> tf.data will error.
+        numpy_data = tree.map_structure(ops.convert_to_numpy, input_data)
+        # Create a dataset.
+        input_dataset = tf.data.Dataset.from_tensor_slices(numpy_data).batch(2)
+        backbone.predict(input_dataset)
+
+        # Check name maps to classname.
+        name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", cls.__name__)
+        name = re.sub("([a-z])([A-Z])", r"\1_\2", name).lower()
+        self.assertRegexpMatches(backbone.name, name)
+
+    def run_task_test(
+        self,
+        cls,
+        init_kwargs,
+        train_data,
+        expected_output_shape=None,
+        batch_size=2,
+    ):
+        """Run basic tests for a backbone, including compilation."""
+        task = cls(**init_kwargs)
+        # Check serialization (without a full save).
+        self.run_serialization_test(task)
+        preprocessor = task.preprocessor
+        ds = tf.data.Dataset.from_tensor_slices(train_data).batch(batch_size)
+        x, y, sw = keras.utils.unpack_x_y_sample_weight(train_data)
+
+        # Test predict.
+        output = task.predict(x)
+        if expected_output_shape is not None:
+            output_shape = tree.map_structure(lambda x: x.shape, output)
+            self.assertAllClose(output_shape, expected_output_shape)
+        # With a dataset.
+        output_ds = task.predict(ds)
+        self.assertAllClose(output, output_ds)
+        # With split preprocessing.
+        task.preprocessor = None
+        output_split = task.predict(ds.map(preprocessor))
+        task.preprocessor = preprocessor
+        self.assertAllClose(output, output_split)
+
+        # Test fit.
+        task.fit(x, y, sample_weight=sw)
+        # With a dataset.
+        task.fit(ds)
+        # With split preprocessing.
+        task.preprocessor = None
+        task.fit(ds.map(preprocessor))
+        task.preprocessor = preprocessor
+
+    def run_preset_test(
+        self,
+        cls,
+        preset,
+        input_data,
+        init_kwargs={},
+        expected_output=None,
+        expected_output_shape=None,
+        expected_partial_output=None,
+    ):
+        """Run instantiation and a forward pass for a preset."""
+        self.assertRegex(cls.from_preset.__doc__, preset)
+
+        with self.assertRaises(ValueError):
+            cls.from_preset("clowntown", **init_kwargs)
+
+        instance = cls.from_preset(preset, **init_kwargs)
+
+        if isinstance(input_data, tuple):
+            # Mimic tf.data unpacking behavior for preprocessing layers.
+            output = instance(*input_data)
+        else:
+            output = instance(input_data)
+
+        if isinstance(instance, keras.Model):
+            instance = cls.from_preset(
+                preset, load_weights=False, **init_kwargs
+            )
+            instance(input_data)
+
+        if expected_output is not None:
+            self.assertAllClose(output, expected_output)
+
+        if expected_output_shape is not None:
+            output_shape = tree.map_structure(lambda x: x.shape, output)
+            self.assertAllClose(output_shape, expected_output_shape)
+
+        if expected_partial_output is not None:
+            # Allow passing a partial output snippet of the last dimension.
+            # We want check stability, but the full output would be too long.
+            def compare(actual, expected):
+                expected = ops.convert_to_numpy(expected)
+                self.assertEqual(len(expected.shape), 1)
+                actual = ops.reshape(actual, (-1,))[: expected.shape[0]]
+                self.assertAllClose(actual, expected, atol=0.01, rtol=0.01)
+
+            tree.map_structure(compare, output, expected_partial_output)
