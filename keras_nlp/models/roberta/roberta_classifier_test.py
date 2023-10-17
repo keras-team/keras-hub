@@ -48,7 +48,7 @@ class RobertaClassifierTest(TestCase):
             "num_classes": 2,
         }
         self.train_data = (
-            ["the quick brown fox.", "the slow brown fox."],  # Features.
+            [" airplane at airport", " airplane airport"],  # Features.
             [1, 0],  # Labels.
         )
         self.input_data = self.preprocessor(*self.train_data)[0]
