@@ -14,10 +14,9 @@
 
 import io
 
+import pytest
 import sentencepiece
-import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
 )
@@ -26,88 +25,43 @@ from keras_nlp.tests.test_case import TestCase
 
 class XLMRobertaTokenizerTest(TestCase):
     def setUp(self):
+        vocab_data = ["the quick brown fox", "the earth is round"]
         bytes_io = io.BytesIO()
-        vocab_data = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox", "the earth is round"]
-        )
         sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=vocab_data.as_numpy_iterator(),
+            sentence_iterator=iter(vocab_data),
             model_writer=bytes_io,
-            vocab_size=10,
+            vocab_size=11,
             model_type="WORD",
             unk_id=0,
             bos_id=1,
             eos_id=2,
+            user_defined_symbols="[MASK]",
         )
-        self.proto = bytes_io.getvalue()
+        self.init_kwargs = {"proto": bytes_io.getvalue()}
+        self.input_data = ["the quick brown fox.", "the earth is round."]
 
-        self.tokenizer = XLMRobertaTokenizer(proto=self.proto)
-
-    def test_tokenize(self):
-        input_data = "the quick brown fox"
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [4, 9, 5, 7])
-
-    def test_tokenize_batch(self):
-        input_data = ["the quick brown fox", "the earth is round"]
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[4, 9, 5, 7], [4, 6, 8, 10]])
-
-    def test_unk_token(self):
-        input_data = "the quick brown fox running"
-
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [4, 9, 5, 7, 3])
-
-    def test_detokenize(self):
-        input_data = [[4, 9, 5, 7]]
-        output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, ["brown round earth is"])
-
-    def test_vocabulary(self):
-        vocabulary = self.tokenizer.get_vocabulary()
-        self.assertAllEqual(
-            vocabulary,
-            [
-                "<s>",
-                "<pad>",
-                "</s>",
-                "<unk>",
-                "▁the",
-                "▁brown",
-                "▁earth",
-                "▁fox",
-                "▁is",
-                "▁quick",
-                "▁round",
-                "<mask>",
-            ],
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=XLMRobertaTokenizer,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output=[[5, 10, 6, 3], [5, 7, 9, 3]],
         )
-        self.assertEqual(self.tokenizer.vocabulary_size(), 12)
 
-    def test_id_to_token(self):
-        print(self.tokenizer.id_to_token(9))
-        self.assertEqual(self.tokenizer.id_to_token(9), "▁quick")
-        self.assertEqual(self.tokenizer.id_to_token(5), "▁brown")
-
-    def test_error_id_out_of_vocabulary(self):
-        with self.assertRaises(ValueError):
-            self.tokenizer.id_to_token(self.tokenizer.vocabulary_size())
-        with self.assertRaises(ValueError):
-            self.tokenizer.id_to_token(-1)
-
-    def test_token_to_id(self):
-        self.assertEqual(self.tokenizer.token_to_id("▁the"), 4)
-        self.assertEqual(self.tokenizer.token_to_id("▁round"), 10)
-        # Test any random OOV token.
-        self.assertEqual(self.tokenizer.token_to_id("<oov-token>"), 3)
-        # Test a special token.
-        self.assertEqual(self.tokenizer.token_to_id("<pad>"), 1)
-
-    def test_serialization(self):
-        config = keras.saving.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.saving.deserialize_keras_object(config)
-        self.assertEqual(
-            new_tokenizer.get_config(),
-            self.tokenizer.get_config(),
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=XLMRobertaTokenizer,
+            preset="xlm_roberta_base_multi",
+            input_data=["The quick brown fox."],
+            expected_output=[[581, 63773, 119455, 6, 147797, 5]],
         )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in XLMRobertaTokenizer.presets:
+            self.run_preset_test(
+                cls=XLMRobertaTokenizer,
+                preset=preset,
+                input_data=self.input_data,
+            )
