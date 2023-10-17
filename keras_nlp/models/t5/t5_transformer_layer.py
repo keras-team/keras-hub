@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tensorflow as tf
-
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.transformer_layer_utils import (
     compute_causal_mask,
@@ -21,6 +19,7 @@ from keras_nlp.layers.modeling.transformer_layer_utils import (
 from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.models.t5.t5_multi_head_attention import T5MultiHeadAttention
 
+from keras_nlp.backend import ops
 
 class T5TransformerLayer(keras.layers.Layer):
     def __init__(
@@ -92,6 +91,22 @@ class T5TransformerLayer(keras.layers.Layer):
         self.layer_norm = T5LayerNorm(epsilon=layer_norm_epsilon)
         self.dropout_layer = keras.layers.Dropout(dropout)
 
+    def build(self, input_shape):
+        self.self_attention_layer_norm.build(input_shape)
+        self.self_attention.build(input_shape)
+        self.self_attention_dropout.build(input_shape)
+        if self.is_decoder:
+            self.cross_attention.build(input_shape)
+            self.cross_attention_layer_norm.build(input_shape)
+            self.cross_attention_dropout.build(input_shape)
+        if self.use_gated_activation:
+            self.gate_projector.build(input_shape)
+        self.output_projector.build(input_shape)
+        self.layer_norm.build(input_shape)
+        self.dropout_layer.build(input_shape)
+        self.built = True
+
+
     def call(
         self,
         hidden_states,
@@ -103,10 +118,10 @@ class T5TransformerLayer(keras.layers.Layer):
         training=False,
     ):
         if use_causal_mask:
-            shape = tf.shape(hidden_states)
+            shape = ops.shape(hidden_states)
             batch_size, length = shape[0], shape[1]
             causal_mask = compute_causal_mask(batch_size, length, length)
-            attention_mask = tf.cast(attention_mask, "int32")
+            attention_mask = ops.cast(attention_mask, "int32")
             attention_mask = causal_mask & attention_mask
 
         x = hidden_states  # Intermediate result.
@@ -147,4 +162,7 @@ class T5TransformerLayer(keras.layers.Layer):
         x = self.dropout_layer(x, training=training)
         x = x + residual
 
-        return x, position_bias
+        if position_bias is not None:
+            return x, position_bias
+        else:
+            return x
