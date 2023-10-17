@@ -320,7 +320,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
 
         # Check compiled predict function.
         backbone.predict(input_data)
-        input_dataset = tf.data.Dataset.from_tensor_slices(input_data).batch(2)
+        # Convert to numpy first, torch GPU tensor -> tf.data will error.
+        numpy_data = tree.map_structure(ops.convert_to_numpy, input_data)
+        # Create a dataset.
+        input_dataset = tf.data.Dataset.from_tensor_slices(numpy_data).batch(2)
         backbone.predict(input_dataset)
 
         # Check name maps to classname.
