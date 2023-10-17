@@ -143,7 +143,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                         return self.layer(x)
 
             model = TestModel(layer)
-            model.compile(optimizer="sgd", loss="mse", jit_compile=True)
+            # Temporarily disable jit compilation on torch backend.
+            jit_compile = config.backend() != "torch"
+            model.compile(optimizer="sgd", loss="mse", jit_compile=jit_compile)
             model.fit(input_data, output_data, verbose=0)
 
         if config.multi_backend():

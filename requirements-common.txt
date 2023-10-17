@@ -1,5 +1,4 @@
 # Library deps.
-keras-core>=0.1.6
 dm-tree
 regex
 rich
@@ -17,5 +16,3 @@ namex
 rouge-score
 sentencepiece
 tensorflow-datasets
-# Breakage fix.
-ml-dtypes==0.2.0
