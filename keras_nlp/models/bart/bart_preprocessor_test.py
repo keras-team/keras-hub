@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
 import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.models.bart.bart_preprocessor import BartPreprocessor
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.tests.test_case import TestCase
@@ -22,141 +22,48 @@ from keras_nlp.tests.test_case import TestCase
 
 class BartPreprocessorTest(TestCase):
     def setUp(self):
-        vocab = {
-            "<s>": 0,
-            "<pad>": 1,
-            "</s>": 2,
-            "Ġair": 3,
-            "plane": 4,
-            "Ġat": 5,
-            "port": 6,
-            "Ġkoh": 7,
-            "li": 8,
-            "Ġis": 9,
-            "Ġthe": 10,
-            "Ġbest": 11,
-            "<mask>": 12,
+        self.vocab = ["<s>", "<pad>", "</s>", "air", "Ġair", "plane", "Ġat"]
+        self.vocab += ["port", "<mask>"]
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.tokenizer = BartTokenizer(
+            vocabulary=self.vocab, merges=self.merges
+        )
+        self.init_kwargs = {
+            "tokenizer": self.tokenizer,
+            "encoder_sequence_length": 5,
+            "decoder_sequence_length": 8,
         }
-
-        merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
-        merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
-        merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
-        merges += ["pla ne"]
-
-        self.preprocessor = BartPreprocessor(
-            tokenizer=BartTokenizer(
-                vocabulary=vocab,
-                merges=merges,
-            ),
-            encoder_sequence_length=10,
-            decoder_sequence_length=9,
+        self.input_data = (
+            {
+                "encoder_text": [" airplane at airport"],
+                "decoder_text": [" airplane airport"],
+            },
+            [1],  # Pass through labels.
+            [1.0],  # Pass through sample_weights.
         )
 
-    def test_tokenize_strings(self):
-        input_data = {
-            "encoder_text": " airplane at airport",
-            "decoder_text": " kohli is the best",
-        }
-
-        output = self.preprocessor(input_data)
-        self.assertAllEqual(
-            output["encoder_token_ids"], [0, 3, 4, 5, 3, 6, 2, 1, 1, 1]
-        )
-        self.assertAllEqual(
-            output["encoder_padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0]
-        )
-        self.assertAllEqual(
-            output["decoder_token_ids"], [2, 0, 7, 8, 9, 10, 11, 2, 1]
-        )
-        self.assertAllEqual(
-            output["decoder_padding_mask"], [1, 1, 1, 1, 1, 1, 1, 1, 0]
-        )
-
-    def test_key_order(self):
-        self.assertAllClose(
-            self.preprocessor(
+    def test_preprocessor_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=BartPreprocessor,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output=(
                 {
-                    "encoder_text": " airplane at airport",
-                    "decoder_text": " kohli is the best",
-                }
-            ),
-            self.preprocessor(
-                {
-                    "decoder_text": " kohli is the best",
-                    "encoder_text": " airplane at airport",
-                }
+                    "encoder_token_ids": [[0, 4, 5, 6, 2]],
+                    "encoder_padding_mask": [[1, 1, 1, 1, 1]],
+                    "decoder_token_ids": [[2, 0, 4, 5, 4, 7, 2, 1]],
+                    "decoder_padding_mask": [[1, 1, 1, 1, 1, 1, 1, 0]],
+                },
+                [1],  # Pass through labels.
+                [1.0],  # Pass through sample_weights.
             ),
         )
-
-    def test_tokenize_list_of_strings(self):
-        input_data = {
-            "encoder_text": [" airplane at airport"] * 4,
-            "decoder_text": [" kohli is the best"] * 4,
-        }
-
-        output = self.preprocessor(input_data)
-        self.assertAllEqual(
-            output["encoder_token_ids"], [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1]] * 4
-        )
-        self.assertAllEqual(
-            output["encoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0]] * 4
-        )
-        self.assertAllEqual(
-            output["decoder_token_ids"], [[2, 0, 7, 8, 9, 10, 11, 2, 1]] * 4
-        )
-        self.assertAllEqual(
-            output["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 0]] * 4
-        )
-
-    def test_tokenize_labeled_batch(self):
-        x = {
-            "encoder_text": [" airplane at airport"] * 4,
-            "decoder_text": [" kohli is the best"] * 4,
-        }
-        y = tf.constant([1] * 4)
-        sw = tf.constant([1.0] * 4)
-        x_out, y_out, sw_out = self.preprocessor(x, y, sw)
-        self.assertAllEqual(
-            x_out["encoder_token_ids"], [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1]] * 4
-        )
-        self.assertAllEqual(
-            x_out["encoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0]] * 4
-        )
-        self.assertAllEqual(
-            x_out["decoder_token_ids"], [[2, 0, 7, 8, 9, 10, 11, 2, 1]] * 4
-        )
-        self.assertAllEqual(
-            x_out["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 0]] * 4
-        )
-        self.assertAllEqual(y_out, y)
-        self.assertAllEqual(sw_out, sw)
-
-    def test_tokenize_labeled_dataset(self):
-        x = {
-            "encoder_text": [" airplane at airport"] * 4,
-            "decoder_text": [" kohli is the best"] * 4,
-        }
-        y = tf.constant([1] * 4)
-        sw = tf.constant([1.0] * 4)
-        ds = tf.data.Dataset.from_tensor_slices((x, y, sw))
-        ds = ds.map(self.preprocessor)
-        x_out, y_out, sw_out = ds.batch(4).take(1).get_single_element()
-        self.assertAllEqual(
-            x_out["encoder_token_ids"], [[0, 3, 4, 5, 3, 6, 2, 1, 1, 1]] * 4
-        )
-        self.assertAllEqual(
-            x_out["encoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0]] * 4
-        )
-        self.assertAllEqual(
-            x_out["decoder_token_ids"], [[2, 0, 7, 8, 9, 10, 11, 2, 1]] * 4
-        )
-        self.assertAllEqual(
-            x_out["decoder_padding_mask"], [[1, 1, 1, 1, 1, 1, 1, 1, 0]] * 4
-        )
-        self.assertAllEqual(y_out, y)
-        self.assertAllEqual(sw_out, sw)
 
     def test_error_multi_segment_input(self):
+        preprocessor = BartPreprocessor(**self.init_kwargs)
         input_data = {
             "encoder_text": (
                 tf.constant([" airplane at airport"] * 2),
@@ -167,14 +74,14 @@ class BartPreprocessorTest(TestCase):
                 tf.constant([" kohli"] * 2),
             ),
         }
-
         with self.assertRaises(ValueError):
-            self.preprocessor(input_data)
+            preprocessor(input_data)
 
-    def test_serialization(self):
-        new_preprocessor = keras.saving.deserialize_keras_object(
-            keras.saving.serialize_keras_object(self.preprocessor)
-        )
-        self.assertEqual(
-            new_preprocessor.get_config(), self.preprocessor.get_config()
-        )
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in BartPreprocessor.presets:
+            self.run_preset_test(
+                cls=BartPreprocessor,
+                preset=preset,
+                input_data=self.input_data,
+            )
