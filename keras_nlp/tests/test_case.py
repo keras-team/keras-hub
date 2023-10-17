@@ -411,9 +411,9 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             # Allow passing a partial output snippet of the last dimension.
             # We want check stability, but the full output would be too long.
             def compare(actual, expected):
-                for _ in range(len(actual.shape) - 1):
-                    actual = actual[0]
-                actual = actual[: len(expected)]
+                expected = ops.convert_to_numpy(expected)
+                self.assertEqual(len(expected.shape), 1)
+                actual = ops.reshape(actual, (-1,))[: expected.shape[0]]
                 self.assertAllClose(actual, expected, atol=0.01, rtol=0.01)
 
             tree.map_structure(compare, output, expected_partial_output)
