@@ -17,7 +17,6 @@ import io
 import sentencepiece
 import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.tests.test_case import TestCase
 
@@ -42,28 +41,16 @@ class T5TokenizerTest(TestCase):
             unk_piece="<unk>",
             user_defined_symbols="[MASK]",
         )
-        self.proto = bytes_io.getvalue()
+        self.init_kwargs = {"proto": bytes_io.getvalue()}
+        self.input_data = ["the quick brown fox.", "the earth is round."]
 
-        self.tokenizer = T5Tokenizer(proto=self.proto)
-
-    def test_tokenize(self):
-        input_data = "the quick brown fox"
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [4, 9, 5, 7])
-
-    def test_tokenize_batch(self):
-        input_data = ["the quick brown fox", "the earth is round"]
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[4, 9, 5, 7], [4, 6, 8, 10]])
-
-    def test_detokenize(self):
-        input_data = [[4, 9, 5, 7]]
-        output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, ["the quick brown fox"])
-
-    def test_vocabulary_size(self):
-        tokenizer = T5Tokenizer(proto=self.proto)
-        self.assertEqual(tokenizer.vocabulary_size(), 11)
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=T5Tokenizer,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output=[[4, 9, 5, 2], [4, 6, 8, 2]],
+        )
 
     def test_errors_missing_special_tokens(self):
         bytes_io = io.BytesIO()
@@ -77,11 +64,3 @@ class T5TokenizerTest(TestCase):
         )
         with self.assertRaises(ValueError):
             T5Tokenizer(proto=bytes_io.getvalue())
-
-    def test_serialization(self):
-        config = keras.saving.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.saving.deserialize_keras_object(config)
-        self.assertEqual(
-            new_tokenizer.get_config(),
-            self.tokenizer.get_config(),
-        )

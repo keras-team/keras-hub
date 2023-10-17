@@ -305,7 +305,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             self.assertEqual(output.shape, expected_output_shape)
 
         # Check we can embed tokens eagerly.
-        output = backbone.token_embedding(input_data["token_ids"])
+        output = backbone.token_embedding(ops.zeros((2, 3), dtype="int32"))
 
         # Check variable length sequences.
         if variable_length_data is None:
