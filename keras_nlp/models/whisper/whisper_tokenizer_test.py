@@ -18,27 +18,14 @@ from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class WhisperTokenizerTest(TestCase):
     def setUp(self):
-        self.vocab = {
-            "Ġair": 0,
-            "plane": 1,
-            "Ġat": 2,
-            "port": 3,
-            "Ġkoh": 4,
-            "li": 5,
-            "Ġis": 6,
-            "Ġthe": 7,
-            "Ġbest": 8,
-        }
-
-        merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
-        merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
-        merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
-        merges += ["pla ne"]
-        self.merges = merges
-
+        self.vocab = ["!", "air", "Ġair", "plane", "Ġat", "port"]
+        self.vocab += ["<|endoftext|>"]
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
         self.special_tokens = {
             "<|startoftranscript|>": 9,
             "<|endoftext|>": 10,
@@ -46,56 +33,58 @@ class WhisperTokenizerTest(TestCase):
             "<|transcribe|>": 12,
             "<|translate|>": 13,
         }
-
         self.language_tokens = {
             "<|en|>": 14,
             "<|fr|>": 15,
         }
+        self.init_kwargs = {
+            "vocabulary": self.vocab,
+            "merges": self.merges,
+            "special_tokens": self.special_tokens,
+            "language_tokens": self.language_tokens,
+        }
+        self.input_data = [
+            " airplane at airport<|endoftext|>",
+            " airplane airport",
+        ]
 
-        self.tokenizer = WhisperTokenizer(
-            vocabulary=self.vocab,
-            merges=self.merges,
-            special_tokens=self.special_tokens,
-            language_tokens=self.language_tokens,
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=WhisperTokenizer,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output=[[2, 3, 4, 2, 5, 10], [2, 3, 2, 5]],
         )
-
-    def test_tokenize(self):
-        input_data = " airplane at airport"
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [0, 1, 2, 0, 3])
-
-    def test_tokenize_batch(self):
-        input_data = [" airplane at airport", " kohli is the best"]
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[0, 1, 2, 0, 3], [4, 5, 6, 7, 8]])
-
-    def test_detokenize(self):
-        input_tokens = [0, 1, 2, 0, 3]
-        output = self.tokenizer.detokenize(input_tokens)
-        self.assertEqual(output, " airplane at airport")
-
-    def test_detokenize_with_special_tokens(self):
-        input_tokens = [9, 14, 12, 11, 0, 1, 2, 0, 3, 10]
-        output = self.tokenizer.detokenize(input_tokens)
-        print(output)
-        self.assertEqual(
-            output,
-            "<|startoftranscript|><|en|><|transcribe|><|notimestamps|> airplane at airport<|endoftext|>",
-        )
-
-    def test_vocabulary_size(self):
-        self.assertEqual(self.tokenizer.vocabulary_size(), 16)
 
     def test_special_tokens(self):
-        self.assertEqual(self.tokenizer.bos_token_id, 9)
-        self.assertEqual(self.tokenizer.eos_token_id, 10)
-        self.assertEqual(self.tokenizer.pad_token_id, 10)
-        self.assertEqual(self.tokenizer.no_timestamps_token_id, 11)
-        self.assertEqual(self.tokenizer.translate_token_id, 13)
-        self.assertEqual(self.tokenizer.transcribe_token_id, 12)
+        tokenizer = WhisperTokenizer(**self.init_kwargs)
+        self.assertEqual(tokenizer.bos_token_id, 9)
+        self.assertEqual(tokenizer.eos_token_id, 10)
+        self.assertEqual(tokenizer.pad_token_id, 10)
+        self.assertEqual(tokenizer.no_timestamps_token_id, 11)
+        self.assertEqual(tokenizer.translate_token_id, 13)
+        self.assertEqual(tokenizer.transcribe_token_id, 12)
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             WhisperTokenizer(
                 vocabulary=["a", "b", "c"], merges=[], special_tokens={}
+            )
+
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=WhisperTokenizer,
+            preset="whisper_tiny_en",
+            input_data=["The quick brown fox."],
+            expected_output=[[464, 2068, 7586, 21831, 13]],
+        )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in WhisperTokenizer.presets:
+            self.run_preset_test(
+                cls=WhisperTokenizer,
+                preset=preset,
+                input_data=self.input_data,
             )

@@ -24,7 +24,7 @@ from keras_nlp.tests.test_case import TestCase
 class LoraDenseTest(TestCase):
     def test_layer_behaviors(self):
         self.run_layer_test(
-            layer_cls=LoraDense,
+            cls=LoraDense,
             init_kwargs={
                 "inner_dense": keras.layers.Dense(16),
                 "rank": 2,
@@ -41,7 +41,7 @@ class LoraDenseTest(TestCase):
 
     def test_layer_behaviors_einsum(self):
         self.run_layer_test(
-            layer_cls=LoraDense,
+            cls=LoraDense,
             init_kwargs={
                 "inner_dense": keras.layers.EinsumDense(
                     "abc,cde->abde",

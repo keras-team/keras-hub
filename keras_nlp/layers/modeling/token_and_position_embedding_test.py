@@ -26,7 +26,7 @@ from keras_nlp.tests.test_case import TestCase
 class TokenAndPositionEmbeddingTest(TestCase):
     def test_layer_behaviors(self):
         self.run_layer_test(
-            layer_cls=TokenAndPositionEmbedding,
+            cls=TokenAndPositionEmbedding,
             init_kwargs={
                 "vocabulary_size": 5,
                 "sequence_length": 4,

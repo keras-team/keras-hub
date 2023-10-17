@@ -20,7 +20,7 @@ from keras_nlp.tests.test_case import TestCase
 class FNetEncoderTest(TestCase):
     def test_layer_behaviors(self):
         self.run_layer_test(
-            layer_cls=FNetEncoder,
+            cls=FNetEncoder,
             init_kwargs={
                 "intermediate_dim": 4,
                 "dropout": 0,

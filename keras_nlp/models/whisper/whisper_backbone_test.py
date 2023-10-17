@@ -12,13 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
-import numpy as np
 import pytest
-import tensorflow as tf
 
-from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.tests.test_case import TestCase
 
@@ -26,94 +22,95 @@ from keras_nlp.tests.test_case import TestCase
 @pytest.mark.tf_only
 class WhisperBackboneTest(TestCase):
     def setUp(self):
-        self.backbone = WhisperBackbone(
-            vocabulary_size=10,
-            num_layers=2,
-            num_heads=2,
-            hidden_dim=2,
-            intermediate_dim=4,
-            max_encoder_sequence_length=6,
-            max_decoder_sequence_length=6,
-        )
-        self.input_batch = {
-            "encoder_features": np.ones((2, 5, 80), dtype="float32"),
-            "decoder_token_ids": np.ones((2, 5), dtype="int32"),
-            "decoder_padding_mask": np.ones((2, 5), dtype="int32"),
+        self.init_kwargs = {
+            "vocabulary_size": 10,
+            "num_layers": 2,
+            "num_heads": 2,
+            "hidden_dim": 2,
+            "intermediate_dim": 4,
+            "max_encoder_sequence_length": 6,
+            "max_decoder_sequence_length": 6,
+        }
+        self.input_data = {
+            "encoder_features": ops.ones((2, 5, 80), dtype="float32"),
+            "decoder_token_ids": ops.ones((2, 5), dtype="int32"),
+            "decoder_padding_mask": ops.ones((2, 5), dtype="int32"),
         }
 
-        self.input_dataset = tf.data.Dataset.from_tensor_slices(
-            self.input_batch
-        ).batch(2)
-
-    def test_valid_call_whisper(self):
-        self.backbone(self.input_batch)
-
-    def test_token_embedding(self):
-        output = self.backbone.token_embedding(
-            self.input_batch["decoder_token_ids"]
+    def test_backbone_basics(self):
+        self.run_backbone_test(
+            cls=WhisperBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output_shape={
+                "encoder_sequence_output": (2, 3, 2),
+                "decoder_sequence_output": (2, 5, 2),
+            },
         )
-        self.assertEqual(output.shape, (2, 5, 2))
-
-    def test_name(self):
-        # Check default name passed through
-        self.assertRegexpMatches(self.backbone.name, "whisper_backbone")
-
-    def test_variable_sequence_length_call_whisper(self):
-        for seq_length in (2, 3, 4):
-            input_data = {
-                "encoder_features": np.ones(
-                    (2, seq_length, 80), dtype="float32"
-                ),
-                "decoder_token_ids": np.ones((2, seq_length), dtype="int32"),
-                "decoder_padding_mask": np.ones((2, seq_length), dtype="int32"),
-            }
-            self.backbone(input_data)
-
-    def test_predict(self):
-        self.backbone.predict(self.input_batch)
-        self.backbone.predict(self.input_dataset)
-
-    def test_serialization(self):
-        new_backbone = keras.saving.deserialize_keras_object(
-            keras.saving.serialize_keras_object(self.backbone)
-        )
-        self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 
     def test_key_projection_bias_absence(self):
+        backbone = WhisperBackbone(**self.init_kwargs)
         # Check only for the first encoder layer and first decoder layer.
         self.assertIsNone(
-            self.backbone.get_layer(
+            backbone.get_layer(
                 "transformer_encoder_layer_0"
             )._self_attention_layer._key_dense.bias
         )
         self.assertIsNone(
-            self.backbone.get_layer(
+            backbone.get_layer(
                 "transformer_decoder_layer_0"
             )._self_attention_layer._key_dense.bias
         )
         self.assertIsNone(
-            self.backbone.get_layer(
+            backbone.get_layer(
                 "transformer_decoder_layer_0"
             )._cross_attention_layer._key_dense.bias
         )
 
-    @pytest.mark.large  # Saving is slow, so mark these large.
+    @pytest.mark.large
     def test_saved_model(self):
-        model_output = self.backbone(self.input_batch)
-        path = os.path.join(self.get_temp_dir(), "model.keras")
-        self.backbone.save(path, save_format="keras_v3")
-        restored_model = keras.models.load_model(path)
-
-        # Check we got the real object back.
-        self.assertIsInstance(restored_model, WhisperBackbone)
-
-        # Check that output matches.
-        restored_output = restored_model(self.input_batch)
-        self.assertAllClose(
-            model_output["encoder_sequence_output"],
-            restored_output["encoder_sequence_output"],
+        self.run_model_saving_test(
+            cls=WhisperBackbone,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
         )
-        self.assertAllClose(
-            model_output["decoder_sequence_output"],
-            restored_output["decoder_sequence_output"],
+
+    @pytest.mark.skip  # TODO: fix weight mismatch error.
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=WhisperBackbone,
+            preset="whisper_tiny_en",
+            input_data={
+                "encoder_features": ops.ones((1, 3000, 80)),
+                "decoder_token_ids": ops.array(
+                    [[50257, 50362, 464, 2068, 7586, 21831, 13, 50256, 50256]]
+                ),
+                "decoder_padding_mask": ops.array(
+                    [[1, 1, 1, 1, 1, 1, 1, 1, 0]]
+                ),
+            },
+            expected_output_shape={
+                "encoder_sequence_output": (1, 1500, 384),
+                "decoder_sequence_output": (1, 9, 384),
+            },
+            # The forward pass from a preset should be stable!
+            expected_partial_output={
+                "encoder_sequence_output": ops.array(
+                    [-0.21382, -0.48528, 0.42348, -1.33874, -0.14191]
+                ),
+                "decoder_sequence_output": ops.array(
+                    [13.238, 1.051, 8.348, -20.012, -5.022]
+                ),
+            },
         )
+
+    @pytest.mark.skip  # TODO: fix weight mismatch error.
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in WhisperBackbone.presets:
+            self.run_preset_test(
+                cls=WhisperBackbone,
+                preset=preset,
+                input_data=self.input_data,
+            )

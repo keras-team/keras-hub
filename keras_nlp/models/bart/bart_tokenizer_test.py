@@ -12,66 +12,52 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.backend import keras
+import pytest
+
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
 class BartTokenizerTest(TestCase):
     def setUp(self):
-        vocab = {
-            "<s>": 0,
-            "<pad>": 1,
-            "</s>": 2,
-            "Ġair": 3,
-            "plane": 4,
-            "Ġat": 5,
-            "port": 6,
-            "Ġkoh": 7,
-            "li": 8,
-            "Ġis": 9,
-            "Ġthe": 10,
-            "Ġbest": 11,
-        }
+        self.vocab = ["<s>", "<pad>", "</s>", "air", "Ġair", "plane", "Ġat"]
+        self.vocab += ["port", "<mask>"]
+        self.vocab = dict([(token, i) for i, token in enumerate(self.vocab)])
+        self.merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+        self.merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+        self.merges += ["Ġai r", "Ġa i", "pla ne"]
+        self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
+        self.input_data = [
+            "<s> airplane at airport</s><pad>",
+            " airplane airport",
+        ]
 
-        merges = ["Ġ a", "Ġ t", "Ġ k", "Ġ i", "Ġ b", "Ġa i", "p l", "n e"]
-        merges += ["Ġa t", "p o", "r t", "o h", "l i", "Ġi s", "Ġb e", "s t"]
-        merges += ["Ġt h", "Ġai r", "pl a", "Ġk oh", "Ġth e", "Ġbe st", "po rt"]
-        merges += ["pla ne"]
-
-        self.tokenizer = BartTokenizer(vocabulary=vocab, merges=merges)
-
-    def test_tokenize(self):
-        input_data = " airplane at airport"
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [3, 4, 5, 3, 6])
-
-    def test_tokenize_special_tokens(self):
-        input_data = "<s> airplane at airport</s><pad>"
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [0, 3, 4, 5, 3, 6, 0, 1])
-
-    def test_tokenize_batch(self):
-        input_data = [" airplane at airport", " kohli is the best"]
-        output = self.tokenizer(input_data)
-        self.assertAllEqual(output, [[3, 4, 5, 3, 6], [7, 8, 9, 10, 11]])
-
-    def test_detokenize(self):
-        input_tokens = [[3, 4, 5, 3, 6]]
-        output = self.tokenizer.detokenize(input_tokens)
-        self.assertAllEqual(output, [" airplane at airport"])
-
-    def test_vocabulary_size(self):
-        self.assertEqual(self.tokenizer.vocabulary_size(), 12)
+    def test_tokenizer_basics(self):
+        self.run_preprocessing_layer_test(
+            cls=BartTokenizer,
+            init_kwargs=self.init_kwargs,
+            input_data=self.input_data,
+            expected_output=[[0, 4, 5, 6, 4, 7, 0, 1], [4, 5, 4, 7]],
+        )
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             BartTokenizer(vocabulary=["a", "b", "c"], merges=[])
 
-    def test_serialization(self):
-        config = keras.saving.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.saving.deserialize_keras_object(config)
-        self.assertEqual(
-            new_tokenizer.get_config(),
-            self.tokenizer.get_config(),
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=BartTokenizer,
+            preset="bart_base_en",
+            input_data=["The quick brown fox."],
+            expected_output=[[133, 2119, 6219, 23602, 4]],
         )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in BartTokenizer.presets:
+            self.run_preset_test(
+                cls=BartTokenizer,
+                preset=preset,
+                input_data=self.input_data,
+            )
