@@ -91,21 +91,6 @@ class T5TransformerLayer(keras.layers.Layer):
         self.layer_norm = T5LayerNorm(epsilon=layer_norm_epsilon)
         self.dropout_layer = keras.layers.Dropout(dropout)
 
-    def build(self, input_shape):
-        self.self_attention_layer_norm.build(input_shape)
-        self.self_attention.build(input_shape)
-        self.self_attention_dropout.build(input_shape)
-        if self.is_decoder:
-            self.cross_attention.build(input_shape)
-            self.cross_attention_layer_norm.build(input_shape)
-            self.cross_attention_dropout.build(input_shape)
-        if self.use_gated_activation:
-            self.gate_projector.build(input_shape)
-        self.output_projector.build(input_shape)
-        self.layer_norm.build(input_shape)
-        self.dropout_layer.build(input_shape)
-        self.built = True
-
     def call(
         self,
         hidden_states,
