@@ -13,13 +13,13 @@
 # limitations under the License.
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.layers.modeling.transformer_layer_utils import (
     compute_causal_mask,
 )
 from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.models.t5.t5_multi_head_attention import T5MultiHeadAttention
 
-from keras_nlp.backend import ops
 
 class T5TransformerLayer(keras.layers.Layer):
     def __init__(
@@ -105,7 +105,6 @@ class T5TransformerLayer(keras.layers.Layer):
         self.layer_norm.build(input_shape)
         self.dropout_layer.build(input_shape)
         self.built = True
-
 
     def call(
         self,
