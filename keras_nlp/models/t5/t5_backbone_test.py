@@ -19,7 +19,6 @@ from keras_nlp.models.t5.t5_backbone import T5Backbone
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.tf_only
 class T5BackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
