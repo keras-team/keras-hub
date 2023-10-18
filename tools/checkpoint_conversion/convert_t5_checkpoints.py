@@ -25,6 +25,8 @@ from checkpoint_conversion_utils import (
     get_md5_checksum,
 )
 import math
+import keras_core
+from keras_core import ops
 
 PRESET_MAP = {
     "t5_small_en": "google/t5-v1_1-small",
@@ -39,6 +41,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset", "t5_base_en", f'Must be one of {",".join(PRESET_MAP.keys())}'
 )
+os.environ["KERAS_BACKEND"] = "torch"
 
 
 def extract_vocab(hf_tokenizer):
@@ -218,13 +221,13 @@ def check_output(
         encoder_input,
         padding="max_length",
         max_length=sequence_length,
-        return_tensors="tf",
+        return_tensors="pt",
     )
     hf_decoder_inputs = hf_tokenizer(
         decoder_input,
         padding="max_length",
         max_length=sequence_length,
-        return_tensors="tf",
+        return_tensors="pt",
     )
     hf_inputs = {
         "input_ids": hf_encoder_inputs["input_ids"],
@@ -247,14 +250,14 @@ def check_output(
 
     # Only compare non-padded token ids.
     keras_outputs = keras_outputs["decoder_sequence_output"]
-    keras_outputs = tf.gather_nd(keras_outputs, tf.where(decoder_padding_mask))
+    keras_outputs = ops.take_along_axis(keras_outputs, ops.where(decoder_padding_mask))
     hf_outputs = hf_outputs.last_hidden_state
-    hf_outputs = tf.gather_nd(hf_outputs, tf.where(decoder_padding_mask))
+    hf_outputs = ops.take_along_axis(hf_outputs, ops.where(decoder_padding_mask))
 
-    print("-> KerasNLP output:", keras_outputs[0, :5])
-    print("-> HF output:", hf_outputs[0, :5])
+    print("-> KerasNLP output:", keras_outputs[0:5])
+    print("-> HF output:", hf_outputs[0:5])
     np.testing.assert_allclose(
-        keras_outputs.numpy(), hf_outputs.numpy(), atol=1e-5
+        keras_outputs.detach().numpy(), hf_outputs.detach().numpy(), atol=1e-5
     )
 
 def count_params(weights):
