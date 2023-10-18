@@ -19,7 +19,6 @@ from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.t5.t5_layer_norm import T5LayerNorm
 from keras_nlp.models.t5.t5_transformer_layer import T5TransformerLayer
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.tensor_utils import assert_tf_backend
 
 
 @keras_nlp_export("keras_nlp.models.T5Backbone")
@@ -81,8 +80,6 @@ class T5Backbone(Backbone):
         tie_embedding_weights=False,
         **kwargs,
     ):
-        assert_tf_backend(self.__class__.__name__)
-
         # Encoder inputs
         encoder_token_ids = keras.Input(
             shape=(None,), dtype="int32", name="encoder_token_ids"
@@ -121,7 +118,7 @@ class T5Backbone(Backbone):
 
         position_bias = None
         for i in range(num_layers):
-            x, position_bias = T5TransformerLayer(
+            output = T5TransformerLayer(
                 is_decoder=False,
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
@@ -138,6 +135,8 @@ class T5Backbone(Backbone):
                 position_bias=position_bias,
                 use_causal_mask=False,
             )
+            if isinstance(output, tuple):
+                x, position_bias = output
 
         x = T5LayerNorm(
             epsilon=layer_norm_epsilon,
@@ -162,7 +161,7 @@ class T5Backbone(Backbone):
 
         position_bias = None
         for i in range(num_layers):
-            x, position_bias = T5TransformerLayer(
+            output = T5TransformerLayer(
                 is_decoder=True,
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
@@ -181,6 +180,8 @@ class T5Backbone(Backbone):
                 encoder_attention_mask=encoder_attention_mask,
                 use_causal_mask=True,
             )
+            if isinstance(output, tuple):
+                x, position_bias = output
 
         x = T5LayerNorm(
             epsilon=layer_norm_epsilon,

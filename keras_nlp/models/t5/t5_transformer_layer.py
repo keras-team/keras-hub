@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tensorflow as tf
-
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.layers.modeling.transformer_layer_utils import (
     compute_causal_mask,
 )
@@ -103,10 +102,10 @@ class T5TransformerLayer(keras.layers.Layer):
         training=False,
     ):
         if use_causal_mask:
-            shape = tf.shape(hidden_states)
+            shape = ops.shape(hidden_states)
             batch_size, length = shape[0], shape[1]
             causal_mask = compute_causal_mask(batch_size, length, length)
-            attention_mask = tf.cast(attention_mask, "int32")
+            attention_mask = ops.cast(attention_mask, "int32")
             attention_mask = causal_mask & attention_mask
 
         x = hidden_states  # Intermediate result.
@@ -147,4 +146,7 @@ class T5TransformerLayer(keras.layers.Layer):
         x = self.dropout_layer(x, training=training)
         x = x + residual
 
-        return x, position_bias
+        if position_bias is not None:
+            return x, position_bias
+        else:
+            return x

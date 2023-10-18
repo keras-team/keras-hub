@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tensorflow as tf
-
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 
 
 class T5LayerNorm(keras.layers.Layer):
@@ -31,8 +30,6 @@ class T5LayerNorm(keras.layers.Layer):
         self.built = True
 
     def call(self, hidden_states):
-        variance = tf.math.reduce_mean(
-            tf.math.square(hidden_states), axis=-1, keepdims=True
-        )
-        hidden_states = hidden_states * tf.math.rsqrt(variance + self.epsilon)
+        variance = ops.mean(ops.square(hidden_states), axis=-1, keepdims=True)
+        hidden_states = hidden_states * ops.rsqrt(variance + self.epsilon)
         return self.weight * hidden_states
