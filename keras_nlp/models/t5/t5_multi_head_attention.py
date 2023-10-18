@@ -18,15 +18,6 @@ from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 
 
-def shape_list(tensor):
-    return ops.shape(tensor)
-    # dynamic = tf.shape(tensor)
-    # if tensor.shape == tf.TensorShape(None):
-    #     return dynamic
-    # static = tensor.shape.as_list()
-    # return [dynamic[i] if s is None else s for i, s in enumerate(static)]
-
-
 class T5MultiHeadAttention(keras.layers.Layer):
     # This layer is adapted from Hugging Face
     # Ref: https://github.com/huggingface/transformers/blob/main/src/transformers/models/t5/modeling_tf_t5.py
@@ -187,7 +178,7 @@ class T5MultiHeadAttention(keras.layers.Layer):
     ):
         # Input is (batch_size, query_length, dim)
         # past_key_value[0] is (batch_size, num_heads, q_len - 1, dim_per_head)
-        batch_size, seq_length = shape_list(hidden_states)[:2]
+        batch_size, seq_length = ops.shape(hidden_states)[:2]
 
         real_seq_length = seq_length
 
@@ -198,7 +189,7 @@ class T5MultiHeadAttention(keras.layers.Layer):
                     f"keys and values. Got {len(past_key_value)} past states."
                 )
             real_seq_length += (
-                shape_list(past_key_value[0])[2]
+                ops.shape(past_key_value[0])[2]
                 if query_length is None
                 else query_length
             )
@@ -206,7 +197,7 @@ class T5MultiHeadAttention(keras.layers.Layer):
         key_length = (
             real_seq_length
             if key_value_states is None
-            else shape_list(key_value_states)[1]
+            else ops.shape(key_value_states)[1]
         )
 
         def shape(hidden_states):

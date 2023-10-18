@@ -170,7 +170,11 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
     def call(self, inputs):
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)
 
-        (token_ids, mask_positions, mask_ids,) = tf_text.mask_language_model(
+        (
+            token_ids,
+            mask_positions,
+            mask_ids,
+        ) = tf_text.mask_language_model(
             inputs,
             item_selector=self._random_selector,
             mask_values_chooser=self._mask_values_chooser,
