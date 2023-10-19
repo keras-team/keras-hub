@@ -105,6 +105,12 @@ def convert_checkpoints(hf_model):
             ).self_attention.output_projector.kernel.assign(
                 hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.o.weight"].transpose(1,0).numpy()
             )
+            if keras_nlp_model.get_layer(f"transformer_{section}_layer_{i}").self_attention.use_relative_attention_bias:
+                keras_nlp_model.get_layer(
+                    f"transformer_{section}_layer_{i}"
+                ).self_attention.relative_attention_bias.assign(
+                    hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.relative_attention_bias.weight"].numpy()
+                )
 
             # Self-attention norm
             keras_nlp_model.get_layer(
