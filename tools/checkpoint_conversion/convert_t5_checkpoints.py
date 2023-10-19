@@ -88,22 +88,22 @@ def convert_checkpoints(hf_model):
             keras_nlp_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention.query_projector.kernel.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.q.weight"].numpy()
+                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.q.weight"].transpose(1,0).numpy()
             )
             keras_nlp_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention.key_projector.kernel.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.k.weight"].numpy()
+                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.k.weight"].transpose(1,0).numpy()
             )
             keras_nlp_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention.value_projector.kernel.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.v.weight"].numpy()
+                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.v.weight"].transpose(1,0).numpy()
             )
             keras_nlp_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention.output_projector.kernel.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.o.weight"].numpy()
+                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.o.weight"].transpose(1,0).numpy()
             )
 
             # Self-attention norm
@@ -121,29 +121,29 @@ def convert_checkpoints(hf_model):
                 keras_nlp_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention.query_projector.kernel.assign(
-                    hf_wts[f"{section}.block.{i}.layer.{n}.EncDecAttention.q.weight"]
+                    hf_wts[f"{section}.block.{i}.layer.{n}.EncDecAttention.q.weight"].transpose(1,0).numpy()
                 )
                 keras_nlp_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention.key_projector.kernel.assign(
-                    hf_wts[f"{section}.block.{i}.layer.{n}.EncDecAttention.k.weight"]
+                    hf_wts[f"{section}.block.{i}.layer.{n}.EncDecAttention.k.weight"].transpose(1,0).numpy()
                 )
                 keras_nlp_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention.value_projector.kernel.assign(
-                    hf_wts[f"{section}.block.{i}.layer.{n}.EncDecAttention.v.weight"]
+                    hf_wts[f"{section}.block.{i}.layer.{n}.EncDecAttention.v.weight"].transpose(1,0).numpy()
                 )
                 keras_nlp_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention.output_projector.kernel.assign(
-                    hf_wts[f"{section}.block.{i}.layer.{n}.EncDecAttention.o.weight"]
+                    hf_wts[f"{section}.block.{i}.layer.{n}.EncDecAttention.o.weight"].transpose(1,0).numpy()
                 )
 
                 # Cross-attention layer norm
                 keras_nlp_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention_layer_norm.weight.assign(
-                    hf_wts[f"{section}.block.{i}.layer.{n}.layer_norm.weight"]
+                    hf_wts[f"{section}.block.{i}.layer.{n}.layer_norm.weight"].numpy()
                 )
                 # Increment for next layer
                 n += 1
