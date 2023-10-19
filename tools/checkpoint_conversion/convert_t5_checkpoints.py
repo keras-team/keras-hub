@@ -185,26 +185,37 @@ def convert_checkpoints(hf_model):
                 # Increment for next layer
                 n += 1
 
-            # Input projection layer
-            keras_nlp_model.get_layer(
-                f"transformer_{section}_layer_{i}"
-            ).input_projector.weights[0].assign(
-                hf_wts[
-                    f"{section}.block.{i}.layer.{n}.DenseReluDense.wi_0.weight"
-                ]
-                .transpose(1, 0)
-                .numpy()
-            )
-
-            # Gated activation layer
             if keras_nlp_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).use_gated_activation:
+                # Input projection layer
+                keras_nlp_model.get_layer(
+                    f"transformer_{section}_layer_{i}"
+                ).input_projector.weights[0].assign(
+                    hf_wts[
+                        f"{section}.block.{i}.layer.{n}.DenseReluDense.wi_0.weight"
+                    ]
+                    .transpose(1, 0)
+                    .numpy()
+                )
+
+                # Gated activation layer
                 keras_nlp_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).gate_projector.weights[0].assign(
                     hf_wts[
                         f"{section}.block.{i}.layer.{n}.DenseReluDense.wi_1.weight"
+                    ]
+                    .transpose(1, 0)
+                    .numpy()
+                )
+            else:
+                # Input projection layer
+                keras_nlp_model.get_layer(
+                    f"transformer_{section}_layer_{i}"
+                ).input_projector.weights[0].assign(
+                    hf_wts[
+                        f"{section}.block.{i}.layer.{n}.DenseReluDense.wi.weight"
                     ]
                     .transpose(1, 0)
                     .numpy()
