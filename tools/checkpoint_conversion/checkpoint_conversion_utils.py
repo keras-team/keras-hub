@@ -14,7 +14,6 @@
 import hashlib
 import tarfile
 import zipfile
-import inspect
 
 
 def get_md5_checksum(file_path):

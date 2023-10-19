@@ -11,22 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import math
 import os
 import shutil
 
 import numpy as np
-import tensorflow as tf
 import transformers
 from absl import app
 from absl import flags
+from checkpoint_conversion_utils import get_md5_checksum
+from keras_core import ops
 
 import keras_nlp
-from checkpoint_conversion_utils import (
-    get_md5_checksum,
-)
-import math
-import keras_core
-from keras_core import ops
 
 PRESET_MAP = {
     "t5_small_en": "google/t5-v1_1-small",
@@ -66,6 +62,7 @@ def extract_vocab(hf_tokenizer):
 
     return keras_tokenizer
 
+
 def convert_checkpoints(hf_model):
     keras_nlp_model = keras_nlp.models.T5Backbone.from_preset(
         FLAGS.preset, load_weights=False
@@ -88,35 +85,51 @@ def convert_checkpoints(hf_model):
             keras_nlp_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention.query_projector.kernel.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.q.weight"].transpose(1,0).numpy()
+                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.q.weight"]
+                .transpose(1, 0)
+                .numpy()
             )
             keras_nlp_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention.key_projector.kernel.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.k.weight"].transpose(1,0).numpy()
+                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.k.weight"]
+                .transpose(1, 0)
+                .numpy()
             )
             keras_nlp_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention.value_projector.kernel.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.v.weight"].transpose(1,0).numpy()
+                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.v.weight"]
+                .transpose(1, 0)
+                .numpy()
             )
             keras_nlp_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention.output_projector.kernel.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.o.weight"].transpose(1,0).numpy()
+                hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.o.weight"]
+                .transpose(1, 0)
+                .numpy()
             )
-            if keras_nlp_model.get_layer(f"transformer_{section}_layer_{i}").self_attention.use_relative_attention_bias:
+
+            # Add relative attention bias
+            if keras_nlp_model.get_layer(
+                f"transformer_{section}_layer_{i}"
+            ).self_attention.use_relative_attention_bias:
                 keras_nlp_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).self_attention.relative_attention_bias.assign(
-                    hf_wts[f"{section}.block.{i}.layer.{n}.SelfAttention.relative_attention_bias.weight"].numpy()
+                    hf_wts[
+                        f"{section}.block.{i}.layer.{n}.SelfAttention.relative_attention_bias.weight"
+                    ].numpy()
                 )
 
             # Self-attention norm
             keras_nlp_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).self_attention_layer_norm.weight.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.layer_norm.weight"].numpy()
+                hf_wts[
+                    f"{section}.block.{i}.layer.{n}.layer_norm.weight"
+                ].numpy()
             )
 
             # Increment for next layer
@@ -127,29 +140,47 @@ def convert_checkpoints(hf_model):
                 keras_nlp_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention.query_projector.kernel.assign(
-                    hf_wts[f"{section}.block.{i}.layer.{n}.EncDecAttention.q.weight"].transpose(1,0).numpy()
+                    hf_wts[
+                        f"{section}.block.{i}.layer.{n}.EncDecAttention.q.weight"
+                    ]
+                    .transpose(1, 0)
+                    .numpy()
                 )
                 keras_nlp_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention.key_projector.kernel.assign(
-                    hf_wts[f"{section}.block.{i}.layer.{n}.EncDecAttention.k.weight"].transpose(1,0).numpy()
+                    hf_wts[
+                        f"{section}.block.{i}.layer.{n}.EncDecAttention.k.weight"
+                    ]
+                    .transpose(1, 0)
+                    .numpy()
                 )
                 keras_nlp_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention.value_projector.kernel.assign(
-                    hf_wts[f"{section}.block.{i}.layer.{n}.EncDecAttention.v.weight"].transpose(1,0).numpy()
+                    hf_wts[
+                        f"{section}.block.{i}.layer.{n}.EncDecAttention.v.weight"
+                    ]
+                    .transpose(1, 0)
+                    .numpy()
                 )
                 keras_nlp_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention.output_projector.kernel.assign(
-                    hf_wts[f"{section}.block.{i}.layer.{n}.EncDecAttention.o.weight"].transpose(1,0).numpy()
+                    hf_wts[
+                        f"{section}.block.{i}.layer.{n}.EncDecAttention.o.weight"
+                    ]
+                    .transpose(1, 0)
+                    .numpy()
                 )
 
                 # Cross-attention layer norm
                 keras_nlp_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).cross_attention_layer_norm.weight.assign(
-                    hf_wts[f"{section}.block.{i}.layer.{n}.layer_norm.weight"].numpy()
+                    hf_wts[
+                        f"{section}.block.{i}.layer.{n}.layer_norm.weight"
+                    ].numpy()
                 )
                 # Increment for next layer
                 n += 1
@@ -158,37 +189,51 @@ def convert_checkpoints(hf_model):
             keras_nlp_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).input_projector.weights[0].assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.DenseReluDense.wi_0.weight"].transpose(1,0).numpy()
+                hf_wts[
+                    f"{section}.block.{i}.layer.{n}.DenseReluDense.wi_0.weight"
+                ]
+                .transpose(1, 0)
+                .numpy()
             )
 
             # Gated activation layer
-            if keras_nlp_model.get_layer(f"transformer_{section}_layer_{i}").use_gated_activation:
+            if keras_nlp_model.get_layer(
+                f"transformer_{section}_layer_{i}"
+            ).use_gated_activation:
                 keras_nlp_model.get_layer(
                     f"transformer_{section}_layer_{i}"
                 ).gate_projector.weights[0].assign(
-                    hf_wts[f"{section}.block.{i}.layer.{n}.DenseReluDense.wi_1.weight"].transpose(1,0).numpy()
+                    hf_wts[
+                        f"{section}.block.{i}.layer.{n}.DenseReluDense.wi_1.weight"
+                    ]
+                    .transpose(1, 0)
+                    .numpy()
                 )
 
             # Output projection layer
             keras_nlp_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).output_projector.weights[0].assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.DenseReluDense.wo.weight"].transpose(1,0).numpy()
+                hf_wts[
+                    f"{section}.block.{i}.layer.{n}.DenseReluDense.wo.weight"
+                ]
+                .transpose(1, 0)
+                .numpy()
             )
 
             # Layer norm
             keras_nlp_model.get_layer(
                 f"transformer_{section}_layer_{i}"
             ).layer_norm.weight.assign(
-                hf_wts[f"{section}.block.{i}.layer.{n}.layer_norm.weight"].numpy()
+                hf_wts[
+                    f"{section}.block.{i}.layer.{n}.layer_norm.weight"
+                ].numpy()
             )
 
             # Final normalization
-            keras_nlp_model.get_layer(
-                f"{section}_output_layer_norm"
-            ).weights[-1].assign(
-                hf_wts[f"{section}.final_layer_norm.weight"].numpy()
-            )
+            keras_nlp_model.get_layer(f"{section}_output_layer_norm").weights[
+                -1
+            ].assign(hf_wts[f"{section}.final_layer_norm.weight"].numpy())
 
     return keras_nlp_model
 
@@ -256,9 +301,13 @@ def check_output(
 
     # Only compare non-padded token ids.
     keras_outputs = keras_outputs["decoder_sequence_output"]
-    keras_outputs = ops.take_along_axis(keras_outputs, ops.where(decoder_padding_mask))
+    keras_outputs = ops.take_along_axis(
+        keras_outputs, ops.where(decoder_padding_mask)
+    )
     hf_outputs = hf_outputs.last_hidden_state
-    hf_outputs = ops.take_along_axis(hf_outputs, ops.where(decoder_padding_mask))
+    hf_outputs = ops.take_along_axis(
+        hf_outputs, ops.where(decoder_padding_mask)
+    )
 
     print("-> KerasNLP output:", keras_outputs[0:5])
     print("-> HF output:", hf_outputs[0:5])
@@ -266,9 +315,11 @@ def check_output(
         keras_outputs.detach().numpy(), hf_outputs.detach().numpy(), atol=1e-5
     )
 
+
 def count_params(weights):
     shapes = [v.shape for v in weights]
     return int(sum(math.prod(p) for p in shapes))
+
 
 def main(_):
     hf_id = PRESET_MAP[FLAGS.preset]
