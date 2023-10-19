@@ -221,6 +221,7 @@ class T5Backbone(Backbone):
         self.num_layers = num_layers
         self.num_heads = num_heads
         self.activation = keras.activations.get(activation)
+        self.key_value_dim = key_value_dim
         self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
         self.tie_embedding_weights = tie_embedding_weights
@@ -236,6 +237,7 @@ class T5Backbone(Backbone):
                 "num_layers": self.num_layers,
                 "num_heads": self.num_heads,
                 "activation": keras.activations.serialize(self.activation),
+                "key_value_dim": self.key_value_dim,
                 "dropout": self.dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "tie_embedding_weights": self.tie_embedding_weights,
