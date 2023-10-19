@@ -25,17 +25,18 @@ from keras_core import ops
 import keras_nlp
 
 PRESET_MAP = {
-    "t5_small_en": "google/t5-v1_1-small",
-    "t5_base_en": "google/t5-v1_1-base",
-    "t5_large_en": "google/t5-v1_1-large",
-    "t5_extra_large_en": "google/t5-v1_1-xl",
-    "t5_extra_extra_large_en": "google/t5-v1_1-xxl",
+    "t5_small_multi": "t5-small",
+    "t5_base_multi": "t5-base",
+    "t5_large_multi": "t5-large",
+    "flan_small_multi": "google/flan-t5-small",
+    "flan_base_multi": "google/flan-t5-base",
+    "flan_large_multi": "google/flan-t5-large",
 }
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "preset", "t5_base_en", f'Must be one of {",".join(PRESET_MAP.keys())}'
+    "preset", "t5_base_multi", f'Must be one of {",".join(PRESET_MAP.keys())}'
 )
 os.environ["KERAS_BACKEND"] = "torch"
 
