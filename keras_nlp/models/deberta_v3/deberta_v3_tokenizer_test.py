@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
+import pathlib
 
 import pytest
-import sentencepiece
 
 from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 from keras_nlp.tests.test_case import TestCase
@@ -23,24 +22,16 @@ from keras_nlp.tests.test_case import TestCase
 
 class DebertaV3TokenizerTest(TestCase):
     def setUp(self):
-        vocab_data = ["the quick brown fox", "the earth is round"]
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(vocab_data),
-            model_writer=bytes_io,
-            vocab_size=11,
-            model_type="WORD",
-            pad_id=0,
-            bos_id=1,
-            eos_id=2,
-            unk_id=3,
-            pad_piece="[PAD]",
-            bos_piece="[CLS]",
-            eos_piece="[SEP]",
-            unk_piece="[UNK]",
+        proto = str(
+            (
+                pathlib.Path(__file__).parent.parent.parent
+                / "tests"
+                / "test_data"
+                / "deberta_v3_tokenizer_sentencepiece.proto"
+            ).absolute()
         )
-        self.tokenizer = DebertaV3Tokenizer(proto=bytes_io.getvalue())
-        self.init_kwargs = {"proto": bytes_io.getvalue()}
+        self.tokenizer = DebertaV3Tokenizer(proto=proto)
+        self.init_kwargs = {"proto": proto}
         self.input_data = ["the quick brown fox.", "the earth is round."]
 
     def test_tokenizer_basics(self):
@@ -52,17 +43,17 @@ class DebertaV3TokenizerTest(TestCase):
         )
 
     def test_errors_missing_special_tokens(self):
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(["abc"]),
-            model_writer=bytes_io,
-            vocab_size=5,
-            pad_id=-1,
-            eos_id=-1,
-            bos_id=-1,
-        )
         with self.assertRaises(ValueError):
-            DebertaV3Tokenizer(proto=bytes_io.getvalue())
+            DebertaV3Tokenizer(
+                proto=str(
+                    (
+                        pathlib.Path(__file__).parent.parent.parent
+                        / "tests"
+                        / "test_data"
+                        / "deberta_v3_sentencepiece_bad.proto"
+                    ).absolute()
+                )
+            )
 
     def test_mask_token_handling(self):
         tokenizer = DebertaV3Tokenizer(**self.init_kwargs)

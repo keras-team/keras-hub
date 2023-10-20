@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
+import pathlib
 
 import pytest
-import sentencepiece
 
 from keras_nlp.models.deberta_v3.deberta_v3_masked_lm_preprocessor import (
     DebertaV3MaskedLMPreprocessor,
@@ -26,24 +25,16 @@ from keras_nlp.tests.test_case import TestCase
 
 class DebertaV3MaskedLMPreprocessorTest(TestCase):
     def setUp(self):
-        vocab_data = ["the quick brown fox", "the earth is round"]
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(vocab_data),
-            model_writer=bytes_io,
-            vocab_size=12,
-            model_type="WORD",
-            pad_id=0,
-            bos_id=1,
-            eos_id=2,
-            unk_id=3,
-            pad_piece="[PAD]",
-            bos_piece="[CLS]",
-            eos_piece="[SEP]",
-            unk_piece="[UNK]",
-            user_defined_symbols="[MASK]",
+        self.tokenizer = DebertaV3Tokenizer(
+            proto=str(
+                (
+                    pathlib.Path(__file__).parent.parent.parent
+                    / "tests"
+                    / "test_data"
+                    / "deberta_v3_sentencepiece.proto"
+                ).absolute()
+            )
         )
-        self.tokenizer = DebertaV3Tokenizer(proto=bytes_io.getvalue())
         self.init_kwargs = {
             "tokenizer": self.tokenizer,
             # Simplify our testing by masking every available token.

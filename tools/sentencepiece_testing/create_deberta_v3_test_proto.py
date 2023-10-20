@@ -22,16 +22,31 @@ def main():
         vocab_size=12,
         model_type="WORD",
         pad_id=0,
-        unk_id=1,
-        bos_id=2,
-        eos_id=3,
-        pad_piece="<pad>",
-        unk_piece="<unk>",
+        bos_id=1,
+        eos_id=2,
+        unk_id=3,
+        pad_piece="[PAD]",
         bos_piece="[CLS]",
         eos_piece="[SEP]",
+        unk_piece="[UNK]",
         user_defined_symbols="[MASK]",
     )
-    _save(bytes_io, "albert_sentencepiece.proto")
+    _save(bytes_io, "deberta_v3_sentencepiece.proto")
+
+    bytes_io = _train_sentencepiece(
+        ["the quick brown fox", "the earth is round"],
+        vocab_size=11,
+        model_type="WORD",
+        pad_id=0,
+        bos_id=1,
+        eos_id=2,
+        unk_id=3,
+        pad_piece="[PAD]",
+        bos_piece="[CLS]",
+        eos_piece="[SEP]",
+        unk_piece="[UNK]",
+    )
+    _save(bytes_io, "deberta_v3_tokenizer_sentencepiece.proto")
 
     bytes_io = _train_sentencepiece(
         ["abc"],
@@ -40,7 +55,7 @@ def main():
         eos_id=-1,
         bos_id=-1,
     )
-    _save(bytes_io, "albert_sentencepiece_bad.proto")
+    _save(bytes_io, "deberta_v3_sentencepiece_bad.proto")
 
 
 if __name__ == "__main__":
