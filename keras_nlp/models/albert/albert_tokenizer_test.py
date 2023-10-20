@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
+import pathlib
 
 import pytest
-import sentencepiece
 
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
 from keras_nlp.tests.test_case import TestCase
@@ -23,24 +22,16 @@ from keras_nlp.tests.test_case import TestCase
 
 class AlbertTokenizerTest(TestCase):
     def setUp(self):
-        vocab_data = ["the quick brown fox", "the earth is round"]
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(vocab_data),
-            model_writer=bytes_io,
-            vocab_size=12,
-            model_type="WORD",
-            pad_id=0,
-            unk_id=1,
-            bos_id=2,
-            eos_id=3,
-            pad_piece="<pad>",
-            unk_piece="<unk>",
-            bos_piece="[CLS]",
-            eos_piece="[SEP]",
-            user_defined_symbols="[MASK]",
-        )
-        self.init_kwargs = {"proto": bytes_io.getvalue()}
+        self.init_kwargs = {
+            "proto": str(
+                (
+                    pathlib.Path(__file__).parent.parent.parent
+                    / "tests"
+                    / "test_data"
+                    / "albert_sentencepiece.proto"
+                ).absolute()
+            )
+        }
         self.input_data = ["the quick brown fox.", "the earth is round."]
 
     def test_tokenizer_basics(self):
@@ -52,17 +43,17 @@ class AlbertTokenizerTest(TestCase):
         )
 
     def test_errors_missing_special_tokens(self):
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(["abc"]),
-            model_writer=bytes_io,
-            vocab_size=5,
-            pad_id=-1,
-            eos_id=-1,
-            bos_id=-1,
-        )
         with self.assertRaises(ValueError):
-            AlbertTokenizer(proto=bytes_io.getvalue())
+            AlbertTokenizer(
+                proto=str(
+                    (
+                        pathlib.Path(__file__).parent.parent.parent
+                        / "tests"
+                        / "test_data"
+                        / "albert_sentencepiece_bad.proto"
+                    ).absolute()
+                )
+            )
 
     @pytest.mark.large
     def test_smallest_preset(self):
