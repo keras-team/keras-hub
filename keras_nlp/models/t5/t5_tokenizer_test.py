@@ -12,10 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
-
-import sentencepiece
-import tensorflow as tf
+import pathlib
 
 from keras_nlp.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.tests.test_case import TestCase
@@ -23,25 +20,16 @@ from keras_nlp.tests.test_case import TestCase
 
 class T5TokenizerTest(TestCase):
     def setUp(self):
-        bytes_io = io.BytesIO()
-        vocab_data = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox", "the earth is round"]
-        )
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=vocab_data.as_numpy_iterator(),
-            model_writer=bytes_io,
-            vocab_size=11,
-            model_type="WORD",
-            bos_id=-1,
-            pad_id=0,
-            eos_id=1,
-            unk_id=2,
-            pad_piece="<pad>",
-            eos_piece="</s>",
-            unk_piece="<unk>",
-            user_defined_symbols="[MASK]",
-        )
-        self.init_kwargs = {"proto": bytes_io.getvalue()}
+        self.init_kwargs = {
+            "proto": str(
+                (
+                    pathlib.Path(__file__).parent.parent.parent
+                    / "tests"
+                    / "test_data"
+                    / "t5_sentencepiece.proto"
+                )
+            )
+        }
         self.input_data = ["the quick brown fox.", "the earth is round."]
 
     def test_tokenizer_basics(self):
@@ -53,14 +41,14 @@ class T5TokenizerTest(TestCase):
         )
 
     def test_errors_missing_special_tokens(self):
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(["abc"]),
-            model_writer=bytes_io,
-            vocab_size=5,
-            pad_id=-1,
-            eos_id=-1,
-            bos_id=-1,
-        )
         with self.assertRaises(ValueError):
-            T5Tokenizer(proto=bytes_io.getvalue())
+            T5Tokenizer(
+                proto=str(
+                    (
+                        pathlib.Path(__file__).parent.parent.parent
+                        / "tests"
+                        / "test_data"
+                        / "t5_sentencepiece_bad.proto"
+                    )
+                )
+            )
