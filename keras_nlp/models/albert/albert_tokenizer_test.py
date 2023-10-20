@@ -24,12 +24,10 @@ class AlbertTokenizerTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "proto": str(
-                (
-                    pathlib.Path(__file__).parent.parent.parent
-                    / "tests"
-                    / "test_data"
-                    / "albert_sentencepiece.proto"
-                ).absolute()
+                pathlib.Path(__file__).parent.parent.parent
+                / "tests"
+                / "test_data"
+                / "albert_sentencepiece.proto"
             )
         }
         self.input_data = ["the quick brown fox.", "the earth is round."]
@@ -46,12 +44,10 @@ class AlbertTokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             AlbertTokenizer(
                 proto=str(
-                    (
-                        pathlib.Path(__file__).parent.parent.parent
-                        / "tests"
-                        / "test_data"
-                        / "albert_sentencepiece_bad.proto"
-                    ).absolute()
+                    pathlib.Path(__file__).parent.parent.parent
+                    / "tests"
+                    / "test_data"
+                    / "albert_sentencepiece_bad.proto"
                 )
             )
 

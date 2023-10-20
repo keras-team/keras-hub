@@ -25,12 +25,10 @@ class FNetPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = FNetTokenizer(
             proto=str(
-                (
-                    pathlib.Path(__file__).parent.parent.parent
-                    / "tests"
-                    / "test_data"
-                    / "f_net_sentencepiece.proto"
-                ).absolute()
+                pathlib.Path(__file__).parent.parent.parent
+                / "tests"
+                / "test_data"
+                / "f_net_sentencepiece.proto"
             )
         )
         self.init_kwargs = {

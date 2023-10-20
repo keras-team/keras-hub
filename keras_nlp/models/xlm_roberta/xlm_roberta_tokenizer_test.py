@@ -26,12 +26,10 @@ class XLMRobertaTokenizerTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "proto": str(
-                (
-                    pathlib.Path(__file__).parent.parent.parent
-                    / "tests"
-                    / "test_data"
-                    / "xlm_roberta_sentencepiece.proto"
-                ).absolute()
+                pathlib.Path(__file__).parent.parent.parent
+                / "tests"
+                / "test_data"
+                / "xlm_roberta_sentencepiece.proto"
             )
         }
         self.input_data = ["the quick brown fox.", "the earth is round."]

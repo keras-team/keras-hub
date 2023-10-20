@@ -27,12 +27,10 @@ class AlbertMaskedLMPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = AlbertTokenizer(
             proto=str(
-                (
-                    pathlib.Path(__file__).parent.parent.parent
-                    / "tests"
-                    / "test_data"
-                    / "albert_sentencepiece.proto"
-                ).absolute()
+                pathlib.Path(__file__).parent.parent.parent
+                / "tests"
+                / "test_data"
+                / "albert_sentencepiece.proto"
             )
         )
         self.init_kwargs = {

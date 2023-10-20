@@ -31,12 +31,10 @@ class DebertaV3MaskedLMTest(TestCase):
         self.preprocessor = DebertaV3MaskedLMPreprocessor(
             DebertaV3Tokenizer(
                 proto=str(
-                    (
-                        pathlib.Path(__file__).parent.parent.parent
-                        / "tests"
-                        / "test_data"
-                        / "deberta_v3_sentencepiece.proto"
-                    ).absolute()
+                    pathlib.Path(__file__).parent.parent.parent
+                    / "tests"
+                    / "test_data"
+                    / "deberta_v3_sentencepiece.proto"
                 )
             ),
             # Simplify our testing by masking every available token.

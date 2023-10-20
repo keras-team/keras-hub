@@ -35,12 +35,10 @@ class XLMRobertaClassifierTest(TestCase):
         self.preprocessor = XLMRobertaPreprocessor(
             XLMRobertaTokenizer(
                 proto=str(
-                    (
-                        pathlib.Path(__file__).parent.parent.parent
-                        / "tests"
-                        / "test_data"
-                        / "xlm_roberta_classifier_sentencepiece.proto"
-                    ).absolute()
+                    pathlib.Path(__file__).parent.parent.parent
+                    / "tests"
+                    / "test_data"
+                    / "xlm_roberta_classifier_sentencepiece.proto"
                 )
             ),
             sequence_length=5,

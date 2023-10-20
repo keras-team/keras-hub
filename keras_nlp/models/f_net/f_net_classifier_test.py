@@ -29,12 +29,10 @@ class FNetClassifierTest(TestCase):
         self.preprocessor = FNetPreprocessor(
             FNetTokenizer(
                 proto=str(
-                    (
-                        pathlib.Path(__file__).parent.parent.parent
-                        / "tests"
-                        / "test_data"
-                        / "f_net_sentencepiece.proto"
-                    ).absolute()
+                    pathlib.Path(__file__).parent.parent.parent
+                    / "tests"
+                    / "test_data"
+                    / "f_net_sentencepiece.proto"
                 )
             ),
             sequence_length=5,

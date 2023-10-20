@@ -33,12 +33,10 @@ class DebertaV3ClassifierTest(TestCase):
         self.preprocessor = DebertaV3Preprocessor(
             DebertaV3Tokenizer(
                 proto=str(
-                    (
-                        pathlib.Path(__file__).parent.parent.parent
-                        / "tests"
-                        / "test_data"
-                        / "deberta_v3_sentencepiece.proto"
-                    ).absolute()
+                    pathlib.Path(__file__).parent.parent.parent
+                    / "tests"
+                    / "test_data"
+                    / "deberta_v3_sentencepiece.proto"
                 )
             ),
             sequence_length=5,

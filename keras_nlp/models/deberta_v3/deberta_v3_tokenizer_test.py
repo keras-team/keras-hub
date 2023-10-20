@@ -23,12 +23,10 @@ from keras_nlp.tests.test_case import TestCase
 class DebertaV3TokenizerTest(TestCase):
     def setUp(self):
         proto = str(
-            (
-                pathlib.Path(__file__).parent.parent.parent
-                / "tests"
-                / "test_data"
-                / "deberta_v3_tokenizer_sentencepiece.proto"
-            ).absolute()
+            pathlib.Path(__file__).parent.parent.parent
+            / "tests"
+            / "test_data"
+            / "deberta_v3_tokenizer_sentencepiece.proto"
         )
         self.tokenizer = DebertaV3Tokenizer(proto=proto)
         self.init_kwargs = {"proto": proto}
@@ -46,12 +44,10 @@ class DebertaV3TokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             DebertaV3Tokenizer(
                 proto=str(
-                    (
-                        pathlib.Path(__file__).parent.parent.parent
-                        / "tests"
-                        / "test_data"
-                        / "deberta_v3_sentencepiece_bad.proto"
-                    ).absolute()
+                    pathlib.Path(__file__).parent.parent.parent
+                    / "tests"
+                    / "test_data"
+                    / "deberta_v3_sentencepiece_bad.proto"
                 )
             )
 

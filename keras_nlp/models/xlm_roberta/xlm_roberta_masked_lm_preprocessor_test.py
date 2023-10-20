@@ -29,12 +29,10 @@ class XLMRobertaMaskedLMPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = XLMRobertaTokenizer(
             proto=str(
-                (
-                    pathlib.Path(__file__).parent.parent.parent
-                    / "tests"
-                    / "test_data"
-                    / "xlm_roberta_sentencepiece.proto"
-                ).absolute()
+                pathlib.Path(__file__).parent.parent.parent
+                / "tests"
+                / "test_data"
+                / "xlm_roberta_sentencepiece.proto"
             )
         )
         self.init_kwargs = {

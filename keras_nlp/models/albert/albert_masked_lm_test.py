@@ -31,12 +31,10 @@ class AlbertMaskedLMTest(TestCase):
         self.preprocessor = AlbertMaskedLMPreprocessor(
             AlbertTokenizer(
                 proto=str(
-                    (
-                        pathlib.Path(__file__).parent.parent.parent
-                        / "tests"
-                        / "test_data"
-                        / "albert_sentencepiece.proto"
-                    ).absolute()
+                    pathlib.Path(__file__).parent.parent.parent
+                    / "tests"
+                    / "test_data"
+                    / "albert_sentencepiece.proto"
                 ),
                 sequence_length=5,
             ),

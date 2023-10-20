@@ -35,12 +35,10 @@ class XLMRobertaMaskedLMTest(TestCase):
         self.preprocessor = XLMRobertaMaskedLMPreprocessor(
             XLMRobertaTokenizer(
                 proto=str(
-                    (
-                        pathlib.Path(__file__).parent.parent.parent
-                        / "tests"
-                        / "test_data"
-                        / "xlm_roberta_sentencepiece.proto"
-                    ).absolute()
+                    pathlib.Path(__file__).parent.parent.parent
+                    / "tests"
+                    / "test_data"
+                    / "xlm_roberta_sentencepiece.proto"
                 )
             ),
             # Simplify our testing by masking every available token.

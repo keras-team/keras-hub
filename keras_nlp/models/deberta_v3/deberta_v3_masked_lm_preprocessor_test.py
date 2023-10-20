@@ -27,12 +27,10 @@ class DebertaV3MaskedLMPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = DebertaV3Tokenizer(
             proto=str(
-                (
-                    pathlib.Path(__file__).parent.parent.parent
-                    / "tests"
-                    / "test_data"
-                    / "deberta_v3_sentencepiece.proto"
-                ).absolute()
+                pathlib.Path(__file__).parent.parent.parent
+                / "tests"
+                / "test_data"
+                / "deberta_v3_sentencepiece.proto"
             )
         )
         self.init_kwargs = {

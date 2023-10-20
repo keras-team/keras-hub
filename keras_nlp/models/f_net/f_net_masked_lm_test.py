@@ -31,12 +31,10 @@ class FNetMaskedLMTest(TestCase):
         self.preprocessor = FNetMaskedLMPreprocessor(
             FNetTokenizer(
                 proto=str(
-                    (
-                        pathlib.Path(__file__).parent.parent.parent
-                        / "tests"
-                        / "test_data"
-                        / "f_net_sentencepiece.proto"
-                    ).absolute()
+                    pathlib.Path(__file__).parent.parent.parent
+                    / "tests"
+                    / "test_data"
+                    / "f_net_sentencepiece.proto"
                 )
             ),
             # Simplify our testing by masking every available token.
