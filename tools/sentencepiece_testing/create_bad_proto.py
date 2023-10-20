@@ -18,35 +18,13 @@ from tools.sentencepiece_testing.utils import _train_sentencepiece
 
 def main():
     bytes_io = _train_sentencepiece(
-        ["the quick brown fox", "the earth is round"],
-        vocab_size=12,
-        model_type="WORD",
-        pad_id=0,
-        bos_id=1,
-        eos_id=2,
-        unk_id=3,
-        pad_piece="[PAD]",
-        bos_piece="[CLS]",
-        eos_piece="[SEP]",
-        unk_piece="[UNK]",
-        user_defined_symbols="[MASK]",
+        ["abc"],
+        vocab_size=5,
+        pad_id=-1,
+        eos_id=-1,
+        bos_id=-1,
     )
-    _save(bytes_io, "deberta_v3_sentencepiece.proto")
-
-    bytes_io = _train_sentencepiece(
-        ["the quick brown fox", "the earth is round"],
-        vocab_size=11,
-        model_type="WORD",
-        pad_id=0,
-        bos_id=1,
-        eos_id=2,
-        unk_id=3,
-        pad_piece="[PAD]",
-        bos_piece="[CLS]",
-        eos_piece="[SEP]",
-        unk_piece="[UNK]",
-    )
-    _save(bytes_io, "deberta_v3_tokenizer_sentencepiece.proto")
+    _save(bytes_io, "sentencepiece_bad.proto")
 
 
 if __name__ == "__main__":

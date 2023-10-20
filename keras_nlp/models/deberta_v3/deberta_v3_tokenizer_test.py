@@ -47,7 +47,7 @@ class DebertaV3TokenizerTest(TestCase):
                     pathlib.Path(__file__).parent.parent.parent
                     / "tests"
                     / "test_data"
-                    / "deberta_v3_sentencepiece_bad.proto"
+                    / "sentencepiece_bad.proto"
                 )
             )
 

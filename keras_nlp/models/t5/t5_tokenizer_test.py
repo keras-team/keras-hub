@@ -48,7 +48,7 @@ class T5TokenizerTest(TestCase):
                         pathlib.Path(__file__).parent.parent.parent
                         / "tests"
                         / "test_data"
-                        / "t5_sentencepiece_bad.proto"
+                        / "sentencepiece_bad.proto"
                     )
                 )
             )

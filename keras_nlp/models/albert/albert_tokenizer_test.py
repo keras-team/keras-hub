@@ -47,7 +47,7 @@ class AlbertTokenizerTest(TestCase):
                     pathlib.Path(__file__).parent.parent.parent
                     / "tests"
                     / "test_data"
-                    / "albert_sentencepiece_bad.proto"
+                    / "sentencepiece_bad.proto"
                 )
             )
 

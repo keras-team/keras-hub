@@ -47,7 +47,7 @@ class FNetTokenizerTest(TestCase):
                     pathlib.Path(__file__).parent.parent.parent
                     / "tests"
                     / "test_data"
-                    / "f_net_sentencepiece_bad.proto"
+                    / "sentencepiece_bad.proto"
                 )
             )
 

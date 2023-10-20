@@ -32,15 +32,6 @@ def main():
     )
     _save(bytes_io, "t5_sentencepiece.proto")
 
-    bytes_io = _train_sentencepiece(
-        ["abc"],
-        vocab_size=5,
-        pad_id=-1,
-        eos_id=-1,
-        bos_id=-1,
-    )
-    _save(bytes_io, "t5_sentencepiece_bad.proto")
-
 
 if __name__ == "__main__":
     main()
