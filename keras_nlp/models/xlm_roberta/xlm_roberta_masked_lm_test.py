@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
+import pathlib
 
 import pytest
-import sentencepiece
 
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm import (
@@ -33,20 +32,17 @@ from keras_nlp.tests.test_case import TestCase
 class XLMRobertaMaskedLMTest(TestCase):
     def setUp(self):
         # Setup model.
-        vocab_data = ["the quick brown fox", "the earth is round"]
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(vocab_data),
-            model_writer=bytes_io,
-            vocab_size=11,
-            model_type="WORD",
-            unk_id=0,
-            bos_id=1,
-            eos_id=2,
-            user_defined_symbols="[MASK]",
-        )
         self.preprocessor = XLMRobertaMaskedLMPreprocessor(
-            XLMRobertaTokenizer(proto=bytes_io.getvalue()),
+            XLMRobertaTokenizer(
+                proto=str(
+                    (
+                        pathlib.Path(__file__).parent.parent.parent
+                        / "tests"
+                        / "test_data"
+                        / "xlm_roberta_sentencepiece.proto"
+                    ).absolute()
+                )
+            ),
             # Simplify our testing by masking every available token.
             mask_selection_rate=1.0,
             mask_token_rate=1.0,
