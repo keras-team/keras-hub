@@ -66,11 +66,7 @@ class T5TransformerLayer(keras.layers.Layer):
             self.cross_attention_dropout = keras.layers.Dropout(dropout)
 
         if activation == "gelu":
-
-            def approx_gelu(x):
-                return keras.activations.gelu(x, approximate=True)
-
-            activation = approx_gelu
+            activation = keras.activations.get("keras_nlp>gelu_approximate")
         else:
             activation = keras.activations.get(activation)
 
