@@ -27,6 +27,7 @@ class T5TransformerLayer(keras.layers.Layer):
         is_decoder,
         hidden_dim,
         intermediate_dim,
+        key_value_dim,
         dropout,
         activation,
         layer_norm_epsilon,
@@ -40,10 +41,11 @@ class T5TransformerLayer(keras.layers.Layer):
         self.use_gated_activation = use_gated_activation
 
         self.self_attention = T5MultiHeadAttention(
-            is_decoder,
-            hidden_dim,
-            num_heads,
-            dropout,
+            is_decoder=is_decoder,
+            hidden_dim=hidden_dim,
+            key_value_dim=key_value_dim,
+            num_heads=num_heads,
+            dropout=dropout,
             use_relative_attention_bias=use_relative_attention_bias,
             name="self_attention",
         )
@@ -52,15 +54,21 @@ class T5TransformerLayer(keras.layers.Layer):
 
         if self.is_decoder:
             self.cross_attention = T5MultiHeadAttention(
-                is_decoder,
-                hidden_dim,
-                num_heads,
-                dropout,
+                is_decoder=is_decoder,
+                hidden_dim=hidden_dim,
+                key_value_dim=key_value_dim,
+                num_heads=num_heads,
+                dropout=dropout,
                 use_relative_attention_bias=False,
                 name="cross_attention",
             )
             self.cross_attention_layer_norm = T5LayerNorm(layer_norm_epsilon)
             self.cross_attention_dropout = keras.layers.Dropout(dropout)
+
+        if activation == "gelu":
+            activation = keras.activations.get("keras_nlp>gelu_approximate")
+        else:
+            activation = keras.activations.get(activation)
 
         self.input_projector = keras.layers.Dense(
             intermediate_dim,
