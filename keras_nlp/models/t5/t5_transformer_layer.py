@@ -65,11 +65,6 @@ class T5TransformerLayer(keras.layers.Layer):
             self.cross_attention_layer_norm = T5LayerNorm(layer_norm_epsilon)
             self.cross_attention_dropout = keras.layers.Dropout(dropout)
 
-        if activation == "gelu":
-            activation = keras.activations.get("keras_nlp>gelu_approximate")
-        else:
-            activation = keras.activations.get(activation)
-
         self.input_projector = keras.layers.Dense(
             intermediate_dim,
             use_bias=False,
