@@ -58,8 +58,7 @@ class T5Backbone(Backbone):
         dropout: float. Dropout probability for the Transformer layers.
         activation: activation function (or activation string name). The
             activation to be used in the inner dense blocks of the
-            Transformer layers. The original T5 architecture used `"relu"`,
-            but more recent versions use `"gelu"`. Defaults to `"gelu"`.
+            Transformer layers. Defaults to `"relu"`.
         use_gated_activation: boolean. Whether to use activation gating in
             the inner dense blocks of the Transformer layers.
             The original T5 architecture didn't use gating, but more
@@ -80,7 +79,7 @@ class T5Backbone(Backbone):
         intermediate_dim,
         key_value_dim=None,
         dropout=0.1,
-        activation="gelu",
+        activation="relu",
         use_gated_activation=True,
         layer_norm_epsilon=1e-06,
         tie_embedding_weights=False,
