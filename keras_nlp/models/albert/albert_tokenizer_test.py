@@ -37,7 +37,7 @@ class AlbertTokenizerTest(TestCase):
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             AlbertTokenizer(
-                # Generated using create_bad_proto.py
+                # Generated using create_no_special_token_proto.py
                 proto=str(
                     self.get_test_data_dir() / "no_special_token_vocab.spm"
                 )
