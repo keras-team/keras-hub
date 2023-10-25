@@ -137,6 +137,7 @@ class DistilBertClassifier(Task):
         num_classes=4,
     )
     classifier.fit(x=features, y=labels, batch_size=2)
+    ```
     """
 
     def __init__(

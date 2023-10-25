@@ -53,3 +53,32 @@ class T5BackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=T5Backbone,
+            preset="t5_small_multi",
+            input_data=self.input_data,
+            expected_output_shape={
+                "encoder_sequence_output": (2, 3, 512),
+                "decoder_sequence_output": (2, 3, 512),
+            },
+            expected_partial_output={
+                "encoder_sequence_output": ops.array(
+                    [-0.0034, 0.0293, -0.0827, -0.1076]
+                ),
+                "decoder_sequence_output": ops.array(
+                    [0.0097, 0.3576, -0.1508, 0.0150]
+                ),
+            },
+        )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in T5Backbone.presets:
+            self.run_preset_test(
+                cls=T5Backbone,
+                preset=preset,
+                input_data=self.input_data,
+            )

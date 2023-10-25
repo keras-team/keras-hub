@@ -14,6 +14,8 @@
 
 import os
 
+import pytest
+
 from keras_nlp.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.tests.test_case import TestCase
 
@@ -43,4 +45,22 @@ class T5TokenizerTest(TestCase):
                 proto=os.path.join(
                     (self.get_test_data_dir(), "no_special_token_vocab.spm")
                 )
+            )
+
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        for preset in T5Tokenizer.presets:
+            self.run_preset_test(
+                cls=T5Tokenizer,
+                input_data=["The quick brown fox."],
+                expected_output=[[1996, 4248, 2829, 4419, 1012]],
+            )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in T5Tokenizer.presets:
+            self.run_preset_test(
+                cls=T5Tokenizer,
+                preset=preset,
+                input_data=self.input_data,
             )
