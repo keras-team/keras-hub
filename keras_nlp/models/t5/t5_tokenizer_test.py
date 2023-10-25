@@ -14,6 +14,7 @@
 
 import io
 
+import pytest
 import sentencepiece
 import tensorflow as tf
 
@@ -64,3 +65,22 @@ class T5TokenizerTest(TestCase):
         )
         with self.assertRaises(ValueError):
             T5Tokenizer(proto=bytes_io.getvalue())
+
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        for preset in T5Tokenizer.presets:
+            self.run_preset_test(
+                cls=T5Tokenizer,
+                preset=preset,
+                input_data=["The quick brown fox."],
+                expected_output=[[1996, 4248, 2829, 4419, 1012]],
+            )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in T5Tokenizer.presets:
+            self.run_preset_test(
+                cls=T5Tokenizer,
+                preset=preset,
+                input_data=self.input_data,
+            )
