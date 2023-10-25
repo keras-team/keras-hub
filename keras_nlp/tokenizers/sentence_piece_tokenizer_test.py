@@ -22,7 +22,7 @@ class SentencePieceTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
         self.proto = str(
-            self.get_test_data_dir() / "sentence_piece_tokenizer_test_vocab.spm"
+            self.get_test_data_dir() / "tokenizer_test_vocab.spm"
         )
 
     def test_tokenize(self):
