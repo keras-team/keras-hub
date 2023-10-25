@@ -112,20 +112,14 @@ class Backbone(keras.Model):
         if not load_weights:
             return model
 
-        if metadata["weights_url"].endswith(".weights.h5"):
-            weights = keras.utils.get_file(
-                "model.weights.h5",
-                metadata["weights_url"],
-                cache_subdir=os.path.join("models", preset),
-                file_hash=metadata["weights_hash"],
-            )
-        else:
-            weights = keras.utils.get_file(
-                "model.h5",
-                metadata["weights_url"],
-                cache_subdir=os.path.join("models", preset),
-                file_hash=metadata["weights_hash"],
-            )
+        filename = os.path.basename(metadata["weights_url"])
+        weights = keras.utils.get_file(
+            filename,
+            metadata["weights_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["weights_hash"],
+        )
+
         model.load_weights(weights)
         return model
 
