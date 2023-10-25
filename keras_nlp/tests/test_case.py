@@ -420,4 +420,4 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             tree.map_structure(compare, output, expected_partial_output)
 
     def get_test_data_dir(self):
-        return pathlib.Path(__file__).parent / "test_data"
+        return str(pathlib.Path(__file__).parent / "test_data")

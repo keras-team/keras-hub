@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import pytest
 
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
@@ -29,8 +31,8 @@ class DebertaV3MaskedLMTest(TestCase):
         self.preprocessor = DebertaV3MaskedLMPreprocessor(
             DebertaV3Tokenizer(
                 # Generated using create_deberta_v3_test_proto.py
-                proto=str(
-                    self.get_test_data_dir() / "deberta_v3_test_vocab.spm"
+                proto=os.path.join(
+                    self.get_test_data_dir(), "deberta_v3_test_vocab.spm"
                 )
             ),
             # Simplify our testing by masking every available token.

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import pytest
 
 from keras_nlp.models.f_net.f_net_masked_lm_preprocessor import (
@@ -25,7 +27,7 @@ class FNetMaskedLMPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = FNetTokenizer(
             # Generated using create_f_net_test_proto.py
-            proto=str(self.get_test_data_dir() / "f_net_test_vocab.spm")
+            proto=os.path.join(self.get_test_data_dir(), "f_net_test_vocab.spm")
         )
         self.init_kwargs = {
             "tokenizer": self.tokenizer,

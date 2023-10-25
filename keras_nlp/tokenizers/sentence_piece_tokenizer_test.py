@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import tensorflow as tf
 
 from keras_nlp.tests.test_case import TestCase
@@ -21,8 +23,8 @@ from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 class SentencePieceTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
-        self.proto = str(
-            self.get_test_data_dir() / "tokenizer_test_vocab.spm"
+        self.proto = os.path.join(
+            self.get_test_data_dir(), "tokenizer_test_vocab.spm"
         )
 
     def test_tokenize(self):

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import pytest
 
 from keras_nlp.models.albert.albert_masked_lm_preprocessor import (
@@ -25,7 +27,9 @@ class AlbertMaskedLMPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = AlbertTokenizer(
             # Generated using create_albert_test_proto.py
-            proto=str(self.get_test_data_dir() / "albert_test_vocab.spm")
+            proto=os.path.join(
+                self.get_test_data_dir(), "albert_test_vocab.spm"
+            )
         )
         self.init_kwargs = {
             "tokenizer": self.tokenizer,

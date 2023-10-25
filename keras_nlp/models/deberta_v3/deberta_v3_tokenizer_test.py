@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import pytest
 
 from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
@@ -21,7 +23,9 @@ from keras_nlp.tests.test_case import TestCase
 class DebertaV3TokenizerTest(TestCase):
     def setUp(self):
         # Generated using create_deberta_v3_test_proto.py
-        proto = str(self.get_test_data_dir() / "deberta_v3_test_vocab.spm")
+        proto = os.path.join(
+            self.get_test_data_dir(), "deberta_v3_test_vocab.spm"
+        )
         self.tokenizer = DebertaV3Tokenizer(proto=proto)
         self.init_kwargs = {"proto": proto}
         self.input_data = ["the quick brown fox.", "the earth is round."]
@@ -38,8 +42,8 @@ class DebertaV3TokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             DebertaV3Tokenizer(
                 # Generated using create_no_special_token_proto.py
-                proto=str(
-                    self.get_test_data_dir() / "no_special_token_vocab.spm"
+                proto=os.path.join(
+                    self.get_test_data_dir(), "no_special_token_vocab.spm"
                 )
             )
 
