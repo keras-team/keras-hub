@@ -12,19 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tools.sentencepiece_testing.utils import _save
-from tools.sentencepiece_testing.utils import _train_sentencepiece
+from tools.sentencepiece_testing.utils import train_sentencepiece
 
 
 def main():
-    bytes_io = _train_sentencepiece(
+    train_sentencepiece(
         ["abc"],
+        "no_special_token_vocab.spm",
         vocab_size=5,
         pad_id=-1,
         eos_id=-1,
         bos_id=-1,
     )
-    _save(bytes_io, "sentencepiece_bad.proto")
 
 
 if __name__ == "__main__":

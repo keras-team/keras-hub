@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pathlib
-
 import pytest
 
 from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
@@ -22,12 +20,8 @@ from keras_nlp.tests.test_case import TestCase
 
 class DebertaV3TokenizerTest(TestCase):
     def setUp(self):
-        proto = str(
-            pathlib.Path(__file__).parent.parent.parent
-            / "tests"
-            / "test_data"
-            / "deberta_v3_tokenizer_sentencepiece.proto"
-        )
+        # Generated using create_deberta_v3_test_proto.py
+        proto = str(self.get_test_data_dir() / "deberta_v3_test_vocab.spm")
         self.tokenizer = DebertaV3Tokenizer(proto=proto)
         self.init_kwargs = {"proto": proto}
         self.input_data = ["the quick brown fox.", "the earth is round."]
@@ -37,26 +31,24 @@ class DebertaV3TokenizerTest(TestCase):
             cls=DebertaV3Tokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output=[[4, 9, 5, 3], [4, 6, 8, 3]],
+            expected_output=[[5, 10, 6, 3], [5, 7, 9, 3]],
         )
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             DebertaV3Tokenizer(
+                # Generated using create_bad_proto.py
                 proto=str(
-                    pathlib.Path(__file__).parent.parent.parent
-                    / "tests"
-                    / "test_data"
-                    / "sentencepiece_bad.proto"
+                    self.get_test_data_dir() / "no_special_token_vocab.spm"
                 )
             )
 
     def test_mask_token_handling(self):
         tokenizer = DebertaV3Tokenizer(**self.init_kwargs)
-        self.assertEqual(tokenizer.get_vocabulary()[11], "[MASK]")
-        self.assertEqual(tokenizer.id_to_token(11), "[MASK]")
-        self.assertEqual(tokenizer.token_to_id("[MASK]"), 11)
-        input_data = [[4, 9, 5, 7, self.tokenizer.mask_token_id]]
+        self.assertEqual(tokenizer.get_vocabulary()[4], "[MASK]")
+        self.assertEqual(tokenizer.id_to_token(4), "[MASK]")
+        self.assertEqual(tokenizer.token_to_id("[MASK]"), 4)
+        input_data = [[5, 10, 6, 8, self.tokenizer.mask_token_id]]
         output = tokenizer.detokenize(input_data)
         self.assertEqual(output, ["the quick brown fox"])
 

@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pathlib
-
 import pytest
 
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
@@ -23,12 +21,8 @@ from keras_nlp.tests.test_case import TestCase
 class AlbertTokenizerTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "proto": str(
-                pathlib.Path(__file__).parent.parent.parent
-                / "tests"
-                / "test_data"
-                / "albert_sentencepiece.proto"
-            )
+            # Generated using create_albert_test_proto.py
+            "proto": str(self.get_test_data_dir() / "albert_test_vocab.spm")
         }
         self.input_data = ["the quick brown fox.", "the earth is round."]
 
@@ -43,11 +37,9 @@ class AlbertTokenizerTest(TestCase):
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             AlbertTokenizer(
+                # Generated using create_bad_proto.py
                 proto=str(
-                    pathlib.Path(__file__).parent.parent.parent
-                    / "tests"
-                    / "test_data"
-                    / "sentencepiece_bad.proto"
+                    self.get_test_data_dir() / "no_special_token_vocab.spm"
                 )
             )
 

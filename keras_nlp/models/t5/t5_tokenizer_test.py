@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pathlib
-
 from keras_nlp.models.t5.t5_tokenizer import T5Tokenizer
 from keras_nlp.tests.test_case import TestCase
 
@@ -21,14 +19,8 @@ from keras_nlp.tests.test_case import TestCase
 class T5TokenizerTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "proto": str(
-                (
-                    pathlib.Path(__file__).parent.parent.parent
-                    / "tests"
-                    / "test_data"
-                    / "t5_sentencepiece.proto"
-                )
-            )
+            # Generated using create_t5_test_proto.py
+            "proto": str((self.get_test_data_dir() / "t5_test_vocab.spm"))
         }
         self.input_data = ["the quick brown fox.", "the earth is round."]
 
@@ -43,12 +35,8 @@ class T5TokenizerTest(TestCase):
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             T5Tokenizer(
+                # Generated using create_bad_proto.py
                 proto=str(
-                    (
-                        pathlib.Path(__file__).parent.parent.parent
-                        / "tests"
-                        / "test_data"
-                        / "sentencepiece_bad.proto"
-                    )
+                    (self.get_test_data_dir() / "no_special_token_vocab.spm")
                 )
             )

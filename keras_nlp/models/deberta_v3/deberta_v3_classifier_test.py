@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pathlib
-
 import pytest
 
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
@@ -32,11 +30,9 @@ class DebertaV3ClassifierTest(TestCase):
         # Setup model.
         self.preprocessor = DebertaV3Preprocessor(
             DebertaV3Tokenizer(
+                # Generated using create_deberta_v3_test_proto.py
                 proto=str(
-                    pathlib.Path(__file__).parent.parent.parent
-                    / "tests"
-                    / "test_data"
-                    / "deberta_v3_sentencepiece.proto"
+                    self.get_test_data_dir() / "deberta_v3_test_vocab.spm"
                 )
             ),
             sequence_length=5,

@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tools.sentencepiece_testing.utils import _save
-from tools.sentencepiece_testing.utils import _train_sentencepiece
+from tools.sentencepiece_testing.utils import train_sentencepiece
 
 
 def main():
-    bytes_io = _train_sentencepiece(
+    train_sentencepiece(
         ["the quick brown fox", "the earth is round"],
+        "albert_test_vocab.spm",
         vocab_size=12,
         model_type="WORD",
         pad_id=0,
@@ -31,7 +31,6 @@ def main():
         eos_piece="[SEP]",
         user_defined_symbols="[MASK]",
     )
-    _save(bytes_io, "albert_sentencepiece.proto")
 
 
 if __name__ == "__main__":

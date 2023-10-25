@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pathlib
-
 import pytest
 
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
@@ -24,12 +22,8 @@ from keras_nlp.tests.test_case import TestCase
 class AlbertPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = AlbertTokenizer(
-            proto=str(
-                pathlib.Path(__file__).parent.parent.parent
-                / "tests"
-                / "test_data"
-                / "albert_sentencepiece.proto"
-            )
+            # Generated using create_albert_test_proto.py
+            proto=str(self.get_test_data_dir() / "albert_test_vocab.spm")
         )
         self.init_kwargs = {
             "tokenizer": self.tokenizer,

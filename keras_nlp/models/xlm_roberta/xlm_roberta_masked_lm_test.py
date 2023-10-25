@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pathlib
-
 import pytest
 
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
@@ -34,11 +32,9 @@ class XLMRobertaMaskedLMTest(TestCase):
         # Setup model.
         self.preprocessor = XLMRobertaMaskedLMPreprocessor(
             XLMRobertaTokenizer(
+                # Generated using create_xlm_roberta_test_proto.py
                 proto=str(
-                    pathlib.Path(__file__).parent.parent.parent
-                    / "tests"
-                    / "test_data"
-                    / "xlm_roberta_sentencepiece.proto"
+                    self.get_test_data_dir() / "xlm_roberta_test_vocab.spm"
                 )
             ),
             # Simplify our testing by masking every available token.

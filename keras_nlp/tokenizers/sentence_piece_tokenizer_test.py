@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pathlib
-
 import tensorflow as tf
 
 from keras_nlp.tests.test_case import TestCase
@@ -24,10 +22,7 @@ class SentencePieceTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
         self.proto = str(
-            pathlib.Path(__file__).parent.parent
-            / "tests"
-            / "test_data"
-            / "sentence_piece_tokenizer_sentencepiece.proto"
+            self.get_test_data_dir() / "sentence_piece_tokenizer_test_vocab.spm"
         )
 
     def test_tokenize(self):

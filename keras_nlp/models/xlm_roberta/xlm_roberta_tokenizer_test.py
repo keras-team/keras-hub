@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pathlib
-
 import pytest
 
 from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
@@ -25,11 +23,9 @@ from keras_nlp.tests.test_case import TestCase
 class XLMRobertaTokenizerTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
+            # Generated using create_xlm_roberta_test_proto.py
             "proto": str(
-                pathlib.Path(__file__).parent.parent.parent
-                / "tests"
-                / "test_data"
-                / "xlm_roberta_sentencepiece.proto"
+                self.get_test_data_dir() / "xlm_roberta_test_vocab.spm"
             )
         }
         self.input_data = ["the quick brown fox.", "the earth is round."]

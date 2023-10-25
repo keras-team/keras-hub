@@ -17,15 +17,11 @@ import pathlib
 import sentencepiece
 
 
-def _train_sentencepiece(data, *args, **kwargs):
+def train_sentencepiece(data, filename, *args, **kwargs):
     bytes_io = io.BytesIO()
     sentencepiece.SentencePieceTrainer.train(
         sentence_iterator=iter(data), model_writer=bytes_io, *args, **kwargs
     )
-    return bytes_io
-
-
-def _save(bytes_io, filename):
     with open(
         pathlib.Path(__file__).parent.parent.parent
         / "keras_nlp"

@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pathlib
-
 import pytest
 
 from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
@@ -28,12 +26,8 @@ from keras_nlp.tests.test_case import TestCase
 class XLMRobertaPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = XLMRobertaTokenizer(
-            proto=str(
-                pathlib.Path(__file__).parent.parent.parent
-                / "tests"
-                / "test_data"
-                / "xlm_roberta_sentencepiece.proto"
-            )
+            # Generated using create_xlm_roberta_test_proto.py
+            proto=str(self.get_test_data_dir() / "xlm_roberta_test_vocab.spm")
         )
         self.init_kwargs = {
             "tokenizer": self.tokenizer,
@@ -52,7 +46,7 @@ class XLMRobertaPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[0, 6, 11, 7, 9, 2, 1, 1]],
+                    "token_ids": [[0, 5, 10, 6, 8, 2, 1, 1]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
                 },
                 [1],  # Pass through labels.

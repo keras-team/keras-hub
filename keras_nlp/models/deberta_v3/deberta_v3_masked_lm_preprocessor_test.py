@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pathlib
-
 import pytest
 
 from keras_nlp.models.deberta_v3.deberta_v3_masked_lm_preprocessor import (
@@ -26,12 +24,8 @@ from keras_nlp.tests.test_case import TestCase
 class DebertaV3MaskedLMPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = DebertaV3Tokenizer(
-            proto=str(
-                pathlib.Path(__file__).parent.parent.parent
-                / "tests"
-                / "test_data"
-                / "deberta_v3_sentencepiece.proto"
-            )
+            # Generated using create_deberta_v3_test_proto.py
+            proto=str(self.get_test_data_dir() / "deberta_v3_test_vocab.spm")
         )
         self.init_kwargs = {
             "tokenizer": self.tokenizer,

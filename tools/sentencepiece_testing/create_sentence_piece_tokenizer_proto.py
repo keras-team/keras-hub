@@ -12,17 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tools.sentencepiece_testing.utils import _save
-from tools.sentencepiece_testing.utils import _train_sentencepiece
+from tools.sentencepiece_testing.utils import train_sentencepiece
 
 
 def main():
-    bytes_io = _train_sentencepiece(
+    train_sentencepiece(
         ["the quick brown fox."],
+        "tokenizer_test_vocab.spm",
         vocab_size=7,
         model_type="WORD",
     )
-    _save(bytes_io, "sentence_piece_tokenizer_sentencepiece.proto")
 
 
 if __name__ == "__main__":

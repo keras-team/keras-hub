@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pathlib
-
 import pytest
 
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
@@ -24,12 +22,8 @@ from keras_nlp.tests.test_case import TestCase
 class FNetPreprocessorTest(TestCase):
     def setUp(self):
         self.tokenizer = FNetTokenizer(
-            proto=str(
-                pathlib.Path(__file__).parent.parent.parent
-                / "tests"
-                / "test_data"
-                / "f_net_sentencepiece.proto"
-            )
+            # Generated using create_f_net_test_proto.py
+            proto=str(self.get_test_data_dir() / "f_net_test_vocab.spm")
         )
         self.init_kwargs = {
             "tokenizer": self.tokenizer,

@@ -12,31 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tools.sentencepiece_testing.utils import _save
-from tools.sentencepiece_testing.utils import _train_sentencepiece
+from tools.sentencepiece_testing.utils import train_sentencepiece
 
 
 def main():
-    bytes_io = _train_sentencepiece(
+    train_sentencepiece(
         ["the quick brown fox", "the earth is round"],
-        vocab_size=10,
+        "xlm_roberta_test_vocab.spm",
+        vocab_size=12,
         model_type="WORD",
-        unk_id=0,
-        bos_id=1,
-        eos_id=2,
-    )
-    _save(bytes_io, "xlm_roberta_classifier_sentencepiece.proto")
-
-    bytes_io = _train_sentencepiece(
-        ["the quick brown fox", "the earth is round"],
-        vocab_size=11,
-        model_type="WORD",
-        unk_id=0,
-        bos_id=1,
-        eos_id=2,
+        pad_id=0,
+        unk_id=1,
+        bos_id=2,
+        eos_id=3,
+        pad_piece="<pad>",
+        unk_piece="<unk>",
+        bos_piece="[CLS]",
+        eos_piece="[SEP]",
         user_defined_symbols="[MASK]",
     )
-    _save(bytes_io, "xlm_roberta_sentencepiece.proto")
 
 
 if __name__ == "__main__":
