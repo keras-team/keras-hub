@@ -12,10 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
 import os
 
-import sentencepiece
 import tensorflow as tf
 
 from keras_nlp.tests.test_case import TestCase
@@ -25,17 +23,9 @@ from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 class SentencePieceTokenizerTest(TestCase):
     def setUp(self):
         super().setUp()
-        bytes_io = io.BytesIO()
-        vocab_data = tf.data.Dataset.from_tensor_slices(
-            ["the quick brown fox."]
+        self.proto = os.path.join(
+            self.get_test_data_dir(), "tokenizer_test_vocab.spm"
         )
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=vocab_data.as_numpy_iterator(),
-            model_writer=bytes_io,
-            vocab_size=7,
-            model_type="WORD",
-        )
-        self.proto = bytes_io.getvalue()
 
     def test_tokenize(self):
         input_data = ["the quick brown fox."]
@@ -112,15 +102,13 @@ class SentencePieceTokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             tokenizer.id_to_token(-1)
 
-    def test_from_file(self):
-        filepath = os.path.join(self.get_temp_dir(), "model.txt")
-        input_data = ["the quick brown fox."]
-        with tf.io.gfile.GFile(filepath, "wb") as file:
-            file.write(self.proto)
+    def test_from_bytes(self):
+        with tf.io.gfile.GFile(self.proto, "rb") as file:
+            proto = file.read()
         tokenizer = SentencePieceTokenizer(
-            proto=filepath,
+            proto=proto,
         )
-        output_data = tokenizer(input_data)
+        output_data = tokenizer(["the quick brown fox."])
         self.assertAllEqual(output_data, [[6, 5, 3, 4]])
 
     def test_tokenize_then_batch(self):

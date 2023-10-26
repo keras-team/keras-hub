@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
+import os
 
 import pytest
-import sentencepiece
 
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_classifier import (
@@ -33,19 +32,13 @@ from keras_nlp.tests.test_case import TestCase
 class XLMRobertaClassifierTest(TestCase):
     def setUp(self):
         # Setup model.
-        vocab_data = ["the quick brown fox", "the earth is round"]
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(vocab_data),
-            model_writer=bytes_io,
-            vocab_size=10,
-            model_type="WORD",
-            unk_id=0,
-            bos_id=1,
-            eos_id=2,
-        )
         self.preprocessor = XLMRobertaPreprocessor(
-            XLMRobertaTokenizer(proto=bytes_io.getvalue()),
+            XLMRobertaTokenizer(
+                # Generated using create_xlm_roberta_test_proto.py
+                proto=os.path.join(
+                    self.get_test_data_dir(), "xlm_roberta_test_vocab.spm"
+                )
+            ),
             sequence_length=5,
         )
         self.backbone = XLMRobertaBackbone(

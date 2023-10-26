@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
+import os
 
 import pytest
-import sentencepiece
 
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.tests.test_case import TestCase
@@ -23,24 +22,12 @@ from keras_nlp.tests.test_case import TestCase
 
 class FNetTokenizerTest(TestCase):
     def setUp(self):
-        vocab_data = ["the quick brown fox", "the earth is round"]
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(vocab_data),
-            model_writer=bytes_io,
-            vocab_size=12,
-            model_type="WORD",
-            pad_id=0,
-            unk_id=1,
-            bos_id=2,
-            eos_id=3,
-            pad_piece="<pad>",
-            unk_piece="<unk>",
-            bos_piece="[CLS]",
-            eos_piece="[SEP]",
-            user_defined_symbols="[MASK]",
-        )
-        self.init_kwargs = {"proto": bytes_io.getvalue()}
+        self.init_kwargs = {
+            # Generated using create_f_net_test_proto.py
+            "proto": os.path.join(
+                self.get_test_data_dir(), "f_net_test_vocab.spm"
+            )
+        }
         self.input_data = ["the quick brown fox.", "the earth is round."]
 
     def test_tokenizer_basics(self):
@@ -52,17 +39,13 @@ class FNetTokenizerTest(TestCase):
         )
 
     def test_errors_missing_special_tokens(self):
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(["abc"]),
-            model_writer=bytes_io,
-            vocab_size=5,
-            pad_id=-1,
-            eos_id=-1,
-            bos_id=-1,
-        )
         with self.assertRaises(ValueError):
-            FNetTokenizer(proto=bytes_io.getvalue())
+            FNetTokenizer(
+                # Generated using create_no_special_token_proto.py
+                proto=os.path.join(
+                    self.get_test_data_dir(), "no_special_token_vocab.spm"
+                )
+            )
 
     @pytest.mark.large
     def test_smallest_preset(self):
