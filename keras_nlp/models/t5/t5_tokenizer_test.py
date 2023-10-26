@@ -24,9 +24,7 @@ class T5TokenizerTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             # Generated using create_t5_test_proto.py
-            "proto": os.path.join(
-                (self.get_test_data_dir(), "t5_test_vocab.spm")
-            )
+            "proto": os.path.join(self.get_test_data_dir(), "t5_test_vocab.spm")
         }
         self.input_data = ["the quick brown fox.", "the earth is round."]
 
@@ -43,7 +41,7 @@ class T5TokenizerTest(TestCase):
             T5Tokenizer(
                 # Generated using create_no_special_token_proto.py
                 proto=os.path.join(
-                    (self.get_test_data_dir(), "no_special_token_vocab.spm")
+                    self.get_test_data_dir(), "no_special_token_vocab.spm"
                 )
             )
 
