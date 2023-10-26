@@ -66,7 +66,7 @@ if "KERAS_BACKEND" in os.environ and os.environ["KERAS_BACKEND"]:
     _MULTI_BACKEND = True
 
 # If keras is version 3, use multi-backend keras (our only option).
-_IS_KERAS_3 = version.parse(keras.__version__) >= version.parse("3.0.0")
+_IS_KERAS_3 = version.parse(keras.__version__) >= version.parse("3.0.0.dev0")
 if _IS_KERAS_3:
     _MULTI_BACKEND = True
 
