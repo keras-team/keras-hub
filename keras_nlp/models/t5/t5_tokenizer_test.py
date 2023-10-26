@@ -50,6 +50,7 @@ class T5TokenizerTest(TestCase):
         for preset in T5Tokenizer.presets:
             self.run_preset_test(
                 cls=T5Tokenizer,
+                preset=preset,
                 input_data=["The quick brown fox."],
                 expected_output=[[1996, 4248, 2829, 4419, 1012]],
             )
