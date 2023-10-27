@@ -22,6 +22,7 @@ from keras_nlp.models.whisper.whisper_multi_head_attention import (
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class WhisperEncoder(TransformerEncoder):
     """Whisper encoder.
 

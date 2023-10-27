@@ -60,6 +60,7 @@ def _get_output_shape(output_rank, known_last_dims):
     return [None] * (output_rank - len(known_last_dims)) + list(known_last_dims)
 
 
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class WhisperMultiHeadAttention(keras.layers.MultiHeadAttention):
     """Whisper Multi-Head Attention layer.
 
