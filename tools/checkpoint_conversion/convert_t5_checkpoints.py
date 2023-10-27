@@ -82,8 +82,10 @@ def convert_checkpoints(hf_model):
                 hf_wts[f"{section}.embed_tokens.weight"]
             )
             if not keras_nlp_model.tie_embedding_weights:
-                keras_nlp_model.get_layer("token_embedding").reverse_embeddings.assign(
-                    hf_wts[f"lm_head.weight"].transpose(1, 0).numpy()
+                keras_nlp_model.get_layer(
+                    "token_embedding"
+                ).reverse_embeddings.assign(
+                    hf_wts["lm_head.weight"].transpose(1, 0).numpy()
                 )
 
             # Query, key, value, and output projectors in self-attention
@@ -333,9 +335,13 @@ def check_output(
     )
 
     if keras_model.tie_embedding_weights:
-        keras_hidden_states = keras_hidden_states * (keras_model.hidden_dim ** -0.5)
+        keras_hidden_states = keras_hidden_states * (
+            keras_model.hidden_dim**-0.5
+        )
 
-    keras_logits = keras_model.token_embedding(keras_hidden_states, reverse=True)
+    keras_logits = keras_model.token_embedding(
+        keras_hidden_states, reverse=True
+    )
     hf_logits = hf_out.logits
     print("-> KerasNLP logits:", keras_logits[0:5])
     print("-> HF logits:", hf_logits[0:5])
