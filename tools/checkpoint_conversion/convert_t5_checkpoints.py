@@ -361,10 +361,7 @@ def main(_):
     os.mkdir(f"./{FLAGS.preset}")
 
     print("\n-> Convert weights.")
-    # if "flan" in hf_id:
     hf_model = transformers.T5ForConditionalGeneration.from_pretrained(hf_id)
-    # else:
-    #     hf_model = transformers.AutoModel.from_pretrained(hf_id)
     keras_model = convert_checkpoints(hf_model)
 
     # Save the model.
