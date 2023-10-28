@@ -37,7 +37,7 @@ class WhisperDecoder(TransformerDecoder):
     def build(
         self,
         decoder_sequence_shape,
-        encoder_sequence_shape=None,
+        encoder_sequence_shape,
     ):
         self._decoder_sequence_shape = decoder_sequence_shape
         self._encoder_sequence_shape = encoder_sequence_shape
@@ -62,16 +62,11 @@ class WhisperDecoder(TransformerDecoder):
             dtype=self.dtype_policy,
             name="self_attention",
         )
-        if hasattr(self._self_attention_layer, "_build_from_signature"):
-            self._self_attention_layer._build_from_signature(
-                query=decoder_sequence_shape,
-                value=decoder_sequence_shape,
-            )
-        else:
-            self._self_attention_layer.build(
-                query_shape=decoder_sequence_shape,
-                value_shape=decoder_sequence_shape,
-            )
+
+        self._self_attention_layer.build(
+            query_shape=decoder_sequence_shape,
+            value_shape=decoder_sequence_shape,
+        )
         self._self_attention_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
@@ -84,40 +79,31 @@ class WhisperDecoder(TransformerDecoder):
             name="self_attention_dropout",
         )
 
-        # Cross attention layers are optional.
-        self._cross_attention_layer = None
-        if encoder_sequence_shape:
-            self._cross_attention_layer = WhisperCachedMultiHeadAttention(
-                num_heads=self.num_heads,
-                key_dim=head_dim,
-                value_dim=head_dim,
-                dropout=self.dropout,
-                kernel_initializer=clone_initializer(self.kernel_initializer),
-                bias_initializer=clone_initializer(self.bias_initializer),
-                dtype=self.dtype_policy,
-                name="cross_attention",
-            )
-            if hasattr(self._cross_attention_layer, "_build_from_signature"):
-                self._cross_attention_layer._build_from_signature(
-                    query=decoder_sequence_shape,
-                    value=encoder_sequence_shape,
-                )
-            else:
-                self._cross_attention_layer.build(
-                    query_shape=decoder_sequence_shape,
-                    value_shape=encoder_sequence_shape,
-                )
-            self._cross_attention_layer_norm = keras.layers.LayerNormalization(
-                epsilon=self.layer_norm_epsilon,
-                dtype=self.dtype_policy,
-                name="cross_attention_layer_norm",
-            )
-            self._cross_attention_layer_norm.build(decoder_sequence_shape)
-            self._cross_attention_dropout = keras.layers.Dropout(
-                rate=self.dropout,
-                dtype=self.dtype_policy,
-                name="cross_attention_dropout",
-            )
+        self._cross_attention_layer = WhisperCachedMultiHeadAttention(
+            num_heads=self.num_heads,
+            key_dim=head_dim,
+            value_dim=head_dim,
+            dropout=self.dropout,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
+            dtype=self.dtype_policy,
+            name="cross_attention",
+        )
+        self._cross_attention_layer.build(
+            query_shape=decoder_sequence_shape,
+            value_shape=encoder_sequence_shape,
+        )
+        self._cross_attention_layer_norm = keras.layers.LayerNormalization(
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="cross_attention_layer_norm",
+        )
+        self._cross_attention_layer_norm.build(decoder_sequence_shape)
+        self._cross_attention_dropout = keras.layers.Dropout(
+            rate=self.dropout,
+            dtype=self.dtype_policy,
+            name="cross_attention_dropout",
+        )
 
         # Feedforward layers.
         self._feedforward_intermediate_dense = keras.layers.Dense(

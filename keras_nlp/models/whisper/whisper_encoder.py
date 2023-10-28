@@ -16,8 +16,8 @@
 
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.transformer_encoder import TransformerEncoder
-from keras_nlp.models.whisper.whisper_multi_head_attention import (
-    WhisperMultiHeadAttention,
+from keras_nlp.models.whisper.whisper_cached_multi_head_attention import (
+    WhisperCachedMultiHeadAttention,
 )
 from keras_nlp.utils.keras_utils import clone_initializer
 
@@ -28,7 +28,7 @@ class WhisperEncoder(TransformerEncoder):
 
     Inherits from `keras_nlp.layers.TransformerEncoder`, and overrides the
     `_build` method to use the
-    `keras_nlp.models.whisper.whisper_multi_head_attention.WhisperMultiHeadAttention`
+    `keras_nlp.models.whisper.whisper_multi_head_attention.WhisperCachedMultiHeadAttention`
     layer instead of `keras.layers.MultiHeadAttention`.
     """
 
@@ -45,7 +45,7 @@ class WhisperEncoder(TransformerEncoder):
             )
 
         # Self attention layers.
-        self._self_attention_layer = WhisperMultiHeadAttention(
+        self._self_attention_layer = WhisperCachedMultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=key_dim,
             dropout=self.dropout,
