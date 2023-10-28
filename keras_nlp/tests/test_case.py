@@ -24,6 +24,7 @@ from absl.testing import parameterized
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
+from keras_nlp.tokenizers.tokenizer import Tokenizer
 from keras_nlp.utils.tensor_utils import is_float_dtype
 from keras_nlp.utils.tensor_utils import standardize_dtype
 
@@ -203,7 +204,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         init_kwargs,
         input_data,
         expected_output=None,
-        batch_size=2,
+        expected_detokenize_output=None,
     ):
         """Run basic tests for a preprocessing layer."""
         layer = cls(**init_kwargs)
@@ -218,6 +219,13 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             output = layer(*input_data)
         else:
             output = layer(input_data)
+
+        # For tokenizers only, also check detokenize.
+        if isinstance(layer, Tokenizer):
+            if not expected_detokenize_output:
+                expected_detokenize_output = input_data
+            detokenize_output = layer.detokenize(output)
+            self.assertAllEqual(detokenize_output, expected_detokenize_output)
 
         # Run with an unbatched dataset.
         output_ds = ds.map(layer).ragged_batch(1_000)

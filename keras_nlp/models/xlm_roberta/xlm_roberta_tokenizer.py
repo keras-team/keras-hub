@@ -157,9 +157,6 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         return tf.add(tokens, 1)
 
     def detokenize(self, inputs):
-        if inputs.dtype == tf.string:
-            return super().detokenize(inputs)
-
         tokens = tf.ragged.boolean_mask(
             inputs, tf.not_equal(inputs, self.mask_token_id)
         )
