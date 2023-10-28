@@ -81,6 +81,12 @@ def convert_checkpoints(hf_model):
             keras_nlp_model.get_layer("token_embedding").embeddings.assign(
                 hf_wts[f"{section}.embed_tokens.weight"]
             )
+            if not keras_nlp_model.tie_embedding_weights:
+                keras_nlp_model.get_layer(
+                    "token_embedding"
+                ).reverse_embeddings.assign(
+                    hf_wts["lm_head.weight"].transpose(1, 0).numpy()
+                )
 
             # Query, key, value, and output projectors in self-attention
             keras_nlp_model.get_layer(
@@ -308,23 +314,39 @@ def check_output(
         print(k, v)
 
     # Forward pass
-    keras_outputs = keras_model(keras_inputs)
-    hf_outputs = hf_model(**hf_inputs)
+    keras_out = keras_model(keras_inputs)
+    hf_out = hf_model(**hf_inputs, output_hidden_states=True)
 
     # Only compare non-padded token ids.
-    keras_outputs = keras_outputs["decoder_sequence_output"]
+    keras_hidden_states = keras_out["decoder_sequence_output"]
+    hf_hidden_states = hf_out.decoder_hidden_states[-1]
+
     keras_outputs = ops.take_along_axis(
-        keras_outputs, ops.where(decoder_padding_mask)
+        keras_hidden_states, ops.where(decoder_padding_mask)
     )
-    hf_outputs = hf_outputs.last_hidden_state
     hf_outputs = ops.take_along_axis(
-        hf_outputs, ops.where(decoder_padding_mask)
+        hf_hidden_states, ops.where(decoder_padding_mask)
     )
 
     print("-> KerasNLP output:", keras_outputs[0:5])
     print("-> HF output:", hf_outputs[0:5])
     np.testing.assert_allclose(
         keras_outputs.detach().numpy(), hf_outputs.detach().numpy(), atol=1e-5
+    )
+
+    if keras_model.tie_embedding_weights:
+        keras_hidden_states = keras_hidden_states * (
+            keras_model.hidden_dim**-0.5
+        )
+
+    keras_logits = keras_model.token_embedding(
+        keras_hidden_states, reverse=True
+    )
+    hf_logits = hf_out.logits
+    print("-> KerasNLP logits:", keras_logits[0:5])
+    print("-> HF logits:", hf_logits[0:5])
+    np.testing.assert_allclose(
+        keras_logits.detach().numpy(), hf_logits.detach().numpy(), atol=1e-3
     )
 
 
@@ -339,7 +361,7 @@ def main(_):
     os.mkdir(f"./{FLAGS.preset}")
 
     print("\n-> Convert weights.")
-    hf_model = transformers.AutoModel.from_pretrained(hf_id)
+    hf_model = transformers.T5ForConditionalGeneration.from_pretrained(hf_id)
     keras_model = convert_checkpoints(hf_model)
 
     # Save the model.
