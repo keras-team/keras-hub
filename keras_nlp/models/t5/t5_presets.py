@@ -40,7 +40,7 @@ backbone_presets = {
         },
         "preprocessor_config": {},
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/t5_small_multi/v1/model.weights.h5",
-        "weights_hash": "2e10b5f72405d464ee55026b07e6074",
+        "weights_hash": "2e10b5f72405d464ee55026b07e60741",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/t5_small_multi/v1/vocab.spm",
         "vocabulary_hash": "9d15ef55d09d5a425ceb63fa31f7cae3",
     },
