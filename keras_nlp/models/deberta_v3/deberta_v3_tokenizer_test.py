@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
+import os
 
 import pytest
-import sentencepiece
 
 from keras_nlp.models.deberta_v3.deberta_v3_tokenizer import DebertaV3Tokenizer
 from keras_nlp.tests.test_case import TestCase
@@ -23,24 +22,12 @@ from keras_nlp.tests.test_case import TestCase
 
 class DebertaV3TokenizerTest(TestCase):
     def setUp(self):
-        vocab_data = ["the quick brown fox", "the earth is round"]
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(vocab_data),
-            model_writer=bytes_io,
-            vocab_size=11,
-            model_type="WORD",
-            pad_id=0,
-            bos_id=1,
-            eos_id=2,
-            unk_id=3,
-            pad_piece="[PAD]",
-            bos_piece="[CLS]",
-            eos_piece="[SEP]",
-            unk_piece="[UNK]",
+        # Generated using create_deberta_v3_test_proto.py
+        proto = os.path.join(
+            self.get_test_data_dir(), "deberta_v3_test_vocab.spm"
         )
-        self.tokenizer = DebertaV3Tokenizer(proto=bytes_io.getvalue())
-        self.init_kwargs = {"proto": bytes_io.getvalue()}
+        self.tokenizer = DebertaV3Tokenizer(proto=proto)
+        self.init_kwargs = {"proto": proto}
         self.input_data = ["the quick brown fox.", "the earth is round."]
 
     def test_tokenizer_basics(self):
@@ -48,28 +35,24 @@ class DebertaV3TokenizerTest(TestCase):
             cls=DebertaV3Tokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output=[[4, 9, 5, 3], [4, 6, 8, 3]],
+            expected_output=[[5, 10, 6, 3], [5, 7, 9, 3]],
         )
 
     def test_errors_missing_special_tokens(self):
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(["abc"]),
-            model_writer=bytes_io,
-            vocab_size=5,
-            pad_id=-1,
-            eos_id=-1,
-            bos_id=-1,
-        )
         with self.assertRaises(ValueError):
-            DebertaV3Tokenizer(proto=bytes_io.getvalue())
+            DebertaV3Tokenizer(
+                # Generated using create_no_special_token_proto.py
+                proto=os.path.join(
+                    self.get_test_data_dir(), "no_special_token_vocab.spm"
+                )
+            )
 
     def test_mask_token_handling(self):
         tokenizer = DebertaV3Tokenizer(**self.init_kwargs)
-        self.assertEqual(tokenizer.get_vocabulary()[11], "[MASK]")
-        self.assertEqual(tokenizer.id_to_token(11), "[MASK]")
-        self.assertEqual(tokenizer.token_to_id("[MASK]"), 11)
-        input_data = [[4, 9, 5, 7, self.tokenizer.mask_token_id]]
+        self.assertEqual(tokenizer.get_vocabulary()[4], "[MASK]")
+        self.assertEqual(tokenizer.id_to_token(4), "[MASK]")
+        self.assertEqual(tokenizer.token_to_id("[MASK]"), 4)
+        input_data = [[5, 10, 6, 8, self.tokenizer.mask_token_id]]
         output = tokenizer.detokenize(input_data)
         self.assertEqual(output, ["the quick brown fox"])
 

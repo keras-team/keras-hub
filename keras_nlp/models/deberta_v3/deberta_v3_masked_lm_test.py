@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
+import os
 
 import pytest
-import sentencepiece
 
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_masked_lm import DebertaV3MaskedLM
@@ -29,25 +28,13 @@ from keras_nlp.tests.test_case import TestCase
 class DebertaV3MaskedLMTest(TestCase):
     def setUp(self):
         # Setup model.
-        vocab_data = ["the quick brown fox", "the earth is round"]
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(vocab_data),
-            model_writer=bytes_io,
-            vocab_size=12,
-            model_type="WORD",
-            pad_id=0,
-            bos_id=1,
-            eos_id=2,
-            unk_id=3,
-            pad_piece="[PAD]",
-            bos_piece="[CLS]",
-            eos_piece="[SEP]",
-            unk_piece="[UNK]",
-            user_defined_symbols="[MASK]",
-        )
         self.preprocessor = DebertaV3MaskedLMPreprocessor(
-            DebertaV3Tokenizer(proto=bytes_io.getvalue()),
+            DebertaV3Tokenizer(
+                # Generated using create_deberta_v3_test_proto.py
+                proto=os.path.join(
+                    self.get_test_data_dir(), "deberta_v3_test_vocab.spm"
+                )
+            ),
             # Simplify our testing by masking every available token.
             mask_selection_rate=1.0,
             mask_token_rate=1.0,

@@ -14,6 +14,7 @@
 
 import json
 import os
+import pathlib
 import re
 
 import tensorflow as tf
@@ -417,3 +418,6 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 self.assertAllClose(actual, expected, atol=0.01, rtol=0.01)
 
             tree.map_structure(compare, output, expected_partial_output)
+
+    def get_test_data_dir(self):
+        return str(pathlib.Path(__file__).parent / "test_data")

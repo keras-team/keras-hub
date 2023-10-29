@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
+import os
 
 import pytest
-import sentencepiece
 
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_masked_lm import FNetMaskedLM
@@ -29,25 +28,13 @@ from keras_nlp.tests.test_case import TestCase
 class FNetMaskedLMTest(TestCase):
     def setUp(self):
         # Setup model.
-        vocab_data = ["the quick brown fox", "the earth is round"]
-        bytes_io = io.BytesIO()
-        sentencepiece.SentencePieceTrainer.train(
-            sentence_iterator=iter(vocab_data),
-            model_writer=bytes_io,
-            vocab_size=12,
-            model_type="WORD",
-            pad_id=0,
-            unk_id=1,
-            bos_id=2,
-            eos_id=3,
-            pad_piece="<pad>",
-            unk_piece="<unk>",
-            bos_piece="[CLS]",
-            eos_piece="[SEP]",
-            user_defined_symbols="[MASK]",
-        )
         self.preprocessor = FNetMaskedLMPreprocessor(
-            FNetTokenizer(proto=bytes_io.getvalue()),
+            FNetTokenizer(
+                # Generated using create_f_net_test_proto.py
+                proto=os.path.join(
+                    self.get_test_data_dir(), "f_net_test_vocab.spm"
+                )
+            ),
             # Simplify our testing by masking every available token.
             mask_selection_rate=1.0,
             mask_token_rate=1.0,
