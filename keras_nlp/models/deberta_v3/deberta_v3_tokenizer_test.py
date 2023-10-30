@@ -28,14 +28,14 @@ class DebertaV3TokenizerTest(TestCase):
         )
         self.tokenizer = DebertaV3Tokenizer(proto=proto)
         self.init_kwargs = {"proto": proto}
-        self.input_data = ["the quick brown fox.", "the earth is round."]
+        self.input_data = ["the quick brown fox", "the earth is round"]
 
     def test_tokenizer_basics(self):
         self.run_preprocessing_layer_test(
             cls=DebertaV3Tokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output=[[5, 10, 6, 3], [5, 7, 9, 3]],
+            expected_output=[[5, 10, 6, 8], [5, 7, 9, 11]],
         )
 
     def test_errors_missing_special_tokens(self):

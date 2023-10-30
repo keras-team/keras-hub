@@ -30,14 +30,14 @@ class XLMRobertaTokenizerTest(TestCase):
                 self.get_test_data_dir(), "xlm_roberta_test_vocab.spm"
             )
         }
-        self.input_data = ["the quick brown fox.", "the earth is round."]
+        self.input_data = ["the quick brown fox", "the earth is round"]
 
     def test_tokenizer_basics(self):
         self.run_preprocessing_layer_test(
             cls=XLMRobertaTokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output=[[6, 11, 7, 2], [6, 8, 10, 2]],
+            expected_output=[[6, 11, 7, 9], [6, 8, 10, 12]],
         )
 
     @pytest.mark.large
