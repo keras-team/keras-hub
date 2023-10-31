@@ -12,20 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
-from keras_nlp.layers.modeling.token_and_position_embedding import (
-    PositionEmbedding, ReversibleEmbedding
-)
+from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
+from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.layers.modeling.transformer_encoder import TransformerEncoder
 from keras_nlp.models.backbone import Backbone
-from keras_nlp.utils.python_utils import classproperty
 
 
 def electra_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
+
 
 @keras_nlp_export("keras_nlp.models.ElectraBackbone")
 class ElectraBackbone(Backbone):
@@ -46,20 +43,56 @@ class ElectraBackbone(Backbone):
     warranties or conditions of any kind. The underlying model is provided by a
     third party and subject to a separate license, available
     [here](https://huggingface.co/docs/transformers/model_doc/electra#overview).
+
+    Args:
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers.
+        num_heads: int. The number of attention heads for each transformer.
+            The hidden size must be divisible by the number of attention heads.
+        hidden_dim: int. The size of the transformer encoding and pooler layers.
+        embedding_size: int. The size of the token embeddings.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            a two-layer feedforward network for each transformer.
+        dropout: float. Dropout probability for the Transformer encoder.
+        max_sequence_length: int. The maximum sequence length that this encoder
+            can consume. If None, `max_sequence_length` uses the value from
+            sequence length. This determines the variable shape for positional
+            embeddings.
+
+    Examples:
+        ```python
+        input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "segment_ids": np.array([[0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0]]),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+        }
+        # Randomly initialized Electra encoder
+        backbone = keras_nlp.models.ElectraBackbone(
+            vocabulary_size=1000,
+            num_layers=2,
+            num_heads=2,
+            hidden_size=32,
+            intermediate_dim=64,
+            dropout=0.1,
+            max_sequence_length=512,
+            )
+        # Returns sequence and pooled outputs.
+        sequence_output, pooled_output = backbone(input_data)
+        ```
     """
 
     def __init__(
-         self,
-         vocabulary_size,
-         num_layers,
-         num_heads,
-         embedding_size,
-         hidden_size,
-         intermediate_dim,
-         dropout=0.1,
-         max_sequence_length=512,
-         num_segments=2,
-         **kwargs
+        self,
+        vocabulary_size,
+        num_layers,
+        num_heads,
+        embedding_size,
+        hidden_size,
+        intermediate_size,
+        dropout=0.1,
+        max_sequence_length=512,
+        num_segments=2,
+        **kwargs,
     ):
         # Index of classification token in the vocabulary
         cls_token_index = 0
@@ -83,14 +116,12 @@ class ElectraBackbone(Backbone):
         )
         token_embedding = token_embedding_layer(token_id_input)
         position_embedding = PositionEmbedding(
-            input_dim=max_sequence_length,
-            output_dim=embedding_size,
-            merge_mode="add",
-            embeddings_initializer=electra_kernel_initializer(),
+            initializer=electra_kernel_initializer(),
+            sequence_length=max_sequence_length,
             name="position_embedding",
         )(token_embedding)
         segment_embedding = keras.layers.Embedding(
-            input_dim=max_sequence_length,
+            input_dim=num_segments,
             output_dim=embedding_size,
             embeddings_initializer=electra_kernel_initializer(),
             name="segment_embedding",
@@ -124,7 +155,7 @@ class ElectraBackbone(Backbone):
         for i in range(num_layers):
             x = TransformerEncoder(
                 num_heads=num_heads,
-                intermediate_dim=intermediate_dim,
+                intermediate_dim=intermediate_size,
                 activation="gelu",
                 dropout=dropout,
                 layer_norm_epsilon=1e-12,
@@ -161,7 +192,7 @@ class ElectraBackbone(Backbone):
         self.num_heads = num_heads
         self.hidden_size = hidden_size
         self.embedding_size = embedding_size
-        self.intermediate_dim = intermediate_dim
+        self.intermediate_dim = intermediate_size
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
         self.num_segments = num_segments
@@ -186,13 +217,3 @@ class ElectraBackbone(Backbone):
             }
         )
         return config
-
-
-
-
-
-
-
-
-
-
