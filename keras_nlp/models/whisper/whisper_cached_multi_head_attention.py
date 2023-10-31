@@ -13,7 +13,7 @@
 # limitations under the License.
 """Whisper Cached Multi-Head Attention layer."""
 
-
+import collections
 import string
 
 import keras_nlp
@@ -125,10 +125,23 @@ class WhisperCachedMultiHeadAttention(
         # attention.  These computations could be wrapped into the keras
         # attention layer once it supports multi-head einsum computations.
         self._build_attention(output_rank)
-        self._output_dense = self._make_output_dense(
-            query_shape,
-            self._get_common_kwargs_for_sublayer(),
-            "attention_output",
+
+        if self._output_shape:
+            if not isinstance(self._output_shape, collections.abc.Sized):
+                output_shape = [self._output_shape]
+            else:
+                output_shape = self._output_shape
+        else:
+            output_shape = [query_shape[-1]]
+        einsum_equation, bias_axes, output_rank = _build_proj_equation(
+            query_rank - 1, bound_dims=2, output_dims=len(output_shape)
+        )
+        self._output_dense = keras.layers.EinsumDense(
+            einsum_equation,
+            output_shape=_get_output_shape(output_rank - 1, output_shape),
+            bias_axes=bias_axes if self._use_bias else None,
+            name="attention_output",
+            **self._get_common_kwargs_for_sublayer(),
         )
         output_dense_input_shape = list(
             self._query_dense.compute_output_shape(query_shape)
