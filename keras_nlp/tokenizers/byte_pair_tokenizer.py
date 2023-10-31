@@ -20,7 +20,6 @@ but is TF graph compatible.
 """
 
 import json
-import os
 from typing import Iterable
 from typing import List
 
@@ -28,8 +27,9 @@ import regex as re
 import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
 from keras_nlp.tokenizers import tokenizer
+from keras_nlp.utils.model_utils import get_file
+from keras_nlp.utils.model_utils import get_preset_config
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
@@ -619,33 +619,19 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         tokenizer.detokenize([5, 6, 7, 8, 9])
         ```
         """
-
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class"
-            )
-
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-
-        vocabulary = keras.utils.get_file(
-            "vocab.json",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["vocabulary_hash"],
+        preset_config = get_preset_config(cls, preset)
+        vocabulary = get_file(
+            preset,
+            path=preset_config["vocabulary_url"],
+            hash=preset_config["vocabulary_hash"],
         )
-        merges = keras.utils.get_file(
-            "merges.txt",
-            metadata["merges_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["merges_hash"],
+        merges = get_file(
+            preset,
+            path=preset_config["merges_url"],
+            hash=preset_config["merges_hash"],
         )
 
-        config = metadata["preprocessor_config"]
+        config = preset_config["preprocessor_config"]
         config.update(
             {
                 "vocabulary": vocabulary,

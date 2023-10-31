@@ -14,14 +14,14 @@
 
 import base64
 import binascii
-import os
 from typing import List
 
 import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
 from keras_nlp.tokenizers import tokenizer
+from keras_nlp.utils.model_utils import get_file
+from keras_nlp.utils.model_utils import get_preset_config
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
@@ -248,30 +248,17 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         tokenizer.detokenize([5, 6, 7, 8, 9])
         ```
         """
-
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class"
-            )
-
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-
-        spm_proto = keras.utils.get_file(
-            "vocab.spm",
-            metadata["spm_proto_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["spm_proto_hash"],
+        preset_config = get_preset_config(cls, preset)
+        vocabulary = get_file(
+            preset,
+            path=preset_config["vocabulary_url"],
+            hash=preset_config["vocabulary_hash"],
         )
 
-        config = metadata["preprocessor_config"]
+        config = preset_config["preprocessor_config"]
         config.update(
             {
-                "proto": spm_proto,
+                "proto": vocabulary,
             },
         )
 

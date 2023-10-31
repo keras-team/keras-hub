@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
 from keras_nlp.backend import keras
+from keras_nlp.utils.model_utils import get_file
+from keras_nlp.utils.model_utils import get_preset_config
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -94,33 +94,19 @@ class Backbone(keras.Model):
         )
         ```
         """
+        preset_config = get_preset_config(cls, preset)
 
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class."
-            )
-
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-        config = metadata["config"]
+        config = preset_config["config"]
         model = cls.from_config({**config, **kwargs})
 
-        if not load_weights:
-            return model
+        if load_weights:
+            weights = get_file(
+                preset,
+                path=preset_config["weights_url"],
+                hash=preset_config["weights_hash"],
+            )
+            model.load_weights(weights)
 
-        filename = os.path.basename(metadata["weights_url"])
-        weights = keras.utils.get_file(
-            filename,
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
-        )
-
-        model.load_weights(weights)
         return model
 
     def __init_subclass__(cls, **kwargs):

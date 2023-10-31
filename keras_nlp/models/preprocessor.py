@@ -16,6 +16,7 @@ from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_nlp.utils.model_utils import get_preset_config
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -81,24 +82,14 @@ class Preprocessor(PreprocessingLayer):
         )
         ```
         """
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class."
-            )
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-
         tokenizer = cls.tokenizer_cls.from_preset(preset)
 
-        metadata = cls.presets[preset]
+        preset_config = get_preset_config(cls, preset)
         # For task model presets, the backbone config is nested.
-        if "backbone" in metadata["config"]:
-            backbone_config = metadata["config"]["backbone"]["config"]
+        if "backbone" in preset_config["config"]:
+            backbone_config = preset_config["config"]["backbone"]["config"]
         else:
-            backbone_config = metadata["config"]
+            backbone_config = preset_config["config"]
 
         # Use model's `max_sequence_length` if `sequence_length` unspecified;
         # otherwise check that `sequence_length` not too long.

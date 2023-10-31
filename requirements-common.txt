@@ -13,6 +13,7 @@ pytest
 pytest-cov
 build
 namex
+kagglehub
 # Optional deps.
 rouge-score
 sentencepiece

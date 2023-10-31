@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
 from rich import console as rich_console
 from rich import markup
 from rich import table as rich_table
@@ -21,6 +19,8 @@ from rich import table as rich_table
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.keras_utils import print_msg
+from keras_nlp.utils.model_utils import get_file
+from keras_nlp.utils.model_utils import get_preset_config
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -171,41 +171,29 @@ class Task(PipelineModel):
         )
         ```
         """
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class."
-            )
-
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-
         if "preprocessor" not in kwargs:
             kwargs["preprocessor"] = cls.preprocessor_cls.from_preset(preset)
 
-        # Check if preset is backbone-only model
-        if preset in cls.backbone_cls.presets:
+        # TODO: support task models from kaggle.
+        # Check if preset is backbone-only model.
+        backbone_presets = cls.backbone_cls.presets
+        if preset not in cls.presets or preset in backbone_presets:
             backbone = cls.backbone_cls.from_preset(preset, load_weights)
             return cls(backbone, **kwargs)
 
-        # Otherwise must be one of class presets
-        metadata = cls.presets[preset]
-        config = metadata["config"]
+        # Otherwise must be one of class presets.
+        preset_config = get_preset_config(cls, preset)
+        config = preset_config["config"]
         model = cls.from_config({**config, **kwargs})
 
-        if not load_weights:
-            return model
+        if load_weights:
+            weights = get_file(
+                preset,
+                path=preset_config["weights_url"],
+                hash=preset_config["weights_hash"],
+            )
+            model.load_weights(weights)
 
-        weights = keras.utils.get_file(
-            "model.h5",
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
-        )
-
-        model.load_weights(weights)
         return model
 
     def __init_subclass__(cls, **kwargs):

@@ -37,8 +37,8 @@ backbone_presets = {
         "preprocessor_config": {},
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/f_net_base_en/v1/model.h5",
         "weights_hash": "35db90842b85a985a0e54c86c00746fe",
-        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/f_net_base_en/v1/vocab.spm",
-        "spm_proto_hash": "71c5f4610bef1daf116998a113a01f3d",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/f_net_base_en/v1/vocab.spm",
+        "vocabulary_hash": "71c5f4610bef1daf116998a113a01f3d",
     },
     "f_net_large_en": {
         "metadata": {
@@ -63,7 +63,7 @@ backbone_presets = {
         "preprocessor_config": {},
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/f_net_large_en/v1/model.h5",
         "weights_hash": "7ae4a3faa67ff054f8cecffb5619f779",
-        "spm_proto_url": "https://storage.googleapis.com/keras-nlp/models/f_net_large_en/v1/vocab.spm",
-        "spm_proto_hash": "71c5f4610bef1daf116998a113a01f3d",
+        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/f_net_large_en/v1/vocab.spm",
+        "vocabulary_hash": "71c5f4610bef1daf116998a113a01f3d",
     },
 }
