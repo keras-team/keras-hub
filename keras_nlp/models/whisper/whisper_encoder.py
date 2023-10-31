@@ -54,16 +54,11 @@ class WhisperEncoder(TransformerEncoder):
             dtype=self.dtype_policy,
             name="self_attention_layer",
         )
-        if hasattr(self._self_attention_layer, "_build_from_signature"):
-            self._self_attention_layer._build_from_signature(
-                query=inputs_shape,
-                value=inputs_shape,
-            )
-        else:
-            self._self_attention_layer.build(
-                query_shape=inputs_shape,
-                value_shape=inputs_shape,
-            )
+        self._self_attention_layer.build(
+            query_shape=inputs_shape,
+            value_shape=inputs_shape,
+        )
+
         self._self_attention_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
