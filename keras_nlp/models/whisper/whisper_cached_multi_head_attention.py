@@ -103,6 +103,7 @@ class WhisperCachedMultiHeadAttention(
             output_shape=_get_output_shape(
                 output_rank - 1, [self._num_heads, self._key_dim]
             ),
+            bias_axes=None,
             name="key",
             **self._get_common_kwargs_for_sublayer(),
         )
