@@ -112,6 +112,8 @@ class WhisperTokenizer(BytePairTokenizer):
         self.translate_token_id = special_tokens[translate_token]
         self.transcribe_token_id = special_tokens[transcribe_token]
 
+        self.end_token_id = self.eos_token_id
+
         # TODO: Add language tokens to `unsplittable_tokens` once we figure
         # out the performance issue with a large list.
         unsplittable_tokens = list(special_tokens.keys())
