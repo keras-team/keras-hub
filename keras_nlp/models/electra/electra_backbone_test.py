@@ -22,7 +22,7 @@ from keras_nlp.tests.test_case import TestCase
 class ElectraBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
-            "vocabulary_size": 10,
+            "vocab_size": 10,
             "num_layers": 2,
             "num_heads": 2,
             "hidden_size": 2,

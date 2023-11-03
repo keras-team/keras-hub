@@ -17,6 +17,7 @@ from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.layers.modeling.transformer_encoder import TransformerEncoder
+from keras_nlp.utils.keras_utils import gelu_approximate
 from keras_nlp.models.backbone import Backbone
 
 
@@ -83,7 +84,7 @@ class ElectraBackbone(Backbone):
 
     def __init__(
         self,
-        vocabulary_size,
+        vocab_size,
         num_layers,
         num_heads,
         embedding_size,
@@ -109,7 +110,7 @@ class ElectraBackbone(Backbone):
 
         # Embed tokens, positions, and segment ids.
         token_embedding_layer = ReversibleEmbedding(
-            input_dim=vocabulary_size,
+            input_dim=vocab_size,
             output_dim=embedding_size,
             embeddings_initializer=electra_kernel_initializer(),
             name="token_embedding",
@@ -156,11 +157,11 @@ class ElectraBackbone(Backbone):
             x = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_size,
-                activation="gelu",
+                activation=gelu_approximate,
                 dropout=dropout,
                 layer_norm_epsilon=1e-12,
                 kernel_initializer=electra_kernel_initializer(),
-                name=f"transformer_layer_{i}",
+                name=f"encoder_layer_{i}",
             )(x, padding_mask=padding_mask)
 
         sequence_output = x
@@ -187,12 +188,12 @@ class ElectraBackbone(Backbone):
         )
 
         # All references to self below this line
-        self.vocab_size = vocabulary_size
+        self.vocab_size = vocab_size
         self.num_layers = num_layers
         self.num_heads = num_heads
         self.hidden_size = hidden_size
         self.embedding_size = embedding_size
-        self.intermediate_dim = intermediate_size
+        self.intermediate_size = intermediate_size
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
         self.num_segments = num_segments
@@ -208,12 +209,10 @@ class ElectraBackbone(Backbone):
                 "num_heads": self.num_heads,
                 "hidden_size": self.hidden_size,
                 "embedding_size": self.embedding_size,
-                "intermediate_dim": self.intermediate_dim,
+                "intermediate_size": self.intermediate_size,
                 "dropout": self.dropout,
                 "max_sequence_length": self.max_sequence_length,
                 "num_segments": self.num_segments,
-                "cls_token_index": self.cls_token_index,
-                "token_embedding": self.token_embedding,
             }
         )
         return config
