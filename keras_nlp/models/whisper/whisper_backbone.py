@@ -271,7 +271,7 @@ class WhisperBackbone(Backbone):
         self.dropout = dropout
         self.max_encoder_sequence_length = max_encoder_sequence_length
         self.max_decoder_sequence_length = max_decoder_sequence_length
-        self.token_embedding = embedding_layer
+        self.token_embedding = embedding_layer.token_embedding
 
     def get_config(self):
         config = super().get_config()
