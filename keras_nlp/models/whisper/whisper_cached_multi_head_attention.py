@@ -150,3 +150,6 @@ class WhisperCachedMultiHeadAttention(
         output_dense_input_shape[-1] = self._value_dim
         self._output_dense.build(tuple(output_dense_input_shape))
         self.built = True
+
+    def _build_from_signature(self, query, value, key=None):
+        pass
