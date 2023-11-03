@@ -82,7 +82,7 @@ class T5Backbone(Backbone):
         activation="relu",
         use_gated_activation=True,
         layer_norm_epsilon=1e-06,
-        tie_embedding_weights=False,
+        tie_embedding_weights=True,
         **kwargs,
     ):
         # Encoder inputs
