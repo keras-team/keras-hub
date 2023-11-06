@@ -15,11 +15,8 @@
 import json
 import os
 
-import keras
-from packaging import version
-
 _MULTI_BACKEND = False
-_IS_KERAS_3 = False
+_USE_KERAS_3 = False
 
 # Set Keras base dir path given KERAS_HOME env variable, if applicable.
 # Otherwise either ~/.keras or /tmp.
@@ -65,15 +62,27 @@ if not os.path.exists(_config_path):
 if "KERAS_BACKEND" in os.environ and os.environ["KERAS_BACKEND"]:
     _MULTI_BACKEND = True
 
-# If keras is version 3, use multi-backend keras (our only option).
-_IS_KERAS_3 = version.parse(keras.__version__) >= version.parse("3.0.0.dev0")
-if _IS_KERAS_3:
+
+def detect_if_tensorflow_uses_keras_3():
+    # We follow the version of keras that tensorflow is configured to use.
+    from tensorflow import keras
+
+    # Note that only recent versions of keras have a `version()` function.
+    if hasattr(keras, "version") and keras.version().startswith("3."):
+        return True
+
+    # No `keras.version()` means we are on an old version of keras.
+    return False
+
+
+_USE_KERAS_3 = detect_if_tensorflow_uses_keras_3()
+if _USE_KERAS_3:
     _MULTI_BACKEND = True
 
 
 def keras_3():
-    """Check if Keras 3 is installed."""
-    return _IS_KERAS_3
+    """Check if Keras 3 is being used."""
+    return _USE_KERAS_3
 
 
 def multi_backend():
@@ -89,4 +98,7 @@ def backend():
         import keras_core
 
         return keras_core.config.backend()
+
+    from tensorflow import keras
+
     return keras.config.backend()
