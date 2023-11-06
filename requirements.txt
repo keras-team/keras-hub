@@ -1,6 +1,6 @@
 # Tensorflow.
-tensorflow>=2.14.0
-tensorflow-text>=2.14.0
+tf-nightly-cpu==2.16.0.dev20231103  # Pin a working nightly until rc0.
+tensorflow-text-nightly==2.16.0.dev20231103  # Pin a working nightly until rc0.
 
 # Torch.
 --extra-index-url https://download.pytorch.org/whl/cpu

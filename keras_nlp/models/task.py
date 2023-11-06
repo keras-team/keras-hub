@@ -79,6 +79,9 @@ class Task(PipelineModel):
             )
 
     def compile(self, optimizer="rmsprop", loss=None, **kwargs):
+        # Temporarily disable jit compilation on torch.
+        if config.backend() == "torch":
+            kwargs["jit_compile"] = False
         self._check_for_loss_mismatch(loss)
         super().compile(optimizer=optimizer, loss=loss, **kwargs)
 

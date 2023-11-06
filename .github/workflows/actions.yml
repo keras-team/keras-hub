@@ -7,7 +7,7 @@ on:
     types: [created]
 jobs:
   build:
-    name: Test the code with tf.keras
+    name: Test the code with Keras 2
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -29,7 +29,8 @@ jobs:
             ${{ runner.os }}-pip-
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt --progress-bar off
+          pip install -r requirements-common.txt --progress-bar off
+          pip install tensorflow-text==2.14 tensorflow==2.14 keras-core
           pip install --no-deps -e "." --progress-bar off
       - name: Test with pytest
         run: |
@@ -38,7 +39,7 @@ jobs:
         run: |
           python pip_build.py --install && cd integration_tests && pytest .
   multibackend:
-    name: Test the code with Keras Core
+    name: Test the code with Keras 3
     strategy:
       fail-fast: false
       matrix:
