@@ -25,9 +25,9 @@ class ElectraBackboneTest(TestCase):
             "vocab_size": 10,
             "num_layers": 2,
             "num_heads": 2,
-            "hidden_size": 2,
-            "embedding_size": 2,
-            "intermediate_size": 4,
+            "hidden_dim": 2,
+            "embedding_dim": 2,
+            "intermediate_dim": 4,
             "max_sequence_length": 5,
         }
         self.input_data = {
