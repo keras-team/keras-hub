@@ -1,6 +1,10 @@
 name: Publish to PyPI
 
 on: push
+
+permissions:
+  contents: read
+
 jobs:
   build-and-publish:
     name: Build and publish to PyPI
