@@ -142,8 +142,8 @@ We strongly recommend a Linux development environment for an easy contribution
 experience. To build a dev environement from scratch on MacOS, see the following
 guides:
 
-https://developer.apple.com/metal/tensorflow-plugin/
-https://github.com/tensorflow/text
+- https://developer.apple.com/metal/tensorflow-plugin/
+- https://github.com/tensorflow/text
 
 ### Windows
 
