@@ -51,7 +51,7 @@ def export_version_string(version, is_nightly=False):
     if is_nightly:
         date = datetime.datetime.now()
         version += f".dev{date.strftime('%Y%m%d%H')}"
-        # Replaces `name="keras"` string in `setup.py` with `keras-nightly`
+        # Replaces `name="keras-nlp"` in `setup.py` with `keras-nlp-nightly`
         with open("setup.py") as f:
             setup_contents = f.read()
         with open("setup.py", "w") as f:
