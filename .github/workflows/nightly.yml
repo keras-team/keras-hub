@@ -9,103 +9,11 @@ permissions:
   contents: read
 
 jobs:
-  keras2:
-    name: Test the code with Keras 2
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.9
-      - name: Get pip cache dir
-        id: pip-cache
-        run: |
-          python -m pip install --upgrade pip setuptools
-          echo "::set-output name=dir::$(pip cache dir)"
-      - name: pip cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ steps.pip-cache.outputs.dir }}
-          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements-common.txt --progress-bar off
-          pip install tensorflow-text==2.14 tensorflow==2.14 keras-core
-          pip install --no-deps -e "." --progress-bar off
-      - name: Test with pytest
-        run: |
-          pytest --cov=keras_nlp --cov-report xml:coverage.xml keras_nlp/
-      - name: Run integration tests
-        run: |
-          python pip_build.py --install && cd integration_tests && pytest .
-  multibackend:
-    name: Test the code with Keras 3
-    strategy:
-      fail-fast: false
-      matrix:
-        backend: [tensorflow, jax, torch]
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v1
-      with:
-        python-version: 3.9
-    - name: Get pip cache dir
-      id: pip-cache
-      run: |
-        python -m pip install --upgrade pip setuptools
-        echo "::set-output name=dir::$(pip cache dir)"
-    - name: pip cache
-      uses: actions/cache@v2
-      with:
-        path: ${{ steps.pip-cache.outputs.dir }}
-        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-    - name: Install dependencies
-      run: |
-          pip install -r requirements.txt --progress-bar off
-          pip install --no-deps -e "." --progress-bar off
-    - name: Test with pytest
-      env:
-        KERAS_BACKEND: ${{ matrix.backend }}
-      run: |
-        pytest keras_nlp/
-  format:
-    name: Check the code format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.9
-      - name: Get pip cache dir
-        id: pip-cache
-        run: |
-          python -m pip install --upgrade pip setuptools
-          echo "::set-output name=dir::$(pip cache dir)"
-      - name: pip cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ steps.pip-cache.outputs.dir }}
-          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt --progress-bar off
-          pip install --no-deps -e "." --progress-bar off
-      - name: Lint
-        run: bash shell/lint.sh
-
+  run-test-for-nightly:
+    uses: ./.github/workflows/actions.yml
   nightly:
     name: Build Wheel file and upload
-    needs: [format, keras2, multibackend]
+    needs: [run-test-for-nightly]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3

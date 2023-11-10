@@ -46,7 +46,7 @@ to_copy = [
 ]
 
 
-def export_version_string(version, is_nightly=False, rc_index=None):
+def export_version_string(version, is_nightly=False):
     """Export Version and Package Name."""
     if is_nightly:
         date = datetime.datetime.now()
@@ -58,9 +58,13 @@ def export_version_string(version, is_nightly=False, rc_index=None):
             setup_contents = setup_contents.replace(
                 'name="keras-nlp"', 'name="keras-nlp-nightly"'
             )
+            setup_contents = setup_contents.replace(
+                '"tensorflow"', '"tf-nightly"'
+            )
+            setup_contents = setup_contents.replace(
+                '"tensorflow-text', '"tensorflow-text-nightly'
+            )
             f.write(setup_contents)
-    elif rc_index is not None:
-        version += "rc" + str(rc_index)
 
     # Make sure to export the __version__ string
     with open(os.path.join(package, "__init__.py")) as f:
@@ -69,7 +73,7 @@ def export_version_string(version, is_nightly=False, rc_index=None):
         f.write(init_contents + "\n\n" + f'__version__ = "{version}"\n')
 
 
-def build(root_path, is_nightly=False, rc_index=None):
+def build(root_path, is_nightly=False):
     if os.path.exists(build_directory):
         raise ValueError(f"Directory already exists: {build_directory}")
 
@@ -92,7 +96,7 @@ def build(root_path, is_nightly=False, rc_index=None):
         # Make sure to export the __version__ string
         from keras_nlp.src import __version__  # noqa: E402
 
-        export_version_string(__version__, is_nightly, rc_index)
+        export_version_string(__version__, is_nightly)
 
         # Build the package
         os.system("python3 -m build")
@@ -133,11 +137,6 @@ if __name__ == "__main__":
         "--nightly",
         action="store_true",
         help="Whether to generate nightly wheel file.",
-    )
-    parser.add_argument(
-        "--rc",
-        type=int,
-        help="Specify `[0-9] when generating RC wheels.",
     )
     args = parser.parse_args()
     root_path = pathlib.Path(__file__).parent.resolve()

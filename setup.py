@@ -58,12 +58,12 @@ setup(
         "regex",
         "rich",
         "dm-tree",
-        "tf-nightly",
+        "tensorflow",
         # Don't require tensorflow-text on MacOS, there are no binaries for ARM.
         # Also, we rely on tensorflow *transitively* through tensorflow-text.
         # This avoid a slowdown during `pip install keras-nlp` where pip would
         # download many version of both libraries to find compatible versions.
-        "tensorflow-text-nightly; platform_system != 'Darwin'",
+        "tensorflow-text; platform_system != 'Darwin'",
     ],
     extras_require={
         "extras": [
