@@ -59,10 +59,7 @@ def export_version_string(version, is_nightly=False):
                 'name="keras-nlp"', 'name="keras-nlp-nightly"'
             )
             setup_contents = setup_contents.replace(
-                '"tensorflow"', '"tf-nightly"'
-            )
-            setup_contents = setup_contents.replace(
-                '"tensorflow-text', '"tensorflow-text-nightly'
+                '"tensorflow-text', '"tf-nightly", "tensorflow-text-nightly'
             )
             f.write(setup_contents)
 
@@ -140,6 +137,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     root_path = pathlib.Path(__file__).parent.resolve()
-    whl_path = build(root_path, args.nightly, args.rc)
+    whl_path = build(root_path, args.nightly)
     if whl_path and args.install:
         install_whl(whl_path)
