@@ -11,11 +11,11 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  keras_2:
     name: Test the code with Keras 2
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set up Python 3.9
         uses: actions/setup-python@v1
         with:
@@ -43,7 +43,7 @@ jobs:
       - name: Run integration tests
         run: |
           python pip_build.py --install && cd integration_tests && pytest .
-  multibackend:
+  keras_3:
     name: Test the code with Keras 3
     strategy:
       fail-fast: false
@@ -51,7 +51,7 @@ jobs:
         backend: [tensorflow, jax, torch]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Set up Python 3.9
       uses: actions/setup-python@v1
       with:
@@ -77,11 +77,11 @@ jobs:
         KERAS_BACKEND: ${{ matrix.backend }}
       run: |
         pytest keras_nlp/
-  format:
+  check_format:
     name: Check the code format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set up Python 3.9
         uses: actions/setup-python@v1
         with:
