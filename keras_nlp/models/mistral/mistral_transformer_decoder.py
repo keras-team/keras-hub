@@ -178,10 +178,17 @@ class MistralTransformerDecoder(keras.layers.Layer):
         input_length = output_length = ops.shape(decoder_sequence)[1]
 
         # Mistral uses a banded attention mask
-        causal_mask = compute_causal_mask(
+        causal_mask_lower = compute_causal_mask(
             batch_size, input_length, output_length, 0
         )
-        causal_mask = ops.triu(causal_mask, k=-self.sliding_window)
+        # Below is a workaround for `ops.triu` for Keras 2.
+        # TODO(tirthasheshpatel): Use `ops.triu` once Keras 2 support is removed.
+        # causal_mask = ops.triu(causal_mask_upper, k=-self.sliding_window)
+        i = ops.arange(output_length)[:, None]
+        j = ops.arange(input_length)[None, :]
+        causal_mask_upper = ops.cast(i <= j - self.sliding_window, "int32")
+        causal_mask = ops.minimum(causal_mask_lower, causal_mask_upper)
+
         return (
             ops.minimum(decoder_mask, causal_mask)
             if decoder_mask is not None
