@@ -126,7 +126,7 @@ class CachedMistralAttention(keras.layers.Layer):
             x = ops.concatenate([x[..., ::2], x[..., 1::2]], axis=-1)
             x = self.rotary_embedding_layer(x, start_index=start_index)
             x = ops.reshape(
-                ops.stack(ops.split(x, 2, axis=-1), axis=-1), x.shape
+                ops.stack(ops.split(x, 2, axis=-1), axis=-1), ops.shape(x)
             )
             return x
 
