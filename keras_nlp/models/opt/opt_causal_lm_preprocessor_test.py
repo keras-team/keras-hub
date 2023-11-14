@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import pytest
-import tensorflow as tf
 
 from keras_nlp.models.opt.opt_causal_lm_preprocessor import (
     OPTCausalLMPreprocessor,
@@ -77,8 +76,8 @@ class OPTCausalLMPreprocessorTest(TestCase):
 
     def test_generate_postprocess(self):
         input_data = {
-            "token_ids": tf.constant([1, 2, 4, 5, 3, 6, 0, 0]),
-            "padding_mask": tf.cast([1, 1, 1, 1, 1, 1, 0, 0], dtype="bool"),
+            "token_ids": [1, 2, 4, 5, 3, 6, 0, 0],
+            "padding_mask": [1, 1, 1, 1, 1, 1, 0, 0],
         }
         preprocessor = OPTCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_postprocess(input_data)

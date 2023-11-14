@@ -164,10 +164,8 @@ class OPTCausalLMPreprocessor(OPTPreprocessor):
         back to a string.
         """
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
-        if not isinstance(token_ids, tf.Tensor):
-            token_ids = ops.convert_to_numpy(token_ids)
-        if not isinstance(padding_mask, tf.Tensor):
-            padding_mask = ops.convert_to_numpy(padding_mask)
+        token_ids = ops.convert_to_numpy(token_ids)
+        padding_mask = ops.convert_to_numpy(padding_mask)
         # Strip any special tokens during detokenization (e.g. the start and
         # end markers). In the future we could make this configurable.
         padding_mask = padding_mask & (token_ids != self.tokenizer.end_token_id)
