@@ -74,7 +74,7 @@ class BertTokenizer(WordPieceTokenizer):
 
     def __init__(
         self,
-        vocabulary,
+        vocabulary=None,
         lowercase=False,
         **kwargs,
     ):
@@ -83,6 +83,9 @@ class BertTokenizer(WordPieceTokenizer):
             lowercase=lowercase,
             **kwargs,
         )
+
+    def load_vocabulary(self, vocabulary):
+        super().load_vocabulary(vocabulary)
 
         # Check for necessary special tokens.
         cls_token = "[CLS]"
