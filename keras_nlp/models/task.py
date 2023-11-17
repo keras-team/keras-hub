@@ -115,12 +115,6 @@ class Task(PipelineModel):
         self.include_preprocessing = value is not None
         self._preprocessor = value
 
-    def _flatten_layers(self, include_self=True, recursive=True):
-        layers = super()._flatten_layers(include_self, recursive)
-        if self._preprocessor is not None:
-            layers.extend(self._preprocessor._flatten_layers(True, recursive))
-        return layers
-
     def get_config(self):
         # Don't chain to super here. The default `get_config()` for functional
         # models is nested and cannot be passed to our Task constructors.

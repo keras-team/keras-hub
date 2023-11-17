@@ -15,7 +15,6 @@
 import datetime
 import json
 import os
-import tempfile
 
 from keras_nlp.backend import keras
 
@@ -25,29 +24,48 @@ except ImportError:
     kagglehub = None
 
 KAGGLE_PREFIX = "kaggle://"
-
-
-def get_kaggle_handle(preset):
-    kaggle_handle = preset.removeprefix(KAGGLE_PREFIX)
-    if len(kaggle_handle.split("/")) not in (4, 5):
-        raise ValueError(
-            "Unexpected kaggle preset handle. Kaggle model handles should have "
-            "the form kaggle://{org}/{model}/keras/{variant}[/{version}]. For "
-            "example, kaggle://keras-nlp/albert/keras/bert_base_en_uncased."
-        )
-    return kaggle_handle
+TOKENIZER_ASSET_DIR = "tokenizer_assets"
 
 
 def get_file(preset, path):
+    """Download a preset file in necessary and return the local path."""
     if preset.startswith(KAGGLE_PREFIX):
+        kaggle_handle = preset.removeprefix(KAGGLE_PREFIX)
         if kagglehub is None:
             raise ImportError(
                 "`from_preset()` requires the `kagglehub` package. "
                 "Please install with `pip install kagglehub`."
             )
-        kaggle_handle = get_kaggle_handle(preset)
+        if len(kaggle_handle.split("/")) not in (4, 5):
+            raise ValueError(
+                "Unexpected kaggle preset handle. Kaggle model handles should have "
+                "the form kaggle://{org}/{model}/keras/{variant}[/{version}]. For "
+                "example, kaggle://keras-nlp/albert/keras/bert_base_en_uncased."
+            )
         return kagglehub.model_download(kaggle_handle, path)
     return os.path.join(preset, path)
+
+
+def get_tokenizer(layer):
+    """Get the tokenizer from any KerasNLP model or layer."""
+    # Avoid circular import.
+    from keras_nlp.tokenizers.tokenizer import Tokenizer
+
+    if isinstance(layer, Tokenizer):
+        return layer
+    if hasattr(layer, "tokenizer"):
+        return layer.tokenizer
+    if hasattr(layer, "preprocessor"):
+        return getattr(layer.preprocessor, "tokenizer", None)
+    return None
+
+
+def recursive_pop(config, key):
+    """Remove a key from a nested config object"""
+    config.pop(key, None)
+    for value in config.values():
+        if isinstance(value, dict):
+            recursive_pop(value, key)
 
 
 def save_to_preset(
@@ -57,16 +75,19 @@ def save_to_preset(
     config_filename="config.json",
     weights_filename="model.weights.h5",
 ):
+    """Save a KerasNLP layer to a preset directory."""
     os.makedirs(preset, exist_ok=True)
 
-    # Save any assets.
-    temp_dir = tempfile.mkdtemp()
-    for child in layer._flatten_layers():
-        if hasattr(child, "save_assets"):
-            child.save_assets(temp_dir)
-    asset_files = os.listdir(temp_dir)
-    for asset in asset_files:
-        os.replace(os.path.join(temp_dir, asset), os.path.join(preset, asset))
+    # Save tokenizers assets.
+    tokenizer = get_tokenizer(layer)
+    assets = []
+    if tokenizer:
+        asset_dir = os.path.join(preset, TOKENIZER_ASSET_DIR)
+        os.makedirs(asset_dir, exist_ok=True)
+        tokenizer.save_assets(asset_dir)
+        assets = [
+            os.path.join(TOKENIZER_ASSET_DIR, p) for p in os.listdir(asset_dir)
+        ]
 
     # Optionally save weights.
     save_weights = save_weights and hasattr(layer, "save_weights")
@@ -77,10 +98,11 @@ def save_to_preset(
     # Save a serialized Keras object.
     config_path = os.path.join(preset, config_filename)
     config = keras.saving.serialize_keras_object(layer)
-    config["assets"] = asset_files
+    # Include references to weights and assets.
+    config["assets"] = assets
     config["weights"] = weights_filename if save_weights else None
-    config.pop("compile_config", None)
-    config.pop("build_config", None)
+    recursive_pop(config, "config_config")
+    recursive_pop(config, "build_config")
     with open(config_path, "w") as config_file:
         config_file.write(json.dumps(config, indent=4))
 
@@ -100,6 +122,7 @@ def load_from_preset(
     config_file="config.json",
     config_overrides={},
 ):
+    """Load a KerasNLP layer to a preset directory."""
     # Load a serialized Keras object.
     config_path = get_file(preset, config_file)
     with open(config_path) as config_file:
@@ -107,17 +130,16 @@ def load_from_preset(
     config["config"] = {**config["config"], **config_overrides}
     layer = keras.saving.deserialize_keras_object(config)
 
-    # Load any assets.
-    if config["assets"]:
+    # Load any assets for our tokenizers.
+    tokenizer = get_tokenizer(layer)
+    if tokenizer:
         asset_dir = None
         for asset in config["assets"]:
             asset_dir = os.path.dirname(get_file(preset, asset))
-        for child in layer._flatten_layers():
-            if hasattr(child, "load_assets"):
-                child.load_assets(asset_dir)
+        if asset_dir:
+            tokenizer.load_assets(asset_dir)
 
     # Optionally load weights.
-    load_weights = load_weights and hasattr(layer, "load_weights")
     load_weights = load_weights and config["weights"]
     if load_weights:
         weights_path = get_file(preset, config["weights"])
@@ -131,6 +153,7 @@ def check_preset_class(
     classes,
     config_file="config.json",
 ):
+    """Validate a preset is being loaded on the correct class."""
     config_path = get_file(preset, config_file)
     with open(config_path) as config_file:
         config = json.load(config_file)
