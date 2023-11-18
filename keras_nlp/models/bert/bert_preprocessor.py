@@ -156,6 +156,9 @@ class BertPreprocessor(Preprocessor):
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
         # assets have loaded when restoring a saved model.
+        self.built = True
+        if self.packer is not None:
+            return
         self.packer = MultiSegmentPacker(
             start_value=self.tokenizer.cls_token_id,
             end_value=self.tokenizer.sep_token_id,

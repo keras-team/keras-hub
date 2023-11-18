@@ -38,12 +38,12 @@ class BertMaskedLMTest(TestCase):
             sequence_length=5,
         )
         self.backbone = BertBackbone(
-            vocabulary_size=self.preprocessor.tokenizer.vocabulary_size(),
+            vocabulary_size=len(self.vocab),
             num_layers=2,
             num_heads=2,
             hidden_dim=2,
             intermediate_dim=4,
-            max_sequence_length=self.preprocessor.packer.sequence_length,
+            max_sequence_length=self.preprocessor.sequence_length,
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,

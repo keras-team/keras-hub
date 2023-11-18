@@ -33,6 +33,9 @@ class PreprocessingLayer(keras.layers.Layer):
         if not hasattr(self, "build"):
             self.built = True
 
+    def get_build_config(self):
+        return None
+
     def __call__(self, *args, **kwargs):
         # Always place on CPU for preprocessing, to avoid expensive back and
         # forth copies to GPU before the trainable model.
