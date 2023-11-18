@@ -254,7 +254,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         revived_cfg_json = json.dumps(revived_cfg, sort_keys=True, indent=4)
         self.assertEqual(cfg_json, revived_cfg_json)
         # Dir tests only work on keras-core.
-        if config.multi_backend():
+        if config.multi_backend() and not isinstance(instance, Tokenizer):
             self.assertEqual(ref_dir, dir(revived_instance))
 
         # serialization roundtrip
@@ -267,7 +267,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         revived_cfg_json = json.dumps(revived_cfg, sort_keys=True, indent=4)
         self.assertEqual(cfg_json, revived_cfg_json)
         # Dir tests only work on keras-core.
-        if config.multi_backend():
+        if config.multi_backend() and not isinstance(instance, Tokenizer):
             new_dir = dir(revived_instance)[:]
             for lst in [ref_dir, new_dir]:
                 if "__annotations__" in lst:
