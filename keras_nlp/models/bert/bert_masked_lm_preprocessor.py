@@ -141,11 +141,10 @@ class BertMaskedLMPreprocessor(BertPreprocessor):
 
         self.masker = None
 
-
     def build(self, input_shape):
         # Defer masker creation to `build()` so that we can be sure tokenizer
         # assets have loaded when restoring a saved model.
-        super().build(input_shape)
+
         self.built = True
         if self.masker is not None:
             return
