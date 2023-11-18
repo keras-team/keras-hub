@@ -24,7 +24,7 @@ except ImportError:
     kagglehub = None
 
 KAGGLE_PREFIX = "kaggle://"
-TOKENIZER_ASSET_DIR = "tokenizer_assets"
+TOKENIZER_ASSET_DIR = "assets/tokenizer"
 
 
 def get_file(preset, path):
@@ -85,9 +85,8 @@ def save_to_preset(
         asset_dir = os.path.join(preset, TOKENIZER_ASSET_DIR)
         os.makedirs(asset_dir, exist_ok=True)
         tokenizer.save_assets(asset_dir)
-        assets = [
-            os.path.join(TOKENIZER_ASSET_DIR, p) for p in os.listdir(asset_dir)
-        ]
+        for asset_path in os.listdir(asset_dir):
+            assets.append(os.path.join(TOKENIZER_ASSET_DIR, asset_path))
 
     # Optionally save weights.
     save_weights = save_weights and hasattr(layer, "save_weights")
@@ -132,12 +131,12 @@ def load_from_preset(
 
     # Load any assets for our tokenizers.
     tokenizer = get_tokenizer(layer)
-    if tokenizer:
-        asset_dir = None
+    if tokenizer and config["assets"]:
         for asset in config["assets"]:
-            asset_dir = os.path.dirname(get_file(preset, asset))
-        if asset_dir:
-            tokenizer.load_assets(asset_dir)
+            get_file(preset, asset)
+        config_dir = os.path.dirname(config_path)
+        asset_dir = os.path.join(config_dir, TOKENIZER_ASSET_DIR)
+        tokenizer.load_assets(asset_dir)
 
     # Optionally load weights.
     load_weights = load_weights and config["weights"]

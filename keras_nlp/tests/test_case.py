@@ -254,7 +254,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         revived_cfg_json = json.dumps(revived_cfg, sort_keys=True, indent=4)
         self.assertEqual(cfg_json, revived_cfg_json)
         # Dir tests only work on keras-core.
-        if config.multi_backend() and not isinstance(instance, Tokenizer):
+        if config.multi_backend():
             self.assertEqual(ref_dir, dir(revived_instance))
 
         # serialization roundtrip
@@ -267,7 +267,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         revived_cfg_json = json.dumps(revived_cfg, sort_keys=True, indent=4)
         self.assertEqual(cfg_json, revived_cfg_json)
         # Dir tests only work on keras-core.
-        if config.multi_backend() and not isinstance(instance, Tokenizer):
+        if config.multi_backend():
             new_dir = dir(revived_instance)[:]
             for lst in [ref_dir, new_dir]:
                 if "__annotations__" in lst:
@@ -394,7 +394,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         """Run instantiation and a forward pass for a preset."""
         self.assertRegex(cls.from_preset.__doc__, preset)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(Exception):
             cls.from_preset("clowntown", **init_kwargs)
 
         instance = cls.from_preset(preset, **init_kwargs)

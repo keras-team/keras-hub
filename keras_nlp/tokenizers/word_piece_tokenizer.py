@@ -326,10 +326,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.split_on_cjk = split_on_cjk
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
-        self._fast_word_piece = None
-
-        if vocabulary is not None:
-            self.load_vocabulary(vocabulary)
+        self.set_vocabulary(vocabulary)
 
     def save_assets(self, dir_path):
         with tf.io.gfile.GFile(os.path.join(dir_path, FILENAME), "w") as file:
@@ -337,9 +334,15 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 file.write(f"{token}\n")
 
     def load_assets(self, dir_path):
-        self.load_vocabulary(os.path.join(dir_path, FILENAME))
+        self.set_vocabulary(os.path.join(dir_path, FILENAME))
 
-    def load_vocabulary(self, vocabulary):
+    def set_vocabulary(self, vocabulary):
+        """Set the tokenizer vocabulary to a file or list of strings."""
+        if vocabulary is None:
+            self.vocabulary = None
+            self._fast_word_piece = None
+            return
+
         if isinstance(vocabulary, str):
             with tf.io.gfile.GFile(vocabulary) as file:
                 self.vocabulary = [line.rstrip() for line in file]

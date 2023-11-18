@@ -156,9 +156,6 @@ class BertPreprocessor(Preprocessor):
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
         # assets have loaded when restoring a saved model.
-        self.built = True
-        if self.packer is not None:
-            return
         self.packer = MultiSegmentPacker(
             start_value=self.tokenizer.cls_token_id,
             end_value=self.tokenizer.sep_token_id,
@@ -166,6 +163,7 @@ class BertPreprocessor(Preprocessor):
             truncate=self.truncate,
             sequence_length=self.sequence_length,
         )
+        self.built = True
 
     def call(self, x, y=None, sample_weight=None):
         x = convert_inputs_to_list_of_tensor_segments(x)

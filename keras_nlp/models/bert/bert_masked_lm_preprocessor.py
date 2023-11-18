@@ -138,16 +138,12 @@ class BertMaskedLMPreprocessor(BertPreprocessor):
         self.mask_selection_length = mask_selection_length
         self.mask_token_rate = mask_token_rate
         self.random_token_rate = random_token_rate
-
         self.masker = None
 
     def build(self, input_shape):
+        super().build(input_shape)
         # Defer masker creation to `build()` so that we can be sure tokenizer
         # assets have loaded when restoring a saved model.
-        super().build(input_shape)
-        self.built = True
-        if self.masker is not None:
-            return
         self.masker = MaskedLMMaskGenerator(
             mask_selection_rate=self.mask_selection_rate,
             mask_selection_length=self.mask_selection_length,
@@ -161,18 +157,6 @@ class BertMaskedLMPreprocessor(BertPreprocessor):
                 self.tokenizer.pad_token_id,
             ],
         )
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "mask_selection_rate": self.mask_selection_rate,
-                "mask_selection_length": self.mask_selection_length,
-                "mask_token_rate": self.mask_token_rate,
-                "random_token_rate": self.random_token_rate,
-            }
-        )
-        return config
 
     def call(self, x, y=None, sample_weight=None):
         if y is not None or sample_weight is not None:
@@ -200,3 +184,15 @@ class BertMaskedLMPreprocessor(BertPreprocessor):
         y = masker_outputs["mask_ids"]
         sample_weight = masker_outputs["mask_weights"]
         return pack_x_y_sample_weight(x, y, sample_weight)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "mask_selection_rate": self.mask_selection_rate,
+                "mask_selection_length": self.mask_selection_length,
+                "mask_token_rate": self.mask_token_rate,
+                "random_token_rate": self.random_token_rate,
+            }
+        )
+        return config
