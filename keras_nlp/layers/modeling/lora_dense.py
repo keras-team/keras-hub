@@ -129,7 +129,7 @@ class LoraDense(keras.layers.Layer):
 
         if not config.keras_3():
             raise ValueError(
-                "Lora requires with Keras 3, and Keras 2 is installed. Please "
+                "Lora requires with Keras 3, but Keras 2 is installed. Please "
                 "see https://github.com/keras-team/keras-nlp#installation"
             )
 

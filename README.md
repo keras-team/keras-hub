@@ -41,7 +41,7 @@ to start learning our API. We welcome [contributions](CONTRIBUTING.md).
 ## Installation
 
 KerasNLP supports both Keras 2 and Keras 3. We recommend Keras 3 for all new
-users, as it enables using KerasNLP models and layers with Jax, TensorFlow and
+users, as it enables using KerasNLP models and layers with JAX, TensorFlow and
 PyTorch.
 
 ### Keras 2 Installation
@@ -108,7 +108,7 @@ For more in depth guides and examples, visit https://keras.io/keras_nlp/.
 ## Configuring your backend
 
 If you have Keras 3 installed in your environment (see installation above),
-you can use KerasNLP with any of Jax, TensorFlow and PyTorch. To do so, set the
+you can use KerasNLP with any of JAX, TensorFlow and PyTorch. To do so, set the
 `KERAS_BACKEND` environment variable. For example:
 
 ```shell
