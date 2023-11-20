@@ -21,6 +21,8 @@ import tensorflow as tf
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.tokenizers import tokenizer
+from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
@@ -32,6 +34,8 @@ try:
     import tensorflow_text as tf_text
 except ImportError:
     tf_text = None
+
+FILENAME = "vocabulary.txt"
 
 # Matches whitespace and control characters.
 WHITESPACE_REGEX = r"|".join(
@@ -312,19 +316,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             )
 
         super().__init__(dtype=dtype, **kwargs)
-
-        if isinstance(vocabulary, str):
-            self.vocabulary = [
-                line.rstrip() for line in tf.io.gfile.GFile(vocabulary)
-            ]
-        elif isinstance(vocabulary, Iterable):
-            # Make a copy.
-            self.vocabulary = list(vocabulary)
-        else:
-            raise ValueError(
-                "Vocabulary must be an file path or list of terms. "
-                f"Received: vocabulary={vocabulary}"
-            )
         if oov_token is None:
             raise ValueError("`oov_token` cannot be None.")
 
@@ -335,8 +326,36 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.split_on_cjk = split_on_cjk
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
+        self.set_vocabulary(vocabulary)
 
-        if oov_token not in self.vocabulary:
+    def save_assets(self, dir_path):
+        with tf.io.gfile.GFile(os.path.join(dir_path, FILENAME), "w") as file:
+            for token in self.vocabulary:
+                file.write(f"{token}\n")
+
+    def load_assets(self, dir_path):
+        self.set_vocabulary(os.path.join(dir_path, FILENAME))
+
+    def set_vocabulary(self, vocabulary):
+        """Set the tokenizer vocabulary to a file or list of strings."""
+        if vocabulary is None:
+            self.vocabulary = None
+            self._fast_word_piece = None
+            return
+
+        if isinstance(vocabulary, str):
+            with tf.io.gfile.GFile(vocabulary) as file:
+                self.vocabulary = [line.rstrip() for line in file]
+        elif isinstance(vocabulary, Iterable):
+            # Make a defensive copy.
+            self.vocabulary = list(vocabulary)
+        else:
+            raise ValueError(
+                "Vocabulary must be an file path or list of terms. "
+                f"Received: vocabulary={vocabulary}"
+            )
+
+        if self.oov_token not in self.vocabulary:
             raise ValueError(
                 f'Cannot find `oov_token="{self.oov_token}"` in the '
                 "vocabulary.\n"
@@ -348,8 +367,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self._fast_word_piece = tf_text.FastWordpieceTokenizer(
             vocab=self.vocabulary,
             token_out_type=self.compute_dtype,
-            suffix_indicator=suffix_indicator,
-            unknown_token=oov_token,
+            suffix_indicator=self.suffix_indicator,
+            unknown_token=self.oov_token,
             no_pretokenization=True,
             support_detokenization=True,
         )
@@ -382,10 +401,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         config = super().get_config()
         config.update(
             {
-                # Ideally a vocabulary would be saved as a plain text asset in
-                # the saved model. We have no good way to support this
-                # currently, so we save the vocabulary in the config.
-                "vocabulary": self.vocabulary,
+                "vocabulary": None,  # Save vocabulary via an asset!
                 "sequence_length": self.sequence_length,
                 "lowercase": self.lowercase,
                 "strip_accents": self.strip_accents,
@@ -410,6 +426,11 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         )
 
         # Apply WordPiece and coerce shape for outputs.
+        if self._fast_word_piece is None:
+            raise ValueError(
+                "No vocabulary has been set for WordPieceTokenizer. Make sure "
+                "to pass a `vocabulary` argument when creating the layer."
+            )
         tokens = self._fast_word_piece.tokenize(inputs)
         # By default tf.text tokenizes text with two ragged dimensions (one for
         # split words and one for split subwords). We will collapse to a single
@@ -440,6 +461,30 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         return {}
 
     @classmethod
+    def _legacy_from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        metadata = cls.presets[preset]
+
+        vocabulary = keras.utils.get_file(
+            "vocab.txt",
+            metadata["vocabulary_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["vocabulary_hash"],
+        )
+
+        config = metadata["preprocessor_config"]
+        config.update(
+            {
+                "vocabulary": vocabulary,
+            },
+        )
+
+        return cls.from_config({**config, **kwargs})
+
+    @classmethod
     def from_preset(
         cls,
         preset,
@@ -462,34 +507,17 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         tokenizer.detokenize([5, 6, 7, 8, 9])
         ```
         """
+        # TODO: delete me!
+        if preset in cls.presets:
+            return cls._legacy_from_preset(preset, **kwargs)
 
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class"
-            )
-
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-
-        vocabulary = keras.utils.get_file(
-            "vocab.txt",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["vocabulary_hash"],
+        config_file = "tokenizer.json"
+        check_preset_class(preset, cls, config_file=config_file)
+        return load_from_preset(
+            preset,
+            config_file=config_file,
+            config_overrides=kwargs,
         )
-
-        config = metadata["preprocessor_config"]
-        config.update(
-            {
-                "vocabulary": vocabulary,
-            },
-        )
-
-        return cls.from_config({**config, **kwargs})
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.
