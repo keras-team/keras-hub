@@ -190,6 +190,7 @@ class WordPieceTokenizerTest(TestCase):
         cloned_tokenizer = WordPieceTokenizer.from_config(
             original_tokenizer.get_config()
         )
+        cloned_tokenizer.set_vocabulary(original_tokenizer.get_vocabulary())
         self.assertAllEqual(
             original_tokenizer(input_data),
             cloned_tokenizer(input_data),
