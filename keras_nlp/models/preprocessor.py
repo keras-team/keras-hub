@@ -16,6 +16,8 @@ from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -63,34 +65,11 @@ class Preprocessor(PreprocessingLayer):
         return {}
 
     @classmethod
-    def from_preset(
+    def _legacy_from_preset(
         cls,
         preset,
         **kwargs,
     ):
-        """Instantiate {{preprocessor_name}} from preset architecture.
-
-        Args:
-            preset: string. Must be one of "{{preset_names}}".
-
-        Examples:
-        ```python
-        # Load a preprocessor layer from a preset.
-        preprocessor = keras_nlp.models.{{preprocessor_name}}.from_preset(
-            "{{example_preset_name}}",
-        )
-        ```
-        """
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class."
-            )
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-
         tokenizer = cls.tokenizer_cls.from_preset(preset)
 
         metadata = cls.presets[preset]
@@ -119,6 +98,37 @@ class Preprocessor(PreprocessingLayer):
             sequence_length=sequence_length,
             **kwargs,
         )
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        """Instantiate {{preprocessor_name}} from preset architecture.
+
+        Args:
+            preset: string. Must be one of "{{preset_names}}".
+
+        Examples:
+        ```python
+        # Load a preprocessor layer from a preset.
+        preprocessor = keras_nlp.models.{{preprocessor_name}}.from_preset(
+            "{{example_preset_name}}",
+        )
+        ```
+        """
+        # TODO: delete me!
+        if preset in cls.presets:
+            return cls._legacy_from_preset(preset, **kwargs)
+
+        config_file = "tokenizer.json"
+        check_preset_class(preset, cls.tokenizer_cls, config_file=config_file)
+        tokenizer = load_from_preset(
+            preset,
+            config_file=config_file,
+        )
+        return cls(tokenizer=tokenizer, **kwargs)
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.

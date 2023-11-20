@@ -82,23 +82,32 @@ class DistilBertTokenizer(WordPieceTokenizer):
             **kwargs,
         )
 
-        # Check for necessary special tokens.
-        cls_token = "[CLS]"
-        sep_token = "[SEP]"
-        pad_token = "[PAD]"
-        mask_token = "[MASK]"
-        for token in [cls_token, pad_token, sep_token, mask_token]:
-            if token not in self.get_vocabulary():
-                raise ValueError(
-                    f"Cannot find token `'{token}'` in the provided "
-                    f"`vocabulary`. Please provide `'{token}'` in your "
-                    "`vocabulary` or use a pretrained `vocabulary` name."
-                )
+    def set_vocabulary(self, vocabulary):
+        super().set_vocabulary(vocabulary)
 
-        self.cls_token_id = self.token_to_id(cls_token)
-        self.sep_token_id = self.token_to_id(sep_token)
-        self.pad_token_id = self.token_to_id(pad_token)
-        self.mask_token_id = self.token_to_id(mask_token)
+        if vocabulary is not None:
+            # Check for necessary special tokens.
+            cls_token = "[CLS]"
+            sep_token = "[SEP]"
+            pad_token = "[PAD]"
+            mask_token = "[MASK]"
+            for token in [cls_token, pad_token, sep_token]:
+                if token not in self.get_vocabulary():
+                    raise ValueError(
+                        f"Cannot find token `'{token}'` in the provided "
+                        f"`vocabulary`. Please provide `'{token}'` in your "
+                        "`vocabulary` or use a pretrained `vocabulary` name."
+                    )
+
+            self.cls_token_id = self.token_to_id(cls_token)
+            self.sep_token_id = self.token_to_id(sep_token)
+            self.pad_token_id = self.token_to_id(pad_token)
+            self.mask_token_id = self.token_to_id(mask_token)
+        else:
+            self.cls_token_id = None
+            self.sep_token_id = None
+            self.pad_token_id = None
+            self.mask_token_id = None
 
     @classproperty
     def presets(cls):

@@ -122,7 +122,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
                 ),
                 "tie_weights": self.token_embedding.tie_weights,
                 "mask_zero": self.token_embedding.mask_zero,
-            },
+            }
         )
         return config
 

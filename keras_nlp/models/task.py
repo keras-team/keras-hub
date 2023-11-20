@@ -22,6 +22,8 @@ from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
+from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -149,42 +151,12 @@ class Task(PipelineModel):
         return {}
 
     @classmethod
-    def from_preset(
+    def _legacy_from_preset(
         cls,
         preset,
         load_weights=True,
         **kwargs,
     ):
-        """Instantiate {{model_task_name}} model from preset architecture and weights.
-
-        Args:
-            preset: string. Must be one of "{{preset_names}}".
-            load_weights: Whether to load pre-trained weights into model.
-                Defaults to `True`.
-
-        Examples:
-        ```python
-        # Load architecture and weights from preset
-        model = {{model_task_name}}.from_preset("{{example_preset_name}}")
-
-        # Load randomly initialized model from preset architecture
-        model = {{model_task_name}}.from_preset(
-            "{{example_preset_name}}",
-            load_weights=False
-        )
-        ```
-        """
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class."
-            )
-
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-
         if "preprocessor" not in kwargs:
             kwargs["preprocessor"] = cls.preprocessor_cls.from_preset(preset)
 
@@ -210,6 +182,58 @@ class Task(PipelineModel):
 
         model.load_weights(weights)
         return model
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        load_weights=True,
+        **kwargs,
+    ):
+        """Instantiate {{model_task_name}} model from preset architecture and weights.
+
+        Args:
+            preset: string. Must be one of "{{preset_names}}".
+            load_weights: Whether to load pre-trained weights into model.
+                Defaults to `True`.
+
+        Examples:
+        ```python
+        # Load architecture and weights from preset
+        model = {{model_task_name}}.from_preset("{{example_preset_name}}")
+
+        # Load randomly initialized model from preset architecture
+        model = {{model_task_name}}.from_preset(
+            "{{example_preset_name}}",
+            load_weights=False
+        )
+        ```
+        """
+        # TODO: delete me!
+        if preset in cls.presets:
+            return cls._legacy_from_preset(preset, load_weights, **kwargs)
+
+        preset_cls = check_preset_class(preset, (cls, cls.backbone_cls))
+
+        # Backbone case.
+        if preset_cls == cls.backbone_cls:
+            backbone = load_from_preset(
+                preset,
+                load_weights=load_weights,
+            )
+            tokenizer = load_from_preset(
+                preset,
+                config_file="tokenizer.json",
+            )
+            preprocessor = cls.preprocessor_cls(tokenizer=tokenizer)
+            return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
+
+        # Task case.
+        return load_from_preset(
+            preset,
+            load_weights=load_weights,
+            config_overrides=kwargs,
+        )
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.

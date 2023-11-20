@@ -15,6 +15,8 @@
 import os
 
 from keras_nlp.backend import keras
+from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -67,6 +69,31 @@ class Backbone(keras.Model):
         return {}
 
     @classmethod
+    def _legacy_from_preset(
+        cls,
+        preset,
+        load_weights=True,
+        **kwargs,
+    ):
+        metadata = cls.presets[preset]
+        config = metadata["config"]
+        model = cls.from_config({**config, **kwargs})
+
+        if not load_weights:
+            return model
+
+        filename = os.path.basename(metadata["weights_url"])
+        weights = keras.utils.get_file(
+            filename,
+            metadata["weights_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["weights_hash"],
+        )
+
+        model.load_weights(weights)
+        return model
+
+    @classmethod
     def from_preset(
         cls,
         preset,
@@ -94,34 +121,16 @@ class Backbone(keras.Model):
         )
         ```
         """
+        # TODO: delete me!
+        if preset in cls.presets:
+            return cls._legacy_from_preset(preset, **kwargs)
 
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class."
-            )
-
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-        config = metadata["config"]
-        model = cls.from_config({**config, **kwargs})
-
-        if not load_weights:
-            return model
-
-        filename = os.path.basename(metadata["weights_url"])
-        weights = keras.utils.get_file(
-            filename,
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
+        check_preset_class(preset, cls)
+        return load_from_preset(
+            preset,
+            load_weights=load_weights,
+            config_overrides=kwargs,
         )
-
-        model.load_weights(weights)
-        return model
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.
