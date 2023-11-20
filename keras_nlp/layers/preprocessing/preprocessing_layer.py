@@ -29,7 +29,12 @@ class PreprocessingLayer(keras.layers.Layer):
         super().__init__(**kwargs)
         self._convert_input_args = False
         self._allow_non_tensor_positional_args = True
-        self.built = True
+        # Most pre-preprocessing has no build.
+        if not hasattr(self, "build"):
+            self.built = True
+
+    def get_build_config(self):
+        return None
 
     def __call__(self, *args, **kwargs):
         # Always place on CPU for preprocessing, to avoid expensive back and
