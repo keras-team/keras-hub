@@ -114,6 +114,11 @@ class CachedMistralAttention(keras.layers.Layer):
         start_index = (
             cache_update_index if cache_update_index is not None else 0
         )
+        # If `cache_update_index` is a tensor, RotaryEmbedding expects it
+        # to have dtype `self.compute_dtype`.
+        start_index = ops.cast(
+            start_index, self.rotary_embedding_layer.compute_dtype
+        )
 
         query = self._query_dense(hidden_states)
 
@@ -133,29 +138,6 @@ class CachedMistralAttention(keras.layers.Layer):
         # Compute RoPE for queries
         query = _mistral_rope(query)
 
-        # Note that the cache update step is slightly different for the
-        # mistral model. If `seq_len` is greater than `self._sliding_window`,
-        # the cache wraps around itself. So, in this case, we update all the
-        # indices as we would, but at the end, we would permute the cache such
-        # that the tokens outside the sliding window appear in front of the
-        # cache.
-        def _update_cache(cache, update_positions, update):
-            cache = ops.slice_update(
-                cache, [0, ops.min(update_positions), 0, 0], update
-            )
-            perm = ops.concatenate(
-                [
-                    ops.arange(0, ops.min(update_positions)),
-                    update_positions,
-                    ops.arange(
-                        ops.max(update_positions) + 1, self._sliding_window
-                    ),
-                ],
-                axis=-1,
-            )
-            cache = ops.take(cache, perm, axis=1)
-            return cache
-
         def _compute_key_value(x):
             key, value = self._key_dense(x), self._value_dense(x)
             key = _mistral_rope(key)
@@ -169,51 +151,58 @@ class CachedMistralAttention(keras.layers.Layer):
                 # Compute the new keys and values
                 key, value = _compute_key_value(hidden_states)
 
-                # Cache is a rotating buffer
-                positions = ops.arange(
-                    cache_update_index, cache_update_index + seq_len
+                # Cache is a rotating buffer, we want to warp around if
+                # the sequence length exceeds the sliding window.
+                update_end_index = (
+                    cache_update_index + seq_len - 1
+                ) % self._sliding_window + 1
+                update_end_index = ops.cast(update_end_index, "int32")
+                cache_update_index = cache_update_index % self._sliding_window
+                update_start_index = ops.cond(
+                    update_end_index > cache_update_index,
+                    lambda: ops.cast(cache_update_index, "int32"),
+                    lambda: ops.cast(0, "int32"),
                 )
-                update_positions = (
-                    positions[-self._sliding_window :] % self._sliding_window
-                )
-                cache_k = _update_cache(
+                # Also note that the update step below assumes that the
+                # sequence length is always one when `cache_update_index != 0`.
+                # This is necessary to support XLA compilation. Ideally, we
+                # would want to use
+                # `key[:, -(update_end_index - update_start_index):, ...]`
+                # as the update but updating using a dynamic slice gives an
+                # XLA compilation error in TensorFlow.
+                # Passing a sequence of length > 1 with cache update might give
+                # incorrect results (since there is no way to determine how
+                # many most recent tokens are to be saved if the tokens exceed
+                # the sliding window length).
+                cache_k = ops.slice_update(
                     cache_k,
-                    update_positions,
+                    [0, update_start_index, 0, 0],
+                    # We slice the keys and values since if the user has passed
+                    # a sequence of length > `self._sliding_window`. We want to
+                    # prefill the cache using just the most recent values in the
+                    # sliding window.
                     ops.cast(
                         key[:, -self._sliding_window :, ...], cache_k.dtype
                     ),
                 )
-                cache_v = _update_cache(
+                cache_v = ops.slice_update(
                     cache_v,
-                    update_positions,
+                    [0, update_start_index, 0, 0],
                     ops.cast(
                         value[:, -self._sliding_window :, ...], cache_v.dtype
                     ),
                 )
                 cache = ops.stack([cache_k, cache_v], axis=1)
 
-            # Get the required keys and values from the cache.
-            # Since we expect the user to pass a fixed-size cache, we just
-            # pick the first few slices up-to and including the newly computed
-            # keys and values.
-            key = ops.cast(
-                cache_k[
-                    :,
-                    : (cache_update_index + seq_len - 1) % self._sliding_window
-                    + 1,
-                    ...,
-                ],
-                dtype=self.compute_dtype,
-            )
-            value = ops.cast(
-                cache_v[
-                    :,
-                    : (cache_update_index + seq_len - 1) % self._sliding_window
-                    + 1,
-                    ...,
-                ],
-                dtype=self.compute_dtype,
-            )
+                # Get the required keys and values from the cache.
+                # Since we expect the user to pass a fixed-size cache, we just
+                # pick the first few slices up-to and including the newly computed
+                # keys and values.
+                cache_k = cache_k[:, :update_end_index, ...]
+                cache_v = cache_v[:, :update_end_index, ...]
+
+            key = ops.cast(cache_k, dtype=self.compute_dtype)
+            value = ops.cast(cache_v, dtype=self.compute_dtype)
         else:
             # Compute keys and values
             key, value = _compute_key_value(hidden_states)

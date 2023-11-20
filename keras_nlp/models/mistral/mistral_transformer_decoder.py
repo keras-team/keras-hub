@@ -126,8 +126,8 @@ class MistralTransformerDecoder(keras.layers.Layer):
         decoder_sequence,
         decoder_padding_mask=None,
         decoder_attention_mask=None,
-        cache=None,
-        cache_update_index=None,
+        self_attention_cache=None,
+        self_attention_cache_update_index=None,
     ):
         self_attention_mask = self._compute_self_attention_mask(
             decoder_sequence=decoder_sequence,
@@ -142,12 +142,12 @@ class MistralTransformerDecoder(keras.layers.Layer):
         x = self._self_attention_layer(
             hidden_states=x,
             attention_mask=self_attention_mask,
-            cache=cache,
-            cache_update_index=cache_update_index,
+            cache=self_attention_cache,
+            cache_update_index=self_attention_cache_update_index,
         )
 
-        if cache is not None:
-            x, cache = x
+        if self_attention_cache is not None:
+            x, self_attention_cache = x
 
         x = x + residual
         residual = x
@@ -161,8 +161,8 @@ class MistralTransformerDecoder(keras.layers.Layer):
 
         decoder_output = x + residual
 
-        if cache is not None:
-            return decoder_output, cache
+        if self_attention_cache is not None:
+            return decoder_output, self_attention_cache
         return decoder_output
 
     def _compute_self_attention_mask(
@@ -183,10 +183,10 @@ class MistralTransformerDecoder(keras.layers.Layer):
         )
         # Below is a workaround for `ops.triu` for Keras 2.
         # TODO(tirthasheshpatel): Use `ops.triu` once Keras 2 support is removed.
-        # causal_mask = ops.triu(causal_mask_upper, k=-self.sliding_window)
+        # causal_mask = ops.triu(causal_mask_lower, k=-self.sliding_window)
         i = ops.arange(output_length)[:, None]
         j = ops.arange(input_length)[None, :]
-        causal_mask_upper = ops.cast(i <= j - self.sliding_window, "int32")
+        causal_mask_upper = ops.cast(i <= j + self.sliding_window, "int32")
         causal_mask = ops.minimum(causal_mask_lower, causal_mask_upper)
 
         return (
