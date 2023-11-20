@@ -136,32 +136,29 @@ class DistilBertMaskedLMPreprocessor(DistilBertPreprocessor):
             truncate=truncate,
             **kwargs,
         )
+        self.mask_selection_rate = mask_selection_rate
+        self.mask_selection_length = mask_selection_length
+        self.mask_token_rate = mask_token_rate
+        self.random_token_rate = random_token_rate
+        self.masker = None
 
+    def build(self, input_shape):
+        super().build(input_shape)
+        # Defer masker creation to `build()` so that we can be sure tokenizer
+        # assets have loaded when restoring a saved model.
         self.masker = MaskedLMMaskGenerator(
-            mask_selection_rate=mask_selection_rate,
-            mask_selection_length=mask_selection_length,
-            mask_token_rate=mask_token_rate,
-            random_token_rate=random_token_rate,
-            vocabulary_size=tokenizer.vocabulary_size(),
-            mask_token_id=tokenizer.mask_token_id,
+            mask_selection_rate=self.mask_selection_rate,
+            mask_selection_length=self.mask_selection_length,
+            mask_token_rate=self.mask_token_rate,
+            random_token_rate=self.random_token_rate,
+            vocabulary_size=self.tokenizer.vocabulary_size(),
+            mask_token_id=self.tokenizer.mask_token_id,
             unselectable_token_ids=[
-                tokenizer.cls_token_id,
-                tokenizer.sep_token_id,
-                tokenizer.pad_token_id,
+                self.tokenizer.cls_token_id,
+                self.tokenizer.sep_token_id,
+                self.tokenizer.pad_token_id,
             ],
         )
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "mask_selection_rate": self.masker.mask_selection_rate,
-                "mask_selection_length": self.masker.mask_selection_length,
-                "mask_token_rate": self.masker.mask_token_rate,
-                "random_token_rate": self.masker.random_token_rate,
-            }
-        )
-        return config
 
     def call(self, x, y=None, sample_weight=None):
         if y is not None or sample_weight is not None:
@@ -183,3 +180,15 @@ class DistilBertMaskedLMPreprocessor(DistilBertPreprocessor):
         y = masker_outputs["mask_ids"]
         sample_weight = masker_outputs["mask_weights"]
         return pack_x_y_sample_weight(x, y, sample_weight)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "mask_selection_rate": self.mask_selection_rate,
+                "mask_selection_length": self.mask_selection_length,
+                "mask_token_rate": self.mask_token_rate,
+                "random_token_rate": self.random_token_rate,
+            }
+        )
+        return config
