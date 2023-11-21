@@ -93,12 +93,16 @@ class AlbertTokenizer(SentencePieceTokenizer):
         self.mask_token = "[MASK]"
 
         super().__init__(proto=proto, **kwargs)
-        
 
     def set_vocabulary(self, proto):
         super().set_vocabulary(proto)
         if proto is not None:
-            for token in [self.cls_token, self.sep_token, self.pad_token, self.mask_token]:
+            for token in [
+                self.cls_token,
+                self.sep_token,
+                self.pad_token,
+                self.mask_token,
+            ]:
                 if token not in self.get_vocabulary():
                     raise ValueError(
                         f"Cannot find token `'{token}'` in the provided "

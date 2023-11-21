@@ -103,7 +103,6 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     def set_vocabulary(self, proto):
         super().set_vocabulary(proto)
         if proto is not None:
-
             for token in [self.cls_token, self.pad_token, self.sep_token]:
                 if token not in super().get_vocabulary():
                     raise ValueError(

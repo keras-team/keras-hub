@@ -111,7 +111,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     def __init__(
         self,
-        proto = None,
+        proto=None,
         sequence_length: int = None,
         dtype="int32",
         **kwargs,
@@ -138,7 +138,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     def load_assets(self, dir_path):
         path = os.path.join(dir_path, VOCAB_FILENAME)
-        self.set_vocabulary(os.path.join(dir_path, VOCAB_FILENAME))
+        self.set_vocabulary(path)
 
     def set_vocabulary(self, proto):
         if proto is None:
@@ -321,7 +321,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             preset,
             config_file=config_file,
             config_overrides=kwargs,
-        )        
+        )
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.
