@@ -21,7 +21,7 @@ from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
-class BartPreprocessorTest(TestCase):
+class BartSeq2SeqLMPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = ["<s>", "<pad>", "</s>", "air", "Ġair", "plane", "Ġat"]
         self.vocab += ["port", "<mask>"]

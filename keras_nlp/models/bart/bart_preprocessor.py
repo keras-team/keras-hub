@@ -140,15 +140,23 @@ class BartPreprocessor(Preprocessor):
     ):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
+        self.encoder_sequence_length = encoder_sequence_length
+        self.decoder_sequence_length = decoder_sequence_length
+        self.encoder_packer = None
+        self.decoder_packer = None
+
+    def build(self, input_shape):
+        # Defer packer creation to `build()` so that we can be sure tokenizer
+        # assets have loaded when restoring a saved model.
 
         # TODO: Use `MultiSegmentPacker` instead of `StartEndPacker` once we
         # want to move to multi-segment packing and have improved
         # `MultiSegmentPacker`'s performance.
         self.encoder_packer = StartEndPacker(
-            start_value=tokenizer.start_token_id,
-            end_value=tokenizer.end_token_id,
-            pad_value=tokenizer.pad_token_id,
-            sequence_length=encoder_sequence_length,
+            start_value=self.tokenizer.start_token_id,
+            end_value=self.tokenizer.end_token_id,
+            pad_value=self.tokenizer.pad_token_id,
+            sequence_length=self.encoder_sequence_length,
             return_padding_mask=True,
         )
 
@@ -161,19 +169,10 @@ class BartPreprocessor(Preprocessor):
             ],
             end_value=self.tokenizer.end_token_id,
             pad_value=self.tokenizer.pad_token_id,
-            sequence_length=decoder_sequence_length,
+            sequence_length=self.decoder_sequence_length,
             return_padding_mask=True,
         )
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "encoder_sequence_length": self.encoder_packer.sequence_length,
-                "decoder_sequence_length": self.decoder_packer.sequence_length,
-            }
-        )
-        return config
+        self.built = True
 
     def call(self, x, y=None, sample_weight=None):
         if not (
@@ -216,6 +215,16 @@ class BartPreprocessor(Preprocessor):
         }
 
         return pack_x_y_sample_weight(x, y, sample_weight)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "encoder_sequence_length": self.encoder_sequence_length,
+                "decoder_sequence_length": self.decoder_sequence_length,
+            }
+        )
+        return config
 
     @classproperty
     def tokenizer_cls(cls):

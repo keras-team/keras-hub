@@ -164,48 +164,61 @@ class WhisperPreprocessor(Preprocessor):
         super().__init__(**kwargs)
         self.audio_feature_extractor = audio_feature_extractor
         self.tokenizer = tokenizer
+        self.decoder_sequence_length = decoder_sequence_length
+        self.language = language
+        self.task = task
+        self.no_timestamps = no_timestamps
+        self.decoder_packer = None
+
+    def build(self, input_shape):
+        # Defer packer creation to `build()` so that we can be sure tokenizer
+        # assets have loaded when restoring a saved model.
 
         # Create list of tokens to be prepended to decoder inputs.
         bos_tokens = [self.tokenizer.bos_token_id]
         if self.tokenizer.language_tokens is not None:
             if (
-                language is None
-                or language not in self.tokenizer.language_tokens
+                self.language is None
+                or self.language not in self.tokenizer.language_tokens
             ):
                 raise ValueError(
                     "You must pass a non-None value for `language` when using "
                     "a multilingual tokenizer. The value must be one of "
                     f'{",".join(self.tokenizer.language_tokens.keys())}. '
-                    f"Received: language={language}."
+                    f"Received: language={self.language}."
                 )
-            if task is None or task not in ["transcribe", "translate"]:
+            if self.task is None or self.task not in [
+                "transcribe",
+                "translate",
+            ]:
                 raise ValueError(
                     "You must pass a non-None value for `task` when using "
                     "a multilingual tokenizer. The value must be one of "
-                    f'`"transcribe"`, `"translate"`. Received: task={task}.'
+                    '`"transcribe"`, `"translate"`. '
+                    f"Received: task={self.task}."
                 )
 
-            bos_tokens += [self.tokenizer.language_tokens[language]]
+            bos_tokens += [self.tokenizer.language_tokens[self.language]]
 
-            if task == "transcribe":
+            if self.task == "transcribe":
                 bos_tokens += [self.tokenizer.special_tokens["<|transcribe|>"]]
-            elif task == "translate":
+            elif self.task == "translate":
                 bos_tokens += [self.tokenizer.special_tokens["<|translate|>"]]
         else:
-            if language is not None:
+            if self.language is not None:
                 logging.info(
                     "`tokenizer` is monolingual, and `language` has a "
                     "non-`None` value. Setting `language` to `None`."
                 )
-                language = None
-            if task is not None:
+                self.language = None
+            if self.task is not None:
                 logging.info(
                     "`tokenizer` is monolingual, and `task` has a "
                     "non-`None` value. Setting `task` to `None`."
                 )
-                task = None
+                self.task = None
 
-        if no_timestamps:
+        if self.no_timestamps:
             bos_tokens += [self.tokenizer.no_timestamps_token_id]
 
         # TODO: Use `MultiSegmentPacker` instead of `StartEndPacker` once we
@@ -215,43 +228,9 @@ class WhisperPreprocessor(Preprocessor):
             start_value=bos_tokens,
             end_value=self.tokenizer.eos_token_id,
             pad_value=self.tokenizer.pad_token_id,
-            sequence_length=decoder_sequence_length,
+            sequence_length=self.decoder_sequence_length,
             return_padding_mask=True,
         )
-
-        self.decoder_sequence_length = decoder_sequence_length
-        self.language = language
-        self.task = task
-        self.no_timestamps = no_timestamps
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "audio_feature_extractor": keras.layers.serialize(
-                    self.audio_feature_extractor
-                ),
-                "decoder_sequence_length": self.decoder_sequence_length,
-                "language": self.language,
-                "task": self.task,
-                "no_timestamps": self.no_timestamps,
-            }
-        )
-        return config
-
-    @classmethod
-    def from_config(cls, config):
-        if "tokenizer" in config and isinstance(config["tokenizer"], dict):
-            config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
-
-        if "audio_feature_extractor" in config and isinstance(
-            config["audio_feature_extractor"], dict
-        ):
-            config["audio_feature_extractor"] = keras.layers.deserialize(
-                config["audio_feature_extractor"]
-            )
-
-        return cls(**config)
 
     def call(self, x, y=None, sample_weight=None, decoder_sequence_length=None):
         if not (
@@ -293,6 +272,35 @@ class WhisperPreprocessor(Preprocessor):
         }
 
         return pack_x_y_sample_weight(x, y, sample_weight)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "audio_feature_extractor": keras.layers.serialize(
+                    self.audio_feature_extractor
+                ),
+                "decoder_sequence_length": self.decoder_sequence_length,
+                "language": self.language,
+                "task": self.task,
+                "no_timestamps": self.no_timestamps,
+            }
+        )
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        if "tokenizer" in config and isinstance(config["tokenizer"], dict):
+            config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
+
+        if "audio_feature_extractor" in config and isinstance(
+            config["audio_feature_extractor"], dict
+        ):
+            config["audio_feature_extractor"] = keras.layers.deserialize(
+                config["audio_feature_extractor"]
+            )
+
+        return cls(**config)
 
     @classproperty
     def audio_feature_extractor_cls(cls):
