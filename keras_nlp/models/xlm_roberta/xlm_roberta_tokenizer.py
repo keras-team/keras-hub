@@ -88,8 +88,6 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     """
 
     def __init__(self, proto, **kwargs):
-        super().__init__(proto=proto, **kwargs)
-
         # List of special tokens.
         self._vocabulary_prefix = ["<s>", "<pad>", "</s>", "<unk>"]
 
@@ -98,7 +96,15 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         self.pad_token_id = 1  # <pad>
         self.end_token_id = 2  # </s>
         self.unk_token_id = 3  # <unk>
-        self.mask_token_id = self.vocabulary_size() - 1  # <mask>
+
+        super().__init__(proto=proto, **kwargs)
+
+    def set_proto(self, proto):
+        super().set_proto(proto)
+        if proto is not None:
+            self.mask_token_id = self.vocabulary_size() - 1
+        else:
+            self.mask_token_id = None
 
     def vocabulary_size(self):
         """Get the size of the tokenizer vocabulary."""
@@ -106,6 +112,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
     def get_vocabulary(self):
         """Get the size of the tokenizer vocabulary."""
+        self._check_vocabulary()
         vocabulary = tensor_to_list(
             self._sentence_piece.id_to_string(
                 tf.range(super().vocabulary_size())
@@ -115,6 +122,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
     def id_to_token(self, id):
         """Convert an integer id to a string token."""
+        self._check_vocabulary()
 
         if id == self.mask_token_id:
             return "<mask>"
@@ -132,6 +140,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
     def token_to_id(self, token):
         """Convert a string token to an integer id."""
+        self._check_vocabulary()
 
         if token in self._vocabulary_prefix:
             return self._vocabulary_prefix.index(token)
@@ -146,6 +155,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         return int(spm_token_id.numpy()) + 1
 
     def tokenize(self, inputs):
+        self._check_vocabulary()
         tokens = super().tokenize(inputs)
 
         # Correct `unk_token_id` (0 -> 3). Note that we do not correct
@@ -157,6 +167,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         return tf.add(tokens, 1)
 
     def detokenize(self, inputs):
+        self._check_vocabulary()
         tokens = tf.ragged.boolean_mask(
             inputs, tf.not_equal(inputs, self.mask_token_id)
         )
