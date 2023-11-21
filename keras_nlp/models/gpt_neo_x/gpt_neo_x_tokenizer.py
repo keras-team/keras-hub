@@ -45,32 +45,39 @@ class GPTNeoXTokenizer(BytePairTokenizer):
 
     def __init__(
         self,
-        vocabulary,
-        merges,
+        vocabulary=None,
+        merges=None,
         **kwargs,
     ):
-        # Special tokens.
-        end_token = "<|endoftext|>"
+        # GPTNeoX uses the same start as end token, i.e., "<|endoftext|>".
+        self.end_token = self.start_token = "<|endoftext|>"
 
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            unsplittable_tokens=[end_token],
+            unsplittable_tokens=[self.end_token],
             **kwargs,
         )
 
-        # Check whether special tokens are present in the vocabulary.
-        if end_token not in self.get_vocabulary():
-            raise ValueError(
-                f"Cannot find token `'{end_token}'` in the provided "
-                f"`vocabulary`. Please provide `'{end_token}'` in your "
-                "`vocabulary` or use a pretrained `vocabulary` name."
-            )
+    def set_vocabulary_and_merges(self, vocabulary, merges):
+        super().set_vocabulary_and_merges(vocabulary, merges)
 
-        self.end_token_id = self.token_to_id(end_token)
-        # GPTNeoX uses the same start as end token, i.e., "<|endoftext|>".
-        self.start_token_id = self.end_token_id
-        self.pad_token_id = 0
+        if vocabulary is not None:
+            # Check for necessary special tokens.
+            if self.end_token not in self.get_vocabulary():
+                raise ValueError(
+                    f"Cannot find token `'{self.end_token}'` in the provided "
+                    f"`vocabulary`. Please provide `'{self.end_token}'` in "
+                    "your `vocabulary` or use a pretrained `vocabulary` name."
+                )
+
+            self.end_token_id = self.token_to_id(self.end_token)
+            self.start_token_id = self.end_token_id
+            self.pad_token_id = 0
+        else:
+            self.end_token_id = None
+            self.start_token_id = None
+            self.pad_token_id = None
 
     def get_config(self):
         config = super().get_config()
