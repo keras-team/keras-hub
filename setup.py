@@ -40,7 +40,7 @@ README = (HERE / "README.md").read_text()
 if os.path.exists("keras_nlp/version.py"):
     VERSION = get_version("keras_nlp/version.py")
 else:
-    VERSION = get_version("kera_nlps/__init__.py")
+    VERSION = get_version("keras_nlp/__init__.py")
 
 setup(
     name="keras-nlp",
