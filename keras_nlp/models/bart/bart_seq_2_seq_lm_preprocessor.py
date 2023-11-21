@@ -46,16 +46,6 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         tokenizer: A `keras_nlp.models.BartTokenizer` instance.
         encoder_sequence_length: The length of the packed encoder inputs.
         decoder_sequence_length: The length of the packed decoder inputs.
-        truncate: string. The algorithm to truncate a list of batched segments
-            to fit within `sequence_length`. The value can be either
-            `round_robin` or `waterfall`:
-                - `"round_robin"`: Available space is assigned one token at a
-                    time in a round-robin fashion to the inputs that still need
-                    some, until the limit is reached.
-                - `"waterfall"`: The allocation of the budget is done using a
-                    "waterfall" algorithm that allocates quota in a
-                    left-to-right manner and fills up the buckets until we run
-                    out of budget. It supports an arbitrary number of segments.
 
     Call arguments:
         x: A dictionary with `encoder_text` and `decoder_text` as its keys.
@@ -139,7 +129,6 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         tokenizer,
         encoder_sequence_length,
         decoder_sequence_length,
-        truncate="round_robin",
         **kwargs
     ):
         # Since we truncate the last token from `decoder_token_ids`, we need to
@@ -155,16 +144,6 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         # Maintain a private copy of the sequence lengths for config purposes.
         self._encoder_sequence_length = encoder_sequence_length
         self._decoder_sequence_length = decoder_sequence_length
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "encoder_sequence_length": self._encoder_sequence_length,
-                "decoder_sequence_length": self._decoder_sequence_length,
-            }
-        )
-        return config
 
     def call(self, x, y=None, sample_weight=None):
         if y is not None or sample_weight is not None:
@@ -191,10 +170,6 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         sample_weight = decoder_padding_mask[..., 1:]
         return pack_x_y_sample_weight(x, y, sample_weight)
 
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
-
     def generate_preprocess(
         self,
         x,
@@ -212,6 +187,9 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         the decoder sequence (as generation is expected to continue at the end
         of the inputted decoder prompt).
         """
+        if not self.built:
+            self.build(None)
+
         # If `sequence_length` is not provided, we use the default value.
         if sequence_length is None:
             sequence_length = self._decoder_sequence_length
@@ -262,6 +240,9 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         padding and start/end tokens, and then converting the integer sequence
         back to a string.
         """
+        if not self.built:
+            self.build(None)
+
         decoder_token_ids, decoder_padding_mask = (
             x["decoder_token_ids"],
             x["decoder_padding_mask"],
@@ -279,3 +260,17 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             decoder_token_ids, decoder_padding_mask
         )
         return self.tokenizer.detokenize(decoder_token_ids)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "encoder_sequence_length": self._encoder_sequence_length,
+                "decoder_sequence_length": self._decoder_sequence_length,
+            }
+        )
+        return config
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)

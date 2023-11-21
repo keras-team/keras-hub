@@ -123,13 +123,19 @@ class OPTPreprocessor(Preprocessor):
         self.sequence_length = sequence_length
         self.add_start_token = add_start_token
         self.add_end_token = add_end_token
+        self.packer = None
+
+    def build(self, input_shape):
+        # Defer packer creation to `build()` so that we can be sure tokenizer
+        # assets have loaded when restoring a saved model.
         self.packer = StartEndPacker(
-            start_value=tokenizer.start_token_id,
-            end_value=tokenizer.end_token_id,
-            pad_value=tokenizer.pad_token_id,
-            sequence_length=sequence_length,
+            start_value=self.tokenizer.start_token_id,
+            end_value=self.tokenizer.end_token_id,
+            pad_value=self.tokenizer.pad_token_id,
+            sequence_length=self.sequence_length,
             return_padding_mask=True,
         )
+        self.built = True
 
     def get_config(self):
         config = super().get_config()

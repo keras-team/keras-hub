@@ -35,7 +35,7 @@ try:
 except ImportError:
     tf_text = None
 
-FILENAME = "vocabulary.txt"
+VOCAB_FILENAME = "vocabulary.txt"
 
 # Matches whitespace and control characters.
 WHITESPACE_REGEX = r"|".join(
@@ -329,12 +329,14 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.set_vocabulary(vocabulary)
 
     def save_assets(self, dir_path):
-        with tf.io.gfile.GFile(os.path.join(dir_path, FILENAME), "w") as file:
+        path = os.path.join(dir_path, VOCAB_FILENAME)
+        with open(path, "w") as file:
             for token in self.vocabulary:
                 file.write(f"{token}\n")
 
     def load_assets(self, dir_path):
-        self.set_vocabulary(os.path.join(dir_path, FILENAME))
+        path = os.path.join(dir_path, VOCAB_FILENAME)
+        self.set_vocabulary(path)
 
     def set_vocabulary(self, vocabulary):
         """Set the tokenizer vocabulary to a file or list of strings."""
@@ -344,7 +346,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             return
 
         if isinstance(vocabulary, str):
-            with tf.io.gfile.GFile(vocabulary) as file:
+            with open(vocabulary) as file:
                 self.vocabulary = [line.rstrip() for line in file]
         elif isinstance(vocabulary, Iterable):
             # Make a defensive copy.
@@ -375,14 +377,17 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def get_vocabulary(self) -> List[str]:
         """Get the tokenizer vocabulary as a list of strings tokens."""
+        self._check_vocabulary()
         return self.vocabulary
 
     def vocabulary_size(self) -> int:
         """Get the size of the tokenizer vocabulary."""
+        self._check_vocabulary()
         return len(self.vocabulary)
 
     def id_to_token(self, id: int) -> str:
         """Convert an integer id to a string token."""
+        self._check_vocabulary()
         if id >= self.vocabulary_size() or id < 0:
             raise ValueError(
                 f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
@@ -395,6 +400,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         # This will be slow, but keep memory usage down compared to building a
         # . Assuming the main use case is looking up a few special tokens
         # early in the vocab, this should be fine.
+        self._check_vocabulary()
         return self.vocabulary.index(token)
 
     def get_config(self):
@@ -412,7 +418,15 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         )
         return config
 
+    def _check_vocabulary(self):
+        if self.vocabulary is None:
+            raise ValueError(
+                "No vocabulary has been set for WordPieceTokenizer. Make sure "
+                "to pass a `vocabulary` argument when creating the layer."
+            )
+
     def tokenize(self, inputs):
+        self._check_vocabulary()
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
 
@@ -426,11 +440,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         )
 
         # Apply WordPiece and coerce shape for outputs.
-        if self._fast_word_piece is None:
-            raise ValueError(
-                "No vocabulary has been set for WordPieceTokenizer. Make sure "
-                "to pass a `vocabulary` argument when creating the layer."
-            )
         tokens = self._fast_word_piece.tokenize(inputs)
         # By default tf.text tokenizes text with two ragged dimensions (one for
         # split words and one for split subwords). We will collapse to a single
@@ -450,6 +459,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
+        self._check_vocabulary()
         inputs, unbatched, _ = convert_to_ragged_batch(inputs)
         outputs = self._fast_word_piece.detokenize(inputs)
         if unbatched:

@@ -143,16 +143,6 @@ class BertPreprocessor(Preprocessor):
         self.truncate = truncate
         self.packer = None
 
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "sequence_length": self.sequence_length,
-                "truncate": self.truncate,
-            }
-        )
-        return config
-
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
         # assets have loaded when restoring a saved model.
@@ -175,6 +165,16 @@ class BertPreprocessor(Preprocessor):
             "padding_mask": token_ids != self.tokenizer.pad_token_id,
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "sequence_length": self.sequence_length,
+                "truncate": self.truncate,
+            }
+        )
+        return config
 
     @classproperty
     def tokenizer_cls(cls):

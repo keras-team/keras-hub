@@ -30,6 +30,8 @@ import tensorflow as tf
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.tokenizers import tokenizer
+from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
@@ -41,6 +43,10 @@ try:
     import tensorflow_text as tf_text
 except ImportError:
     tf_text = None
+
+VOCAB_FILENAME = "vocabulary.json"
+MERGES_FILENAME = "merges.txt"
+
 
 # As python and TF handles special spaces differently, we need to
 # manually handle special spaces during string split.
@@ -273,8 +279,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
     def __init__(
         self,
-        vocabulary,
-        merges,
+        vocabulary=None,
+        merges=None,
         sequence_length=None,
         add_prefix_space=False,
         unsplittable_tokens=None,
@@ -325,11 +331,63 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             unicode_list, byte_list, default=""
         )
 
+        self.set_vocabulary_and_merges(vocabulary, merges)
+
+    def save_assets(self, dir_path):
+        vocab_path = os.path.join(dir_path, VOCAB_FILENAME)
+        merges_path = os.path.join(dir_path, MERGES_FILENAME)
+        with open(vocab_path, "w") as file:
+            file.write(json.dumps(self.vocabulary))
+        with open(merges_path, "w") as file:
+            for merge in self.merges:
+                file.write(f"{merge}\n")
+
+    def load_assets(self, dir_path):
+        vocab_path = os.path.join(dir_path, VOCAB_FILENAME)
+        merges_path = os.path.join(dir_path, MERGES_FILENAME)
+        self.set_vocabulary_and_merges(vocab_path, merges_path)
+
+    def set_vocabulary_and_merges(self, vocabulary, merges):
+        """Set the vocabulary and merge rules from data or files."""
+        if vocabulary is None or merges is None:
+            # Clear vocab related state.
+            self.vocabulary = None
+            self.merges = None
+            self.cache = None
+            self.id_to_token_map = None
+            self.token_to_id_map = None
+            self.merge_ranks_lookup_default = None
+            self.merge_ranks = None
+            return
+
+        if isinstance(vocabulary, str):
+            with open(vocabulary, "r") as f:
+                self.vocabulary = json.load(f)
+        elif isinstance(vocabulary, dict):
+            self.vocabulary = vocabulary.copy()
+        else:
+            raise ValueError(
+                "Vocabulary must be an file path or dictionary mapping string "
+                "token to int ids. Received: "
+                f"`type(vocabulary)={type(vocabulary)}`."
+            )
+        if isinstance(merges, str):
+            self.merges = [bp.rstrip() for bp in open(merges)]
+        elif isinstance(merges, Iterable):
+            self.merges = list(merges)
+        else:
+            raise ValueError(
+                "Merges must be a file path or a list of merge rules. "
+                f"Received: `type(merges)={type(merges)}`"
+            )
+
         self.cache = BytePairTokenizerCache()
-        if unsplittable_tokens:
+        if self.unsplittable_tokens:
             # Put special tokens into cache, so it won't be further split and
             # merged.
-            self.cache.insert(unsplittable_tokens, unsplittable_tokens)
+            self.cache.insert(
+                self.unsplittable_tokens, self.unsplittable_tokens
+            )
 
         # Create mapping between string tokens to int ids, and vice versa.
         byte_pairs = [x[0] for x in self.vocabulary.items()]
@@ -356,10 +414,12 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
     def get_vocabulary(self) -> List[str]:
         """Get the tokenizer vocabulary as a list of strings tokens."""
+        self._check_vocabulary()
         return self.vocabulary.keys()
 
     def vocabulary_size(self) -> int:
         """Get the size of the tokenizer vocabulary."""
+        self._check_vocabulary()
         return len(self.vocabulary)
 
     def id_to_token(self, id: int) -> str:
@@ -367,6 +427,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         # This will be slow, but keep memory usage down compared to building a
         # dict. Assuming the main use case is looking up a few special tokens
         # early in the vocab, this should be fine.
+        self._check_vocabulary()
 
         keys = self.get_vocabulary()
         for token in keys:
@@ -376,23 +437,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
     def token_to_id(self, token: str) -> int:
         """Convert a string token to an integer id."""
+        self._check_vocabulary()
         return self.vocabulary[token]
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                # Ideally vocabulary and merge list would be saved as plain text
-                # assets in the saved model. We have no good way to support
-                # this currently, so we save the vocabulary in the config.
-                "vocabulary": self.vocabulary,
-                "merges": self.merges,
-                "sequence_length": self.sequence_length,
-                "add_prefix_space": self.add_prefix_space,
-                "unsplittable_tokens": self.unsplittable_tokens,
-            }
-        )
-        return config
 
     @tf.function
     def _bpe_merge_one_step(self, words, mask):
@@ -499,7 +545,16 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         )
         return merged_words
 
+    def _check_vocabulary(self):
+        if self.vocabulary is None:
+            raise ValueError(
+                "No vocabulary has been set for BytePairTokenizer. Make sure "
+                "to pass `vocabulary` and `merges` arguments when creating the "
+                "layer."
+            )
+
     def tokenize(self, inputs):
+        self._check_vocabulary()
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
 
@@ -560,6 +615,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
+        self._check_vocabulary()
         inputs, unbatched, _ = convert_to_ragged_batch(inputs)
         inputs = tf.cast(inputs, self.dtype)
         unicode_text = tf.strings.reduce_join(
@@ -592,9 +648,51 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         )
         self.cache.insert(tokens, tokenized_words)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "sequence_length": self.sequence_length,
+                "add_prefix_space": self.add_prefix_space,
+                "unsplittable_tokens": self.unsplittable_tokens,
+            }
+        )
+        return config
+
     @classproperty
     def presets(cls):
         return {}
+
+    @classmethod
+    def _legacy_from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        metadata = cls.presets[preset]
+
+        vocabulary = keras.utils.get_file(
+            "vocab.txt",
+            metadata["vocabulary_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["vocabulary_hash"],
+        )
+        merges = keras.utils.get_file(
+            "merges.txt",
+            metadata["merges_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["merges_hash"],
+        )
+
+        config = metadata["preprocessor_config"]
+        config.update(
+            {
+                "vocabulary": vocabulary,
+                "merges": merges,
+            },
+        )
+
+        return cls.from_config({**config, **kwargs})
 
     @classmethod
     def from_preset(
@@ -619,41 +717,17 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         tokenizer.detokenize([5, 6, 7, 8, 9])
         ```
         """
+        # TODO: delete me!
+        if preset in cls.presets:
+            return cls._legacy_from_preset(preset, **kwargs)
 
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class"
-            )
-
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-
-        vocabulary = keras.utils.get_file(
-            "vocab.json",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["vocabulary_hash"],
+        config_file = "tokenizer.json"
+        check_preset_class(preset, cls, config_file=config_file)
+        return load_from_preset(
+            preset,
+            config_file=config_file,
+            config_overrides=kwargs,
         )
-        merges = keras.utils.get_file(
-            "merges.txt",
-            metadata["merges_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["merges_hash"],
-        )
-
-        config = metadata["preprocessor_config"]
-        config.update(
-            {
-                "vocabulary": vocabulary,
-                "merges": merges,
-            },
-        )
-
-        return cls.from_config({**config, **kwargs})
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.
