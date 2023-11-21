@@ -58,6 +58,7 @@ class CachedMistralAttention(keras.layers.Layer):
             equation="abc,cde->abde",
             output_shape=(None, self._num_query_heads, self._attn_head_size),
             kernel_initializer=self._kernel_initializer,
+            dtype=self.compute_dtype,
             name="query",
         )
         self._query_dense.build(inputs_shape)
@@ -70,6 +71,7 @@ class CachedMistralAttention(keras.layers.Layer):
                 self._attn_head_size,
             ),
             kernel_initializer=self._kernel_initializer,
+            dtype=self.compute_dtype,
             name="key",
         )
         self._key_dense.build(inputs_shape)
@@ -82,6 +84,7 @@ class CachedMistralAttention(keras.layers.Layer):
                 self._attn_head_size,
             ),
             kernel_initializer=self._kernel_initializer,
+            dtype=self.compute_dtype,
             name="value",
         )
         self._value_dense.build(inputs_shape)
@@ -92,6 +95,7 @@ class CachedMistralAttention(keras.layers.Layer):
             equation="abc,cd->abd",
             output_shape=(None, self._hidden_dim),
             kernel_initializer=self._kernel_initializer,
+            dtype=self.compute_dtype,
             name="attention_output",
         )
         self._output_dense.build(inputs_shape)
@@ -99,6 +103,7 @@ class CachedMistralAttention(keras.layers.Layer):
         self.rotary_embedding_layer = RotaryEmbedding(
             max_wavelength=self._rope_max_wavelength,
             scaling_factor=self._rope_scaling_factor,
+            dtype=self.compute_dtype,
         )
 
         self.built = True

@@ -74,12 +74,15 @@ class MistralTransformerDecoder(keras.layers.Layer):
             rope_scaling_factor=self.rope_scaling_factor,
             sliding_window=self.sliding_window,
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.compute_dtype,
             name="self_attention",
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
         self._self_attention_layernorm = MistralLayerNormalization(
-            epsilon=self.layer_norm_epsilon, name="self_attention_layernorm"
+            epsilon=self.layer_norm_epsilon,
+            name="self_attention_layernorm",
+            dtype=self.compute_dtype,
         )
         self._self_attention_layernorm.build(decoder_sequence_shape)
 
@@ -88,6 +91,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
             self.intermediate_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             use_bias=False,
+            dtype=self.compute_dtype,
             name="feedforward_intermediate_dense",
         )
         self._feedforward_intermediate_dense.build(decoder_sequence_shape)
@@ -105,6 +109,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
             self.hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             use_bias=False,
+            dtype=self.compute_dtype,
             name="feedforward_output_dense",
         )
 
@@ -115,7 +120,9 @@ class MistralTransformerDecoder(keras.layers.Layer):
         )
 
         self._feedforward_layernorm = MistralLayerNormalization(
-            epsilon=self.layer_norm_epsilon, name="feedforward_layernorm"
+            epsilon=self.layer_norm_epsilon,
+            name="feedforward_layernorm",
+            dtype=self.compute_dtype,
         )
         self._feedforward_layernorm.build(decoder_sequence_shape)
 

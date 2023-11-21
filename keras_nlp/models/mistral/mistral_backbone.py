@@ -44,6 +44,9 @@ class MistralBackbone(Backbone):
         sliding_window=512,
         **kwargs,
     ):
+        # Get the dtype
+        dtype = kwargs.pop("dtype", keras.config.floatx())
+
         # Inputs
         token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
         padding_mask = keras.Input(
@@ -56,6 +59,7 @@ class MistralBackbone(Backbone):
             output_dim=hidden_dim,
             tie_weights=False,
             embeddings_initializer=_mistral_kernel_initializer(stddev=0.01),
+            dtype=dtype,
             name="token_embedding",
         )
         x = token_embedding_layer(token_ids)
@@ -72,11 +76,14 @@ class MistralBackbone(Backbone):
                 activation=ops.silu,
                 kernel_initializer=_mistral_kernel_initializer(stddev=0.02),
                 sliding_window=sliding_window,
+                dtype=dtype,
                 name=f"transformer_layer_{i}",
             )(x, decoder_padding_mask=padding_mask)
 
         sequence_output = MistralLayerNormalization(
-            name="sequence_output_layernorm", epsilon=layer_norm_epsilon
+            name="sequence_output_layernorm",
+            epsilon=layer_norm_epsilon,
+            dtype=dtype,
         )(x)
 
         # Instantiate using Functional API Model constructor
