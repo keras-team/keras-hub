@@ -52,49 +52,36 @@ class WhisperTokenizer(BytePairTokenizer):
 
     def __init__(
         self,
-        vocabulary,
-        merges,
-        special_tokens,
+        vocabulary=None,
+        merges=None,
+        special_tokens=None,
         language_tokens=None,
         **kwargs,
     ):
-        vocabulary = _load_dict(vocabulary)
-
-        # Necessary special tokens.
-        bos_token = "<|startoftranscript|>"
-        eos_token = "<|endoftext|>"
-
+        special_tokens = _load_dict(special_tokens)
         if language_tokens is not None:
-            # Multilingual tokenizer.
-            # TODO: The pad token for the multilingual tokenizer is actually
-            # "", but it errors out (OOM). After BPE is fixed, we can update
-            # this to "". For now, we will use `"<|endoftext|>"`.
-            pad_token = "<|endoftext|>"
             language_tokens = _load_dict(language_tokens)
 
-            # Add language tokens to the vocabulary. This makes detokenization
-            # easier for us.
-            vocabulary = {
-                **vocabulary,
-                **language_tokens,
-            }
-        else:
-            # English tokenizer.
-            pad_token = "<|endoftext|>"
+        # Necessary special tokens.
+        self.bos_token = "<|startoftranscript|>"
+        self.eos_token = "<|endoftext|>"
+        # TODO: The pad token for the multilingual tokenizer is actually
+        # "", but it errors out (OOM). After BPE is fixed, we can update
+        # this to "". For now, we will use `"<|endoftext|>"`.
+        self.pad_token = "<|endoftext|>"
 
-        no_timestamps_token = "<|notimestamps|>"
+        self.no_timestamps_token = "<|notimestamps|>"
         # Task special tokens.
-        translate_token = "<|translate|>"
-        transcribe_token = "<|transcribe|>"
+        self.translate_token = "<|translate|>"
+        self.transcribe_token = "<|transcribe|>"
 
-        special_tokens = _load_dict(special_tokens)
         for token in [
-            bos_token,
-            eos_token,
-            pad_token,
-            no_timestamps_token,
-            translate_token,
-            transcribe_token,
+            self.bos_token,
+            self.eos_token,
+            self.pad_token,
+            self.no_timestamps_token,
+            self.translate_token,
+            self.transcribe_token,
         ]:
             if token not in special_tokens:
                 raise ValueError(
@@ -102,15 +89,16 @@ class WhisperTokenizer(BytePairTokenizer):
                     f"`special_tokens`. Please provide `'{token}'` in your "
                     "`special_tokens`."
                 )
-            # Add special tokens to `vocabulary` for easy detokenization.
-            vocabulary[token] = special_tokens[token]
 
-        self.bos_token_id = special_tokens[bos_token]
-        self.eos_token_id = special_tokens[eos_token]
-        self.pad_token_id = special_tokens[pad_token]
-        self.no_timestamps_token_id = special_tokens[no_timestamps_token]
-        self.translate_token_id = special_tokens[translate_token]
-        self.transcribe_token_id = special_tokens[transcribe_token]
+        self.bos_token_id = special_tokens[self.bos_token]
+        self.eos_token_id = special_tokens[self.eos_token]
+        self.pad_token_id = special_tokens[self.pad_token]
+        self.no_timestamps_token_id = special_tokens[self.no_timestamps_token]
+        self.translate_token_id = special_tokens[self.translate_token]
+        self.transcribe_token_id = special_tokens[self.transcribe_token]
+
+        self.special_tokens = special_tokens
+        self.language_tokens = language_tokens
 
         # TODO: Add language tokens to `unsplittable_tokens` once we figure
         # out the performance issue with a large list.
@@ -123,8 +111,30 @@ class WhisperTokenizer(BytePairTokenizer):
             **kwargs,
         )
 
-        self.special_tokens = special_tokens
-        self.language_tokens = language_tokens
+    def set_vocabulary_and_merges(self, vocabulary, merges):
+        if vocabulary is not None:
+            vocabulary = _load_dict(vocabulary)
+
+            if self.language_tokens is not None:
+                # Multilingual tokenizer.
+                # Add language tokens to the vocabulary. This makes
+                # detokenization easier for us.
+                vocabulary = {
+                    **vocabulary,
+                    **self.language_tokens,
+                }
+
+            for token in [
+                self.bos_token,
+                self.eos_token,
+                self.pad_token,
+                self.no_timestamps_token,
+                self.translate_token,
+                self.transcribe_token,
+            ]:
+                vocabulary[token] = self.special_tokens[token]
+
+        super().set_vocabulary_and_merges(vocabulary, merges)
 
     def get_config(self):
         config = super().get_config()

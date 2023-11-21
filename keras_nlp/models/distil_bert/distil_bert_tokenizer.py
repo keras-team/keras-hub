@@ -76,6 +76,10 @@ class DistilBertTokenizer(WordPieceTokenizer):
         lowercase=False,
         **kwargs,
     ):
+        self.cls_token = "[CLS]"
+        self.sep_token = "[SEP]"
+        self.pad_token = "[PAD]"
+        self.mask_token = "[MASK]"
         super().__init__(
             vocabulary=vocabulary,
             lowercase=lowercase,
@@ -87,22 +91,18 @@ class DistilBertTokenizer(WordPieceTokenizer):
 
         if vocabulary is not None:
             # Check for necessary special tokens.
-            cls_token = "[CLS]"
-            sep_token = "[SEP]"
-            pad_token = "[PAD]"
-            mask_token = "[MASK]"
-            for token in [cls_token, pad_token, sep_token]:
-                if token not in self.get_vocabulary():
+            for token in [self.cls_token, self.pad_token, self.sep_token]:
+                if token not in self.vocabulary:
                     raise ValueError(
                         f"Cannot find token `'{token}'` in the provided "
                         f"`vocabulary`. Please provide `'{token}'` in your "
                         "`vocabulary` or use a pretrained `vocabulary` name."
                     )
 
-            self.cls_token_id = self.token_to_id(cls_token)
-            self.sep_token_id = self.token_to_id(sep_token)
-            self.pad_token_id = self.token_to_id(pad_token)
-            self.mask_token_id = self.token_to_id(mask_token)
+            self.cls_token_id = self.token_to_id(self.cls_token)
+            self.sep_token_id = self.token_to_id(self.sep_token)
+            self.pad_token_id = self.token_to_id(self.pad_token)
+            self.mask_token_id = self.token_to_id(self.mask_token)
         else:
             self.cls_token_id = None
             self.sep_token_id = None
