@@ -161,6 +161,7 @@ class SentencePieceTokenizerTest(TestCase):
         cloned_tokenizer = SentencePieceTokenizer.from_config(
             original_tokenizer.get_config()
         )
+        cloned_tokenizer.set_proto(original_tokenizer.proto)
         self.assertAllEqual(
             original_tokenizer(input_data),
             cloned_tokenizer(input_data),
