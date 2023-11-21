@@ -110,6 +110,9 @@ class GPTNeoXCausalLMPreprocessor(GPTNeoXPreprocessor):
         the sequence (as generation is expected to continue at the end of the
         inputted prompt).
         """
+        if not self.built:
+            self.build(None)
+
         x = convert_inputs_to_list_of_tensor_segments(x)[0]
         x = self.tokenizer(x)
         token_ids, padding_mask = self.packer(
@@ -130,6 +133,9 @@ class GPTNeoXCausalLMPreprocessor(GPTNeoXPreprocessor):
         padding and start/end tokens, and then converting the integer sequence
         back to a string.
         """
+        if not self.built:
+            self.build(None)
+
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
         if not isinstance(token_ids, tf.Tensor):
             token_ids = ops.convert_to_numpy(token_ids)
