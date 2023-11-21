@@ -93,33 +93,38 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     """
 
     def __init__(self, proto, **kwargs):
+        self.cls_token = "[CLS]"
+        self.sep_token = "[SEP]"
+        self.pad_token = "[PAD]"
+        self.mask_token = "[MASK]"
+
         super().__init__(proto=proto, **kwargs)
 
-        # Check for necessary special tokens.
-        cls_token = "[CLS]"
-        sep_token = "[SEP]"
-        pad_token = "[PAD]"
-        mask_token = "[MASK]"
+    def set_proto(self, proto):
+        super().set_proto(proto)
+        if proto is not None:
+            for token in [self.cls_token, self.pad_token, self.sep_token]:
+                if token not in super().get_vocabulary():
+                    raise ValueError(
+                        f"Cannot find token `'{token}'` in the provided "
+                        f"`vocabulary`. Please provide `'{token}'` in your "
+                        "`vocabulary` or use a pretrained `vocabulary` name."
+                    )
 
-        # We do not throw an error if `mask_token` is not present in the
-        # vocabulary.
-        for token in [cls_token, pad_token, sep_token]:
-            if token not in super().get_vocabulary():
-                raise ValueError(
-                    f"Cannot find token `'{token}'` in the provided "
-                    f"`vocabulary`. Please provide `'{token}'` in your "
-                    "`vocabulary` or use a pretrained `vocabulary` name."
-                )
-
-        self.cls_token_id = self.token_to_id(cls_token)
-        self.sep_token_id = self.token_to_id(sep_token)
-        self.pad_token_id = self.token_to_id(pad_token)
-        # If the mask token is not in the vocabulary, add it to the end of the
-        # vocabulary.
-        if mask_token in super().get_vocabulary():
-            self.mask_token_id = super().token_to_id(mask_token)
+            self.cls_token_id = self.token_to_id(self.cls_token)
+            self.sep_token_id = self.token_to_id(self.sep_token)
+            self.pad_token_id = self.token_to_id(self.pad_token)
+            # If the mask token is not in the vocabulary, add it to the end of the
+            # vocabulary.
+            if self.mask_token in super().get_vocabulary():
+                self.mask_token_id = super().token_to_id(self.mask_token)
+            else:
+                self.mask_token_id = super().vocabulary_size()
         else:
-            self.mask_token_id = super().vocabulary_size()
+            self.cls_token_id = None
+            self.sep_token_id = None
+            self.pad_token_id = None
+            self.mask_token_id = None
 
     def vocabulary_size(self):
         sentence_piece_size = super().vocabulary_size()
