@@ -73,20 +73,26 @@ class T5Tokenizer(SentencePieceTokenizer):
     """
 
     def __init__(self, proto, **kwargs):
+        self.end_token = "</s>"
+        self.pad_token = "<pad>"
+
         super().__init__(proto=proto, **kwargs)
 
-        # Check for necessary special tokens.
-        end_token = "</s>"
-        pad_token = "<pad>"
-        for token in [pad_token]:
-            if token not in self.get_vocabulary():
-                raise ValueError(
-                    f"Cannot find token `'{token}'` in the provided "
-                    f"`vocabulary`. Please provide `'{token}'` in your "
-                    "`vocabulary` or use a pretrained `vocabulary` name."
-                )
-
-        self.pad_token_id = self.token_to_id(pad_token)
-        self.end_token_id = self.token_to_id(end_token)
-        # T5 uses the same start token as end token, i.e., "<\s>".
-        self.start_token_id = self.end_token_id
+    def set_proto(self, proto):
+        super().set_proto(proto)
+        if proto is not None:
+            for token in [self.end_token, self.pad_token]:
+                if token not in self.get_vocabulary():
+                    raise ValueError(
+                        f"Cannot find token `'{token}'` in the provided "
+                        f"`vocabulary`. Please provide `'{token}'` in your "
+                        "`vocabulary` or use a pretrained `vocabulary` name."
+                    )
+            self.end_token_id = self.token_to_id(self.end_token)
+            self.pad_token_id = self.token_to_id(self.pad_token)
+            # T5 uses the same start token as end token, i.e., "<\s>".
+            self.start_token_id = self.end_token_id
+        else:
+            self.end_token_id = None
+            self.pad_token_id = None
+            self.start_token_id = None
