@@ -69,8 +69,8 @@ class FNetTokenizer(SentencePieceTokenizer):
         self.mask_token = "[MASK]"
         super().__init__(proto=proto, **kwargs)
 
-    def set_vocabulary(self, proto):
-        super().set_vocabulary(proto)
+    def set_proto(self, proto):
+        super().set_proto(proto)
         if proto is not None:
             for token in [
                 self.cls_token,

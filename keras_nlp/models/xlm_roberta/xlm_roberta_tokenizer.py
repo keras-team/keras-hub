@@ -99,8 +99,8 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
         super().__init__(proto=proto, **kwargs)
 
-    def set_vocabulary(self, proto):
-        super().set_vocabulary(proto)
+    def set_proto(self, proto):
+        super().set_proto(proto)
         if proto is not None:
             self.mask_token_id = self.vocabulary_size() - 1
         else:

@@ -78,10 +78,10 @@ class T5Tokenizer(SentencePieceTokenizer):
 
         super().__init__(proto=proto, **kwargs)
 
-    def set_vocabulary(self, proto):
-        super().set_vocabulary(proto)
+    def set_proto(self, proto):
+        super().set_proto(proto)
         if proto is not None:
-            for token in [self.pad_token]:
+            for token in [self.end_token, self.pad_token]:
                 if token not in self.get_vocabulary():
                     raise ValueError(
                         f"Cannot find token `'{token}'` in the provided "

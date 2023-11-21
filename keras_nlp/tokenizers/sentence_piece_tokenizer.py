@@ -128,19 +128,18 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
         self.proto = None
         self.sequence_length = sequence_length
-        self.set_vocabulary(proto)
+        self.set_proto(proto)
 
     def save_assets(self, dir_path):
         path = os.path.join(dir_path, VOCAB_FILENAME)
         with open(path, "w") as file:
-            for token in self.proto:
-                file.write(f"{token}\n")
+            file.write(self.proto)
 
     def load_assets(self, dir_path):
         path = os.path.join(dir_path, VOCAB_FILENAME)
-        self.set_vocabulary(path)
+        self.set_proto(path)
 
-    def set_vocabulary(self, proto):
+    def set_proto(self, proto):
         if proto is None:
             self.proto = None
             self._sentence_piece = None
