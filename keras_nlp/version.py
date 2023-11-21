@@ -18,6 +18,6 @@ from keras_nlp.api_export import keras_nlp_export
 __version__ = "0.7.0"
 
 
-@keras_nlp_export("keras.version")
+@keras_nlp_export("keras_nlp.version")
 def version():
     return __version__
