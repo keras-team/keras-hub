@@ -110,7 +110,7 @@ class MistralBackbone(Backbone):
         **kwargs,
     ):
         # Get the dtype
-        dtype = kwargs.pop("dtype", keras.config.floatx())
+        dtype = kwargs.pop("dtype", keras.backend.floatx())
 
         # Inputs
         token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
