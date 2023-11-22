@@ -1,4 +1,4 @@
-# Copyright 2021 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,18 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# sentencepiece is segfaulting on tf-nightly if tensorflow is imported first.
-# This is a temporary fix to restore our nightly testing to green, while we look
-# for a longer term solution.
-try:
-    import sentencepiece
-except ImportError:
-    pass
+from keras_nlp.api_export import keras_nlp_export
 
-from keras_nlp import layers
-from keras_nlp import metrics
-from keras_nlp import models
-from keras_nlp import samplers
-from keras_nlp import tokenizers
-from keras_nlp import utils
-from keras_nlp.version import __version__
+# Unique source of truth for the version number.
+__version__ = "0.7.0"
+
+
+@keras_nlp_export("keras_nlp.version")
+def version():
+    return __version__
