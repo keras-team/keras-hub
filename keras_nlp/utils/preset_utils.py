@@ -108,15 +108,18 @@ def save_to_preset(
     from keras_nlp import __version__ as keras_nlp_version
 
     # Save any associated metadata.
-    metadata = {
-        "keras_version": keras.src.__version__,
-        "keras_nlp_version": keras_nlp_version,
-        "parameter_count": layer.count_params(),
-        "date_saved": datetime.datetime.now().strftime("%Y-%m-%d@%H:%M:%S"),
-    }
-    metadata_path = os.path.join(preset, "metadata.json")
-    with open(metadata_path, "w") as metadata_file:
-        metadata_file.write(json.dumps(metadata, indent=4))
+    if config_filename == "config.json":
+        metadata = {
+            "keras_version": keras.version()
+            if hasattr(keras, "version")
+            else None,
+            "keras_nlp_version": keras_nlp_version,
+            "parameter_count": layer.count_params(),
+            "date_saved": datetime.datetime.now().strftime("%Y-%m-%d@%H:%M:%S"),
+        }
+        metadata_path = os.path.join(preset, "metadata.json")
+        with open(metadata_path, "w") as metadata_file:
+            metadata_file.write(json.dumps(metadata, indent=4))
 
 
 def load_from_preset(
