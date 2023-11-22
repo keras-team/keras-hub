@@ -153,3 +153,63 @@ class PresetUtilsTest(TestCase):
         )
         input_data = model.preprocessor(*train_data)[0]
         self.assertAllEqual(model(input_data), restored_model(input_data))
+
+    def test_bert_wordpiece_preset_saving(self):
+        save_dir = self.get_temp_dir()
+        model = BertMaskedLM.from_preset("bert_tiny_en_uncased")
+        preset_utils.save_to_preset(model, save_dir)
+
+        # Check existence of files
+        self.assertTrue(
+            os.path.exists(
+                os.path.join(save_dir, "assets/tokenizer/vocabulary.txt")
+            )
+        )
+        self.assertTrue(os.path.exists(os.path.join(save_dir, "config.json")))
+        self.assertTrue(
+            os.path.exists(os.path.join(save_dir, "model.weights.h5"))
+        )
+        self.assertTrue(os.path.exists(os.path.join(save_dir, "metadata.json")))
+
+        preset_dict = bert_presets.backbone_presets["bert_tiny_en_uncased"]
+
+        # Check that saved vocab is equal to the original preset vocab
+        vocab = open(
+            os.path.join(save_dir, "assets/tokenizer/vocabulary.txt"), "r"
+        ).read()
+        expected_vocab_file = keras.utils.get_file(
+            "vocab.txt",
+            preset_dict["vocabulary_url"],
+            cache_subdir=os.path.join("models", "bert_tiny_en_uncased"),
+            file_hash=preset_dict["vocabulary_hash"],
+        )
+        expected_vocab = open(expected_vocab_file, "r").read()
+        self.assertEqual(vocab, expected_vocab)
+
+        # Check the model config (`config.json``)
+        config_json = open(os.path.join(save_dir, "config.json"), "r").read()
+        self.assertTrue(
+            "build_config" not in config_json
+        )  # Test on raw json to include nested keys
+        self.assertTrue(
+            "compile_config" not in config_json
+        )  # Test on raw json to include nested keys
+        config = json.loads(config_json)
+        self.assertAllEqual(
+            config["assets"], ["assets/tokenizer/vocabulary.txt"]
+        )
+        self.assertEqual(config["weights"], "model.weights.h5")
+
+        # Try deserializing the model using the config
+        restored_model = keras.saving.deserialize_keras_object(config)
+        restored_model.load_weights(os.path.join(save_dir, "model.weights.h5"))
+        restored_model.preprocessor.tokenizer.load_assets(
+            os.path.join(save_dir, "assets/tokenizer/")
+        )
+
+        # Check model outputs
+        train_data = (
+            ["the quick brown fox.", "the slow brown fox."],  # Features.
+        )
+        input_data = model.preprocessor(*train_data)[0]
+        self.assertAllEqual(model(input_data), restored_model(input_data))
