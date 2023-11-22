@@ -37,6 +37,7 @@ local unittest = base.BaseTest {
     'pytest',
     'keras_nlp',
     '--run_large',
+    '--check_gpu',
   ],
 };
 

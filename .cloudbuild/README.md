@@ -26,7 +26,7 @@ gcloud config set project keras-team-test
 ```
 
 To add/update dependency for GPU tests for a given framework:
-- Add/update dependencies in `requirements.txt`.
+- Add/update dependencies in `requirements-{framework}-cuda.txt`.
 - Add/update dependencies in `.cloudbuild/{framework}/Dockerfile`.
 - Run the following:
 ```
