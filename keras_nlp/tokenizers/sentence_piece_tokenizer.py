@@ -132,7 +132,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     def save_assets(self, dir_path):
         path = os.path.join(dir_path, VOCAB_FILENAME)
-        with open(path, "w") as file:
+        with open(path, "wb") as file:
             file.write(self.proto)
 
     def load_assets(self, dir_path):

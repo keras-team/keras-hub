@@ -100,14 +100,18 @@ def save_to_preset(
     # Include references to weights and assets.
     config["assets"] = assets
     config["weights"] = weights_filename if save_weights else None
-    recursive_pop(config, "config_config")
+    recursive_pop(config, "compile_config")
     recursive_pop(config, "build_config")
     with open(config_path, "w") as config_file:
         config_file.write(json.dumps(config, indent=4))
 
+    from keras_nlp import __version__ as keras_nlp_version
+
     # Save any associated metadata.
     metadata = {
-        # TODO: save keras version and keras-nlp version.
+        "keras_version": keras.src.__version__,
+        "keras_nlp_version": keras_nlp_version,
+        "parameter_count": layer.count_params(),
         "date_saved": datetime.datetime.now().strftime("%Y-%m-%d@%H:%M:%S"),
     }
     metadata_path = os.path.join(preset, "metadata.json")
