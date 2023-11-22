@@ -34,12 +34,14 @@ class CachedMistralAttention(keras.layers.Layer):
         rope_scaling_factor=1.0,
         kernel_initializer="glorot_uniform",
         sliding_window=512,
+        dropout=0,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._num_query_heads = num_query_heads
         self._num_key_value_heads = num_key_value_heads
         self._sliding_window = sliding_window
+        self._dropout = dropout
 
         self._num_key_value_groups = num_query_heads // num_key_value_heads
         self._rope_max_wavelength = rope_max_wavelength
@@ -51,12 +53,20 @@ class CachedMistralAttention(keras.layers.Layer):
         self._rope_scaling_factor = rope_scaling_factor
 
     def build(self, inputs_shape):
+        # Einsum variables:
+        # b = batch size
+        # q = query length
+        # k = key/value length
+        # m = model dim
+        # u = num query heads
+        # v = num key/value heads
+        # h = head dim
         self._hidden_dim = inputs_shape[-1]
-        self._attn_head_size = self._hidden_dim // self._num_query_heads
+        self._head_dim = self._hidden_dim // self._num_query_heads
 
         self._query_dense = keras.layers.EinsumDense(
-            equation="abc,cde->abde",
-            output_shape=(None, self._num_query_heads, self._attn_head_size),
+            equation="bqm,muh->bquh",
+            output_shape=(None, self._num_query_heads, self._head_dim),
             kernel_initializer=self._kernel_initializer,
             dtype=self.compute_dtype,
             name="query",
@@ -64,11 +74,11 @@ class CachedMistralAttention(keras.layers.Layer):
         self._query_dense.build(inputs_shape)
 
         self._key_dense = keras.layers.EinsumDense(
-            equation="abc,cde->abde",
+            equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
                 self._num_key_value_heads,
-                self._attn_head_size,
+                self._head_dim,
             ),
             kernel_initializer=self._kernel_initializer,
             dtype=self.compute_dtype,
@@ -77,11 +87,11 @@ class CachedMistralAttention(keras.layers.Layer):
         self._key_dense.build(inputs_shape)
 
         self._value_dense = keras.layers.EinsumDense(
-            equation="abc,cde->abde",
+            equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
                 self._num_key_value_heads,
-                self._attn_head_size,
+                self._head_dim,
             ),
             kernel_initializer=self._kernel_initializer,
             dtype=self.compute_dtype,
@@ -91,14 +101,20 @@ class CachedMistralAttention(keras.layers.Layer):
 
         self._softmax = keras.layers.Softmax(axis=-1, name="attention_softmax")
 
+        self._dropout_layer = keras.layers.Dropout(
+            rate=self._dropout, dtype=self.compute_dtype
+        )
+
         self._output_dense = keras.layers.EinsumDense(
-            equation="abc,cd->abd",
+            equation="bquh,uhm->bqm",
             output_shape=(None, self._hidden_dim),
             kernel_initializer=self._kernel_initializer,
             dtype=self.compute_dtype,
             name="attention_output",
         )
-        self._output_dense.build(inputs_shape)
+        self._output_dense.build(
+            (None, None, self._num_query_heads, self._head_dim)
+        )
 
         self.rotary_embedding_layer = RotaryEmbedding(
             max_wavelength=self._rope_max_wavelength,
@@ -114,6 +130,7 @@ class CachedMistralAttention(keras.layers.Layer):
         attention_mask=None,
         cache=None,
         cache_update_index=None,
+        training=None,
     ):
         seq_len = ops.shape(hidden_states)[1]
         start_index = (
@@ -221,14 +238,8 @@ class CachedMistralAttention(keras.layers.Layer):
             query, key, value, attention_mask
         )
 
-        attention_output_shape = ops.shape(attention_output)
-        attention_output = ops.reshape(
-            attention_output,
-            [
-                attention_output_shape[0],  # batch_shape
-                attention_output_shape[1],  # seq_len
-                self._hidden_dim,
-            ],
+        attention_output = self._dropout_layer(
+            attention_output, training=training
         )
 
         attention_output = self._output_dense(attention_output)
@@ -247,9 +258,7 @@ class CachedMistralAttention(keras.layers.Layer):
     def _compute_attention(self, query, key, value, attention_mask=None):
         attention_scores = ops.einsum("aecd,abcd->acbe", key, query)
 
-        norm_factor = ops.sqrt(
-            ops.cast(self._attn_head_size, self.compute_dtype)
-        )
+        norm_factor = ops.sqrt(ops.cast(self._head_dim, self.compute_dtype))
 
         attention_scores = attention_scores / norm_factor
 
@@ -274,6 +283,7 @@ class CachedMistralAttention(keras.layers.Layer):
                     self._kernel_initializer
                 ),
                 "sliding_window": self._sliding_window,
+                "dropout": self._dropout,
             }
         )
         return config

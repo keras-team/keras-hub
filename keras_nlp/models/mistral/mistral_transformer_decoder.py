@@ -39,10 +39,9 @@ class MistralTransformerDecoder(keras.layers.Layer):
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
         sliding_window=512,
+        dropout=0,
         **kwargs,
     ):
-        decoder_sequence_shape = kwargs.pop("decoder_sequence_shape", None)
-
         super().__init__(**kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_query_heads = num_query_heads
@@ -51,16 +50,14 @@ class MistralTransformerDecoder(keras.layers.Layer):
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
 
+        self.dropout = dropout
+
         self.sliding_window = sliding_window
         self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
         self.supports_masking = True
-        self._decoder_sequence_shape = None
-
-        if decoder_sequence_shape:
-            self.build(decoder_sequence_shape)
 
     def build(self, decoder_sequence_shape):
         self._decoder_sequence_shape = decoder_sequence_shape
@@ -74,6 +71,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
             rope_scaling_factor=self.rope_scaling_factor,
             sliding_window=self.sliding_window,
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dropout=self.dropout,
             dtype=self.compute_dtype,
             name="self_attention",
         )
@@ -85,6 +83,11 @@ class MistralTransformerDecoder(keras.layers.Layer):
             dtype=self.compute_dtype,
         )
         self._self_attention_layernorm.build(decoder_sequence_shape)
+        self._self_attention_dropout = keras.layers.Dropout(
+            rate=self.dropout,
+            dtype=self.compute_dtype,
+            name="self_attention_dropout",
+        )
 
         # Feedforward layers.
         self._feedforward_intermediate_dense = keras.layers.Dense(
@@ -135,6 +138,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
         decoder_attention_mask=None,
         self_attention_cache=None,
         self_attention_cache_update_index=None,
+        training=None,
     ):
         self_attention_mask = self._compute_self_attention_mask(
             decoder_sequence=decoder_sequence,
@@ -155,6 +159,8 @@ class MistralTransformerDecoder(keras.layers.Layer):
 
         if self_attention_cache is not None:
             x, self_attention_cache = x
+
+        x = self._self_attention_dropout(x, training=training)
 
         x = x + residual
         residual = x
@@ -220,7 +226,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
-                "decoder_sequence_shape": self._decoder_sequence_shape,
+                "dropout": self.dropout,
             }
         )
         return config
