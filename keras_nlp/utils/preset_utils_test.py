@@ -12,16 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import datetime
 import json
 import os
 
 from keras_nlp.backend import keras
-from keras_nlp.model.bart import bart_presets
 from keras_nlp.models import AlbertMaskedLM
 from keras_nlp.models import BartSeq2SeqLM
 from keras_nlp.models import BertMaskedLM
 from keras_nlp.models.albert import albert_presets
+from keras_nlp.models.bart import bart_presets
 from keras_nlp.models.bert import bert_presets
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.utils import preset_utils
@@ -84,6 +83,73 @@ class PresetUtilsTest(TestCase):
         # Check model outputs
         train_data = (
             ["the quick brown fox.", "the slow brown fox."],  # Features.
+        )
+        input_data = model.preprocessor(*train_data)[0]
+        self.assertAllEqual(model(input_data), restored_model(input_data))
+
+    def test_bart_bytepiece_preset_saving(self):
+        save_dir = self.get_temp_dir()
+        model = BartSeq2SeqLM.from_preset("bart_base_en")
+        preset_utils.save_to_preset(model, save_dir)
+
+        # Check existence of files
+        self.assertTrue(
+            os.path.exists(
+                os.path.join(save_dir, "assets/tokenizer/vocabulary.json")
+            )
+        )
+        self.assertTrue(os.path.exists(os.path.join(save_dir, "config.json")))
+        self.assertTrue(
+            os.path.exists(os.path.join(save_dir, "model.weights.h5"))
+        )
+        self.assertTrue(os.path.exists(os.path.join(save_dir, "metadata.json")))
+
+        preset_dict = bart_presets.backbone_presets["bart_base_en"]
+
+        # Check that saved vocab is equal to the original preset vocab
+        vocab = open(
+            os.path.join(save_dir, "assets/tokenizer/vocabulary.json"), "r"
+        ).read()
+        expected_vocab_file = keras.utils.get_file(
+            "vocab.json",
+            preset_dict["vocabulary_url"],
+            cache_subdir=os.path.join("models", "bart_base_en"),
+            file_hash=preset_dict["vocabulary_hash"],
+        )
+        expected_vocab = open(expected_vocab_file, "r").read()
+        self.assertAllEqual(json.loads(vocab), json.loads(expected_vocab))
+
+        # Check the model config (`config.json``)
+        config_json = open(os.path.join(save_dir, "config.json"), "r").read()
+        self.assertTrue(
+            "build_config" not in config_json
+        )  # Test on raw json to include nested keys
+        self.assertTrue(
+            "compile_config" not in config_json
+        )  # Test on raw json to include nested keys
+        config = json.loads(config_json)
+        self.assertAllEqual(
+            config["assets"],
+            ["assets/tokenizer/vocabulary.json", "assets/tokenizer/merges.txt"],
+        )
+        self.assertEqual(config["weights"], "model.weights.h5")
+
+        # Try deserializing the model using the config
+        restored_model = keras.saving.deserialize_keras_object(config)
+        restored_model.load_weights(os.path.join(save_dir, "model.weights.h5"))
+        restored_model.preprocessor.tokenizer.load_assets(
+            os.path.join(save_dir, "assets/tokenizer/")
+        )
+
+        # Check model outputs
+        train_data = (
+            {
+                "encoder_text": [
+                    " airplane at airport",
+                    " airplane at airport",
+                ],
+                "decoder_text": [" airplane airport", " airplane airport"],
+            },
         )
         input_data = model.preprocessor(*train_data)[0]
         self.assertAllEqual(model(input_data), restored_model(input_data))
