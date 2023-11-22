@@ -4,9 +4,9 @@
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-nlp/issues)
 
 KerasNLP is a natural language processing library that works natively
-with TensorFlow, JAX, or PyTorch. Built on [multi-backend Keras](https://keras.io/keras_core/announcement/)
-(Keras 3), these models, layers, metrics, and tokenizers can be trained and
-serialized in any framework and re-used in another without costly migrations.
+with TensorFlow, JAX, or PyTorch. Built on Keras 3, these models, layers,
+metrics, and tokenizers can be trained and serialized in any framework and
+re-used in another without costly migrations.
 
 KerasNLP supports users through their entire development cycle. Our workflows
 are built from modular components that have state-of-the-art preset weights when
@@ -55,23 +55,27 @@ pip install --upgrade keras-nlp
 ### Keras 3 Installation
 
 There are currently two ways to install Keras 3 with KerasNLP. To install the
-latest changes for KerasNLP and Keras, you can use our nightly package.
+stable versions of KerasNLP and Keras 3, you should install Keras 3 **after**
+installing KerasNLP. This is a temporary step while TensorFlow is pinned to
+Keras 2, and will no longer be necessary after TensorFlow 2.16.
+
+```
+pip install --upgrade keras-nlp
+pip install --upgrade keras>=3
+```
+
+To install the latest nightly changes for both KerasNLP and Keras, you can use
+our nightly package.
 
 ```
 pip install --upgrade keras-nlp-nightly
 ```
 
-To install the stable versions of KerasNLP and Keras 3, you should install Keras
-3 **after** installing KerasNLP. This is a temporary step while TensorFlow is
-pinned to Keras 2, and will no longer be necessary after TensorFlow 2.16.
-
-```
-pip install --upgrade keras-nlp
-pip install keras>=3
-```
-
 > [!IMPORTANT]
 > Keras 3 will not function with TensorFlow 2.14 or earlier.
+
+Read [Getting started with Keras](/getting_started/) for more information on
+installing Keras generally and compatibility with different frameworks.
 
 ## Quickstart
 
@@ -80,7 +84,7 @@ Fine-tune BERT on a small sentiment analysis task using the
 
 ```python
 import os
-os.environ["KERAS_BACKEND"] = "jax"  # For Keras 3 only!
+os.environ["KERAS_BACKEND"] = "tensorflow"  # Or "jax" or "torch"!
 
 import keras_nlp
 import tensorflow_datasets as tfds
