@@ -32,6 +32,7 @@ class PresetUtilsTest(TestCase):
         (BertClassifier, "bert_tiny_en_uncased", "wordpiece"),
     )
     @pytest.mark.keras_3_only
+    @pytest.mark.large
     def test_preset_saving(self, cls, preset_name, tokenizer_type):
         save_dir = self.get_temp_dir()
         model = cls.from_preset(preset_name, num_classes=2)
