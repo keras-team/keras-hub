@@ -14,8 +14,8 @@
 
 import json
 import os
-import pytest
 
+import pytest
 from absl.testing import parameterized
 
 from keras_nlp.models import AlbertClassifier
