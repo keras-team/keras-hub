@@ -106,13 +106,12 @@ def save_to_preset(
         config_file.write(json.dumps(config, indent=4))
 
     from keras_nlp import __version__ as keras_nlp_version
+    keras_version = keras.version() if hasattr(keras, "version") else None
 
     # Save any associated metadata.
     if config_filename == "config.json":
         metadata = {
-            "keras_version": keras.version()
-            if hasattr(keras, "version")
-            else None,
+            "keras_version": keras_version,
             "keras_nlp_version": keras_nlp_version,
             "parameter_count": layer.count_params(),
             "date_saved": datetime.datetime.now().strftime("%Y-%m-%d@%H:%M:%S"),

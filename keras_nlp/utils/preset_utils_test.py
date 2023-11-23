@@ -14,6 +14,7 @@
 
 import json
 import os
+import pytest
 
 from absl.testing import parameterized
 
@@ -30,6 +31,7 @@ class PresetUtilsTest(TestCase):
         (RobertaClassifier, "roberta_base_en", "bytepair"),
         (BertClassifier, "bert_tiny_en_uncased", "wordpiece"),
     )
+    @pytest.mark.keras_3_only
     def test_preset_saving(self, cls, preset_name, tokenizer_type):
         save_dir = self.get_temp_dir()
         model = cls.from_preset(preset_name, num_classes=2)
@@ -41,6 +43,9 @@ class PresetUtilsTest(TestCase):
                 "assets/tokenizer/vocabulary.json",
                 "assets/tokenizer/merges.txt",
             ]
+        elif tokenizer_type == "sentencepiece":
+            vocab_filename = "assets/tokenizer/vocabulary.spm"
+            expected_assets = ["assets/tokenizer/vocabulary.spm"]
         else:
             vocab_filename = "assets/tokenizer/vocabulary.txt"
             expected_assets = ["assets/tokenizer/vocabulary.txt"]
@@ -73,11 +78,10 @@ class PresetUtilsTest(TestCase):
         )
         model_input_data = model.preprocessor(*train_data)
         restored_model_input_data = restored_model.preprocessor(*train_data)
+
         # Check that saved vocab is equal to the original preset vocab
-        for key in model_input_data:
-            self.assertAllEqual(
-                model_input_data[key], restored_model_input_data[key]
-            )
+        self.assertAllClose(model_input_data, restored_model_input_data)
+
         # Check model outputs
         self.assertAllEqual(
             model(model_input_data), restored_model(restored_model_input_data)

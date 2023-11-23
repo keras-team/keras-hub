@@ -38,7 +38,7 @@ except ImportError:
     tf_text = None
 
 
-VOCAB_FILENAME = "vocabulary.txt"
+VOCAB_FILENAME = "vocabulary.spm"
 
 
 @keras_nlp_export("keras_nlp.tokenizers.SentencePieceTokenizer")
