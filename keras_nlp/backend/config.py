@@ -63,9 +63,9 @@ if "KERAS_BACKEND" in os.environ and os.environ["KERAS_BACKEND"]:
     _MULTI_BACKEND = True
 
 
-def detect_if_tensorflow_uses_keras_3():
+def detect_if_keras_3_installed():
     # We follow the version of keras that tensorflow is configured to use.
-    from tensorflow import keras
+    import keras
 
     # Note that only recent versions of keras have a `version()` function.
     if hasattr(keras, "version") and keras.version().startswith("3."):
@@ -75,7 +75,7 @@ def detect_if_tensorflow_uses_keras_3():
     return False
 
 
-_USE_KERAS_3 = detect_if_tensorflow_uses_keras_3()
+_USE_KERAS_3 = detect_if_keras_3_installed()
 if _USE_KERAS_3:
     _MULTI_BACKEND = True
 
