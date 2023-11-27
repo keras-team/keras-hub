@@ -65,27 +65,19 @@ if "KERAS_BACKEND" in os.environ and os.environ["KERAS_BACKEND"]:
 
 def detect_if_tensorflow_uses_keras_3():
     # We follow the version of keras that tensorflow is configured to use.
-    import keras
-    import tensorflow as tf
-    from packaging import version
+    try:
+        from tensorflow import keras
 
-    # Return False if env variable is set and `tf_keras` is installed.
-    if os.environ.get("TF_USE_LEGACY_KERAS", None) in ("true", "True", "1"):
+        # Note that only recent versions of keras have a `version()` function.
+        if hasattr(keras, "version") and keras.version().startswith("3."):
+            return True
+    except:
         raise ValueError(
-            "`keras-nlp` is not compatible with usage of `tf-keras` "
-            "via environment variable `TF_USE_LEGACY_KERAS`. "
-            "Please unset this environment variable to use `keras-nlp`."
+            "Unable to import `keras` with `tensorflow`.  Please check your "
+            "Keras and Tensorflow version are compatible; Keras 3 requires "
+            "TensorFlow 2.15 or later. See keras.io/getting_started for more "
+            "information on installing Keras."
         )
-    # Note that only recent versions of keras have a `version()` function.
-    if hasattr(keras, "version") and keras.version().startswith("3."):
-        if version.parse(tf.__version__) < version.parse("2.15.0"):
-            raise ValueError(
-                f"Your `tensorflow` version {tf.__version__} is not compatible "
-                f"with `keras` version {keras.version()}. Keras 3 requires "
-                "TensorFlow 2.15 or later. See keras.io/getting_started for "
-                "more information on installing Keras."
-            )
-        return True
 
     # No `keras.version()` means we are on an old version of keras.
     return False
