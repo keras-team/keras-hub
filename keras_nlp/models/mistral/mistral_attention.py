@@ -24,10 +24,12 @@ from keras_nlp.utils.keras_utils import clone_initializer
 # TODO(tirthasheshpatel): Generalize the attention layer
 # TODO(tirthasheshpatel): Merge `LlamaAttention` with this layer
 # TODO(tirthasheshpatel): Use flash attention
-# TODO(tirthasheshpatel): Add dropout
 class CachedMistralAttention(keras.layers.Layer):
+    """A cached grounded query attention layer with sliding window."""
+
     def __init__(
         self,
+        *,
         num_query_heads,
         num_key_value_heads,
         rope_max_wavelength=10000,

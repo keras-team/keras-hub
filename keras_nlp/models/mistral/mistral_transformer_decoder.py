@@ -26,10 +26,12 @@ from keras_nlp.models.mistral.mistral_layer_norm import (
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
-# TODO(tirthasheshpatel): Add dropout
 class MistralTransformerDecoder(keras.layers.Layer):
+    """A Transformer decoder layer for the Mistral backbone."""
+
     def __init__(
         self,
+        *,
         intermediate_dim,
         num_query_heads,
         num_key_value_heads,

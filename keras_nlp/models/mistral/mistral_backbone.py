@@ -30,8 +30,72 @@ def _mistral_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.MistralBackbone")
 class MistralBackbone(Backbone):
+    """
+    The Mistral Transformer core architecture with hyperparameters.
+
+    This network implements a Transformer-based decoder network,
+    Mistral, as described in
+    ["Mistral 7B"](https://arxiv.org/pdf/2310.06825.pdf).
+    It includes the embedding lookups and transformer layers.
+
+    The default constructor gives a fully customizable, randomly initialized
+    Mistral model with any number of layers, heads, and embedding
+    dimensions. To load preset architectures and weights, use the `from_preset`
+    constructor.
+
+    Args:
+        vocabulary_size (int): The size of the token vocabulary.
+        num_layers (int): The number of transformer layers.
+        num_query_heads (int): The number of query attention heads for
+            each transformer.
+        hidden_dim (int): The size of the transformer encoding and pooling layers.
+        intermediate_dim (int): The output dimension of the first Dense layer in a
+            three-layer feedforward network for each transformer.
+        num_key_value_heads (int): The number of key and value attention heads for
+            each transformer.
+        rope_max_wavelength (int, optional): The maximum angular wavelength of the
+            sine/cosine curves, for rotary embeddings. Defaults to `10000`.
+        rope_scaling_factor (float, optional): The scaling factor for calculation
+            of roatary embedding. Defaults to `1.0`.
+        layer_norm_epsilon (float, optional): Epsilon for the layer normalization
+            layers in the transformer decoder. Defaults to `1e-6`.
+        sliding_window (int, optional): The sliding window for the mistral
+            attention layers. This controls the maximum cache size for the attention
+            layers in each transformer decoder. Only `sliding_window` number of tokens
+            are saved in the cache and used to generate the next token.
+            Defaults to `512`.
+
+    Examples:
+
+    ```python
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+    }
+
+    # Pretrained Mistral decoder.
+    model = keras_nlp.models.MistralBackbone.from_preset("mistral7b_base_en")
+    model(input_data)
+
+    # Randomly initialized Mistral decoder with custom config.
+    model = keras_nlp.models.MistralBackbone(
+        vocabulary_size=10,
+        hidden_dim=512,
+        num_layers=2,
+        num_query_heads=32,
+        num_key_value_heads=8,
+        intermediate_dim=1024,
+        sliding_window=512,
+        layer_norm_epsilon=1e-6,
+        dtype="float32"
+    )
+    model(input_data)
+    ```
+    """
+
     def __init__(
         self,
+        *,
         vocabulary_size,
         num_layers,
         num_query_heads,
@@ -42,6 +106,7 @@ class MistralBackbone(Backbone):
         rope_scaling_factor=1.0,
         layer_norm_epsilon=1e-6,
         sliding_window=512,
+        dropout=0,
         **kwargs,
     ):
         # Get the dtype
@@ -76,6 +141,7 @@ class MistralBackbone(Backbone):
                 activation=ops.silu,
                 kernel_initializer=_mistral_kernel_initializer(stddev=0.02),
                 sliding_window=sliding_window,
+                dropout=dropout,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )(x, decoder_padding_mask=padding_mask)
@@ -107,6 +173,7 @@ class MistralBackbone(Backbone):
         self.rope_scaling_factor = rope_scaling_factor
         self.sliding_window = sliding_window
         self.layer_norm_epsilon = layer_norm_epsilon
+        self.dropout = dropout
         self.token_embedding = token_embedding_layer
 
     def get_config(self):
@@ -123,6 +190,7 @@ class MistralBackbone(Backbone):
                 "num_key_value_heads": self.num_key_value_heads,
                 "sliding_window": self.sliding_window,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
+                "dropout": self.dropout,
             }
         )
         return config
