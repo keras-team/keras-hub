@@ -74,7 +74,7 @@ pip install --upgrade keras-nlp-nightly
 > [!IMPORTANT]
 > Keras 3 will not function with TensorFlow 2.14 or earlier.
 
-Read [Getting started with Keras](keras.io/getting_started/) for more information
+Read [Getting started with Keras](https://keras.io/getting_started/) for more information
 on installing Keras 3 and compatibility with different frameworks.
 
 ## Quickstart
