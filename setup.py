@@ -37,7 +37,10 @@ def get_version(rel_path):
 
 HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
-VERSION = get_version("keras_nlp/version.py")
+if os.path.exists("keras_nlp/version_utils.py"):
+    VERSION = get_version("keras_nlp/version_utils.py")
+else:
+    VERSION = get_version("keras_nlp/src/version_utils.py")
 
 setup(
     name="keras-nlp",

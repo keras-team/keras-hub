@@ -26,4 +26,5 @@ from keras_nlp import models
 from keras_nlp import samplers
 from keras_nlp import tokenizers
 from keras_nlp import utils
-from keras_nlp.version import __version__
+from keras_nlp.version_utils import __version__
+from keras_nlp.version_utils import version
