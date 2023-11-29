@@ -127,10 +127,10 @@ class LoraDense(keras.layers.Layer):
             kwargs["dtype"] = inner_dense.dtype_policy
         super().__init__(**kwargs)
 
-        if not config.multi_backend():
+        if not config.keras_3():
             raise ValueError(
-                "Lora only works with multi-backend Keras 3. Please set the "
-                "`KERAS_BACKEND` environment variable to use this API."
+                "Lora requires with Keras 3, but Keras 2 is installed. Please "
+                "see https://github.com/keras-team/keras-nlp#installation"
             )
 
         if isinstance(inner_dense, keras.layers.Dense):

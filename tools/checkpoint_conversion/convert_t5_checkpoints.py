@@ -20,7 +20,7 @@ import transformers
 from absl import app
 from absl import flags
 from checkpoint_conversion_utils import get_md5_checksum
-from keras_core import ops
+from keras import ops
 
 import keras_nlp
 

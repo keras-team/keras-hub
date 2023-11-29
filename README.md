@@ -4,9 +4,9 @@
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-nlp/issues)
 
 KerasNLP is a natural language processing library that works natively
-with TensorFlow, JAX, or PyTorch. Built on [multi-backend Keras](https://keras.io/keras_core/announcement/)
-(Keras 3), these models, layers, metrics, and tokenizers can be trained and
-serialized in any framework and re-used in another without costly migrations.
+with TensorFlow, JAX, or PyTorch. Built on Keras 3, these models, layers,
+metrics, and tokenizers can be trained and serialized in any framework and
+re-used in another without costly migrations.
 
 KerasNLP supports users through their entire development cycle. Our workflows
 are built from modular components that have state-of-the-art preset weights when
@@ -40,18 +40,42 @@ to start learning our API. We welcome [contributions](CONTRIBUTING.md).
 
 ## Installation
 
-To install the latest official release:
+KerasNLP supports both Keras 2 and Keras 3. We recommend Keras 3 for all new
+users, as it enables using KerasNLP models and layers with JAX, TensorFlow and
+PyTorch.
+
+### Keras 2 Installation
+
+To install the latest KerasNLP release with Keras 2, simply run:
 
 ```
-pip install keras-nlp --upgrade
+pip install --upgrade keras-nlp
 ```
 
-To install the latest unreleased changes to the library, we recommend using
-pip to install directly from the master branch on github:
+### Keras 3 Installation
+
+There are currently two ways to install Keras 3 with KerasNLP. To install the
+stable versions of KerasNLP and Keras 3, you should install Keras 3 **after**
+installing KerasNLP. This is a temporary step while TensorFlow is pinned to
+Keras 2, and will no longer be necessary after TensorFlow 2.16.
 
 ```
-pip install git+https://github.com/keras-team/keras-nlp.git --upgrade
+pip install --upgrade keras-nlp
+pip install --upgrade keras>=3
 ```
+
+To install the latest nightly changes for both KerasNLP and Keras, you can use
+our nightly package.
+
+```
+pip install --upgrade keras-nlp-nightly
+```
+
+> [!IMPORTANT]
+> Keras 3 will not function with TensorFlow 2.14 or earlier.
+
+Read [Getting started with Keras](https://keras.io/getting_started/) for more information
+on installing Keras 3 and compatibility with different frameworks.
 
 ## Quickstart
 
@@ -60,7 +84,7 @@ Fine-tune BERT on a small sentiment analysis task using the
 
 ```python
 import os
-os.environ["KERAS_BACKEND"] = "jax"  # Or "tensorflow", or "torch".
+os.environ["KERAS_BACKEND"] = "tensorflow"  # Or "jax" or "torch"!
 
 import keras_nlp
 import tensorflow_datasets as tfds
@@ -87,14 +111,9 @@ For more in depth guides and examples, visit https://keras.io/keras_nlp/.
 
 ## Configuring your backend
 
-**Keras 3** is an upcoming release of the Keras library which supports
-TensorFlow, Jax or Torch as backends. This is supported today in KerasNLP,
-but will not be enabled by default until the official release of Keras 3. If you
-`pip install keras-nlp` and run a script or notebook without changes, you will
-be using TensorFlow and **Keras 2**.
-
-If you would like to enable a preview of the Keras 3 behavior, you can do
-so by setting the `KERAS_BACKEND` environment variable. For example:
+If you have Keras 3 installed in your environment (see installation above),
+you can use KerasNLP with any of JAX, TensorFlow and PyTorch. To do so, set the
+`KERAS_BACKEND` environment variable. For example:
 
 ```shell
 export KERAS_BACKEND=jax
@@ -112,16 +131,6 @@ import keras_nlp
 > [!IMPORTANT]
 > Make sure to set the `KERAS_BACKEND` before import any Keras libraries, it
 > will be used to set up Keras when it is first imported.
-
-Until the Keras 3 release, KerasNLP will use a preview of Keras 3 on PyPI named
-[keras-core](https://pypi.org/project/keras-core/).
-
-> [!IMPORTANT]
-> If you set `KERAS_BACKEND` variable, you should `import keras_core as keras`
-> instead of `import keras`. This is a temporary step until Keras 3 is out!
-
-To restore the default **Keras 2** behavior, `unset KERAS_BACKEND` before
-importing Keras and KerasNLP.
 
 ## Compatibility
 
