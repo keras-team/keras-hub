@@ -20,8 +20,6 @@ from keras_nlp.backend import config
 
 if config.keras_3():
     from keras import *  # noqa: F403, F401
-elif config.multi_backend():
-    from keras_core import *  # noqa: F403, F401
 else:
     from tensorflow.keras import *  # noqa: F403, F401
 

@@ -4,11 +4,10 @@
 ![Tensorflow](https://img.shields.io/badge/tensorflow-v2.5.0+-success.svg)
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/keras-team/keras-nlp/issues)
 
-KerasNLP is a natural language processing library that works natively 
-with TensorFlow, JAX, or PyTorch. Built on [Keras Core](https://keras.io/keras_core/announcement/),
-these models, layers, metrics, callbacks, etc., can be trained and serialized
-in any framework and re-used in another without costly migrations. See "Using 
-KerasNLP with Keras Core" below for more details on multi-framework KerasNLP.
+KerasNLP is a natural language processing library that works natively
+with TensorFlow, JAX, or PyTorch. Built on Keras 3, these models, layers,
+metrics, and tokenizers can be trained and serialized in any framework and
+re-used in another without costly migrations.
 
 KerasNLP supports users through their entire development cycle. Our workflows 
 are built from modular components that have state-of-the-art preset weights and 
@@ -47,17 +46,28 @@ We are a new and growing project and welcome [contributions](CONTRIBUTING.md).
 
 ## Installation
 
-To install the latest official release:
+KerasNLP supports both Keras 2 and Keras 3. We recommend Keras 3 for all new
+users, as it enables using KerasNLP models and layers with JAX, TensorFlow and
+PyTorch.
+
+### Keras 2 Installation
+
+To install the latest KerasNLP release with Keras 2, simply run:
 
 ```
-pip install keras-nlp --upgrade
+pip install --upgrade keras-nlp
 ```
 
-To install the latest unreleased changes to the library, we recommend using
-pip to install directly from the master branch on github:
+### Keras 3 Installation
+
+There are currently two ways to install Keras 3 with KerasNLP. To install the
+stable versions of KerasNLP and Keras 3, you should install Keras 3 **after**
+installing KerasNLP. This is a temporary step while TensorFlow is pinned to
+Keras 2, and will no longer be necessary after TensorFlow 2.16.
 
 ```
-pip install git+https://github.com/keras-team/keras-nlp.git --upgrade
+pip install --upgrade keras-nlp
+pip install --upgrade keras>=3
 ```
 ## Using KerasNLP with Keras Core
 
@@ -88,12 +98,28 @@ Until Keras Core is officially released as Keras 3.0, KerasNLP will use
 `.keras/keras_nlp.json`. You will need to restart the Python runtime for changes 
 to take effect.
 
+To install the latest nightly changes for both KerasNLP and Keras, you can use
+our nightly package.
+
+```
+pip install --upgrade keras-nlp-nightly
+```
+
+> [!IMPORTANT]
+> Keras 3 will not function with TensorFlow 2.14 or earlier.
+
+Read [Getting started with Keras](https://keras.io/getting_started/) for more information
+on installing Keras 3 and compatibility with different frameworks.
+
 ## Quickstart
 
 Fine-tune BERT on a small sentiment analysis task using the 
 [`keras_nlp.models`](https://keras.io/api/keras_nlp/models/) API:
 
 ```python
+import os
+os.environ["KERAS_BACKEND"] = "tensorflow"  # Or "jax" or "torch"!
+
 import keras_nlp
 import tensorflow_datasets as tfds
 
@@ -115,6 +141,29 @@ classifier.predict(["What an amazing movie!", "A total waste of my time."])
 ```
 
 For more in depth guides and examples, visit https://keras.io/keras_nlp/.
+
+## Configuring your backend
+
+If you have Keras 3 installed in your environment (see installation above),
+you can use KerasNLP with any of JAX, TensorFlow and PyTorch. To do so, set the
+`KERAS_BACKEND` environment variable. For example:
+
+```shell
+export KERAS_BACKEND=jax
+```
+
+Or in Colab, with:
+
+```python
+import os
+os.environ["KERAS_BACKEND"] = "jax"
+
+import keras_nlp
+```
+
+> [!IMPORTANT]
+> Make sure to set the `KERAS_BACKEND` before import any Keras libraries, it
+> will be used to set up Keras when it is first imported.
 
 ## Compatibility
 

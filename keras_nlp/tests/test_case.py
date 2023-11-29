@@ -143,7 +143,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             model.compile(optimizer="sgd", loss="mse", jit_compile=jit_compile)
             model.fit(input_data, output_data, verbose=0)
 
-        if config.multi_backend():
+        if config.keras_3():
             # Build test.
             layer = layer_cls(**init_kwargs)
             if isinstance(input_data, dict):
@@ -205,8 +205,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         revived_cfg = revived_instance.get_config()
         revived_cfg_json = json.dumps(revived_cfg, sort_keys=True, indent=4)
         self.assertEqual(cfg_json, revived_cfg_json)
-        # Dir tests only work on keras-core.
-        if config.multi_backend():
+        # Dir tests only work with Keras 3.
+        if config.keras_3():
             self.assertEqual(ref_dir, dir(revived_instance))
 
         # serialization roundtrip
@@ -218,8 +218,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         revived_cfg = revived_instance.get_config()
         revived_cfg_json = json.dumps(revived_cfg, sort_keys=True, indent=4)
         self.assertEqual(cfg_json, revived_cfg_json)
-        # Dir tests only work on keras-core.
-        if config.multi_backend():
+        # Dir tests only work with Keras 3.
+        if config.keras_3():
             new_dir = dir(revived_instance)[:]
             for lst in [ref_dir, new_dir]:
                 if "__annotations__" in lst:
