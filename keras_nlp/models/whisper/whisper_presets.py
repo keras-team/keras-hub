@@ -27,14 +27,6 @@ ENGLISH_SPECIAL_TOKENS = {
     "<|transcribe|>": 50357,
 }
 
-AUDIO_FEATURE_EXTRACTOR_CONFIG = {
-    "num_mels": 80,
-    "num_fft_bins": 400,
-    "stride": 160,
-    "sampling_rate": 16000,
-    "max_audio_length": 30,
-}
-
 LANGUAGE_TOKENS = {
     "<|af|>": 50327,
     "<|am|>": 50334,
@@ -161,7 +153,6 @@ backbone_presets = {
             "max_encoder_sequence_length": 3000,
             "max_decoder_sequence_length": 448,
         },
-        "audio_feature_extractor_config": AUDIO_FEATURE_EXTRACTOR_CONFIG,
         "preprocessor_config": {
             "special_tokens": ENGLISH_SPECIAL_TOKENS,
             "language_tokens": None,
@@ -195,7 +186,6 @@ backbone_presets = {
             "max_encoder_sequence_length": 3000,
             "max_decoder_sequence_length": 448,
         },
-        "audio_feature_extractor_config": AUDIO_FEATURE_EXTRACTOR_CONFIG,
         "preprocessor_config": {
             "special_tokens": ENGLISH_SPECIAL_TOKENS,
             "language_tokens": None,
@@ -229,7 +219,6 @@ backbone_presets = {
             "max_encoder_sequence_length": 3000,
             "max_decoder_sequence_length": 448,
         },
-        "audio_feature_extractor_config": AUDIO_FEATURE_EXTRACTOR_CONFIG,
         "preprocessor_config": {
             "special_tokens": ENGLISH_SPECIAL_TOKENS,
             "language_tokens": None,
@@ -263,7 +252,6 @@ backbone_presets = {
             "max_encoder_sequence_length": 3000,
             "max_decoder_sequence_length": 448,
         },
-        "audio_feature_extractor_config": AUDIO_FEATURE_EXTRACTOR_CONFIG,
         "preprocessor_config": {
             "special_tokens": ENGLISH_SPECIAL_TOKENS,
             "language_tokens": None,
@@ -297,7 +285,6 @@ backbone_presets = {
             "max_encoder_sequence_length": 3000,
             "max_decoder_sequence_length": 448,
         },
-        "audio_feature_extractor_config": AUDIO_FEATURE_EXTRACTOR_CONFIG,
         "preprocessor_config": {
             "special_tokens": MULTILINGUAL_SPECIAL_TOKENS,
             "language_tokens": LANGUAGE_TOKENS,
@@ -331,7 +318,6 @@ backbone_presets = {
             "max_encoder_sequence_length": 3000,
             "max_decoder_sequence_length": 448,
         },
-        "audio_feature_extractor_config": AUDIO_FEATURE_EXTRACTOR_CONFIG,
         "preprocessor_config": {
             "special_tokens": MULTILINGUAL_SPECIAL_TOKENS,
             "language_tokens": LANGUAGE_TOKENS,
@@ -365,7 +351,6 @@ backbone_presets = {
             "max_encoder_sequence_length": 3000,
             "max_decoder_sequence_length": 448,
         },
-        "audio_feature_extractor_config": AUDIO_FEATURE_EXTRACTOR_CONFIG,
         "preprocessor_config": {
             "special_tokens": MULTILINGUAL_SPECIAL_TOKENS,
             "language_tokens": LANGUAGE_TOKENS,
@@ -399,7 +384,6 @@ backbone_presets = {
             "max_encoder_sequence_length": 3000,
             "max_decoder_sequence_length": 448,
         },
-        "audio_feature_extractor_config": AUDIO_FEATURE_EXTRACTOR_CONFIG,
         "preprocessor_config": {
             "special_tokens": MULTILINGUAL_SPECIAL_TOKENS,
             "language_tokens": LANGUAGE_TOKENS,
@@ -433,7 +417,6 @@ backbone_presets = {
             "max_encoder_sequence_length": 3000,
             "max_decoder_sequence_length": 448,
         },
-        "audio_feature_extractor_config": AUDIO_FEATURE_EXTRACTOR_CONFIG,
         "preprocessor_config": {
             "special_tokens": MULTILINGUAL_SPECIAL_TOKENS,
             "language_tokens": LANGUAGE_TOKENS,
@@ -468,7 +451,6 @@ backbone_presets = {
             "max_encoder_sequence_length": 3000,
             "max_decoder_sequence_length": 448,
         },
-        "audio_feature_extractor_config": AUDIO_FEATURE_EXTRACTOR_CONFIG,
         "preprocessor_config": {
             "special_tokens": MULTILINGUAL_SPECIAL_TOKENS,
             "language_tokens": LANGUAGE_TOKENS,
