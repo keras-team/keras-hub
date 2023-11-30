@@ -71,31 +71,8 @@ class Preprocessor(PreprocessingLayer):
         **kwargs,
     ):
         tokenizer = cls.tokenizer_cls.from_preset(preset)
-
-        metadata = cls.presets[preset]
-        # For task model presets, the backbone config is nested.
-        if "backbone" in metadata["config"]:
-            backbone_config = metadata["config"]["backbone"]["config"]
-        else:
-            backbone_config = metadata["config"]
-
-        # Use model's `max_sequence_length` if `sequence_length` unspecified;
-        # otherwise check that `sequence_length` not too long.
-        sequence_length = kwargs.pop("sequence_length", None)
-        max_sequence_length = backbone_config["max_sequence_length"]
-        if sequence_length is not None:
-            if sequence_length > max_sequence_length:
-                raise ValueError(
-                    f"`sequence_length` cannot be longer than `{preset}` "
-                    f"preset's `max_sequence_length` of {max_sequence_length}. "
-                    f"Received: {sequence_length}."
-                )
-        else:
-            sequence_length = max_sequence_length
-
         return cls(
             tokenizer=tokenizer,
-            sequence_length=sequence_length,
             **kwargs,
         )
 
