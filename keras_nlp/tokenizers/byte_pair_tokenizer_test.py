@@ -164,6 +164,9 @@ class BytePairTokenizerTest(TestCase):
         cloned_tokenizer = BytePairTokenizer.from_config(
             self.tokenizer.get_config()
         )
+        cloned_tokenizer.set_vocabulary_and_merges(
+            self.tokenizer.vocabulary, self.tokenizer.merges
+        )
         self.assertAllEqual(
             self.tokenizer(input_data),
             cloned_tokenizer(input_data),
