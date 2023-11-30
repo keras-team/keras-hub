@@ -222,6 +222,7 @@ class T5Backbone(Backbone):
         self.activation = keras.activations.get(activation)
         self.key_value_dim = key_value_dim
         self.dropout = dropout
+        self.use_gated_activation = use_gated_activation
         self.layer_norm_epsilon = layer_norm_epsilon
         self.tie_embedding_weights = tie_embedding_weights
         self.token_embedding = token_embedding_layer
@@ -238,6 +239,7 @@ class T5Backbone(Backbone):
                 "activation": keras.activations.serialize(self.activation),
                 "key_value_dim": self.key_value_dim,
                 "dropout": self.dropout,
+                "use_gated_activation": self.use_gated_activation,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "tie_embedding_weights": self.tie_embedding_weights,
             }
