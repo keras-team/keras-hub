@@ -111,9 +111,20 @@ class WhisperTokenizer(BytePairTokenizer):
             **kwargs,
         )
 
+    def save_assets(self, dir_path):
+        # TODO: whisper is currently mutating it's vocabulary before passing
+        # it to the super class, so we need to restore the unmutated vocabulary
+        # before saving our assets. We should find a more robust (and memory
+        # efficient) way to do this.
+        vocabulary = self.vocabulary
+        self.vocabulary = self._initial_vocabulary
+        super().save_assets(dir_path)
+        self.vocabulary = vocabulary
+
     def set_vocabulary_and_merges(self, vocabulary, merges):
         if vocabulary is not None:
             vocabulary = _load_dict(vocabulary)
+            self._initial_vocabulary = dict(vocabulary)
 
             if self.language_tokens is not None:
                 # Multilingual tokenizer.
@@ -133,6 +144,8 @@ class WhisperTokenizer(BytePairTokenizer):
                 self.transcribe_token,
             ]:
                 vocabulary[token] = self.special_tokens[token]
+        else:
+            self._initial_vocabulary = None
 
         super().set_vocabulary_and_merges(vocabulary, merges)
 
