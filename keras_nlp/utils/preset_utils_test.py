@@ -68,7 +68,7 @@ class PresetUtilsTest(TestCase):
             "compile_config" not in config_json
         )  # Test on raw json to include nested keys
         config = json.loads(config_json)
-        self.assertAllEqual(config["assets"], expected_assets)
+        self.assertEqual(set(config["assets"]), set(expected_assets))
         self.assertEqual(config["weights"], "model.weights.h5")
 
         # Try loading the model from preset directory
