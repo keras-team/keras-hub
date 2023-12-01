@@ -28,7 +28,6 @@ import regex as re
 import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
 from keras_nlp.tokenizers import tokenizer
 from keras_nlp.utils.preset_utils import check_preset_class
 from keras_nlp.utils.preset_utils import load_from_preset
@@ -664,37 +663,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         return {}
 
     @classmethod
-    def _legacy_from_preset(
-        cls,
-        preset,
-        **kwargs,
-    ):
-        metadata = cls.presets[preset]
-
-        vocabulary = keras.utils.get_file(
-            "vocab.txt",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["vocabulary_hash"],
-        )
-        merges = keras.utils.get_file(
-            "merges.txt",
-            metadata["merges_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["merges_hash"],
-        )
-
-        config = metadata["preprocessor_config"]
-        config.update(
-            {
-                "vocabulary": vocabulary,
-                "merges": merges,
-            },
-        )
-
-        return cls.from_config({**config, **kwargs})
-
-    @classmethod
     def from_preset(
         cls,
         preset,
@@ -717,9 +685,10 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         tokenizer.detokenize([5, 6, 7, 8, 9])
         ```
         """
-        # TODO: delete me!
+        # We support short IDs for official presets, e.g. `"bert_base_en"`.
+        # Map these to a Kaggle Models handle.
         if preset in cls.presets:
-            return cls._legacy_from_preset(preset, **kwargs)
+            preset = cls.presets[preset]["kaggle_handle"]
 
         config_file = "tokenizer.json"
         check_preset_class(preset, cls, config_file=config_file)

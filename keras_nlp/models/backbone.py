@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
 from keras_nlp.backend import keras
 from keras_nlp.utils.preset_utils import check_preset_class
 from keras_nlp.utils.preset_utils import load_from_preset
@@ -69,31 +67,6 @@ class Backbone(keras.Model):
         return {}
 
     @classmethod
-    def _legacy_from_preset(
-        cls,
-        preset,
-        load_weights=True,
-        **kwargs,
-    ):
-        metadata = cls.presets[preset]
-        config = metadata["config"]
-        model = cls.from_config({**config, **kwargs})
-
-        if not load_weights:
-            return model
-
-        filename = os.path.basename(metadata["weights_url"])
-        weights = keras.utils.get_file(
-            filename,
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
-        )
-
-        model.load_weights(weights)
-        return model
-
-    @classmethod
     def from_preset(
         cls,
         preset,
@@ -121,9 +94,10 @@ class Backbone(keras.Model):
         )
         ```
         """
-        # TODO: delete me!
+        # We support short IDs for official presets, e.g. `"bert_base_en"`.
+        # Map these to a Kaggle Models handle.
         if preset in cls.presets:
-            return cls._legacy_from_preset(preset, **kwargs)
+            preset = cls.presets[preset]["kaggle_handle"]
 
         check_preset_class(preset, cls)
         return load_from_preset(

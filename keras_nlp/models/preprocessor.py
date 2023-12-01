@@ -65,18 +65,6 @@ class Preprocessor(PreprocessingLayer):
         return {}
 
     @classmethod
-    def _legacy_from_preset(
-        cls,
-        preset,
-        **kwargs,
-    ):
-        tokenizer = cls.tokenizer_cls.from_preset(preset)
-        return cls(
-            tokenizer=tokenizer,
-            **kwargs,
-        )
-
-    @classmethod
     def from_preset(
         cls,
         preset,
@@ -95,9 +83,10 @@ class Preprocessor(PreprocessingLayer):
         )
         ```
         """
-        # TODO: delete me!
+        # We support short IDs for official presets, e.g. `"bert_base_en"`.
+        # Map these to a Kaggle Models handle.
         if preset in cls.presets:
-            return cls._legacy_from_preset(preset, **kwargs)
+            preset = cls.presets[preset]["kaggle_handle"]
 
         config_file = "tokenizer.json"
         check_preset_class(preset, cls.tokenizer_cls, config_file=config_file)

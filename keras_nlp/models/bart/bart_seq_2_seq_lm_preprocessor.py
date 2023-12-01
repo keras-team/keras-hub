@@ -127,8 +127,8 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
     def __init__(
         self,
         tokenizer,
-        encoder_sequence_length,
-        decoder_sequence_length,
+        encoder_sequence_length=1024,
+        decoder_sequence_length=1024,
         **kwargs
     ):
         # Since we truncate the last token from `decoder_token_ids`, we need to
