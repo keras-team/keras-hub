@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
 from rich import console as rich_console
 from rich import markup
 from rich import table as rich_table
@@ -151,39 +149,6 @@ class Task(PipelineModel):
         return {}
 
     @classmethod
-    def _legacy_from_preset(
-        cls,
-        preset,
-        load_weights=True,
-        **kwargs,
-    ):
-        if "preprocessor" not in kwargs:
-            kwargs["preprocessor"] = cls.preprocessor_cls.from_preset(preset)
-
-        # Check if preset is backbone-only model
-        if preset in cls.backbone_cls.presets:
-            backbone = cls.backbone_cls.from_preset(preset, load_weights)
-            return cls(backbone, **kwargs)
-
-        # Otherwise must be one of class presets
-        metadata = cls.presets[preset]
-        config = metadata["config"]
-        model = cls.from_config({**config, **kwargs})
-
-        if not load_weights:
-            return model
-
-        weights = keras.utils.get_file(
-            "model.h5",
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
-        )
-
-        model.load_weights(weights)
-        return model
-
-    @classmethod
     def from_preset(
         cls,
         preset,
@@ -209,9 +174,10 @@ class Task(PipelineModel):
         )
         ```
         """
-        # TODO: delete me!
+        # We support short IDs for official presets, e.g. `"bert_base_en"`.
+        # Map these to a Kaggle Models handle.
         if preset in cls.presets:
-            return cls._legacy_from_preset(preset, load_weights, **kwargs)
+            preset = cls.presets[preset]["kaggle_handle"]
 
         preset_cls = check_preset_class(preset, (cls, cls.backbone_cls))
 
