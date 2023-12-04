@@ -18,11 +18,15 @@ import os
 import pytest
 from absl.testing import parameterized
 
-from keras_nlp.models import AlbertClassifier
-from keras_nlp.models import BertClassifier
-from keras_nlp.models import RobertaClassifier
+from keras_nlp.models.albert.albert_classifier import AlbertClassifier
+from keras_nlp.models.backbone import Backbone
+from keras_nlp.models.bert.bert_classifier import BertClassifier
+from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
+from keras_nlp.models.task import Task
 from keras_nlp.tests.test_case import TestCase
-from keras_nlp.utils import preset_utils
+from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import load_from_preset
+from keras_nlp.utils.preset_utils import save_to_preset
 
 
 class PresetUtilsTest(TestCase):
@@ -36,7 +40,7 @@ class PresetUtilsTest(TestCase):
     def test_preset_saving(self, cls, preset_name, tokenizer_type):
         save_dir = self.get_temp_dir()
         model = cls.from_preset(preset_name, num_classes=2)
-        preset_utils.save_to_preset(model, save_dir)
+        save_to_preset(model, save_dir)
 
         if tokenizer_type == "bytepair":
             vocab_filename = "assets/tokenizer/vocabulary.json"
@@ -72,7 +76,14 @@ class PresetUtilsTest(TestCase):
         self.assertEqual(config["weights"], "model.weights.h5")
 
         # Try loading the model from preset directory
-        restored_model = preset_utils.load_from_preset(save_dir)
+        self.assertEqual(cls, check_preset_class(save_dir, cls))
+        self.assertEqual(cls, check_preset_class(save_dir, Task))
+        with self.assertRaises(ValueError):
+            # Preset is a subclass of Task, not Backbone.
+            check_preset_class(save_dir, Backbone)
+
+        # Try loading the model from preset directory
+        restored_model = load_from_preset(save_dir)
 
         train_data = (
             ["the quick brown fox.", "the slow brown fox."],  # Features.
