@@ -68,7 +68,7 @@ class DebertaV3Backbone(Backbone):
         bucket_size: int. The size of the relative position buckets. Generally
             equal to `max_sequence_length // 2`.
 
-    Example usage:
+    Example:
     ```python
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
