@@ -64,6 +64,7 @@ class MistralBackbone(Backbone):
             layers in each transformer decoder. Only `sliding_window` number of tokens
             are saved in the cache and used to generate the next token.
             Defaults to `512`.
+        dtype (str, optional): The dtype policy for the mistral model.
 
     Examples:
 
@@ -95,7 +96,6 @@ class MistralBackbone(Backbone):
 
     def __init__(
         self,
-        *,
         vocabulary_size,
         num_layers,
         num_query_heads,

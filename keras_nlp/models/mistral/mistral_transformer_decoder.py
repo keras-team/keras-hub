@@ -31,7 +31,6 @@ class MistralTransformerDecoder(keras.layers.Layer):
 
     def __init__(
         self,
-        *,
         intermediate_dim,
         num_query_heads,
         num_key_value_heads,

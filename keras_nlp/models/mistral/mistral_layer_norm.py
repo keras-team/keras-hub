@@ -15,8 +15,9 @@ from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 
 
-# TODO: Deprecate this in favor of `keras.layers.LayerNormalization` once
-#       Keras 2 support is removed.
+# TODO: Deprecate this in favor of
+# `keras.layers.LayerNormalization(rms_scaling=True)` once Keras 2 support is
+# removed.
 class MistralLayerNormalization(keras.layers.Layer):
     """A normalization layer for Mistral that implements RMS normalization."""
 

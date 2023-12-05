@@ -29,7 +29,6 @@ class CachedMistralAttention(keras.layers.Layer):
 
     def __init__(
         self,
-        *,
         num_query_heads,
         num_key_value_heads,
         rope_max_wavelength=10000,
@@ -123,6 +122,9 @@ class CachedMistralAttention(keras.layers.Layer):
             scaling_factor=self._rope_scaling_factor,
             dtype=self.compute_dtype,
         )
+
+        self._dot_product_equation = "bquh,bkuh->buqk"
+        self._combine_equation = "buqk,bkuh->bquh"
 
         self.built = True
 
@@ -258,7 +260,7 @@ class CachedMistralAttention(keras.layers.Layer):
         return self._softmax(attention_scores)
 
     def _compute_attention(self, query, key, value, attention_mask=None):
-        attention_scores = ops.einsum("aecd,abcd->acbe", key, query)
+        attention_scores = ops.einsum(self._dot_product_equation, key, query)
 
         norm_factor = ops.sqrt(ops.cast(self._head_dim, self.compute_dtype))
 
@@ -268,7 +270,7 @@ class CachedMistralAttention(keras.layers.Layer):
             attention_scores, attention_mask
         )
         attention_output = ops.einsum(
-            "acbe,aecd->abcd", attention_scores, value
+            self._combine_equation, attention_scores, value
         )
 
         return attention_output
