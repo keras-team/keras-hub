@@ -25,7 +25,7 @@ backbone_presets = {
             "path": "bart",
             "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/bart/README.md",
         },
-        "kaggle_handle": "gs://keras-nlp-kaggle/bart_base_en",
+        "kaggle_handle": "kaggle://keras/bart/bart_base_en/1",
     },
     "bart_large_en": {
         "metadata": {
@@ -47,7 +47,7 @@ backbone_presets = {
             "dropout": 0.1,
             "max_sequence_length": 1024,
         },
-        "kaggle_handle": "gs://keras-nlp-kaggle/bart_large_en",
+        "kaggle_handle": "kaggle://keras/bart/bart_large_en/1",
     },
     "bart_large_en_cnn": {
         "metadata": {
@@ -69,6 +69,6 @@ backbone_presets = {
             "dropout": 0.1,
             "max_sequence_length": 1024,
         },
-        "kaggle_handle": "gs://keras-nlp-kaggle/bart_large_en_cnn",
+        "kaggle_handle": "kaggle://keras/bart/bart_large_en_cnn/1",
     },
 }

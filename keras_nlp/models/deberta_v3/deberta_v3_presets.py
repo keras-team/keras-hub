@@ -25,7 +25,7 @@ backbone_presets = {
             "path": "deberta_v3",
             "model_card": "https://huggingface.co/microsoft/deberta-v3-xsmall",
         },
-        "kaggle_handle": "gs://keras-nlp-kaggle/deberta_v3_extra_small_en",
+        "kaggle_handle": "kaggle://keras/deberta_v3/deberta_v3_extra_small_en/1",
     },
     "deberta_v3_small_en": {
         "metadata": {
@@ -38,7 +38,7 @@ backbone_presets = {
             "path": "deberta_v3",
             "model_card": "https://huggingface.co/microsoft/deberta-v3-small",
         },
-        "kaggle_handle": "gs://keras-nlp-kaggle/deberta_v3_small_en",
+        "kaggle_handle": "kaggle://keras/deberta_v3/deberta_v3_small_en/1",
     },
     "deberta_v3_base_en": {
         "metadata": {
@@ -51,7 +51,7 @@ backbone_presets = {
             "path": "deberta_v3",
             "model_card": "https://huggingface.co/microsoft/deberta-v3-base",
         },
-        "kaggle_handle": "gs://keras-nlp-kaggle/deberta_v3_base_en",
+        "kaggle_handle": "kaggle://keras/deberta_v3/deberta_v3_base_en/1",
     },
     "deberta_v3_large_en": {
         "metadata": {
@@ -64,7 +64,7 @@ backbone_presets = {
             "path": "deberta_v3",
             "model_card": "https://huggingface.co/microsoft/deberta-v3-large",
         },
-        "kaggle_handle": "gs://keras-nlp-kaggle/deberta_v3_large_en",
+        "kaggle_handle": "kaggle://keras/deberta_v3/deberta_v3_large_en/1",
     },
     "deberta_v3_base_multi": {
         "metadata": {
@@ -77,6 +77,6 @@ backbone_presets = {
             "path": "deberta_v3",
             "model_card": "https://huggingface.co/microsoft/mdeberta-v3-base",
         },
-        "kaggle_handle": "gs://keras-nlp-kaggle/deberta_v3_base_multi",
+        "kaggle_handle": "kaggle://keras/deberta_v3/deberta_v3_base_multi/1",
     },
 }
