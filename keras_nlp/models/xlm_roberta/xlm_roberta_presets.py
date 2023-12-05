@@ -25,7 +25,7 @@ backbone_presets = {
             "path": "xlm_roberta",
             "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/xlmr/README.md",
         },
-        "kaggle_handle": "gs://keras-nlp-kaggle/xlm_roberta_base_multi",
+        "kaggle_handle": "kaggle://keras/xlm_roberta/xlm_roberta_base_multi/1",
     },
     "xlm_roberta_large_multi": {
         "metadata": {
@@ -38,6 +38,6 @@ backbone_presets = {
             "path": "xlm_roberta",
             "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/xlmr/README.md",
         },
-        "kaggle_handle": "gs://keras-nlp-kaggle/xlm_roberta_large_multi",
+        "kaggle_handle": "kaggle://keras/xlm_roberta/xlm_roberta_large_multi/1",
     },
 }
