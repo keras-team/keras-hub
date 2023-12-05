@@ -62,7 +62,7 @@ class GPT2Backbone(Backbone):
             sequence length. This determines the variable shape for positional
             embeddings.
 
-    Example usage:
+    Example:
     ```python
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
