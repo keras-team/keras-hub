@@ -19,81 +19,99 @@ This script is for reference only.
 """
 
 import os
+import re
 import shutil
 
 os.environ["KERAS_HOME"] = os.getcwd()
 
-import keras_nlp  # noqa: E402
+from keras_nlp import models  # noqa: E402
 from keras_nlp.src.utils.preset_utils import save_to_preset  # noqa: E402
 
 BUCKET = "keras-nlp-kaggle"
 
-backbone_models = [
-    (keras_nlp.models.AlbertBackbone, keras_nlp.models.AlbertTokenizer),
-    (keras_nlp.models.BartBackbone, keras_nlp.models.BartTokenizer),
-    (keras_nlp.models.BertBackbone, keras_nlp.models.BertTokenizer),
-    (keras_nlp.models.DebertaV3Backbone, keras_nlp.models.DebertaV3Tokenizer),
-    (keras_nlp.models.DistilBertBackbone, keras_nlp.models.DistilBertTokenizer),
-    (keras_nlp.models.FNetBackbone, keras_nlp.models.FNetTokenizer),
-    (keras_nlp.models.GPT2Backbone, keras_nlp.models.GPT2Tokenizer),
-    (keras_nlp.models.OPTBackbone, keras_nlp.models.OPTTokenizer),
-    (keras_nlp.models.RobertaBackbone, keras_nlp.models.RobertaTokenizer),
-    (keras_nlp.models.T5Backbone, keras_nlp.models.T5Tokenizer),
-    (keras_nlp.models.WhisperBackbone, keras_nlp.models.WhisperTokenizer),
-    (keras_nlp.models.XLMRobertaBackbone, keras_nlp.models.XLMRobertaTokenizer),
-]
-for backbone_cls, tokenizer_cls in backbone_models:
-    for preset in backbone_cls.presets:
-        backbone = backbone_cls.from_preset(preset)
-        tokenizer = tokenizer_cls.from_preset(preset)
-        save_to_preset(
-            backbone,
-            preset,
-            config_filename="config.json",
-        )
-        save_to_preset(
-            tokenizer,
-            preset,
-            config_filename="tokenizer.json",
-        )
-        # Delete first to clean up any exising version.
-        os.system(f"gsutil rm -rf gs://{BUCKET}/{preset}")
-        os.system(f"gsutil cp -r {preset} gs://{BUCKET}/{preset}")
-        for root, _, files in os.walk(preset):
-            for file in files:
-                path = os.path.join(BUCKET, root, file)
-                os.system(
-                    f"gcloud storage objects update gs://{path} "
-                    "--add-acl-grant=entity=AllUsers,role=READER"
-                )
-        # Clean up local disk usage.
-        shutil.rmtree("models")
-        shutil.rmtree(preset)
 
-# Handle our single task model.
-preset = "bert_tiny_en_uncased_sst2"
-task = keras_nlp.models.BertClassifier.from_preset(preset)
-tokenizer = keras_nlp.models.BertTokenizer.from_preset(preset)
-save_to_preset(
-    task,
-    preset,
-    config_filename="config.json",
-)
-save_to_preset(
-    tokenizer,
-    preset,
-    config_filename="tokenizer.json",
-)
-# Delete first to clean up any exising version.
-os.system(f"gsutil rm -rf gs://{BUCKET}/{preset}")
-os.system(f"gsutil cp -r {preset} gs://{BUCKET}/{preset}")
-for root, _, files in os.walk(preset):
-    for file in files:
-        path = os.path.join(BUCKET, root, file)
-        os.system(
-            f"gcloud storage objects update gs://{path} "
-            "--add-acl-grant=entity=AllUsers,role=READER"
-        )
-# Clean up local disk usage.
-shutil.rmtree("models")
-shutil.rmtree(preset)
+def to_snake_case(name):
+    name = re.sub(r"\W+", "", name)
+    name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
+    name = re.sub("([a-z])([A-Z])", r"\1_\2", name).lower()
+    return name
+
+
+if __name__ == "__main__":
+    backbone_models = [
+        (models.AlbertBackbone, models.AlbertTokenizer),
+        (models.BartBackbone, models.BartTokenizer),
+        (models.BertBackbone, models.BertTokenizer),
+        (models.DebertaV3Backbone, models.DebertaV3Tokenizer),
+        (models.DistilBertBackbone, models.DistilBertTokenizer),
+        (models.FNetBackbone, models.FNetTokenizer),
+        (models.GPT2Backbone, models.GPT2Tokenizer),
+        (models.OPTBackbone, models.OPTTokenizer),
+        (models.RobertaBackbone, models.RobertaTokenizer),
+        (models.T5Backbone, models.T5Tokenizer),
+        (models.WhisperBackbone, models.WhisperTokenizer),
+        (models.XLMRobertaBackbone, models.XLMRobertaTokenizer),
+    ]
+    for backbone_cls, tokenizer_cls in backbone_models:
+        for preset in backbone_cls.presets:
+            backbone = backbone_cls.from_preset(
+                preset, name=to_snake_case(backbone_cls.__name__)
+            )
+            tokenizer = tokenizer_cls.from_preset(
+                preset, name=to_snake_case(tokenizer_cls.__name__)
+            )
+            save_to_preset(
+                backbone,
+                preset,
+                config_filename="config.json",
+            )
+            save_to_preset(
+                tokenizer,
+                preset,
+                config_filename="tokenizer.json",
+            )
+            # Delete first to clean up any exising version.
+            os.system(f"gsutil rm -rf gs://{BUCKET}/{preset}")
+            os.system(f"gsutil cp -r {preset} gs://{BUCKET}/{preset}")
+            for root, _, files in os.walk(preset):
+                for file in files:
+                    path = os.path.join(BUCKET, root, file)
+                    os.system(
+                        f"gcloud storage objects update gs://{path} "
+                        "--add-acl-grant=entity=AllUsers,role=READER"
+                    )
+            # Clean up local disk usage.
+            shutil.rmtree("models")
+            shutil.rmtree(preset)
+
+    # Handle our single task model.
+    preset = "bert_tiny_en_uncased_sst2"
+    task = models.BertClassifier.from_preset(
+        preset, name=to_snake_case(models.BertClassifier.__name__)
+    )
+    tokenizer = models.BertTokenizer.from_preset(
+        preset, name=to_snake_case(models.BertTokenizer.__name__)
+    )
+    save_to_preset(
+        task,
+        preset,
+        config_filename="config.json",
+    )
+    save_to_preset(
+        tokenizer,
+        preset,
+        config_filename="tokenizer.json",
+    )
+    # Delete first to clean up any exising version.
+    os.system(f"gsutil rm -rf gs://{BUCKET}/{preset}")
+    os.system(f"gsutil cp -r {preset} gs://{BUCKET}/{preset}")
+    for root, _, files in os.walk(preset):
+        for file in files:
+            path = os.path.join(BUCKET, root, file)
+            os.system(
+                f"gcloud storage objects update gs://{path} "
+                "--add-acl-grant=entity=AllUsers,role=READER"
+            )
+    # Clean up local disk usage.
+    shutil.rmtree("models")
+    shutil.rmtree(preset)
