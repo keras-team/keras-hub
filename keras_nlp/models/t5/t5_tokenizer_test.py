@@ -52,7 +52,7 @@ class T5TokenizerTest(TestCase):
                 cls=T5Tokenizer,
                 preset=preset,
                 input_data=["The quick brown fox."],
-                expected_output=[[1996, 4248, 2829, 4419, 1012]],
+                expected_output=[[37, 1704, 4216, 3, 20400, 5]],
             )
 
     @pytest.mark.extra_large
