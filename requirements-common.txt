@@ -2,6 +2,7 @@
 dm-tree
 regex
 rich
+kagglehub
 # Tooling deps.
 astor
 packaging

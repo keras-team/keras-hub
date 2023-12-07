@@ -25,7 +25,7 @@ backbone_presets = {
             "path": "roberta",
             "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/roberta/README.md",
         },
-        "kaggle_handle": "gs://keras-nlp-kaggle/roberta_base_en",
+        "kaggle_handle": "kaggle://keras/roberta/roberta_base_en/1",
     },
     "roberta_large_en": {
         "metadata": {
@@ -38,6 +38,6 @@ backbone_presets = {
             "path": "roberta",
             "model_card": "https://github.com/facebookresearch/fairseq/blob/main/examples/roberta/README.md",
         },
-        "kaggle_handle": "gs://keras-nlp-kaggle/roberta_large_en",
+        "kaggle_handle": "kaggle://keras/roberta/roberta_large_en/1",
     },
 }
