@@ -87,3 +87,10 @@ class PresetUtilsTest(TestCase):
         self.assertAllEqual(
             model(model_input_data), restored_model(restored_model_input_data)
         )
+
+    def test_preset_errors(self):
+        with self.assertRaisesRegex(ValueError, "must be a string"):
+            AlbertClassifier.from_preset(AlbertClassifier)
+
+        with self.assertRaisesRegex(ValueError, "Unknown preset identifier"):
+            AlbertClassifier.from_preset("snaggle://bort/bort/bort")
