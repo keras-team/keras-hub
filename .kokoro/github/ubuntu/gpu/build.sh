@@ -48,9 +48,9 @@ pip install --no-deps -e "." --progress-bar off
 # Run Extra Large Tests for Continuous builds
 if [ "${RUN_XLARGE:-0}" == "1" ]
 then
-   pytest keras_nlp --run_large --run_extra_large \
+   pytest keras_nlp --check_gpu --run_large --run_extra_large \
       --cov=keras-nlp
 else
-   pytest keras_nlp --run_large \
+   pytest keras_nlp --check_gpu --run_large \
       --cov=keras-nlp
 fi

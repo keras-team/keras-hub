@@ -38,9 +38,35 @@ def pytest_addoption(parser):
         default="",
         help="restrict docs testing to modules whose name matches this flag",
     )
+    parser.addoption(
+        "--check_gpu",
+        action="store_true",
+        default=False,
+        help="fail if a gpu is not present",
+    )
 
 
 def pytest_configure(config):
+    # Verify that device has GPU and detected by backend
+    if config.getoption("--check_gpu"):
+        found_gpu = False
+        backend = backend_config.backend()
+        if backend == "jax":
+            import jax
+
+            try:
+                found_gpu = bool(jax.devices("gpu"))
+            except RuntimeError:
+                found_gpu = False
+        elif backend == "tensorflow":
+            found_gpu = bool(tf.config.list_logical_devices("GPU"))
+        elif backend == "torch":
+            import torch
+
+            found_gpu = bool(torch.cuda.device_count())
+        if not found_gpu:
+            pytest.fail(f"No GPUs discovered on the {backend} backend.")
+
     config.addinivalue_line(
         "markers",
         "large: mark test as being slow or requiring a network",
@@ -52,6 +78,10 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers",
         "tf_only: mark test as a tf only test",
+    )
+    config.addinivalue_line(
+        "markers",
+        "keras_3_only: mark test as a keras 3 only test",
     )
 
 
