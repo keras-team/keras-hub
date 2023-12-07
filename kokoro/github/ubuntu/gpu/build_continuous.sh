@@ -25,7 +25,6 @@ if [ "$KERAS_BACKEND" == "tensorflow" ]
 then
    echo "TensorFlow backend detected."
    pip install -r requirements-tensorflow-cuda.txt --progress-bar off
-   pip uninstall -y keras keras-nightly
    echo "Check that TensorFlow uses GPU"
    python3 -c 'import tensorflow as tf;print(tf.__version__);print(tf.config.list_physical_devices("GPU"))'
    # Raise error if GPU is not detected.
@@ -36,7 +35,6 @@ if [ "$KERAS_BACKEND" == "jax" ]
 then
    echo "JAX backend detected."
    pip install -r requirements-jax-cuda.txt --progress-bar off
-   pip uninstall -y keras keras-nightly
    python3 -c 'import jax;print(jax.__version__);print(jax.default_backend())'
    # Raise error if GPU is not detected.
    python3 -c 'import jax;assert jax.default_backend().lower() == "gpu"'
@@ -46,11 +44,13 @@ if [ "$KERAS_BACKEND" == "torch" ]
 then
    echo "PyTorch backend detected."
    pip install -r requirements-torch-cuda.txt --progress-bar off
-   pip uninstall -y keras keras-nightly
    python3 -c 'import torch;print(torch.__version__);print(torch.cuda.is_available())'
    # Raise error if GPU is not detected.
    python3 -c 'import torch;assert torch.cuda.is_available()'
 fi
 
+pip install --no-deps -e "." --progress-bar off
+
+# Add Extra Large Tests
 pytest keras_nlp --run_large \
    --cov=keras-nlp
