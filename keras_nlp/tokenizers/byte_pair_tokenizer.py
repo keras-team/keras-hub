@@ -336,7 +336,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         vocab_path = os.path.join(dir_path, VOCAB_FILENAME)
         merges_path = os.path.join(dir_path, MERGES_FILENAME)
         with open(vocab_path, "w") as file:
-            file.write(json.dumps(self.vocabulary))
+            file.write(json.dumps(dict(self.vocabulary)))
         with open(merges_path, "w") as file:
             for merge in self.merges:
                 file.write(f"{merge}\n")
