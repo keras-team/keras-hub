@@ -203,7 +203,9 @@ def check_preset_class(
     cls = keras.saving.get_registered_object(config["registered_name"])
     if not isinstance(classes, (tuple, list)):
         classes = (classes,)
-    if cls not in classes:
+    # Allow subclasses for testing a base class, e.g.
+    # `check_preset_class(preset, Backbone)`
+    if not any(issubclass(cls, x) for x in classes):
         raise ValueError(
             f"Unexpected class in preset `'{preset}'`. "
             "When calling `from_preset()` on a class object, the preset class "
