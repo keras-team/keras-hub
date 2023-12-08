@@ -561,7 +561,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
 
     def detokenize(self, inputs):
         inputs, unbatched, _ = convert_to_ragged_batch(inputs)
-
+        inputs = tf.cast(inputs, self.dtype)
         unicode_text = tf.strings.reduce_join(
             self.id_to_token_map.lookup(inputs), axis=-1
         )

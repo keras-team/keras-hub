@@ -36,9 +36,9 @@ class CachedMultiHeadAttentionTest(TestCase):
             expected_output_shape=(2, 4, 6),
             expected_num_trainable_weights=8,
             expected_num_non_trainable_variables=1,
-            # tf.keras does not handle mixed precision correctly when not set
+            # Keras 2 does not handle mixed precision correctly when not set
             # globally.
-            run_mixed_precision_check=config.multi_backend(),
+            run_mixed_precision_check=config.keras_3(),
         )
 
     def test_cache_call_is_correct(self):

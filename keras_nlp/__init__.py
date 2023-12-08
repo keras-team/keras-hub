@@ -26,6 +26,5 @@ from keras_nlp import models
 from keras_nlp import samplers
 from keras_nlp import tokenizers
 from keras_nlp import utils
-
-# This is the global source of truth for the version number.
-__version__ = "0.7.0.dev0"
+from keras_nlp.version_utils import __version__
+from keras_nlp.version_utils import version

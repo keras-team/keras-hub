@@ -75,7 +75,6 @@ class WhisperBackboneTest(TestCase):
             input_data=self.input_data,
         )
 
-    @pytest.mark.skip  # TODO: fix weight mismatch error.
     @pytest.mark.large
     def test_smallest_preset(self):
         self.run_preset_test(
@@ -105,7 +104,6 @@ class WhisperBackboneTest(TestCase):
             },
         )
 
-    @pytest.mark.skip  # TODO: fix weight mismatch error.
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in WhisperBackbone.presets:

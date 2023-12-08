@@ -73,8 +73,8 @@ def pytest_collection_modifyitems(config, items):
         not backend_config.backend() == "tensorflow",
         reason="tests only run on tf backend",
     )
-    multi_backend_only = pytest.mark.skipif(
-        not backend_config.multi_backend(),
+    keras_3_only = pytest.mark.skipif(
+        not backend_config.keras_3(),
         reason="tests only run on with multi-backend keras",
     )
     for item in items:
@@ -84,11 +84,11 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_extra_large)
         if "tf_only" in item.keywords:
             item.add_marker(tf_only)
-        if "multi_backend_only" in item.keywords:
-            item.add_marker(multi_backend_only)
+        if "keras_3_only" in item.keywords:
+            item.add_marker(keras_3_only)
 
 
 # Disable traceback filtering for quicker debugging of tests failures.
 tf.debugging.disable_traceback_filtering()
-if backend_config.multi_backend():
+if backend_config.keras_3():
     keras.config.disable_traceback_filtering()

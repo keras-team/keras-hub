@@ -24,20 +24,20 @@ class BertTokenizerTest(TestCase):
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
         self.vocab += ["the", "quick", "brown", "fox"]
         self.init_kwargs = {"vocabulary": self.vocab}
-        self.input_data = ["THE QUICK BROWN FOX.", "THE FOX."]
+        self.input_data = ["THE QUICK BROWN FOX", "THE FOX"]
 
     def test_tokenizer_basics(self):
         self.run_preprocessing_layer_test(
             cls=BertTokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output=[[5, 6, 7, 8, 1], [5, 8, 1]],
+            expected_output=[[5, 6, 7, 8], [5, 8]],
         )
 
     def test_lowercase(self):
         tokenizer = BertTokenizer(vocabulary=self.vocab, lowercase=True)
         output = tokenizer(self.input_data)
-        self.assertAllEqual(output, [[9, 10, 11, 12, 1], [9, 12, 1]])
+        self.assertAllEqual(output, [[9, 10, 11, 12], [9, 12]])
 
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):

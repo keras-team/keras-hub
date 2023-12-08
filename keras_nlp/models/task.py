@@ -79,6 +79,9 @@ class Task(PipelineModel):
             )
 
     def compile(self, optimizer="rmsprop", loss=None, **kwargs):
+        # Temporarily disable jit compilation on torch.
+        if config.backend() == "torch":
+            kwargs["jit_compile"] = False
         self._check_for_loss_mismatch(loss)
         super().compile(optimizer=optimizer, loss=loss, **kwargs)
 
@@ -316,7 +319,7 @@ class Task(PipelineModel):
                 print_fn(console.end_capture(), line_break=False)
 
         # Avoid `tf.keras.Model.summary()`, so the above output matches.
-        if config.multi_backend():
+        if config.keras_3():
             super().summary(
                 line_length=line_length,
                 positions=positions,

@@ -14,7 +14,6 @@
 
 import pytest
 
-from keras_nlp.backend import ops
 from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
@@ -82,8 +81,8 @@ class BartPreprocessorTest(TestCase):
     def test_generate_postprocess(self):
         preprocessor = BartSeq2SeqLMPreprocessor(**self.init_kwargs)
         input_data = {
-            "decoder_token_ids": ops.array([0, 4, 5, 6, 2], dtype="int32"),
-            "decoder_padding_mask": ops.array([1, 1, 1, 1, 1], dtype="bool"),
+            "decoder_token_ids": [0, 4, 5, 6, 2],
+            "decoder_padding_mask": [1, 1, 1, 1, 1],
         }
         output = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(output, " airplane at")
