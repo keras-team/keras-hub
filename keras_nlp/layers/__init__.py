@@ -16,7 +16,6 @@ from keras_nlp.layers.modeling.cached_multi_head_attention import (
     CachedMultiHeadAttention,
 )
 from keras_nlp.layers.modeling.f_net_encoder import FNetEncoder
-from keras_nlp.layers.modeling.lora_dense import LoraDense
 from keras_nlp.layers.modeling.masked_lm_head import MaskedLMHead
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
