@@ -20,7 +20,7 @@ from keras_nlp.layers.modeling.lora_dense import LoraDense
 from keras_nlp.tests.test_case import TestCase
 
 
-@pytest.mark.multi_backend_only
+@pytest.mark.keras_3_only
 class LoraDenseTest(TestCase):
     def test_layer_behaviors(self):
         self.run_layer_test(

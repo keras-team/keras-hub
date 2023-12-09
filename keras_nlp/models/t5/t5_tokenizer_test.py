@@ -26,14 +26,14 @@ class T5TokenizerTest(TestCase):
             # Generated using create_t5_test_proto.py
             "proto": os.path.join(self.get_test_data_dir(), "t5_test_vocab.spm")
         }
-        self.input_data = ["the quick brown fox.", "the earth is round."]
+        self.input_data = ["the quick brown fox", "the earth is round"]
 
     def test_tokenizer_basics(self):
         self.run_preprocessing_layer_test(
             cls=T5Tokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output=[[4, 9, 5, 2], [4, 6, 8, 2]],
+            expected_output=[[4, 9, 5, 7], [4, 6, 8, 10]],
         )
 
     def test_errors_missing_special_tokens(self):
@@ -52,7 +52,7 @@ class T5TokenizerTest(TestCase):
                 cls=T5Tokenizer,
                 preset=preset,
                 input_data=["The quick brown fox."],
-                expected_output=[[1996, 4248, 2829, 4419, 1012]],
+                expected_output=[[37, 1704, 4216, 3, 20400, 5]],
             )
 
     @pytest.mark.extra_large

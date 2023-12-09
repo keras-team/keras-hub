@@ -153,7 +153,7 @@ def is_tensor_type(x):
 
 
 def standardize_dtype(dtype):
-    if config.multi_backend():
+    if config.keras_3():
         return keras.backend.standardize_dtype(dtype)
     if hasattr(dtype, "name"):
         return dtype.name

@@ -12,81 +12,52 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import os
 
-import keras
-from packaging import version
 
-_MULTI_BACKEND = False
-_IS_KERAS_3 = False
-
-# Set Keras base dir path given KERAS_HOME env variable, if applicable.
-# Otherwise either ~/.keras or /tmp.
-if "KERAS_HOME" in os.environ:
-    _keras_dir = os.environ.get("KERAS_HOME")
-else:
-    _keras_base_dir = os.path.expanduser("~")
-    if not os.access(_keras_base_dir, os.W_OK):
-        _keras_base_dir = "/tmp"
-    _keras_dir = os.path.join(_keras_base_dir, ".keras")
-
-# Attempt to read KerasNLP config file.
-_config_path = os.path.expanduser(os.path.join(_keras_dir, "keras_nlp.json"))
-if os.path.exists(_config_path):
+def detect_if_tensorflow_uses_keras_3():
+    # We follow the version of keras that tensorflow is configured to use.
     try:
-        with open(_config_path) as f:
-            _config = json.load(f)
-    except ValueError:
-        _config = {}
-    _MULTI_BACKEND = _config.get("multi_backend", _MULTI_BACKEND)
+        from tensorflow import keras
 
-# Save config file, if possible.
-if not os.path.exists(_keras_dir):
-    try:
-        os.makedirs(_keras_dir)
-    except OSError:
-        # Except permission denied and potential race conditions
-        # in multi-threaded environments.
-        pass
+        # Note that only recent versions of keras have a `version()` function.
+        if hasattr(keras, "version") and keras.version().startswith("3."):
+            return True
+    except:
+        raise ValueError(
+            "Unable to import `keras` with `tensorflow`.  Please check your "
+            "Keras and Tensorflow version are compatible; Keras 3 requires "
+            "TensorFlow 2.15 or later. See keras.io/getting_started for more "
+            "information on installing Keras."
+        )
 
-if not os.path.exists(_config_path):
-    _config = {
-        "multi_backend": _MULTI_BACKEND,
-    }
-    try:
-        with open(_config_path, "w") as f:
-            f.write(json.dumps(_config, indent=4))
-    except IOError:
-        # Except permission denied.
-        pass
+    # No `keras.version()` means we are on an old version of keras.
+    return False
 
-# If KERAS_BACKEND is set in the environment use multi-backend keras.
-if "KERAS_BACKEND" in os.environ and os.environ["KERAS_BACKEND"]:
-    _MULTI_BACKEND = True
 
-# If keras is version 3, use multi-backend keras (our only option).
-_IS_KERAS_3 = version.parse(keras.__version__) >= version.parse("3.0.0.dev0")
-if _IS_KERAS_3:
-    _MULTI_BACKEND = True
+_USE_KERAS_3 = detect_if_tensorflow_uses_keras_3()
+
+if not _USE_KERAS_3:
+    backend = os.environ.get("KERAS_BACKEND")
+    if backend and backend != "tensorflow":
+        raise RuntimeError(
+            "When running Keras 2, the `KERAS_BACKEND` environment variable "
+            f"must either be unset or `'tensorflow'`. Received: `{backend}`. "
+            "To set another backend, please install Keras 3. See "
+            "https://github.com/keras-team/keras-nlp#installation"
+        )
 
 
 def keras_3():
-    """Check if Keras 3 is installed."""
-    return _IS_KERAS_3
-
-
-def multi_backend():
-    """Check if multi-backend Keras is enabled."""
-    return _MULTI_BACKEND
+    """Check if Keras 3 is being used."""
+    return _USE_KERAS_3
 
 
 def backend():
     """Check the backend framework."""
-    if not multi_backend():
-        return "tensorflow"
     if not keras_3():
-        import keras_core
+        return "tensorflow"
 
-        return keras_core.config.backend()
+    import keras
+
     return keras.config.backend()
