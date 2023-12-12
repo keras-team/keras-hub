@@ -295,27 +295,6 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             )
 
         super().__init__(dtype=dtype, **kwargs)
-
-        if isinstance(vocabulary, str):
-            with open(vocabulary, "r", encoding="utf-8") as f:
-                self.vocabulary = json.load(f)
-        elif isinstance(vocabulary, dict):
-            self.vocabulary = vocabulary.copy()
-        else:
-            raise ValueError(
-                "Vocabulary must be an file path or dictionary mapping string "
-                "token to int ids. Received: "
-                f"`type(vocabulary)={type(vocabulary)}`."
-            )
-        if isinstance(merges, str):
-            self.merges = [bp.rstrip() for bp in tf.io.gfile.GFile(merges)]
-        elif isinstance(merges, Iterable):
-            self.merges = list(merges)
-        else:
-            raise ValueError(
-                "Merges must be a file path or a list of merge rules. "
-                f"Received: `type(merges)={type(merges)}`"
-            )
         self.sequence_length = sequence_length
         self.add_prefix_space = add_prefix_space
         self.unsplittable_tokens = unsplittable_tokens
