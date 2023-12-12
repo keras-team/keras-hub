@@ -19,7 +19,7 @@ nvidia-smi
 nvcc --version
 
 cd "src/github/keras-nlp"
-pip install -U pip setuptools
+pip install -U pip setuptools psutil
 
 if [ "${KERAS2:-0}" == "1" ]
 then

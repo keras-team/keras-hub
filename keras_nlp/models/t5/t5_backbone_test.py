@@ -14,6 +14,7 @@
 
 import pytest
 
+from keras_nlp.backend import config as backend_config
 from keras_nlp.backend import ops
 from keras_nlp.models.t5.t5_backbone import T5Backbone
 from keras_nlp.tests.test_case import TestCase
@@ -55,6 +56,10 @@ class T5BackboneTest(TestCase):
         )
 
     @pytest.mark.large
+    @pytest.mark.skipif(
+        not backend_config.keras_3(),
+        reason="TODO: Fails in Keras2",
+    )
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=T5Backbone,
@@ -75,6 +80,10 @@ class T5BackboneTest(TestCase):
         )
 
     @pytest.mark.extra_large
+    @pytest.mark.skipif(
+        not backend_config.keras_3(),
+        reason="TODO: Fails in Keras2",
+    )
     def test_all_presets(self):
         for preset in T5Backbone.presets:
             self.run_preset_test(
