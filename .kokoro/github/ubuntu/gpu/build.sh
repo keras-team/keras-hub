@@ -25,7 +25,7 @@ if [ "${KERAS2:-0}" == "1" ]
 then
    echo "Keras2 detected."
    pip install -r requirements-common.txt --progress-bar off
-   pip install tensorflow-text==2.14 tensorflow==2.14 keras-core
+   pip install tensorflow-text==2.15 tensorflow[and-cuda]~=2.15 keras-core
 
 elif [ "$KERAS_BACKEND" == "tensorflow" ]
 then
