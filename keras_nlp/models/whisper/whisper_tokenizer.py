@@ -23,7 +23,7 @@ from keras_nlp.utils.python_utils import classproperty
 
 def _load_dict(dict_or_path):
     if isinstance(dict_or_path, str):
-        with open(dict_or_path, "r") as f:
+        with open(dict_or_path, "r", encoding="utf-8") as f:
             dict_or_path = json.load(f)
     return dict_or_path
 
