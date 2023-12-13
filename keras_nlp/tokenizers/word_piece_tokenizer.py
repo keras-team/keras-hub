@@ -329,7 +329,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def save_assets(self, dir_path):
         path = os.path.join(dir_path, VOCAB_FILENAME)
-        with open(path, "w") as file:
+        with open(path, "w", encoding="utf-8") as file:
             for token in self.vocabulary:
                 file.write(f"{token}\n")
 
@@ -345,7 +345,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             return
 
         if isinstance(vocabulary, str):
-            with open(vocabulary) as file:
+            with open(vocabulary, "r", encoding="utf-8") as file:
                 self.vocabulary = [line.rstrip() for line in file]
         elif isinstance(vocabulary, Iterable):
             # Make a defensive copy.
