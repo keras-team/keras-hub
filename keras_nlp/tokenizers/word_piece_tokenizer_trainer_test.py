@@ -177,7 +177,7 @@ class WordPieceTokenizerTrainerTest(TestCase):
             reserved_tokens=[],
         )
         vocab_from_file = []
-        with open(vocab_file, "r") as f:
+        with open(vocab_file, "r", encoding="utf-8") as f:
             for line in f:
                 vocab_from_file.append(line.strip())
         self.assertAllEqual(vocab_from_file, test_output)

@@ -314,9 +314,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     def save_assets(self, dir_path):
         vocab_path = os.path.join(dir_path, VOCAB_FILENAME)
         merges_path = os.path.join(dir_path, MERGES_FILENAME)
-        with open(vocab_path, "w") as file:
+        with open(vocab_path, "w", encoding="utf-8") as file:
             file.write(json.dumps(dict(self.vocabulary)))
-        with open(merges_path, "w") as file:
+        with open(merges_path, "w", encoding="utf-8") as file:
             for merge in self.merges:
                 file.write(f"{merge}\n")
 
@@ -339,7 +339,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             return
 
         if isinstance(vocabulary, str):
-            with open(vocabulary, "r") as f:
+            with open(vocabulary, "r", encoding="utf-8") as f:
                 self.vocabulary = json.load(f)
         elif isinstance(vocabulary, dict):
             self.vocabulary = vocabulary.copy()
@@ -350,7 +350,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 f"`type(vocabulary)={type(vocabulary)}`."
             )
         if isinstance(merges, str):
-            self.merges = [bp.rstrip() for bp in open(merges)]
+            self.merges = [bp.rstrip() for bp in open(merges, encoding="utf-8")]
         elif isinstance(merges, Iterable):
             self.merges = list(merges)
         else:
