@@ -165,14 +165,12 @@ def legacy_load_weights(layer, weights_path):
     # We find the `Functional` class, and temporarily remove the
     # `_layer_checkpoint_dependencies` property, which on older version of
     # TensorFlow complete broke the variable paths for functional models.
-    functional_cls = None
-    for cls in inspect.getmro(layer.__class__):
-        if cls.__name__ == "Functional":
-            functional_cls = cls
-    property = functional_cls._layer_checkpoint_dependencies
-    functional_cls._layer_checkpoint_dependencies = None
-    layer.load_weights(weights_path)
-    functional_cls._layer_checkpoint_dependencies = property
+    property = layer._layer_checkpoint_dependencies
+    layer._layer_checkpoint_dependencies = None
+    try:
+        layer.load_weights(weights_path)
+    finally:
+        layer._layer_checkpoint_dependencies = property
 
 
 def load_from_preset(
