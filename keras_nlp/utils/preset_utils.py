@@ -17,6 +17,9 @@ import inspect
 import json
 import os
 
+import h5py
+
+from keras_nlp.backend import config as backend_config
 from keras_nlp.backend import keras
 
 try:
@@ -171,6 +174,19 @@ def legacy_load_weights(layer, weights_path):
             functional_cls = cls
     property = functional_cls._layer_checkpoint_dependencies
     functional_cls._layer_checkpoint_dependencies = []
+
+    from keras_nlp.models.backbone import Backbone
+
+    if not backend_config.keras_3() and isinstance(layer, Backbone):
+        # Hacky fix for Keras 2 backwards compatibility. Keras 2 traverses loading
+        # weights in the reverse order, causing a naming mismatch when loading
+        # Kaggle weights saved from Keras 3.
+        f = h5py.File(weights_path, "r+")
+        if "_token_embedding" in f.keys():
+            data = f["_token_embedding"]
+            f["token_embedding"] = data
+        f.close()
+
     layer.load_weights(weights_path)
     functional_cls._layer_checkpoint_dependencies = property
 
