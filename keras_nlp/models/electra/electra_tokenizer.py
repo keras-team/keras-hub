@@ -36,6 +36,25 @@ class ElectraTokenizer(WordPieceTokenizer):
             plain text file containing a single word piece token per line.
         lowercase: If `True`, the input text will be first lowered before
             tokenization.
+
+    Examples:
+    ```python
+    # Custom Vocabulary.
+    vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
+    vocab += ["The", "quick", "brown", "fox", "jumped", "."]
+
+    # Instantiate the tokenizer.
+    tokenizer = keras_nlp.models.ElectraTokenizer(vocabulary=vocab)
+
+    # Unbatched input.
+    tokenizer("The quick brown fox jumped.")
+
+    # Batched input.
+    tokenizer(["The quick brown fox jumped.", "The fox slept."])
+
+    # Detokenization.
+    tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
+    ```
     """
 
     def __init__(self, vocabulary, lowercase=False, **kwargs):
