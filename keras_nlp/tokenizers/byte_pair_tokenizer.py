@@ -292,7 +292,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         super().__init__(dtype=dtype, **kwargs)
 
         if isinstance(vocabulary, str):
-            with open(vocabulary, "r") as f:
+            with open(vocabulary, "r", encoding="utf-8") as f:
                 self.vocabulary = json.load(f)
         elif isinstance(vocabulary, dict):
             self.vocabulary = vocabulary.copy()
