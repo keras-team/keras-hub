@@ -187,19 +187,20 @@ class Task(PipelineModel):
                 preset,
                 load_weights=load_weights,
             )
-            tokenizer = load_from_preset(
-                preset,
-                config_file="tokenizer.json",
-            )
             if "backbone" in kwargs:
                 raise ValueError(
-                    "`backbone` weights are loaded from the "
-                    f"preset {preset}. Cannot provide `backbone` "
-                    "argument to the `from_preset` method."
+                    "You cannot pass a `backbone` argument to the "
+                    f"`from_preset` method. Instead, call the {cls.__name__} "
+                    "default constructor with `backbone` argument. "
+                    f"Received: backbone={backbone}."
                 )
             if "preprocessor" in kwargs:
                 preprocessor = kwargs.pop("preprocessor")
             else:
+                tokenizer = load_from_preset(
+                    preset,
+                    config_file="tokenizer.json",
+                )
                 preprocessor = cls.preprocessor_cls(tokenizer=tokenizer)
             return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
 
