@@ -191,7 +191,16 @@ class Task(PipelineModel):
                 preset,
                 config_file="tokenizer.json",
             )
-            preprocessor = cls.preprocessor_cls(tokenizer=tokenizer)
+            if "backbone" in kwargs:
+                raise ValueError(
+                    "`backbone` weights are loaded from the "
+                    f"preset {preset}. Cannot provide `backbone` "
+                    "argument to the `from_preset` method."
+                )
+            if "preprocessor" in kwargs:
+                preprocessor = kwargs.pop("preprocessor")
+            else:
+                preprocessor = cls.preprocessor_cls(tokenizer=tokenizer)
             return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
 
         # Task case.
