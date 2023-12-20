@@ -162,13 +162,12 @@ class BertBackbone(Backbone):
         # Construct the two BERT outputs. The pooled output is a dense layer on
         # top of the [CLS] token.
         sequence_output = x
-        x = keras.layers.Dense(
+        pooled_output = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=bert_kernel_initializer(),
             activation="tanh",
             name="pooled_dense",
-        )(x)
-        pooled_output = x[:, cls_token_index, :]
+        )(x[:, cls_token_index, :])
 
         # Instantiate using Functional API Model constructor
         super().__init__(
