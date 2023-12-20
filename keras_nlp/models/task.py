@@ -174,6 +174,13 @@ class Task(PipelineModel):
         )
         ```
         """
+        if "backbone" in kwargs:
+            raise ValueError(
+                "You cannot pass a `backbone` argument to the `from_preset` "
+                f"method. Instead, call the {cls.__name__} default "
+                "constructor with a `backbone` argument. "
+                f"Received: backbone={kwargs['backbone']}."
+            )
         # We support short IDs for official presets, e.g. `"bert_base_en"`.
         # Map these to a Kaggle Models handle.
         if preset in cls.presets:
@@ -187,11 +194,14 @@ class Task(PipelineModel):
                 preset,
                 load_weights=load_weights,
             )
-            tokenizer = load_from_preset(
-                preset,
-                config_file="tokenizer.json",
-            )
-            preprocessor = cls.preprocessor_cls(tokenizer=tokenizer)
+            if "preprocessor" in kwargs:
+                preprocessor = kwargs.pop("preprocessor")
+            else:
+                tokenizer = load_from_preset(
+                    preset,
+                    config_file="tokenizer.json",
+                )
+                preprocessor = cls.preprocessor_cls(tokenizer=tokenizer)
             return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
 
         # Task case.
