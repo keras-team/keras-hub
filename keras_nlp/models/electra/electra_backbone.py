@@ -165,7 +165,6 @@ class ElectraBackbone(Backbone):
         sequence_output = x
         # Construct the two ELECTRA outputs. The pooled output is a dense layer on
         # top of the [CLS] token.
-        sequence_output = x
         pooled_output = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=electra_kernel_initializer(),
