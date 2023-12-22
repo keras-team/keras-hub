@@ -101,16 +101,18 @@ class RotaryEmbedding(keras.layers.Layer):
         sequence_axis = get_axis(self.sequence_axis)
 
         rotary_dim = ops.shape(inputs)[feature_axis]
-
         inverse_freq = self._get_inverse_freq(rotary_dim)
 
         seq_len = ops.shape(inputs)[self.sequence_axis]
         tensor = ops.cast(ops.arange(seq_len), self.compute_dtype) + start_index
 
         tensor = ops.cast(tensor, dtype=inverse_freq.dtype)
-        freq = ops.einsum("i, j -> ij", tensor, inverse_freq)
-        embedding = ops.concatenate((freq, freq), axis=self.feature_axis)
+        freq = ops.einsum("i,j->ij", tensor, inverse_freq)
+        embedding = ops.concatenate((freq, freq), axis=-1)
 
+        # Reshape the embedding to be broadcastable with input shape.
+        if feature_axis < sequence_axis:
+            embedding = ops.transpose(embedding)
         for axis in range(len(inputs.shape)):
             if axis != sequence_axis and axis != feature_axis:
                 embedding = ops.expand_dims(embedding, axis)

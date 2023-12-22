@@ -97,6 +97,18 @@ class RotaryEmbeddingTest(TestCase):
             )
         self.assertAllClose(full_output, sequential_output)
 
+    def test_permuted_axes(self):
+        batch_size, seq_length, feature_size = 2, 3, 4
+        data = random.uniform(shape=(batch_size, seq_length, feature_size))
+        layer = RotaryEmbedding(seq_length)
+        outputs = layer(data)
+        permuted_data = ops.transpose(data, (0, 2, 1))
+        permuted_layer = RotaryEmbedding(
+            seq_length, sequence_axis=-1, feature_axis=-2
+        )
+        permuted_outputs = permuted_layer(permuted_data)
+        self.assertAllClose(outputs, ops.transpose(permuted_outputs, (0, 2, 1)))
+
     def test_float16_dtype(self):
         embedding_layer = RotaryEmbedding(dtype="float16")
         seq_length = 100
