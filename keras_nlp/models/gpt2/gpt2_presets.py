@@ -26,7 +26,7 @@ backbone_presets = {
             "path": "gpt2",
             "model_card": "https://github.com/openai/gpt-2/blob/master/model_card.md",
         },
-        "kaggle_handle": "kaggle://keras/gpt2/gpt2_base_en/1",
+        "kaggle_handle": "kaggle://keras/gpt2/gpt2_base_en/2",
     },
     "gpt2_medium_en": {
         "metadata": {
@@ -39,7 +39,7 @@ backbone_presets = {
             "path": "gpt2",
             "model_card": "https://github.com/openai/gpt-2/blob/master/model_card.md",
         },
-        "kaggle_handle": "kaggle://keras/gpt2/gpt2_medium_en/1",
+        "kaggle_handle": "kaggle://keras/gpt2/gpt2_medium_en/2",
     },
     "gpt2_large_en": {
         "metadata": {
@@ -52,7 +52,7 @@ backbone_presets = {
             "path": "gpt2",
             "model_card": "https://github.com/openai/gpt-2/blob/master/model_card.md",
         },
-        "kaggle_handle": "kaggle://keras/gpt2/gpt2_large_en/1",
+        "kaggle_handle": "kaggle://keras/gpt2/gpt2_large_en/2",
     },
     "gpt2_extra_large_en": {
         "metadata": {
@@ -65,7 +65,7 @@ backbone_presets = {
             "path": "gpt2",
             "model_card": "https://github.com/openai/gpt-2/blob/master/model_card.md",
         },
-        "kaggle_handle": "kaggle://keras/gpt2/gpt2_extra_large_en/1",
+        "kaggle_handle": "kaggle://keras/gpt2/gpt2_extra_large_en/2",
     },
     "gpt2_base_en_cnn_dailymail": {
         "metadata": {
@@ -77,6 +77,6 @@ backbone_presets = {
             "official_name": "GPT-2",
             "path": "gpt2",
         },
-        "kaggle_handle": "kaggle://keras/gpt2/gpt2_base_en_cnn_dailymail/1",
+        "kaggle_handle": "kaggle://keras/gpt2/gpt2_base_en_cnn_dailymail/2",
     },
 }

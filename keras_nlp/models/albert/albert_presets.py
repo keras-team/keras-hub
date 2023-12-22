@@ -26,7 +26,7 @@ backbone_presets = {
             "path": "albert",
             "model_card": "https://github.com/google-research/albert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/albert/albert_base_en_uncased/1",
+        "kaggle_handle": "kaggle://keras/albert/albert_base_en_uncased/2",
     },
     "albert_large_en_uncased": {
         "metadata": {
@@ -39,7 +39,7 @@ backbone_presets = {
             "path": "albert",
             "model_card": "https://github.com/google-research/albert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/albert/albert_large_en_uncased/1",
+        "kaggle_handle": "kaggle://keras/albert/albert_large_en_uncased/2",
     },
     "albert_extra_large_en_uncased": {
         "metadata": {
@@ -52,7 +52,7 @@ backbone_presets = {
             "path": "albert",
             "model_card": "https://github.com/google-research/albert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/albert/albert_extra_large_en_uncased/1",
+        "kaggle_handle": "kaggle://keras/albert/albert_extra_large_en_uncased/2",
     },
     "albert_extra_extra_large_en_uncased": {
         "metadata": {
@@ -65,6 +65,6 @@ backbone_presets = {
             "path": "albert",
             "model_card": "https://github.com/google-research/albert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/albert/albert_extra_extra_large_en_uncased/1",
+        "kaggle_handle": "kaggle://keras/albert/albert_extra_extra_large_en_uncased/2",
     },
 }
