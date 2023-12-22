@@ -34,6 +34,19 @@ class Task(PipelineModel):
         self._backbone = None
         self._preprocessor = None
         super().__init__(*args, **kwargs)
+        self._functional_layer_ids = set(
+            id(layer) for layer in self._flatten_layers()
+        )
+
+    def __dir__(self):
+        # Temporary fixes for weight saving. This mimics the following PR for
+        # older version of Keras: https://github.com/keras-team/keras/pull/18982
+        def filter_fn(attr):
+            if attr == "_layer_checkpoint_dependencies":
+                return False
+            return id(getattr(self, attr)) not in self._functional_layer_ids
+
+        return filter(filter_fn, super().__dir__())
 
     def _check_for_loss_mismatch(self, loss):
         """Check for a softmax/from_logits mismatch after compile.

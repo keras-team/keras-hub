@@ -13,13 +13,9 @@
 # limitations under the License.
 
 import datetime
-import inspect
 import json
 import os
 
-import h5py
-
-from keras_nlp.backend import config as backend_config
 from keras_nlp.backend import keras
 
 try:
@@ -163,40 +159,6 @@ def save_to_preset(
             metadata_file.write(json.dumps(metadata, indent=4))
 
 
-def legacy_load_weights(layer, weights_path):
-    # Hacky fix for TensorFlow 2.13 and 2.14 when loading a `.weights.h5` file.
-    # We find the `Functional` class, and temporarily remove the
-    # `_layer_checkpoint_dependencies` property, which on older version of
-    # TensorFlow complete broke the variable paths for functional models.
-    functional_cls = None
-    for cls in inspect.getmro(layer.__class__):
-        if cls.__name__ == "Functional":
-            functional_cls = cls
-    property = functional_cls._layer_checkpoint_dependencies
-    functional_cls._layer_checkpoint_dependencies = []
-
-    from keras_nlp.models.backbone import Backbone
-
-    if not backend_config.keras_3() and isinstance(layer, Backbone):
-        # Hacky fix for Keras 2 backwards compatibility. Keras 2 traverses loading
-        # weights in the reverse order, causing a naming mismatch when loading
-        # Kaggle weights saved from Keras 3.
-        new_weights_path = os.path.join(
-            os.path.dirname(weights_path),
-            "legacy_" + os.path.basename(weights_path),
-        )
-        os.rename(weights_path, new_weights_path)
-        weights_path = new_weights_path
-        f = h5py.File(weights_path, "r+")
-        if "_token_embedding" in f.keys():
-            data = f["_token_embedding"]
-            f["token_embedding"] = data
-        f.close()
-
-    layer.load_weights(weights_path)
-    functional_cls._layer_checkpoint_dependencies = property
-
-
 def load_from_preset(
     preset,
     load_weights=True,
@@ -224,10 +186,7 @@ def load_from_preset(
     load_weights = load_weights and config["weights"]
     if load_weights:
         weights_path = get_file(preset, config["weights"])
-        if hasattr(layer, "_layer_checkpoint_dependencies"):
-            legacy_load_weights(layer, weights_path)
-        else:
-            layer.load_weights(weights_path)
+        layer.load_weights(weights_path)
 
     return layer
 
