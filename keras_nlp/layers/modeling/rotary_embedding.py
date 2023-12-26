@@ -85,10 +85,7 @@ class RotaryEmbedding(keras.layers.Layer):
         self.built = True
 
     def call(self, inputs, start_index=0):
-        rotary_dim = ops.shape(inputs)[-1]
-        cos_emb, sin_emb = self._compute_cos_sin_embedding(
-            inputs, rotary_dim, start_index
-        )
+        cos_emb, sin_emb = self._compute_cos_sin_embedding(inputs, start_index)
         return self._apply_rotary_pos_emb(inputs, cos_emb, sin_emb)
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
@@ -96,8 +93,34 @@ class RotaryEmbedding(keras.layers.Layer):
         half_rot_tensor = ops.concatenate((-x2, x1), axis=self.feature_axis)
         return (tensor * cos_emb) + (half_rot_tensor * sin_emb)
 
-    def _compute_cos_sin_embedding(self, x, rotary_dim, start_index):
-        freq_range = ops.arange(0, rotary_dim, 2, dtype="float32")
+    def _compute_cos_sin_embedding(self, inputs, start_index=0):
+        def get_axis(axis):
+            return axis if axis > 0 else len(inputs.shape) + axis
+
+        feature_axis = get_axis(self.feature_axis)
+        sequence_axis = get_axis(self.sequence_axis)
+
+        rotary_dim = ops.shape(inputs)[feature_axis]
+        inverse_freq = self._get_inverse_freq(rotary_dim)
+
+        seq_len = ops.shape(inputs)[self.sequence_axis]
+        tensor = ops.cast(ops.arange(seq_len), self.compute_dtype) + start_index
+
+        tensor = ops.cast(tensor, dtype=inverse_freq.dtype)
+        freq = ops.einsum("i,j->ij", tensor, inverse_freq)
+        embedding = ops.concatenate((freq, freq), axis=-1)
+
+        # Reshape the embedding to be broadcastable with input shape.
+        if feature_axis < sequence_axis:
+            embedding = ops.transpose(embedding)
+        for axis in range(len(inputs.shape)):
+            if axis != sequence_axis and axis != feature_axis:
+                embedding = ops.expand_dims(embedding, axis)
+
+        return ops.cos(embedding), ops.sin(embedding)
+
+    def _get_inverse_freq(self, rotary_dim):
+        freq_range = ops.arange(0, rotary_dim, 2)
         freq_range = ops.cast(freq_range, self.compute_dtype)
         freq_range = freq_range / ops.cast(
             self.scaling_factor, self.compute_dtype
@@ -106,23 +129,7 @@ class RotaryEmbedding(keras.layers.Layer):
             self.max_wavelength
             ** (freq_range / ops.cast(rotary_dim, self.compute_dtype))
         )
-        seq_len = ops.shape(x)[self.sequence_axis]
-        tensor = ops.arange(seq_len, dtype="float32") + start_index
-        tensor = ops.cast(tensor, dtype=inverse_freq.dtype)
-        freq = ops.einsum("i, j -> ij", tensor, inverse_freq)
-        embedding = ops.concatenate((freq, freq), axis=self.feature_axis)
-
-        def get_axis(axis):
-            return axis if axis > 0 else len(x.shape) + axis
-
-        feature_axis = get_axis(self.feature_axis)
-        sequence_axis = get_axis(self.sequence_axis)
-
-        for axis in range(len(x.shape)):
-            if axis != sequence_axis and axis != feature_axis:
-                embedding = ops.expand_dims(embedding, axis)
-
-        return ops.cos(embedding), ops.sin(embedding)
+        return inverse_freq
 
     def get_config(self):
         config = super().get_config()

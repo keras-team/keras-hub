@@ -163,13 +163,14 @@ class ElectraBackbone(Backbone):
             )(x, padding_mask=padding_mask)
 
         sequence_output = x
-        x = keras.layers.Dense(
+        # Construct the two ELECTRA outputs. The pooled output is a dense layer on
+        # top of the [CLS] token.
+        pooled_output = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=electra_kernel_initializer(),
             activation="tanh",
             name="pooled_dense",
-        )(x)
-        pooled_output = x[:, cls_token_index, :]
+        )(x[:, cls_token_index, :])
 
         # Instantiate using Functional API Model constructor
         super().__init__(
