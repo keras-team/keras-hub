@@ -13,6 +13,8 @@
 # limitations under the License.
 """BERT model preset configurations."""
 
+# TODO(jbischof): document presets in keras.io and use URL in docstrings
+# Metadata for loading pretrained model weights.
 backbone_presets = {
     "bert_tiny_en_uncased": {
         "metadata": {
@@ -25,7 +27,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_tiny_en_uncased/1",
+        "kaggle_handle": "gs://keras-nlp-kaggle/bert_tiny_en_uncased",
     },
     "bert_small_en_uncased": {
         "metadata": {
@@ -38,7 +40,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_small_en_uncased/1",
+        "kaggle_handle": "gs://keras-nlp-kaggle/bert_small_en_uncased",
     },
     "bert_medium_en_uncased": {
         "metadata": {
@@ -51,7 +53,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_medium_en_uncased/1",
+        "kaggle_handle": "gs://keras-nlp-kaggle/bert_medium_en_uncased",
     },
     "bert_base_en_uncased": {
         "metadata": {
@@ -64,7 +66,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_base_en_uncased/1",
+        "kaggle_handle": "gs://keras-nlp-kaggle/bert_base_en_uncased",
     },
     "bert_base_en": {
         "metadata": {
@@ -77,7 +79,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_base_en/1",
+        "kaggle_handle": "gs://keras-nlp-kaggle/bert_base_en",
     },
     "bert_base_zh": {
         "metadata": {
@@ -89,7 +91,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_base_zh/1",
+        "kaggle_handle": "gs://keras-nlp-kaggle/bert_base_zh",
     },
     "bert_base_multi": {
         "metadata": {
@@ -101,7 +103,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_base_multi/1",
+        "kaggle_handle": "gs://keras-nlp-kaggle/bert_base_multi",
     },
     "bert_large_en_uncased": {
         "metadata": {
@@ -114,7 +116,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_large_en_uncased/1",
+        "kaggle_handle": "gs://keras-nlp-kaggle/bert_large_en_uncased",
     },
     "bert_large_en": {
         "metadata": {
@@ -127,7 +129,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_large_en/1",
+        "kaggle_handle": "gs://keras-nlp-kaggle/bert_large_en",
     },
 }
 
@@ -142,6 +144,6 @@ classifier_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_tiny_en_uncased_sst2/1",
+        "kaggle_handle": "gs://keras-nlp-kaggle/bert_tiny_en_uncased_sst2",
     }
 }
