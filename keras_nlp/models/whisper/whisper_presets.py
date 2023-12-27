@@ -474,7 +474,7 @@ backbone_presets = {
             "language_tokens": LANGUAGE_TOKENS,
         },
         "weights_url": "https://storage.googleapis.com/keras-nlp/models/whisper_large_multi_v2/v1/model.h5",
-        "weights_hash": "ca157162ec9c3329a659388528a3af88",
+        "weights_hash": "ccab1c93c5739007868ae73fe025806d",
         "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/whisper_large_multi_v2/v1/vocab.json",
         "vocabulary_hash": "1b87ed3e3ecd9ccfdca74e64cbe81d68",
         "merges_url": "https://storage.googleapis.com/keras-nlp/models/whisper_large_multi_v2/v1/merges.txt",
