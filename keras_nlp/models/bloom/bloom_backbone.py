@@ -41,13 +41,14 @@ class BloomBackbone(Backbone):
         )
 
         # Embed tokens
-        token_embedding = ReversibleEmbedding(
+        token_embedding_layer = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=_bloom_kernel_initializer(stddev=0.02),
             tie_weights=False,
             name="token_embedding",
-        )(token_ids)
+        )
+        token_embedding = token_embedding_layer(token_ids)
 
         x = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon, name="token_embedding_layernorm"
@@ -75,6 +76,24 @@ class BloomBackbone(Backbone):
         )
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
+        self.num_heads = num_heads
         self.hidden_dim = hidden_dim
-        self.max_sequence_length = max_sequence_length
+        self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
+        self.max_sequence_length = max_sequence_length
+        self.token_embedding = token_embedding_layer
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "vocabulary_size": self.vocabulary_size,
+                "num_layers": self.num_layers,
+                "num_heads": self.num_heads,
+                "hidden_dim": self.hidden_dim,
+                "dropout": self.dropout,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
+                "max_sequence_length": self.max_sequence_length,
+            }
+        )
+        return config

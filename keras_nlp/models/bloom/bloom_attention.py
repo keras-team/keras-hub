@@ -31,7 +31,6 @@ class BloomAttention(keras.layers.Layer):
         self.dropout = dropout
         self.kernel_initializer = kernel_initializer
         self.bias_initializer = bias_initializer
-        self.inv_norm_factor = None
 
     def build(self, inputs_shape):
         _, seq_length, hidden_dim = inputs_shape
@@ -80,9 +79,9 @@ class BloomAttention(keras.layers.Layer):
 
     @staticmethod
     def _build_alibi_tensor(seq_length, num_heads):
+        # this function is adopted from fairseq
+        # https://github.com/ofirpress/attention_with_linear_biases/blob/a35aaca144e0eb6b789dfcb46784c4b8e31b7983/fairseq/models/transformer.py#L742
         def get_slopes(n):
-            # this function is adopted from fairseq
-            # https://github.com/ofirpress/attention_with_linear_biases/blob/a35aaca144e0eb6b789dfcb46784c4b8e31b7983/fairseq/models/transformer.py#L742
             def get_slopes_power_of_2(n):
                 start = 2 ** (-(2 ** -(math.log2(n) - 3)))
                 ratio = start
@@ -102,9 +101,7 @@ class BloomAttention(keras.layers.Layer):
         slopes = ops.convert_to_tensor(get_slopes(num_heads), dtype=float)
         slopes = ops.expand_dims(slopes, 1)
 
-        alibi = slopes * ops.expand_dims(
-            ops.arange(seq_length, dtype=float), 0
-        )
+        alibi = slopes * ops.expand_dims(ops.arange(seq_length, dtype=float), 0)
         alibi = ops.expand_dims(alibi, 1)
         alibi = ops.expand_dims(alibi, 0)
 
@@ -184,3 +181,15 @@ class BloomAttention(keras.layers.Layer):
             return attention_output, cache
 
         return attention_output
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_heads": self.num_heads,
+                "dropout": self.dropout,
+                "kernel_initializer": self.kernel_initializer,
+                "bias_initializer": self.bias_initializer,
+            }
+        )
+        return config

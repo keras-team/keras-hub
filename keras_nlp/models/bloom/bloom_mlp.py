@@ -70,3 +70,15 @@ class BloomMLP(keras.layers.Layer):
         x = self._dense_4h_to_h(x)
         hidden_states = self._dropout(x)
         return hidden_states
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "hidden_dim": self.hidden_dim,
+                "dropout": self.dropout,
+                "kernel_initializer": self.kernel_initializer,
+                "bias_initializer": self.bias_initializer,
+            }
+        )
+        return config
