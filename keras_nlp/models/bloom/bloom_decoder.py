@@ -93,8 +93,6 @@ class BloomDecoder(keras.layers.Layer):
         )
         self._mlp.build(decoder_sequence_shape)
 
-        self.built = True
-
     def call(
         self,
         decoder_sequence,
