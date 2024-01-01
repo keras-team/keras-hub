@@ -147,13 +147,6 @@ def check_output(keras_model, hf_model):
     print("KerasNLP output:", keras_model_outputs[0, 0, :10])
     print("HF output:", hf_model_outputs[0, 0, :10])
     print("Difference:", np.mean(keras_model_outputs - hf_model_outputs))
-    rtol = 1e-04
-    atol = 1e-04
-    print(
-        f"all close with relative tolerance = {rtol} and absolute tolerance"
-        f"= {atol}?"
-        f"{np.allclose(keras_model_outputs, hf_model_outputs, rtol=rtol, atol=atol)}"
-    )
 
     # Show the MD5 checksum of the model weights.
     print("Model md5sum: ", get_md5_checksum(f"./{FLAGS.preset}.weights.h5"))
