@@ -64,6 +64,8 @@ class BloomMLP(keras.layers.Layer):
             rate=self.dropout, dtype=self.dtype_policy, name="dropout"
         )
 
+        self.built = True
+
     def call(self, hidden_states):
         x = self._dense_h_to_4h(hidden_states)
         x = self._gelu_function(x)
