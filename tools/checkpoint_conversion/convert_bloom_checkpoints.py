@@ -162,7 +162,7 @@ def main(_):
         FLAGS.preset in PRESET_MAP.keys()
     ), f'Invalid preset {FLAGS.preset}. Must be one of {",".join(PRESET_MAP.keys())}'
 
-    hf_model_name = PRESET_MAP[flags.preset]
+    hf_model_name = PRESET_MAP[FLAGS.preset]
 
     print("\n-> Loading HF model.")
     hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
