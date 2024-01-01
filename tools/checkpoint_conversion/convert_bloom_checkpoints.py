@@ -133,6 +133,7 @@ def check_output(keras_model, hf_model):
     }
 
     hf_model_outputs = hf_model(**hf_model_input)
+    hf_model_outputs = hf_model_outputs.last_hidden_state
     hf_model_outputs = hf_model_outputs.detach().numpy()
 
     keras_model_input = {
