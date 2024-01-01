@@ -151,7 +151,8 @@ def check_output(keras_model, hf_model):
     atol = 1e-04
     print(
         f"all close with relative tolerance = {rtol} and absolute tolerance"
-        f"= {atol} ? {np.allclose(keras_model_outputs, hf_model_outputs)}"
+        f"= {atol}?"
+        f"{np.allclose(keras_model_outputs, hf_model_outputs, rtol=rtol, atol=atol)}"
     )
 
     # Show the MD5 checksum of the model weights.
