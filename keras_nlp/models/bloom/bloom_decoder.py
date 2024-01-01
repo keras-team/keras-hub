@@ -64,7 +64,7 @@ class BloomDecoder(keras.layers.Layer):
         self._pre_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
-            name="pre_attention_layer_norm",
+            name="_pre_attention_layernorm",
         )
         self._pre_attention_layernorm.build(decoder_sequence_shape)
 
