@@ -68,8 +68,6 @@ class BloomAttention(keras.layers.Layer):
         self.built = True
 
     def _split_heads(self, fused_qkv):
-        # in  : [batch_size, seq_length, 3 x hidden_size]
-        # out : 3 * [batch_size, num_heads, seq_length, head_dim]
         batch_size, seq_length, _ = ops.shape(fused_qkv)
         fused_qkv = ops.reshape(
             fused_qkv,

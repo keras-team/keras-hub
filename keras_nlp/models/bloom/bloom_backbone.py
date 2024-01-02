@@ -24,6 +24,53 @@ def _bloom_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.BloomBackbone")
 class BloomBackbone(Backbone):
+    """A Bloom decoder network.
+
+    This network implements a Transformer-based decoder network, BigScience
+    Language Open-science Open-access Multilingual (BLOOM), as descriped in
+    ["BLOOM: A 176B-Parameter Open-Access Multilingual Language Model"](https://arxiv.org/pdf/2211.05100.pdf).
+
+    The default constructor gives a fully customizable, randomly initialized
+    Bloom model with any number of layers, heads, and embedding dimensions. To
+    load preset architectures and weights, use the `from_preset()` constructor.
+
+    Disclaimer: Pre-trained models are provided on an "as is" basis, without
+    warranties or conditions of any kind.
+
+    Args:
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers.
+        num_heads: int. The number of attention heads for each transformer.
+            The hidden size must be divisible by the number of attention heads.
+        hidden_dim: int. The dimensionality of the embeddings and hidden states.
+        dropout: float. Dropout probability for the Transformer decoder.
+        layer_norm_epsilon: float. Epsilon for the layer normalization layers in
+            the transformer decoder.
+        max_sequence_length: int. The maximum sequence length that this decoder
+            can consume.
+
+    Examples:
+    ```python
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+    }
+
+    # Randomly initialized BLOOM decoder with a custom config.
+    model = keras_nlp.models.BloomBackbone(
+        vocabulary_size=10,
+        num_layers=2,
+        num_heads=2,
+        hidden_dim=64,
+        dropout=0.0,
+        layer_norm_epsilon=1e-5,
+        max_sequence_length=128,
+    )
+    model(input_data)
+    ```
+
+    """
+
     def __init__(
         self,
         vocabulary_size,
