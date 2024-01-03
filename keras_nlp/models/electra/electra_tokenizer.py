@@ -12,8 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
+
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers import WordPieceTokenizer
+from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.models.electra.electra_presets import backbone_presets
 
 
 @keras_nlp_export("keras_nlp.models.ElectraTokenizer")
@@ -39,6 +43,12 @@ class ElectraTokenizer(WordPieceTokenizer):
 
     Examples:
     ```python
+    # Loading the tokenizer from preset.
+    tokenizer = keras_nlp.models.DistilBertTokenizer.from_preset(
+        "distil_bert_base_en_uncased",
+    )
+    tokenizer("The quick brown fox jumped.")
+
     # Custom Vocabulary.
     vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     vocab += ["The", "quick", "brown", "fox", "jumped", "."]
@@ -77,3 +87,7 @@ class ElectraTokenizer(WordPieceTokenizer):
         self.sep_token_id = self.token_to_id(sep_token)
         self.pad_token_id = self.token_to_id(pad_token)
         self.mask_token_id = self.token_to_id(mask_token)
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy({**backbone_presets})

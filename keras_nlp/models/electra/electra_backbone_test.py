@@ -54,3 +54,34 @@ class ElectraBackboneTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=ElectraBackbone,
+            preset="electra-small-generator",
+            input_data={
+                "token_ids": ops.array([[101, 1996, 4248, 102]], dtype="int32"),
+                "segment_ids": ops.zeros((1, 4), dtype="int32"),
+                "padding_mask": ops.ones((1, 4), dtype="int32"),
+            },
+            expected_output_shape={
+                "sequence_output": (1, 4, 256),
+                "pooled_output": (1, 256),
+            },
+            # The forward pass from a preset should be stable!
+            # TODO: Add sequence and pooled output trimmed to 5 tokens.
+            expected_partial_output={
+                "sequence_output": (ops.array()),
+                "pooled_output": (ops.array()),
+            },
+        )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in ElectraBackbone.presets:
+            self.run_preset_test(
+                cls=ElectraBackbone,
+                preset=preset,
+                input_data=self.input_data,
+            )
