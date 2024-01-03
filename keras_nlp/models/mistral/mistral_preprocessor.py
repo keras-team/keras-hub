@@ -25,6 +25,92 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras_nlp_export("keras_nlp.models.MistralPreprocessor")
 class MistralPreprocessor(Preprocessor):
+    """An Mistral preprocessing layer which tokenizes and packs inputs.
+
+    This preprocessing layer will do three things:
+
+     1. Tokenize any number of input segments using the `tokenizer`.
+     2. Pack the inputs together using a `keras_nlp.layers.StartEndPacker`.
+       with the appropriate tokens.
+     3. Construct a dictionary with keys `"token_ids"`, and `"padding_mask"`
+       that can be passed directly to `keras_nlp.models.MistralBackbone`.
+
+    This layer can be used directly with `tf.data.Dataset.map` to preprocess
+    string data in the `(x, y, sample_weight)` format used by
+    `keras.Model.fit`.
+
+    Args:
+        tokenizer: A `keras_nlp.models.MistralTokenizer` instance.
+        sequence_length: The length of the packed inputs.
+        add_start_token: If `True`, the preprocessor will prepend the tokenizer
+            start token to each input sequence. Default is `True`.
+        add_end_token: If `True`, the preprocessor will append the tokenizer
+            end token to each input sequence. Default is `False`.
+
+    Call arguments:
+        x: A tensor of single string sequences, or a tuple of multiple
+            tensor sequences to be packed together. Inputs may be batched or
+            unbatched. For single sequences, raw python inputs will be converted
+            to tensors. For multiple sequences, pass tensors directly.
+        y: Any label data. Will be passed through unaltered.
+        sample_weight: Any label weight data. Will be passed through unaltered.
+        sequence_length: Pass to override the configured `sequence_length` of
+            the layer.
+
+    Examples:
+
+    Directly calling the from_preset().
+    ```python
+    preprocessor = keras_nlp.models.MistralPreprocessor.from_preset(
+        "mistral_base_en"
+    )
+
+    # Tokenize and pack a single sentence.
+    preprocessor("The quick brown fox jumped.")
+
+    # Tokenize and a batch of single sentences.
+    preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
+
+    # Preprocess a batch of sentence pairs.
+    # When handling multiple sequences, always convert to tensors first!
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+    preprocessor((first, second))
+    ```
+
+    Mapping with `tf.data.Dataset`.
+    ```python
+    preprocessor = keras_nlp.models.MistralPreprocessor.from_preset(
+        "mistral_base_en"
+    )
+    first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
+    second = tf.constant(["The fox tripped.", "Oh look, a whale."])
+    label = tf.constant([1, 1])
+
+    # Map labeled single sentences.
+    ds = tf.data.Dataset.from_tensor_slices((first, label))
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map unlabeled single sentences.
+    ds = tf.data.Dataset.from_tensor_slices(first)
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map labeled sentence pairs.
+    ds = tf.data.Dataset.from_tensor_slices(((first, second), label))
+    ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Map unlabeled sentence pairs.
+    ds = tf.data.Dataset.from_tensor_slices((first, second))
+
+    # Watch out for tf.data's default unpacking of tuples here!
+    # Best to invoke the `preprocessor` directly in this case.
+    ds = ds.map(
+        lambda first, second: preprocessor(x=(first, second)),
+        num_parallel_calls=tf.data.AUTOTUNE,
+    )
+    ```
+    """
+
     def __init__(
         self,
         tokenizer,
