@@ -31,7 +31,7 @@ PRESET_MAP = {
     "google/electra-base-generator": "google/electra-base-generator",
     "google/electra-small-generator": "google/electra-small-generator",
     "google/electra-base-discriminator": "google/electra-base-discriminator",
-    "google/electra-small-discriminator": "google/electra-small-discriminator"
+    "google/electra-small-discriminator": "google/electra-small-discriminator",
 }
 
 EXTRACT_DIR = "./{}"
@@ -84,6 +84,7 @@ def define_preprocessor(hf_model_name):
     print(f"`{vocab_path}` md5sum: ", get_md5_checksum(vocab_path))
 
     return keras_nlp_preprocessor, hf_tokenizer
+
 
 def convert_checkpoints(keras_nlp_model, hf_model):
     print("\n-> Convert original weights to KerasNLP format.")
@@ -141,72 +142,129 @@ def convert_checkpoints(keras_nlp_model, hf_model):
         )
 
     for i in range(keras_nlp_model.num_layers):
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._self_attention_layer._query_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.query.weight"].transpose(1, 0).reshape(
-                (cfg["hidden_dim"], cfg["num_heads"], -1)).numpy()
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._self_attention_layer._query_dense.kernel.assign(
+            hf_wts[f"encoder.layer.{i}.attention.self.query.weight"]
+            .transpose(1, 0)
+            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._self_attention_layer._query_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.query.bias"].reshape((cfg["num_heads"], -1)).numpy()
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._self_attention_layer._query_dense.bias.assign(
+            hf_wts[f"encoder.layer.{i}.attention.self.query.bias"]
+            .reshape((cfg["num_heads"], -1))
+            .numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._self_attention_layer._key_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.key.weight"].transpose(1, 0).reshape(
-                (cfg["hidden_dim"], cfg["num_heads"], -1)).numpy()
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._self_attention_layer._key_dense.kernel.assign(
+            hf_wts[f"encoder.layer.{i}.attention.self.key.weight"]
+            .transpose(1, 0)
+            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._self_attention_layer._key_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.key.bias"].reshape((cfg["num_heads"], -1)).numpy()
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._self_attention_layer._key_dense.bias.assign(
+            hf_wts[f"encoder.layer.{i}.attention.self.key.bias"]
+            .reshape((cfg["num_heads"], -1))
+            .numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._self_attention_layer._value_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.value.weight"].transpose(1, 0).reshape(
-                (cfg["hidden_dim"], cfg["num_heads"], -1)).numpy()
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._self_attention_layer._value_dense.kernel.assign(
+            hf_wts[f"encoder.layer.{i}.attention.self.value.weight"]
+            .transpose(1, 0)
+            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._self_attention_layer._value_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.value.bias"].reshape((cfg["num_heads"], -1)).numpy()
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._self_attention_layer._value_dense.bias.assign(
+            hf_wts[f"encoder.layer.{i}.attention.self.value.bias"]
+            .reshape((cfg["num_heads"], -1))
+            .numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._self_attention_layer._output_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.attention.output.dense.weight"].transpose(1, 0).reshape(
-                (cfg["num_heads"], -1, cfg["hidden_dim"])).numpy()
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._self_attention_layer._output_dense.kernel.assign(
+            hf_wts[f"encoder.layer.{i}.attention.output.dense.weight"]
+            .transpose(1, 0)
+            .reshape((cfg["num_heads"], -1, cfg["hidden_dim"]))
+            .numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._self_attention_layer._output_dense.bias.assign(
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._self_attention_layer._output_dense.bias.assign(
             hf_wts[f"encoder.layer.{i}.attention.output.dense.bias"].numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._self_attention_layer_norm.gamma.assign(
-            hf_wts[f"encoder.layer.{i}.attention.output.LayerNorm.weight"].numpy()
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._self_attention_layer_norm.gamma.assign(
+            hf_wts[
+                f"encoder.layer.{i}.attention.output.LayerNorm.weight"
+            ].numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._self_attention_layer_norm.beta.assign(
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._self_attention_layer_norm.beta.assign(
             hf_wts[f"encoder.layer.{i}.attention.output.LayerNorm.bias"].numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._feedforward_intermediate_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.intermediate.dense.weight"].transpose(1, 0).numpy()
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._feedforward_intermediate_dense.kernel.assign(
+            hf_wts[f"encoder.layer.{i}.intermediate.dense.weight"]
+            .transpose(1, 0)
+            .numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._feedforward_intermediate_dense.bias.assign(
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._feedforward_intermediate_dense.bias.assign(
             hf_wts[f"encoder.layer.{i}.intermediate.dense.bias"].numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._feedforward_output_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.output.dense.weight"].transpose(1, 0).numpy()
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._feedforward_output_dense.kernel.assign(
+            hf_wts[f"encoder.layer.{i}.output.dense.weight"]
+            .transpose(1, 0)
+            .numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._feedforward_output_dense.bias.assign(
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._feedforward_output_dense.bias.assign(
             hf_wts[f"encoder.layer.{i}.output.dense.bias"].numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._feedforward_layer_norm.gamma.assign(
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._feedforward_layer_norm.gamma.assign(
             hf_wts[f"encoder.layer.{i}.output.LayerNorm.weight"].numpy()
         )
-        keras_nlp_model.get_layer(f"transformer_layer_{i}")._feedforward_layer_norm.beta.assign(
+        keras_nlp_model.get_layer(
+            f"transformer_layer_{i}"
+        )._feedforward_layer_norm.beta.assign(
             hf_wts[f"encoder.layer.{i}.output.LayerNorm.bias"].numpy()
         )
 
-        print(f"\n-> Save KerasNLP model weights to `{FLAGS.preset}.weights.h5`.")
+        print(
+            f"\n-> Save KerasNLP model weights to `{FLAGS.preset}.weights.h5`."
+        )
         keras_nlp_model.save_weights(f"{FLAGS.preset}.weights.h5")
 
         return keras_nlp_model
 
+
 def check_output(
-        keras_nlp_preprocessor,
-        keras_nlp_model,
-        hf_tokenizer,
-        hf_model,
+    keras_nlp_preprocessor,
+    keras_nlp_model,
+    hf_tokenizer,
+    hf_model,
 ):
     print("\n-> Check the outputs.")
-    sample_text = ["The problem of being faster than light is that you can only live in darkness."]
+    sample_text = [
+        "The problem of being faster than light is that you can only live in darkness."
+    ]
 
     # KerasNLP
     keras_nlp_inputs = keras_nlp_preprocessor(tf.constant(sample_text))
@@ -218,14 +276,19 @@ def check_output(
     )
     hf_output = hf_model(**hf_inputs).last_hidden_state
 
-    print("KerasNLP output:", keras_nlp_output.get('sequence_output')[0, 0, :10])
+    print(
+        "KerasNLP output:", keras_nlp_output.get("sequence_output")[0, 0, :10]
+    )
     print("HF output:", hf_output[0, 0, :10])
-    print("Difference:", np.mean(keras_nlp_output.get('sequence_output') - hf_output.detach().numpy()))
+    print(
+        "Difference:",
+        np.mean(
+            keras_nlp_output.get("sequence_output") - hf_output.detach().numpy()
+        ),
+    )
 
     # Show the MD5 checksum of the model weights.
     print("Model md5sum: ", get_md5_checksum(f"./{FLAGS.preset}.weights.h5"))
-
-
 
 
 def main(_):
@@ -252,6 +315,7 @@ def main(_):
         hf_tokenizer,
         hf_model,
     )
+
 
 if __name__ == "__main__":
     flags.mark_flag_as_required("preset")
