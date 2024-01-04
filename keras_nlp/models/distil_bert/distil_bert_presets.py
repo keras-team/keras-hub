@@ -26,7 +26,7 @@ backbone_presets = {
             "path": "distil_bert",
             "model_card": "https://huggingface.co/distilbert-base-uncased",
         },
-        "kaggle_handle": "kaggle://keras/distil_bert/distil_bert_base_en_uncased/1",
+        "kaggle_handle": "kaggle://keras/distil_bert/distil_bert_base_en_uncased/2",
     },
     "distil_bert_base_en": {
         "metadata": {
@@ -40,7 +40,7 @@ backbone_presets = {
             "path": "distil_bert",
             "model_card": "https://huggingface.co/distilbert-base-cased",
         },
-        "kaggle_handle": "kaggle://keras/distil_bert/distil_bert_base_en/1",
+        "kaggle_handle": "kaggle://keras/distil_bert/distil_bert_base_en/2",
     },
     "distil_bert_base_multi": {
         "metadata": {
@@ -52,6 +52,6 @@ backbone_presets = {
             "path": "distil_bert",
             "model_card": "https://huggingface.co/distilbert-base-multilingual-cased",
         },
-        "kaggle_handle": "kaggle://keras/distil_bert/distil_bert_base_multi/1",
+        "kaggle_handle": "kaggle://keras/distil_bert/distil_bert_base_multi/2",
     },
 }

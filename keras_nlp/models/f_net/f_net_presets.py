@@ -25,7 +25,7 @@ backbone_presets = {
             "path": "f_net",
             "model_card": "https://github.com/google-research/google-research/blob/master/f_net/README.md",
         },
-        "kaggle_handle": "kaggle://keras/f_net/f_net_base_en/1",
+        "kaggle_handle": "kaggle://keras/f_net/f_net_base_en/2",
     },
     "f_net_large_en": {
         "metadata": {
@@ -38,6 +38,6 @@ backbone_presets = {
             "path": "f_net",
             "model_card": "https://github.com/google-research/google-research/blob/master/f_net/README.md",
         },
-        "kaggle_handle": "kaggle://keras/f_net/f_net_large_en/1",
+        "kaggle_handle": "kaggle://keras/f_net/f_net_large_en/2",
     },
 }

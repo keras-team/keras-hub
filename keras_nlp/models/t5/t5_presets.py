@@ -25,7 +25,7 @@ backbone_presets = {
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
         },
-        "kaggle_handle": "kaggle://keras/t5/t5_small_multi/1",
+        "kaggle_handle": "kaggle://keras/t5/t5_small_multi/2",
     },
     "t5_base_multi": {
         "metadata": {
@@ -38,7 +38,7 @@ backbone_presets = {
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
         },
-        "kaggle_handle": "kaggle://keras/t5/t5_base_multi/1",
+        "kaggle_handle": "kaggle://keras/t5/t5_base_multi/2",
     },
     "t5_large_multi": {
         "metadata": {
@@ -51,7 +51,7 @@ backbone_presets = {
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
         },
-        "kaggle_handle": "kaggle://keras/t5/t5_large_multi/1",
+        "kaggle_handle": "kaggle://keras/t5/t5_large_multi/2",
     },
     "flan_small_multi": {
         "metadata": {
@@ -64,7 +64,7 @@ backbone_presets = {
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
         },
-        "kaggle_handle": "kaggle://keras/t5/flan_small_multi/1",
+        "kaggle_handle": "kaggle://keras/t5/flan_small_multi/2",
     },
     "flan_base_multi": {
         "metadata": {
@@ -77,7 +77,7 @@ backbone_presets = {
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
         },
-        "kaggle_handle": "kaggle://keras/t5/flan_base_multi/1",
+        "kaggle_handle": "kaggle://keras/t5/flan_base_multi/2",
     },
     "flan_large_multi": {
         "metadata": {
@@ -90,6 +90,6 @@ backbone_presets = {
             "path": "t5",
             "model_card": "https://github.com/google-research/text-to-text-transfer-transformer/blob/main/README.md",
         },
-        "kaggle_handle": "kaggle://keras/t5/flan_large_multi/1",
+        "kaggle_handle": "kaggle://keras/t5/flan_large_multi/2",
     },
 }
