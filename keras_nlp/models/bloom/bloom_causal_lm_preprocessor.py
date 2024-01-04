@@ -15,7 +15,7 @@
 import tensorflow as tf
 from absl import logging
 
-from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.models.bloom.bloom_preprocessor import BloomPreprocessor
 from keras_nlp.utils.keras_utils import (
@@ -24,7 +24,7 @@ from keras_nlp.utils.keras_utils import (
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 
 
-@keras_nlp_export("keras_nlp.models.BloomCausalLMPreprocessor")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class BloomCausalLMPreprocessor(BloomPreprocessor):
     """BLOOM Causal LM preprocessor.
 
