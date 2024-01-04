@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
@@ -23,7 +23,7 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.GPTNeoXPreprocessor")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class GPTNeoXPreprocessor(Preprocessor):
     """GPTNeoX preprocessing layer which tokenizes and packs inputs.
 
