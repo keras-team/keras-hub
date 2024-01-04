@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
@@ -25,7 +24,7 @@ def electra_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.ElectraBackbone")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class ElectraBackbone(Backbone):
     """A Electra encoder network.
 
