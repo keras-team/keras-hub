@@ -58,18 +58,22 @@ class MistralTokenizer(SentencePieceTokenizer):
     """
 
     def __init__(self, proto, **kwargs):
+        self.start_token = "<s>"
+        self.end_token = "</s>"
         super().__init__(proto=proto, **kwargs)
 
-        # Check for necessary special tokens.
-        start_token = "<s>"
-        end_token = "</s>"
-        for token in [start_token, end_token]:
-            if token not in self.get_vocabulary():
-                raise ValueError(
-                    f"Cannot find token `'{token}'` in the provided "
-                    f"`vocabulary`. Please provide `'{token}'` in your "
-                    "`vocabulary` or use a pretrained `vocabulary` name."
-                )
-
-        self.start_token_id = self.token_to_id(start_token)
-        self.end_token_id = self.token_to_id(end_token)
+    def set_proto(self, proto):
+        super().set_proto(proto)
+        if proto is not None:
+            for token in [self.start_token, self.end_token]:
+                if token not in self.get_vocabulary():
+                    raise ValueError(
+                        f"Cannot find token `'{token}'` in the provided "
+                        f"`vocabulary`. Please provide `'{token}'` in your "
+                        "`vocabulary` or use a pretrained `vocabulary` name."
+                    )
+            self.start_token_id = self.token_to_id(self.start_token)
+            self.end_token_id = self.token_to_id(self.end_token)
+        else:
+            self.start_token_id = None
+            self.end_token_id = None
