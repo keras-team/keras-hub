@@ -26,7 +26,7 @@ backbone_presets = {
             "path": "opt",
             "model_card": "https://github.com/facebookresearch/metaseq/blob/main/projects/OPT/model_card.md",
         },
-        "kaggle_handle": "kaggle://keras/opt/opt_125m_en/2",
+        "kaggle_handle": "kaggle://keras/opt/keras/opt_125m_en/2",
     },
     # We skip the 350m checkpoint because it does not match the structure of
     # other checkpoints.
@@ -41,7 +41,7 @@ backbone_presets = {
             "path": "opt",
             "model_card": "https://github.com/facebookresearch/metaseq/blob/main/projects/OPT/model_card.md",
         },
-        "kaggle_handle": "kaggle://keras/opt/opt_1.3b_en/2",
+        "kaggle_handle": "kaggle://keras/opt/keras/opt_1.3b_en/2",
     },
     "opt_2.7b_en": {
         "metadata": {
@@ -54,7 +54,7 @@ backbone_presets = {
             "path": "opt",
             "model_card": "https://github.com/facebookresearch/metaseq/blob/main/projects/OPT/model_card.md",
         },
-        "kaggle_handle": "kaggle://keras/opt/opt_2.7b_en/2",
+        "kaggle_handle": "kaggle://keras/opt/keras/opt_2.7b_en/2",
     },
     "opt_6.7b_en": {
         "metadata": {
@@ -67,6 +67,6 @@ backbone_presets = {
             "path": "opt",
             "model_card": "https://github.com/facebookresearch/metaseq/blob/main/projects/OPT/model_card.md",
         },
-        "kaggle_handle": "kaggle://keras/opt/opt_6.7b_en/2",
+        "kaggle_handle": "kaggle://keras/opt/keras/opt_6.7b_en/2",
     },
 }

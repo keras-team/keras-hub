@@ -25,7 +25,7 @@ backbone_presets = {
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://keras/whisper/whisper_tiny_en/2",
+        "kaggle_handle": "kaggle://keras/whisper/keras/whisper_tiny_en/2",
     },
     "whisper_base_en": {
         "metadata": {
@@ -38,7 +38,7 @@ backbone_presets = {
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://keras/whisper/whisper_base_en/2",
+        "kaggle_handle": "kaggle://keras/whisper/keras/whisper_base_en/2",
     },
     "whisper_small_en": {
         "metadata": {
@@ -51,7 +51,7 @@ backbone_presets = {
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://keras/whisper/whisper_small_en/2",
+        "kaggle_handle": "kaggle://keras/whisper/keras/whisper_small_en/2",
     },
     "whisper_medium_en": {
         "metadata": {
@@ -64,7 +64,7 @@ backbone_presets = {
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://keras/whisper/whisper_medium_en/2",
+        "kaggle_handle": "kaggle://keras/whisper/keras/whisper_medium_en/2",
     },
     "whisper_tiny_multi": {
         "metadata": {
@@ -77,7 +77,7 @@ backbone_presets = {
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://keras/whisper/whisper_tiny_multi/2",
+        "kaggle_handle": "kaggle://keras/whisper/keras/whisper_tiny_multi/2",
     },
     "whisper_base_multi": {
         "metadata": {
@@ -90,7 +90,7 @@ backbone_presets = {
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://keras/whisper/whisper_base_multi/2",
+        "kaggle_handle": "kaggle://keras/whisper/keras/whisper_base_multi/2",
     },
     "whisper_small_multi": {
         "metadata": {
@@ -103,7 +103,7 @@ backbone_presets = {
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://keras/whisper/whisper_small_multi/2",
+        "kaggle_handle": "kaggle://keras/whisper/keras/whisper_small_multi/2",
     },
     "whisper_medium_multi": {
         "metadata": {
@@ -116,7 +116,7 @@ backbone_presets = {
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://keras/whisper/whisper_medium_multi/2",
+        "kaggle_handle": "kaggle://keras/whisper/keras/whisper_medium_multi/2",
     },
     "whisper_large_multi": {
         "metadata": {
@@ -129,7 +129,7 @@ backbone_presets = {
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://keras/whisper/whisper_large_multi/2",
+        "kaggle_handle": "kaggle://keras/whisper/keras/whisper_large_multi/2",
     },
     "whisper_large_multi_v2": {
         "metadata": {
@@ -143,6 +143,6 @@ backbone_presets = {
             "path": "whisper",
             "model_card": "https://github.com/openai/whisper/blob/main/model-card.md",
         },
-        "kaggle_handle": "kaggle://keras/whisper/whisper_large_multi_v2/2",
+        "kaggle_handle": "kaggle://keras/whisper/keras/whisper_large_multi_v2/2",
     },
 }
