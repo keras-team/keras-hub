@@ -25,7 +25,7 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras_nlp_export("keras_nlp.models.MistralPreprocessor")
 class MistralPreprocessor(Preprocessor):
-    """An Mistral preprocessing layer which tokenizes and packs inputs.
+    """A Mistral preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do three things:
 

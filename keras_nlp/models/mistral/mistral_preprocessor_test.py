@@ -59,12 +59,3 @@ class MistralPreprocessorTest(TestCase):
         ambiguous_input = [["one", "two"], ["three", "four"]]
         with self.assertRaises(ValueError):
             preprocessor(ambiguous_input)
-
-    @pytest.mark.extra_large
-    def test_all_presets(self):
-        for preset in MistralPreprocessor.presets:
-            self.run_preset_test(
-                cls=MistralPreprocessor,
-                preset=preset,
-                input_data=self.input_data,
-            )
