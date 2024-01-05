@@ -25,7 +25,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_tiny_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_tiny_en_uncased/2",
     },
     "bert_small_en_uncased": {
         "metadata": {
@@ -38,7 +38,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_small_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_small_en_uncased/2",
     },
     "bert_medium_en_uncased": {
         "metadata": {
@@ -51,7 +51,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_medium_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_medium_en_uncased/2",
     },
     "bert_base_en_uncased": {
         "metadata": {
@@ -64,7 +64,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_base_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_base_en_uncased/2",
     },
     "bert_base_en": {
         "metadata": {
@@ -77,7 +77,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_base_en/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_base_en/2",
     },
     "bert_base_zh": {
         "metadata": {
@@ -89,7 +89,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_base_zh/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_base_zh/2",
     },
     "bert_base_multi": {
         "metadata": {
@@ -101,7 +101,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_base_multi/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_base_multi/2",
     },
     "bert_large_en_uncased": {
         "metadata": {
@@ -114,7 +114,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_large_en_uncased/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_large_en_uncased/2",
     },
     "bert_large_en": {
         "metadata": {
@@ -127,7 +127,7 @@ backbone_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_large_en/2",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_large_en/2",
     },
 }
 
@@ -142,6 +142,6 @@ classifier_presets = {
             "path": "bert",
             "model_card": "https://github.com/google-research/bert/blob/master/README.md",
         },
-        "kaggle_handle": "kaggle://keras/bert/bert_tiny_en_uncased_sst2/3",
+        "kaggle_handle": "kaggle://keras/bert/keras/bert_tiny_en_uncased_sst2/3",
     }
 }

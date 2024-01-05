@@ -40,20 +40,15 @@ def get_file(preset, path):
                 "`from_preset()` requires the `kagglehub` package. "
                 "Please install with `pip install kagglehub`."
             )
-        segments = preset.removeprefix(KAGGLE_PREFIX).split("/")
-        # Insert the kaggle framework into the handle.
-        if len(segments) == 3:
-            org, model, variant = segments
-            kaggle_handle = f"{org}/{model}/keras/{variant}"
-        elif len(segments) == 4:
-            org, model, variant, version = segments
-            kaggle_handle = f"{org}/{model}/keras/{variant}/{version}"
-        else:
+        kaggle_handle = preset.removeprefix(KAGGLE_PREFIX)
+        num_segments = len(kaggle_handle.split("/"))
+        if num_segments not in (4, 5):
             raise ValueError(
-                "Unexpected kaggle preset handle. Kaggle model handles should "
-                "have the form kaggle://{org}/{model}/{variant}[/{version}]. "
-                "For example, 'kaggle://keras/bert/bert_base_en'. "
-                f"Received: preset={preset}"
+                "Unexpected Kaggle preset. Kaggle model handles should have "
+                "the form kaggle://{org}/{model}/keras/{variant}[/{version}]. "
+                "For example, 'kaggle://username/bert/keras/bert_base_en' or "
+                "'kaggle://username/bert/keras/bert_base_en/1' (to specify a "
+                f"version). Received: preset={preset}"
             )
         return kagglehub.model_download(kaggle_handle, path)
     elif preset.startswith(GS_PREFIX):
@@ -75,7 +70,7 @@ def get_file(preset, path):
         raise ValueError(
             "Unknown preset identifier. A preset must be a one of:\n"
             "1) a built in preset identifier like `'bert_base_en'`\n"
-            "2) a Kaggle Models handle like `'kaggle://keras/bert/bert_base_en'`\n"
+            "2) a Kaggle Models handle like `'kaggle://keras/bert/keras/bert_base_en'`\n"
             "3) a path to a local preset directory like `'./bert_base_en`\n"
             "Use `print(cls.presets.keys())` to view all built-in presets for "
             "API symbol `cls`.\n"
