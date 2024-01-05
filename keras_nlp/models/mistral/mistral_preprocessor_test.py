@@ -14,8 +14,6 @@
 
 import os
 
-import pytest
-
 from keras_nlp.models.mistral.mistral_preprocessor import MistralPreprocessor
 from keras_nlp.models.mistral.mistral_tokenizer import MistralTokenizer
 from keras_nlp.tests.test_case import TestCase
