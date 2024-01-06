@@ -56,7 +56,7 @@ class BloomAttention(keras.layers.Layer):
             dtype=self.dtype_policy,
             name="out_dense",
         )
-        self._out_dense.build(inputs_shape)
+        self._output_dense.build(inputs_shape)
 
         self._dropout = keras.layers.Dropout(
             rate=self.dropout, dtype=self.dtype_policy, name="dropout"
