@@ -26,7 +26,6 @@ from keras_nlp.models.bloom.bloom_attention import BloomAttention
 from keras_nlp.models.bloom.bloom_mlp import BloomMLP
 
 
-@keras_nlp_export("keras_nlp.models.BloomDecoder")
 class BloomDecoder(keras.layers.Layer):
     def __init__(
         self,
