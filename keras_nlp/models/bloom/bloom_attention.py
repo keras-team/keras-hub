@@ -40,35 +40,14 @@ class BloomAttention(keras.layers.Layer):
         # Layer-wise attention scaling
         self.inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
 
-        self._query_dense = keras.layers.EinsumDense(
-            equation="btm,mnh->btnh",
-            output_shape=(None, self.num_heads, self.head_dim),
+        self._query_key_value_dense = keras.layers.Dense(
+            3 * hidden_dim,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
             dtype=self.dtype_policy,
-            name="query_dense",
+            name="query_key_value_dense",
         )
-        self._query_dense.build(inputs_shape)
-
-        self._key_dense = keras.layers.EinsumDense(
-            equation="bsm,mnh->bsnh",
-            output_shape=(None, self.num_heads, self.head_dim),
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
-            dtype=self.dtype_policy,
-            name="key_dense",
-        )
-        self._key_dense.build(inputs_shape)
-
-        self._value_dense = keras.layers.EinsumDense(
-            equation="bsm,mnh->bsnh",
-            output_shape=(None, self.num_heads, self.head_dim),
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
-            dtype=self.dtype_policy,
-            name="value_dense",
-        )
-        self._value_dense.build(inputs_shape)
+        self._query_key_value_dense.build(inputs_shape)
 
         self._output_dense = keras.layers.Dense(
             hidden_dim,
@@ -87,6 +66,14 @@ class BloomAttention(keras.layers.Layer):
         )
 
         self.built = True
+
+    def _split_heads(self, fused_qkv):
+        batch_size, seq_length, hidden_dim = ops.shape(fused_qkv)
+        fused_qkv = ops.reshape(
+            fused_qkv,
+            (batch_size, seq_length, self.num_heads, 3, self.head_dim),
+        )
+        return fused_qkv[..., 0, :], fused_qkv[..., 1, :], fused_qkv[..., 2, :]
 
     @staticmethod
     def _build_alibi_tensor(seq_length, num_heads):
@@ -127,9 +114,13 @@ class BloomAttention(keras.layers.Layer):
     ):
         batch_size, seq_length, hidden_dim = ops.shape(hidden_states)
 
-        query = self._query_dense(hidden_states)
-        key = self._key_dense(hidden_states)
-        value = self._value_dense(hidden_states)
+        fused_qkv = self._query_key_value_dense(
+            hidden_states
+        )  # [batch_size, seq_length, 3 x hidden_size]
+
+        (query, key, value) = self._split_heads(
+            fused_qkv
+        )  # [batch_size, seq_length, num_heads, head_dim]
 
         if cache is not None:
             key_cache = cache[:, 0, ...]
