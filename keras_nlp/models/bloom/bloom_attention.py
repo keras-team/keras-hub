@@ -33,7 +33,7 @@ class BloomAttention(keras.layers.Layer):
         self.bias_initializer = bias_initializer
 
     def build(self, inputs_shape):
-        _, seq_length, hidden_dim = inputs_shape
+        batch_size, seq_length, hidden_dim = inputs_shape
 
         self.head_dim = hidden_dim // self.num_heads
 
@@ -68,7 +68,7 @@ class BloomAttention(keras.layers.Layer):
         self.built = True
 
     def _split_heads(self, fused_qkv):
-        batch_size, seq_length, _ = ops.shape(fused_qkv)
+        batch_size, seq_length, hidden_dim = ops.shape(fused_qkv)
         fused_qkv = ops.reshape(
             fused_qkv,
             (batch_size, seq_length, self.num_heads, 3, self.head_dim),
@@ -112,7 +112,7 @@ class BloomAttention(keras.layers.Layer):
         cache=None,
         cache_update_index=None,
     ):
-        batch_size, seq_length, _ = ops.shape(hidden_states)
+        batch_size, seq_length, hidden_dim = ops.shape(hidden_states)
 
         fused_qkv = self._query_key_value_dense(
             hidden_states
