@@ -32,11 +32,6 @@ class BloomMLP(keras.layers.Layer):
         self.kernel_initializer = kernel_initializer
         self.bias_initializer = bias_initializer
 
-    def _gelu_function(self, x):
-        return (
-            x * 0.5 * (1.0 + ops.tanh(0.79788456 * x * (1 + 0.044715 * x * x)))
-        )
-
     def build(self, input_shape):
         if input_shape[-1] != self.hidden_dim:
             raise ValueError("hiddens sizes doesn't match")
@@ -69,7 +64,7 @@ class BloomMLP(keras.layers.Layer):
 
     def call(self, hidden_states):
         x = self._MLP_intermediate_dense(hidden_states)
-        x = self._gelu_function(x)
+        x = keras.activations.gelu(x, approximate=True)
         x = self._MLP_output_dense(x)
         hidden_states = self._dropout(x)
         return hidden_states
