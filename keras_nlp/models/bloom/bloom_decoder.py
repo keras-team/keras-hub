@@ -48,17 +48,11 @@ class BloomDecoder(keras.layers.Layer):
     def build(self, decoder_sequence_shape):
         hidden_dim = decoder_sequence_shape[-1]
         head_dim = int(hidden_dim // self.num_heads)
-        if head_dim == 0:
-            raise ValueError(
-                "Attention `head_dim` computed cannot be zero. "
-                f"The `hidden_dim` value of {hidden_dim} has to be equal to "
-                f"or greater than `num_heads` value of {self.num_heads}."
-            )
 
         if head_dim * self.num_heads != hidden_dim:
             raise ValueError(
-                f"`hidden_dim` must be divisible by num_heads (got `hidden_dim`: {hidden_dim} and `num_heads`:"
-                f" {self.num_heads})."
+                f"`hidden_dim` must be divisible by num_heads (got `hidden_dim`"
+                f": {hidden_dim} and `num_heads`: {self.num_heads})."
             )
 
         self._pre_attention_layernorm = keras.layers.LayerNormalization(
