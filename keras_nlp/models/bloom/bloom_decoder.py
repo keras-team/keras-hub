@@ -22,7 +22,6 @@ from keras_nlp.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
 from keras_nlp.models.bloom.bloom_attention import BloomAttention
-from keras_nlp.models.bloom.bloom_mlp import BloomMLP
 
 
 class BloomDecoder(keras.layers.Layer):
@@ -79,14 +78,29 @@ class BloomDecoder(keras.layers.Layer):
         )
         self._post_attention_layernorm.build(decoder_sequence_shape)
 
-        self._mlp = BloomMLP(
-            hidden_dim=hidden_dim,
-            intermediate_dim=self.intermediate_dim,
-            dropout=self.dropout,
+        self._MLP_intermediate_dense = keras.layers.Dense(
+            self.intermediate_dim,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
             dtype=self.dtype_policy,
-            name="MLP",
+            name="MLP_intermediate_dense",
         )
-        self._mlp.build(decoder_sequence_shape)
+        self._MLP_intermediate_dense.build(decoder_sequence_shape)
+
+        self._MLP_output_dense = keras.layers.Dense(
+            hidden_dim,
+            kernel_initializer=self.kernel_initializer,
+            bias_initializer=self.bias_initializer,
+            dtype=self.dtype_policy,
+            name="MLP_output_dense",
+        )
+        intermediate_shape = list(decoder_sequence_shape)
+        intermediate_shape[-1] = self.intermediate_dim
+        self._MLP_output_dense.build(tuple(intermediate_shape))
+
+        self._dropout = keras.layers.Dropout(
+            rate=self.dropout, dtype=self.dtype_policy, name="dropout"
+        )
 
         self.built = True
 
@@ -126,7 +140,10 @@ class BloomDecoder(keras.layers.Layer):
         x = x + residual
         residual = x
         x = self._post_attention_layernorm(x)
-        x = self._mlp(x)
+        x = self._MLP_intermediate_dense(x)
+        x = keras.activations.gelu(x, approximate=True)
+        x = self._MLP_output_dense(x)
+        x = self._dropout(x)
         x = x + residual
 
         if attention_cache is not None:
