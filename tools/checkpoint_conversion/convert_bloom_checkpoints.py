@@ -47,8 +47,13 @@ def convert_checkpoints(hf_model):
     cfg["num_layers"] = hf_config["n_layer"]
     cfg["num_heads"] = hf_config["n_head"]
     cfg["hidden_dim"] = hf_config["hidden_size"]
+    cfg["intermediate_dim"] = hf_config["hidden_size"]*4
     cfg["dropout"] = hf_config["hidden_dropout"]
     cfg["layer_norm_epsilon"] = hf_config["layer_norm_epsilon"]
+
+    hidden_dim = cfg["hidden_dim"]
+    num_heads = cfg["num_heads"]
+    head_dim = hidden_dim // num_heads
 
     # Intialize Bloom model with the weights.
     keras_model = BloomBackbone(**cfg)
@@ -91,31 +96,48 @@ def convert_checkpoints(hf_model):
 
         # Attention layer.
         attention_layer = decoder_layer._self_attention_layer
-        attention_layer._query_key_value_dense.kernel.assign(
-            hf_wts[f"h.{i}.self_attention.query_key_value.weight"].T
+
+        fused_qkv_kernal = hf_wts[
+            f"h.{i}.self_attention.query_key_value.weight"
+        ].T
+        fused_qkv_kernal = fused_qkv_kernal.view(
+            hidden_dim, num_heads, 3, head_dim
         )
-        attention_layer._query_key_value_dense.bias.assign(
-            hf_wts[f"h.{i}.self_attention.query_key_value.bias"]
-        )
-        attention_layer._out_dense.kernel.assign(
+        query_kernal = fused_qkv_kernal[..., 0, :]
+        key_kernal = fused_qkv_kernal[..., 1, :]
+        value_kernl = fused_qkv_kernal[..., 2, :]
+
+        fused_qkv_bais = hf_wts[f"h.{i}.self_attention.query_key_value.bias"]
+        fused_qkv_bais = fused_qkv_bais.view(num_heads, 3, head_dim)
+        query_bais = fused_qkv_bais[:, 0, :]
+        key_bais = fused_qkv_bais[:, 1, :]
+        value_bais = fused_qkv_bais[:, 2, :]
+
+        attention_layer._query_dense.kernel.assign(query_kernal)
+        attention_layer._query_dense.bias.assign(query_bais)
+        attention_layer._key_dense.kernel.assign(key_kernal)
+        attention_layer._key_dense.bias.assign(key_bais)
+        attention_layer._value_dense.kernel.assign(value_kernl)
+        attention_layer._value_dense.bias.assign(value_bais)
+
+        attention_layer._output_dense.kernel.assign(
             hf_wts[f"h.{i}.self_attention.dense.weight"].T
         )
-        attention_layer._out_dense.bias.assign(
+        attention_layer._output_dense.bias.assign(
             hf_wts[f"h.{i}.self_attention.dense.bias"]
         )
 
-        # MLP layer.
-        mlp_layer = decoder_layer._mlp
-        mlp_layer._dense_h_to_4h.kernel.assign(
+        # MLP.
+        decoder_layer._MLP_intermediate_dense.kernel.assign(
             hf_wts[f"h.{i}.mlp.dense_h_to_4h.weight"].T
         )
-        mlp_layer._dense_h_to_4h.bias.assign(
+        decoder_layer._MLP_intermediate_dense.bias.assign(
             hf_wts[f"h.{i}.mlp.dense_h_to_4h.bias"]
         )
-        mlp_layer._dense_4h_to_h.kernel.assign(
+        decoder_layer._MLP_output_dense.kernel.assign(
             hf_wts[f"h.{i}.mlp.dense_4h_to_h.weight"].T
         )
-        mlp_layer._dense_4h_to_h.bias.assign(
+        decoder_layer._MLP_output_dense.bias.assign(
             hf_wts[f"h.{i}.mlp.dense_4h_to_h.bias"]
         )
 
