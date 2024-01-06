@@ -49,12 +49,12 @@ class BloomAttention(keras.layers.Layer):
         )
         self._query_key_value_dense.build(inputs_shape)
 
-        self._out_dense = keras.layers.Dense(
+        self._output_dense = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
             dtype=self.dtype_policy,
-            name="out_dense",
+            name="output_dense",
         )
         self._output_dense.build(inputs_shape)
 
@@ -172,7 +172,7 @@ class BloomAttention(keras.layers.Layer):
             [batch_size, seq_length, self.num_heads * self.head_dim],
         )  # [batch_size, query_length, hidden_dim]
 
-        attention_output = self._out_dense(attention_output)
+        attention_output = self._output_dense(attention_output)
         attention_output = self._dropout(attention_output)
 
         if cache is not None:
