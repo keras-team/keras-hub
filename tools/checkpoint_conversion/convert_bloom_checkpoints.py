@@ -47,7 +47,7 @@ def convert_checkpoints(hf_model):
     cfg["num_layers"] = hf_config["n_layer"]
     cfg["num_heads"] = hf_config["n_head"]
     cfg["hidden_dim"] = hf_config["hidden_size"]
-    cfg["intermediate_dim"] = hf_config["hidden_size"]*4
+    cfg["intermediate_dim"] = hf_config["hidden_size"] * 4
     cfg["dropout"] = hf_config["hidden_dropout"]
     cfg["layer_norm_epsilon"] = hf_config["layer_norm_epsilon"]
 
