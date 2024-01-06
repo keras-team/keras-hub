@@ -19,6 +19,7 @@ class BloomMLP(keras.layers.Layer):
     def __init__(
         self,
         hidden_dim,
+        intermediate_dim,
         dropout=0.0,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
@@ -26,6 +27,7 @@ class BloomMLP(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.kernel_initializer = kernel_initializer
         self.bias_initializer = bias_initializer
@@ -39,26 +41,25 @@ class BloomMLP(keras.layers.Layer):
         if input_shape[-1] != self.hidden_dim:
             raise ValueError("hiddens sizes doesn't match")
 
-        self._dense_h_to_4h = keras.layers.Dense(
-            4 * self.hidden_dim,
+        self._MLP_intermediate_dense = keras.layers.Dense(
+            self.intermediate_dim,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
             dtype=self.dtype_policy,
-            name="dense_h_to_4h",
+            name="MLP_intermediate_dense",
         )
-        self._dense_h_to_4h.build(input_shape)
+        self._MLP_intermediate_dense.build(input_shape)
 
-        self._dense_4h_to_h = keras.layers.Dense(
+        self._MLP_output_dense = keras.layers.Dense(
             self.hidden_dim,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
             dtype=self.dtype_policy,
-            name="dense_4h_to_h",
+            name="MLP_output_dense",
         )
-        input_shape_for_dense_4h_to_h = (
-            self._dense_h_to_4h.compute_output_shape(input_shape)
-        )
-        self._dense_4h_to_h.build(input_shape_for_dense_4h_to_h)
+        intermediate_shape = list(input_shape)
+        intermediate_shape[-1] = self.intermediate_dim
+        self._MLP_output_dense.build(tuple(intermediate_shape))
 
         self._dropout = keras.layers.Dropout(
             rate=self.dropout, dtype=self.dtype_policy, name="dropout"
@@ -67,9 +68,9 @@ class BloomMLP(keras.layers.Layer):
         self.built = True
 
     def call(self, hidden_states):
-        x = self._dense_h_to_4h(hidden_states)
+        x = self._MLP_intermediate_dense(hidden_states)
         x = self._gelu_function(x)
-        x = self._dense_4h_to_h(x)
+        x = self._MLP_output_dense(x)
         hidden_states = self._dropout(x)
         return hidden_states
 
@@ -78,6 +79,7 @@ class BloomMLP(keras.layers.Layer):
         config.update(
             {
                 "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
                 "kernel_initializer": self.kernel_initializer,
                 "bias_initializer": self.bias_initializer,

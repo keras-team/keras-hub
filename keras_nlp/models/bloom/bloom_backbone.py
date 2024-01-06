@@ -43,6 +43,8 @@ class BloomBackbone(Backbone):
         num_heads: int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
         hidden_dim: int. The dimensionality of the embeddings and hidden states.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            the MLP network of each transformer 
         dropout: float. Dropout probability for the Transformer decoder.
         layer_norm_epsilon: float. Epsilon for the layer normalization layers in
             the transformer decoder.
@@ -61,7 +63,8 @@ class BloomBackbone(Backbone):
         vocabulary_size=10,
         num_layers=2,
         num_heads=2,
-        hidden_dim=64,
+        hidden_dim=32,
+        intermediate_dim=32*4,
         dropout=0.0,
         layer_norm_epsilon=1e-5,
         max_sequence_length=128,
@@ -77,6 +80,7 @@ class BloomBackbone(Backbone):
         num_layers,
         num_heads,
         hidden_dim,
+        intermediate_dim,
         dropout=0.0,
         layer_norm_epsilon=1e-5,
         max_sequence_length=512,
@@ -104,6 +108,7 @@ class BloomBackbone(Backbone):
         for i in range(num_layers):
             x = BloomDecoder(
                 num_heads=num_heads,
+                intermediate_dim=intermediate_dim,
                 dropout=dropout,
                 layer_norm_epsilon=layer_norm_epsilon,
                 name=f"transformer_layer_{i}",
@@ -125,6 +130,7 @@ class BloomBackbone(Backbone):
         self.num_layers = num_layers
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
         self.max_sequence_length = max_sequence_length
@@ -138,6 +144,7 @@ class BloomBackbone(Backbone):
                 "num_layers": self.num_layers,
                 "num_heads": self.num_heads,
                 "hidden_dim": self.hidden_dim,
+                "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "max_sequence_length": self.max_sequence_length,

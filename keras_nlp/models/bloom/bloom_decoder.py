@@ -30,6 +30,7 @@ class BloomDecoder(keras.layers.Layer):
     def __init__(
         self,
         num_heads,
+        intermediate_dim,
         dropout=0.0,
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
@@ -39,6 +40,7 @@ class BloomDecoder(keras.layers.Layer):
         super().__init__(**kwargs)
 
         self.num_heads = num_heads
+        self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = kernel_initializer
@@ -80,6 +82,7 @@ class BloomDecoder(keras.layers.Layer):
 
         self._mlp = BloomMLP(
             hidden_dim=hidden_dim,
+            intermediate_dim=self.intermediate_dim,
             dropout=self.dropout,
             dtype=self.dtype_policy,
             name="MLP",
@@ -173,6 +176,7 @@ class BloomDecoder(keras.layers.Layer):
         config.update(
             {
                 "num_heads": self.num_heads,
+                "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "kernel_initializer": self.rope_mkernel_initializerax_wavelength,

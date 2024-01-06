@@ -26,6 +26,7 @@ class BloomTest(TestCase):
             "num_layers": 2,
             "num_heads": 4,
             "hidden_dim": 8,
+            "intermediate_dim": 32,
             "max_sequence_length": 10,
         }
         self.input_data = {
