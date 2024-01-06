@@ -43,7 +43,7 @@ class BloomAttention(keras.layers.Layer):
         self._query_dense = keras.layers.EinsumDense(
             equation="btm,mnh->btnh",
             output_shape=(None, self.num_heads, self.head_dim),
-            bias_axes="m",
+            bias_axes="nh",
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
             dtype=self.dtype_policy,
@@ -54,7 +54,7 @@ class BloomAttention(keras.layers.Layer):
         self._key_dense = keras.layers.EinsumDense(
             equation="bsm,mnh->bsnh",
             output_shape=(None, self.num_heads, self.head_dim),
-            bias_axes="m",
+            bias_axes="nh",
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
             dtype=self.dtype_policy,
@@ -65,7 +65,7 @@ class BloomAttention(keras.layers.Layer):
         self._value_dense = keras.layers.EinsumDense(
             equation="bsm,mnh->bsnh",
             output_shape=(None, self.num_heads, self.head_dim),
-            bias_axes="m",
+            bias_axes="nh",
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
             dtype=self.dtype_policy,
