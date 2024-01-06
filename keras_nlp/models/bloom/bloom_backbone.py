@@ -44,7 +44,7 @@ class BloomBackbone(Backbone):
             The hidden size must be divisible by the number of attention heads.
         hidden_dim: int. The dimensionality of the embeddings and hidden states.
         intermediate_dim: int. The output dimension of the first Dense layer in
-            the MLP network of each transformer 
+            the MLP network of each transformer.
         dropout: float. Dropout probability for the Transformer decoder.
         layer_norm_epsilon: float. Epsilon for the layer normalization layers in
             the transformer decoder.
