@@ -150,36 +150,22 @@ class BloomAttention(keras.layers.Layer):
                     f"cache_update_index={cache_update_index}"
                 )
 
-        # query (batch_size, num_heads, query_length, head_dim)
         query = ops.transpose(query, [0, 2, 1, 3])
-        # value (batch_size, num_heads, kv_length, head_dim)
         value = ops.transpose(value, [0, 2, 1, 3])
-        # key   (batch_size, num_heads, head_dim, kv_length)
         key = ops.transpose(key, [0, 2, 3, 1])
 
         alibi = self._build_alibi_tensor(
             seq_length=seq_length, num_heads=self.num_heads
         )
-
-        scores = (
-            ops.matmul(query, key) * self.inv_norm_factor + alibi
-        )  # [batch_size, num_heads, query_length, kv_length]
-
+        scores = ops.matmul(query, key) * self.inv_norm_factor + alibi
         scores = self._softmax(scores, ops.expand_dims(attention_mask, 1))
-
         scores = self._dropout(scores)
-
-        attention_output = ops.matmul(
-            scores, value
-        )  # [batch_size, num_heads, query_length, head_dim]
-
-        attention_output = ops.transpose(
-            attention_output, [0, 2, 1, 3]
-        )  # [batch_size, query_length, num_heads, head_dim]
+        attention_output = ops.matmul(scores, value)
+        attention_output = ops.transpose(attention_output, [0, 2, 1, 3])
         attention_output = ops.reshape(
             attention_output,
             [batch_size, seq_length, self.num_heads * self.head_dim],
-        )  # [batch_size, query_length, hidden_dim]
+        )
 
         attention_output = self._output_dense(attention_output)
         attention_output = self._dropout(attention_output)
