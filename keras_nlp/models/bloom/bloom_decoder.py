@@ -149,9 +149,6 @@ class BloomDecoder(keras.layers.Layer):
         if use_causal_mask:
             batch_size = ops.shape(decoder_sequence)[0]
             input_length = output_length = ops.shape(decoder_sequence)[1]
-            # We need to handle a rectangular causal mask when doing cached
-            # decoding. For generative inference, `decoder_sequence` will
-            # generally be length 1, and `cache` will be the full generation length.
             if attention_cache is not None:
                 input_length = ops.shape(attention_cache)[2]
 
