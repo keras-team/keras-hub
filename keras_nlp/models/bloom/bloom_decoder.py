@@ -198,7 +198,7 @@ class BloomDecoder(keras.layers.Layer):
                 ),
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
-                )
+                ),
             }
         )
         return config
