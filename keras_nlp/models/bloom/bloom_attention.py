@@ -93,12 +93,12 @@ class BloomAttention(keras.layers.Layer):
         self.built = True
 
     @staticmethod
-    def _build_alibi_tensor(seq_length, num_heads):
+    def _build_alibi_tensor(num_heads, seq_length, alibi_bias_max=8):
         # this function is adopted from fairseq
         # https://github.com/ofirpress/attention_with_linear_biases/blob/a35aaca144e0eb6b789dfcb46784c4b8e31b7983/fairseq/models/transformer.py#L742
         def get_slopes(n):
             def get_slopes_power_of_2(n):
-                start = 2 ** (-(2 ** -(math.log2(n) - 3)))
+                start = 2 ** (-(2 ** -(math.log2(n) - math.log2(alibi_bias_max))))
                 ratio = start
                 return [start * ratio**i for i in range(n)]
 
@@ -162,7 +162,7 @@ class BloomAttention(keras.layers.Layer):
         key = ops.transpose(key, [0, 2, 3, 1])
 
         alibi = self._build_alibi_tensor(
-            seq_length=seq_length, num_heads=self.num_heads
+            num_heads=self.num_heads, seq_length=seq_length
         )
 
         scores = (
