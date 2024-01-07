@@ -22,6 +22,7 @@ from keras_nlp.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
 from keras_nlp.models.bloom.bloom_attention import BloomAttention
+from keras_nlp.utils.keras_utils import clone_initializer
 
 
 class BloomDecoder(keras.layers.Layer):
@@ -41,8 +42,8 @@ class BloomDecoder(keras.layers.Layer):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
-        self.kernel_initializer = kernel_initializer
-        self.bias_initializer = bias_initializer
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
 
     def build(self, decoder_sequence_shape):
         hidden_dim = decoder_sequence_shape[-1]
@@ -64,8 +65,8 @@ class BloomDecoder(keras.layers.Layer):
         self._self_attention_layer = BloomAttention(
             num_heads=self.num_heads,
             dropout=self.dropout,
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
             dtype=self.dtype_policy,
             name="self_attention",
         )
@@ -80,8 +81,8 @@ class BloomDecoder(keras.layers.Layer):
 
         self._MLP_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
             dtype=self.dtype_policy,
             name="MLP_intermediate_dense",
         )
@@ -89,8 +90,8 @@ class BloomDecoder(keras.layers.Layer):
 
         self._MLP_output_dense = keras.layers.Dense(
             hidden_dim,
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
             dtype=self.dtype_policy,
             name="MLP_output_dense",
         )

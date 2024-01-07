@@ -15,6 +15,7 @@ import math
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
+from keras_nlp.utils.keras_utils import clone_initializer
 
 
 class BloomAttention(keras.layers.Layer):
@@ -29,8 +30,8 @@ class BloomAttention(keras.layers.Layer):
         super().__init__(**kwargs)
         self.num_heads = num_heads
         self.dropout = dropout
-        self.kernel_initializer = kernel_initializer
-        self.bias_initializer = bias_initializer
+        self.kernel_initializer = keras.initializers.get(kernel_initializer)
+        self.bias_initializer = keras.initializers.get(bias_initializer)
 
     def build(self, inputs_shape):
         batch_size, seq_length, hidden_dim = inputs_shape
@@ -44,8 +45,8 @@ class BloomAttention(keras.layers.Layer):
             equation="btm,mnh->btnh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
             dtype=self.dtype_policy,
             name="query_dense",
         )
@@ -55,8 +56,8 @@ class BloomAttention(keras.layers.Layer):
             equation="bsm,mnh->bsnh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
             dtype=self.dtype_policy,
             name="key_dense",
         )
@@ -66,8 +67,8 @@ class BloomAttention(keras.layers.Layer):
             equation="bsm,mnh->bsnh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
             dtype=self.dtype_policy,
             name="value_dense",
         )
@@ -75,8 +76,8 @@ class BloomAttention(keras.layers.Layer):
 
         self._output_dense = keras.layers.Dense(
             hidden_dim,
-            kernel_initializer=self.kernel_initializer,
-            bias_initializer=self.bias_initializer,
+            kernel_initializer=clone_initializer(self.kernel_initializer),
+            bias_initializer=clone_initializer(self.bias_initializer),
             dtype=self.dtype_policy,
             name="output_dense",
         )
