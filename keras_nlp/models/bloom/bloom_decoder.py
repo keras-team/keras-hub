@@ -98,7 +98,7 @@ class BloomDecoder(keras.layers.Layer):
         intermediate_shape[-1] = self.intermediate_dim
         self._MLP_output_dense.build(tuple(intermediate_shape))
 
-        self._dropout = keras.layers.Dropout(
+        self._dropout_layer = keras.layers.Dropout(
             rate=self.dropout, dtype=self.dtype_policy, name="dropout"
         )
 
@@ -143,7 +143,7 @@ class BloomDecoder(keras.layers.Layer):
         x = self._MLP_intermediate_dense(x)
         x = keras.activations.gelu(x, approximate=True)
         x = self._MLP_output_dense(x)
-        x = self._dropout(x)
+        x = self._dropout_layer(x)
         x = x + residual
 
         if attention_cache is not None:

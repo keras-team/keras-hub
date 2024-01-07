@@ -82,7 +82,7 @@ class BloomAttention(keras.layers.Layer):
         )
         self._output_dense.build(inputs_shape)
 
-        self._dropout = keras.layers.Dropout(
+        self._dropout_layer = keras.layers.Dropout(
             rate=self.dropout, dtype=self.dtype_policy, name="dropout"
         )
         self._softmax = keras.layers.Softmax(
@@ -170,7 +170,7 @@ class BloomAttention(keras.layers.Layer):
 
         scores = self._softmax(scores, ops.expand_dims(attention_mask, 1))
 
-        scores = self._dropout(scores)
+        scores = self._dropout_layer(scores)
 
         attention_output = ops.matmul(
             scores, value
@@ -185,7 +185,7 @@ class BloomAttention(keras.layers.Layer):
         )  # [batch_size, query_length, hidden_dim]
 
         attention_output = self._output_dense(attention_output)
-        attention_output = self._dropout(attention_output)
+        attention_output = self._dropout_layer(attention_output)
 
         if cache is not None:
             return attention_output, cache
