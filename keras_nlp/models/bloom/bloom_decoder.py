@@ -193,8 +193,12 @@ class BloomDecoder(keras.layers.Layer):
                 "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "kernel_initializer": self.rope_mkernel_initializerax_wavelength,
-                "bias_initializer": self.bias_initializer,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                )
             }
         )
         return config

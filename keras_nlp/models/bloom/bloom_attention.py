@@ -199,8 +199,12 @@ class BloomAttention(keras.layers.Layer):
             {
                 "num_heads": self.num_heads,
                 "dropout": self.dropout,
-                "kernel_initializer": self.kernel_initializer,
-                "bias_initializer": self.bias_initializer,
+                "kernel_initializer": keras.initializers.serialize(
+                    self.kernel_initializer
+                ),
+                "bias_initializer": keras.initializers.serialize(
+                    self.bias_initializer
+                )
             }
         )
         return config
