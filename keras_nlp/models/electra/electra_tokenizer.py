@@ -57,19 +57,42 @@ class ElectraTokenizer(WordPieceTokenizer):
     ```
     """
 
-    def __init__(self, vocabulary, lowercase=False, **kwargs):
+    def __init__(
+        self,
+        vocabulary,
+        lowercase=False,
+        **kwargs,
+    ):
         self.cls_token = "[CLS]"
         self.sep_token = "[SEP]"
         self.pad_token = "[PAD]"
         self.mask_token = "[MASK]"
-        super().__init__(vocabulary=vocabulary, lowercase=lowercase, **kwargs)
+        self.unk_token = "[UNK]"
+        super().__init__(
+            vocabulary=vocabulary,
+            lowercase=lowercase,
+            unsplittable_tokens=[
+                self.cls_token,
+                self.sep_token,
+                self.pad_token,
+                self.mask_token,
+                self.unk_token,
+            ],
+            ** kwargs,
+        )
 
     def set_vocabulary(self, vocabulary):
         super().set_vocabulary(vocabulary)
 
         if vocabulary is not None:
             # Check for necessary special tokens.
-            for token in [self.cls_token, self.pad_token, self.sep_token]:
+            for token in [
+                self.cls_token,
+                self.pad_token,
+                self.sep_token,
+                self.mask_token,
+                self.unk_token,
+            ]:
                 if token not in self.vocabulary:
                     raise ValueError(
                         f"Cannot find token `'{token}'` in the provided "
@@ -86,3 +109,11 @@ class ElectraTokenizer(WordPieceTokenizer):
             self.sep_token_id = None
             self.pad_token_id = None
             self.mask_token_id = None
+
+    def get_config(self):
+        config = super().get_config()
+        # In the constructor, we pass the list of special tokens to the
+        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # delete it from the config here.
+        del config["unsplittable_tokens"]
+        return config
