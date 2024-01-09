@@ -78,7 +78,7 @@ class ElectraTokenizer(WordPieceTokenizer):
                 self.mask_token,
                 self.unk_token,
             ],
-            ** kwargs,
+            **kwargs,
         )
 
     def set_vocabulary(self, vocabulary):
