@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import itertools
-
 import tensorflow as tf
 import tree
 
@@ -82,30 +80,18 @@ class GenerativeTask(Task):
 
             @jax.jit
             def compiled_generate_function(inputs, end_token_id, state):
-                (
-                    sampler_variables,
-                    trainable_variables,
-                    non_trainable_variables,
-                ) = state
-                mapping = itertools.chain(
-                    zip(self._sampler.variables, sampler_variables),
-                    zip(self.trainable_variables, trainable_variables),
-                    zip(self.non_trainable_variables, non_trainable_variables),
-                )
+                # The only state we update during generation is sampler state,
+                # all weights are fixed and will not change.
+                mapping = zip(self._sampler.variables, state)
 
                 with keras.StatelessScope(state_mapping=mapping) as scope:
                     outputs = self.generate_step(inputs, end_token_id)
 
                 # Get updated sampler variables from the stateless scope.
-                sampler_variables = []
+                state = []
                 for v in self._sampler.variables:
                     new_v = scope.get_current_value(v)
-                    sampler_variables.append(new_v if new_v is not None else v)
-                state = (
-                    sampler_variables,
-                    trainable_variables,
-                    non_trainable_variables,
-                )
+                    state.append(new_v if new_v is not None else v)
                 return outputs, state
 
             def wrapped_generate_function(
@@ -113,20 +99,15 @@ class GenerativeTask(Task):
                 end_token_id=None,
             ):
                 # Create an explicit tuple of all variable state.
-                state = (
-                    self._sampler.variables,
-                    self.trainable_variables,
-                    self.non_trainable_variables,
-                )
                 inputs = tree.map_structure(ops.convert_to_tensor, inputs)
                 outputs, state = compiled_generate_function(
                     inputs,
                     end_token_id,
-                    state,
+                    self._sampler.variables,
                 )
                 # Only assign the sampler variables (random seeds), as other
                 # model variables should never be updated in generation.
-                for ref_v, v in zip(self._sampler.variables, state[0]):
+                for ref_v, v in zip(self._sampler.variables, state):
                     ref_v.assign(v)
                 return outputs
 
