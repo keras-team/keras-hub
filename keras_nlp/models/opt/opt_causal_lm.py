@@ -241,16 +241,18 @@ class OPTCausalLM(GenerativeTask):
         max_length = ops.shape(token_ids)[1]
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_heads
-        head_dim = self.backbone.hidden_dim // self.backbone.num_heads
+        model_dim = self.backbone.hidden_dim
+        head_dim = model_dim // self.backbone.num_heads
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
         cache = ops.zeros(shape, dtype=self.compute_dtype)
-        # Seed the cache.
-        _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
+        shape = [batch_size, max_length, self.backbone.hidden_dim]
+        hidden_states = ops.zeros(shape, dtype=self.compute_dtype)
         return hidden_states, cache
 
     def generate_step(
         self,
         inputs,
+        prefill=False,
         end_token_id=None,
     ):
         """A compilable generation function for a single batch of inputs.
@@ -269,10 +271,18 @@ class OPTCausalLM(GenerativeTask):
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
         # Create and seed cache with a single forward pass.
         hidden_states, cache = self._build_cache(token_ids)
-        # Compute the lengths of all user inputted tokens ids.
-        row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
-        # Start at the first index that has no user inputted id.
-        index = ops.min(row_lengths)
+
+        if prefill:
+            # Compute the lengths of all user inputted tokens ids.
+            # Start at the first index that has no user inputted id.
+            row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
+            index = ops.min(row_lengths)
+            # Seed the cache.
+            _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
+        else:
+            # If we are not prefilling with the prompt, start the loop at the
+            # first predicted token.
+            index = 1
 
         def next(prompt, cache, index):
             # The cache index is the index of our previous token.

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from functools import partial
+
 import tensorflow as tf
 import tree
 
@@ -47,7 +49,7 @@ class GenerativeTask(Task):
         # Clear the compiled generate function.
         self.generate_function = None
 
-    def generate_step(self):
+    def generate_step(self, end_token_id, prefill):
         """Run generation on a single batch of input."""
         raise NotImplementedError
 
@@ -62,10 +64,11 @@ class GenerativeTask(Task):
 
             def wrapped_generate_function(
                 inputs,
+                prefill=False,
                 end_token_id=None,
             ):
                 with torch.no_grad():
-                    return self.generate_step(inputs, end_token_id)
+                    return self.generate_step(inputs, prefill, end_token_id)
 
             self.generate_function = wrapped_generate_function
         elif config.backend() == "tensorflow" and not self.run_eagerly:
@@ -78,14 +81,18 @@ class GenerativeTask(Task):
         elif config.backend() == "jax" and not self.run_eagerly:
             import jax
 
-            @jax.jit
-            def compiled_generate_function(inputs, end_token_id, state):
+            @partial(jax.jit, static_argnames=["prefill", "end_token_id"])
+            def compiled_generate_function(
+                inputs,
+                prefill,
+                end_token_id,
+                state,
+            ):
                 # The only state we update during generation is sampler state,
                 # all weights are fixed and will not change.
                 mapping = zip(self._sampler.variables, state)
-
                 with keras.StatelessScope(state_mapping=mapping) as scope:
-                    outputs = self.generate_step(inputs, end_token_id)
+                    outputs = self.generate_step(inputs, prefill, end_token_id)
 
                 # Get updated sampler variables from the stateless scope.
                 state = []
@@ -96,12 +103,14 @@ class GenerativeTask(Task):
 
             def wrapped_generate_function(
                 inputs,
+                prefill=False,
                 end_token_id=None,
             ):
                 # Create an explicit tuple of all variable state.
                 inputs = tree.map_structure(ops.convert_to_tensor, inputs)
                 outputs, state = compiled_generate_function(
                     inputs,
+                    prefill,
                     end_token_id,
                     self._sampler.variables,
                 )
@@ -190,6 +199,7 @@ class GenerativeTask(Task):
         self,
         inputs,
         max_length=None,
+        prefill=False,
     ):
         """Generate text given prompt `inputs`.
 
@@ -218,6 +228,11 @@ class GenerativeTask(Task):
                 `preprocessor`. If `preprocessor` is `None`, `inputs` should be
                 should be padded to the desired maximum length and this argument
                 will be ignored.
+            prefill: Optional. bool. If `True`, the output state of fixed
+                prompt in `inputs` computed in a single forward pass, consuming
+                more memory, but speeding generation. If `False`, the output
+                state of the prompt will be computed token-by-token, slowing
+                generation but saving memory. Defaults to `False.
         """
         # Setup our three main passes.
         # 1. Optionally preprocessing strings to dense integer tensors.
@@ -234,7 +249,11 @@ class GenerativeTask(Task):
             )
 
         def generate(x):
-            return generate_function(x, end_token_id=end_token_id)
+            return generate_function(
+                x,
+                prefill=prefill,
+                end_token_id=end_token_id,
+            )
 
         def postprocess(x):
             return self.preprocessor.generate_postprocess(x)
