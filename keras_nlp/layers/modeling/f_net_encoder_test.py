@@ -23,11 +23,11 @@ class FNetEncoderTest(TestCase):
             cls=FNetEncoder,
             init_kwargs={
                 "intermediate_dim": 4,
-                "dropout": 0,
                 "activation": "relu",
                 "layer_norm_epsilon": 1e-5,
                 "kernel_initializer": "HeNormal",
                 "bias_initializer": "Zeros",
+                "dropout": 0.1,
             },
             input_data=random.uniform(shape=(2, 4, 6)),
             expected_output_shape=(2, 4, 6),
