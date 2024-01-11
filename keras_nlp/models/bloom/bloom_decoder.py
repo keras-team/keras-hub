@@ -79,25 +79,25 @@ class BloomDecoder(keras.layers.Layer):
         )
         self._post_attention_layernorm.build(decoder_sequence_shape)
 
-        self._MLP_intermediate_dense = keras.layers.Dense(
+        self._mlp_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
             dtype=self.dtype_policy,
-            name="MLP_intermediate_dense",
+            name="mlp_intermediate_dense",
         )
-        self._MLP_intermediate_dense.build(decoder_sequence_shape)
+        self._mlp_intermediate_dense.build(decoder_sequence_shape)
 
-        self._MLP_output_dense = keras.layers.Dense(
+        self._mlp_output_dense = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
             dtype=self.dtype_policy,
-            name="MLP_output_dense",
+            name="mlp_output_dense",
         )
         intermediate_shape = list(decoder_sequence_shape)
         intermediate_shape[-1] = self.intermediate_dim
-        self._MLP_output_dense.build(tuple(intermediate_shape))
+        self._mlp_output_dense.build(tuple(intermediate_shape))
 
         self._dropout_layer = keras.layers.Dropout(
             rate=self.dropout, dtype=self.dtype_policy, name="dropout"
@@ -141,9 +141,9 @@ class BloomDecoder(keras.layers.Layer):
         x = x + residual
         residual = x
         x = self._post_attention_layernorm(x)
-        x = self._MLP_intermediate_dense(x)
+        x = self._mlp_intermediate_dense(x)
         x = keras.activations.gelu(x, approximate=True)
-        x = self._MLP_output_dense(x)
+        x = self._mlp_output_dense(x)
         x = self._dropout_layer(x)
         x = x + residual
 

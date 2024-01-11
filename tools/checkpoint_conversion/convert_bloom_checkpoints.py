@@ -127,17 +127,17 @@ def convert_checkpoints(hf_model):
             hf_wts[f"h.{i}.self_attention.dense.bias"]
         )
 
-        # MLP.
-        decoder_layer._MLP_intermediate_dense.kernel.assign(
+        # mlp.
+        decoder_layer._mlp_intermediate_dense.kernel.assign(
             hf_wts[f"h.{i}.mlp.dense_h_to_4h.weight"].T
         )
-        decoder_layer._MLP_intermediate_dense.bias.assign(
+        decoder_layer._mlp_intermediate_dense.bias.assign(
             hf_wts[f"h.{i}.mlp.dense_h_to_4h.bias"]
         )
-        decoder_layer._MLP_output_dense.kernel.assign(
+        decoder_layer._mlp_output_dense.kernel.assign(
             hf_wts[f"h.{i}.mlp.dense_4h_to_h.weight"].T
         )
-        decoder_layer._MLP_output_dense.bias.assign(
+        decoder_layer._mlp_output_dense.bias.assign(
             hf_wts[f"h.{i}.mlp.dense_4h_to_h.bias"]
         )
 
