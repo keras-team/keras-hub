@@ -376,12 +376,12 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             if self.unsplittable_tokens is not None:
                 # Get the regex of unsplittable tokens.
                 # the idea here is to pass the unsplittable tokens regex to the
-                # split function as delimiter regex pattern, so the input will be
-                # splitted by them, but also the function will treat each on of them
-                # as one entity that shouldn't be splitted even if they have other
-                # delimiter regex pattern inside them. then pass the unsplittable
-                # tokens regex also as keep delimiter regex pattern, so they will
-                # not be removed.
+                # split function as delimiter regex pattern, so the input will
+                # be splitted by them, but also the function will treat each on
+                # of them as one entity that shouldn't be splitted even if they
+                # have other delimiter regex pattern inside them. then pass the
+                # unsplittable tokens regex also as keep delimiter regex
+                # pattern, so they will not be removed.
                 self.unsplittable_tokens_regex = get_unsplittable_tokens_regex(
                     self.unsplittable_tokens
                 )
