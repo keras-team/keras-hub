@@ -28,6 +28,7 @@ class CachedMultiHeadAttentionTest(TestCase):
             init_kwargs={
                 "num_heads": 2,
                 "key_dim": 4,
+                "dropout": 0.1,
             },
             input_data={
                 "query": random.uniform(shape=(2, 4, 6)),

@@ -37,6 +37,7 @@ class TransformerEncoderTest(TestCase):
                 "layer_norm_epsilon": 1e-05,
                 "kernel_initializer": "HeNormal",
                 "bias_initializer": "Zeros",
+                "dropout": 0.1,
             },
             input_data=random.uniform(shape=(2, 4, 6)),
             expected_output_shape=(2, 4, 6),
