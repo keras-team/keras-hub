@@ -162,10 +162,12 @@ class AlbertClassifier(Task):
             num_classes,
             kernel_initializer=albert_kernel_initializer(),
             activation=activation,
+            dtype=backbone.dtype_policy,
             name="logits",
         )
         self.output_dropout = keras.layers.Dropout(
             dropout,
+            dtype=backbone.dtype_policy,
             name="output_dropout",
         )
 

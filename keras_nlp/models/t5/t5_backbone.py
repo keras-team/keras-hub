@@ -67,7 +67,11 @@ class T5Backbone(Backbone):
             layer normalization layers in the Transformer layers.
         tie_embedding_weights: boolean. If `True`, the weights of the token
             embedding and the weights projecting language model outputs from
-            `hidden_dim`
+            `hidden_dim`.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
     """
 
     def __init__(
@@ -83,6 +87,7 @@ class T5Backbone(Backbone):
         use_gated_activation=True,
         layer_norm_epsilon=1e-06,
         tie_embedding_weights=True,
+        dtype=None,
         **kwargs,
     ):
         # Token embedding layer. This layer is shared by encoder and decoder.
@@ -91,10 +96,12 @@ class T5Backbone(Backbone):
             output_dim=hidden_dim,
             tie_weights=tie_embedding_weights,
             embeddings_initializer=keras.initializers.TruncatedNormal(1.0),
+            dtype=dtype,
             name="token_embedding",
         )
         self.encoder_embedding_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="encoder_embedding_dropout",
         )
         self.encoder_transformer_layers = []
@@ -110,19 +117,23 @@ class T5Backbone(Backbone):
                 num_heads=num_heads,
                 use_gated_activation=use_gated_activation,
                 use_relative_attention_bias=bool(i == 0),
+                dtype=dtype,
                 name=f"transformer_encoder_layer_{i}",
             )
             self.encoder_transformer_layers.append(layer)
         self.encoder_layer_norm = T5LayerNorm(
             epsilon=layer_norm_epsilon,
+            dtype=dtype,
             name="encoder_output_layer_norm",
         )
         self.encoder_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="encoder_output_dropout",
         )
         self.decoder_embedding_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="decoder_embedding_dropout",
         )
         self.decoder_transformer_layers = []
@@ -138,15 +149,18 @@ class T5Backbone(Backbone):
                 num_heads=num_heads,
                 use_gated_activation=use_gated_activation,
                 use_relative_attention_bias=bool(i == 0),
+                dtype=dtype,
                 name=f"transformer_decoder_layer_{i}",
             )
             self.decoder_transformer_layers.append(layer)
         self.decoder_layer_norm = T5LayerNorm(
             epsilon=layer_norm_epsilon,
+            dtype=dtype,
             name="decoder_output_layer_norm",
         )
         self.decoder_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="decoder_output_dropout",
         )
 

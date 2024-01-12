@@ -94,25 +94,34 @@ class XLNetEncoder(keras.layers.Layer):
             key_dim=self.head_dim,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
+            dtype=self.dtype_policy,
             name="rel_attn",
         )
 
         self.layer_norm = keras.layers.LayerNormalization(
-            epsilon=self.layer_norm_epsilon, name="layer_norm_rel_attn"
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="layer_norm_rel_attn",
         )
         self.layer_norm.build(input_shape)
 
-        self.dropout_attn = keras.layers.Dropout(self.dropout)
+        self.dropout_attn = keras.layers.Dropout(
+            self.dropout,
+            dtype=self.dtype_policy,
+        )
 
         # Feed-Forward Part
         self.layer_norm_ff = keras.layers.LayerNormalization(
-            epsilon=self.layer_norm_epsilon, name="layer_norm_ff"
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="layer_norm_ff",
         )
         self.layer_norm_ff.build(input_shape)
 
         self.feedforward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
             name="feedforward_intermediate_dense",
         )
         self.feedforward_intermediate_dense.build(input_shape)
@@ -120,6 +129,7 @@ class XLNetEncoder(keras.layers.Layer):
         self.feedforward_output_dense = keras.layers.Dense(
             self.hidden_dim,
             kernel_initializer=self.kernel_initializer,
+            dtype=self.dtype_policy,
             name="feedforward_output_dense",
         )
         self.feedforward_output_dense.build(
@@ -128,7 +138,10 @@ class XLNetEncoder(keras.layers.Layer):
             )
         )
 
-        self.dropout_ff = keras.layers.Dropout(self.dropout)
+        self.dropout_ff = keras.layers.Dropout(
+            self.dropout,
+            dtype=self.dtype_policy,
+        )
 
         self.activation_function_ff = keras.activations.get(self.activation)
 

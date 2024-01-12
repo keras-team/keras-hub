@@ -52,6 +52,10 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
             consume. The sequence length of the input must be less than
             `max_sequence_length` default value. This determines the variable
             shape for positional embeddings.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Examples:
     ```python

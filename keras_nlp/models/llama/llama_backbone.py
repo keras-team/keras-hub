@@ -58,7 +58,10 @@ class LlamaBackbone(Backbone):
             can consume. If `None`, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
-
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
     """
 
     def __init__(
@@ -73,6 +76,7 @@ class LlamaBackbone(Backbone):
         rope_max_wavelength=10000,
         layer_norm_epsilon=1e-5,
         max_sequence_length=4096,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
@@ -81,6 +85,7 @@ class LlamaBackbone(Backbone):
             output_dim=hidden_dim,
             embeddings_initializer=_llama_kernel_initializer(stddev=0.01),
             tie_weights=False,
+            dtype=dtype,
             name="token_embedding",
         )
         self.transformer_layers = []
@@ -95,12 +100,14 @@ class LlamaBackbone(Backbone):
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
                 kernel_initializer=_llama_kernel_initializer(stddev=0.02),
+                dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
         self.layer_norm = LlamaLayerNorm(
-            name="layer_norm",
+            dtype=dtype,
             epsilon=layer_norm_epsilon,
+            name="layer_norm",
         )
 
         # === Functional Model ===

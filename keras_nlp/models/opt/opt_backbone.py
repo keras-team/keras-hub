@@ -57,6 +57,10 @@ class OPTBackbone(Backbone):
             can consume. If `None`, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Examples:
     ```python
@@ -91,6 +95,7 @@ class OPTBackbone(Backbone):
         intermediate_dim,
         dropout=0.1,
         max_sequence_length=2048,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
@@ -99,6 +104,7 @@ class OPTBackbone(Backbone):
             sequence_length=max_sequence_length,
             embedding_dim=hidden_dim,
             embeddings_initializer=opt_kernel_initializer(),
+            dtype=dtype,
             name="embeddings",
         )
         self.token_embedding = self.embeddings.token_embedding
@@ -112,13 +118,14 @@ class OPTBackbone(Backbone):
                 layer_norm_epsilon=1e-5,
                 normalize_first=True,
                 kernel_initializer=opt_kernel_initializer(),
+                dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
         self.layer_norm = keras.layers.LayerNormalization(
             axis=-1,
             epsilon=1e-5,
-            dtype="float32",
+            dtype=dtype,
             name="layer_norm",
         )
 

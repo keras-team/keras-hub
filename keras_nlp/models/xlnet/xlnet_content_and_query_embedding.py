@@ -85,11 +85,14 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         self.word_embed = keras.layers.Embedding(
             input_dim=self.vocabulary_size,
             output_dim=self.hidden_dim,
+            dtype=self.dtype_policy,
             name="word_embedding",
         )
         self.word_embed.build(input_shape)
-        self.dropout_layer = keras.layers.Dropout(self.dropout)
-
+        self.dropout_layer = keras.layers.Dropout(
+            self.dropout,
+            dtype=self.dtype_policy,
+        )
         super().build(input_shape)
 
     def call(

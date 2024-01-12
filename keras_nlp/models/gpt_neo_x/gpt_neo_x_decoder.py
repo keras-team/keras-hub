@@ -99,18 +99,21 @@ class GPTNeoXDecoder(keras.layers.Layer):
             max_sequence_length=self.max_sequence_length,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            dtype=self.dtype_policy,
             name="self_attention",
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
         self._self_attention_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
             name="self_attention_layer_norm",
         )
         self._self_attention_layer_norm.build(decoder_sequence_shape)
 
         self._self_attention_dropout = keras.layers.Dropout(
             rate=self.dropout,
+            dtype=self.dtype_policy,
             name="self_attention_dropout",
         )
 
@@ -120,6 +123,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            dtype=self.dtype_policy,
             name="feedforward_intermediate_dense",
         )
         self._feedforward_intermediate_dense.build(decoder_sequence_shape)
@@ -128,6 +132,7 @@ class GPTNeoXDecoder(keras.layers.Layer):
             hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            dtype=self.dtype_policy,
             name="feedforward_output_dense",
         )
 
@@ -137,12 +142,14 @@ class GPTNeoXDecoder(keras.layers.Layer):
 
         self._feedforward_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
             name="feedforward_layer_norm",
         )
         self._feedforward_layer_norm.build(decoder_sequence_shape)
 
         self._feedforward_dropout = keras.layers.Dropout(
             rate=self.dropout,
+            dtype=self.dtype_policy,
             name="feedforward_dropout",
         )
         self.built = True

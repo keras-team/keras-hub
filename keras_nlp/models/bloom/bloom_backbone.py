@@ -55,6 +55,10 @@ class BloomBackbone(Backbone):
             the transformer decoder.
         max_sequence_length: int. The maximum sequence length that this decoder
             can consume.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Examples:
     ```python
@@ -93,6 +97,7 @@ class BloomBackbone(Backbone):
         dropout=0.0,
         layer_norm_epsilon=1e-5,
         max_sequence_length=2048,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
@@ -101,10 +106,12 @@ class BloomBackbone(Backbone):
             output_dim=hidden_dim,
             embeddings_initializer=_bloom_kernel_initializer(stddev=0.02),
             tie_weights=False,
+            dtype=dtype,
             name="token_embedding",
         )
         self.embeddings_layer_norm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
+            dtype=dtype,
             name="token_embedding_layernorm",
         )
         self.transformer_layers = []
@@ -114,11 +121,13 @@ class BloomBackbone(Backbone):
                 intermediate_dim=intermediate_dim,
                 dropout=dropout,
                 layer_norm_epsilon=layer_norm_epsilon,
+                dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
         self.layer_norm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
+            dtype=dtype,
             name="final_layernorm",
         )
 

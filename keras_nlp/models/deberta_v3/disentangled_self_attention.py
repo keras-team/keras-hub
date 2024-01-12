@@ -86,6 +86,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
             output_shape=(None, self.num_heads, self.attn_head_size),
             bias_axes="de",
             **self._get_common_kwargs_for_sublayer(use_bias=True),
+            dtype=self.dtype_policy,
             name="query",
         )
         self._query_dense.build(inputs_shape)
@@ -94,6 +95,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
             output_shape=(None, self.num_heads, self.attn_head_size),
             bias_axes="de",
             **self._get_common_kwargs_for_sublayer(use_bias=True),
+            dtype=self.dtype_policy,
             name="key",
         )
         self._key_dense.build(inputs_shape)
@@ -102,17 +104,27 @@ class DisentangledSelfAttention(keras.layers.Layer):
             output_shape=(None, self.num_heads, self.attn_head_size),
             bias_axes="de",
             **self._get_common_kwargs_for_sublayer(use_bias=True),
+            dtype=self.dtype_policy,
             name="value",
         )
         self._value_dense.build(inputs_shape)
 
         # Relative attention.
-        self._position_dropout_layer = keras.layers.Dropout(self.dropout)
+        self._position_dropout_layer = keras.layers.Dropout(
+            self.dropout,
+            dtype=self.dtype_policy,
+        )
 
         self._attn_dropout_layer = keras.layers.Dropout(
-            self.dropout, name="attention_dropout"
+            self.dropout,
+            dtype=self.dtype_policy,
+            name="attention_dropout",
         )
-        self._softmax = keras.layers.Softmax(axis=-1, name="attention_softmax")
+        self._softmax = keras.layers.Softmax(
+            axis=-1,
+            dtype="float32",
+            name="attention_softmax",
+        )
 
         # Output.
         self._output_dense = keras.layers.EinsumDense(
@@ -120,6 +132,7 @@ class DisentangledSelfAttention(keras.layers.Layer):
             output_shape=(None, self.hidden_dim),
             bias_axes="d",
             **self._get_common_kwargs_for_sublayer(use_bias=True),
+            dtype=self.dtype_policy,
             name="attention_output",
         )
         self._output_dense.build(inputs_shape)

@@ -145,12 +145,14 @@ class BertClassifier(Task):
         self.preprocessor = preprocessor
         self.output_dropout = keras.layers.Dropout(
             dropout,
+            dtype=backbone.dtype_policy,
             name="classifier_dropout",
         )
         self.output_dense = keras.layers.Dense(
             num_classes,
             kernel_initializer=bert_kernel_initializer(),
             activation=activation,
+            dtype=backbone.dtype_policy,
             name="logits",
         )
 

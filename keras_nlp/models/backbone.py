@@ -22,7 +22,7 @@ from keras_nlp.utils.python_utils import format_docstring
 
 @keras.saving.register_keras_serializable(package="keras_nlp")
 class Backbone(keras.Model):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, dtype=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._functional_layer_ids = set(
             id(layer) for layer in self._flatten_layers()
@@ -74,8 +74,8 @@ class Backbone(keras.Model):
         self._token_embedding = value
 
     def get_config(self):
-        # Don't chain to super here. The default `get_config()` for functional
-        # models is nested and cannot be passed to our Backbone constructors.
+        # Don't chain to super here. `get_config()` for functional models is
+        # a nested layer config and cannot be passed to Backbone constructors.
         return {
             "name": self.name,
             "trainable": self.trainable,

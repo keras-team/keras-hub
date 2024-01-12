@@ -61,6 +61,10 @@ class GPTNeoXBackbone(Backbone):
             can consume. If `None`, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
     """
 
     def __init__(
@@ -75,6 +79,7 @@ class GPTNeoXBackbone(Backbone):
         rotary_max_wavelength=10000,
         layer_norm_epsilon=1e-5,
         max_sequence_length=512,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
@@ -82,10 +87,12 @@ class GPTNeoXBackbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=_gpt_neo_x_kernel_initializer(stddev=0.01),
+            dtype=dtype,
             name="token_embedding",
         )
         self.embeddings_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="embeddings_dropout",
         )
         self.transformer_layers = []
@@ -100,14 +107,15 @@ class GPTNeoXBackbone(Backbone):
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=gelu_approximate,
                 kernel_initializer=_gpt_neo_x_kernel_initializer(stddev=0.02),
+                dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
         self.layer_norm = keras.layers.LayerNormalization(
-            name="layer_norm",
             axis=-1,
             epsilon=layer_norm_epsilon,
-            dtype="float32",
+            dtype=dtype,
+            name="layer_norm",
         )
 
         # === Functional Model ===

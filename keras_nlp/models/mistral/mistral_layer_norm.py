@@ -32,7 +32,6 @@ class MistralLayerNormalization(keras.layers.Layer):
             trainable=True,
             shape=(self._dim,),
             initializer="ones",
-            dtype=self.compute_dtype,
         )
         self.built = True
 

@@ -61,6 +61,10 @@ class RobertaBackbone(Backbone):
             consume. The sequence length of the input must be less than
             `max_sequence_length` default value. This determines the variable
             shape for positional embeddings.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Examples:
     ```python
@@ -96,6 +100,7 @@ class RobertaBackbone(Backbone):
         intermediate_dim,
         dropout=0.1,
         max_sequence_length=512,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
@@ -104,17 +109,19 @@ class RobertaBackbone(Backbone):
             sequence_length=max_sequence_length,
             embedding_dim=hidden_dim,
             embeddings_initializer=roberta_kernel_initializer(),
+            dtype=dtype,
             name="embeddings",
         )
         self.token_embedding = self.embeddings.token_embedding
         self.embeddings_layer_norm = keras.layers.LayerNormalization(
             axis=-1,
             epsilon=1e-5,  # Original paper uses this epsilon value
-            dtype="float32",
+            dtype=dtype,
             name="embeddings_layer_norm",
         )
         self.embeddings_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="embeddings_dropout",
         )
         self.transformer_layers = []
@@ -126,6 +133,7 @@ class RobertaBackbone(Backbone):
                 dropout=dropout,
                 layer_norm_epsilon=1e-5,
                 kernel_initializer=roberta_kernel_initializer(),
+                dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)

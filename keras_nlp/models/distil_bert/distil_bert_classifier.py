@@ -158,16 +158,19 @@ class DistilBertClassifier(Task):
             hidden_dim,
             activation="relu",
             kernel_initializer=distilbert_kernel_initializer(),
+            dtype=backbone.dtype_policy,
             name="pooled_dense",
         )
         self.output_dropout = keras.layers.Dropout(
             dropout,
+            dtype=backbone.dtype_policy,
             name="output_dropout",
         )
         self.output_dense = keras.layers.Dense(
             num_classes,
             kernel_initializer=distilbert_kernel_initializer(),
             activation=activation,
+            dtype=backbone.dtype_policy,
             name="logits",
         )
 

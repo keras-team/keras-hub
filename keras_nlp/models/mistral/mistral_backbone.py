@@ -64,7 +64,10 @@ class MistralBackbone(Backbone):
             layers in each transformer decoder. Only `sliding_window` number of tokens
             are saved in the cache and used to generate the next token.
             Defaults to `512`.
-        dtype (str, optional): The dtype policy for the mistral model.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Examples:
 
@@ -107,10 +110,10 @@ class MistralBackbone(Backbone):
         layer_norm_epsilon=1e-6,
         sliding_window=512,
         dropout=0,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
-        dtype = kwargs.pop("dtype", keras.backend.floatx())
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,

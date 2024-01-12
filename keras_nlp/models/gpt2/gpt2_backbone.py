@@ -61,6 +61,10 @@ class GPT2Backbone(Backbone):
             can consume. If `None`, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for the models computations and weights. Note that some
+            computations, such as softmax and layer normalization will always
+            be done a float32 precision regardless of dtype.
 
     Example:
     ```python
@@ -95,6 +99,7 @@ class GPT2Backbone(Backbone):
         intermediate_dim,
         dropout=0.1,
         max_sequence_length=1024,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
@@ -102,18 +107,22 @@ class GPT2Backbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=_gpt_2_kernel_initializer(stddev=0.01),
+            dtype=dtype,
             name="token_embedding",
         )
         self.position_embedding = PositionEmbedding(
             initializer=_gpt_2_kernel_initializer(stddev=0.02),
             sequence_length=max_sequence_length,
+            dtype=dtype,
             name="position_embedding",
         )
         self.embeddings_add = keras.layers.Add(
+            dtype=dtype,
             name="embeddings_add",
         )
         self.embeddings_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="embeddings_dropout",
         )
         self.transformer_layers = []
@@ -127,14 +136,15 @@ class GPT2Backbone(Backbone):
                     activation=gelu_approximate,
                     kernel_initializer=_gpt_2_kernel_initializer(stddev=0.02),
                     normalize_first=True,
+                    dtype=dtype,
                     name=f"transformer_layer_{i}",
                 )
             )
         self.layer_norm = keras.layers.LayerNormalization(
-            name="layer_norm",
             axis=-1,
             epsilon=1e-05,
-            dtype="float32",
+            dtype=dtype,
+            name="layer_norm",
         )
 
         # === Functional Model ===

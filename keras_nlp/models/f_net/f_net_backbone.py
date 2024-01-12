@@ -66,6 +66,10 @@ class FNetBackbone(Backbone):
             embeddings.
         num_segments: int. The number of types that the 'segment_ids' input can
             take.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Examples:
     ```python
@@ -99,6 +103,7 @@ class FNetBackbone(Backbone):
         dropout=0.1,
         max_sequence_length=512,
         num_segments=4,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
@@ -106,34 +111,42 @@ class FNetBackbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=f_net_kernel_initializer(),
+            dtype=dtype,
             name="token_embedding",
         )
         self.position_embedding = PositionEmbedding(
             initializer=f_net_kernel_initializer(),
             sequence_length=max_sequence_length,
+            dtype=dtype,
             name="position_embedding",
         )
         self.segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
             output_dim=hidden_dim,
             embeddings_initializer=f_net_kernel_initializer(),
+            dtype=dtype,
             name="segment_embedding",
         )
-        self.embeddings_add = keras.layers.Add()
+        self.embeddings_add = keras.layers.Add(
+            dtype=dtype,
+            name="embeddings_add",
+        )
         self.embeddings_layer_norm = keras.layers.LayerNormalization(
-            name="embeddings_layer_norm",
             axis=-1,
             epsilon=1e-12,
-            dtype="float32",
+            dtype=dtype,
+            name="embeddings_layer_norm",
         )
         self.embedding_projection = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=f_net_kernel_initializer(),
             bias_initializer=f_net_bias_initializer(),
+            dtype=dtype,
             name="embedding_projection",
         )
         self.embeddings_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="embeddings_dropout",
         )
         self.transformer_layers = []
@@ -145,6 +158,7 @@ class FNetBackbone(Backbone):
                 layer_norm_epsilon=1e-12,
                 kernel_initializer=f_net_kernel_initializer(),
                 bias_initializer=f_net_bias_initializer(),
+                dtype=dtype,
                 name=f"f_net_layer_{i}",
             )
             self.transformer_layers.append(layer)
@@ -153,6 +167,7 @@ class FNetBackbone(Backbone):
             kernel_initializer=f_net_kernel_initializer(),
             bias_initializer=f_net_bias_initializer(),
             activation="tanh",
+            dtype=dtype,
             name="pooled_dense",
         )
 

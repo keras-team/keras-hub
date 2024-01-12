@@ -57,7 +57,9 @@ class RelativeEmbedding(keras.layers.Layer):
             name="rel_embedding",
         )
         self.layer_norm = keras.layers.LayerNormalization(
-            epsilon=layer_norm_epsilon, name="rel_embeddings_layer_norm"
+            epsilon=layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="rel_embeddings_layer_norm",
         )
 
     def call(self, inputs):

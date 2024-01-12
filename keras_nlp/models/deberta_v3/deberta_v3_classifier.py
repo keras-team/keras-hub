@@ -168,22 +168,26 @@ class DebertaV3Classifier(Task):
         self.preprocessor = preprocessor
         self.pooled_dropout = keras.layers.Dropout(
             dropout,
+            dtype=backbone.dtype_policy,
             name="pooled_dropout",
         )
         hidden_dim = hidden_dim or backbone.hidden_dim
         self.pooled_dense = keras.layers.Dense(
             hidden_dim,
             activation=keras.activations.gelu,
+            dtype=backbone.dtype_policy,
             name="pooled_dense",
         )
         self.output_dropout = keras.layers.Dropout(
             backbone.dropout,
+            dtype=backbone.dtype_policy,
             name="classifier_dropout",
         )
         self.output_dense = keras.layers.Dense(
             num_classes,
             kernel_initializer=deberta_kernel_initializer(),
             activation=activation,
+            dtype=backbone.dtype_policy,
             name="logits",
         )
 
