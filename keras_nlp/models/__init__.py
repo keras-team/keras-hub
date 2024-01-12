@@ -90,6 +90,7 @@ from keras_nlp.models.gpt_neo_x.gpt_neo_x_preprocessor import (
 )
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
 from keras_nlp.models.llama.llama_backbone import LlamaBackbone
+from keras_nlp.models.llama.llama_tokenizer import LlamaTokenizer
 from keras_nlp.models.mistral.mistral_backbone import MistralBackbone
 from keras_nlp.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.models.opt.opt_causal_lm import OPTCausalLM
