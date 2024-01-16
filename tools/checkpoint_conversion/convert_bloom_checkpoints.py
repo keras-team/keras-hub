@@ -27,8 +27,8 @@ from checkpoint_conversion_utils import get_md5_checksum  # noqa: E402
 from huggingface_hub import snapshot_download  # noqa: E402
 
 import keras_nlp  # noqa: E402
-from keras_nlp.models.bloom.bloom_backbone import BloomBackbone  # noqa: E402
-from keras_nlp.models.bloom.bloom_tokenizer import BloomTokenizer  # noqa: E402
+from keras_nlp.models import BloomBackbone  # noqa: E402
+from keras_nlp.models import BloomTokenizer  # noqa: E402
 
 FLAGS = flags.FLAGS
 

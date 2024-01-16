@@ -36,6 +36,7 @@ from keras_nlp.models.bert.bert_masked_lm_preprocessor import (
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.models.bloom.bloom_backbone import BloomBackbone
+from keras_nlp.models.bloom.bloom_tokenizer import BloomTokenizer
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_classifier import (
     DebertaV3Classifier,
