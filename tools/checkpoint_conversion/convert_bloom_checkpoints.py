@@ -12,14 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-import torch
-import transformers
-from absl import app
-from absl import flags
-from checkpoint_conversion_utils import get_md5_checksum
+import json
+import os
 
-from keras_nlp.models.bloom.bloom_backbone import BloomBackbone
+os.environ["KERAS_BACKEND"] = "torch"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+import numpy as np  # noqa: E402
+import torch  # noqa: E402
+import transformers  # noqa: E402
+from absl import app  # noqa: E402
+from absl import flags  # noqa: E402
+from checkpoint_conversion_utils import get_md5_checksum  # noqa: E402
+from huggingface_hub import snapshot_download  # noqa: E402
+
+import keras_nlp  # noqa: E402
+from keras_nlp.models.bloom.bloom_backbone import BloomBackbone  # noqa: E402
+from keras_nlp.models.bloom.bloom_tokenizer import BloomTokenizer  # noqa: E402
 
 FLAGS = flags.FLAGS
 
@@ -32,31 +41,58 @@ PRESET_MAP = {
     "bloom_extra_large": "bigscience/bloom",
 }
 
+EXTRACT_DIR = "./model"
+
+
 flags.DEFINE_string(
     "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
 )
 flags.mark_flag_as_required("preset")
 
 
-def convert_checkpoints(hf_model):
+def download_hf_model(hf_model_name):
+    hf_model_dir = snapshot_download(
+        repo_id=hf_model_name,
+        allow_patterns=["*.json", "*.bin"],
+        ignore_patterns=["onnx/*"],
+        local_dir=EXTRACT_DIR,
+    )
+
+    return hf_model_dir
+
+
+def convert_model(hf_model):
     # get huggingface model configuration.
     hf_config = hf_model.config.to_dict()
 
-    cfg = {}
-    cfg["vocabulary_size"] = hf_config["vocab_size"]
-    cfg["num_layers"] = hf_config["n_layer"]
-    cfg["num_heads"] = hf_config["n_head"]
-    cfg["hidden_dim"] = hf_config["hidden_size"]
-    cfg["intermediate_dim"] = hf_config["hidden_size"] * 4
-    cfg["dropout"] = hf_config["hidden_dropout"]
-    cfg["layer_norm_epsilon"] = hf_config["layer_norm_epsilon"]
+    kwargs = {}
+    kwargs["vocabulary_size"] = hf_config["vocab_size"]
+    kwargs["num_layers"] = hf_config["n_layer"]
+    kwargs["num_heads"] = hf_config["n_head"]
+    kwargs["hidden_dim"] = hf_config["hidden_size"]
+    kwargs["intermediate_dim"] = hf_config["hidden_size"] * 4
+    kwargs["dropout"] = hf_config["hidden_dropout"]
+    kwargs["layer_norm_epsilon"] = hf_config["layer_norm_epsilon"]
 
-    hidden_dim = cfg["hidden_dim"]
-    num_heads = cfg["num_heads"]
+    return BloomBackbone(**kwargs)
+
+
+def convert_tokenizer(hf_model_dir):
+    tokenizer_file_path = os.path.join(hf_model_dir, "tokenizer.json")
+    with open(tokenizer_file_path) as tokenizer_file:
+        hf_tokenizer = json.load(tokenizer_file)
+
+    vocab = hf_tokenizer["model"]["vocab"]
+    merges = hf_tokenizer["model"]["merges"]
+
+    return BloomTokenizer(vocabulary=vocab, merges=merges)
+
+
+def convert_checkpoints(keras_model, hf_model):
+    hidden_dim = keras_model.hidden_dim
+    num_heads = keras_model.num_heads
     head_dim = hidden_dim // num_heads
-
-    # Intialize Bloom model with the weights.
-    keras_model = BloomBackbone(**cfg)
+    num_layers = keras_model.num_layers
 
     # get huggingface model weights.
     hf_wts = hf_model.state_dict()
@@ -78,7 +114,7 @@ def convert_checkpoints(hf_model):
     keras_model.get_layer("final_layernorm").beta.assign(hf_wts["ln_f.bias"])
 
     # Decoder layers.
-    for i in range(cfg["num_layers"]):
+    for i in range(num_layers):
         decoder_layer = keras_model.get_layer(f"transformer_layer_{i}")
         # LayrNorm.
         decoder_layer._pre_attention_layernorm.gamma.assign(
@@ -148,7 +184,14 @@ def convert_checkpoints(hf_model):
     return keras_model
 
 
-def check_output(keras_model, hf_model):
+def validate_output(
+    hf_model,
+    keras_model,
+    hf_tokenizer,
+    keras_tokenizer,
+):
+    print("⏺ checking Backbone output")
+
     hf_model_input = {
         "input_ids": torch.tensor([[59414, 15, 2670, 35433, 632, 207595]]),
         "attention_mask": torch.tensor([[1, 1, 1, 1, 1, 1]]),
@@ -166,29 +209,57 @@ def check_output(keras_model, hf_model):
     keras_model_outputs = keras_model.predict(keras_model_input)
 
     # Comparing the outputs.
-    print("KerasNLP output:", keras_model_outputs[0, 0, :10])
-    print("HF output:", hf_model_outputs[0, 0, :10])
-    print("Difference:", np.mean(keras_model_outputs - hf_model_outputs))
+    print("🔶 KerasNLP output:", keras_model_outputs[0, 0, :10])
+    print("🔶 HF output:", hf_model_outputs[0, 0, :10])
+    print("🔶 Difference:", np.mean(keras_model_outputs - hf_model_outputs))
+
+    print("⏺ checking tokenizer output")
+
+    input_str = ["the quick brown fox ran, galloped and jumped."]
+    token_ids_keras = keras_tokenizer(input_str)
+    token_ids_hf = hf_tokenizer(input_str)
+
+    print("🔶 KerasNLP output:", token_ids_keras)
+    print("🔶 HF output:", token_ids_hf)
 
     # Show the MD5 checksum of the model weights.
     print("Model md5sum: ", get_md5_checksum(f"./{FLAGS.preset}.weights.h5"))
 
 
 def main(_):
+    preset = FLAGS.preset
+
     assert (
-        FLAGS.preset in PRESET_MAP.keys()
-    ), f'Invalid preset {FLAGS.preset}. Must be one of {",".join(PRESET_MAP.keys())}'
+        preset in PRESET_MAP.keys()
+    ), f'Invalid preset {preset}. Must be one of {",".join(PRESET_MAP.keys())}'
 
-    hf_model_name = PRESET_MAP[FLAGS.preset]
+    print(f"✅ Coverting {preset}")
 
-    print("\n-> Loading HF model.")
-    hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
+    hf_model_name = PRESET_MAP[preset]
+    hf_model_dir = download_hf_model(hf_model_name)
+    print("✅ Huggingface model downloaded from hub")
 
-    print("\n-> Converting model checkpoint.")
-    keras_model = convert_checkpoints(hf_model)
+    hf_model = transformers.BloomModel.from_pretrained(hf_model_dir)
+    hf_tokenizer = transformers.BloomTokenizerFast.from_pretrained(hf_model_dir)
+    print("✅ Huggingface model loaded")
 
-    print("\n-> Checking keras model output.")
-    check_output(keras_model, hf_model)
+    keras_model = convert_model(hf_model)
+    keras_tokenizer = convert_tokenizer(hf_model_dir)
+    print("✅ Keras model loaded")
+
+    validate_output(
+        hf_model,
+        keras_model,
+        hf_tokenizer,
+        keras_tokenizer,
+    )
+    print("✅ Numerics validated")
+
+    keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
+    keras_nlp.src.utils.preset_utils.save_to_preset(
+        keras_tokenizer, preset, config_filename="tokenizer.json"
+    )
+    print("✅ Preset saved")
 
 
 if __name__ == "__main__":
