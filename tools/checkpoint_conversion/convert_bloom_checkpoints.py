@@ -88,7 +88,7 @@ def convert_tokenizer(hf_model_dir):
     return BloomTokenizer(vocabulary=vocab, merges=merges)
 
 
-def convert_checkpoints(keras_model, hf_model):
+def convert_weights(keras_model, hf_model):
     hidden_dim = keras_model.hidden_dim
     num_heads = keras_model.num_heads
     head_dim = hidden_dim // num_heads
@@ -177,13 +177,6 @@ def convert_checkpoints(keras_model, hf_model):
             hf_wts[f"h.{i}.mlp.dense_4h_to_h.bias"]
         )
 
-    # Save the model.
-    print(f"\n-> Saving KerasNLP model weights to `{FLAGS.preset}.weights.h5`.")
-    keras_model.save_weights(f"{FLAGS.preset}.weights.h5")
-
-    return keras_model
-
-
 def validate_output(
     hf_model,
     keras_model,
@@ -222,9 +215,6 @@ def validate_output(
     print("🔶 KerasNLP output:", token_ids_keras)
     print("🔶 HF output:", token_ids_hf)
 
-    # Show the MD5 checksum of the model weights.
-    print("Model md5sum: ", get_md5_checksum(f"./{FLAGS.preset}.weights.h5"))
-
 
 def main(_):
     preset = FLAGS.preset
@@ -246,6 +236,9 @@ def main(_):
     keras_model = convert_model(hf_model)
     keras_tokenizer = convert_tokenizer(hf_model_dir)
     print("✅ Keras model loaded")
+
+    convert_weights(keras_model, hf_model)
+    print("✅ Weights converted")
 
     validate_output(
         hf_model,
