@@ -23,7 +23,6 @@ import torch  # noqa: E402
 import transformers  # noqa: E402
 from absl import app  # noqa: E402
 from absl import flags  # noqa: E402
-from checkpoint_conversion_utils import get_md5_checksum  # noqa: E402
 from huggingface_hub import snapshot_download  # noqa: E402
 
 import keras_nlp  # noqa: E402
@@ -177,6 +176,7 @@ def convert_weights(keras_model, hf_model):
             hf_wts[f"h.{i}.mlp.dense_4h_to_h.bias"]
         )
 
+
 def validate_output(
     hf_model,
     keras_model,
@@ -184,7 +184,7 @@ def validate_output(
     keras_tokenizer,
 ):
     print("⏺ checking Tokenizer and Backbone outputs")
-    
+
     input_str = ["the quick brown fox ran, galloped and jumped."]
 
     # KerasNLP
@@ -205,6 +205,7 @@ def validate_output(
     print("🔶 KerasNLP output:", keras_model_outputs[0, 0, :10])
     print("🔶 HF output:", hf_model_outputs[0, 0, :10])
     print("🔶 Difference:", np.mean(keras_model_outputs - hf_model_outputs))
+
 
 def main(_):
     preset = FLAGS.preset
