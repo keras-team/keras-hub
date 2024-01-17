@@ -38,7 +38,7 @@ PRESET_MAP = {
     "bloom_1.7b_multi": "bigscience/bloom-1b7",
     "bloom_3b_multi": "bigscience/bloom-3b",
     "bloom_7b_multi": "bigscience/bloom-7b1",
-    "bloom_multi": "bigscience/bloom",
+    "bloom_176b_multi": "bigscience/bloom",
 }
 
 EXTRACT_DIR = "./model"
