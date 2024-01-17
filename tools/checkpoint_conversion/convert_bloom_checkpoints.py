@@ -188,8 +188,8 @@ def validate_output(
     input_str = ["the quick brown fox ran, galloped and jumped."]
 
     # KerasNLP
-    token_ids = keras_tokenizer(input_str)
-    padding_mask = token_ids != 0
+    token_ids = torch.tensor(keras_tokenizer(input_str))
+    padding_mask = token_ids != 3
     keras_model_input = {
         "token_ids": token_ids,
         "padding_mask": padding_mask,
