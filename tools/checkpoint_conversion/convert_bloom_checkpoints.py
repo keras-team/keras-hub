@@ -183,38 +183,28 @@ def validate_output(
     hf_tokenizer,
     keras_tokenizer,
 ):
-    print("⏺ checking Backbone output")
+    print("⏺ checking Tokenizer and Backbone outputs")
+    
+    input_str = ["the quick brown fox ran, galloped and jumped."]
 
-    hf_model_input = {
-        "input_ids": torch.tensor([[59414, 15, 2670, 35433, 632, 207595]]),
-        "attention_mask": torch.tensor([[1, 1, 1, 1, 1, 1]]),
-    }
-
-    hf_model_outputs = hf_model(**hf_model_input)
-    hf_model_outputs = hf_model_outputs.last_hidden_state
-    hf_model_outputs = hf_model_outputs.detach().numpy()
-
+    # KerasNLP
+    token_ids = keras_tokenizer(input_str)
+    padding_mask = token_ids != 0
     keras_model_input = {
-        "token_ids": torch.tensor([[59414, 15, 2670, 35433, 632, 207595]]),
-        "padding_mask": torch.tensor([[1, 1, 1, 1, 1, 1]]),
+        "token_ids": token_ids.to_tensor(),
+        "padding_mask": padding_mask.to_tensor(),
     }
-
     keras_model_outputs = keras_model.predict(keras_model_input)
+
+    hf_model_input = hf_tokenizer(input_str, return_tensors="pt")
+
+    hf_model_outputs = hf_model(**hf_model_input).last_hidden_state
+    hf_model_outputs = hf_model_outputs.detach().numpy()
 
     # Comparing the outputs.
     print("🔶 KerasNLP output:", keras_model_outputs[0, 0, :10])
     print("🔶 HF output:", hf_model_outputs[0, 0, :10])
     print("🔶 Difference:", np.mean(keras_model_outputs - hf_model_outputs))
-
-    print("⏺ checking tokenizer output")
-
-    input_str = ["the quick brown fox ran, galloped and jumped."]
-    token_ids_keras = keras_tokenizer(input_str)
-    token_ids_hf = hf_tokenizer(input_str)
-
-    print("🔶 KerasNLP output:", token_ids_keras)
-    print("🔶 HF output:", token_ids_hf)
-
 
 def main(_):
     preset = FLAGS.preset
