@@ -33,12 +33,12 @@ from keras_nlp.models import BloomTokenizer  # noqa: E402
 FLAGS = flags.FLAGS
 
 PRESET_MAP = {
-    "bloom_tiny": "bigscience/bloom-560m",
-    "bloom_extra_small": "bigscience/bloom-1b1",
-    "bloom_small": "bigscience/bloom-1b7",
-    "bloom_meduim": "bigscience/bloom-3b",
-    "bloom_large": "bigscience/bloom-7b1",
-    "bloom_extra_large": "bigscience/bloom",
+    "bloom_560m_multi": "bigscience/bloom-560m",
+    "bloom_1.1b_multi": "bigscience/bloom-1b1",
+    "bloom_1.7b_multi": "bigscience/bloom-1b7",
+    "bloom_3b_multi": "bigscience/bloom-3b",
+    "bloom_7b_multi": "bigscience/bloom-7b1",
+    "bloom_multi": "bigscience/bloom",
 }
 
 EXTRACT_DIR = "./model"
