@@ -191,8 +191,8 @@ def validate_output(
     token_ids = keras_tokenizer(input_str)
     padding_mask = token_ids != 0
     keras_model_input = {
-        "token_ids": torch.tensor(token_ids),
-        "padding_mask": torch.tensor(padding_mask),
+        "token_ids": token_ids,
+        "padding_mask": padding_mask,
     }
     keras_model_outputs = keras_model.predict(keras_model_input)
 
