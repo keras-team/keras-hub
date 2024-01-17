@@ -50,7 +50,7 @@ class BloomTokenizer(BytePairTokenizer):
 
     ```python
     # Unbatched input.
-    tokenizer = keras_nlp.models.BloomTokenizer.from_preset("gpt2_base_en")
+    tokenizer = keras_nlp.models.BloomTokenizer.from_preset("bloom_560m_multi")
     tokenizer("The quick brown fox jumped.")
 
     # Batched input.
