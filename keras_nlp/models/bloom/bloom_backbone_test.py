@@ -19,7 +19,7 @@ from keras_nlp.models.bloom.bloom_backbone import BloomBackbone
 from keras_nlp.tests.test_case import TestCase
 
 
-class BloomTest(TestCase):
+class BloomBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
             "vocabulary_size": 10,
