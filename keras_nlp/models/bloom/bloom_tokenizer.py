@@ -15,7 +15,7 @@
 import copy
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
+from keras_nlp.models.bloom.bloom_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 from keras_nlp.utils.python_utils import classproperty
 
