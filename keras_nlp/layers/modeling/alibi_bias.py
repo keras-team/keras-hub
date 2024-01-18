@@ -54,7 +54,8 @@ class AlibiBias(keras.layers.Layer):
 
     Examples:
     ```python
-    # create a simple embedding layer with sinusoidal positional encoding
+    # create a simple layer that takes token embeddings as input and generates 
+    # the alibi tensor
     seq_len = 100
     vocab_size = 1000
     embedding_dim = 32
@@ -62,8 +63,7 @@ class AlibiBias(keras.layers.Layer):
     embedding = keras.layers.Embedding(
         input_dim=vocab_size, output_dim=embedding_dim
     )(inputs)
-    positional_encoding = keras_nlp.layers.SinePositionEncoding()(embedding)
-    outputs = embedding + positional_encoding
+    alibi_bias = keras_nlp.layers.AlibiBias(num_heads=8)(embedding)
     ```
 
     References:
