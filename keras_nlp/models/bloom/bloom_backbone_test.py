@@ -49,3 +49,27 @@ class BloomTest(TestCase):
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
         )
+
+    # @pytest.mark.large
+    # def test_smallest_preset(self):
+    #     self.run_preset_test(
+    #         cls=BloomBackbone,
+    #         preset="bloom_560m_multi",
+    #         input_data={
+    #             "token_ids": ops.array([[101, 1996, 4248, 102]], dtype="int32"),
+    #             "padding_mask": ops.ones((1, 4), dtype="int32"),
+    #         },
+    #         expected_output_shape=(1, 4, 128),
+    #         # The forward pass from a preset should be stable!
+    #         expected_partial_output=ops.array([-1.38173, 0.16598, -2.92788, -2.66958, -0.61556])
+   
+    #     )
+
+    # @pytest.mark.extra_large
+    # def test_all_presets(self):
+    #     for preset in BloomBackbone.presets:
+    #         self.run_preset_test(
+    #             cls=BloomBackbone,
+    #             preset=preset,
+    #             input_data=self.input_data,
+    #         )

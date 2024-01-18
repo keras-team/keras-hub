@@ -16,15 +16,15 @@
 backbone_presets = {
     "bloom_560m_multi": {
         "metadata": {
-            # "description": (
-            #     "2-layer BERT model where all input is lowercased. "
-            #     "Trained on English Wikipedia + BooksCorpus."
-            # ),
+            "description": (
+                "24-layer Bloom model. trained on 45 natural languages and "
+                "12 programming languages."
+            ),
             "params": 816115712,
             "official_name": "BLOOM",
             "path": "bloom",
-            # "model_card": "https://github.com/google-research/bert/blob/master/README.md",
+            "model_card": "https://huggingface.co/bigscience/bloom",
         },
-        # "kaggle_handle": "kaggle://keras/bert/keras/bert_tiny_en_uncased/2",
+        "kaggle_handle": "kaggle://mohamedabuelnasr/bloom/keras/bloom_560m_multi/1",
     },
 }
