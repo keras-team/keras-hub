@@ -60,7 +60,7 @@ class BloomTokenizer(BytePairTokenizer):
     tokenizer.detokenize(tokenizer("The quick brown fox jumped."))
 
     # Custom vocabulary.
-    vocab = {"<|endoftext|>": 0, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    vocab = {"<s>": 0, "</s>": 1, "<pad>": 2, "a": 3, "Ġquick": 4, "Ġfox": 5}
     merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
     merges += ["Ġ f", "o x", "Ġf ox"]
     tokenizer = keras_nlp.models.BloomTokenizer(vocabulary=vocab, merges=merges)
