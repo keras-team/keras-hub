@@ -18,20 +18,19 @@ import os
 import numpy as np
 import requests
 import tensorflow as tf
-import transformers
 from absl import app
 from absl import flags
+from checkpoint_conversion_utils import get_md5_checksum
+from transformers import AutoModel
+from transformers import AutoTokenizer
 
 import keras_nlp
-from checkpoint_conversion_utils import get_md5_checksum
-
-from transformers import AutoTokenizer, AutoModel
 
 PRESET_MAP = {
-    "google/electra-base-generator": "google/electra-base-generator",
-    "google/electra-small-generator": "google/electra-small-generator",
-    "google/electra-base-discriminator": "google/electra-base-discriminator",
-    "google/electra-small-discriminator": "google/electra-small-discriminator",
+    "electra_base_generator_en": "google/electra-base-generator",
+    "electra_small_generator_en": "google/electra-small-generator",
+    "electra_base_discriminator_en": "google/electra-base-discriminator",
+    "electra_small_discriminator_en": "google/electra-small-discriminator",
 }
 
 EXTRACT_DIR = "./{}"

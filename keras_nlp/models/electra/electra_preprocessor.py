@@ -19,9 +19,7 @@ from keras_nlp.layers.preprocessing.multi_segment_packer import (
     MultiSegmentPacker,
 )
 from keras_nlp.models.electra.electra_presets import backbone_presets
-from keras_nlp.models.electra.electra_tokenizer import (
-    ElectraTokenizer,
-)
+from keras_nlp.models.electra.electra_tokenizer import ElectraTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
@@ -73,7 +71,7 @@ class ElectraPreprocessor(Preprocessor):
     Directly calling the layer on data.
     ```python
     preprocessor = keras_nlp.models.ElectraPreprocessor.from_preset(
-        "electra-base-generator"
+        "electra_base_discriminator_en"
     )
     preprocessor(["The quick brown fox jumped.", "Call me Ishmael."])
 
@@ -88,7 +86,7 @@ class ElectraPreprocessor(Preprocessor):
     Mapping with `tf.data.Dataset`.
     ```python
     preprocessor = keras_nlp.models.ElectraPreprocessor.from_preset(
-        "electra-base-generator"
+        "electra_base_discriminator_en"
     )
 
     first = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])

@@ -16,14 +16,11 @@ import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
-
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.layers.modeling.transformer_encoder import TransformerEncoder
-
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.electra.electra_presets import backbone_presets
-
 from keras_nlp.utils.keras_utils import gelu_approximate
 from keras_nlp.utils.python_utils import classproperty
 
@@ -43,7 +40,7 @@ class ElectraBackbone(Backbone):
     or classification task networks.
 
     The default constructor gives a fully customizable, randomly initialized
-    DistilBERT encoder with any number of layers, heads, and embedding
+    ELECTRA encoder with any number of layers, heads, and embedding
     dimensions. To load preset architectures and weights, use the
     `from_preset()` constructor.
 
@@ -75,9 +72,9 @@ class ElectraBackbone(Backbone):
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
         }
 
-        # Pre-trained DistilBERT encoder.
+        # Pre-trained ELECTRA encoder.
         model = keras_nlp.models.ElectraBackbone.from_preset(
-        "electra-base-generator"
+            "electra_base_discriminator_en"
         )
         model(input_data)
 

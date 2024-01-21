@@ -15,9 +15,9 @@
 import copy
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.models.electra.electra_presets import backbone_presets
 from keras_nlp.tokenizers import WordPieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.models.electra.electra_presets import backbone_presets
 
 
 @keras_nlp_export("keras_nlp.models.ElectraTokenizer")
@@ -44,8 +44,8 @@ class ElectraTokenizer(WordPieceTokenizer):
     Examples:
     ```python
     # Loading the tokenizer from preset.
-    tokenizer = keras_nlp.models.DistilBertTokenizer.from_preset(
-        "distil_bert_base_en_uncased",
+    tokenizer = keras_nlp.models.ElectraTokenizer.from_preset(
+        "electra_base_discriminator_en"
     )
     tokenizer("The quick brown fox jumped.")
 
