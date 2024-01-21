@@ -16,6 +16,8 @@ from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -81,44 +83,18 @@ class Preprocessor(PreprocessingLayer):
         )
         ```
         """
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class."
-            )
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
+        # We support short IDs for official presets, e.g. `"bert_base_en"`.
+        # Map these to a Kaggle Models handle.
+        if preset in cls.presets:
+            preset = cls.presets[preset]["kaggle_handle"]
 
-        tokenizer = cls.tokenizer_cls.from_preset(preset)
-
-        metadata = cls.presets[preset]
-        # For task model presets, the backbone config is nested.
-        if "backbone" in metadata["config"]:
-            backbone_config = metadata["config"]["backbone"]["config"]
-        else:
-            backbone_config = metadata["config"]
-
-        # Use model's `max_sequence_length` if `sequence_length` unspecified;
-        # otherwise check that `sequence_length` not too long.
-        sequence_length = kwargs.pop("sequence_length", None)
-        max_sequence_length = backbone_config["max_sequence_length"]
-        if sequence_length is not None:
-            if sequence_length > max_sequence_length:
-                raise ValueError(
-                    f"`sequence_length` cannot be longer than `{preset}` "
-                    f"preset's `max_sequence_length` of {max_sequence_length}. "
-                    f"Received: {sequence_length}."
-                )
-        else:
-            sequence_length = max_sequence_length
-
-        return cls(
-            tokenizer=tokenizer,
-            sequence_length=sequence_length,
-            **kwargs,
+        config_file = "tokenizer.json"
+        check_preset_class(preset, cls.tokenizer_cls, config_file=config_file)
+        tokenizer = load_from_preset(
+            preset,
+            config_file=config_file,
         )
+        return cls(tokenizer=tokenizer, **kwargs)
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.

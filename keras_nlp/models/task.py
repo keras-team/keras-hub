@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
 from rich import console as rich_console
 from rich import markup
 from rich import table as rich_table
@@ -22,6 +20,8 @@ from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
+from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -34,6 +34,19 @@ class Task(PipelineModel):
         self._backbone = None
         self._preprocessor = None
         super().__init__(*args, **kwargs)
+        self._functional_layer_ids = set(
+            id(layer) for layer in self._flatten_layers()
+        )
+
+    def __dir__(self):
+        # Temporary fixes for weight saving. This mimics the following PR for
+        # older version of Keras: https://github.com/keras-team/keras/pull/18982
+        def filter_fn(attr):
+            if attr == "_layer_checkpoint_dependencies":
+                return False
+            return id(getattr(self, attr)) not in self._functional_layer_ids
+
+        return filter(filter_fn, super().__dir__())
 
     def _check_for_loss_mismatch(self, loss):
         """Check for a softmax/from_logits mismatch after compile.
@@ -174,42 +187,42 @@ class Task(PipelineModel):
         )
         ```
         """
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class."
-            )
-
-        if preset not in cls.presets:
+        if "backbone" in kwargs:
             raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
+                "You cannot pass a `backbone` argument to the `from_preset` "
+                f"method. Instead, call the {cls.__name__} default "
+                "constructor with a `backbone` argument. "
+                f"Received: backbone={kwargs['backbone']}."
             )
+        # We support short IDs for official presets, e.g. `"bert_base_en"`.
+        # Map these to a Kaggle Models handle.
+        if preset in cls.presets:
+            preset = cls.presets[preset]["kaggle_handle"]
 
-        if "preprocessor" not in kwargs:
-            kwargs["preprocessor"] = cls.preprocessor_cls.from_preset(preset)
+        preset_cls = check_preset_class(preset, (cls, cls.backbone_cls))
 
-        # Check if preset is backbone-only model
-        if preset in cls.backbone_cls.presets:
-            backbone = cls.backbone_cls.from_preset(preset, load_weights)
-            return cls(backbone, **kwargs)
+        # Backbone case.
+        if preset_cls == cls.backbone_cls:
+            backbone = load_from_preset(
+                preset,
+                load_weights=load_weights,
+            )
+            if "preprocessor" in kwargs:
+                preprocessor = kwargs.pop("preprocessor")
+            else:
+                tokenizer = load_from_preset(
+                    preset,
+                    config_file="tokenizer.json",
+                )
+                preprocessor = cls.preprocessor_cls(tokenizer=tokenizer)
+            return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
 
-        # Otherwise must be one of class presets
-        metadata = cls.presets[preset]
-        config = metadata["config"]
-        model = cls.from_config({**config, **kwargs})
-
-        if not load_weights:
-            return model
-
-        weights = keras.utils.get_file(
-            "model.h5",
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
+        # Task case.
+        return load_from_preset(
+            preset,
+            load_weights=load_weights,
+            config_overrides=kwargs,
         )
-
-        model.load_weights(weights)
-        return model
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.

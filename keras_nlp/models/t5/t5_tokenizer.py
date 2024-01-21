@@ -11,9 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import copy
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.models.t5.t5_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
+from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.T5Tokenizer")
@@ -73,20 +76,30 @@ class T5Tokenizer(SentencePieceTokenizer):
     """
 
     def __init__(self, proto, **kwargs):
+        self.end_token = "</s>"
+        self.pad_token = "<pad>"
+
         super().__init__(proto=proto, **kwargs)
 
-        # Check for necessary special tokens.
-        end_token = "</s>"
-        pad_token = "<pad>"
-        for token in [pad_token]:
-            if token not in self.get_vocabulary():
-                raise ValueError(
-                    f"Cannot find token `'{token}'` in the provided "
-                    f"`vocabulary`. Please provide `'{token}'` in your "
-                    "`vocabulary` or use a pretrained `vocabulary` name."
-                )
+    def set_proto(self, proto):
+        super().set_proto(proto)
+        if proto is not None:
+            for token in [self.end_token, self.pad_token]:
+                if token not in self.get_vocabulary():
+                    raise ValueError(
+                        f"Cannot find token `'{token}'` in the provided "
+                        f"`vocabulary`. Please provide `'{token}'` in your "
+                        "`vocabulary` or use a pretrained `vocabulary` name."
+                    )
+            self.end_token_id = self.token_to_id(self.end_token)
+            self.pad_token_id = self.token_to_id(self.pad_token)
+            # T5 uses the same start token as end token, i.e., "<\s>".
+            self.start_token_id = self.end_token_id
+        else:
+            self.end_token_id = None
+            self.pad_token_id = None
+            self.start_token_id = None
 
-        self.pad_token_id = self.token_to_id(pad_token)
-        self.end_token_id = self.token_to_id(end_token)
-        # T5 uses the same start token as end token, i.e., "<\s>".
-        self.start_token_id = self.end_token_id
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)

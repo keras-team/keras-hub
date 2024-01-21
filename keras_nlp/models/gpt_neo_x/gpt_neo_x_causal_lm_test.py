@@ -44,7 +44,7 @@ class GPTNeoXCausalLMTest(TestCase):
             num_heads=2,
             hidden_dim=4,
             intermediate_dim=8,
-            max_sequence_length=self.preprocessor.packer.sequence_length,
+            max_sequence_length=self.preprocessor.sequence_length,
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,

@@ -172,7 +172,7 @@ def compute_word_piece_vocabulary(
     if vocabulary_output_file is not None:
         vocab_text = "".join([line + "\n" for line in vocab])
         # Write vocab to file.
-        with open(vocabulary_output_file, "w") as vocab_file:
+        with open(vocabulary_output_file, "w", encoding="utf-8") as vocab_file:
             vocab_file.write(vocab_text)
     else:
         return vocab

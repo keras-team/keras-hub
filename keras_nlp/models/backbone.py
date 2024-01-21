@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
 from keras_nlp.backend import keras
+from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -24,6 +24,19 @@ class Backbone(keras.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._token_embedding = None
+        self._functional_layer_ids = set(
+            id(layer) for layer in self._flatten_layers()
+        )
+
+    def __dir__(self):
+        # Temporary fixes for weight saving. This mimics the following PR for
+        # older version of Keras: https://github.com/keras-team/keras/pull/18982
+        def filter_fn(attr):
+            if attr == "_layer_checkpoint_dependencies":
+                return False
+            return id(getattr(self, attr)) not in self._functional_layer_ids
+
+        return filter(filter_fn, super().__dir__())
 
     def __setattr__(self, name, value):
         # Work around torch setattr for properties.
@@ -94,34 +107,17 @@ class Backbone(keras.Model):
         )
         ```
         """
+        # We support short IDs for official presets, e.g. `"bert_base_en"`.
+        # Map these to a Kaggle Models handle.
+        if preset in cls.presets:
+            preset = cls.presets[preset]["kaggle_handle"]
 
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class."
-            )
-
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-        config = metadata["config"]
-        model = cls.from_config({**config, **kwargs})
-
-        if not load_weights:
-            return model
-
-        filename = os.path.basename(metadata["weights_url"])
-        weights = keras.utils.get_file(
-            filename,
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
+        check_preset_class(preset, cls)
+        return load_from_preset(
+            preset,
+            load_weights=load_weights,
+            config_overrides=kwargs,
         )
-
-        model.load_weights(weights)
-        return model
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.

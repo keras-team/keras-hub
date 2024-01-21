@@ -77,36 +77,54 @@ class RobertaTokenizer(BytePairTokenizer):
 
     def __init__(
         self,
-        vocabulary,
-        merges,
+        vocabulary=None,
+        merges=None,
         **kwargs,
     ):
-        # Special tokens.
-        start_token = "<s>"
-        pad_token = "<pad>"
-        end_token = "</s>"
-        mask_token = "<mask>"
+        self.start_token = "<s>"
+        self.pad_token = "<pad>"
+        self.end_token = "</s>"
+        self.mask_token = "<mask>"
 
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
-            unsplittable_tokens=[start_token, pad_token, end_token, mask_token],
+            unsplittable_tokens=[
+                self.start_token,
+                self.pad_token,
+                self.end_token,
+                self.mask_token,
+            ],
             **kwargs,
         )
 
-        # Check whether special tokens are present in the vocabulary.
-        for token in [start_token, pad_token, end_token, mask_token]:
-            if token not in self.get_vocabulary():
-                raise ValueError(
-                    f"Cannot find token `'{token}'` in the provided "
-                    f"`vocabulary`. Please provide `'{token}'` in your "
-                    "`vocabulary` or use a pretrained `vocabulary` name."
-                )
+    def set_vocabulary_and_merges(self, vocabulary, merges):
+        super().set_vocabulary_and_merges(vocabulary, merges)
 
-        self.start_token_id = self.token_to_id(start_token)
-        self.pad_token_id = self.token_to_id(pad_token)
-        self.end_token_id = self.token_to_id(end_token)
-        self.mask_token_id = self.token_to_id(mask_token)
+        if vocabulary is not None:
+            # Check for necessary special tokens.
+            for token in [
+                self.start_token,
+                self.pad_token,
+                self.end_token,
+                self.mask_token,
+            ]:
+                if token not in self.vocabulary:
+                    raise ValueError(
+                        f"Cannot find token `'{token}'` in the provided "
+                        f"`vocabulary`. Please provide `'{token}'` in your "
+                        "`vocabulary` or use a pretrained `vocabulary` name."
+                    )
+
+            self.start_token_id = self.token_to_id(self.start_token)
+            self.pad_token_id = self.token_to_id(self.pad_token)
+            self.end_token_id = self.token_to_id(self.end_token)
+            self.mask_token_id = self.token_to_id(self.mask_token)
+        else:
+            self.start_token_id = None
+            self.pad_token_id = None
+            self.end_token_id = None
+            self.mask_token_id = None
 
     @classproperty
     def presets(cls):

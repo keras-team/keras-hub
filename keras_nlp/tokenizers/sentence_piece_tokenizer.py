@@ -20,8 +20,9 @@ from typing import List
 import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
 from keras_nlp.tokenizers import tokenizer
+from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
@@ -34,6 +35,9 @@ try:
     import tensorflow_text as tf_text
 except ImportError:
     tf_text = None
+
+
+VOCAB_FILENAME = "vocabulary.spm"
 
 
 @keras_nlp_export("keras_nlp.tokenizers.SentencePieceTokenizer")
@@ -106,7 +110,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     def __init__(
         self,
-        proto,
+        proto=None,
         sequence_length: int = None,
         dtype="int32",
         **kwargs,
@@ -121,6 +125,25 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
         super().__init__(dtype=dtype, **kwargs)
 
+        self.proto = None
+        self.sequence_length = sequence_length
+        self.set_proto(proto)
+
+    def save_assets(self, dir_path):
+        path = os.path.join(dir_path, VOCAB_FILENAME)
+        with open(path, "wb") as file:
+            file.write(self.proto)
+
+    def load_assets(self, dir_path):
+        path = os.path.join(dir_path, VOCAB_FILENAME)
+        self.set_proto(path)
+
+    def set_proto(self, proto):
+        if proto is None:
+            self.proto = None
+            self._sentence_piece = None
+            return
+
         if isinstance(proto, str):
             # A string could be either a filepath, or a base64 encoded byte
             # array (which we need for serialization). We will heuristically
@@ -134,7 +157,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 except binascii.Error:
                     pass
             if not is_base64:
-                proto_bytes = tf.io.gfile.GFile(proto, "rb").read()
+                proto_bytes = open(proto, "rb").read()
         elif isinstance(proto, bytes):
             proto_bytes = proto
         else:
@@ -148,18 +171,18 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             model=proto_bytes,
             out_type=self.compute_dtype,
         )
-
         # Keras cannot serialize a bytestring, so we base64 encode the model
         # byte array as a string for saving.
-        self.proto = base64.b64encode(proto_bytes).decode("ascii")
-        self.sequence_length = sequence_length
+        self.proto = proto_bytes
 
     def vocabulary_size(self) -> int:
         """Get the size of the tokenizer vocabulary."""
+        self._check_vocabulary()
         return int(self._sentence_piece.vocab_size().numpy())
 
     def get_vocabulary(self) -> List[str]:
         """Get the tokenizer vocabulary."""
+        self._check_vocabulary()
         return tensor_to_list(
             self._sentence_piece.id_to_string(
                 tf.range(int(self._sentence_piece.vocab_size().numpy()))
@@ -168,6 +191,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     def id_to_token(self, id: int) -> str:
         """Convert an integer id to a string token."""
+        self._check_vocabulary()
         if id >= self.vocabulary_size() or id < 0:
             raise ValueError(
                 f"`id` must be in range [0, {self.vocabulary_size() - 1}]. "
@@ -177,27 +201,39 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
     def token_to_id(self, token: str) -> int:
         """Convert a string token to an integer id."""
+        self._check_vocabulary()
         return int(self._sentence_piece.string_to_id(token).numpy())
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                # Ideally the model would be saved as a file asset in
-                # the saved model. We have no good way to support this
-                # currently, so we save the model string in the config.
-                "proto": self.proto,
+                "proto": None,  # Save vocabulary via an asset!
                 "sequence_length": self.sequence_length,
             }
         )
         return config
 
+    def _check_vocabulary(self):
+        if self.proto is None:
+            raise ValueError(
+                "No vocabulary has been set for SentencePieceTokenizer. Make "
+                "sure to pass a `proto` argument when creating the layer."
+            )
+
     def tokenize(self, inputs):
+        self._check_vocabulary()
         if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
             inputs = tf.convert_to_tensor(inputs)
         scalar_input = inputs.shape.rank == 0
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
+
+        if self._sentence_piece is None:
+            raise ValueError(
+                "No vocabulary has been set for SentencePieceTokenizer. Make "
+                "sure to pass a `vocabulary` argument when creating the layer."
+            )
 
         tokens = self._sentence_piece.tokenize(inputs)
 
@@ -215,6 +251,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
+        self._check_vocabulary()
         inputs, unbatched, _ = convert_to_ragged_batch(inputs)
         outputs = self._sentence_piece.detokenize(inputs)
         if unbatched:
@@ -248,34 +285,18 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         tokenizer.detokenize([5, 6, 7, 8, 9])
         ```
         """
+        # We support short IDs for official presets, e.g. `"bert_base_en"`.
+        # Map these to a Kaggle Models handle.
+        if preset in cls.presets:
+            preset = cls.presets[preset]["kaggle_handle"]
 
-        if not cls.presets:
-            raise NotImplementedError(
-                "No presets have been created for this class"
-            )
-
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
-
-        spm_proto = keras.utils.get_file(
-            "vocab.spm",
-            metadata["spm_proto_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["spm_proto_hash"],
+        config_file = "tokenizer.json"
+        check_preset_class(preset, cls, config_file=config_file)
+        return load_from_preset(
+            preset,
+            config_file=config_file,
+            config_overrides=kwargs,
         )
-
-        config = metadata["preprocessor_config"]
-        config.update(
-            {
-                "proto": spm_proto,
-            },
-        )
-
-        return cls.from_config({**config, **kwargs})
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.

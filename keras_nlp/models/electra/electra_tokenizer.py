@@ -68,7 +68,12 @@ class ElectraTokenizer(WordPieceTokenizer):
     """
 
     def __init__(self, vocabulary, lowercase=False, **kwargs):
+        self.cls_token = "[CLS]"
+        self.sep_token = "[SEP]"
+        self.pad_token = "[PAD]"
+        self.mask_token = "[MASK]"
         super().__init__(vocabulary=vocabulary, lowercase=lowercase, **kwargs)
+
 
         # Check for special tokens
         cls_token = "[CLS]"

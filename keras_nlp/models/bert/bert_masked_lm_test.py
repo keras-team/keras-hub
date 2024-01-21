@@ -43,7 +43,7 @@ class BertMaskedLMTest(TestCase):
             num_heads=2,
             hidden_dim=2,
             intermediate_dim=4,
-            max_sequence_length=self.preprocessor.packer.sequence_length,
+            max_sequence_length=self.preprocessor.sequence_length,
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,
