@@ -63,6 +63,10 @@ class BloomBackbone(Backbone):
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
     }
 
+    # Pretrained BLOOM decoder.
+    model = keras_nlp.models.BloomBackbone.from_preset("bloom_560m_multi")
+    model(input_data)
+
     # Randomly initialized BLOOM decoder with a custom config.
     model = keras_nlp.models.BloomBackbone(
         vocabulary_size=10,
