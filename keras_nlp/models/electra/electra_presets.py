@@ -14,7 +14,7 @@
 """Electra model presets and configurations."""
 
 backbone_presets = {
-    "google/electra-base-generator": {
+    "electra_base_generator_en": {
         "metadata": {
             "description": (
                 "Base Electra generator model from Google."
@@ -45,7 +45,7 @@ backbone_presets = {
         "vocabulary_url": "https://storage.googleapis.com/pranav-keras/electra-base-generator/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
-    "google/electra-small-generator": {
+    "electra_small_generator_en": {
         "metadata": {
             "description": (
                 "Small Electra generator model from Google."
@@ -76,7 +76,7 @@ backbone_presets = {
         "vocabulary_url": "https://storage.googleapis.com/pranav-keras/electra-small-generator/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
-    "google/electra-small-discriminator": {
+    "electra_small_discriminator_en": {
         "metadata": {
             "description": (
                 "Small Electra discriminator model from Google."
@@ -107,7 +107,7 @@ backbone_presets = {
         "vocabulary_url": "https://storage.googleapis.com/pranav-keras/electra-small-discriminator/vocab.txt",
         "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
     },
-    "google/electra-base-discriminator": {
+    "electra_base_discriminator_en": {
         "metadata": {
             "description": (
                 "Base Electra discriminator model from Google."
