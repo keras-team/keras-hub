@@ -18,12 +18,12 @@ import os
 os.environ["KERAS_BACKEND"] = "torch"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
+import huggingface_hub  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 import transformers  # noqa: E402
 from absl import app  # noqa: E402
 from absl import flags  # noqa: E402
-from huggingface_hub import snapshot_download  # noqa: E402
 
 import keras_nlp  # noqa: E402
 from keras_nlp.models import BloomBackbone  # noqa: E402
@@ -50,7 +50,7 @@ flags.mark_flag_as_required("preset")
 
 
 def download_hf_model(hf_model_name):
-    hf_model_dir = snapshot_download(
+    hf_model_dir = huggingface_hub.snapshot_download(
         repo_id=hf_model_name,
         allow_patterns=["*.json", "*.bin"],
         ignore_patterns=["onnx/*"],
@@ -183,8 +183,6 @@ def validate_output(
     hf_tokenizer,
     keras_tokenizer,
 ):
-    print("⏺ checking Tokenizer and Backbone outputs")
-
     input_str = ["the quick brown fox ran, galloped and jumped."]
 
     # KerasNLP
