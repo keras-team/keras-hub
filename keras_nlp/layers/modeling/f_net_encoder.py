@@ -47,6 +47,16 @@ class FNetEncoder(keras.layers.Layer):
         bias_initializer: "string" or `keras.initializers` initializer.
             The bias initializer for the dense layers.
             Defaults to `"zeros"`.
+        kernel_regularizer: Kernel regularizer for the dense and multiheaded
+            attention layers. Defaults to None.
+        bias_regularizer: Bias regularizer for the dense and multiheaded
+            attention layers. Defaults to None.
+        activity_regularizer: Activity regularizer for the dense and multiheaded
+            attention layers. Defaults to None.
+        kernel_constraint: Constraint for  dense and multiheaded attention
+            layer kernels.
+        bias_constraint: Constraint for dense and multiheaded attention
+            layers kernels.
         name: string. The name of the layer. Defaults to `None`.
         **kwargs: other keyword arguments.
 
@@ -80,6 +90,11 @@ class FNetEncoder(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         name=None,
+        kernel_regularizer=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        kernel_constraint=None,
+        bias_constraint=None,
         **kwargs
     ):
         super().__init__(name=name, **kwargs)
@@ -89,6 +104,11 @@ class FNetEncoder(keras.layers.Layer):
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
+        self.kernel_regularizer = keras.regularizers.get(kernel_regularizer)
+        self.bias_regularizer = keras.regularizers.get(bias_regularizer)
+        self.activity_regularizer = keras.regularizers.get(activity_regularizer)
+        self.kernel_constraint = keras.constraints.get(kernel_constraint)
+        self.bias_constraint = keras.constraints.get(bias_constraint)
 
     def build(self, inputs_shape):
         # Create layers based on input shape.
@@ -114,6 +134,11 @@ class FNetEncoder(keras.layers.Layer):
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            kernel_regularizer=self.kernel_regularizer,
+            bias_regularizer=self.bias_regularizer,
+            activity_regularizer=self.activity_regularizer,
+            kernel_constraint=self.kernel_constraint,
+            bias_constraint=self.bias_constraint,
             dtype=self.dtype_policy,
             name="intermediate_dense",
         )
@@ -122,6 +147,11 @@ class FNetEncoder(keras.layers.Layer):
             feature_size,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            kernel_regularizer=self.kernel_regularizer,
+            bias_regularizer=self.bias_regularizer,
+            activity_regularizer=self.activity_regularizer,
+            kernel_constraint=self.kernel_constraint,
+            bias_constraint=self.bias_constraint,
             dtype=self.dtype_policy,
             name="output_dense",
         )
@@ -189,6 +219,21 @@ class FNetEncoder(keras.layers.Layer):
                 ),
                 "bias_initializer": keras.initializers.serialize(
                     self.bias_initializer
+                ),
+                "kernel_regularizer": keras.regularizers.serialize(
+                    self.kernel_regularizer
+                ),
+                "bias_regularizer": keras.regularizers.serialize(
+                    self.bias_regularizer
+                ),
+                "activity_regularizer": keras.regularizers.serialize(
+                    self.activity_regularizer
+                ),
+                "kernel_constraint": keras.constraints.serialize(
+                    self.kernel_constraint
+                ),
+                "bias_constraint": keras.constraints.serialize(
+                    self.bias_constraint
                 ),
             }
         )

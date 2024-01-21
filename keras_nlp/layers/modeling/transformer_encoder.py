@@ -58,6 +58,16 @@ class TransformerEncoder(keras.layers.Layer):
             (similar to GPT-2). If set to False, outputs of attention layer and
             intermediate dense layer are normalized (similar to BERT).
             Defaults to `False`.
+        kernel_regularizer: Kernel regularizer for the dense and multiheaded
+            attention layers. Defaults to None.
+        bias_regularizer: Bias regularizer for the dense and multiheaded
+            attention layers. Defaults to None.
+        activity_regularizer: Activity regularizer for the dense and multiheaded
+            attention layers. Defaults to None.
+        kernel_constraint: Constraint for  dense and multiheaded attention
+            layer kernels.
+        bias_constraint: Constraint for dense and multiheaded attention
+            layers kernels.
         name: string. The name of the layer. Defaults to `None`.
         **kwargs: other keyword arguments.
 
@@ -92,6 +102,11 @@ class TransformerEncoder(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         normalize_first=False,
+        kernel_regularizer=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        kernel_constraint=None,
+        bias_constraint=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -103,6 +118,11 @@ class TransformerEncoder(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
         self.normalize_first = normalize_first
+        self.kernel_regularizer = keras.regularizers.get(kernel_regularizer)
+        self.bias_regularizer = keras.regularizers.get(bias_regularizer)
+        self.activity_regularizer = keras.regularizers.get(activity_regularizer)
+        self.kernel_constraint = keras.constraints.get(kernel_constraint)
+        self.bias_constraint = keras.constraints.get(bias_constraint)
         self.supports_masking = True
 
     def build(self, inputs_shape):
@@ -124,6 +144,11 @@ class TransformerEncoder(keras.layers.Layer):
             dropout=self.dropout,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            kernel_regularizer=self.kernel_regularizer,
+            bias_regularizer=self.bias_regularizer,
+            activity_regularizer=self.activity_regularizer,
+            kernel_constraint=self.kernel_constraint,
+            bias_constraint=self.bias_constraint,
             dtype=self.dtype_policy,
             name="self_attention_layer",
         )
@@ -161,6 +186,11 @@ class TransformerEncoder(keras.layers.Layer):
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            kernel_regularizer=self.kernel_regularizer,
+            bias_regularizer=self.bias_regularizer,
+            activity_regularizer=self.activity_regularizer,
+            kernel_constraint=self.kernel_constraint,
+            bias_constraint=self.bias_constraint,
             dtype=self.dtype_policy,
             name="feedforward_intermediate_dense",
         )
@@ -169,6 +199,11 @@ class TransformerEncoder(keras.layers.Layer):
             hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            kernel_regularizer=self.kernel_regularizer,
+            bias_regularizer=self.bias_regularizer,
+            activity_regularizer=self.activity_regularizer,
+            kernel_constraint=self.kernel_constraint,
+            bias_constraint=self.bias_constraint,
             dtype=self.dtype_policy,
             name="feedforward_output_dense",
         )
@@ -248,6 +283,21 @@ class TransformerEncoder(keras.layers.Layer):
                     self.bias_initializer
                 ),
                 "normalize_first": self.normalize_first,
+                "kernel_regularizer": keras.regularizers.serialize(
+                    self.kernel_regularizer
+                ),
+                "bias_regularizer": keras.regularizers.serialize(
+                    self.bias_regularizer
+                ),
+                "activity_regularizer": keras.regularizers.serialize(
+                    self.activity_regularizer
+                ),
+                "kernel_constraint": keras.constraints.serialize(
+                    self.kernel_constraint
+                ),
+                "bias_constraint": keras.constraints.serialize(
+                    self.bias_constraint
+                ),
             }
         )
         return config
