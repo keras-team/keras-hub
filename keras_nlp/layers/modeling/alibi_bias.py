@@ -25,9 +25,8 @@ class AlibiBias(keras.layers.Layer):
     This layer generates a linear, non-learned bias. Defined and formalized in
     [Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation](https://arxiv.org/abs/2108.12409).
 
-    Takes as input an attention score. The input must have shape
-    `(batch_size, num_heads, query_length, key_length)`. This layer will return 
-    an the attention scores after adding the alibi bias which will have the same 
+    Takes as input an attention score. This layer will return the attention
+    scores after adding the alibi bias to it. The output will have the same
     shape as the input.
 
     Args:
@@ -37,8 +36,9 @@ class AlibiBias(keras.layers.Layer):
             ratio. Defaults to 8.
     Call arguments:
         attention_scores: The result of multipying the query and the key of the
-            multi head attention of the transformer. with shape 
-            `(batch_size, num_heads, query_length, key_length)`.
+            multi head attention of the transformer. The shape must be greater
+            than or equal to 3 with the last 3 dimensions equal to
+            `(num_heads, query_length, key_length)`.
 
     Examples:
     ```python
@@ -66,32 +66,42 @@ class AlibiBias(keras.layers.Layer):
         super().__init__(**kwargs)
         self.alibi_bias_max = alibi_bias_max
 
-    def call(self, inputs):
-        shape = ops.shape(inputs)
-        if ( len(shape) != 4):
-            raise ValueError("Expected inputs of shape (batch_size, num_heads, "
-                f"query_length, key_length) but recieved inputs of shape {shape}")
-        
-        num_heads = shape[1]
-        seq_length = shape[-1]
-        alibi_bias = self._get_alibi_bias(num_heads, seq_length)
+    def call(self, attention_scores):
+        shape = ops.shape(attention_scores)
+        print(shape)
+        if len(shape) < 3:
+            raise ValueError(
+                "Expected `attention_scores` shape to be "
+                "`(..., num_heads, query_length, key_Length)`."
+                f" Recived shape={shape}"
+            )
 
-        return ops.add(inputs, alibi_bias)  
+        key_length = shape[-1]
+        num_heads = shape[-3]
 
-    def _get_alibi_bias(self, num_heads, seq_length):
-        slopes = ops.convert_to_tensor(self._get_slopes(num_heads), dtype=float)
+        alibi_bias = self._get_alibi_bias(num_heads, key_length)
+        alibi_bias = ops.reshape(
+            alibi_bias,
+            tuple([1 for _ in range(len(shape[:-3]))])
+            + (num_heads, 1, key_length),
+        )
+
+        return ops.add(attention_scores, alibi_bias)
+
+    def _get_alibi_bias(self, num_heads, key_length):
+        slopes = ops.convert_to_tensor(
+            self._get_slopes(num_heads), dtype=self.compute_dtype
+        )
         slopes = ops.expand_dims(slopes, 1)
 
-        seq_range = ops.expand_dims(
-            ops.arange(1.0 - seq_length, 1.0, dtype=float), 0
-        )
+        seq_range = ops.expand_dims(ops.arange(1.0 - key_length, 1.0), 0)
+        seq_range = ops.cast(seq_range, dtype=self.compute_dtype)
+
         alibi_bias = ops.multiply(slopes, seq_range)
-        alibi_bias = ops.expand_dims(alibi_bias, 1)
-        alibi_bias = ops.expand_dims(alibi_bias, 0)
 
-        return ops.convert_to_tensor(alibi_bias, dtype=self.compute_dtype)
-
-        
+        # Expand on query dimension
+        # return shape is `(num_heads, 1, key_length)`
+        return ops.expand_dims(alibi_bias, 1)
 
     def _get_slopes(self, num_heads):
         # this function is adopted from Alibi original implementation
