@@ -20,41 +20,29 @@ from keras_nlp.backend import ops
 
 @keras_nlp_export("keras_nlp.layers.AlibiBias")
 class AlibiBias(keras.layers.Layer):
-    """A layer that generates alibi bias
+    """A layer that add the alibi bias to attention scores
 
-    This layer generates a linear, non-learned bias. Defined and formalized in 
+    This layer generates a linear, non-learned bias. Defined and formalized in
     [Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation](https://arxiv.org/abs/2108.12409).
 
-    Takes as input an embedded token tensor. The input must have shape
-    `(batch_size, sequence_length, hidden_dim)`. This layer will return an alibi
-    bias of the shape `(1, num_heads, 1, sequence_length)`, which will be added to
-    the result of the query-key dot product in the multi-head attention layer of
-    the transformer. 
+    Takes as input an attention score. The input must have shape
+    `(batch_size, num_heads, query_length, key_length)`. This layer will return 
+    an the attention scores after adding the alibi bias which will have the same 
+    shape as the input.
 
     Args:
-        num_heads: int. The number of heads in the multi-head attention layer of
-            the transformer.
-        alibi_bias_max: int. This value will be used to compute the slope of 
-            each head. The heads slopes is a geometric sequence that starts at 
-            `2**(-alibi_bias_max/num_heads)` and uses that same value as its 
+        alibi_bias_max: int. This value will be used to compute the slope of
+            each head. The heads slopes is a geometric sequence that starts at
+            `2**(-alibi_bias_max/num_heads)` and uses that same value as its
             ratio. Defaults to 8.
-        full: bool. Whether to return the full alibi bias tensor. If set to 
-            `True`, the alibi bias shape will be 
-            `(1, num_heads, sequence_length, sequence_length)`. Defaults to 
-            `False`, so the third dimension will be broadcasted, and this will 
-            work because of the translation invariance property of the softmax, 
-            let `L` be a tensor and `x` a constant, `softmax(L+x) = softmax(L)`
-        batched: bool. Whether to return the alibi bias tensor with first 
-            dimention equal to `batch_size`. If set to `True` the alibi bias 
-            shape wil be `(batch_size, num_heads, 1, sequence_length)`. Defaults 
-            to `False`, so the first dimension will be broadcasted.
     Call arguments:
-        inputs: The tensor inputs to compute an embedding for, with shape
-            `(batch_size, sequence_length, hidden_dim)`.
+        attention_scores: The result of multipying the query and the key of the
+            multi head attention of the transformer. with shape 
+            `(batch_size, num_heads, query_length, key_length)`.
 
     Examples:
     ```python
-    # create a simple layer that takes token embeddings as input and generates 
+    # create a simple layer that takes token embeddings as input and generates
     # the alibi tensor
     seq_len = 100
     vocab_size = 1000
@@ -72,40 +60,40 @@ class AlibiBias(keras.layers.Layer):
 
     def __init__(
         self,
-        num_heads, 
         alibi_bias_max=8,
-        full=False,
-        batched=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.num_heads = num_heads
         self.alibi_bias_max = alibi_bias_max
-        self.full = full
-        self.batched = batched
 
     def call(self, inputs):
         shape = ops.shape(inputs)
-        batch_size = shape[0]
-        seq_length = shape[1]
-
-        slopes = ops.convert_to_tensor(self._get_slopes(), dtype=float)
-        slopes = ops.reshape(slopes, (self.num_heads, 1, 1))
-
-
-        sequence_range = ops.expand_dims(ops.arange( 1 - seq_length, 1, dtype=float), 0)
-        if self.full:
-            sequence_range = ops.subtract(sequence_range, ops.expand_dims(ops.arange( 1 - seq_length, 1, dtype=float), 1))
-            sequence_range = ops.multiply(ops.abs(sequence_range), -1)
+        if ( len(shape) != 4):
+            raise ValueError("Expected inputs of shape (batch_size, num_heads, "
+                f"query_length, key_length) but recieved inputs of shape {shape}")
         
-        alibi_bias = slopes * ops.expand_dims(ops.arange(seq_length, dtype=float), 0)
-        alibi_bias = ops.expand_dims(alibi_bias, 0)
-        if self.batched:
-            return ops.repeat(alibi_bias, batch_size, axis=0)
+        num_heads = shape[1]
+        seq_length = shape[-1]
+        alibi_bias = self._get_alibi_bias(num_heads, seq_length)
 
-        return alibi_bias
-    
-    def _get_slopes(self):
+        return ops.add(inputs, alibi_bias)  
+
+    def _get_alibi_bias(self, num_heads, seq_length):
+        slopes = ops.convert_to_tensor(self._get_slopes(num_heads), dtype=float)
+        slopes = ops.expand_dims(slopes, 1)
+
+        seq_range = ops.expand_dims(
+            ops.arange(1.0 - seq_length, 1.0, dtype=float), 0
+        )
+        alibi_bias = ops.multiply(slopes, seq_range)
+        alibi_bias = ops.expand_dims(alibi_bias, 1)
+        alibi_bias = ops.expand_dims(alibi_bias, 0)
+
+        return ops.convert_to_tensor(alibi_bias, dtype=self.compute_dtype)
+
+        
+
+    def _get_slopes(self, num_heads):
         # this function is adopted from Alibi original implementation
         # https://github.com/ofirpress/attention_with_linear_biases/blob/a35aaca144e0eb6b789dfcb46784c4b8e31b7983/fairseq/models/transformer.py#L742
         def get_slopes_power_of_2(n):
@@ -115,36 +103,25 @@ class AlibiBias(keras.layers.Layer):
             ratio = start
             return [start * ratio**i for i in range(n)]
 
-        if math.log2(self.num_heads).is_integer():
-            return get_slopes_power_of_2(self.num_heads)
+        if math.log2(num_heads).is_integer():
+            return get_slopes_power_of_2(num_heads)
         else:
-            closest_power_of_2 = 2 ** math.floor(math.log2(self.num_heads))
+            closest_power_of_2 = 2 ** math.floor(math.log2(num_heads))
             return (
                 get_slopes_power_of_2(closest_power_of_2)
                 + self._get_slopes(2 * closest_power_of_2)[0::2][
-                    : self.num_heads - closest_power_of_2
+                    : num_heads - closest_power_of_2
                 ]
             )
 
     def compute_output_shape(self, input_shape):
-        batch_size = input_shape[0]
-        seq_length = input_shape[1]
-        output_shape = [1, self.num_heads, 1, seq_length]
-        if self.full:
-            output_shape[2] = seq_length
-        if self.batched:
-            output_shape[0] = batch_size
+        return input_shape
 
-        return tuple(output_shape)
-    
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "num_heads": self.num_heads,
                 "alibi_bias_max": self.alibi_bias_max,
-                "full": self.full,
-                "batched": self.batched,
             }
         )
         return config
