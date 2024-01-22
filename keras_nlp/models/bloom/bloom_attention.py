@@ -95,7 +95,6 @@ class BloomAttention(keras.layers.Layer):
 
         self.built = True
 
-
     def call(
         self,
         hidden_states,
@@ -136,10 +135,12 @@ class BloomAttention(keras.layers.Layer):
         key = ops.transpose(key, [0, 2, 3, 1])
 
         attention_scores = (
-            ops.matmul(query, key) * self.inv_norm_factor 
+            ops.matmul(query, key) * self.inv_norm_factor
         )  # [batch_size, num_heads, query_length, kv_length]
         attention_scores = self._alibi_layer(attention_scores)
-        attention_scores = self._softmax(attention_scores, ops.expand_dims(attention_mask, 1))
+        attention_scores = self._softmax(
+            attention_scores, ops.expand_dims(attention_mask, 1)
+        )
         attention_scores = self._dropout_layer(attention_scores)
 
         attention_output = ops.matmul(
