@@ -94,7 +94,7 @@ class AlibiBias(keras.layers.Layer):
         )
         slopes = ops.expand_dims(slopes, 1)
 
-        seq_range = ops.expand_dims(ops.arange(1.0 - key_length, 1.0), 0)
+        seq_range = ops.expand_dims(ops.arange(1 - key_length, 1), 0)
         seq_range = ops.cast(seq_range, dtype=self.compute_dtype)
 
         alibi_bias = ops.multiply(slopes, seq_range)
