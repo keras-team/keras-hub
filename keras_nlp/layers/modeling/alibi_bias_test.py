@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.backend import random
@@ -201,7 +199,6 @@ class AlibiBiasTest(TestCase):
                         [[-0.25, -0.125, 0.0]],
                         [[-0.03125, -0.015625, 0.0]],
                         [[-0.70710677, -0.35355338, 0.0]],
-
                     ]
                 ]
             ),
