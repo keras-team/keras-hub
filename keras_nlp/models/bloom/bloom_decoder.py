@@ -187,7 +187,7 @@ class BloomDecoder(keras.layers.Layer):
                 else causal_mask
             )
         return decoder_mask
-    
+
     def compute_output_shape(self, decoder_sequence_shape):
         return decoder_sequence_shape
 
