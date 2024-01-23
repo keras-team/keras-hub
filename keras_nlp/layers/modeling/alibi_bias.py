@@ -68,7 +68,6 @@ class AlibiBias(keras.layers.Layer):
 
     def call(self, attention_scores):
         shape = ops.shape(attention_scores)
-        print(shape)
         if len(shape) < 3:
             raise ValueError(
                 "Expected `attention_scores` shape to be "
