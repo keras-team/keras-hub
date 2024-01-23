@@ -30,6 +30,7 @@ class BloomDecoder(keras.layers.Layer):
         self,
         num_heads,
         intermediate_dim,
+        max_sequence_length,
         dropout=0.0,
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
@@ -40,6 +41,7 @@ class BloomDecoder(keras.layers.Layer):
 
         self.num_heads = num_heads
         self.intermediate_dim = intermediate_dim
+        self.max_sequence_length = max_sequence_length
         self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
@@ -64,6 +66,7 @@ class BloomDecoder(keras.layers.Layer):
 
         self._self_attention_layer = BloomAttention(
             num_heads=self.num_heads,
+            max_sequence_length=self.max_sequence_length,
             dropout=self.dropout,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
@@ -184,6 +187,9 @@ class BloomDecoder(keras.layers.Layer):
                 else causal_mask
             )
         return decoder_mask
+    
+    def compute_output_shape(self, decoder_sequence_shape):
+        return decoder_sequence_shape
 
     def get_config(self):
         config = super().get_config()

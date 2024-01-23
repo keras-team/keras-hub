@@ -23,6 +23,7 @@ class BloomAttention(keras.layers.Layer):
     def __init__(
         self,
         num_heads,
+        max_sequence_length,
         dropout=0.0,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
@@ -30,6 +31,7 @@ class BloomAttention(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
         self.num_heads = num_heads
+        self.max_sequence_length = max_sequence_length
         self.dropout = dropout
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
@@ -75,7 +77,10 @@ class BloomAttention(keras.layers.Layer):
         )
         self._value_dense.build(inputs_shape)
 
-        self._alibi_layer = AlibiBias()
+        self._alibi_layer = AlibiBias(
+            max_sequence_length=self.max_sequence_length
+        )
+        self._alibi_layer.build((batch_size, self.num_heads, 1, seq_length))
 
         self._output_dense = keras.layers.Dense(
             hidden_dim,
