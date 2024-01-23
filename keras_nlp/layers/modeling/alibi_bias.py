@@ -102,20 +102,19 @@ class AlibiBias(keras.layers.Layer):
             )
 
         key_length = shape[-1]
-
-        return ops.add(
+        attention_scores = ops.add(
             attention_scores,
             self.alibi_bias[..., self.max_sequence_length - key_length :],
         )
 
+        return ops.cast(attention_scores, self.compute_dtype)
+
     def _get_alibi_bias(self, num_heads, key_length):
-        slopes = ops.convert_to_tensor(
-            self._get_slopes(num_heads), dtype=self.compute_dtype
-        )
+        slopes = ops.convert_to_tensor(self._get_slopes(num_heads), dtype=float)
         slopes = ops.expand_dims(slopes, 1)
 
         seq_range = ops.expand_dims(ops.arange(1 - key_length, 1), 0)
-        seq_range = ops.cast(seq_range, dtype=self.compute_dtype)
+        seq_range = ops.cast(seq_range, dtype=float)
 
         alibi_bias = ops.multiply(slopes, seq_range)
 
