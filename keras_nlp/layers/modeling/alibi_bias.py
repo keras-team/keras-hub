@@ -82,7 +82,7 @@ class AlibiBias(keras.layers.Layer):
             self.max_sequence_length,
         )
         self.alibi_bias = self.add_weight(
-            shape=alibi_bias_shape, trainable=False
+            shape=alibi_bias_shape, dtype=self.compute_dtype, trainable=False
         )
         alibi_bias = self._get_alibi_bias(num_heads, self.max_sequence_length)
         alibi_bias = ops.reshape(
