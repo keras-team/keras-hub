@@ -97,68 +97,73 @@ class GPT2Backbone(Backbone):
         max_sequence_length=1024,
         **kwargs,
     ):
-        # Inputs
-        token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
-        padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
-
-        # Embed tokens, positions.
-        token_embedding_layer = ReversibleEmbedding(
+        # === Layers ===
+        self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=_gpt_2_kernel_initializer(stddev=0.01),
             name="token_embedding",
         )
-        token_embedding = token_embedding_layer(token_ids)
-
-        # Can't use `TokenAndPositionEmbedding` layer here because of different
-        # initializers.
-        position_embedding = PositionEmbedding(
+        self.position_embedding = PositionEmbedding(
             initializer=_gpt_2_kernel_initializer(stddev=0.02),
             sequence_length=max_sequence_length,
             name="position_embedding",
-        )(token_embedding)
-
-        # Sum and apply dropout to embeddings.
-        x = keras.layers.Add(name="embeddings_add")(
-            (token_embedding, position_embedding)
         )
-        x = keras.layers.Dropout(
+        self.embeddings_add = keras.layers.Add(
+            name="embeddings_add",
+        )
+        self.embeddings_dropout = keras.layers.Dropout(
             dropout,
             name="embeddings_dropout",
-        )(x)
-
-        # Apply successive transformer decoder blocks.
+        )
+        self.transformer_layers = []
         for i in range(num_layers):
-            x = TransformerDecoder(
-                intermediate_dim=intermediate_dim,
-                num_heads=num_heads,
-                dropout=dropout,
-                layer_norm_epsilon=1e-05,
-                activation=gelu_approximate,
-                kernel_initializer=_gpt_2_kernel_initializer(stddev=0.02),
-                normalize_first=True,
-                name=f"transformer_layer_{i}",
-            )(x, decoder_padding_mask=padding_mask)
-
-        sequence_output = keras.layers.LayerNormalization(
+            self.transformer_layers.append(
+                TransformerDecoder(
+                    intermediate_dim=intermediate_dim,
+                    num_heads=num_heads,
+                    dropout=dropout,
+                    layer_norm_epsilon=1e-05,
+                    activation=gelu_approximate,
+                    kernel_initializer=_gpt_2_kernel_initializer(stddev=0.02),
+                    normalize_first=True,
+                    name=f"transformer_layer_{i}",
+                )
+            )
+        self.layer_norm = keras.layers.LayerNormalization(
             name="layer_norm",
             axis=-1,
             epsilon=1e-05,
             dtype="float32",
-        )(x)
+        )
 
-        # Instantiate using Functional API Model constructor
+        # === Functional Model ===
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        # Embed inputs.
+        tokens = self.token_embedding(token_id_input)
+        positions = self.position_embedding(tokens)
+        x = self.embeddings_add((tokens, positions))
+        x = self.embeddings_dropout(x)
+        # Apply transformer layers.
+        for transformer_layer in self.transformer_layers:
+            x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
+        sequence_output = self.layer_norm(x)
+        # Instantiate using the Functional constructor.
         super().__init__(
             inputs={
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask_input,
             },
             outputs=sequence_output,
             **kwargs,
         )
-        # All references to `self` below this line
+
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -166,7 +171,6 @@ class GPT2Backbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
-        self.token_embedding = token_embedding_layer
 
     def get_config(self):
         config = super().get_config()

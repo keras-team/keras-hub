@@ -142,27 +142,15 @@ def _train_validation_split(arrays, validation_split):
 class PipelineModel(keras.Model):
     """A model which allows automatically applying preprocessing."""
 
-    def __init__(self, *args, include_preprocessing=True, **kwargs):
+    def __init__(self, *args, **kwargs):
         # Workaround for https://github.com/keras-team/keras/issues/17270
         # Reset any attempt to overwrite this classes base class to this class
         # can continue to be used for functional and non-functional models.
         PipelineModel.__bases__ = (keras.Model,)
         super().__init__(*args, **kwargs)
-        self.include_preprocessing = include_preprocessing
-
-    def preprocess_features(self, x):
-        """An overridable function which preprocesses features."""
-        return x
-
-    def preprocess_labels(self, y):
-        """An overridable function which preprocesses labels."""
-        return y
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
         """An overridable function which preprocesses entire samples."""
-        x = self.preprocess_features(x)
-        if y is not None:
-            y = self.preprocess_labels(y)
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     # ========================================================================
@@ -184,10 +172,9 @@ class PipelineModel(keras.Model):
             )
 
         x = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
-        if self.include_preprocessing:
-            x = x.map(
-                self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
-            ).prefetch(tf.data.AUTOTUNE)
+        x = x.map(
+            self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
+        ).prefetch(tf.data.AUTOTUNE)
 
         if validation_data is not None:
             if not isinstance(validation_data, tf.data.Dataset):
@@ -221,10 +208,9 @@ class PipelineModel(keras.Model):
         # needs preprocessing.
         kwargs.pop("_use_cached_eval_dataset", None)
         x = _convert_inputs_to_dataset(x, y, sample_weight, batch_size)
-        if self.include_preprocessing:
-            x = x.map(
-                self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
-            ).prefetch(tf.data.AUTOTUNE)
+        x = x.map(
+            self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
+        ).prefetch(tf.data.AUTOTUNE)
         return super().evaluate(
             x=x,
             y=None,
@@ -239,11 +225,9 @@ class PipelineModel(keras.Model):
         **kwargs,
     ):
         x = _convert_inputs_to_dataset(x, None, None, batch_size)
-        if self.include_preprocessing:
-            x = x.map(
-                self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
-            ).prefetch(tf.data.AUTOTUNE)
-
+        x = x.map(
+            self.preprocess_samples, num_parallel_calls=tf.data.AUTOTUNE
+        ).prefetch(tf.data.AUTOTUNE)
         return super().predict(
             x=x,
             batch_size=None,
@@ -257,14 +241,13 @@ class PipelineModel(keras.Model):
         sample_weight=None,
         **kwargs,
     ):
-        if self.include_preprocessing:
-            data = self.preprocess_samples(x, y, sample_weight)
-            x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
-            x = ops.convert_to_tensor(x)
-            if y is not None:
-                y = ops.convert_to_tensor(y)
-            if sample_weight is not None:
-                sample_weight = ops.convert_to_tensor(sample_weight)
+        data = self.preprocess_samples(x, y, sample_weight)
+        x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
+        x = ops.convert_to_tensor(x)
+        if y is not None:
+            y = ops.convert_to_tensor(y)
+        if sample_weight is not None:
+            sample_weight = ops.convert_to_tensor(sample_weight)
         return super().train_on_batch(
             x=x,
             y=y,
@@ -279,14 +262,13 @@ class PipelineModel(keras.Model):
         sample_weight=None,
         **kwargs,
     ):
-        if self.include_preprocessing:
-            data = self.preprocess_samples(x, y, sample_weight)
-            x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
-            x = ops.convert_to_tensor(x)
-            if y is not None:
-                y = ops.convert_to_tensor(y)
-            if sample_weight is not None:
-                sample_weight = ops.convert_to_tensor(sample_weight)
+        data = self.preprocess_samples(x, y, sample_weight)
+        x, y, sample_weight = keras.utils.unpack_x_y_sample_weight(data)
+        x = ops.convert_to_tensor(x)
+        if y is not None:
+            y = ops.convert_to_tensor(y)
+        if sample_weight is not None:
+            sample_weight = ops.convert_to_tensor(sample_weight)
         return super().test_on_batch(
             x=x,
             y=y,
@@ -299,10 +281,9 @@ class PipelineModel(keras.Model):
         x,
         **kwargs,
     ):
-        if self.include_preprocessing:
-            data = self.preprocess_samples(x)
-            x, _, _ = keras.utils.unpack_x_y_sample_weight(data)
-            x = ops.convert_to_tensor(x)
+        data = self.preprocess_samples(x)
+        x, _, _ = keras.utils.unpack_x_y_sample_weight(data)
+        x = ops.convert_to_tensor(x)
         return super().predict_on_batch(
             x=x,
             **kwargs,

@@ -155,23 +155,21 @@ class OPTCausalLM(GenerativeTask):
         preprocessor=None,
         **kwargs,
     ):
+        # === Layers ===
+        self.backbone = backbone
+        self.preprocessor = preprocessor
+
+        # === Functional Model ===
         inputs = backbone.input
         hidden_states = backbone(inputs)
         outputs = backbone.token_embedding(hidden_states, reverse=True)
-
-        # Instantiate using Functional API Model constructor.
         super().__init__(
             inputs=inputs,
             outputs=outputs,
-            include_preprocessing=preprocessor is not None,
             **kwargs,
         )
-        self.backbone = backbone
-        self.preprocessor = preprocessor
-        self.generate_function = None
-        self._sampler = None
 
-        # Default compilation
+        # === Default compilation ===
         self.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(2e-5),
@@ -216,21 +214,19 @@ class OPTCausalLM(GenerativeTask):
             the final hidden representation of the input tokens, and `cache` is
             the decoding cache.
         """
-        x = self.backbone.get_layer("embeddings")(
-            token_ids, start_index=cache_update_index
-        )
+        x = self.backbone.embeddings(token_ids, start_index=cache_update_index)
         # Each decoder layer has a cache; we update them separately.
         caches = []
-        for i in range(self.backbone.num_layers):
+        for i, transformer_layer in enumerate(self.backbone.transformer_layers):
             current_cache = cache[:, i, ...]
-            x, next_cache = self.backbone.get_layer(f"transformer_layer_{i}")(
+            x, next_cache = transformer_layer(
                 x,
                 self_attention_cache=current_cache,
                 self_attention_cache_update_index=cache_update_index,
             )
             caches.append(next_cache)
         cache = ops.stack(caches, axis=1)
-        x = self.backbone.get_layer("layer_norm")(x)
+        x = self.backbone.layer_norm(x)
         hidden_states = x
         logits = self.backbone.token_embedding(hidden_states, reverse=True)
         return logits, hidden_states, cache

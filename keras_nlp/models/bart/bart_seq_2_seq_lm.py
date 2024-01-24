@@ -185,24 +185,21 @@ class BartSeq2SeqLM(GenerativeTask):
         preprocessor=None,
         **kwargs,
     ):
+        # === Layers ===
+        self.backbone = backbone
+        self.preprocessor = preprocessor
+
+        # === Functional Model ===
         inputs = backbone.input
         hidden_states = backbone(inputs)["decoder_sequence_output"]
         outputs = backbone.token_embedding(hidden_states, reverse=True)
-
-        # Instantiate using Functional API Model constructor.
         super().__init__(
             inputs=inputs,
             outputs=outputs,
-            include_preprocessing=preprocessor is not None,
             **kwargs,
         )
 
-        self.backbone = backbone
-        self.preprocessor = preprocessor
-        self.generate_function = None
-        self._sampler = None
-
-        # Default compilation
+        # === Default compilation ===
         self.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(2e-5),
@@ -280,33 +277,28 @@ class BartSeq2SeqLM(GenerativeTask):
             cross-attention layer.
         """
         # Embedding layers.
-        token_embedding = self.backbone.get_layer("token_embedding")(
-            decoder_token_ids
+        tokens = self.backbone.token_embedding(decoder_token_ids)
+        positions = self.backbone.decoder_position_embedding(
+            tokens,
+            start_index=self_attention_cache_update_index,
         )
-        position_embedding = self.backbone.get_layer(
-            "decoder_position_embedding"
-        )(token_embedding, start_index=self_attention_cache_update_index)
-
         # Sum, normalize and apply dropout to embeddings.
-        x = self.backbone.get_layer("decoder_embeddings_add")(
-            (token_embedding, position_embedding)
-        )
-        x = self.backbone.get_layer("decoder_embeddings_layer_norm")(x)
-        x = self.backbone.get_layer("decoder_embeddings_dropout")(x)
+        x = self.backbone.decoder_embeddings_add((tokens, positions))
+        x = self.backbone.decoder_embeddings_layer_norm(x)
+        x = self.backbone.decoder_embeddings_dropout(x)
 
         # Every decoder layer has a separate cache for the self-attention layer
         # and the cross-attention layer. We update all of them separately.
         self_attention_caches = []
         cross_attention_caches = []
-        for i in range(self.backbone.num_layers):
+        for i, layer in enumerate(self.backbone.decoder_transformer_layers):
             current_self_attention_cache = self_attention_cache[:, i, ...]
             current_cross_attention_cache = cross_attention_cache[:, i, ...]
-
             (
                 x,
                 next_self_attention_cache,
                 next_cross_attention_cache,
-            ) = self.backbone.get_layer(f"transformer_decoder_layer_{i}")(
+            ) = layer(
                 decoder_sequence=x,
                 encoder_sequence=encoder_hidden_states,
                 encoder_padding_mask=encoder_padding_mask,
@@ -315,7 +307,6 @@ class BartSeq2SeqLM(GenerativeTask):
                 cross_attention_cache=current_cross_attention_cache,
                 cross_attention_cache_update_index=cross_attention_cache_update_index,
             )
-
             if self_attention_cache_update_index is not None:
                 self_attention_caches.append(next_self_attention_cache)
             if cross_attention_cache_update_index is not None:
@@ -337,26 +328,13 @@ class BartSeq2SeqLM(GenerativeTask):
 
     def call_encoder(self, token_ids, padding_mask):
         """Does a forward pass on the encoder and returns the encoder output."""
-
-        # Embedding layers.
-        token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
-        position_embedding = self.backbone.get_layer(
-            "encoder_position_embedding"
-        )(token_embedding)
-
-        # Sum, normalize and apply dropout to embeddings.
-        x = self.backbone.get_layer("encoder_embeddings_add")(
-            (token_embedding, position_embedding)
-        )
-        x = self.backbone.get_layer("encoder_embeddings_layer_norm")(x)
-        x = self.backbone.get_layer("encoder_embeddings_dropout")(x)
-
-        # Transformer encoder layers.
-        for i in range(self.backbone.num_layers):
-            x = self.backbone.get_layer(f"transformer_encoder_layer_{i}")(
-                x, padding_mask=padding_mask
-            )
-
+        tokens = self.backbone.token_embedding(token_ids)
+        positions = self.backbone.encoder_position_embedding(tokens)
+        x = self.backbone.decoder_embeddings_add((tokens, positions))
+        x = self.backbone.encoder_embeddings_layer_norm(x)
+        x = self.backbone.encoder_embeddings_dropout(x)
+        for transformer_layer in self.backbone.encoder_transformer_layers:
+            x = transformer_layer(x, padding_mask=padding_mask)
         return x
 
     def _initialize_cache(self, encoder_token_ids, decoder_token_ids):
