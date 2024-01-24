@@ -291,6 +291,7 @@ class OPTCausalLM(GenerativeTask):
             )
 
         token_ids = self._sampler(
+            self,
             next=next,
             prompt=token_ids,
             cache=cache,
