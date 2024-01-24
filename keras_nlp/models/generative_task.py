@@ -101,12 +101,7 @@ class GenerativeTask(Task):
                 for v in self._sampler.variables:
                     new_v = scope.get_current_value(v)
                     sampler_variables.append(new_v if new_v is not None else v)
-                state = (
-                    sampler_variables,
-                    trainable_variables,
-                    non_trainable_variables,
-                )
-                return outputs, state
+                return outputs, sampler_variables
 
             def wrapped_generate_function(
                 inputs,
@@ -119,14 +114,14 @@ class GenerativeTask(Task):
                     self.non_trainable_variables,
                 )
                 inputs = tree.map_structure(ops.convert_to_tensor, inputs)
-                outputs, state = compiled_generate_function(
+                outputs, sampler_variables = compiled_generate_function(
                     inputs,
                     end_token_id,
                     state,
                 )
                 # Only assign the sampler variables (random seeds), as other
                 # model variables should never be updated in generation.
-                for ref_v, v in zip(self._sampler.variables, state[0]):
+                for ref_v, v in zip(self._sampler.variables, sampler_variables):
                     ref_v.assign(v)
                 return outputs
 
