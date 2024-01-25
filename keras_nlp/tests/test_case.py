@@ -142,6 +142,12 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     else:
                         return self.layer(x)
 
+            input_data = tree.map_structure(
+                lambda x: ops.convert_to_numpy(x), input_data
+            )
+            output_data = tree.map_structure(
+                lambda x: ops.convert_to_numpy(x), output_data
+            )
             model = TestModel(layer)
             # Temporarily disable jit compilation on torch backend.
             jit_compile = config.backend() != "torch"
