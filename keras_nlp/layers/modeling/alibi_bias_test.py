@@ -67,14 +67,13 @@ class AlibiBiasTest(TestCase):
         test_layer = AlibiBias()
         # Create a 4-dimensional input (the first dimension is implicit).
         input_tensor = keras.Input(
-            shape=(None, num_heads, query_length, key_length)
+            shape=(num_heads, query_length, key_length)
         )
         output_tensor = test_layer(input_tensor)
 
         # the output is expected to be the same as the input shape in all
-        # dimensions - but may be None if the input shape is None there.
+        # dimensions.
         expected_output_shape = (
-            None,
             None,
             num_heads,
             query_length,
