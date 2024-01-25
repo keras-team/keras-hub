@@ -42,19 +42,19 @@ class AlibiBias(keras.layers.Layer):
 
     Examples:
     ```python
-    query_length = 100
-    key_length = 100
-    num_heads = 8
-    batch_size = 4
-    hidden_dim = 12
+    query_length = 10
+    key_length = 10
+    num_heads = 4
+    batch_size = 2
+    hidden_dim = 8
 
     # Create new alibi layer.
-    alibi_layer = AlibiBias()
+    alibi_layer = keras_nlp.layers.AlibiBias()
 
     query = np.zeros((batch_size, num_heads, query_length, hidden_dim))
     key = np.zeros((batch_size, num_heads, hidden_dim, key_length))
 
-    attention_scores = ops.matmul(query, key)
+    attention_scores = keras.ops.matmul(query, key)
 
     # Add alibi bias to attention scores.
     attention_scores = alibi_layer(attention_scores)
