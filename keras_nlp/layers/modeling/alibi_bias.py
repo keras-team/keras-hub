@@ -60,61 +60,41 @@ class AlibiBias(keras.layers.Layer):
 
     def __init__(
         self,
-        max_sequence_length,
         alibi_bias_max=8,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.max_sequence_length = max_sequence_length
         self.alibi_bias_max = alibi_bias_max
-
-    def build(self, inputs_shape):
-        if len(inputs_shape) < 3:
-            raise ValueError(
-                "Expected `attention_scores` shape to be "
-                "`(..., num_heads, query_length, key_length)`."
-                f" Received shape={inputs_shape}"
-            )
-        num_heads = inputs_shape[-3]
-        alibi_bias_shape = tuple([1 for _ in range(len(inputs_shape[:-3]))]) + (
-            num_heads,
-            1,
-            self.max_sequence_length,
-        )
-        self.alibi_bias = self.add_weight(
-            shape=alibi_bias_shape, trainable=False
-        )
-        alibi_bias = self._get_alibi_bias(num_heads, self.max_sequence_length)
-        alibi_bias = ops.reshape(
-            alibi_bias,
-            alibi_bias_shape,
-        )
-
-        self.alibi_bias.assign(alibi_bias)
 
     def call(self, attention_scores):
         shape = ops.shape(attention_scores)
         if len(shape) < 3:
             raise ValueError(
                 "Expected `attention_scores` shape to be "
-                "`(..., num_heads, query_length, key_length)`."
-                f" Received shape={shape}"
+                "`(..., num_heads, query_length, key_Length)`."
+                f" Recived shape={shape}"
             )
 
         key_length = shape[-1]
-        attention_scores = ops.add(
-            attention_scores,
-            self.alibi_bias[..., self.max_sequence_length - key_length :],
+        num_heads = shape[-3]
+
+        alibi_bias = self._get_alibi_bias(num_heads, key_length)
+        alibi_bias = ops.reshape(
+            alibi_bias,
+            tuple([1 for _ in range(len(shape[:-3]))])
+            + (num_heads, 1, key_length),
         )
 
-        return ops.cast(attention_scores, self.compute_dtype)
+        return ops.add(attention_scores, alibi_bias)
 
     def _get_alibi_bias(self, num_heads, key_length):
-        slopes = ops.convert_to_tensor(self._get_slopes(num_heads), dtype=float)
+        slopes = ops.convert_to_tensor(
+            self._get_slopes(num_heads), dtype=self.compute_dtype
+        )
         slopes = ops.expand_dims(slopes, 1)
 
         seq_range = ops.expand_dims(ops.arange(1 - key_length, 1), 0)
-        seq_range = ops.cast(seq_range, dtype=float)
+        seq_range = ops.cast(seq_range, dtype=self.compute_dtype)
 
         alibi_bias = ops.multiply(slopes, seq_range)
 
@@ -150,7 +130,6 @@ class AlibiBias(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "max_sequence_length": self.max_sequence_length,
                 "alibi_bias_max": self.alibi_bias_max,
             }
         )

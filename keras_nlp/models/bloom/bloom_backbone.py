@@ -109,7 +109,6 @@ class BloomBackbone(Backbone):
             x = BloomDecoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
-                max_sequence_length=max_sequence_length,
                 dropout=dropout,
                 layer_norm_epsilon=layer_norm_epsilon,
                 name=f"transformer_layer_{i}",

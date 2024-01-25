@@ -24,13 +24,11 @@ class AlibiBiasTest(TestCase):
         alibi_bias_max = 8
         batch_size = 4
         num_heads = 8
-        max_sequence_length = 10
         query_length = 10
         key_length = 10
         self.run_layer_test(
             cls=AlibiBias,
             init_kwargs={
-                "max_sequence_length": max_sequence_length,
                 "alibi_bias_max": alibi_bias_max,
             },
             input_data=random.uniform(
@@ -42,8 +40,6 @@ class AlibiBiasTest(TestCase):
                 query_length,
                 key_length,
             ),
-            expected_num_non_trainable_weights=1,
-            expected_num_non_trainable_variables=1,
         )
 
     def test_float16_dtype(self):
@@ -51,13 +47,8 @@ class AlibiBiasTest(TestCase):
         alibi_bias_max = 8
         num_heads = 8
         query_length = 5
-        max_sequence_length = 10
         key_length = 10
-        test_layer = AlibiBias(
-            max_sequence_length=max_sequence_length,
-            alibi_bias_max=alibi_bias_max,
-            dtype="float16",
-        )
+        test_layer = AlibiBias(alibi_bias_max=alibi_bias_max, dtype="float16")
         input_tensor = keras.Input(shape=(num_heads, query_length, key_length))
         output_tensor = test_layer(input_tensor)
 
@@ -69,12 +60,11 @@ class AlibiBiasTest(TestCase):
         self.assertEqual("float16", output_tensor.dtype)
 
     def test_dynamic_layer_output_shape(self):
-        max_sequence_length = 10
         query_length = 10
         key_length = 10
         num_heads = 4
 
-        test_layer = AlibiBias(max_sequence_length=max_sequence_length)
+        test_layer = AlibiBias()
         # Create a 4-dimensional input (the first dimension is implicit).
         input_tensor = keras.Input(
             shape=(None, num_heads, query_length, key_length)
@@ -93,25 +83,13 @@ class AlibiBiasTest(TestCase):
         self.assertEqual(expected_output_shape, output_tensor.shape)
 
     def test_value_error_when_inputs_shape_is_less_than_3(self):
-        max_sequence_length = 12
         with self.assertRaises(ValueError):
-            AlibiBias(max_sequence_length=max_sequence_length)(
-                random.uniform(shape=(12, 12))
-            )
-
-    def test_key_length_is_less_than_max_sequence_length(self):
-        max_sequence_length = 20
-        inputs_shape = (5, 4, 4, 12, 12)
-        inputs = random.uniform(shape=inputs_shape)
-        layer = AlibiBias(max_sequence_length=max_sequence_length)
-        outputs = layer(inputs)
-        self.assertEqual(inputs_shape, outputs.shape)
+            AlibiBias()(random.uniform(shape=(12, 12)))
 
     def test_num_heads_is_not_power_of_two(self):
-        max_sequence_length = 12
-        inputs_shape = (1, 12, 12)
+        inputs_shape = (12, 12, 12)
         inputs = random.uniform(shape=inputs_shape)
-        layer = AlibiBias(max_sequence_length=max_sequence_length)
+        layer = AlibiBias()
         outputs = layer(inputs)
         self.assertEqual(inputs_shape, outputs.shape)
 
@@ -120,12 +98,9 @@ class AlibiBiasTest(TestCase):
         num_heads = 8
         query_length = 1
         key_length = 3
-        max_sequence_length = 3
         input_shape = (batch_size, num_heads, query_length, key_length)
         input_tensor = ops.zeros(input_shape)
-        layer = AlibiBias(
-            max_sequence_length=max_sequence_length,
-        )
+        layer = AlibiBias()
         output_tensor = layer(input_tensor)
         print(output_tensor)
         self.assertAllClose(
@@ -151,12 +126,9 @@ class AlibiBiasTest(TestCase):
         num_heads = 14
         query_length = 1
         key_length = 3
-        max_sequence_length = 3
         input_shape = (batch_size, num_heads, query_length, key_length)
         input_tensor = ops.zeros(input_shape)
-        layer = AlibiBias(
-            max_sequence_length=max_sequence_length,
-        )
+        layer = AlibiBias()
         output_tensor = layer(input_tensor)
         print(output_tensor)
         self.assertAllClose(
@@ -189,13 +161,9 @@ class AlibiBiasTest(TestCase):
         num_heads = 2
         query_length = 1
         key_length = 3
-        max_sequence_length = 3
         input_shape = (batch_size, num_heads, query_length, key_length)
         input_tensor = ops.zeros(input_shape)
-        layer = AlibiBias(
-            max_sequence_length=max_sequence_length,
-            alibi_bias_max=alibi_bias_max,
-        )
+        layer = AlibiBias(alibi_bias_max=alibi_bias_max)
         output_tensor = layer(input_tensor)
         print(output_tensor)
         self.assertAllClose(
@@ -218,13 +186,9 @@ class AlibiBiasTest(TestCase):
         num_heads = 3
         query_length = 1
         key_length = 3
-        max_sequence_length = 3
         input_shape = (batch_size, num_heads, query_length, key_length)
         input_tensor = ops.zeros(input_shape)
-        layer = AlibiBias(
-            max_sequence_length=max_sequence_length,
-            alibi_bias_max=alibi_bias_max,
-        )
+        layer = AlibiBias(alibi_bias_max=alibi_bias_max)
         output_tensor = layer(input_tensor)
         print(output_tensor)
         self.assertAllClose(
@@ -235,37 +199,6 @@ class AlibiBiasTest(TestCase):
                         [[-0.25, -0.125, 0.0]],
                         [[-0.03125, -0.015625, 0.0]],
                         [[-0.70710677, -0.35355338, 0.0]],
-                    ]
-                ]
-            ),
-        )
-
-    def test_correct_output_key_length_smaller_than_max_sequence_length(self):
-        batch_size = 1
-        num_heads = 8
-        query_length = 1
-        key_length = 3
-        max_sequence_length = 10
-        input_shape = (batch_size, num_heads, query_length, key_length)
-        input_tensor = ops.zeros(input_shape)
-        layer = AlibiBias(
-            max_sequence_length=max_sequence_length,
-        )
-        output_tensor = layer(input_tensor)
-        print(output_tensor)
-        self.assertAllClose(
-            output_tensor,
-            ops.convert_to_tensor(
-                [
-                    [
-                        [[-1.0, -0.5, 0.0]],
-                        [[-0.5, -0.25, 0.0]],
-                        [[-0.25, -0.125, 0.0]],
-                        [[-0.125, -0.0625, 0.0]],
-                        [[-0.0625, -0.03125, 0.0]],
-                        [[-0.03125, -0.015625, 0.0]],
-                        [[-0.015625, -0.0078125, 0.0]],
-                        [[-0.0078125, -0.00390625, 0.0]],
                     ]
                 ]
             ),
