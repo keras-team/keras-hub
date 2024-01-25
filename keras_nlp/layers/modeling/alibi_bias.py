@@ -20,38 +20,44 @@ from keras_nlp.backend import ops
 
 @keras_nlp_export("keras_nlp.layers.AlibiBias")
 class AlibiBias(keras.layers.Layer):
-    """A layer that add the alibi bias to attention scores
+    """A layer that adds the alibi bias to attention scores.
 
-    This layer generates a linear, non-learned bias. Defined and formalized in
+    This layer adds the alibi bias to the attention scores. alibi bias is a 
+    linear, non-learned bias. Defined and formalized in
     [Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation](https://arxiv.org/abs/2108.12409).
 
-    Takes as input an attention score. This layer will return the attention
+    This layer Takes as input the attention scores. and returns the attention
     scores after adding the alibi bias to it. The output will have the same
     shape as the input.
 
     Args:
         alibi_bias_max: int. This value will be used to compute the slope of
-            each head. The heads slopes is a geometric sequence that starts at
+            each head. The heads' slopes is a geometric sequence that starts at
             `2**(-alibi_bias_max/num_heads)` and uses that same value as its
             ratio. Defaults to 8.
     Call arguments:
         attention_scores: The result of multipying the query and the key of the
-            multi head attention of the transformer. The shape must be greater
-            than or equal to 3 with the last 3 dimensions equal to
-            `(num_heads, query_length, key_length)`.
+            multi-head attention layer of the transformer to add alibi bias to 
+            it. with shape `(batch_size, num_heads, query_length, key_length)`.
 
     Examples:
     ```python
-    # create a simple layer that takes token embeddings as input and generates
-    # the alibi tensor
-    seq_len = 100
-    vocab_size = 1000
-    embedding_dim = 32
-    inputs = keras.Input((seq_len,), dtype="float32")
-    embedding = keras.layers.Embedding(
-        input_dim=vocab_size, output_dim=embedding_dim
-    )(inputs)
-    alibi_bias = keras_nlp.layers.AlibiBias(num_heads=8)(embedding)
+    query_length = 100
+    key_length = 100
+    num_heads = 8
+    batch_size = 4
+    hidden_dim = 12
+
+    # Create new alibi layer.
+    alibi_layer = AlibiBias()
+
+    query = np.zeros((batch_size, num_heads, query_length, hidden_dim))
+    key = np.zeros((batch_size, num_heads, hidden_dim, key_length))
+
+    attention_scores = ops.matmul(query, key)
+
+    # Add alibi bias to attention scores.
+    attention_scores = alibi_layer(attention_scores)
     ```
 
     References:
@@ -68,10 +74,10 @@ class AlibiBias(keras.layers.Layer):
 
     def call(self, attention_scores):
         shape = ops.shape(attention_scores)
-        if len(shape) < 3:
+        if len(shape) != 4:
             raise ValueError(
                 "Expected `attention_scores` shape to be "
-                "`(..., num_heads, query_length, key_Length)`."
+                "`(batch_size, num_heads, query_length, key_Length)`."
                 f" Recived shape={shape}"
             )
 
@@ -79,11 +85,6 @@ class AlibiBias(keras.layers.Layer):
         num_heads = shape[-3]
 
         alibi_bias = self._get_alibi_bias(num_heads, key_length)
-        alibi_bias = ops.reshape(
-            alibi_bias,
-            tuple([1 for _ in range(len(shape[:-3]))])
-            + (num_heads, 1, key_length),
-        )
 
         return ops.add(attention_scores, alibi_bias)
 
@@ -97,13 +98,13 @@ class AlibiBias(keras.layers.Layer):
         seq_range = ops.cast(seq_range, dtype=self.compute_dtype)
 
         alibi_bias = ops.multiply(slopes, seq_range)
+        alibi_bias = ops.expand_dims(alibi_bias, 1)
 
-        # Expand on query dimension
-        # return shape is `(num_heads, 1, key_length)`
-        return ops.expand_dims(alibi_bias, 1)
+        # return shape is `(1, num_heads, 1, key_length)`
+        return ops.expand_dims(alibi_bias, 0)
 
     def _get_slopes(self, num_heads):
-        # this function is adopted from Alibi original implementation
+        # this function is adopted from Alibi original implementation.
         # https://github.com/ofirpress/attention_with_linear_biases/blob/a35aaca144e0eb6b789dfcb46784c4b8e31b7983/fairseq/models/transformer.py#L742
         def get_slopes_power_of_2(n):
             start = 2 ** (

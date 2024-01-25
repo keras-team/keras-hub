@@ -82,12 +82,12 @@ class AlibiBiasTest(TestCase):
         )
         self.assertEqual(expected_output_shape, output_tensor.shape)
 
-    def test_value_error_when_inputs_shape_is_less_than_3(self):
+    def test_value_error_when_inputs_shape_is_not_4(self):
         with self.assertRaises(ValueError):
             AlibiBias()(random.uniform(shape=(12, 12)))
 
     def test_num_heads_is_not_power_of_two(self):
-        inputs_shape = (12, 12, 12)
+        inputs_shape = (1, 12, 12, 12)
         inputs = random.uniform(shape=inputs_shape)
         layer = AlibiBias()
         outputs = layer(inputs)
