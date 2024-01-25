@@ -22,23 +22,23 @@ from keras_nlp.backend import ops
 class AlibiBias(keras.layers.Layer):
     """A layer that adds the alibi bias to attention scores.
 
-    This layer adds the alibi bias to the attention scores. alibi bias is a
+    This layer adds the alibi bias to the attention scores. Alibi bias is a
     linear, non-learned bias. Defined and formalized in
     [Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation](https://arxiv.org/abs/2108.12409).
 
-    This layer Takes as input the attention scores. and returns the attention
+    This layer takes as input the attention scores. and returns the attention
     scores after adding the alibi bias to it. The output will have the same
     shape as the input.
 
     Args:
         alibi_bias_max: int. This value will be used to compute the slope of
-            each head. The heads' slopes is a geometric sequence that starts at
+            each head. The heads' slopes are a geometric sequence that starts at
             `2**(-alibi_bias_max/num_heads)` and uses that same value as its
             ratio. Defaults to 8.
     Call arguments:
         attention_scores: The result of multipying the query and the key of the
             multi-head attention layer of the transformer to add alibi bias to
-            it. with shape `(batch_size, num_heads, query_length, key_length)`.
+            it. With shape `(batch_size, num_heads, query_length, key_length)`.
 
     Examples:
     ```python
