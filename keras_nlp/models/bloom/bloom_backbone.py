@@ -11,11 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import copy
+
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.bloom.bloom_decoder import BloomDecoder
+from keras_nlp.models.bloom.bloom_presets import backbone_presets
+from keras_nlp.utils.python_utils import classproperty
 
 
 def _bloom_kernel_initializer(stddev=0.02):
@@ -35,7 +39,8 @@ class BloomBackbone(Backbone):
     load preset architectures and weights, use the `from_preset()` constructor.
 
     Disclaimer: Pre-trained models are provided on an "as is" basis, without
-    warranties or conditions of any kind.
+    warranties or conditions of any kind. The underlying model is provided by a
+    third party and subject to a separate license, available [here](https://huggingface.co/spaces/bigscience/license).
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
@@ -57,6 +62,10 @@ class BloomBackbone(Backbone):
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
         "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
     }
+
+    # Pretrained BLOOM decoder.
+    model = keras_nlp.models.BloomBackbone.from_preset("bloom_560m_multi")
+    model(input_data)
 
     # Randomly initialized BLOOM decoder with a custom config.
     model = keras_nlp.models.BloomBackbone(
@@ -151,3 +160,7 @@ class BloomBackbone(Backbone):
             }
         )
         return config
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
