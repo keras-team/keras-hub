@@ -172,9 +172,11 @@ class LlamaDecoder(keras.layers.Layer):
             batch_size,
             input_length,
             output_length,
-            0
-            if self_attention_cache_update_index is None
-            else self_attention_cache_update_index,
+            (
+                0
+                if self_attention_cache_update_index is None
+                else self_attention_cache_update_index
+            ),
         )
         return (
             ops.minimum(decoder_mask, causal_mask)
