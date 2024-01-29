@@ -204,3 +204,6 @@ class BloomDecoder(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(self, decoder_sequence_shape):
+        return decoder_sequence_shape

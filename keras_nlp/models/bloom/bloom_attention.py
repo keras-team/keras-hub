@@ -15,6 +15,7 @@ import math
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
+from keras_nlp.layers.modeling.alibi_bias import AlibiBias
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
@@ -74,6 +75,8 @@ class BloomAttention(keras.layers.Layer):
         )
         self._value_dense.build(inputs_shape)
 
+        self._alibi_layer = AlibiBias()
+
         self._output_dense = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
@@ -91,38 +94,6 @@ class BloomAttention(keras.layers.Layer):
         )
 
         self.built = True
-
-    @staticmethod
-    def _build_alibi_tensor(num_heads, seq_length, alibi_bias_max=8):
-        # this function is adopted from fairseq
-        # https://github.com/ofirpress/attention_with_linear_biases/blob/a35aaca144e0eb6b789dfcb46784c4b8e31b7983/fairseq/models/transformer.py#L742
-        def get_slopes(n):
-            def get_slopes_power_of_2(n):
-                start = 2 ** (
-                    -(2 ** -(math.log2(n) - math.log2(alibi_bias_max)))
-                )
-                ratio = start
-                return [start * ratio**i for i in range(n)]
-
-            if math.log2(n).is_integer():
-                return get_slopes_power_of_2(n)
-            else:
-                closest_power_of_2 = 2 ** math.floor(math.log2(n))
-                return (
-                    get_slopes_power_of_2(closest_power_of_2)
-                    + get_slopes(2 * closest_power_of_2)[0::2][
-                        : n - closest_power_of_2
-                    ]
-                )
-
-        slopes = ops.convert_to_tensor(get_slopes(num_heads), dtype=float)
-        slopes = ops.expand_dims(slopes, 1)
-
-        alibi = slopes * ops.expand_dims(ops.arange(seq_length, dtype=float), 0)
-        alibi = ops.expand_dims(alibi, 1)
-        alibi = ops.expand_dims(alibi, 0)
-
-        return alibi
 
     def call(
         self,
@@ -163,20 +134,17 @@ class BloomAttention(keras.layers.Layer):
         # key   (batch_size, num_heads, head_dim, kv_length)
         key = ops.transpose(key, [0, 2, 3, 1])
 
-        alibi = self._build_alibi_tensor(
-            num_heads=self.num_heads, seq_length=seq_length
-        )
-
-        scores = (
-            ops.matmul(query, key) * self.inv_norm_factor + alibi
+        attention_scores = (
+            ops.matmul(query, key) * self.inv_norm_factor
         )  # [batch_size, num_heads, query_length, kv_length]
-
-        scores = self._softmax(scores, ops.expand_dims(attention_mask, 1))
-
-        scores = self._dropout_layer(scores)
+        attention_scores = self._alibi_layer(attention_scores)
+        attention_scores = self._softmax(
+            attention_scores, ops.expand_dims(attention_mask, 1)
+        )
+        attention_scores = self._dropout_layer(attention_scores)
 
         attention_output = ops.matmul(
-            scores, value
+            attention_scores, value
         )  # [batch_size, num_heads, query_length, head_dim]
 
         attention_output = ops.transpose(
