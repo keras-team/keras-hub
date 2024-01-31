@@ -17,3 +17,6 @@ namex
 rouge-score
 sentencepiece
 tensorflow-datasets
+# TODO #1419: CI fails with `tensorflow-hub==0.16.1` installed from
+# `tensorflow-text-nightly` dependency. Remove once GH issue 1419 is closed.
+tensorflow-hub==0.16.0
