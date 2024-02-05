@@ -23,6 +23,8 @@ os.environ["KERAS_BACKEND"] = "torch"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 import huggingface_hub  # noqa: E402
+import numpy as np  # noqa: E402
+import tensorflow as tf  # noqa: E402
 import transformers  # noqa: E402
 from absl import app  # noqa: E402
 from absl import flags  # noqa: E402
@@ -42,7 +44,7 @@ EXTRACT_DIR = "./model"
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset",
-    "electra_small_discriminator_en",
+    "electra_small_generator_en",
     f'Must be one of {",".join(PRESET_MAP)}',
 )
 flags.mark_flag_as_required("preset")
@@ -222,7 +224,23 @@ def convert_weights(keras_model, hf_model):
 
 
 def validate_output(keras_model, hf_model, keras_tokenizer, hf_tokenizer):
-    pass
+    input_str = ["The quick brown fox jumps over the lazy dog."]
+
+    keras_nlp_preprocessor = keras_nlp.models.ElectraPreprocessor(
+        keras_tokenizer
+    )
+    keras_nlp_inputs = keras_nlp_preprocessor(tf.constant(input_str))
+    keras_nlp_output = keras_model.predict(keras_nlp_inputs).get(
+        "sequence_output"
+    )
+
+    hf_inputs = hf_tokenizer(
+        input_str, padding="max_length", return_tensors="pt"
+    )
+    hf_output = hf_model(**hf_inputs).last_hidden_state.detach().numpy()
+    print("🔶 KerasNLP output:", keras_nlp_output[0, 0, :10])
+    print("🔶 HF output:", hf_output[0, 0, :10])
+    print("Difference: ", np.mean(keras_nlp_output - hf_output))
 
 
 def main(_):
@@ -234,8 +252,8 @@ def main(_):
     hf_model_dir = download_hf_model(hf_model_name)
     print("✅ Downloaded model from Hugging face hub")
 
-    hf_model = transformers.AutoModel.from_pretrained(hf_model_dir)
-    hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_dir)
+    hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_name)
+    hf_model = transformers.AutoModel.from_pretrained(hf_model_name)
     print(f"✅ Loaded {preset} from Hugging Face")
 
     keras_model = convert_model(hf_model)
