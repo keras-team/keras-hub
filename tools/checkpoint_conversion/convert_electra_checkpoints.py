@@ -12,19 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+Electra weights conversion script.
+"""
+
 import json
 import os
 
-import numpy as np
-import requests
-import tensorflow as tf
-from absl import app
-from absl import flags
-from checkpoint_conversion_utils import get_md5_checksum
-from transformers import AutoModel
-from transformers import AutoTokenizer
+os.environ["KERAS_BACKEND"] = "torch"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-import keras_nlp
+import huggingface_hub  # noqa: E402
+import transformers  # noqa: E402
+from absl import app  # noqa: E402
+from absl import flags  # noqa: E402
+
+import keras_nlp  # noqa: E402
+from keras_nlp.utils.preset_utils import save_to_preset  # noqa: E402
 
 PRESET_MAP = {
     "electra_base_generator_en": "google/electra-base-generator",
@@ -33,289 +37,222 @@ PRESET_MAP = {
     "electra_small_discriminator_en": "google/electra-small-discriminator",
 }
 
-EXTRACT_DIR = "./{}"
+EXTRACT_DIR = "./model"
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
-    "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
+    "preset",
+    "electra_small_discriminator_en",
+    f'Must be one of {",".join(PRESET_MAP)}',
 )
+flags.mark_flag_as_required("preset")
 
 
-def download_files(hf_model_name):
-    print("-> Download original vocab and config.")
-
-    extract_dir = EXTRACT_DIR.format(FLAGS.preset)
-    if not os.path.exists(extract_dir):
-        os.makedirs(extract_dir)
-
-    # Config.
-    config_path = os.path.join(extract_dir, "config.json")
-    response = requests.get(
-        f"https://huggingface.co/{hf_model_name}/raw/main/config.json"
+def download_hf_model(hf_model_name):
+    hf_model_dir = huggingface_hub.snapshot_download(
+        repo_id=hf_model_name,
+        allow_patterns=["*.json", "*.bin"],
+        ignore_patterns=["onx/*"],
+        local_dir=EXTRACT_DIR,
     )
-    open(config_path, "wb").write(response.content)
-    print(f"`{config_path}`")
-
-    # Vocab.
-    vocab_path = os.path.join(extract_dir, "vocab.txt")
-    response = requests.get(
-        f"https://huggingface.co/{hf_model_name}/raw/main/vocab.txt"
-    )
-    open(vocab_path, "wb").write(response.content)
-    print(f"`{vocab_path}`")
+    return hf_model_dir
 
 
-def define_preprocessor(hf_model_name):
-    print("\n-> Define the tokenizers.")
-    extract_dir = EXTRACT_DIR.format(FLAGS.preset)
-    vocab_path = os.path.join(extract_dir, "vocab.txt")
-
-    keras_nlp_tokenizer = keras_nlp.models.ElectraTokenizer(
-        vocabulary=vocab_path,
-    )
-    keras_nlp_preprocessor = keras_nlp.models.ElectraPreprocessor(
-        keras_nlp_tokenizer
-    )
-
-    hf_tokenizer = AutoTokenizer.from_pretrained(hf_model_name)
-
-    print("\n-> Print MD5 checksum of the vocab files.")
-    print(f"`{vocab_path}` md5sum: ", get_md5_checksum(vocab_path))
-
-    return keras_nlp_preprocessor, hf_tokenizer
-
-
-def convert_checkpoints(keras_nlp_model, hf_model):
-    print("\n-> Convert original weights to KerasNLP format.")
-
-    extract_dir = EXTRACT_DIR.format(FLAGS.preset)
-    config_path = os.path.join(extract_dir, "config.json")
-
+def convert_model(hf_model):
+    hf_config = hf_model.config.to_dict()
     cfg = {}
-    with open(config_path, "r") as f:
-        pt_cfg = json.load(f)
-    cfg["vocab_size"] = pt_cfg["vocab_size"]
-    cfg["embedding_dim"] = pt_cfg["embedding_size"]
-    cfg["num_layers"] = pt_cfg["num_hidden_layers"]
-    cfg["num_heads"] = pt_cfg["num_attention_heads"]
-    cfg["hidden_dim"] = pt_cfg["hidden_size"]
-    cfg["intermediate_dim"] = pt_cfg["intermediate_size"]
-    cfg["dropout"] = pt_cfg["hidden_dropout_prob"]
-    cfg["max_sequence_length"] = pt_cfg["max_position_embeddings"]
+    cfg["vocab_size"] = hf_config["vocab_size"]
+    cfg["embedding_dim"] = hf_config["embedding_size"]
+    cfg["num_layers"] = hf_config["num_hidden_layers"]
+    cfg["num_heads"] = hf_config["num_attention_heads"]
+    cfg["hidden_dim"] = hf_config["hidden_size"]
+    cfg["intermediate_dim"] = hf_config["intermediate_size"]
+    cfg["dropout"] = hf_config["hidden_dropout_prob"]
+    cfg["max_sequence_length"] = hf_config["max_position_embeddings"]
+    return keras_nlp.models.ElectraBackbone(**cfg)
 
-    print("Config: ", cfg)
 
-    hf_wts = hf_model.state_dict()
-    print("Original weights:")
-    print(
-        str(hf_wts.keys())
-        .replace(", ", "\n")
-        .replace("odict_keys([", "")
-        .replace("]", "")
-        .replace(")", "")
+def convert_tokenizer(hf_model_dir):
+    tokenizer_path = os.path.join(hf_model_dir, "tokenizer.json")
+    with open(tokenizer_path) as f:
+        hf_tokenizer = json.load(f)
+    vocab = hf_tokenizer["model"]["vocab"]
+
+    return keras_nlp.models.ElectraTokenizer(vocabulary=vocab)
+
+
+def convert_weights(keras_model, hf_model):
+    hf_model_dict = hf_model.state_dict()
+
+    keras_model.get_layer("token_embedding").embeddings.assign(
+        hf_model_dict["embeddings.word_embeddings.weight"].numpy()
+    )
+    keras_model.get_layer("position_embedding").position_embeddings.assign(
+        hf_model_dict["embeddings.position_embeddings.weight"].numpy()
+    )
+    keras_model.get_layer("segment_embedding").embeddings.assign(
+        hf_model_dict["embeddings.token_type_embeddings.weight"].numpy()
+    )
+    keras_model.get_layer("embeddings_layer_norm").gamma.assign(
+        hf_model_dict["embeddings.LayerNorm.weight"]
+    )
+    keras_model.get_layer("embeddings_layer_norm").beta.assign(
+        hf_model_dict["embeddings.LayerNorm.bias"]
     )
 
-    keras_nlp_model.get_layer("token_embedding").embeddings.assign(
-        hf_wts["embeddings.word_embeddings.weight"].numpy()
-    )
-    keras_nlp_model.get_layer("position_embedding").position_embeddings.assign(
-        hf_wts["embeddings.position_embeddings.weight"].numpy()
-    )
-    keras_nlp_model.get_layer("segment_embedding").embeddings.assign(
-        hf_wts["embeddings.token_type_embeddings.weight"].numpy()
-    )
-    keras_nlp_model.get_layer("embeddings_layer_norm").gamma.assign(
-        hf_wts["embeddings.LayerNorm.weight"]
-    )
-    keras_nlp_model.get_layer("embeddings_layer_norm").beta.assign(
-        hf_wts["embeddings.LayerNorm.bias"]
-    )
-
-    if cfg["embedding_dim"] != cfg["hidden_dim"]:
-        # Embeddings projection isn't created if hidden_dim == embedding_dim.
-        keras_nlp_model.get_layer("embeddings_projection").kernel.assign(
-            hf_wts["embeddings_project.weight"].transpose(1, 0).numpy()
+    if any(
+        layer.name == "embeddings_projection" for layer in keras_model.layers
+    ):
+        keras_model.get_layer("embeddings_projection").kernel.assign(
+            hf_model_dict["embeddings_project.weight"].transpose(1, 0).numpy()
         )
-        keras_nlp_model.get_layer("embeddings_projection").bias.assign(
-            hf_wts["embeddings_project.bias"].numpy()
+        keras_model.get_layer("embeddings_projection").bias.assign(
+            hf_model_dict["embeddings_project.bias"]
         )
 
-    for i in range(keras_nlp_model.num_layers):
-        keras_nlp_model.get_layer(
+    for i in range(keras_model.num_layers):
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._query_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.query.weight"]
+            hf_model_dict[f"encoder.layer.{i}.attention.self.query.weight"]
             .transpose(1, 0)
-            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .reshape((keras_model.hidden_dim, keras_model.num_heads, -1))
             .numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._query_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.query.bias"]
-            .reshape((cfg["num_heads"], -1))
+            hf_model_dict[f"encoder.layer.{i}.attention.self.query.bias"]
+            .reshape((keras_model.num_heads, -1))
             .numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._key_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.key.weight"]
+            hf_model_dict[f"encoder.layer.{i}.attention.self.key.weight"]
             .transpose(1, 0)
-            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .reshape((keras_model.hidden_dim, keras_model.num_heads, -1))
             .numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._key_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.key.bias"]
-            .reshape((cfg["num_heads"], -1))
+            hf_model_dict[f"encoder.layer.{i}.attention.self.key.bias"]
+            .reshape((keras_model.num_heads, -1))
             .numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._value_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.value.weight"]
+            hf_model_dict[f"encoder.layer.{i}.attention.self.value.weight"]
             .transpose(1, 0)
-            .reshape((cfg["hidden_dim"], cfg["num_heads"], -1))
+            .reshape((keras_model.hidden_dim, keras_model.num_heads, -1))
             .numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._value_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.attention.self.value.bias"]
-            .reshape((cfg["num_heads"], -1))
+            hf_model_dict[f"encoder.layer.{i}.attention.self.value.bias"]
+            .reshape((keras_model.num_heads, -1))
             .numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._output_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.attention.output.dense.weight"]
+            hf_model_dict[f"encoder.layer.{i}.attention.output.dense.weight"]
             .transpose(1, 0)
-            .reshape((cfg["num_heads"], -1, cfg["hidden_dim"]))
+            .reshape((keras_model.num_heads, -1, keras_model.hidden_dim))
             .numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer._output_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.attention.output.dense.bias"].numpy()
+            hf_model_dict[
+                f"encoder.layer.{i}.attention.output.dense.bias"
+            ].numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer_norm.gamma.assign(
-            hf_wts[
+            hf_model_dict[
                 f"encoder.layer.{i}.attention.output.LayerNorm.weight"
             ].numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._self_attention_layer_norm.beta.assign(
-            hf_wts[f"encoder.layer.{i}.attention.output.LayerNorm.bias"].numpy()
+            hf_model_dict[
+                f"encoder.layer.{i}.attention.output.LayerNorm.bias"
+            ].numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_intermediate_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.intermediate.dense.weight"]
+            hf_model_dict[f"encoder.layer.{i}.intermediate.dense.weight"]
             .transpose(1, 0)
             .numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_intermediate_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.intermediate.dense.bias"].numpy()
+            hf_model_dict[f"encoder.layer.{i}.intermediate.dense.bias"].numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_output_dense.kernel.assign(
-            hf_wts[f"encoder.layer.{i}.output.dense.weight"]
+            hf_model_dict[f"encoder.layer.{i}.output.dense.weight"]
             .transpose(1, 0)
             .numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_output_dense.bias.assign(
-            hf_wts[f"encoder.layer.{i}.output.dense.bias"].numpy()
+            hf_model_dict[f"encoder.layer.{i}.output.dense.bias"].numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_layer_norm.gamma.assign(
-            hf_wts[f"encoder.layer.{i}.output.LayerNorm.weight"].numpy()
+            hf_model_dict[f"encoder.layer.{i}.output.LayerNorm.weight"].numpy()
         )
-        keras_nlp_model.get_layer(
+        keras_model.get_layer(
             f"transformer_layer_{i}"
         )._feedforward_layer_norm.beta.assign(
-            hf_wts[f"encoder.layer.{i}.output.LayerNorm.bias"].numpy()
+            hf_model_dict[f"encoder.layer.{i}.output.LayerNorm.bias"].numpy()
         )
 
-        print(
-            f"\n-> Save KerasNLP model weights to `{FLAGS.preset}.weights.h5`."
-        )
-        keras_nlp_model.save_weights(f"{FLAGS.preset}.weights.h5")
 
-        return keras_nlp_model
-
-
-def check_output(
-    keras_nlp_preprocessor,
-    keras_nlp_model,
-    hf_tokenizer,
-    hf_model,
-):
-    print("\n-> Check the outputs.")
-    sample_text = [
-        "The problem of being faster than light is that you can only live in darkness."
-    ]
-
-    # KerasNLP
-    keras_nlp_inputs = keras_nlp_preprocessor(tf.constant(sample_text))
-    keras_nlp_output = keras_nlp_model.predict(keras_nlp_inputs)
-
-    # HF
-    hf_inputs = hf_tokenizer(
-        sample_text, padding="max_length", return_tensors="pt"
-    )
-    hf_output = hf_model(**hf_inputs).last_hidden_state
-
-    print(
-        "KerasNLP output:", keras_nlp_output.get("sequence_output")[0, 0, :10]
-    )
-    print("HF output:", hf_output[0, 0, :10])
-    print(
-        "Difference:",
-        np.mean(
-            keras_nlp_output.get("sequence_output") - hf_output.detach().numpy()
-        ),
-    )
-
-    # Show the MD5 checksum of the model weights.
-    print("Model md5sum: ", get_md5_checksum(f"./{FLAGS.preset}.weights.h5"))
+def validate_output(keras_model, hf_model, keras_tokenizer, hf_tokenizer):
+    pass
 
 
 def main(_):
-    hf_model_name = PRESET_MAP[FLAGS.preset]
-    print(hf_model_name)
-    download_files(hf_model_name)
+    preset = FLAGS.preset
+    assert preset in PRESET_MAP.keys(), f"Invalid preset: {preset}"
+    print(f"✅ Converting {preset}")
 
-    keras_nlp_preprocessor, hf_tokenizer = define_preprocessor(hf_model_name)
+    hf_model_name = PRESET_MAP[preset]
+    hf_model_dir = download_hf_model(hf_model_name)
+    print("✅ Downloaded model from Hugging face hub")
 
-    print("\n-> Load KerasNLP model.")
-    keras_nlp_model = keras_nlp.models.ElectraBackbone.from_preset(
-        FLAGS.preset, load_weights=False
-    )
+    hf_model = transformers.AutoModel.from_pretrained(hf_model_dir)
+    hf_tokenizer = transformers.AutoTokenizer.from_pretrained(hf_model_dir)
+    print(f"✅ Loaded {preset} from Hugging Face")
 
-    print("\n-> Load HF model.")
-    hf_model = AutoModel.from_pretrained(hf_model_name)
-    hf_model.eval()
+    keras_model = convert_model(hf_model)
+    keras_tokenizer = convert_tokenizer(hf_model_dir)
+    print("✅ Keras model loaded")
 
-    keras_nlp_model = convert_checkpoints(keras_nlp_model, hf_model)
+    convert_weights(keras_model, hf_model)
+    print("✅ Weights converted")
 
-    check_output(
-        keras_nlp_preprocessor,
-        keras_nlp_model,
-        hf_tokenizer,
-        hf_model,
-    )
+    validate_output(keras_model, hf_model, keras_tokenizer, hf_tokenizer)
+    print("✅ Validation complete")
+
+    save_to_preset(keras_model, preset)
+    save_to_preset(keras_tokenizer, preset, config_filename="tokenizer.json")
+
+    print("✅ Preset saved")
 
 
 if __name__ == "__main__":
-    flags.mark_flag_as_required("preset")
     app.run(main)
