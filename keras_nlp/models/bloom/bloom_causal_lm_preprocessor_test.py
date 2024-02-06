@@ -21,7 +21,7 @@ from keras_nlp.models.bloom.bloom_tokenizer import BloomTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
-class GPT2CausalLMPreprocessorTest(TestCase):
+class BloomCausalLMPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = ["<pad>", "<s>", "</s>"]
         self.vocab += ["!", "air", "Ġair", "plane", "Ġat", "port"]

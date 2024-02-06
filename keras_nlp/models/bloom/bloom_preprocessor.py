@@ -150,7 +150,7 @@ class BloomPreprocessor(Preprocessor):
         if len(x) != 1:
             raise ValueError(
                 "BLOOM requires each input feature to contain only "
-                f"one segment, but received {len(x)}. If you are using GPT2 "
+                f"one segment, but received {len(x)}. If you are using BLOOM "
                 "for a multi-segment classification task, please refer to "
                 "classification models like BERT or RoBERTa."
             )
