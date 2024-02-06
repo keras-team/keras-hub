@@ -28,13 +28,13 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras_nlp_export("keras_nlp.models.BloomPreprocessor")
 class BloomPreprocessor(Preprocessor):
-    """GPT2 preprocessing layer which tokenizes and packs inputs.
+    """BLOOM preprocessing layer which tokenizes and packs inputs.
 
     This preprocessing layer will do 2 things:
 
     - Tokenize the inputs using the `tokenizer`.
     - Construct a dictionary with keys `"token_ids"`, `"padding_mask"`, that can
-        be passed directly to a `keras_nlp.models.GPT2Backbone`.
+        be passed directly to a `keras_nlp.models.BloomBackbone`.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
@@ -47,13 +47,13 @@ class BloomPreprocessor(Preprocessor):
     `y` and `sample_weight` are both optional, can have any format, and will be
     passed through unaltered.
 
-    `GPT2Preprocessor` forces the input to have only one segment, as GPT2 is
+    `BloomPreprocessor` forces the input to have only one segment, as BLOOM is
     mainly used for generation tasks. For tasks having multi-segment inputs
     like "glue/mnli", please use a model designed for classification purposes
     such as BERT or RoBERTa.
 
     Args:
-        tokenizer: A `keras_nlp.models.GPT2Tokenizer` instance.
+        tokenizer: A `keras_nlp.models.BloomTokenizer` instance.
         sequence_length: The length of the packed inputs.
         add_start_token: If `True`, the preprocessor will prepend the tokenizer
             start token to each input sequence.
@@ -71,7 +71,7 @@ class BloomPreprocessor(Preprocessor):
 
     Directly calling the layer on data.
     ```python
-    preprocessor = keras_nlp.models.GPT2Preprocessor.from_preset("gpt2_base_en")
+    preprocessor = keras_nlp.models.BloomPreprocessor.from_preset("bloom_560m_multi")
 
     # Tokenize and pack a single sentence.
     preprocessor("The quick brown fox jumped.")
@@ -81,20 +81,20 @@ class BloomPreprocessor(Preprocessor):
 
     # Custom vocabulary.
     features = ["a quick fox.", "a fox quick."]
-    vocab = {"<|endoftext|>": 0, "a": 4, "Ġquick": 5, "Ġfox": 6}
+    vocab = {"<pad>": 0, "<s>":1, "</s>":2, "a": 3, "Ġquick": 4, "Ġfox": 5}
     merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
     merges += ["Ġ f", "o x", "Ġf ox"]
-    tokenizer = keras_nlp.models.GPT2Tokenizer(
+    tokenizer = keras_nlp.models.BloomTokenizer(
         vocabulary=vocab,
         merges=merges,
     )
-    preprocessor = keras_nlp.models.GPT2Preprocessor(tokenizer=tokenizer)
+    preprocessor = keras_nlp.models.BloomPreprocessor(tokenizer=tokenizer)
     preprocessor("The quick brown fox jumped.")
     ```
 
     Mapping with `tf.data.Dataset`.
     ```python
-    preprocessor = keras_nlp.models.GPT2Preprocessor.from_preset("gpt2_base_en")
+    preprocessor = keras_nlp.models.BloomPreprocessor.from_preset("bloom_560m_multi")
 
     text = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     label = tf.constant([1, 1])
