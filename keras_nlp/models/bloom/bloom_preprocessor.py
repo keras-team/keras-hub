@@ -71,8 +71,9 @@ class BloomPreprocessor(Preprocessor):
 
     Directly calling the layer on data.
     ```python
-    preprocessor = keras_nlp.models.BloomPreprocessor.from_preset("bloom_560m_multi")
-
+    preprocessor = keras_nlp.models.BloomPreprocessor.from_preset(
+        "bloom_560m_multi"
+    )
     # Tokenize and pack a single sentence.
     preprocessor("The quick brown fox jumped.")
 
@@ -94,7 +95,9 @@ class BloomPreprocessor(Preprocessor):
 
     Mapping with `tf.data.Dataset`.
     ```python
-    preprocessor = keras_nlp.models.BloomPreprocessor.from_preset("bloom_560m_multi")
+    preprocessor = keras_nlp.models.BloomPreprocessor.from_preset(
+        "bloom_560m_multi"
+    )
 
     text = tf.constant(["The quick brown fox jumped.", "Call me Ishmael."])
     label = tf.constant([1, 1])
