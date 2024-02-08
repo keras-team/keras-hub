@@ -67,7 +67,7 @@ class MistralCausalLM(GenerativeTask):
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(2e-5),
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=False,
+            jit_compile=True,
         )
 
     @classproperty
