@@ -47,11 +47,6 @@ class BloomPreprocessor(Preprocessor):
     `y` and `sample_weight` are both optional, can have any format, and will be
     passed through unaltered.
 
-    `BloomPreprocessor` forces the input to have only one segment, as BLOOM is
-    mainly used for generation tasks. For tasks having multi-segment inputs
-    like "glue/mnli", please use a model designed for classification purposes
-    such as BERT or RoBERTa.
-
     Args:
         tokenizer: A `keras_nlp.models.BloomTokenizer` instance.
         sequence_length: The length of the packed inputs.
