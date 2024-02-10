@@ -28,7 +28,7 @@ def _bloom_kernel_initializer(stddev=0.02):
 
 @keras_nlp_export("keras_nlp.models.BloomBackbone")
 class BloomBackbone(Backbone):
-    """A Bloom decoder network.
+    """A BLOOM decoder network.
 
     This network implements a Transformer-based decoder network, BigScience
     Language Open-science Open-access Multilingual (BLOOM), as descriped in
@@ -92,7 +92,7 @@ class BloomBackbone(Backbone):
         intermediate_dim,
         dropout=0.0,
         layer_norm_epsilon=1e-5,
-        max_sequence_length=512,
+        max_sequence_length=2048,
         **kwargs,
     ):
         token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
