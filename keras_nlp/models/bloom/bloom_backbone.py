@@ -103,7 +103,7 @@ class BloomBackbone(Backbone):
             tie_weights=False,
             name="token_embedding",
         )
-        self.token_embedding_layernorm = keras.layers.LayerNormalization(
+        self.embeddings_layer_norm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
             name="token_embedding_layernorm",
         )
@@ -117,7 +117,7 @@ class BloomBackbone(Backbone):
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
-        self.final_layernorm = keras.layers.LayerNormalization(
+        self.layer_norm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
             name="final_layernorm",
         )
@@ -130,10 +130,10 @@ class BloomBackbone(Backbone):
             shape=(None,), dtype="int32", name="padding_mask"
         )
         x = self.token_embedding(token_id_input)
-        x = self.token_embedding_layernorm(x)
+        x = self.embeddings_layer_norm(x)
         for transformer_layer in self.transformer_layers:
             x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
-        sequence_output = self.final_layernorm(x)
+        sequence_output = self.layer_norm(x)
         super().__init__(
             inputs={
                 "token_ids": token_id_input,

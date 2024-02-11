@@ -156,8 +156,8 @@ class AlbertClassifier(Task):
         **kwargs,
     ):
         # === Layers ===
-        self.preprocessor = preprocessor
         self.backbone = backbone
+        self.preprocessor = preprocessor
         self.output_dense = keras.layers.Dense(
             num_classes,
             kernel_initializer=albert_kernel_initializer(),

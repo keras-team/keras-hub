@@ -110,8 +110,8 @@ class FNetClassifier(Task):
         **kwargs,
     ):
         # === Layers ===
-        self.preprocessor = preprocessor
         self.backbone = backbone
+        self.preprocessor = preprocessor
         self.output_dropout = keras.layers.Dropout(
             dropout,
             name="output_dropout",
@@ -120,7 +120,7 @@ class FNetClassifier(Task):
             num_classes,
             kernel_initializer=f_net_kernel_initializer(),
             activation=activation,
-            name="output_dense",
+            name="logits",
         )
 
         # === Functional Model ===

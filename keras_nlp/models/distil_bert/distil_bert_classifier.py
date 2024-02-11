@@ -151,8 +151,8 @@ class DistilBertClassifier(Task):
         **kwargs,
     ):
         # === Layers ===
-        self.preprocessor = preprocessor
         self.backbone = backbone
+        self.preprocessor = preprocessor
         hidden_dim = hidden_dim or backbone.hidden_dim
         self.pooled_dense = keras.layers.Dense(
             hidden_dim,
@@ -168,7 +168,7 @@ class DistilBertClassifier(Task):
             num_classes,
             kernel_initializer=distilbert_kernel_initializer(),
             activation=activation,
-            name="output_dense",
+            name="logits",
         )
 
         # === Functional Model ===

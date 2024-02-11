@@ -105,8 +105,8 @@ class DistilBertMaskedLM(Task):
         **kwargs,
     ):
         # === Layers ===
-        self.preprocessor = preprocessor
         self.backbone = backbone
+        self.preprocessor = preprocessor
         self.masked_lm_head = MaskedLMHead(
             vocabulary_size=backbone.vocabulary_size,
             token_embedding=backbone.token_embedding,

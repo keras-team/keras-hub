@@ -158,8 +158,8 @@ class XLMRobertaClassifier(Task):
         **kwargs,
     ):
         # === Layers ===
-        self.preprocessor = preprocessor
         self.backbone = backbone
+        self.preprocessor = preprocessor
         self.pooled_dropout = keras.layers.Dropout(
             dropout,
             name="pooled_dropout",

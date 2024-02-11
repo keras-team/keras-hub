@@ -113,11 +113,11 @@ class T5Backbone(Backbone):
                 name=f"transformer_encoder_layer_{i}",
             )
             self.encoder_transformer_layers.append(layer)
-        self.encoder_output_layer_norm = T5LayerNorm(
+        self.encoder_layer_norm = T5LayerNorm(
             epsilon=layer_norm_epsilon,
             name="encoder_output_layer_norm",
         )
-        self.encoder_output_dropout = keras.layers.Dropout(
+        self.encoder_dropout = keras.layers.Dropout(
             dropout,
             name="encoder_output_dropout",
         )
@@ -141,11 +141,11 @@ class T5Backbone(Backbone):
                 name=f"transformer_decoder_layer_{i}",
             )
             self.decoder_transformer_layers.append(layer)
-        self.decoder_output_layer_norm = T5LayerNorm(
+        self.decoder_layer_norm = T5LayerNorm(
             epsilon=layer_norm_epsilon,
             name="decoder_output_layer_norm",
         )
-        self.decoder_output_dropout = keras.layers.Dropout(
+        self.decoder_dropout = keras.layers.Dropout(
             dropout,
             name="decoder_output_dropout",
         )
@@ -177,8 +177,8 @@ class T5Backbone(Backbone):
             )
             if isinstance(output, tuple):
                 x, position_bias = output
-        x = self.encoder_output_layer_norm(x)
-        x = self.encoder_output_dropout(x)
+        x = self.encoder_layer_norm(x)
+        x = self.encoder_dropout(x)
         encoder_output = x
         # Decoder.
         x = self.token_embedding(decoder_token_id_input)
@@ -196,8 +196,8 @@ class T5Backbone(Backbone):
             )
             if isinstance(output, tuple):
                 x, position_bias = output
-        x = self.decoder_output_layer_norm(x)
-        x = self.decoder_output_dropout(x)
+        x = self.decoder_layer_norm(x)
+        x = self.decoder_dropout(x)
         decoder_output = x
         super().__init__(
             {
