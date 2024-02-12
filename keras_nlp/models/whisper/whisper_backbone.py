@@ -237,7 +237,7 @@ class WhisperBackbone(Backbone):
         # For the second conv. layer, we cannot use `padding="same"` since
         # that corresponds to a padding size of 1.5 (since stride is 2). Hence,
         # we will manually pad the input.
-        embedded_features = Padder()(embedded_features)
+        embedded_features = self.encoder_padder(embedded_features)
         embedded_features = keras.activations.gelu(
             self.encoder_conv_layer_2(embedded_features),
             approximate=False,
