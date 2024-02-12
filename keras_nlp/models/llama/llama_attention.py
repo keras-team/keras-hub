@@ -182,10 +182,10 @@ class LlamaAttention(keras.layers.Layer):
         )
 
         attention_scores /= norm_factor
-
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
         )
+        attention_scores = ops.cast(attention_scores, self.compute_dtype)
         attention_output = ops.einsum(
             "acbe,aecd->abcd", attention_scores, value
         )

@@ -270,10 +270,10 @@ class CachedMistralAttention(keras.layers.Layer):
         norm_factor = ops.sqrt(ops.cast(self._head_dim, self.compute_dtype))
 
         attention_scores = attention_scores / norm_factor
-
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
         )
+        attention_scores = ops.cast(attention_scores, self.compute_dtype)
         attention_output = ops.einsum(
             self._combine_equation, attention_scores, value
         )
