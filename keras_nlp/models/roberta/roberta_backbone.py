@@ -98,39 +98,28 @@ class RobertaBackbone(Backbone):
         max_sequence_length=512,
         **kwargs,
     ):
-        # Inputs
-        token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="token_ids"
-        )
-        padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
-
-        # Embed tokens and positions.
-        embedding_layer = TokenAndPositionEmbedding(
+        # === Layers ===
+        self.embeddings = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
             embedding_dim=hidden_dim,
             embeddings_initializer=roberta_kernel_initializer(),
             name="embeddings",
         )
-        embedding = embedding_layer(token_id_input)
-
-        # Sum, normalize and apply dropout to embeddings.
-        x = keras.layers.LayerNormalization(
-            name="embeddings_layer_norm",
+        self.token_embedding = self.embeddings.token_embedding
+        self.embeddings_layer_norm = keras.layers.LayerNormalization(
             axis=-1,
             epsilon=1e-5,  # Original paper uses this epsilon value
             dtype="float32",
-        )(embedding)
-        x = keras.layers.Dropout(
+            name="embeddings_layer_norm",
+        )
+        self.embeddings_dropout = keras.layers.Dropout(
             dropout,
             name="embeddings_dropout",
-        )(x)
-
-        # Apply successive transformer encoder blocks.
+        )
+        self.transformer_layers = []
         for i in range(num_layers):
-            x = TransformerEncoder(
+            layer = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
                 activation="gelu",
@@ -138,18 +127,31 @@ class RobertaBackbone(Backbone):
                 layer_norm_epsilon=1e-5,
                 kernel_initializer=roberta_kernel_initializer(),
                 name=f"transformer_layer_{i}",
-            )(x, padding_mask=padding_mask)
+            )
+            self.transformer_layers.append(layer)
 
-        # Instantiate using Functional API Model constructor
+        # === Functional Model ===
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        x = self.embeddings(token_id_input)
+        x = self.embeddings_layer_norm(x)
+        x = self.embeddings_dropout(x)
+        for transformer_layer in self.transformer_layers:
+            x = transformer_layer(x, padding_mask=padding_mask_input)
         super().__init__(
             inputs={
                 "token_ids": token_id_input,
-                "padding_mask": padding_mask,
+                "padding_mask": padding_mask_input,
             },
             outputs=x,
             **kwargs,
         )
-        # All references to `self` below this line
+
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -158,7 +160,6 @@ class RobertaBackbone(Backbone):
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
         self.start_token_index = 0
-        self.token_embedding = embedding_layer.token_embedding
 
     def get_config(self):
         config = super().get_config()

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.preset_utils import check_preset_class
 from keras_nlp.utils.preset_utils import load_from_preset
@@ -23,24 +24,40 @@ from keras_nlp.utils.python_utils import format_docstring
 class Backbone(keras.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._token_embedding = None
         self._functional_layer_ids = set(
             id(layer) for layer in self._flatten_layers()
         )
+        self._initialized = True
 
     def __dir__(self):
-        # Temporary fixes for weight saving. This mimics the following PR for
+        if config.keras_3():
+            return super().__dir__()
+
+        # Temporary fixes for Keras 2 saving. This mimics the following PR for
         # older version of Keras: https://github.com/keras-team/keras/pull/18982
         def filter_fn(attr):
-            if attr == "_layer_checkpoint_dependencies":
+            if attr in [
+                "_layer_checkpoint_dependencies",
+                "transformer_layers",
+                "encoder_transformer_layers",
+                "decoder_transformer_layers",
+            ]:
                 return False
             return id(getattr(self, attr)) not in self._functional_layer_ids
 
         return filter(filter_fn, super().__dir__())
 
     def __setattr__(self, name, value):
-        # Work around torch setattr for properties.
-        if name in ["token_embedding"]:
+        # Work around setattr issues for Keras 2 and Keras 3 torch backend.
+        # Since all our state is covered by functional model we can route
+        # around custom setattr calls.
+        is_property = isinstance(getattr(type(self), name, None), property)
+        is_unitialized = not hasattr(self, "_initialized")
+        is_torch = config.backend() == "torch"
+        is_keras_2 = not config.keras_3()
+        if is_torch and (is_property or is_unitialized):
+            return object.__setattr__(self, name, value)
+        if is_keras_2 and is_unitialized:
             return object.__setattr__(self, name, value)
         return super().__setattr__(name, value)
 
@@ -48,18 +65,13 @@ class Backbone(keras.Model):
     def token_embedding(self):
         """A `keras.layers.Embedding` instance for embedding token ids.
 
-        This layer integer token ids to the hidden dim of the model.
+        This layer embeds integer token ids to the hidden dim of the model.
         """
         return self._token_embedding
 
     @token_embedding.setter
     def token_embedding(self, value):
-        # Workaround tf.keras h5 checkpoint loading, which is sensitive to layer
-        # count mismatches and does not deduplicate layers. This could go away
-        # if we update our checkpoints to the newer `.weights.h5` format.
-        self._setattr_tracking = False
         self._token_embedding = value
-        self._setattr_tracking = True
 
     def get_config(self):
         # Don't chain to super here. The default `get_config()` for functional

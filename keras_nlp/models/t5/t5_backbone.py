@@ -85,45 +85,21 @@ class T5Backbone(Backbone):
         tie_embedding_weights=True,
         **kwargs,
     ):
-        # Encoder inputs
-        encoder_token_ids = keras.Input(
-            shape=(None,), dtype="int32", name="encoder_token_ids"
-        )
-        encoder_padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="encoder_padding_mask"
-        )
-
-        # Decoder inputs.
-        decoder_token_ids = keras.Input(
-            shape=(None,), dtype="int32", name="decoder_token_ids"
-        )
-        decoder_padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="decoder_padding_mask"
-        )
-
         # Token embedding layer. This layer is shared by encoder and decoder.
-        token_embedding_layer = ReversibleEmbedding(
+        self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=tie_embedding_weights,
             embeddings_initializer=keras.initializers.TruncatedNormal(1.0),
             name="token_embedding",
         )
-
-        # ===== Encoder =====
-
-        # Embed tokens.
-        token_embedding = token_embedding_layer(encoder_token_ids)
-        x = keras.layers.Dropout(
+        self.encoder_embedding_dropout = keras.layers.Dropout(
             dropout,
             name="encoder_embedding_dropout",
-        )(token_embedding)
-
-        encoder_attention_mask = encoder_padding_mask[:, None, :]
-
-        position_bias = None
+        )
+        self.encoder_transformer_layers = []
         for i in range(num_layers):
-            output = T5TransformerLayer(
+            layer = T5TransformerLayer(
                 is_decoder=False,
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
@@ -135,39 +111,23 @@ class T5Backbone(Backbone):
                 use_gated_activation=use_gated_activation,
                 use_relative_attention_bias=bool(i == 0),
                 name=f"transformer_encoder_layer_{i}",
-            )(
-                x,
-                attention_mask=encoder_attention_mask,
-                position_bias=position_bias,
-                use_causal_mask=False,
             )
-            if isinstance(output, tuple):
-                x, position_bias = output
-
-        x = T5LayerNorm(
+            self.encoder_transformer_layers.append(layer)
+        self.encoder_layer_norm = T5LayerNorm(
             epsilon=layer_norm_epsilon,
             name="encoder_output_layer_norm",
-        )(x)
-        x = keras.layers.Dropout(
+        )
+        self.encoder_dropout = keras.layers.Dropout(
             dropout,
             name="encoder_output_dropout",
-        )(x)
-        encoder_output = x
-
-        # ===== Decoder =====
-
-        # Embed tokens.
-        token_embedding = token_embedding_layer(decoder_token_ids)
-        x = keras.layers.Dropout(
+        )
+        self.decoder_embedding_dropout = keras.layers.Dropout(
             dropout,
             name="decoder_embedding_dropout",
-        )(token_embedding)
-
-        decoder_attention_mask = decoder_padding_mask[:, None, :]
-
-        position_bias = None
+        )
+        self.decoder_transformer_layers = []
         for i in range(num_layers):
-            output = T5TransformerLayer(
+            layer = T5TransformerLayer(
                 is_decoder=True,
                 hidden_dim=hidden_dim,
                 intermediate_dim=intermediate_dim,
@@ -179,7 +139,54 @@ class T5Backbone(Backbone):
                 use_gated_activation=use_gated_activation,
                 use_relative_attention_bias=bool(i == 0),
                 name=f"transformer_decoder_layer_{i}",
-            )(
+            )
+            self.decoder_transformer_layers.append(layer)
+        self.decoder_layer_norm = T5LayerNorm(
+            epsilon=layer_norm_epsilon,
+            name="decoder_output_layer_norm",
+        )
+        self.decoder_dropout = keras.layers.Dropout(
+            dropout,
+            name="decoder_output_dropout",
+        )
+
+        # === Functional Model ===
+        encoder_token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="encoder_token_ids"
+        )
+        encoder_padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="encoder_padding_mask"
+        )
+        decoder_token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="decoder_token_ids"
+        )
+        decoder_padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="decoder_padding_mask"
+        )
+        # Encoder.
+        x = self.token_embedding(encoder_token_id_input)
+        x = self.encoder_embedding_dropout(x)
+        encoder_attention_mask = encoder_padding_mask_input[:, None, :]
+        position_bias = None
+        for transformer_layer in self.encoder_transformer_layers:
+            output = transformer_layer(
+                x,
+                attention_mask=encoder_attention_mask,
+                position_bias=position_bias,
+                use_causal_mask=False,
+            )
+            if isinstance(output, tuple):
+                x, position_bias = output
+        x = self.encoder_layer_norm(x)
+        x = self.encoder_dropout(x)
+        encoder_output = x
+        # Decoder.
+        x = self.token_embedding(decoder_token_id_input)
+        x = self.decoder_embedding_dropout(x)
+        decoder_attention_mask = decoder_padding_mask_input[:, None, :]
+        position_bias = None
+        for transformer_layer in self.decoder_transformer_layers:
+            output = transformer_layer(
                 x,
                 attention_mask=decoder_attention_mask,
                 position_bias=position_bias,
@@ -189,23 +196,15 @@ class T5Backbone(Backbone):
             )
             if isinstance(output, tuple):
                 x, position_bias = output
-
-        x = T5LayerNorm(
-            epsilon=layer_norm_epsilon,
-            name="decoder_output_layer_norm",
-        )(x)
-        x = keras.layers.Dropout(
-            dropout,
-            name="decoder_output_dropout",
-        )(x)
+        x = self.decoder_layer_norm(x)
+        x = self.decoder_dropout(x)
         decoder_output = x
-
         super().__init__(
             {
-                "encoder_token_ids": encoder_token_ids,
-                "encoder_padding_mask": encoder_padding_mask,
-                "decoder_token_ids": decoder_token_ids,
-                "decoder_padding_mask": decoder_padding_mask,
+                "encoder_token_ids": encoder_token_id_input,
+                "encoder_padding_mask": encoder_padding_mask_input,
+                "decoder_token_ids": decoder_token_id_input,
+                "decoder_padding_mask": decoder_padding_mask_input,
             },
             outputs={
                 "encoder_sequence_output": encoder_output,
@@ -213,7 +212,8 @@ class T5Backbone(Backbone):
             },
             **kwargs,
         )
-        # All references to `self` below this line
+
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
@@ -225,7 +225,6 @@ class T5Backbone(Backbone):
         self.use_gated_activation = use_gated_activation
         self.layer_norm_epsilon = layer_norm_epsilon
         self.tie_embedding_weights = tie_embedding_weights
-        self.token_embedding = token_embedding_layer
 
     def get_config(self):
         config = super().get_config()

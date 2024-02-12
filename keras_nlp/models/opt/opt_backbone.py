@@ -93,25 +93,18 @@ class OPTBackbone(Backbone):
         max_sequence_length=2048,
         **kwargs,
     ):
-        # Decoder inputs.
-        token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
-        padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
-
-        # Embed tokens and positions.
-        embedding_layer = TokenAndPositionEmbedding(
+        # === Layers ===
+        self.embeddings = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
             sequence_length=max_sequence_length,
             embedding_dim=hidden_dim,
             embeddings_initializer=opt_kernel_initializer(),
             name="embeddings",
         )
-        x = embedding_layer(token_ids)
-
-        # Apply successive transformer decoder blocks.
+        self.token_embedding = self.embeddings.token_embedding
+        self.transformer_layers = []
         for i in range(num_layers):
-            x = TransformerDecoder(
+            layer = TransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 num_heads=num_heads,
                 dropout=dropout,
@@ -120,27 +113,36 @@ class OPTBackbone(Backbone):
                 normalize_first=True,
                 kernel_initializer=opt_kernel_initializer(),
                 name=f"transformer_layer_{i}",
-            )(x, decoder_padding_mask=padding_mask)
-
-        # Add a final layer norm.
-        x = keras.layers.LayerNormalization(
-            name="layer_norm",
+            )
+            self.transformer_layers.append(layer)
+        self.layer_norm = keras.layers.LayerNormalization(
             axis=-1,
             epsilon=1e-5,
             dtype="float32",
-        )(x)
+            name="layer_norm",
+        )
 
-        # Instantiate using Functional API Model constructor
+        # === Functional Model ===
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        x = self.embeddings(token_id_input)
+        for transformer_layer in self.transformer_layers:
+            x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
+        x = self.layer_norm(x)
         super().__init__(
             inputs={
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask_input,
             },
             outputs=x,
             **kwargs,
         )
 
-        # All references to `self` below this line
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -148,7 +150,6 @@ class OPTBackbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
-        self.token_embedding = embedding_layer.token_embedding
 
     def get_config(self):
         return {

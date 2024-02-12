@@ -36,8 +36,9 @@ class FeaturePipeline(PipelineModel):
         super().__init__(**kwargs)
         self.dense = keras.layers.Dense(1)
 
-    def preprocess_features(self, x):
-        return tf.strings.to_number(x)
+    def preprocess_samples(self, x, y=None, sample_weight=None):
+        x = tf.strings.to_number(x)
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def call(self, inputs):
         return self.dense(inputs)
@@ -48,8 +49,10 @@ class LabelPipeline(PipelineModel):
         super().__init__(**kwargs)
         self.dense = keras.layers.Dense(1)
 
-    def preprocess_labels(self, y):
-        return tf.strings.to_number(y)
+    def preprocess_samples(self, x, y=None, sample_weight=None):
+        if y is not None:
+            y = tf.strings.to_number(y)
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def call(self, inputs):
         return self.dense(inputs)
@@ -63,8 +66,7 @@ class DataPipeline(PipelineModel):
         self.dense = keras.layers.Dense(1)
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
-        x = tf.strings.to_number(x)
-        y = x
+        y = x = tf.strings.to_number(x)
         return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def call(self, inputs):
@@ -77,8 +79,9 @@ class FunctionalPipeline(PipelineModel):
         outputs = keras.layers.Dense(1)(inputs)
         super().__init__(inputs, outputs, **kwargs)
 
-    def preprocess_features(self, x):
-        return tf.strings.to_number(x)
+    def preprocess_samples(self, x, y=None, sample_weight=None):
+        x = tf.strings.to_number(x)
+        return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
 
     def get_config(self):
         return {}
@@ -167,19 +170,6 @@ class TestFeaturePreprocessingModel(TestCase):
         model.fit(x=x, y=y, batch_size=8)
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
-    def test_fit_no_preprocessing(self):
-        x = np.random.uniform(size=(100, 5))
-        y = np.random.uniform(size=(100, 1))
-        sw = np.random.uniform(size=(100, 1))
-        model = FeaturePipeline(include_preprocessing=False)
-        model.compile(loss="mse")
-        # With sample weight.
-        model.fit(x=x, y=y, sample_weight=sw, batch_size=8)
-        model.fit(tf.data.Dataset.from_tensor_slices((x, y, sw)).batch(8))
-        # Without sample weight.
-        model.fit(x=x, y=y, batch_size=8)
-        model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
-
     def test_evaluate_with_preprocessing(self):
         x = tf.strings.as_string(np.random.uniform(size=(100, 5)))
         y = np.random.uniform(size=(100, 1))
@@ -193,29 +183,9 @@ class TestFeaturePreprocessingModel(TestCase):
         model.evaluate(x=x, y=y, batch_size=8)
         model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
-    def test_evaluate_no_preprocessing(self):
-        x = np.random.uniform(size=(100, 5))
-        y = np.random.uniform(size=(100, 1))
-        sw = np.random.uniform(size=(100, 1))
-        model = FeaturePipeline(include_preprocessing=False)
-        model.compile(loss="mse")
-        # With sample weight.
-        model.evaluate(x=x, y=y, sample_weight=sw, batch_size=8)
-        model.evaluate(tf.data.Dataset.from_tensor_slices((x, y, sw)).batch(8))
-        # Without sample weight.
-        model.evaluate(x=x, y=y, batch_size=8)
-        model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
-
     def test_predict_with_preprocessing(self):
         x = tf.strings.as_string(np.random.uniform(size=(100, 5)))
         model = FeaturePipeline()
-        model.compile(loss="mse")
-        model.predict(x=x, batch_size=8)
-        model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
-
-    def test_predict_no_preprocessing(self):
-        x = np.random.uniform(size=(100, 5))
-        model = FeaturePipeline(include_preprocessing=False)
         model.compile(loss="mse")
         model.predict(x=x, batch_size=8)
         model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
@@ -233,19 +203,6 @@ class TestFeaturePreprocessingModel(TestCase):
         model.train_on_batch(x=x, y=y)
         model.test_on_batch(x=x, y=y)
         model.predict_on_batch(x=x)
-
-    def test_on_batch_no_preprocessing(self):
-        x = np.random.uniform(size=(8, 5))
-        y = np.random.uniform(size=(8, 1))
-        sw = np.random.uniform(size=(8, 1))
-        model = FeaturePipeline(include_preprocessing=False)
-        model.compile(loss="mse")
-        # With sample weight.
-        model.train_on_batch(x=x, y=y, sample_weight=sw)
-        model.test_on_batch(x=x, y=y, sample_weight=sw)
-        # Without sample weight.
-        model.train_on_batch(x=x, y=y)
-        model.test_on_batch(x=x, y=y)
 
     def test_saved_model(self):
         model = FeaturePipeline()
@@ -278,37 +235,11 @@ class TestLabelPreprocessingModel(TestCase):
         model.fit(x=x, y=y, batch_size=8)
         model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
 
-    def test_fit_no_preprocessing(self):
-        x = np.random.uniform(size=(100, 5))
-        y = np.random.uniform(size=(100, 1))
-        sw = np.random.uniform(size=(100, 1))
-        model = LabelPipeline(include_preprocessing=False)
-        model.compile(loss="mse")
-        # With sample weight.
-        model.fit(x=x, y=y, sample_weight=sw, batch_size=8)
-        model.fit(tf.data.Dataset.from_tensor_slices((x, y, sw)).batch(8))
-        # Without sample weight.
-        model.fit(x=x, y=y, batch_size=8)
-        model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
-
     def test_evaluate_with_preprocessing(self):
         x = np.random.uniform(size=(100, 5))
         y = tf.strings.as_string(np.random.uniform(size=(100, 1)))
         sw = np.random.uniform(size=(100, 1))
         model = LabelPipeline()
-        model.compile(loss="mse")
-        # With sample weight.
-        model.evaluate(x=x, y=y, sample_weight=sw, batch_size=8)
-        model.evaluate(tf.data.Dataset.from_tensor_slices((x, y, sw)).batch(8))
-        # Without sample weight.
-        model.evaluate(x=x, y=y, batch_size=8)
-        model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
-
-    def test_evaluate_no_preprocessing(self):
-        x = np.random.uniform(size=(100, 5))
-        y = np.random.uniform(size=(100, 1))
-        sw = np.random.uniform(size=(100, 1))
-        model = LabelPipeline(include_preprocessing=False)
         model.compile(loss="mse")
         # With sample weight.
         model.evaluate(x=x, y=y, sample_weight=sw, batch_size=8)
@@ -329,20 +260,6 @@ class TestLabelPreprocessingModel(TestCase):
         y = tf.strings.as_string(np.random.uniform(size=(8, 1)))
         sw = np.random.uniform(size=(8, 1))
         model = LabelPipeline()
-        model.compile(loss="mse")
-        # With sample weight.
-        model.train_on_batch(x=x, y=y, sample_weight=sw)
-        model.test_on_batch(x=x, y=y, sample_weight=sw)
-        # Without sample weight.
-        model.train_on_batch(x=x, y=y)
-        model.test_on_batch(x=x, y=y)
-        model.predict_on_batch(x=x)
-
-    def test_on_batch_no_preprocessing(self):
-        x = np.random.uniform(size=(8, 5))
-        y = np.random.uniform(size=(8, 1))
-        sw = np.random.uniform(size=(8, 1))
-        model = LabelPipeline(include_preprocessing=False)
         model.compile(loss="mse")
         # With sample weight.
         model.train_on_batch(x=x, y=y, sample_weight=sw)
@@ -377,14 +294,6 @@ class TestDataPreprocessingModel(TestCase):
         model.fit(x=data, batch_size=8)
         model.fit(tf.data.Dataset.from_tensor_slices(data).batch(8))
 
-    def test_fit_no_preprocessing(self):
-        x = np.random.uniform(size=(100, 1))
-        y = np.random.uniform(size=(100, 1))
-        model = DataPipeline(include_preprocessing=False)
-        model.compile(loss="mse")
-        model.fit(x=x, y=y, batch_size=8)
-        model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
-
     def test_evaluate_with_preprocessing(self):
         data = tf.strings.as_string(np.random.uniform(size=(100, 1)))
         model = DataPipeline()
@@ -392,24 +301,9 @@ class TestDataPreprocessingModel(TestCase):
         model.evaluate(x=data, batch_size=8)
         model.evaluate(tf.data.Dataset.from_tensor_slices(data).batch(8))
 
-    def test_evaluate_no_preprocessing(self):
-        x = np.random.uniform(size=(100, 1))
-        y = np.random.uniform(size=(100, 1))
-        model = DataPipeline(include_preprocessing=False)
-        model.compile(loss="mse")
-        model.evaluate(x=x, y=y, batch_size=8)
-        model.evaluate(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
-
     def test_predict_with_preprocessing(self):
         x = tf.strings.as_string(np.random.uniform(size=(100, 1)))
         model = DataPipeline()
-        model.compile(loss="mse")
-        model.predict(x=x, batch_size=8)
-        model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
-
-    def test_predict_no_preprocessing(self):
-        x = np.random.uniform(size=(100, 1))
-        model = DataPipeline(include_preprocessing=False)
         model.compile(loss="mse")
         model.predict(x=x, batch_size=8)
         model.predict(tf.data.Dataset.from_tensor_slices(x).batch(8))
@@ -425,20 +319,6 @@ class TestDataPreprocessingModel(TestCase):
         model.train_on_batch(x=data)
         model.test_on_batch(x=data)
         model.predict_on_batch(x=data)
-
-    def test_on_batch_no_preprocessing(self):
-        x = np.random.uniform(size=(8, 1))
-        y = np.random.uniform(size=(8, 1))
-        sw = np.random.uniform(size=(8, 1))
-        model = DataPipeline(include_preprocessing=False)
-        model.compile(loss="mse")
-        # With sample weight.
-        model.train_on_batch(x=x, y=y, sample_weight=sw)
-        model.test_on_batch(x=x, y=y, sample_weight=sw)
-        # Without sample weight.
-        model.train_on_batch(x=x, y=y)
-        model.test_on_batch(x=x, y=y)
-        model.predict_on_batch(x=x)
 
     def test_saved_model(self):
         model = DataPipeline()
@@ -464,19 +344,6 @@ class TestFunctional(TestCase):
         sw = np.random.uniform(size=(100, 1))
 
         model = FunctionalPipeline()
-        model.compile(loss="mse")
-        # With sample weight.
-        model.fit(x=x, y=y, sample_weight=sw, batch_size=8)
-        model.fit(tf.data.Dataset.from_tensor_slices((x, y, sw)).batch(8))
-        # Without sample weight.
-        model.fit(x=x, y=y, batch_size=8)
-        model.fit(tf.data.Dataset.from_tensor_slices((x, y)).batch(8))
-
-    def test_fit_no_preprocessing(self):
-        x = np.random.uniform(size=(100, 5))
-        y = np.random.uniform(size=(100, 1))
-        sw = np.random.uniform(size=(100, 1))
-        model = FunctionalPipeline(include_preprocessing=False)
         model.compile(loss="mse")
         # With sample weight.
         model.fit(x=x, y=y, sample_weight=sw, batch_size=8)
