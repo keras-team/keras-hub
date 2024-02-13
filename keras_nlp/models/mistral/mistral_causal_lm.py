@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.models.generative_task import GenerativeTask
@@ -21,6 +23,7 @@ from keras_nlp.models.mistral.mistral_causal_lm_preprocessor import (
 from keras_nlp.utils.python_utils import classproperty
 
 
+@keras_nlp_export("keras_nlp.models.MistralCausalLM")
 class MistralCausalLM(GenerativeTask):
     """An end-to-end Mistral model for causal language modeling.
 
@@ -44,6 +47,11 @@ class MistralCausalLM(GenerativeTask):
     """
 
     def __init__(self, backbone, preprocessor=None, **kwargs):
+        # === Layers ===
+        self.backbone = backbone
+        self.preprocessor = preprocessor
+
+        # === Functional Model ===
         inputs = backbone.inputs
         hidden_states = backbone(inputs)
         outputs = backbone.token_embedding(hidden_states, reverse=True)
@@ -52,15 +60,8 @@ class MistralCausalLM(GenerativeTask):
         super().__init__(
             inputs=inputs,
             outputs=outputs,
-            include_preprocessing=preprocessor is not None,
             **kwargs,
         )
-
-        # All references to `self` below this line
-        self.backbone = backbone
-        self.preprocessor = preprocessor
-        self.generate_function = None
-        self._sampler = None
 
         # Default compilation
         self.compile(
@@ -103,22 +104,20 @@ class MistralCausalLM(GenerativeTask):
             the final hidden representation of the input tokens, and `cache` is
             the decoding cache.
         """
-        x = self.backbone.get_layer("token_embedding")(token_ids)
+        x = self.backbone.token_embedding(token_ids)
         # Each decoder layer has a cache; we update them separately.
         updated_cache = []
         for i in range(self.backbone.num_layers):
             current_cache = cache[:, i, ...]
-            x, next_cache = self.backbone.get_layer(f"transformer_layer_{i}")(
+            x, next_cache = self.backbone.transformer_layers[i](
                 x,
                 self_attention_cache=current_cache,
                 self_attention_cache_update_index=cache_update_index,
             )
             updated_cache.append(next_cache)
         cache = ops.stack(updated_cache, axis=1)
-        hidden_states = x = self.backbone.get_layer(
-            "sequence_output_layernorm"
-        )(x)
-        logits = self.backbone.get_layer("token_embedding")(x, reverse=True)
+        hidden_states = x = self.backbone.layer_norm(x)
+        logits = self.backbone.token_embedding(x, reverse=True)
         return logits, hidden_states, cache
 
     def _build_cache(self, token_ids):
