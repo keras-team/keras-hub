@@ -36,7 +36,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
         num_key_value_heads,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
-        activation="relu",
+        activation="silu",
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
         sliding_window=512,
