@@ -164,5 +164,8 @@ class MistralCausalLMPreprocessor(MistralPreprocessor):
         # Strip any special tokens during detokenization (e.g. the start and
         # end markers). In the future we could make this configurable.
         padding_mask = padding_mask & (token_ids != self.tokenizer.end_token_id)
+        padding_mask = padding_mask & (
+            token_ids != self.tokenizer.start_token_id
+        )
         token_ids = tf.ragged.boolean_mask(token_ids, padding_mask)
         return self.tokenizer.detokenize(token_ids)

@@ -55,15 +55,13 @@ class MistralCausalLM(GenerativeTask):
         inputs = backbone.inputs
         hidden_states = backbone(inputs)
         outputs = backbone.token_embedding(hidden_states, reverse=True)
-
-        # Instantiate the Functional API Model constructor.
         super().__init__(
             inputs=inputs,
             outputs=outputs,
             **kwargs,
         )
 
-        # Default compilation
+        # === Default compilation ===
         self.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(2e-5),
