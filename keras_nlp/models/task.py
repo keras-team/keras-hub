@@ -31,18 +31,25 @@ class Task(PipelineModel):
     """Base class for Task models."""
 
     def __init__(self, *args, **kwargs):
-        self._backbone = None
-        self._preprocessor = None
         super().__init__(*args, **kwargs)
         self._functional_layer_ids = set(
             id(layer) for layer in self._flatten_layers()
         )
+        self._initialized = True
 
     def __dir__(self):
-        # Temporary fixes for weight saving. This mimics the following PR for
+        if config.keras_3():
+            return super().__dir__()
+
+        # Temporary fixes for Keras 2 saving. This mimics the following PR for
         # older version of Keras: https://github.com/keras-team/keras/pull/18982
         def filter_fn(attr):
-            if attr == "_layer_checkpoint_dependencies":
+            if attr in [
+                "_layer_checkpoint_dependencies",
+                "transformer_layers",
+                "encoder_transformer_layers",
+                "decoder_transformer_layers",
+            ]:
                 return False
             return id(getattr(self, attr)) not in self._functional_layer_ids
 
@@ -99,17 +106,28 @@ class Task(PipelineModel):
         super().compile(optimizer=optimizer, loss=loss, **kwargs)
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
-        return self.preprocessor(x, y=y, sample_weight=sample_weight)
+        if self.preprocessor is not None:
+            return self.preprocessor(x, y=y, sample_weight=sample_weight)
+        else:
+            return super().preprocess_samples(x, y, sample_weight)
 
     def __setattr__(self, name, value):
-        # Work around torch setattr for properties.
-        if name in ["backbone", "preprocessor"]:
+        # Work around setattr issues for Keras 2 and Keras 3 torch backend.
+        # Since all our state is covered by functional model we can route
+        # around custom setattr calls.
+        is_property = isinstance(getattr(type(self), name, None), property)
+        is_unitialized = not hasattr(self, "_initialized")
+        is_torch = config.backend() == "torch"
+        is_keras_2 = not config.keras_3()
+        if is_torch and (is_property or is_unitialized):
+            return object.__setattr__(self, name, value)
+        if is_keras_2 and is_unitialized:
             return object.__setattr__(self, name, value)
         return super().__setattr__(name, value)
 
     @property
     def backbone(self):
-        """A `keras.Model` instance providing the backbone submodel."""
+        """A `keras.Model` instance providing the backbone sub-model."""
         return self._backbone
 
     @backbone.setter
@@ -123,7 +141,6 @@ class Task(PipelineModel):
 
     @preprocessor.setter
     def preprocessor(self, value):
-        self.include_preprocessing = value is not None
         self._preprocessor = value
 
     def get_config(self):

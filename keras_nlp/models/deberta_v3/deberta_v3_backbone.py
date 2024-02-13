@@ -108,46 +108,32 @@ class DebertaV3Backbone(Backbone):
         bucket_size=256,
         **kwargs,
     ):
-        # Inputs
-        token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="token_ids"
-        )
-        padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
-
-        # Embed tokens.
-        token_embedding_layer = ReversibleEmbedding(
+        # === Layers ===
+        self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=deberta_kernel_initializer(),
             name="token_embedding",
         )
-        x = token_embedding_layer(token_id_input)
-
-        # Normalize and apply dropout to embeddings.
-        x = keras.layers.LayerNormalization(
+        self.embeddings_layer_norm = keras.layers.LayerNormalization(
             epsilon=1e-7,
             dtype="float32",
             name="embeddings_layer_norm",
-        )(x)
-        x = keras.layers.Dropout(
+        )
+        self.embeddings_dropout = keras.layers.Dropout(
             dropout,
             name="embeddings_dropout",
-        )(x)
-
-        # Relative embedding layer.
-        rel_embeddings = RelativeEmbedding(
+        )
+        self.relative_embeddings = RelativeEmbedding(
             hidden_dim=hidden_dim,
             bucket_size=bucket_size,
             layer_norm_epsilon=1e-7,
             kernel_initializer=deberta_kernel_initializer(),
             name="rel_embedding",
-        )(x)
-
-        # Apply successive DeBERTa encoder blocks.
+        )
+        self.transformer_layers = []
         for i in range(num_layers):
-            x = DisentangledAttentionEncoder(
+            layer = DisentangledAttentionEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
                 max_position_embeddings=max_sequence_length,
@@ -157,22 +143,36 @@ class DebertaV3Backbone(Backbone):
                 layer_norm_epsilon=1e-7,
                 kernel_initializer=deberta_kernel_initializer(),
                 name=f"disentangled_attention_encoder_layer_{i}",
-            )(
+            )
+            self.transformer_layers.append(layer)
+
+        # === Functional Model ===
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        x = self.token_embedding(token_id_input)
+        x = self.embeddings_layer_norm(x)
+        x = self.embeddings_dropout(x)
+        rel_embeddings = self.relative_embeddings(x)
+        for transformer_layer in self.transformer_layers:
+            x = transformer_layer(
                 x,
                 rel_embeddings=rel_embeddings,
-                padding_mask=padding_mask,
+                padding_mask=padding_mask_input,
             )
-
-        # Instantiate using Functional API Model constructor
         super().__init__(
             inputs={
                 "token_ids": token_id_input,
-                "padding_mask": padding_mask,
+                "padding_mask": padding_mask_input,
             },
             outputs=x,
             **kwargs,
         )
-        # All references to `self` below this line
+
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -182,7 +182,6 @@ class DebertaV3Backbone(Backbone):
         self.max_sequence_length = max_sequence_length
         self.bucket_size = bucket_size
         self.start_token_index = 0
-        self.token_embedding = token_embedding_layer
 
     def get_config(self):
         config = super().get_config()

@@ -99,57 +99,40 @@ class BertBackbone(Backbone):
         num_segments=2,
         **kwargs,
     ):
-        # Index of classification token in the vocabulary
-        cls_token_index = 0
-        # Inputs
-        token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="token_ids"
-        )
-        segment_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="segment_ids"
-        )
-        padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
-
-        # Embed tokens, positions, and segment ids.
-        token_embedding_layer = ReversibleEmbedding(
+        # === Layers ===
+        self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=bert_kernel_initializer(),
             name="token_embedding",
         )
-        token_embedding = token_embedding_layer(token_id_input)
-        position_embedding = PositionEmbedding(
+        self.position_embedding = PositionEmbedding(
             initializer=bert_kernel_initializer(),
             sequence_length=max_sequence_length,
             name="position_embedding",
-        )(token_embedding)
-        segment_embedding = keras.layers.Embedding(
+        )
+        self.segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
             output_dim=hidden_dim,
             embeddings_initializer=bert_kernel_initializer(),
             name="segment_embedding",
-        )(segment_id_input)
-
-        # Sum, normalize and apply dropout to embeddings.
-        x = keras.layers.Add()(
-            (token_embedding, position_embedding, segment_embedding)
         )
-        x = keras.layers.LayerNormalization(
+        self.embeddings_add = keras.layers.Add(
+            name="embeddings_add",
+        )
+        self.embeddings_layer_norm = keras.layers.LayerNormalization(
             name="embeddings_layer_norm",
             axis=-1,
             epsilon=1e-12,
             dtype="float32",
-        )(x)
-        x = keras.layers.Dropout(
+        )
+        self.embeddings_dropout = keras.layers.Dropout(
             dropout,
             name="embeddings_dropout",
-        )(x)
-
-        # Apply successive transformer encoder blocks.
+        )
+        self.transformer_layers = []
         for i in range(num_layers):
-            x = TransformerEncoder(
+            layer = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
                 activation=gelu_approximate,
@@ -157,24 +140,45 @@ class BertBackbone(Backbone):
                 layer_norm_epsilon=1e-12,
                 kernel_initializer=bert_kernel_initializer(),
                 name=f"transformer_layer_{i}",
-            )(x, padding_mask=padding_mask)
-
-        # Construct the two BERT outputs. The pooled output is a dense layer on
-        # top of the [CLS] token.
-        sequence_output = x
-        pooled_output = keras.layers.Dense(
+            )
+            self.transformer_layers.append(layer)
+        self.pooled_dense = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=bert_kernel_initializer(),
             activation="tanh",
             name="pooled_dense",
-        )(x[:, cls_token_index, :])
+        )
 
-        # Instantiate using Functional API Model constructor
+        # === Functional Model ===
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        segment_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="segment_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        # Embed tokens, positions, and segment ids.
+        tokens = self.token_embedding(token_id_input)
+        positions = self.position_embedding(tokens)
+        segments = self.segment_embedding(segment_id_input)
+        # Sum, normalize and apply dropout to embeddings.
+        x = self.embeddings_add((tokens, positions, segments))
+        x = self.embeddings_layer_norm(x)
+        x = self.embeddings_dropout(x)
+        for transformer_layer in self.transformer_layers:
+            x = transformer_layer(x, padding_mask=padding_mask_input)
+        # Construct the two BERT outputs. The pooled output is a dense layer on
+        # top of the [CLS] token.
+        sequence_output = x
+        cls_token_index = 0
+        pooled_output = self.pooled_dense(x[:, cls_token_index, :])
         super().__init__(
             inputs={
                 "token_ids": token_id_input,
                 "segment_ids": segment_id_input,
-                "padding_mask": padding_mask,
+                "padding_mask": padding_mask_input,
             },
             outputs={
                 "sequence_output": sequence_output,
@@ -183,7 +187,7 @@ class BertBackbone(Backbone):
             **kwargs,
         )
 
-        # All references to `self` below this line
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -193,7 +197,6 @@ class BertBackbone(Backbone):
         self.max_sequence_length = max_sequence_length
         self.num_segments = num_segments
         self.cls_token_index = cls_token_index
-        self.token_embedding = token_embedding_layer
 
     def get_config(self):
         config = super().get_config()

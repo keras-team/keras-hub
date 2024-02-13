@@ -32,11 +32,11 @@ class SimplePreprocessor(Preprocessor):
 
 class SimpleTask(Task):
     def __init__(self, preprocessor=None, activation=None, **kwargs):
+        self.preprocessor = preprocessor
+        self.activation = keras.activations.get(activation)
         inputs = keras.Input(shape=(5,))
         outputs = keras.layers.Dense(5)(inputs)
         super().__init__(inputs, outputs, **kwargs)
-        self.preprocessor = preprocessor
-        self.activation = keras.activations.get(activation)
 
 
 class TestTask(TestCase):

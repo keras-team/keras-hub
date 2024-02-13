@@ -75,26 +75,17 @@ class LlamaBackbone(Backbone):
         max_sequence_length=4096,
         **kwargs,
     ):
-        # Inputs
-        token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
-        padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
-
-        # Embed tokens
-        token_embedding = ReversibleEmbedding(
+        # === Layers ===
+        self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=_llama_kernel_initializer(stddev=0.01),
             tie_weights=False,
             name="token_embedding",
-        )(token_ids)
-
-        x = token_embedding
-
-        # Apply successive transformer decoder blocks.
+        )
+        self.transformer_layers = []
         for i in range(num_layers):
-            x = LlamaDecoder(
+            layer = LlamaDecoder(
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
@@ -105,23 +96,34 @@ class LlamaBackbone(Backbone):
                 activation=ops.silu,
                 kernel_initializer=_llama_kernel_initializer(stddev=0.02),
                 name=f"transformer_layer_{i}",
-            )(x, decoder_padding_mask=padding_mask)
-
-        sequence_output = LlamaLayerNorm(
+            )
+            self.transformer_layers.append(layer)
+        self.layer_norm = LlamaLayerNorm(
             name="layer_norm",
             epsilon=layer_norm_epsilon,
-        )(x)
+        )
 
-        # Instantiate using Functional API Model constructor
+        # === Functional Model ===
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        x = self.token_embedding(token_id_input)
+        for transformer_layer in self.transformer_layers:
+            x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
+        sequence_output = self.layer_norm(x)
         super().__init__(
             inputs={
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask_input,
             },
             outputs=sequence_output,
             **kwargs,
         )
-        # All references to `self` below this line
+
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_query_heads = num_query_heads
@@ -150,7 +152,3 @@ class LlamaBackbone(Backbone):
             }
         )
         return config
-
-    @property
-    def token_embedding(self):
-        return self.get_layer("token_embedding")

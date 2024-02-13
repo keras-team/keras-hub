@@ -109,17 +109,9 @@ class MistralBackbone(Backbone):
         dropout=0,
         **kwargs,
     ):
-        # Get the dtype
+        # === Layers ===
         dtype = kwargs.pop("dtype", keras.backend.floatx())
-
-        # Inputs
-        token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
-        padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
-
-        # Embed Tokens
-        token_embedding_layer = ReversibleEmbedding(
+        self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=False,
@@ -127,11 +119,9 @@ class MistralBackbone(Backbone):
             dtype=dtype,
             name="token_embedding",
         )
-        x = token_embedding_layer(token_ids)
-
-        # Apply successive transformer decoder blocks
+        self.transformer_layers = []
         for i in range(num_layers):
-            x = MistralTransformerDecoder(
+            layer = MistralTransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
@@ -144,25 +134,35 @@ class MistralBackbone(Backbone):
                 dropout=dropout,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
-            )(x, decoder_padding_mask=padding_mask)
-
-        sequence_output = MistralLayerNormalization(
-            name="sequence_output_layernorm",
+            )
+            self.transformer_layers.append(layer)
+        self.layer_norm = MistralLayerNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
-        )(x)
+            name="sequence_output_layernorm",
+        )
 
-        # Instantiate using Functional API Model constructor
+        # === Functional Model ===
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        x = self.token_embedding(token_id_input)
+        for transformer_layer in self.transformer_layers:
+            x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
+        sequence_output = self.layer_norm(x)
         super().__init__(
             inputs={
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask_input,
             },
             outputs=sequence_output,
             **kwargs,
         )
 
-        # All references to `self` below this line
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_query_heads = num_query_heads
@@ -174,7 +174,6 @@ class MistralBackbone(Backbone):
         self.sliding_window = sliding_window
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
-        self.token_embedding = token_embedding_layer
 
     def get_config(self):
         config = super().get_config()

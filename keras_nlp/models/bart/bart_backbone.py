@@ -102,59 +102,34 @@ class BartBackbone(Backbone):
         max_sequence_length=1024,
         **kwargs,
     ):
-        # Encoder inputs
-        encoder_token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="encoder_token_ids"
-        )
-        encoder_padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="encoder_padding_mask"
-        )
-
-        # Decoder inputs.
-        decoder_token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="decoder_token_ids"
-        )
-        decoder_padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="decoder_padding_mask"
-        )
-
-        # Token embedding layer. This layer is shared by encoder and decoder.
-        token_embedding_layer = ReversibleEmbedding(
+        # === Layers ===
+        self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=bart_kernel_initializer(),
             name="token_embedding",
         )
-
-        # ===== Encoder =====
-
-        # Embed tokens and positions.
-        token_embedding = token_embedding_layer(encoder_token_id_input)
-        # Position embedding parameters are not shared by encode and decoder.
-        position_embedding = PositionEmbedding(
+        self.encoder_position_embedding = PositionEmbedding(
             initializer=bart_kernel_initializer(),
             sequence_length=max_sequence_length,
             name="encoder_position_embedding",
-        )(token_embedding)
-
-        # Sum, normalize and apply dropout to embeddings.
-        x = keras.layers.Add(name="encoder_embeddings_add")(
-            (token_embedding, position_embedding)
         )
-        x = keras.layers.LayerNormalization(
+        self.encoder_embeddings_add = keras.layers.Add(
+            name="encoder_embeddings_add",
+        )
+        self.encoder_embeddings_layer_norm = keras.layers.LayerNormalization(
             name="encoder_embeddings_layer_norm",
             axis=-1,
             epsilon=1e-5,
             dtype="float32",
-        )(x)
-        x = keras.layers.Dropout(
+        )
+        self.encoder_embeddings_dropout = keras.layers.Dropout(
             dropout,
             name="encoder_embeddings_dropout",
-        )(x)
-
-        # Apply successive transformer encoder blocks.
+        )
+        self.encoder_transformer_layers = []
         for i in range(num_layers):
-            x = TransformerEncoder(
+            layer = TransformerEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
                 activation=keras.activations.gelu,
@@ -162,39 +137,29 @@ class BartBackbone(Backbone):
                 layer_norm_epsilon=1e-5,
                 kernel_initializer=bart_kernel_initializer(),
                 name=f"transformer_encoder_layer_{i}",
-            )(x, padding_mask=encoder_padding_mask)
-
-        encoder_output = x
-
-        # ===== Decoder =====
-
-        # Embed tokens and positions.
-        token_embedding = token_embedding_layer(decoder_token_id_input)
-        # Position embedding parameters are not shared by encode and decoder.
-        position_embedding = PositionEmbedding(
+            )
+            self.encoder_transformer_layers.append(layer)
+        self.decoder_position_embedding = PositionEmbedding(
             initializer=bart_kernel_initializer(),
             sequence_length=max_sequence_length,
             name="decoder_position_embedding",
-        )(token_embedding)
-
-        # Sum, normalize and apply dropout to embeddings.
-        x = keras.layers.Add(name="decoder_embeddings_add")(
-            (token_embedding, position_embedding)
         )
-        x = keras.layers.LayerNormalization(
+        self.decoder_embeddings_add = keras.layers.Add(
+            name="decoder_embeddings_add",
+        )
+        self.decoder_embeddings_layer_norm = keras.layers.LayerNormalization(
             name="decoder_embeddings_layer_norm",
             axis=-1,
             epsilon=1e-5,
             dtype="float32",
-        )(x)
-        x = keras.layers.Dropout(
+        )
+        self.decoder_embeddings_dropout = keras.layers.Dropout(
             dropout,
             name="decoder_embeddings_dropout",
-        )(x)
-
-        # Apply successive transformer decoder blocks.
+        )
+        self.decoder_transformer_layers = []
         for i in range(num_layers):
-            transformer_decoder_layer = TransformerDecoder(
+            layer = TransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 num_heads=num_heads,
                 dropout=dropout,
@@ -203,22 +168,51 @@ class BartBackbone(Backbone):
                 kernel_initializer=bart_kernel_initializer(),
                 name=f"transformer_decoder_layer_{i}",
             )
-            x = transformer_decoder_layer(
+            self.decoder_transformer_layers.append(layer)
+
+        # === Functional Model ===
+        encoder_token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="encoder_token_ids"
+        )
+        encoder_padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="encoder_padding_mask"
+        )
+        decoder_token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="decoder_token_ids"
+        )
+        decoder_padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="decoder_padding_mask"
+        )
+        # Encoder.
+        tokens = self.token_embedding(encoder_token_id_input)
+        positions = self.encoder_position_embedding(tokens)
+        x = self.encoder_embeddings_add((tokens, positions))
+        x = self.encoder_embeddings_layer_norm(x)
+        x = self.encoder_embeddings_dropout(x)
+        for transformer_layer in self.encoder_transformer_layers:
+            x = transformer_layer(x, padding_mask=encoder_padding_mask_input)
+        encoder_output = x
+        # Decoder.
+        tokens = self.token_embedding(decoder_token_id_input)
+        positions = self.decoder_position_embedding(tokens)
+        x = self.decoder_embeddings_add((tokens, positions))
+        x = self.decoder_embeddings_layer_norm(x)
+        x = self.decoder_embeddings_dropout(x)
+        for transformer_layer in self.decoder_transformer_layers:
+            x = transformer_layer(
                 decoder_sequence=x,
                 encoder_sequence=encoder_output,
-                decoder_padding_mask=decoder_padding_mask,
-                encoder_padding_mask=encoder_padding_mask,
+                decoder_padding_mask=decoder_padding_mask_input,
+                encoder_padding_mask=encoder_padding_mask_input,
             )
-
         decoder_output = x
-
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs={
                 "encoder_token_ids": encoder_token_id_input,
-                "encoder_padding_mask": encoder_padding_mask,
+                "encoder_padding_mask": encoder_padding_mask_input,
                 "decoder_token_ids": decoder_token_id_input,
-                "decoder_padding_mask": decoder_padding_mask,
+                "decoder_padding_mask": decoder_padding_mask_input,
             },
             outputs={
                 "encoder_sequence_output": encoder_output,
@@ -227,7 +221,7 @@ class BartBackbone(Backbone):
             **kwargs,
         )
 
-        # All references to `self` below this line
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -235,7 +229,6 @@ class BartBackbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
-        self.token_embedding = token_embedding_layer
 
     def get_config(self):
         config = super().get_config()
