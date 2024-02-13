@@ -75,7 +75,9 @@ class BloomAttention(keras.layers.Layer):
         )
         self._value_dense.build(inputs_shape)
 
-        self._alibi_layer = AlibiBias()
+        self._alibi_layer = AlibiBias(
+            dtype=self.dtype_policy,
+        )
 
         self._output_dense = keras.layers.Dense(
             hidden_dim,
@@ -87,10 +89,13 @@ class BloomAttention(keras.layers.Layer):
         self._output_dense.build(inputs_shape)
 
         self._dropout_layer = keras.layers.Dropout(
-            rate=self.dropout, dtype=self.dtype_policy, name="dropout"
+            rate=self.dropout,
+            dtype=self.dtype_policy,
+            name="dropout",
         )
         self._softmax = keras.layers.Softmax(
-            dtype=self.dtype_policy, name="softmax"
+            dtype="float32",
+            name="softmax",
         )
 
         self.built = True

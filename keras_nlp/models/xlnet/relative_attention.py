@@ -154,6 +154,7 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
                 output_rank - 1, [self._num_heads, self._key_dim]
             ),
             bias_axes=bias_axes if self._use_bias else None,
+            dtype=self.dtype_policy,
             name="query",
             **self._get_common_kwargs_for_sublayer(),
         )
@@ -168,6 +169,7 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
                 output_rank - 1, [self._num_heads, self._key_dim]
             ),
             bias_axes=bias_axes if self._use_bias else None,
+            dtype=self.dtype_policy,
             name="key",
             **self._get_common_kwargs_for_sublayer(),
         )
@@ -182,6 +184,7 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
                 output_rank - 1, [self._num_heads, self._value_dim]
             ),
             bias_axes=bias_axes if self._use_bias else None,
+            dtype=self.dtype_policy,
             name="value",
             **self._get_common_kwargs_for_sublayer(),
         )
@@ -197,6 +200,7 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
                 output_rank - 1, [self._query_shape[-1]]
             ),
             bias_axes=None,
+            dtype=self.dtype_policy,
             name="attention_output",
             **self._get_common_kwargs_for_sublayer(),
         )
@@ -213,6 +217,7 @@ class TwoStreamRelativeAttention(keras.layers.MultiHeadAttention):
                 output_rank - 1, [self._num_heads, self._key_dim]
             ),
             bias_axes=None,
+            dtype=self.dtype_policy,
             name="encoding",
             **self._get_common_kwargs_for_sublayer(),
         )

@@ -58,6 +58,7 @@ class LlamaAttention(keras.layers.Layer):
             equation="bqm,muh->bquh",
             output_shape=(None, self.num_query_heads, self.attn_head_size),
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.dtype_policy,
             name="query",
         )
         self._query_dense.build(inputs_shape)
@@ -65,6 +66,7 @@ class LlamaAttention(keras.layers.Layer):
             equation="bkm,mvh->bkvh",
             output_shape=(None, self.num_key_value_heads, self.attn_head_size),
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.dtype_policy,
             name="key",
         )
         self._key_dense.build(inputs_shape)
@@ -73,16 +75,22 @@ class LlamaAttention(keras.layers.Layer):
             equation="bkm,mvh->bkvh",
             output_shape=(None, self.num_key_value_heads, self.attn_head_size),
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.dtype_policy,
             name="value",
         )
         self._value_dense.build(inputs_shape)
 
-        self._softmax = keras.layers.Softmax(axis=-1, name="attention_softmax")
+        self._softmax = keras.layers.Softmax(
+            axis=-1,
+            dtype="float32",
+            name="attention_softmax",
+        )
 
         self._output_dense = keras.layers.EinsumDense(
             equation="bqm,mh->bqh",
             output_shape=(None, self.hidden_dim),
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.dtype_policy,
             name="attention_output",
         )
         self._output_dense.build(inputs_shape)
@@ -90,6 +98,7 @@ class LlamaAttention(keras.layers.Layer):
         self._rotary_embedding_layer = RotaryEmbedding(
             max_wavelength=self.rope_max_wavelength,
             scaling_factor=self.rope_scaling_factor,
+            dtype=self.dtype_policy,
         )
         self._rotary_embedding_layer.build(inputs_shape)
 
@@ -173,10 +182,10 @@ class LlamaAttention(keras.layers.Layer):
         )
 
         attention_scores /= norm_factor
-
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
         )
+        attention_scores = ops.cast(attention_scores, self.compute_dtype)
         attention_output = ops.einsum(
             "acbe,aecd->abcd", attention_scores, value
         )

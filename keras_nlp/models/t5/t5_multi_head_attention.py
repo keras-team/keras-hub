@@ -45,36 +45,43 @@ class T5MultiHeadAttention(keras.layers.Layer):
         self.query_projector = keras.layers.Dense(
             self.inner_dim,
             use_bias=False,
-            name="query_projector",
             kernel_initializer=keras.initializers.RandomNormal(
                 mean=0, stddev=(self.inner_dim * self.key_value_dim) ** -0.5
             ),
+            dtype=self.dtype_policy,
+            name="query_projector",
         )
         self.key_projector = keras.layers.Dense(
             self.inner_dim,
             use_bias=False,
-            name="key_projector",
             kernel_initializer=keras.initializers.RandomNormal(
                 mean=0, stddev=self.inner_dim**-0.5
             ),
+            dtype=self.dtype_policy,
+            name="key_projector",
         )
         self.value_projector = keras.layers.Dense(
             self.inner_dim,
             use_bias=False,
-            name="value_projector",
             kernel_initializer=keras.initializers.RandomNormal(
                 mean=0, stddev=self.inner_dim**-0.5
             ),
+            dtype=self.dtype_policy,
+            name="value_projector",
         )
         self.output_projector = keras.layers.Dense(
             self.hidden_dim,
             use_bias=False,
-            name="output_projector",
             kernel_initializer=keras.initializers.RandomNormal(
                 mean=0, stddev=self.inner_dim**-0.5
             ),
+            dtype=self.dtype_policy,
+            name="output_projector",
         )
-        self.dropout_layer = keras.layers.Dropout(dropout)
+        self.dropout_layer = keras.layers.Dropout(
+            dropout,
+            dtype=self.dtype_policy,
+        )
 
         if self.use_relative_attention_bias:
             self.relative_attention_bias = self.add_weight(
@@ -298,7 +305,7 @@ class T5MultiHeadAttention(keras.layers.Layer):
                 mask = (1.0 - ops.cast(mask, position_bias.dtype)) * -1e9
                 position_bias = position_bias + mask
 
-        scores += position_bias
+        scores += ops.cast(position_bias, scores.dtype)
         weights = ops.nn.softmax(
             scores, axis=-1
         )  # (batch_size, num_heads, query_length, key_length)

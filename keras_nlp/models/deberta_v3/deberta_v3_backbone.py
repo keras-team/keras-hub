@@ -67,6 +67,10 @@ class DebertaV3Backbone(Backbone):
             `max_sequence_length`.
         bucket_size: int. The size of the relative position buckets. Generally
             equal to `max_sequence_length // 2`.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Example:
     ```python
@@ -106,6 +110,7 @@ class DebertaV3Backbone(Backbone):
         dropout=0.1,
         max_sequence_length=512,
         bucket_size=256,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
@@ -113,15 +118,17 @@ class DebertaV3Backbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=deberta_kernel_initializer(),
+            dtype=dtype,
             name="token_embedding",
         )
         self.embeddings_layer_norm = keras.layers.LayerNormalization(
             epsilon=1e-7,
-            dtype="float32",
+            dtype=dtype,
             name="embeddings_layer_norm",
         )
         self.embeddings_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="embeddings_dropout",
         )
         self.relative_embeddings = RelativeEmbedding(
@@ -129,6 +136,7 @@ class DebertaV3Backbone(Backbone):
             bucket_size=bucket_size,
             layer_norm_epsilon=1e-7,
             kernel_initializer=deberta_kernel_initializer(),
+            dtype=dtype,
             name="rel_embedding",
         )
         self.transformer_layers = []
@@ -142,6 +150,7 @@ class DebertaV3Backbone(Backbone):
                 activation=keras.activations.gelu,
                 layer_norm_epsilon=1e-7,
                 kernel_initializer=deberta_kernel_initializer(),
+                dtype=dtype,
                 name=f"disentangled_attention_encoder_layer_{i}",
             )
             self.transformer_layers.append(layer)

@@ -87,7 +87,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         expected_num_non_trainable_weights=0,
         expected_num_non_trainable_variables=0,
         run_training_check=True,
-        run_mixed_precision_check=True,
+        run_precision_checks=True,
     ):
         """Run basic tests for a modeling layer."""
         # Serialization test.
@@ -187,24 +187,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         if run_training_check:
             run_training_step(layer, input_data, output_data)
 
-        # Never test mixed precision on torch CPU. Torch lacks support.
-        if run_mixed_precision_check and config.backend() == "torch":
-            import torch
-
-            run_mixed_precision_check = torch.cuda.is_available()
-
-        if run_mixed_precision_check:
-            layer = cls(**{**init_kwargs, "dtype": "mixed_float16"})
-            if isinstance(input_data, dict):
-                output_data = layer(**input_data)
-            else:
-                output_data = layer(input_data)
-            for tensor in tree.flatten(output_data):
-                if is_float_dtype(tensor.dtype):
-                    self.assertDTypeEqual(tensor, "float16")
-            for weight in layer.weights:
-                if is_float_dtype(weight.dtype):
-                    self.assertDTypeEqual(weight, "float32")
+        if run_precision_checks:
+            self.run_precision_test(cls, init_kwargs, input_data)
 
     def run_preprocessing_layer_test(
         self,
@@ -283,6 +267,40 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                     lst.remove("__annotations__")
             self.assertEqual(set(ref_dir), set(new_dir))
 
+    def run_precision_test(self, cls, init_kwargs, input_data):
+        # Keras 2 has some errors as non-float32 precision.
+        if not config.keras_3():
+            return
+        # Never test mixed precision on torch CPU. Torch lacks support.
+        if config.backend() == "torch":
+            import torch
+
+            if not torch.cuda.is_available():
+                return
+
+        for policy in ["mixed_float16", "mixed_bfloat16", "bfloat16"]:
+            policy = keras.mixed_precision.Policy(policy)
+            layer = cls(**{**init_kwargs, "dtype": policy})
+            if isinstance(layer, keras.Model):
+                output_data = layer(input_data)
+            elif isinstance(input_data, dict):
+                output_data = layer(**input_data)
+            else:
+                output_data = layer(input_data)
+            for tensor in tree.flatten(output_data):
+                if is_float_dtype(tensor.dtype):
+                    self.assertDTypeEqual(tensor, policy.compute_dtype)
+            for weight in layer.weights:
+                if is_float_dtype(weight.dtype):
+                    self.assertDTypeEqual(weight, policy.variable_dtype)
+            for sublayer in layer._flatten_layers(include_self=False):
+                if isinstance(
+                    sublayer, (keras.layers.Softmax, keras.layers.InputLayer)
+                ):
+                    continue
+                self.assertEqual(policy.compute_dtype, sublayer.compute_dtype)
+                self.assertEqual(policy.variable_dtype, sublayer.variable_dtype)
+
     def run_model_saving_test(
         self,
         cls,
@@ -310,6 +328,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         input_data,
         expected_output_shape,
         variable_length_data=None,
+        run_mixed_precision_check=True,
     ):
         """Run basic tests for a backbone, including compilation."""
         backbone = cls(**init_kwargs)
@@ -350,6 +369,8 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", cls.__name__)
         name = re.sub("([a-z])([A-Z])", r"\1_\2", name).lower()
         self.assertRegexpMatches(backbone.name, name)
+
+        self.run_precision_test(cls, init_kwargs, input_data)
 
     def run_task_test(
         self,

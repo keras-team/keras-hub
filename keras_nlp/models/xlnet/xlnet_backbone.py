@@ -52,6 +52,10 @@ class XLNetBackbone(Backbone):
         bias_initializer: string or `keras.initializers` initializer,
             defaults to "zeros". The bias initializer for
             the dense and multiheaded relative attention layers.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Call arguments:
         token_ids: Indices of input sequence tokens in the vocabulary of shape
@@ -101,6 +105,7 @@ class XLNetBackbone(Backbone):
         activation="gelu",
         kernel_initializer_range=0.02,
         bias_initializer="zeros",
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
@@ -108,14 +113,17 @@ class XLNetBackbone(Backbone):
             vocabulary_size=vocabulary_size,
             hidden_dim=hidden_dim,
             dropout=dropout,
+            dtype=dtype,
             name="content_query_embedding",
         )
         self.attn_mask_layer = XLNetAttentionMaskLayer(
             hidden_dim=hidden_dim,
             kernel_initializer_range=kernel_initializer_range,
+            dtype=dtype,
             name="encoder_block_attn_mask_layer",
         )
         self.seg_mat_layer = XLNetSegmentMatrixLayer(
+            dtype=dtype,
             name="encoder_block_seg_mat_layer",
         )
         head_dim = hidden_dim // num_heads
@@ -131,11 +139,13 @@ class XLNetBackbone(Backbone):
                 layer_norm_epsilon=1e-12,
                 kernel_initializer_range=kernel_initializer_range,
                 bias_initializer=bias_initializer,
+                dtype=dtype,
                 name=f"xlnet_encoder_{i}",
             )
             self.transformer_layers.append(layer)
         self.dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="dropout",
         )
 

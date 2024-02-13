@@ -39,7 +39,7 @@ class CachedMultiHeadAttentionTest(TestCase):
             expected_num_non_trainable_variables=1,
             # Keras 2 does not handle mixed precision correctly when not set
             # globally.
-            run_mixed_precision_check=config.keras_3(),
+            run_precision_checks=config.keras_3(),
         )
 
     def test_cache_call_is_correct(self):

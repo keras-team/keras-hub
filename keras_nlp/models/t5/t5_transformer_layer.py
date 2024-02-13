@@ -47,10 +47,17 @@ class T5TransformerLayer(keras.layers.Layer):
             num_heads=num_heads,
             dropout=dropout,
             use_relative_attention_bias=use_relative_attention_bias,
+            dtype=self.dtype_policy,
             name="self_attention",
         )
-        self.self_attention_layer_norm = T5LayerNorm(layer_norm_epsilon)
-        self.self_attention_dropout = keras.layers.Dropout(dropout)
+        self.self_attention_layer_norm = T5LayerNorm(
+            layer_norm_epsilon,
+            dtype=self.dtype_policy,
+        )
+        self.self_attention_dropout = keras.layers.Dropout(
+            dropout,
+            dtype=self.dtype_policy,
+        )
 
         if self.is_decoder:
             self.cross_attention = T5MultiHeadAttention(
@@ -60,39 +67,55 @@ class T5TransformerLayer(keras.layers.Layer):
                 num_heads=num_heads,
                 dropout=dropout,
                 use_relative_attention_bias=False,
+                dtype=self.dtype_policy,
                 name="cross_attention",
             )
-            self.cross_attention_layer_norm = T5LayerNorm(layer_norm_epsilon)
-            self.cross_attention_dropout = keras.layers.Dropout(dropout)
+            self.cross_attention_layer_norm = T5LayerNorm(
+                layer_norm_epsilon,
+                dtype=self.dtype_policy,
+            )
+            self.cross_attention_dropout = keras.layers.Dropout(
+                dropout,
+                dtype=self.dtype_policy,
+            )
 
         self.input_projector = keras.layers.Dense(
             intermediate_dim,
             use_bias=False,
-            name="input_projector",
             activation=keras.activations.get(activation),
             kernel_initializer=keras.initializers.RandomNormal(
                 mean=0, stddev=hidden_dim**-0.5
             ),
+            dtype=self.dtype_policy,
+            name="input_projector",
         )
         if self.use_gated_activation:
             self.gate_projector = keras.layers.Dense(
                 intermediate_dim,
                 use_bias=False,
-                name="gate_projector",
                 kernel_initializer=keras.initializers.RandomNormal(
                     mean=0, stddev=hidden_dim**-0.5
                 ),
+                dtype=self.dtype_policy,
+                name="gate_projector",
             )
         self.output_projector = keras.layers.Dense(
             hidden_dim,
             use_bias=False,
-            name="output_projector",
             kernel_initializer=keras.initializers.RandomNormal(
                 mean=0, stddev=intermediate_dim**-0.5
             ),
+            dtype=self.dtype_policy,
+            name="output_projector",
         )
-        self.layer_norm = T5LayerNorm(epsilon=layer_norm_epsilon)
-        self.dropout_layer = keras.layers.Dropout(dropout)
+        self.layer_norm = T5LayerNorm(
+            epsilon=layer_norm_epsilon,
+            dtype=self.dtype_policy,
+        )
+        self.dropout_layer = keras.layers.Dropout(
+            dropout,
+            dtype=self.dtype_policy,
+        )
 
     def call(
         self,

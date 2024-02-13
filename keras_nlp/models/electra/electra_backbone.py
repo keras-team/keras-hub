@@ -58,6 +58,10 @@ class ElectraBackbone(Backbone):
             can consume. If None, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Examples:
         ```python
@@ -92,6 +96,7 @@ class ElectraBackbone(Backbone):
         dropout=0.1,
         max_sequence_length=512,
         num_segments=2,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
@@ -99,34 +104,42 @@ class ElectraBackbone(Backbone):
             input_dim=vocab_size,
             output_dim=embedding_dim,
             embeddings_initializer=electra_kernel_initializer(),
+            dtype=dtype,
             name="token_embedding",
         )
         self.position_embedding = PositionEmbedding(
             initializer=electra_kernel_initializer(),
             sequence_length=max_sequence_length,
+            dtype=dtype,
             name="position_embedding",
         )
         self.segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
             output_dim=embedding_dim,
             embeddings_initializer=electra_kernel_initializer(),
+            dtype=dtype,
             name="segment_embedding",
         )
-        self.embeddings_add = keras.layers.Add()
+        self.embeddings_add = keras.layers.Add(
+            dtype=dtype,
+            name="embeddings_add",
+        )
         self.embeddings_layer_norm = keras.layers.LayerNormalization(
-            name="embeddings_layer_norm",
             axis=-1,
             epsilon=1e-12,
-            dtype="float32",
+            dtype=dtype,
+            name="embeddings_layer_norm",
         )
         self.embeddings_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="embeddings_dropout",
         )
         if hidden_dim != embedding_dim:
             self.embeddings_projection = keras.layers.Dense(
                 hidden_dim,
                 kernel_initializer=electra_kernel_initializer(),
+                dtype=dtype,
                 name="embeddings_projection",
             )
         self.transformer_layers = []
@@ -138,6 +151,7 @@ class ElectraBackbone(Backbone):
                 dropout=dropout,
                 layer_norm_epsilon=1e-12,
                 kernel_initializer=electra_kernel_initializer(),
+                dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
@@ -145,6 +159,7 @@ class ElectraBackbone(Backbone):
             hidden_dim,
             kernel_initializer=electra_kernel_initializer(),
             activation="tanh",
+            dtype=dtype,
             name="pooled_dense",
         )
 

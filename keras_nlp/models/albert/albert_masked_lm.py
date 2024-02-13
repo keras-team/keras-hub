@@ -105,6 +105,7 @@ class AlbertMaskedLM(Task):
             token_embedding=backbone.token_embedding,
             intermediate_activation=gelu_approximate,
             kernel_initializer=albert_kernel_initializer(),
+            dtype=backbone.dtype_policy,
             name="mlm_head",
         )
 

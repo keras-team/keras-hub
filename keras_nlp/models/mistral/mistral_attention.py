@@ -69,7 +69,7 @@ class CachedMistralAttention(keras.layers.Layer):
             equation="bqm,muh->bquh",
             output_shape=(None, self._num_query_heads, self._head_dim),
             kernel_initializer=self._kernel_initializer,
-            dtype=self.compute_dtype,
+            dtype=self.dtype_policy,
             name="query",
         )
         self._query_dense.build(inputs_shape)
@@ -82,7 +82,7 @@ class CachedMistralAttention(keras.layers.Layer):
                 self._head_dim,
             ),
             kernel_initializer=self._kernel_initializer,
-            dtype=self.compute_dtype,
+            dtype=self.dtype_policy,
             name="key",
         )
         self._key_dense.build(inputs_shape)
@@ -95,22 +95,27 @@ class CachedMistralAttention(keras.layers.Layer):
                 self._head_dim,
             ),
             kernel_initializer=self._kernel_initializer,
-            dtype=self.compute_dtype,
+            dtype=self.dtype_policy,
             name="value",
         )
         self._value_dense.build(inputs_shape)
 
-        self._softmax = keras.layers.Softmax(axis=-1, name="attention_softmax")
+        self._softmax = keras.layers.Softmax(
+            axis=-1,
+            dtype="float32",
+            name="attention_softmax",
+        )
 
         self._dropout_layer = keras.layers.Dropout(
-            rate=self._dropout, dtype=self.compute_dtype
+            rate=self._dropout,
+            dtype=self.dtype_policy,
         )
 
         self._output_dense = keras.layers.EinsumDense(
             equation="bquh,uhm->bqm",
             output_shape=(None, self._hidden_dim),
             kernel_initializer=self._kernel_initializer,
-            dtype=self.compute_dtype,
+            dtype=self.dtype_policy,
             name="attention_output",
         )
         self._output_dense.build(
@@ -120,7 +125,7 @@ class CachedMistralAttention(keras.layers.Layer):
         self.rotary_embedding_layer = RotaryEmbedding(
             max_wavelength=self._rope_max_wavelength,
             scaling_factor=self._rope_scaling_factor,
-            dtype=self.compute_dtype,
+            dtype=self.dtype_policy,
         )
 
         self._dot_product_equation = "bquh,bkuh->buqk"
@@ -265,10 +270,10 @@ class CachedMistralAttention(keras.layers.Layer):
         norm_factor = ops.sqrt(ops.cast(self._head_dim, self.compute_dtype))
 
         attention_scores = attention_scores / norm_factor
-
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
         )
+        attention_scores = ops.cast(attention_scores, self.compute_dtype)
         attention_output = ops.einsum(
             self._combine_equation, attention_scores, value
         )

@@ -64,7 +64,8 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.rotary_max_wavelength = rotary_max_wavelength
         self.rotary_dim = int(self.attn_head_size * rotary_percentage)
         self.rotary_embedding_layer = RotaryEmbedding(
-            max_wavelength=rotary_max_wavelength
+            max_wavelength=rotary_max_wavelength,
+            dtype=self.dtype_policy,
         )
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
@@ -76,15 +77,22 @@ class GPTNeoXAttention(keras.layers.Layer):
             output_shape=(None, self.num_heads, 3 * self.attn_head_size),
             bias_axes="de",
             **self._get_common_kwargs_for_sublayer(use_bias=True),
+            dtype=self.dtype_policy,
             name="query_key_value",
         )
         self._qkv_dense.build(input_shape)
 
         self._attn_dropout_layer = keras.layers.Dropout(
-            self.dropout, name="attention_dropout"
+            self.dropout,
+            dtype=self.dtype_policy,
+            name="attention_dropout",
         )
 
-        self._softmax = keras.layers.Softmax(axis=-1, name="attention_softmax")
+        self._softmax = keras.layers.Softmax(
+            axis=-1,
+            dtype="float32",
+            name="attention_softmax",
+        )
 
         # Output.
         self._output_dense = keras.layers.EinsumDense(
@@ -92,6 +100,7 @@ class GPTNeoXAttention(keras.layers.Layer):
             output_shape=(None, self.hidden_dim),
             bias_axes="d",
             **self._get_common_kwargs_for_sublayer(use_bias=True),
+            dtype=self.dtype_policy,
             name="attention_output",
         )
 

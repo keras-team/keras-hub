@@ -112,6 +112,7 @@ class DebertaV3MaskedLM(Task):
             token_embedding=backbone.token_embedding,
             intermediate_activation=keras.activations.gelu,
             kernel_initializer=deberta_kernel_initializer(),
+            dtype=backbone.dtype_policy,
             name="mlm_head",
         )
 

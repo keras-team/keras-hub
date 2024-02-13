@@ -75,6 +75,10 @@ class WhisperBackbone(Backbone):
             positional embedding layer.
         max_decoder_sequence_length: int. The maximum sequence length that the
             text decoder can consume.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Examples:
 
@@ -112,6 +116,7 @@ class WhisperBackbone(Backbone):
         dropout=0.0,
         max_encoder_sequence_length=3000,
         max_decoder_sequence_length=448,
+        dtype=None,
         **kwargs,
     ):
         assert_tf_backend(self.__class__.__name__)
@@ -122,6 +127,7 @@ class WhisperBackbone(Backbone):
             kernel_size=3,
             strides=1,
             padding="same",
+            dtype=dtype,
             name="encoder_token_embedding_conv_layer_1",
         )
         self.encoder_conv_layer_2 = keras.layers.Conv1D(
@@ -129,22 +135,27 @@ class WhisperBackbone(Backbone):
             kernel_size=3,
             strides=2,
             padding="valid",
+            dtype=dtype,
             name="encoder_token_embedding_conv_layer_2",
         )
         self.encoder_padder = Padder(
+            dtype=dtype,
             name="encoder_padder",
         )
         self.encoder_position_embedding = PositionEmbedding(
             initializer=whisper_kernel_initializer(),
             sequence_length=max_encoder_sequence_length // 2,
+            dtype=dtype,
             name="encoder_position_embedding",
             trainable=False,
         )
         self.encoder_embeddings_add = keras.layers.Add(
+            dtype=dtype,
             name="encoder_embeddings_add",
         )
         self.encoder_embeddings_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="encoder_embeddings_dropout",
         )
         self.encoder_transformer_layers = []
@@ -157,25 +168,28 @@ class WhisperBackbone(Backbone):
                 dropout=dropout,
                 kernel_initializer=whisper_kernel_initializer(),
                 normalize_first=True,
+                dtype=dtype,
                 name=f"transformer_encoder_layer_{i}",
             )
             self.encoder_transformer_layers.append(layer)
         self.encoder_layer_norm = keras.layers.LayerNormalization(
-            name="encoder_layer_norm",
             axis=-1,
             epsilon=1e-5,
-            dtype="float32",
+            dtype=dtype,
+            name="encoder_layer_norm",
         )
         self.decoder_embeddings = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
             sequence_length=max_decoder_sequence_length,
             embedding_dim=hidden_dim,
             embeddings_initializer=whisper_kernel_initializer(),
+            dtype=dtype,
             name="decoder_token_and_position_embedding",
         )
         self.token_embedding = self.decoder_embeddings.token_embedding
         self.decoder_embeddings_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="decoder_embeddings_dropout",
         )
         self.decoder_transformer_layers = []
@@ -188,14 +202,15 @@ class WhisperBackbone(Backbone):
                 layer_norm_epsilon=1e-5,
                 kernel_initializer=whisper_kernel_initializer(),
                 normalize_first=True,
+                dtype=dtype,
                 name=f"transformer_decoder_layer_{i}",
             )
             self.decoder_transformer_layers.append(layer)
         self.decoder_layer_norm = keras.layers.LayerNormalization(
-            name="decoder_layer_norm",
             axis=-1,
             epsilon=1e-5,
-            dtype="float32",
+            dtype=dtype,
+            name="decoder_layer_norm",
         )
 
         # === Functional Model ===
@@ -222,7 +237,7 @@ class WhisperBackbone(Backbone):
         # For the second conv. layer, we cannot use `padding="same"` since
         # that corresponds to a padding size of 1.5 (since stride is 2). Hence,
         # we will manually pad the input.
-        embedded_features = Padder()(embedded_features)
+        embedded_features = self.encoder_padder(embedded_features)
         embedded_features = keras.activations.gelu(
             self.encoder_conv_layer_2(embedded_features),
             approximate=False,

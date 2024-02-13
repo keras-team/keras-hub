@@ -72,6 +72,10 @@ class AlbertBackbone(Backbone):
             embeddings.
         num_segments: int. The number of types that the 'segment_ids' input can
             take.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Examples:
     ```python
@@ -110,6 +114,7 @@ class AlbertBackbone(Backbone):
         dropout=0.0,
         max_sequence_length=512,
         num_segments=2,
+        dtype=None,
         **kwargs,
     ):
         if num_layers % num_groups != 0:
@@ -123,35 +128,41 @@ class AlbertBackbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=embedding_dim,
             embeddings_initializer=albert_kernel_initializer(),
+            dtype=dtype,
             name="token_embedding",
         )
         self.position_embedding = PositionEmbedding(
             initializer=albert_kernel_initializer(),
             sequence_length=max_sequence_length,
+            dtype=dtype,
             name="position_embedding",
         )
         self.segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
             output_dim=embedding_dim,
             embeddings_initializer=albert_kernel_initializer(),
+            dtype=dtype,
             name="segment_embedding",
         )
         self.embeddings_add = keras.layers.Add(
+            dtype=dtype,
             name="embeddings_add",
         )
         self.embeddings_layer_norm = keras.layers.LayerNormalization(
-            name="embeddings_layer_norm",
             axis=-1,
             epsilon=1e-12,
-            dtype="float32",
+            dtype=dtype,
+            name="embeddings_layer_norm",
         )
         self.embeddings_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="embeddings_dropout",
         )
         self.embeddings_projection = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=albert_kernel_initializer(),
+            dtype=dtype,
             name="embedding_projection",
         )
         self.transformer_layers = []
@@ -165,6 +176,7 @@ class AlbertBackbone(Backbone):
                     dropout=dropout,
                     layer_norm_epsilon=1e-12,
                     kernel_initializer=albert_kernel_initializer(),
+                    dtype=dtype,
                     name=f"group_{group_idx}_inner_layer_{inner_idx}",
                 )
                 inner_layers.append(layer)
@@ -173,6 +185,7 @@ class AlbertBackbone(Backbone):
             hidden_dim,
             kernel_initializer=albert_kernel_initializer(),
             activation="tanh",
+            dtype=dtype,
             name="pooled_dense",
         )
 

@@ -220,9 +220,14 @@ class Task(PipelineModel):
 
         # Backbone case.
         if preset_cls == cls.backbone_cls:
+            # Forward dtype to the backbone.
+            config_overrides = {}
+            if "dtype" in kwargs:
+                config_overrides["dtype"] = kwargs.pop("dtype")
             backbone = load_from_preset(
                 preset,
                 load_weights=load_weights,
+                config_overrides=config_overrides,
             )
             if "preprocessor" in kwargs:
                 preprocessor = kwargs.pop("preprocessor")
