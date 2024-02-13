@@ -147,25 +147,13 @@ class CachedMistralAttention(keras.layers.Layer):
 
         query = self._query_dense(hidden_states)
 
-        # Note that the original PyTorch implementation uses
-        # view_as_complex/view_as_real while we use split/concatenate to
-        # convert to/from complex numbers. The transformations below make
-        # the rope computation numerically equivalent to the original
-        # implementation.
-        def _mistral_rope(x):
-            x = ops.concatenate([x[..., ::2], x[..., 1::2]], axis=-1)
-            x = self.rotary_embedding_layer(x, start_index=start_index)
-            x = ops.reshape(
-                ops.stack(ops.split(x, 2, axis=-1), axis=-1), ops.shape(x)
-            )
-            return x
-
         # Compute RoPE for queries
-        query = _mistral_rope(query)
+        query = self.rotary_embedding_layer(query, start_index=start_index)
 
         def _compute_key_value(x):
             key, value = self._key_dense(x), self._value_dense(x)
-            key = _mistral_rope(key)
+            # Compute RoPE for keys
+            key = self.rotary_embedding_layer(key, start_index=start_index)
             return key, value
 
         if cache is not None:
