@@ -213,9 +213,9 @@ class MistralTransformerDecoder(keras.layers.Layer):
         # Below is a workaround for `ops.triu` for Keras 2.
         # TODO(tirthasheshpatel): Use `ops.triu` once Keras 2 support is removed.
         # causal_mask = ops.triu(causal_mask_lower, k=-self.sliding_window)
-        i = ops.arange(output_length)[:, None] + cache_update_index + 1
+        i = ops.arange(output_length)[:, None] + cache_update_index
         j = ops.arange(input_length)[None, :]
-        causal_mask_upper = ops.cast(i <= j + self.sliding_window, "int32")
+        causal_mask_upper = ops.cast(i < j + self.sliding_window, "int32")
         causal_mask = ops.minimum(causal_mask_lower, causal_mask_upper)
 
         return (
