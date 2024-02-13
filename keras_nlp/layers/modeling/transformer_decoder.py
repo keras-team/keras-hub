@@ -416,10 +416,10 @@ class TransformerDecoder(keras.layers.Layer):
                 cache=cross_attention_cache,
                 cache_update_index=cross_attention_cache_update_index,
             )
-            if self_attention_cache is None:
+            if cross_attention_cache is None:
                 x = attention_output
             else:
-                x, self_attention_cache = attention_output
+                x, cross_attention_cache = attention_output
             x = self._cross_attention_dropout(x)
             x = x + residual
             if not self.normalize_first:
