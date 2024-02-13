@@ -93,6 +93,12 @@ from keras_nlp.models.gpt_neo_x.gpt_neo_x_preprocessor import (
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
 from keras_nlp.models.llama.llama_backbone import LlamaBackbone
 from keras_nlp.models.mistral.mistral_backbone import MistralBackbone
+from keras_nlp.models.mistral.mistral_causal_lm import MistralCausalLM
+from keras_nlp.models.mistral.mistral_causal_lm_preprocessor import (
+    MistralCausalLMPreprocessor,
+)
+from keras_nlp.models.mistral.mistral_preprocessor import MistralPreprocessor
+from keras_nlp.models.mistral.mistral_tokenizer import MistralTokenizer
 from keras_nlp.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.models.opt.opt_causal_lm import OPTCausalLM
 from keras_nlp.models.opt.opt_causal_lm_preprocessor import (

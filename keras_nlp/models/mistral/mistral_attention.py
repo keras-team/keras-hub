@@ -141,7 +141,6 @@ class CachedMistralAttention(keras.layers.Layer):
         cache_update_index=None,
         training=None,
     ):
-        seq_len = ops.shape(hidden_states)[1]
         start_index = (
             cache_update_index if cache_update_index is not None else 0
         )
@@ -153,89 +152,34 @@ class CachedMistralAttention(keras.layers.Layer):
 
         query = self._query_dense(hidden_states)
 
-        # Note that the original PyTorch implementation uses
-        # view_as_complex/view_as_real while we use split/concatenate to
-        # convert to/from complex numbers. The transformations below make
-        # the rope computation numerically equivalent to the original
-        # implementation.
-        def _mistral_rope(x):
-            x = ops.concatenate([x[..., ::2], x[..., 1::2]], axis=-1)
-            x = self.rotary_embedding_layer(x, start_index=start_index)
-            x = ops.reshape(
-                ops.stack(ops.split(x, 2, axis=-1), axis=-1), ops.shape(x)
-            )
-            return x
-
         # Compute RoPE for queries
-        query = _mistral_rope(query)
+        query = self.rotary_embedding_layer(query, start_index=start_index)
 
         def _compute_key_value(x):
             key, value = self._key_dense(x), self._value_dense(x)
-            key = _mistral_rope(key)
+            # Compute RoPE for keys
+            key = self.rotary_embedding_layer(key, start_index=start_index)
             return key, value
 
         if cache is not None:
-            cache_k = cache[:, 0, ...]
-            cache_v = cache[:, 1, ...]
-
-            if cache_update_index is not None:
-                # Compute the new keys and values
-                key, value = _compute_key_value(hidden_states)
-
-                # Cache is a rotating buffer, we want to warp around if
-                # the sequence length exceeds the sliding window.
-                update_end_index = (
-                    cache_update_index + seq_len - 1
-                ) % self._sliding_window + 1
-                update_end_index = ops.cast(update_end_index, "int32")
-                cache_update_index = cache_update_index % self._sliding_window
-                update_start_index = ops.cond(
-                    update_end_index > cache_update_index,
-                    lambda: ops.cast(cache_update_index, "int32"),
-                    lambda: ops.cast(0, "int32"),
-                )
-                # Also note that the update step below assumes that the
-                # sequence length is always one when `cache_update_index != 0`.
-                # This is necessary to support XLA compilation. Ideally, we
-                # would want to use
-                # `key[:, -(update_end_index - update_start_index):, ...]`
-                # as the update but updating using a dynamic slice gives an
-                # XLA compilation error in TensorFlow.
-                # Passing a sequence of length > 1 with cache update might give
-                # incorrect results (since there is no way to determine how
-                # many most recent tokens are to be saved if the tokens exceed
-                # the sliding window length).
-                cache_k = ops.slice_update(
-                    cache_k,
-                    [0, update_start_index, 0, 0],
-                    # We slice the keys and values since if the user has passed
-                    # a sequence of length > `self._sliding_window`. We want to
-                    # prefill the cache using just the most recent values in the
-                    # sliding window.
-                    ops.cast(
-                        key[:, -self._sliding_window :, ...], cache_k.dtype
-                    ),
-                )
-                cache_v = ops.slice_update(
-                    cache_v,
-                    [0, update_start_index, 0, 0],
-                    ops.cast(
-                        value[:, -self._sliding_window :, ...], cache_v.dtype
-                    ),
-                )
-                cache = ops.stack([cache_k, cache_v], axis=1)
-
-                # Get the required keys and values from the cache.
-                # Since we expect the user to pass a fixed-size cache, we just
-                # pick the first few slices up-to and including the newly computed
-                # keys and values.
-                cache_k = cache_k[:, :update_end_index, ...]
-                cache_v = cache_v[:, :update_end_index, ...]
-
-            key = ops.cast(cache_k, dtype=self.compute_dtype)
-            value = ops.cast(cache_v, dtype=self.compute_dtype)
+            key_cache = cache[:, 0, ...]
+            value_cache = cache[:, 1, ...]
+            if cache_update_index is None:
+                key = key_cache
+                value = value_cache
+            else:
+                key_update, value_update = _compute_key_value(hidden_states)
+                start = [0, cache_update_index, 0, 0]
+                key = ops.slice_update(key_cache, start, key_update)
+                value = ops.slice_update(value_cache, start, value_update)
+                cache = ops.stack((key, value), axis=1)
         else:
-            # Compute keys and values
+            if cache_update_index is not None:
+                raise ValueError(
+                    "`cache_update_index` should not be set if `cache` is "
+                    f"`None`. Received: cache={cache}, "
+                    f"cache_update_index={cache_update_index}"
+                )
             key, value = _compute_key_value(hidden_states)
 
         # [batch_shape, seq_len, num_key_value_heads, head_dim]
@@ -265,7 +209,7 @@ class CachedMistralAttention(keras.layers.Layer):
         return self._softmax(attention_scores)
 
     def _compute_attention(self, query, key, value, attention_mask=None):
-        attention_scores = ops.einsum(self._dot_product_equation, key, query)
+        attention_scores = ops.einsum(self._dot_product_equation, query, key)
 
         norm_factor = ops.sqrt(ops.cast(self._head_dim, self.compute_dtype))
 

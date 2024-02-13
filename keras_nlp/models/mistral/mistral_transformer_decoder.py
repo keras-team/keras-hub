@@ -36,7 +36,7 @@ class MistralTransformerDecoder(keras.layers.Layer):
         num_key_value_heads,
         rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
-        activation="relu",
+        activation="silu",
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
         sliding_window=512,
@@ -146,6 +146,8 @@ class MistralTransformerDecoder(keras.layers.Layer):
             decoder_sequence=decoder_sequence,
             decoder_padding_mask=decoder_padding_mask,
             decoder_attention_mask=decoder_attention_mask,
+            self_attention_cache=self_attention_cache,
+            self_attention_cache_update_index=self_attention_cache_update_index,
         )
         residual = decoder_sequence
 
@@ -185,23 +187,36 @@ class MistralTransformerDecoder(keras.layers.Layer):
         decoder_sequence,
         decoder_padding_mask,
         decoder_attention_mask,
+        self_attention_cache,
+        self_attention_cache_update_index,
     ):
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )
         batch_size = ops.shape(decoder_sequence)[0]
         input_length = output_length = ops.shape(decoder_sequence)[1]
+        # We need to handle a rectangular causal mask when doing cached
+        # decoding. For generative inference, `decoder_sequence` will
+        # generally be length 1, and `cache` will be the full generation length.
+        if self_attention_cache is not None:
+            input_length = ops.shape(self_attention_cache)[2]
+
+        cache_update_index = (
+            0
+            if self_attention_cache_update_index is None
+            else self_attention_cache_update_index
+        )
 
         # Mistral uses a banded attention mask
         causal_mask_lower = compute_causal_mask(
-            batch_size, input_length, output_length, 0
+            batch_size, input_length, output_length, cache_update_index
         )
         # Below is a workaround for `ops.triu` for Keras 2.
         # TODO(tirthasheshpatel): Use `ops.triu` once Keras 2 support is removed.
         # causal_mask = ops.triu(causal_mask_lower, k=-self.sliding_window)
-        i = ops.arange(output_length)[:, None]
+        i = ops.arange(output_length)[:, None] + cache_update_index
         j = ops.arange(input_length)[None, :]
-        causal_mask_upper = ops.cast(i <= j + self.sliding_window, "int32")
+        causal_mask_upper = ops.cast(i < j + self.sliding_window, "int32")
         causal_mask = ops.minimum(causal_mask_lower, causal_mask_upper)
 
         return (
