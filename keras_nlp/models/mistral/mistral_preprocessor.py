@@ -123,10 +123,10 @@ class MistralPreprocessor(Preprocessor):
     ):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
+        self.packer = None
         self.add_start_token = add_start_token
         self.add_end_token = add_end_token
         self.sequence_length = sequence_length
-        self.packer = None
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
