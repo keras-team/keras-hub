@@ -178,6 +178,17 @@ class MistralPreprocessor(Preprocessor):
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
 
+    @property
+    def sequence_length(self):
+        """The padded length of model input sequences."""
+        return self._sequence_length
+
+    @sequence_length.setter
+    def sequence_length(self, value):
+        self._sequence_length = value
+        if self.packer is not None:
+            self.packer.sequence_length = value
+
     @classproperty
     def tokenizer_cls(cls):
         return MistralTokenizer

@@ -45,7 +45,7 @@ class XLMRobertaMaskedLMPreprocessorTest(TestCase):
         self.input_data = ["the quick brown fox"]
 
     def test_preprocessor_basics(self):
-        self.run_preprocessing_layer_test(
+        self.run_preprocessor_test(
             cls=XLMRobertaMaskedLMPreprocessor,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,

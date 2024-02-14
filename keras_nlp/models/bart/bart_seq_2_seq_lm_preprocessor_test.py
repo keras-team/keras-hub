@@ -45,7 +45,7 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
         )
 
     def test_preprocessor_basics(self):
-        self.run_preprocessing_layer_test(
+        self.run_preprocessor_test(
             cls=BartSeq2SeqLMPreprocessor,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
@@ -59,6 +59,7 @@ class BartSeq2SeqLMPreprocessorTest(TestCase):
                 [[0, 4, 5, 4, 7, 2, 1, 1]],
                 [[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0]],
             ),
+            token_id_key="decoder_token_ids",
         )
 
     def test_generate_preprocess(self):

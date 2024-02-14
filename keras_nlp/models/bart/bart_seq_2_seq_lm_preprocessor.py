@@ -124,28 +124,17 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
     ```
     """
 
-    def __init__(
+    def call(
         self,
-        tokenizer,
-        encoder_sequence_length=1024,
-        decoder_sequence_length=1024,
-        **kwargs
+        x,
+        y=None,
+        sample_weight=None,
+        *,
+        encoder_sequence_length=None,
+        decoder_sequence_length=None,
+        # `sequence_length` is an alias for `decoder_sequence_length`
+        sequence_length=None,
     ):
-        # Since we truncate the last token from `decoder_token_ids`, we need to
-        # forcefully set the `decoder_sequence_length` to one greater than the
-        # value passed.
-        super().__init__(
-            tokenizer=tokenizer,
-            encoder_sequence_length=encoder_sequence_length,
-            decoder_sequence_length=decoder_sequence_length + 1,
-            **kwargs
-        )
-
-        # Maintain a private copy of the sequence lengths for config purposes.
-        self._encoder_sequence_length = encoder_sequence_length
-        self._decoder_sequence_length = decoder_sequence_length
-
-    def call(self, x, y=None, sample_weight=None):
         if y is not None or sample_weight is not None:
             logging.warning(
                 "`BartSeq2SeqLMPreprocessor` infers `y` and `sample_weight` "
@@ -154,7 +143,17 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
                 "These values will be ignored."
             )
 
-        x = super().call(x)
+        if encoder_sequence_length is None:
+            encoder_sequence_length = self.encoder_sequence_length
+        decoder_sequence_length = decoder_sequence_length or sequence_length
+        if decoder_sequence_length is None:
+            decoder_sequence_length = self.decoder_sequence_length
+
+        x = super().call(
+            x,
+            encoder_sequence_length=encoder_sequence_length,
+            decoder_sequence_length=decoder_sequence_length + 1,
+        )
         decoder_token_ids = x.pop("decoder_token_ids")
         decoder_padding_mask = x.pop("decoder_padding_mask")
 
@@ -173,6 +172,10 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
     def generate_preprocess(
         self,
         x,
+        *,
+        encoder_sequence_length=None,
+        # `sequence_length` is an alias for `decoder_sequence_length`
+        decoder_sequence_length=None,
         sequence_length=None,
     ):
         """Convert encoder and decoder input strings to integer token inputs for generation.
@@ -190,10 +193,6 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         if not self.built:
             self.build(None)
 
-        # If `sequence_length` is not provided, we use the default value.
-        if sequence_length is None:
-            sequence_length = self._decoder_sequence_length
-
         if isinstance(x, dict):
             encoder_text = x["encoder_text"]
             decoder_text = x["decoder_text"]
@@ -202,6 +201,12 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             # Initialize empty prompt for the decoder.
             decoder_text = tf.fill((tf.shape(encoder_text)[0],), "")
 
+        if encoder_sequence_length is None:
+            encoder_sequence_length = self.encoder_sequence_length
+        decoder_sequence_length = decoder_sequence_length or sequence_length
+        if decoder_sequence_length is None:
+            decoder_sequence_length = self.decoder_sequence_length
+
         # Tokenize and pack the encoder inputs.
         # TODO: Remove `[0]` once we have shifted to `MultiSegmentPacker`.
         encoder_text = convert_inputs_to_list_of_tensor_segments(encoder_text)[
@@ -209,7 +214,8 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         ]
         encoder_token_ids = self.tokenizer(encoder_text)
         encoder_token_ids, encoder_padding_mask = self.encoder_packer(
-            encoder_token_ids
+            encoder_token_ids,
+            sequence_length=encoder_sequence_length,
         )
 
         # Tokenize and pack the decoder inputs.
@@ -219,7 +225,7 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
         decoder_token_ids = self.tokenizer(decoder_text)
         decoder_token_ids, decoder_padding_mask = self.decoder_packer(
             decoder_token_ids,
-            sequence_length=sequence_length,
+            sequence_length=decoder_sequence_length,
             add_end_value=False,
         )
 
@@ -260,16 +266,6 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             decoder_token_ids, decoder_padding_mask
         )
         return self.tokenizer.detokenize(decoder_token_ids)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "encoder_sequence_length": self._encoder_sequence_length,
-                "decoder_sequence_length": self._decoder_sequence_length,
-            }
-        )
-        return config
 
     @classproperty
     def presets(cls):
