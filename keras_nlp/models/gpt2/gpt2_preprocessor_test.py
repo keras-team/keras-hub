@@ -38,7 +38,7 @@ class GPT2PreprocessorTest(TestCase):
         self.input_data = ["airplane at airport"]
 
     def test_preprocessor_basics(self):
-        self.run_preprocessing_layer_test(
+        self.run_preprocessor_test(
             cls=GPT2Preprocessor,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,

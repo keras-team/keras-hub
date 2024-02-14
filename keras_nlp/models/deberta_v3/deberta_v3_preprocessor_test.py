@@ -42,7 +42,7 @@ class DebertaV3PreprocessorTest(TestCase):
         )
 
     def test_preprocessor_basics(self):
-        self.run_preprocessing_layer_test(
+        self.run_preprocessor_test(
             cls=DebertaV3Preprocessor,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,

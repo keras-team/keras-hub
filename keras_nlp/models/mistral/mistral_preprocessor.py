@@ -121,15 +121,15 @@ class MistralPreprocessor(Preprocessor):
     ):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
-        self.add_start_token = add_start_token
-        self.add_end_token = add_end_token
-        self.sequence_length = sequence_length
         self.packer = StartEndPacker(
             start_value=self.tokenizer.start_token_id,
             end_value=self.tokenizer.end_token_id,
             sequence_length=sequence_length,
             return_padding_mask=True,
         )
+        self.add_start_token = add_start_token
+        self.add_end_token = add_end_token
+        self.sequence_length = sequence_length
 
     def get_config(self):
         config = super().get_config()
@@ -169,6 +169,17 @@ class MistralPreprocessor(Preprocessor):
             "padding_mask": padding_mask,
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
+
+    @property
+    def sequence_length(self):
+        """The padded length of model input sequences."""
+        return self._sequence_length
+
+    @sequence_length.setter
+    def sequence_length(self, value):
+        self._sequence_length = value
+        if self.packer is not None:
+            self.packer.sequence_length = value
 
     @classproperty
     def tokenizer_cls(cls):

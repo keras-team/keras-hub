@@ -169,11 +169,11 @@ class WhisperPreprocessor(Preprocessor):
             audio_feature_extractor = WhisperAudioFeatureExtractor()
         self.audio_feature_extractor = audio_feature_extractor
         self.tokenizer = tokenizer
+        self.decoder_packer = None
         self.decoder_sequence_length = decoder_sequence_length
         self.language = language
         self.task = task
         self.no_timestamps = no_timestamps
-        self.decoder_packer = None
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -306,6 +306,26 @@ class WhisperPreprocessor(Preprocessor):
             )
 
         return cls(**config)
+
+    @property
+    def decoder_sequence_length(self):
+        """The padded length of decoder input sequences."""
+        return self._decoder_sequence_length
+
+    @decoder_sequence_length.setter
+    def decoder_sequence_length(self, value):
+        self._decoder_sequence_length = value
+        if self.decoder_packer is not None:
+            self.decoder_packer.sequence_length = value
+
+    @property
+    def sequence_length(self):
+        """Alias for `decoder_sequence_length`."""
+        return self.decoder_sequence_length
+
+    @sequence_length.setter
+    def sequence_length(self, value):
+        self.decoder_sequence_length = value
 
     @classproperty
     def audio_feature_extractor_cls(cls):

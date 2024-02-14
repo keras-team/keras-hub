@@ -230,6 +230,42 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         if expected_output:
             self.assertAllClose(output, expected_output)
 
+    def run_preprocessor_test(
+        self,
+        cls,
+        init_kwargs,
+        input_data,
+        expected_output=None,
+        expected_detokenize_output=None,
+        token_id_key="token_ids",
+    ):
+        """Run basic tests for a Model Preprocessor layer."""
+        self.run_preprocessing_layer_test(
+            cls,
+            init_kwargs,
+            input_data,
+            expected_output=expected_output,
+            expected_detokenize_output=expected_detokenize_output,
+        )
+
+        layer = cls(**self.init_kwargs)
+        if isinstance(input_data, tuple):
+            output = layer(*input_data)
+        else:
+            output = layer(input_data)
+        output, _, _ = keras.utils.unpack_x_y_sample_weight(output)
+        shape = ops.shape(output[token_id_key])
+        self.assertEqual(shape[-1], layer.sequence_length)
+        # Update the sequence length.
+        layer.sequence_length = 17
+        if isinstance(input_data, tuple):
+            output = layer(*input_data)
+        else:
+            output = layer(input_data)
+        output, _, _ = keras.utils.unpack_x_y_sample_weight(output)
+        shape = ops.shape(output[token_id_key])
+        self.assertEqual(shape[-1], 17)
+
     def run_serialization_test(self, instance):
         """Check idempotency of serialize/deserialize.
 

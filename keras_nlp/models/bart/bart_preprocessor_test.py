@@ -46,7 +46,7 @@ class BartPreprocessorTest(TestCase):
         )
 
     def test_preprocessor_basics(self):
-        self.run_preprocessing_layer_test(
+        self.run_preprocessor_test(
             cls=BartPreprocessor,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
@@ -60,6 +60,7 @@ class BartPreprocessorTest(TestCase):
                 [1],  # Pass through labels.
                 [1.0],  # Pass through sample_weights.
             ),
+            token_id_key="decoder_token_ids",
         )
 
     def test_error_multi_segment_input(self):

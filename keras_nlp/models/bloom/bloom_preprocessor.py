@@ -116,8 +116,8 @@ class BloomPreprocessor(Preprocessor):
         **kwargs,
     ):
         super().__init__(**kwargs)
-
         self.tokenizer = tokenizer
+        self.packer = None
         self.sequence_length = sequence_length
         self.add_start_token = add_start_token
         self.add_end_token = add_end_token
@@ -172,6 +172,17 @@ class BloomPreprocessor(Preprocessor):
             }
         )
         return config
+
+    @property
+    def sequence_length(self):
+        """The padded length of model input sequences."""
+        return self._sequence_length
+
+    @sequence_length.setter
+    def sequence_length(self, value):
+        self._sequence_length = value
+        if self.packer is not None:
+            self.packer.sequence_length = value
 
     @classproperty
     def presets(cls):
