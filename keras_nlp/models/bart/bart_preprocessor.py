@@ -140,10 +140,10 @@ class BartPreprocessor(Preprocessor):
     ):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
-        self.encoder_sequence_length = encoder_sequence_length
-        self.decoder_sequence_length = decoder_sequence_length
         self.encoder_packer = None
         self.decoder_packer = None
+        self.encoder_sequence_length = encoder_sequence_length
+        self.decoder_sequence_length = decoder_sequence_length
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -174,7 +174,17 @@ class BartPreprocessor(Preprocessor):
         )
         self.built = True
 
-    def call(self, x, y=None, sample_weight=None):
+    def call(
+        self,
+        x,
+        y=None,
+        sample_weight=None,
+        *,
+        encoder_sequence_length=None,
+        decoder_sequence_length=None,
+        # `sequence_length` is an alias for `decoder_sequence_length`
+        sequence_length=None,
+    ):
         if not (
             isinstance(x, dict)
             and all(k in x for k in ("encoder_text", "decoder_text"))
@@ -183,6 +193,12 @@ class BartPreprocessor(Preprocessor):
                 '`x` must be a dictionary, containing the keys `"encoder_text"`'
                 f' and `"decoder_text"`. Received x={x}.'
             )
+
+        if encoder_sequence_length is None:
+            encoder_sequence_length = self.encoder_sequence_length
+        decoder_sequence_length = decoder_sequence_length or sequence_length
+        if decoder_sequence_length is None:
+            decoder_sequence_length = self.decoder_sequence_length
 
         encoder_text = x["encoder_text"]
         decoder_text = x["decoder_text"]
@@ -199,12 +215,14 @@ class BartPreprocessor(Preprocessor):
 
         encoder_inputs = self.tokenizer(encoder_text[0])
         encoder_token_ids, encoder_padding_mask = self.encoder_packer(
-            encoder_inputs
+            encoder_inputs,
+            sequence_length=encoder_sequence_length,
         )
 
         decoder_inputs = self.tokenizer(decoder_text[0])
         decoder_token_ids, decoder_padding_mask = self.decoder_packer(
-            decoder_inputs
+            decoder_inputs,
+            sequence_length=decoder_sequence_length,
         )
 
         x = {
@@ -225,6 +243,37 @@ class BartPreprocessor(Preprocessor):
             }
         )
         return config
+
+    @property
+    def encoder_sequence_length(self):
+        """The padded length of encoder input sequences."""
+        return self._encoder_sequence_length
+
+    @encoder_sequence_length.setter
+    def encoder_sequence_length(self, value):
+        self._encoder_sequence_length = value
+        if self.encoder_packer is not None:
+            self.encoder_packer.sequence_length = value
+
+    @property
+    def decoder_sequence_length(self):
+        """The padded length of decoder input sequences."""
+        return self._decoder_sequence_length
+
+    @decoder_sequence_length.setter
+    def decoder_sequence_length(self, value):
+        self._decoder_sequence_length = value
+        if self.decoder_packer is not None:
+            self.decoder_packer.sequence_length = value
+
+    @property
+    def sequence_length(self):
+        """Alias for `decoder_sequence_length`."""
+        return self.decoder_sequence_length
+
+    @sequence_length.setter
+    def sequence_length(self, value):
+        self.decoder_sequence_length = value
 
     @classproperty
     def tokenizer_cls(cls):

@@ -66,10 +66,11 @@ class WhisperPreprocessorTest(TestCase):
         }
 
     def test_feature_extractor_basics(self):
-        self.run_preprocessing_layer_test(
+        self.run_preprocessor_test(
             cls=WhisperPreprocessor,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
+            token_id_key="decoder_token_ids",
         )
 
     def test_sequence_length_override(self):
