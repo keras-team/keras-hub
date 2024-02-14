@@ -14,6 +14,8 @@
 
 import os
 
+import pytest
+
 from keras_nlp.models.mistral.mistral_causal_lm_preprocessor import (
     MistralCausalLMPreprocessor,
 )
@@ -79,3 +81,12 @@ class MistralCausalLMPreprocessorTest(TestCase):
         preprocessor = MistralCausalLMPreprocessor(**self.init_kwargs)
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "the quick brown fox")
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in MistralCausalLMPreprocessor.presets:
+            self.run_preset_test(
+                cls=MistralCausalLMPreprocessor,
+                preset=preset,
+                input_data=self.input_data,
+            )

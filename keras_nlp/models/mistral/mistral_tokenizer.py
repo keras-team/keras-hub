@@ -11,8 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import copy
+
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.models.mistral.mistral_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
+from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.MistralTokenizer")
@@ -77,3 +81,7 @@ class MistralTokenizer(SentencePieceTokenizer):
         else:
             self.start_token_id = None
             self.end_token_id = None
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
