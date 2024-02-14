@@ -53,7 +53,7 @@ class MistralTokenizerTest(TestCase):
             cls=MistralTokenizer,
             preset="mistral_7b_en",
             input_data=["The quick brown fox."],
-            expected_output=[[464, 2068, 7586, 21831, 13]],
+            expected_output=[[415, 2936, 9060, 285, 1142, 28723]],
         )
 
     @pytest.mark.extra_large
