@@ -11,433 +11,342 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import datetime
+import gc
 import json
+import os
 import pathlib
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional
-from typing import Tuple
+import traceback
 
-import torch
-from torch import nn
+import keras
+import numpy as np
+import requests
+from absl import app
+from absl import flags
+from keras import ops
+from transformers import AutoTokenizer
+from transformers import MistralForCausalLM
 
+import keras_nlp
 from keras_nlp.models import MistralBackbone
+from keras_nlp.models import MistralCausalLMPreprocessor
+from keras_nlp.models import MistralTokenizer
 
-MODEL_PATH = pathlib.Path("mistral-7B-v0.1")
+PRESET_MAP = {
+    "mistral_7b_en": "mistralai/Mistral-7B-v0.1",
+    "mistral_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.1",
+}
 
-# Torch model taken from:
-# https://github.com/mistralai/mistral-src/blob/147c4e68279b90eb61b19bdea44e16f5539d5a5d/one_file_ref.py
-
-
-@dataclass
-class ModelArgs:
-    dim: int
-    n_layers: int
-    head_dim: int
-    hidden_dim: int
-    n_heads: int
-    n_kv_heads: int
-    sliding_window: int
-    norm_eps: float
-    vocab_size: int
-
-    max_batch_size: int = 0
+FLAGS = flags.FLAGS
+flags.DEFINE_string(
+    "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
+)
 
 
-def repeat_kv(keys: torch.Tensor, values: torch.Tensor, repeats: int):
-    keys = torch.repeat_interleave(keys, repeats=repeats, dim=2)
-    values = torch.repeat_interleave(values, repeats=repeats, dim=2)
-    return keys, values
+def convert_checkpoints(keras_nlp_model, hf_model):
+    config = hf_model.config
 
-
-def _reshape_for_broadcast(
-    freqs_cis: torch.Tensor, x: torch.Tensor
-) -> torch.Tensor:
-    """
-    freqs_cis: complex - (seq_len, head_dim / 2)
-    x: complex - (bsz, seq_len, head_dim / 2)
-    """
-    ndim = x.ndim
-    assert 1 < ndim
-    assert freqs_cis.shape == (x.shape[1], x.shape[-1]), (
-        freqs_cis.shape,
-        (x.shape[1], x.shape[-1]),
+    keras_nlp_model.token_embedding.embeddings.assign(
+        hf_model.model.embed_tokens.weight.detach().cpu().numpy()
     )
-    shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
-    return freqs_cis.view(*shape)
 
-
-def apply_rotary_emb(
-    xq: torch.Tensor,
-    xk: torch.Tensor,
-    freqs_cis: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
-    xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
-    freqs_cis = _reshape_for_broadcast(freqs_cis, xq_)
-    xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3)
-    xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3)
-    return xq_out.type_as(xq), xk_out.type_as(xk)
-
-
-class Attention(nn.Module):
-    def __init__(self, args: ModelArgs):
-        super().__init__()
-        self.args = args
-
-        self.n_heads: int = args.n_heads
-        self.n_kv_heads: int = args.n_kv_heads
-
-        self.repeats = self.n_heads // self.n_kv_heads
-        self.sliding_window = self.args.sliding_window
-
-        self.scale = self.args.head_dim**-0.5
-
-        self.wq = nn.Linear(args.dim, args.n_heads * args.head_dim, bias=False)
-        self.wk = nn.Linear(
-            args.dim, args.n_kv_heads * args.head_dim, bias=False
+    for i in range(keras_nlp_model.num_layers):
+        keras_nlp_model.transformer_layers[
+            i
+        ]._self_attention_layer._key_dense.set_weights(
+            [
+                hf_model.model.layers[i]
+                .self_attn.k_proj.weight.T.reshape(
+                    config.hidden_size,
+                    config.num_key_value_heads,
+                    config.hidden_size // config.num_attention_heads,
+                )
+                .detach()
+                .cpu()
+                .numpy()
+            ]
         )
-        self.wv = nn.Linear(
-            args.dim, args.n_kv_heads * args.head_dim, bias=False
+        keras_nlp_model.transformer_layers[
+            i
+        ]._self_attention_layer._query_dense.set_weights(
+            [
+                hf_model.model.layers[i]
+                .self_attn.q_proj.weight.T.reshape(
+                    config.hidden_size,
+                    config.num_attention_heads,
+                    config.hidden_size // config.num_attention_heads,
+                )
+                .detach()
+                .cpu()
+                .numpy()
+            ]
         )
-        self.wo = nn.Linear(args.n_heads * args.head_dim, args.dim, bias=False)
-        self.cache_k = torch.empty(
-            (
-                args.max_batch_size,
-                args.sliding_window,
-                self.n_kv_heads,
-                self.args.head_dim,
-            ),
-            dtype=torch.float16,
+        keras_nlp_model.transformer_layers[
+            i
+        ]._self_attention_layer._value_dense.set_weights(
+            [
+                hf_model.model.layers[i]
+                .self_attn.v_proj.weight.T.reshape(
+                    config.hidden_size,
+                    config.num_key_value_heads,
+                    config.hidden_size // config.num_attention_heads,
+                )
+                .detach()
+                .cpu()
+                .numpy()
+            ]
         )
-        self.cache_v = torch.empty(
-            (
-                args.max_batch_size,
-                args.sliding_window,
-                self.n_kv_heads,
-                self.args.head_dim,
-            ),
-            dtype=torch.float16,
+        keras_nlp_model.transformer_layers[
+            i
+        ]._self_attention_layer._output_dense.set_weights(
+            [
+                hf_model.model.layers[i]
+                .self_attn.o_proj.weight.T.reshape(
+                    config.num_attention_heads,
+                    config.hidden_size // config.num_attention_heads,
+                    config.hidden_size,
+                )
+                .detach()
+                .cpu()
+                .numpy()
+            ]
+        )
+        keras_nlp_model.transformer_layers[
+            i
+        ]._self_attention_layernorm.set_weights(
+            [
+                hf_model.model.layers[i]
+                .input_layernorm.weight.detach()
+                .cpu()
+                .numpy()
+            ]
+        )
+        keras_nlp_model.transformer_layers[
+            i
+        ]._feedforward_intermediate_dense.set_weights(
+            [
+                hf_model.model.layers[i]
+                .mlp.up_proj.weight.T.detach()
+                .cpu()
+                .numpy()
+            ]
+        )
+        keras_nlp_model.transformer_layers[
+            i
+        ]._feedforward_output_dense.set_weights(
+            [
+                hf_model.model.layers[i]
+                .mlp.down_proj.weight.T.detach()
+                .cpu()
+                .numpy()
+            ]
+        )
+        keras_nlp_model.transformer_layers[
+            i
+        ]._feedforward_gate_dense.set_weights(
+            [
+                hf_model.model.layers[i]
+                .mlp.gate_proj.weight.T.detach()
+                .cpu()
+                .numpy()
+            ]
+        )
+        keras_nlp_model.transformer_layers[
+            i
+        ]._feedforward_layernorm.set_weights(
+            [
+                hf_model.model.layers[i]
+                .post_attention_layernorm.weight.detach()
+                .cpu()
+                .numpy()
+            ]
         )
 
-    def forward(
-        self,
-        x: torch.Tensor,
-        freqs_cis: torch.Tensor,
-        positions: torch.Tensor,
-        mask: Optional[torch.Tensor],
-    ) -> torch.Tensor:
-        bsz, seqlen, _ = x.shape
-
-        xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
-        xq = xq.view(bsz, seqlen, self.n_heads, self.args.head_dim)
-        xk = xk.view(bsz, seqlen, self.n_kv_heads, self.args.head_dim)
-        xv = xv.view(bsz, seqlen, self.n_kv_heads, self.args.head_dim)
-        xq, xk = apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
-
-        # The cache is a rotating buffer
-        scatter_pos = (positions[-self.sliding_window :] % self.sliding_window)[
-            None, :, None, None
-        ]
-        scatter_pos = scatter_pos.repeat(
-            bsz, 1, self.n_kv_heads, self.args.head_dim
-        )
-        self.cache_k[:bsz].scatter_(
-            dim=1,
-            index=scatter_pos,
-            src=xk[:, -self.sliding_window :].to(self.cache_k.dtype),
-        )
-        self.cache_v[:bsz].scatter_(
-            dim=1,
-            index=scatter_pos,
-            src=xv[:, -self.sliding_window :].to(self.cache_v.dtype),
-        )
-
-        if positions.shape[0] > 1:
-            # prefill
-            key, value = repeat_kv(xk, xv, self.repeats)
-        else:
-            cur_pos = positions[-1].item() + 1
-            key, value = repeat_kv(
-                self.cache_k[:bsz, :cur_pos, ...].to(xk.dtype),
-                self.cache_v[:bsz, :cur_pos, ...].to(xv.dtype),
-                self.repeats,
-            )
-
-        query = xq.transpose(1, 2)
-        key = key.transpose(1, 2)
-        value = value.transpose(1, 2)
-        # scores : [bsz, n_heads, seqlen | 1, seqlen]
-        scores = torch.matmul(query, key.transpose(2, 3)) * self.scale
-
-        if mask is not None:
-            scores += mask[None, None, ...]
-
-        scores = scores.float()
-        scores = nn.functional.softmax(scores, dim=-1).type_as(query)
-        output = torch.matmul(
-            scores, value
-        )  # (bs, n_local_heads, slen, head_dim)
-        output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
-        return self.wo(output)
-
-
-class FeedForward(nn.Module):
-    def __init__(self, args: ModelArgs):
-        super().__init__()
-
-        self.w1 = nn.Linear(args.dim, args.hidden_dim, bias=False)
-        self.w2 = nn.Linear(args.hidden_dim, args.dim, bias=False)
-        self.w3 = nn.Linear(args.dim, args.hidden_dim, bias=False)
-
-    def forward(self, x) -> torch.Tensor:
-        return self.w2(nn.functional.silu(self.w1(x)) * self.w3(x))
-
-
-class RMSNorm(torch.nn.Module):
-    def __init__(self, dim: int, eps: float = 1e-6):
-        super().__init__()
-        self.eps = eps
-        self.weight = nn.Parameter(torch.ones(dim))
-
-    def _norm(self, x):
-        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-
-    def forward(self, x):
-        output = self._norm(x.float()).type_as(x)
-        return output * self.weight
-
-
-class TransformerBlock(nn.Module):
-    def __init__(self, args: ModelArgs):
-        super().__init__()
-        self.n_heads = args.n_heads
-        self.dim = args.dim
-        self.attention = Attention(args)
-        self.feed_forward = FeedForward(args=args)
-        self.attention_norm = RMSNorm(args.dim, eps=args.norm_eps)
-        self.ffn_norm = RMSNorm(args.dim, eps=args.norm_eps)
-        self.args = args
-
-    def forward(
-        self,
-        x: torch.Tensor,
-        freqs_cis: torch.Tensor,
-        positions: torch.Tensor,
-        mask: Optional[torch.Tensor],
-    ) -> torch.Tensor:
-        r = self.attention.forward(
-            self.attention_norm(x), freqs_cis, positions, mask
-        )
-        h = x + r
-        r = self.feed_forward.forward(self.ffn_norm(h))
-        out = h + r
-        return out
-
-
-def precompute_freqs_cis(
-    dim: int, end: int, theta: float = 10000.0
-) -> torch.Tensor:
-    freqs = 1.0 / (
-        theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim)
+    keras_nlp_model.layer_norm.set_weights(
+        [hf_model.model.norm.weight.detach().cpu().numpy()]
     )
-    t = torch.arange(end, device=freqs.device)  # type: ignore
-    freqs = torch.outer(t, freqs).float()  # type: ignore
-    return torch.polar(torch.ones_like(freqs), freqs)  # complex64
+    keras_nlp_model.token_embedding.reverse_embeddings.assign(
+        hf_model.lm_head.weight.T.detach().cpu().numpy()
+    )
 
 
-class TorchTransformer(nn.Module):
-    def __init__(self, args: ModelArgs):
-        super().__init__()
-        self.args = args
-        self.vocab_size = args.vocab_size
-        self.n_layers = args.n_layers
-        assert self.vocab_size > 0
-
-        self.tok_embeddings = nn.Embedding(args.vocab_size, args.dim)
-
-        self.layers = torch.nn.ModuleList(
-            [TransformerBlock(args=args) for _ in range(args.n_layers)]
-        )
-
-        self.norm = RMSNorm(args.dim, eps=args.norm_eps)
-
-        self.output = nn.Linear(args.dim, args.vocab_size, bias=False)
-
-        self.freqs_cis = precompute_freqs_cis(self.args.head_dim, 128_000)
-
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        positions: torch.Tensor,
-    ):
-        h = self.tok_embeddings(input_ids)
-        freqs_cis = self.freqs_cis[positions]
-
-        mask: Optional[torch.Tensor] = None
-        if input_ids.shape[1] > 1:
-            seqlen = input_ids.shape[1]
-            tensor = torch.full(
-                (seqlen, seqlen),
-                dtype=h.dtype,
-                fill_value=1,
-                device=h.device,
-            )
-            mask = torch.tril(tensor, diagonal=0).to(h.dtype)
-            # make the mask banded to account for sliding window
-            mask = torch.triu(mask, diagonal=-self.args.sliding_window)
-            mask = torch.log(mask)
-
-        for layer in self.layers:
-            h = layer(h, freqs_cis, positions, mask)
-
-        return self.output(self.norm(h)).float()
-
-    @staticmethod
-    def from_folder(
-        folder: Path, max_batch_size: int = 1, device="cpu", dtype=torch.float16
-    ):
-        with open(folder / "params.json", "r") as f:
-            model_args = ModelArgs(**json.loads(f.read()))
-        model_args.max_batch_size = max_batch_size
-        model = TorchTransformer(model_args).to(device=device, dtype=dtype)
-        loaded = torch.load(folder / "consolidated.00.pth")
-        model.load_state_dict(loaded)
-        return model
-
-
-def port_weights(
-    model_k3: MistralBackbone, model_torch: TorchTransformer, params: ModelArgs
+def test_model(
+    keras_nlp_model, keras_nlp_tokenizer, hf_model, hf_model_tokenizer
 ):
-    model_k3.get_layer("token_embedding").embeddings.assign(
-        model_torch.tok_embeddings.weight.detach().cpu().numpy()
-    )
+    # First, test that the number of parameters match
+    keras_nlp_params = keras_nlp_model.count_params()
+    hf_params = hf_model.num_parameters()
+    assert keras_nlp_params == hf_params
 
-    for i in range(model_k3.num_layers):
-        model_k3.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer._key_dense.set_weights(
-            [
-                model_torch.layers[i]
-                .attention.wk.weight.T.reshape(
-                    params.dim, params.n_kv_heads, params.head_dim
-                )
-                .detach()
-                .cpu()
-                .numpy()
-            ]
-        )
-        model_k3.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer._query_dense.set_weights(
-            [
-                model_torch.layers[i]
-                .attention.wq.weight.T.reshape(
-                    params.dim, params.n_heads, params.head_dim
-                )
-                .detach()
-                .cpu()
-                .numpy()
-            ]
-        )
-        model_k3.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer._value_dense.set_weights(
-            [
-                model_torch.layers[i]
-                .attention.wv.weight.T.reshape(
-                    params.dim, params.n_kv_heads, params.head_dim
-                )
-                .detach()
-                .cpu()
-                .numpy()
-            ]
-        )
-        model_k3.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layer._output_dense.set_weights(
-            [
-                model_torch.layers[i]
-                .attention.wo.weight.T.reshape(
-                    params.n_heads, params.head_dim, params.dim
-                )
-                .detach()
-                .cpu()
-                .numpy()
-            ]
-        )
-        model_k3.get_layer(
-            f"transformer_layer_{i}"
-        )._self_attention_layernorm.set_weights(
-            [model_torch.layers[i].attention_norm.weight.detach().cpu().numpy()]
-        )
-        model_k3.get_layer(
-            f"transformer_layer_{i}"
-        )._feedforward_intermediate_dense.set_weights(
-            [
-                model_torch.layers[i]
-                .feed_forward.w3.weight.T.detach()
-                .cpu()
-                .numpy()
-            ]
-        )
-        model_k3.get_layer(
-            f"transformer_layer_{i}"
-        )._feedforward_output_dense.set_weights(
-            [
-                model_torch.layers[i]
-                .feed_forward.w2.weight.T.detach()
-                .cpu()
-                .numpy()
-            ]
-        )
-        model_k3.get_layer(
-            f"transformer_layer_{i}"
-        )._feedforward_gate_dense.set_weights(
-            [
-                model_torch.layers[i]
-                .feed_forward.w1.weight.T.detach()
-                .cpu()
-                .numpy()
-            ]
-        )
-        model_k3.get_layer(
-            f"transformer_layer_{i}"
-        )._feedforward_layernorm.set_weights(
-            [model_torch.layers[i].ffn_norm.weight.detach().cpu().numpy()]
-        )
+    # Test the outputs of both the models
+    hf_outputs = hf_model(
+        **hf_model_tokenizer(["What is Keras?"], return_tensors="pt")
+    )
+    hf_output_logits = hf_outputs.logits.detach().cpu().numpy()
 
-    model_k3.get_layer("sequence_output_layernorm").set_weights(
-        [model_torch.norm.weight.detach().cpu().numpy()]
+    keras_nlp_preprocessor = MistralCausalLMPreprocessor(keras_nlp_tokenizer)
+    keras_nlp_output = keras_nlp_model(
+        keras_nlp_preprocessor(["What is Keras?"], sequence_length=6)[0]
     )
-    model_k3.get_layer("token_embedding").reverse_embeddings.assign(
-        model_torch.output.weight.T.detach().cpu().numpy()
+    keras_nlp_logits = keras_nlp_model.token_embedding(
+        keras_nlp_output, reverse=True
     )
+    keras_nlp_logits = ops.convert_to_numpy(keras_nlp_logits)
+
+    # High tolerence since bfloat16 is used as the default dtype for Mistral
+    try:
+        np.testing.assert_allclose(
+            keras_nlp_logits, hf_output_logits, atol=1e-4
+        )
+    except AssertionError as err:
+        print("\n")
+        print(traceback.format_exc())
+        print(err.args[0])
+        print("\n")
+
+
+def test_tokenizer(keras_nlp_tokenizer, hf_tokenizer):
+    hf_output = hf_tokenizer(["What is Keras?"], return_tensors="pt")
+    hf_output = hf_output["input_ids"].detach().cpu().numpy()
+    keras_nlp_preprocessor = MistralCausalLMPreprocessor(keras_nlp_tokenizer)
+    keras_nlp_output = keras_nlp_preprocessor(
+        ["What is Keras?"], sequence_length=6
+    )
+    keras_nlp_output = ops.convert_to_numpy(keras_nlp_output[0]["token_ids"])
+
+    np.testing.assert_equal(keras_nlp_output, hf_output)
+
+
+def main(_):
+    # === Get the preset name ===
+    if FLAGS.preset not in PRESET_MAP.keys():
+        raise ValueError(
+            f"Invalid preset {FLAGS.preset}. Must be one "
+            f"of {','.join(PRESET_MAP.keys())}"
+        )
+    preset = FLAGS.preset
+    hf_preset = PRESET_MAP[preset]
+
+    # === Create the save directories ===
+    model_dir = pathlib.Path(__file__).parent / f"{preset}"
+    tokenizer_dir = model_dir / "assets" / "tokenizer"
+    if not model_dir.exists():
+        os.makedirs(model_dir)
+    if not tokenizer_dir.exists():
+        os.makedirs(tokenizer_dir)
+
+    # === Load the Huggingface model ===
+    hf_model = MistralForCausalLM.from_pretrained(hf_preset)
+    hf_tokenizer = AutoTokenizer.from_pretrained(hf_preset)
+    hf_model.eval()
+    print("\n-> Huggingface model and tokenizer loaded")
+
+    # === Load the KerasNLP model ===
+    keras_nlp_config = dict(
+        vocabulary_size=hf_model.config.vocab_size,
+        hidden_dim=hf_model.config.hidden_size,
+        num_layers=hf_model.config.num_hidden_layers,
+        num_query_heads=hf_model.config.num_attention_heads,
+        num_key_value_heads=hf_model.config.num_key_value_heads,
+        intermediate_dim=hf_model.config.intermediate_size,
+        sliding_window=hf_model.config.sliding_window,
+        layer_norm_epsilon=hf_model.config.rms_norm_eps,
+        rope_max_wavelength=hf_model.config.rope_theta,
+        dtype="float32",
+    )
+    keras_nlp_model = MistralBackbone(**keras_nlp_config)
+
+    # === Download the tokenizer from Huggingface model card ===
+    spm_path = (
+        f"https://huggingface.co/{hf_preset}/resolve/main/tokenizer.model"
+    )
+    response = requests.get(spm_path)
+    if not response.ok:
+        raise ValueError(f"Couldn't fetch {preset}'s tokenizer.")
+    tokenizer_path = tokenizer_dir / "vocabulary.spm"
+    with open(tokenizer_path, "wb") as tokenizer_file:
+        tokenizer_file.write(response.content)
+    keras_nlp_tokenizer = MistralTokenizer(str(tokenizer_path.absolute()))
+    print("\n-> Keras 3 model and tokenizer loaded.")
+
+    # === Port the weights ===
+    convert_checkpoints(keras_nlp_model, hf_model)
+    print("\n-> Weight transfer done.")
+
+    # === Check that the models and tokenizers outputs match ===
+    test_tokenizer(keras_nlp_tokenizer, hf_tokenizer)
+    test_model(keras_nlp_model, keras_nlp_tokenizer, hf_model, hf_tokenizer)
+    print("\n-> Tests passed!")
+
+    # === Save the model weights in float32 format ===
+    keras_nlp_model.save_weights(
+        str((model_dir / "model.weights.h5").absolute())
+    )
+    print("\n-> Saved the model weights in float16")
+
+    del keras_nlp_model, hf_model
+    gc.collect()
+
+    keras_nlp_config["dtype"] = "float16"
+
+    # === Save the weights again in float16 ===
+    keras_nlp_model = MistralBackbone(**keras_nlp_config)
+    keras_nlp_model.load_weights(
+        str((model_dir / "model.weights.h5").absolute())
+    )
+    keras_nlp_model.save_weights(
+        str((model_dir / "model.weights.h5").absolute())
+    )
+    print("-> Saved the model weights in float16")
+
+    # === Save the model config ===
+    keras_nlp_config["dtype"] = "bfloat16"
+    model_config = {
+        "module": "keras_nlp.src.models.mistral.mistral_backbone",
+        "class_name": "MistralBackbone",
+        "config": {**keras_nlp_config},
+        "registered_name": "keras_nlp>MistralBackbone",
+        "assets": [],
+        "weights": "model.weights.h5",
+    }
+    model_config_json = json.dumps(model_config)
+    with open(model_dir / "config.json", "w") as model_config_file:
+        model_config_file.write(model_config_json)
+    print("\n-> Saved model config")
+
+    # === Save the tokenizer config ===
+    tokenizer_config = {
+        "module": "keras_nlp.src.models.mistral.Mistral_tokenizer",
+        "class_name": "MistralTokenizer",
+        "config": {
+            "name": "mistral_tokenizer",
+            "trainable": True,
+            "dtype": "int32",
+            "proto": None,
+            "sequence_length": None,
+        },
+        "registered_name": "keras_nlp>MistralTokenizer",
+        "assets": ["assets/tokenizer/vocabulary.spm"],
+        "weights": None,
+    }
+    tokenizer_config_json = json.dumps(tokenizer_config)
+    with open(model_dir / "tokenizer.json", "w") as tokenizer_config_file:
+        tokenizer_config_file.write(tokenizer_config_json)
+    print("\n-> Saved tokenizer config")
+
+    # === Save metadata ===
+    metadata_config = {
+        "keras_version": keras.__version__,
+        "keras_nlp_version": keras_nlp.__version__,
+        "parameter_count": keras_nlp_model.count_params(),
+        "date_saved": datetime.datetime.utcnow().strftime("%Y-%m-%d@%H:%M:%S"),
+    }
+    metadata_config_json = json.dumps(metadata_config)
+    with open(model_dir / "metadata.json", "w") as metadata_config_file:
+        metadata_config_file.write(metadata_config_json)
+    print("\n-> Saved metadata")
 
 
 if __name__ == "__main__":
-    with open(MODEL_PATH / "params.json", "r") as params_file:
-        params = ModelArgs(**json.load(params_file))
-
-    model_torch = TorchTransformer.from_folder(
-        MODEL_PATH, device="cpu", dtype=torch.float16
-    )
-    print("Torch model loaded")
-    model_k3 = MistralBackbone(
-        vocabulary_size=32000,
-        hidden_dim=4096,
-        num_layers=32,
-        num_query_heads=32,
-        num_key_value_heads=8,
-        intermediate_dim=14336,
-        sliding_window=4096,
-        layer_norm_epsilon=1e-6,
-        dtype="float16",
-    )
-    print("Keras 3 model loaded.")
-
-    port_weights(model_k3, model_torch, params)
-    print("Weight transfer done.")
-
-    model_k3.save_weights("mistral_7b.weights.h5")
-    print("Weights saved.")
+    flags.mark_flag_as_required("preset")
+    app.run(main)
