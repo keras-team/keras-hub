@@ -14,6 +14,8 @@
 
 import os
 
+import pytest
+
 from keras_nlp.models.mistral.mistral_tokenizer import MistralTokenizer
 from keras_nlp.tests.test_case import TestCase
 
@@ -43,4 +45,22 @@ class MistralTokenizerTest(TestCase):
                 proto=os.path.join(
                     self.get_test_data_dir(), "no_special_token_vocab.spm"
                 )
+            )
+
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=MistralTokenizer,
+            preset="mistral_7b_en",
+            input_data=["The quick brown fox."],
+            expected_output=[[415, 2936, 9060, 285, 1142, 28723]],
+        )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in MistralTokenizer.presets:
+            self.run_preset_test(
+                cls=MistralTokenizer,
+                preset=preset,
+                input_data=self.input_data,
             )

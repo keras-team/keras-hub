@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import copy
+
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
@@ -19,9 +21,11 @@ from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.mistral.mistral_layer_norm import (
     MistralLayerNormalization,
 )
+from keras_nlp.models.mistral.mistral_presets import backbone_presets
 from keras_nlp.models.mistral.mistral_transformer_decoder import (
     MistralTransformerDecoder,
 )
+from keras_nlp.utils.python_utils import classproperty
 
 
 def _mistral_kernel_initializer(stddev=0.02):
@@ -196,3 +200,7 @@ class MistralBackbone(Backbone):
             }
         )
         return config
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)

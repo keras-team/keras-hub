@@ -11,9 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
+from keras_nlp.models.mistral.mistral_presets import backbone_presets
 from keras_nlp.models.mistral.mistral_tokenizer import MistralTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
@@ -121,15 +123,21 @@ class MistralPreprocessor(Preprocessor):
     ):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
-        self.packer = StartEndPacker(
-            start_value=self.tokenizer.start_token_id,
-            end_value=self.tokenizer.end_token_id,
-            sequence_length=sequence_length,
-            return_padding_mask=True,
-        )
+        self.packer = None
         self.add_start_token = add_start_token
         self.add_end_token = add_end_token
         self.sequence_length = sequence_length
+
+    def build(self, input_shape):
+        # Defer packer creation to `build()` so that we can be sure tokenizer
+        # assets have loaded when restoring a saved model.
+        self.packer = StartEndPacker(
+            start_value=self.tokenizer.start_token_id,
+            end_value=self.tokenizer.end_token_id,
+            sequence_length=self.sequence_length,
+            return_padding_mask=True,
+        )
+        self.built = True
 
     def get_config(self):
         config = super().get_config()
@@ -184,3 +192,7 @@ class MistralPreprocessor(Preprocessor):
     @classproperty
     def tokenizer_cls(cls):
         return MistralTokenizer
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
