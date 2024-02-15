@@ -55,7 +55,7 @@ class MistralBackboneTest(TestCase):
         # Reference value calculated using the PyTorch model
         self.assertEqual(model.count_params(), 2704)
 
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=MistralBackbone,
