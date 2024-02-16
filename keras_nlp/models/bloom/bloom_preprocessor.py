@@ -14,7 +14,7 @@
 
 import copy
 
-from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.start_end_packer import StartEndPacker
 from keras_nlp.models.bloom.bloom_presets import backbone_presets
 from keras_nlp.models.bloom.bloom_tokenizer import BloomTokenizer
@@ -26,7 +26,7 @@ from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.BloomPreprocessor")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class BloomPreprocessor(Preprocessor):
     """BLOOM preprocessing layer which tokenizes and packs inputs.
 

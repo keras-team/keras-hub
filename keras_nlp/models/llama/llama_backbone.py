@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
@@ -24,7 +23,7 @@ def _llama_kernel_initializer(stddev=0.02):
     return keras.initializers.RandomNormal(stddev=stddev)
 
 
-@keras_nlp_export("keras_nlp.models.LlamaBackbone")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class LlamaBackbone(Backbone):
     """
     LLaMA core network with hyperparameters.
