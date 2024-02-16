@@ -350,7 +350,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
                 f"`type(vocabulary)={type(vocabulary)}`."
             )
         if isinstance(merges, str):
-            self.merges = [bp.rstrip() for bp in open(merges, encoding="utf-8")]
+            with open(merges, encoding="utf-8") as f:
+                self.merges = [bp.rstrip() for bp in f]
         elif isinstance(merges, Iterable):
             self.merges = list(merges)
         else:
