@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.tokenizers import WordPieceTokenizer
 
 
-@keras_nlp_export("keras_nlp.models.ElectraTokenizer")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class ElectraTokenizer(WordPieceTokenizer):
     """A ELECTRA tokenizer using WordPiece subword segmentation.
 
