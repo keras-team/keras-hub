@@ -16,11 +16,8 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import ops
 from keras_nlp.backend import random
 from keras_nlp.samplers.sampler import Sampler
-from keras_nlp.samplers.sampler import call_args_docstring
-from keras_nlp.utils.python_utils import format_docstring
 
 
-@format_docstring(call_args=call_args_docstring)
 @keras_nlp_export("keras_nlp.samplers.TopPSampler")
 class TopPSampler(Sampler):
     """Top-P Sampler class.
@@ -46,24 +43,16 @@ class TopPSampler(Sampler):
 
     Examples:
     ```python
-    # Use a simple alphabet of lowercase characters with ids in range [0, 25].
-    int_lookup = {i: chr(i + ord('a')) for i in range(26)}
-    char_lookup = {v: k for k, v in int_lookup.items()}
-    batch_size, length, vocab_size = 1, 12, len(int_lookup)
+    causal_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
 
-    def next(prompt, cache, index):
-        hidden_states = np.ones((batch_size, 10))
-        # A uniform distribution over our alphabet.
-        logits = np.ones((batch_size, vocab_size))
-        return logits, hidden_states, cache
+    # Pass by name to compile.
+    causal_lm.compile(sampler="top_p")
+    causal_lm.generate(["Keras is a"])
 
-    output = keras_nlp.samplers.TopPSampler(p=0.1)(
-        next=next,
-        prompt=np.full((batch_size, length,), char_lookup['z'], dtype="int32"),
-        index=5,
-    )
-    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
-    # >>> ['zzzzzbabcccb']
+    # Pass by object to compile.
+    sampler = keras_nlp.samplers.TopPSampler(p=0.1, k=1_000)
+    causal_lm.compile(sampler=sampler)
+    causal_lm.generate(["Keras is a"])
     ```
     """
 
