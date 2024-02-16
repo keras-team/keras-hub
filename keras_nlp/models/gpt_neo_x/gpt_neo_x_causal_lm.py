@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.models.causal_lm import CausalLM
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_backbone import GPTNeoXBackbone
@@ -22,7 +22,7 @@ from keras_nlp.models.gpt_neo_x.gpt_neo_x_causal_lm_preprocessor import (
 from keras_nlp.utils.tensor_utils import any_equal
 
 
-@keras_nlp_export("keras_nlp.models.GPTNeoXCausalLM")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class GPTNeoXCausalLM(CausalLM):
     """An end-to-end GPTNeoX model for causal language modeling.
 
