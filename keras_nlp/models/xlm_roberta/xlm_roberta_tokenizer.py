@@ -20,7 +20,13 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.tensor_utils import is_int_dtype
 from keras_nlp.utils.tensor_utils import tensor_to_list
+
+try:
+    import tensorflow_text as tf_text
+except ImportError:
+    tf_text = None
 
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaTokenizer")
@@ -92,17 +98,21 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         self._vocabulary_prefix = ["<s>", "<pad>", "</s>", "<unk>"]
 
         # IDs of special tokens.
-        self.start_token_id = 0  # <s>
-        self.pad_token_id = 1  # <pad>
-        self.end_token_id = 2  # </s>
-        self.unk_token_id = 3  # <unk>
+        self.start_token_id = 0  # <s> --> spm_id = 1
+        self.pad_token_id = 1  # <pad> --> spm_id = None
+        self.end_token_id = 2  # </s>  --> spm_id = 2
+        self.unk_token_id = 3  # <unk> --> spm_id = 0
 
-        super().__init__(proto=proto, **kwargs)
+        super().__init__(
+            proto=proto,
+            unsplittable_tokens=self._vocabulary_prefix[:3] + ["<mask>"],
+            **kwargs,
+        )
 
     def set_proto(self, proto):
         super().set_proto(proto)
         if proto is not None:
-            self.mask_token_id = self.vocabulary_size() - 1
+            self.mask_token_id = self.vocabulary_size() - 1  # --> spm_id = None
         else:
             self.mask_token_id = None
 
@@ -145,6 +155,9 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         if token in self._vocabulary_prefix:
             return self._vocabulary_prefix.index(token)
 
+        if token == "<mask>":
+            return self.mask_token_id
+
         spm_token_id = self._sentence_piece.string_to_id(token)
 
         # OOV token
@@ -156,12 +169,69 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
     def tokenize(self, inputs):
         self._check_vocabulary()
-        tokens = super().tokenize(inputs)
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            inputs = tf.convert_to_tensor(inputs)
+        scalar_input = inputs.shape.rank == 0
+        if scalar_input:
+            inputs = tf.expand_dims(inputs, 0)
+
+        if self._sentence_piece is None:
+            raise ValueError(
+                "No vocabulary has been set for SentencePieceTokenizer. Make "
+                "sure to pass a `vocabulary` argument when creating the layer."
+            )
+
+        splitted_inputs = tf_text.regex_split(
+            inputs,
+            self._unsplittable_tokens_pattern,
+            self._unsplittable_tokens_pattern,
+        )
+
+        tokens = self._sentence_piece.tokenize(splitted_inputs)
 
         # Correct `unk_token_id` (0 -> 3). Note that we do not correct
         # `start_token_id` and `end_token_id`; they are dealt with in
         # `XLMRobertaPreprocessor`.
         tokens = tf.where(tf.equal(tokens, 0), self.unk_token_id - 1, tokens)
+
+        # Add token ids for <s>, <pad>, and </s>.
+        for token_id, unsplittble_token in enumerate(
+            self._vocabulary_prefix[:3]
+        ):
+            unsplittble_token_mask = tf.equal(
+                splitted_inputs, unsplittble_token
+            )
+            tokens = tf.where(
+                unsplittble_token_mask[..., tf.newaxis],
+                token_id - 1
+                if is_int_dtype(self.compute_dtype)
+                else unsplittble_token,
+                tokens,
+            )
+
+        # Add token ids for <mask>.
+        unsplittble_token_mask = tf.equal(splitted_inputs, "<mask>")
+        tokens = tf.where(
+            unsplittble_token_mask[..., tf.newaxis],
+            self.mask_token_id - 1
+            if is_int_dtype(self.compute_dtype)
+            else "<mask>",
+            tokens,
+        )
+
+        # Remove the dimension that was added by `tf_text.regex_split()`.
+        tokens = tokens.merge_dims(-2, -1)
+
+        # Convert to a dense output if `sequence_length` is set.
+        if self.sequence_length:
+            output_shape = tokens.shape.as_list()
+            output_shape[-1] = self.sequence_length
+            tokens = tokens.to_tensor(shape=output_shape)
+
+        # Convert to a dense output if input was a scalar.
+        if scalar_input:
+            tokens = tf.squeeze(tokens, 0)
+            tf.ensure_shape(tokens, shape=[self.sequence_length])
 
         # Shift the tokens IDs right by one.
         return tf.add(tokens, 1)
@@ -191,3 +261,11 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    def get_config(self):
+        config = super().get_config()
+        # In the constructor, we pass the list of special tokens to the
+        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # delete it from the config here.
+        del config["unsplittable_tokens"]
+        return config

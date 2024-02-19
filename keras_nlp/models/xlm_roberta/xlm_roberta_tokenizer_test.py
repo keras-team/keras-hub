@@ -37,8 +37,31 @@ class XLMRobertaTokenizerTest(TestCase):
             cls=XLMRobertaTokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output=[[6, 11, 7, 9], [6, 8, 10, 12]],
+            expected_output=[[4, 9, 5, 7], [4, 6, 8, 10]],
         )
+
+    def test_tokenizer_unsplittable_tokens(self):
+        input_data = ["<s> the quick <mask> brown RANDOM_WORD fox </s> <pad>"]
+        tokenizer = XLMRobertaTokenizer(**self.init_kwargs)
+        start_token_id = tokenizer.start_token_id
+        end_token_id = tokenizer.end_token_id
+        pad_token_id = tokenizer.pad_token_id
+        mask_token_id = tokenizer.mask_token_id
+        unk_token_id = tokenizer.unk_token_id
+        expected_output = [
+            [
+                start_token_id,
+                4,
+                9,
+                mask_token_id,
+                5,
+                unk_token_id,
+                7,
+                end_token_id,
+                pad_token_id,
+            ]
+        ]
+        self.assertAllEqual(tokenizer(input_data), expected_output)
 
     @pytest.mark.large
     def test_smallest_preset(self):
