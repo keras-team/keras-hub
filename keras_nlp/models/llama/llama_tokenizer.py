@@ -62,11 +62,9 @@ class LlamaTokenizer(SentencePieceTokenizer):
         self.end_token = "</s>"
         super().__init__(
             proto=proto,
-            unsplittable_tokens=[
-                self.start_token,
-                self.end_token
-            ],
-            **kwargs)
+            unsplittable_tokens=[self.start_token, self.end_token],
+            **kwargs,
+        )
 
     def set_proto(self, proto):
         super().set_proto(proto)

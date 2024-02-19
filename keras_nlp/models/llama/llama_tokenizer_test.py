@@ -53,7 +53,6 @@ class LlamaTokenizerTest(TestCase):
         ]
         self.assertAllEqual(tokenizer(input_data), expected_output)
 
-
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             LlamaTokenizer(
