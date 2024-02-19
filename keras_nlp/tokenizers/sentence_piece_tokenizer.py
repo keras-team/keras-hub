@@ -242,20 +242,11 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         )
 
     def _tokenize_with_unsplittable_tokens(self, inputs):
-        # Albert
-        # deberta v3
-        # fnet
-        # llama
-        # mistrel
-        # T5
         splitted_inputs = tf_text.regex_split(
             inputs,
             self._unsplittable_tokens_pattern,
             self._unsplittable_tokens_pattern,
         )
-
-        print(splitted_inputs)
-        print(self._unsplittable_tokens_pattern)
 
         tokens = self._sentence_piece.tokenize(splitted_inputs)
 
@@ -265,9 +256,11 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             )
             tokens = tf.where(
                 unsplittble_token_mask[..., tf.newaxis],
-                self._sentence_piece.string_to_id(unsplittble_token)
-                if is_int_dtype(self.compute_dtype)
-                else unsplittble_token,
+                (
+                    self._sentence_piece.string_to_id(unsplittble_token)
+                    if is_int_dtype(self.compute_dtype)
+                    else unsplittble_token
+                ),
                 tokens,
             )
 
@@ -303,7 +296,6 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             tokens = tf.squeeze(tokens, 0)
             tf.ensure_shape(tokens, shape=[self.sequence_length])
 
-        print(tokens)
         return tokens
 
     def detokenize(self, inputs):
