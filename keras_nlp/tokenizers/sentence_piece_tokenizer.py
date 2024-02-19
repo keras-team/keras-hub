@@ -15,6 +15,7 @@
 import base64
 import binascii
 import os
+import re
 from typing import List
 
 import tensorflow as tf
@@ -38,6 +39,12 @@ except ImportError:
 
 
 VOCAB_FILENAME = "vocabulary.spm"
+
+
+def get_unsplittable_tokens_pattern(unsplittable_tokens):
+    if unsplittable_tokens is None or len(unsplittable_tokens) == 0:
+        return None
+    return r"|".join([re.escape(token) for token in unsplittable_tokens])
 
 
 @keras_nlp_export("keras_nlp.tokenizers.SentencePieceTokenizer")
@@ -112,6 +119,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         self,
         proto=None,
         sequence_length: int = None,
+        unsplittable_tokens=None,
         dtype="int32",
         **kwargs,
     ) -> None:
@@ -127,6 +135,10 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
         self.proto = None
         self.sequence_length = sequence_length
+        self.unsplittable_tokens = unsplittable_tokens
+        self._unsplittable_tokens_pattern = get_unsplittable_tokens_pattern(
+            unsplittable_tokens
+        )
         self.set_proto(proto)
 
     def save_assets(self, dir_path):
@@ -210,6 +222,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             {
                 "proto": None,  # Save vocabulary via an asset!
                 "sequence_length": self.sequence_length,
+                "unsplittable_tokens": self.unsplittable_tokens,
             }
         )
         return config
@@ -220,6 +233,45 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 "No vocabulary has been set for SentencePieceTokenizer. Make "
                 "sure to pass a `proto` argument when creating the layer."
             )
+
+    def _replace_token_id(self, tokens, mask, new_token):
+        return tf.where(
+            mask[..., tf.newaxis],
+            new_token,
+            tokens,
+        )
+
+    def _tokenize_with_unsplittable_tokens(self, inputs):
+        # Albert
+        # deberta v3
+        # fnet
+        # llama
+        # mistrel
+        # T5
+        splitted_inputs = tf_text.regex_split(
+            inputs,
+            self._unsplittable_tokens_pattern,
+            self._unsplittable_tokens_pattern,
+        )
+
+        print(splitted_inputs)
+        print(self._unsplittable_tokens_pattern)
+
+        tokens = self._sentence_piece.tokenize(splitted_inputs)
+
+        for unsplittble_token in self.unsplittable_tokens:
+            unsplittble_token_mask = tf.equal(
+                splitted_inputs, unsplittble_token
+            )
+            tokens = tf.where(
+                unsplittble_token_mask[..., tf.newaxis],
+                self._sentence_piece.string_to_id(unsplittble_token)
+                if is_int_dtype(self.compute_dtype)
+                else unsplittble_token,
+                tokens,
+            )
+
+        return tokens.merge_dims(-2, -1)
 
     def tokenize(self, inputs):
         self._check_vocabulary()
@@ -235,7 +287,10 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 "sure to pass a `vocabulary` argument when creating the layer."
             )
 
-        tokens = self._sentence_piece.tokenize(inputs)
+        if self._unsplittable_tokens_pattern is not None:
+            tokens = self._tokenize_with_unsplittable_tokens(inputs)
+        else:
+            tokens = self._sentence_piece.tokenize(inputs)
 
         # Convert to a dense output if `sequence_length` is set.
         if self.sequence_length:
@@ -248,6 +303,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             tokens = tf.squeeze(tokens, 0)
             tf.ensure_shape(tokens, shape=[self.sequence_length])
 
+        print(tokens)
         return tokens
 
     def detokenize(self, inputs):
