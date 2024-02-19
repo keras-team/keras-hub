@@ -36,6 +36,24 @@ class LlamaTokenizerTest(TestCase):
             expected_output=[[3, 8, 4, 6], [3, 5, 7, 9]],
         )
 
+    def test_tokenizer_unsplittable_tokens(self):
+        input_data = ["<s> the quick brown fox </s>"]
+        tokenizer = LlamaTokenizer(**self.init_kwargs)
+        start_token_id = tokenizer.start_token_id
+        end_token_id = tokenizer.end_token_id
+        expected_output = [
+            [
+                start_token_id,
+                3,
+                8,
+                4,
+                6,
+                end_token_id,
+            ]
+        ]
+        self.assertAllEqual(tokenizer(input_data), expected_output)
+
+
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             LlamaTokenizer(
