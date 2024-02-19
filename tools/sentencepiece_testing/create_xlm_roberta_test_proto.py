@@ -19,17 +19,11 @@ def main():
     train_sentencepiece(
         ["the quick brown fox", "the earth is round"],
         "xlm_roberta_test_vocab.spm",
-        vocab_size=12,
+        vocab_size=10,
         model_type="WORD",
-        pad_id=0,
-        unk_id=1,
-        bos_id=2,
-        eos_id=3,
-        pad_piece="<pad>",
-        unk_piece="<unk>",
-        bos_piece="[CLS]",
-        eos_piece="[SEP]",
-        user_defined_symbols="[MASK]",
+        unk_id=0,
+        bos_id=1,
+        eos_id=2,
     )
 
 
