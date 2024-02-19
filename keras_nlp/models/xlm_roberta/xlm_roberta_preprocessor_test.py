@@ -50,7 +50,7 @@ class XLMRobertaPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[0, 6, 11, 7, 9, 2, 1, 1]],
+                    "token_ids": [[0, 4, 9, 5, 7, 2, 1, 1]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
                 },
                 [1],  # Pass through labels.

@@ -68,7 +68,7 @@ class XLMRobertaMaskedLMTest(TestCase):
             cls=XLMRobertaMaskedLM,
             init_kwargs=self.init_kwargs,
             train_data=self.train_data,
-            expected_output_shape=(2, 5, 14),
+            expected_output_shape=(2, 5, 12),
         )
 
     @pytest.mark.large

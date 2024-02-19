@@ -51,11 +51,11 @@ class XLMRobertaMaskedLMPreprocessorTest(TestCase):
             input_data=self.input_data,
             expected_output=(
                 {
-                    "token_ids": [[0, 13, 13, 13, 13, 2, 1, 1, 1, 1, 1, 1]],
+                    "token_ids": [[0, 11, 11, 11, 11, 2, 1, 1, 1, 1, 1, 1]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]],
                     "mask_positions": [[1, 2, 3, 4]],
                 },
-                [[6, 11, 7, 9]],
+                [[4, 9, 5, 7]],
                 [[1.0, 1.0, 1.0, 1.0]],
             ),
         )
@@ -72,7 +72,7 @@ class XLMRobertaMaskedLMPreprocessorTest(TestCase):
             no_mask_preprocessor(input_data),
             (
                 {
-                    "token_ids": [[0, 6, 11, 7, 9, 2, 1, 1, 1, 1, 1, 1]],
+                    "token_ids": [[0, 4, 9, 5, 7, 2, 1, 1, 1, 1, 1, 1]],
                     "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]],
                     "mask_positions": [[0, 0, 0, 0]],
                 },
