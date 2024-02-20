@@ -186,28 +186,26 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         tokens = self._sentence_piece.tokenize(splitted_inputs)
 
         # Add token ids for [CLS], [SEP], and [PAD]
-        for unsplittble_token in [
+        for special_token in [
             self.cls_token,
             self.sep_token,
             self.pad_token,
         ]:
-            unsplittble_token_mask = tf.equal(
-                splitted_inputs, unsplittble_token
-            )
+            special_token_mask = tf.equal(splitted_inputs, special_token)
             tokens = tf.where(
-                unsplittble_token_mask[..., tf.newaxis],
+                special_token_mask[..., tf.newaxis],
                 (
-                    self._sentence_piece.string_to_id(unsplittble_token)
+                    self._sentence_piece.string_to_id(special_token)
                     if is_int_dtype(self.compute_dtype)
-                    else unsplittble_token
+                    else special_token
                 ),
                 tokens,
             )
 
         # Add token ids for [MASK].
-        unsplittble_token_mask = tf.equal(splitted_inputs, "[MASK]")
+        special_token_mask = tf.equal(splitted_inputs, "[MASK]")
         tokens = tf.where(
-            unsplittble_token_mask[..., tf.newaxis],
+            special_token_mask[..., tf.newaxis],
             (
                 self.mask_token_id
                 if is_int_dtype(self.compute_dtype)

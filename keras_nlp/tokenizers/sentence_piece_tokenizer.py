@@ -256,16 +256,14 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
         tokens = self._sentence_piece.tokenize(splitted_inputs)
 
-        for unsplittble_token in self.special_tokens:
-            unsplittble_token_mask = tf.equal(
-                splitted_inputs, unsplittble_token
-            )
+        for special_token in self.special_tokens:
+            special_token_mask = tf.equal(splitted_inputs, special_token)
             tokens = tf.where(
-                unsplittble_token_mask[..., tf.newaxis],
+                special_token_mask[..., tf.newaxis],
                 (
-                    self._sentence_piece.string_to_id(unsplittble_token)
+                    self._sentence_piece.string_to_id(special_token)
                     if is_int_dtype(self.compute_dtype)
-                    else unsplittble_token
+                    else special_token
                 ),
                 tokens,
             )

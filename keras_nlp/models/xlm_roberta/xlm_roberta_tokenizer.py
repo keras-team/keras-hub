@@ -195,26 +195,22 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
         tokens = tf.where(tf.equal(tokens, 0), self.unk_token_id - 1, tokens)
 
         # Add token ids for <s>, <pad>, and </s>.
-        for token_id, unsplittble_token in enumerate(
-            self._vocabulary_prefix[:3]
-        ):
-            unsplittble_token_mask = tf.equal(
-                splitted_inputs, unsplittble_token
-            )
+        for token_id, special_token in enumerate(self._vocabulary_prefix[:3]):
+            special_token_mask = tf.equal(splitted_inputs, special_token)
             tokens = tf.where(
-                unsplittble_token_mask[..., tf.newaxis],
+                special_token_mask[..., tf.newaxis],
                 (
                     token_id - 1
                     if is_int_dtype(self.compute_dtype)
-                    else unsplittble_token
+                    else special_token
                 ),
                 tokens,
             )
 
         # Add token ids for <mask>.
-        unsplittble_token_mask = tf.equal(splitted_inputs, "<mask>")
+        special_token_mask = tf.equal(splitted_inputs, "<mask>")
         tokens = tf.where(
-            unsplittble_token_mask[..., tf.newaxis],
+            special_token_mask[..., tf.newaxis],
             (
                 self.mask_token_id - 1
                 if is_int_dtype(self.compute_dtype)
