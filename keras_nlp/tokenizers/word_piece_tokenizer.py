@@ -134,9 +134,9 @@ def pretokenize(
             characters (https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)).
             Note that this is applicable only when `split` is `True`. Defaults
             to `True`.
-        unsplittable_tokens_pattern: str. A regex pattern that contain the 
-            unsplittable tokens that will never be split during the word-level 
-            splitting applied before the word-peice encoding. This can be used 
+        unsplittable_tokens_pattern: str. A regex pattern that contain the
+            unsplittable tokens that will never be split during the word-level
+            splitting applied before the word-peice encoding. This can be used
             to ensure special tokens map to unique indices in the vocabulary,
             even if these special tokens contain splittable characters such as
             punctuation.

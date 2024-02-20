@@ -43,11 +43,9 @@ class DistilBertTokenizerTest(TestCase):
 
     def test_tokenizer_unsplittable_tokens(self):
         input_data = ["[CLS] THE [MASK] FOX [SEP] [PAD]"]
-        tokenizer = DistilBertTokenizer(
-            **self.init_kwargs
-        )
+        tokenizer = DistilBertTokenizer(**self.init_kwargs)
         output_data = tokenizer(input_data)
-        expected_output=[[2, 5, 4, 8, 3, 0]]
+        expected_output = [[2, 5, 4, 8, 3, 0]]
 
         self.assertAllEqual(output_data, expected_output)
 
