@@ -39,6 +39,20 @@ class BertTokenizerTest(TestCase):
         output = tokenizer(self.input_data)
         self.assertAllEqual(output, [[9, 10, 11, 12], [9, 12]])
 
+    def test_tokenizer_unsplittable_tokens(self):
+        vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        vocab += ["THE", "QUICK", "BROWN", "FOX"]
+        vocab += ["the", "quick", "brown", "fox"]
+        init_kwargs = {"vocabulary": self.vocab}
+        input_data = ["[CLS] THE [MASK] FOX [SEP] [PAD]"]
+        tokenizer = BertTokenizer(
+            **init_kwargs
+        )
+        output_data = tokenizer(input_data)
+        expected_output=[[2, 5, 4, 8, 3, 0]]
+
+        self.assertAllEqual(output_data, expected_output)
+
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             BertTokenizer(vocabulary=["a", "b", "c"])
