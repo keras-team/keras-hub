@@ -232,12 +232,17 @@ class WordPieceTokenizerTest(TestCase):
         output = tokenizer(input_data)
         self.assertAllEqual(output, [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]])
 
-    def test_no_splitting_special_tokens(self):
-        input_data = ["[MASK]", "m i s s i n g", "t o k e n"]
+    def test_no_splitting_with_special_tokens(self):
+        # When `split` is `False`, no special tokens tokenization will be done.
+        input_data = ["[MASK] t o k e n", "m i s s i n g", "[MASK]", "t o k e n"]
         vocab_data = ["[UNK]", "[MASK]", "t o k e n"]
-        tokenizer = WordPieceTokenizer(vocabulary=vocab_data, split=False)
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            split=False,
+            unsplittable_tokens=["[MASK]"]
+        )
         output = tokenizer(input_data)
-        self.assertAllEqual(output, [1, 0, 2])
+        self.assertAllEqual(output, [0, 0, 1, 2])
 
     def test_config_with_special_tokens(self):
         input_data = ["[UNK] [MASK] [SEP] [PAD] [CLS] the quick brown fox."]

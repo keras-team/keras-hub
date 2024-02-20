@@ -102,11 +102,10 @@ WHITESPACE_PUNCTUATION_AND_CJK_REGEX = r"|".join(
 )
 
 
-def get_unsplittable_tokens_regex(unsplittable_tokens):
-    regex_array = []
-    for token in unsplittable_tokens:
-        regex_array.append(re.escape(token))
-    return r"|".join(regex_array)
+def get_unsplittable_tokens_pattern(unsplittable_tokens):
+    if unsplittable_tokens is None or len(unsplittable_tokens) == 0:
+        return None
+    return r"|".join([re.escape(token) for token in unsplittable_tokens])
 
 
 def pretokenize(
@@ -115,7 +114,7 @@ def pretokenize(
     strip_accents=True,
     split=True,
     split_on_cjk=True,
-    unsplittable_tokens_regex=None,
+    unsplittable_tokens_pattern=None,
 ):
     """Helper function that takes in a dataset element and pretokenizes it.
 
@@ -135,11 +134,11 @@ def pretokenize(
             characters (https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)).
             Note that this is applicable only when `split` is `True`. Defaults
             to `True`.
-        unsplittable_tokens_regex: str. A regex that contain the unsplittable
-            tokrns that will never be split during the word-level splitting
-            applied before the word-peice encoding. This can be used to ensure
-            special tokens map to unique indices in the vocabulary, even if
-            these special tokens contain splittable characters such as
+        unsplittable_tokens_pattern: str. A regex pattern that contain the 
+            unsplittable tokens that will never be split during the word-level 
+            splitting applied before the word-peice encoding. This can be used 
+            to ensure special tokens map to unique indices in the vocabulary,
+            even if these special tokens contain splittable characters such as
             punctuation.
 
     Returns:
@@ -165,29 +164,29 @@ def pretokenize(
         text = tf.strings.regex_replace(text, r"\p{Mn}", "")
     if split:
         if split_on_cjk:
-            if unsplittable_tokens_regex is not None:
+            if unsplittable_tokens_pattern is not None:
                 split_pattern = r"|".join(
                     [
-                        unsplittable_tokens_regex,
+                        unsplittable_tokens_pattern,
                         WHITESPACE_PUNCTUATION_AND_CJK_REGEX,
                     ]
                 )
                 keep_split_pattern = r"|".join(
-                    [unsplittable_tokens_regex, PUNCTUATION_AND_CJK_REGEX]
+                    [unsplittable_tokens_pattern, PUNCTUATION_AND_CJK_REGEX]
                 )
             else:
                 split_pattern = WHITESPACE_PUNCTUATION_AND_CJK_REGEX
                 keep_split_pattern = PUNCTUATION_AND_CJK_REGEX
         else:
-            if unsplittable_tokens_regex is not None:
+            if unsplittable_tokens_pattern is not None:
                 split_pattern = r"|".join(
                     [
-                        unsplittable_tokens_regex,
+                        unsplittable_tokens_pattern,
                         WHITESPACE_AND_PUNCTUATION_REGEX,
                     ]
                 )
                 keep_split_pattern = r"|".join(
-                    [unsplittable_tokens_regex, PUNCTUATION_REGEX]
+                    [unsplittable_tokens_pattern, PUNCTUATION_REGEX]
                 )
             else:
                 split_pattern = WHITESPACE_AND_PUNCTUATION_REGEX
@@ -371,20 +370,19 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
         self.unsplittable_tokens = unsplittable_tokens
-        self.unsplittable_tokens_regex = None
+        self._unsplittable_tokens_pattern = None
         if self.split:
-            if self.unsplittable_tokens is not None:
-                # Get the regex of unsplittable tokens.
-                # the idea here is to pass the unsplittable tokens regex to the
-                # split function as delimiter regex pattern, so the input will
-                # be splitted by them, but also the function will treat each on
-                # of them as one entity that shouldn't be splitted even if they
-                # have other delimiter regex pattern inside them. then pass the
-                # unsplittable tokens regex also as keep delimiter regex
-                # pattern, so they will not be removed.
-                self.unsplittable_tokens_regex = get_unsplittable_tokens_regex(
-                    self.unsplittable_tokens
-                )
+            # Get the pattern of unsplittable tokens.
+            # the idea here is to pass the unsplittable tokens regex to the
+            # split function as delimiter regex pattern, so the input will
+            # be splitted by them, but also the function will treat each on
+            # of them as one entity that shouldn't be splitted even if they
+            # have other delimiter regex pattern inside them. then pass the
+            # unsplittable tokens regex also as keep delimiter regex
+            # pattern, so they will not be removed.
+            self._unsplittable_tokens_pattern = get_unsplittable_tokens_pattern(
+                self.unsplittable_tokens
+            )
         self.set_vocabulary(vocabulary)
 
     def save_assets(self, dir_path):
@@ -497,7 +495,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             self.strip_accents,
             self.split,
             self.split_on_cjk,
-            self.unsplittable_tokens_regex,
+            self._unsplittable_tokens_pattern,
         )
 
         # Apply WordPiece and coerce shape for outputs.
