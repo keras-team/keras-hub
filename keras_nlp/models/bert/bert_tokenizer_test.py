@@ -40,13 +40,9 @@ class BertTokenizerTest(TestCase):
         self.assertAllEqual(output, [[9, 10, 11, 12], [9, 12]])
 
     def test_tokenizer_unsplittable_tokens(self):
-        vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
-        vocab += ["THE", "QUICK", "BROWN", "FOX"]
-        vocab += ["the", "quick", "brown", "fox"]
-        init_kwargs = {"vocabulary": self.vocab}
         input_data = ["[CLS] THE [MASK] FOX [SEP] [PAD]"]
         tokenizer = BertTokenizer(
-            **init_kwargs
+            **self.init_kwargs
         )
         output_data = tokenizer(input_data)
         expected_output=[[2, 5, 4, 8, 3, 0]]
