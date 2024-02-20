@@ -262,12 +262,12 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         oov_token: str. The string value to substitute for
             an unknown token. It must be included in the vocab.
             Defaults to `"[UNK]"`.
-        special_tokens: list. A list of strings that will
-            never be split during the word-level splitting applied before the
-            word-peice encoding. This can be used to ensure special tokens map
-            to unique indices in the vocabulary, even if these special tokens
-            contain splittable characters such as punctuation. Special tokens
-            must still be included in `vocabulary`. Defaults to `None`.
+        special_tokens: list. A list of strings that will never be split during 
+            the word-level splitting applied before the word-peice encoding. 
+            This can be used to ensure special tokens map to unique indices in 
+            the vocabulary, even if these special tokens contain splittable 
+            characters such as punctuation. Special tokens must still be 
+            included in `vocabulary`. Defaults to `None`.
 
     References:
      - [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)
