@@ -24,6 +24,6 @@ backbone_presets = {
             "path": "electra",
             "model_card": "https://github.com/google-research/electra/blob/master/README.md"
         },
-        "kaggle_handle": "kaggle://pranavprajapati16/electra/keras/electra_base_discriminator_en/1"
+        "kaggle_handle": "kaggle://pranavprajapati16/electra/keras/electra_base_discriminator_en/2"
     }
 }
