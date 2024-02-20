@@ -28,8 +28,8 @@ class BloomTokenizerTest(TestCase):
         self.merges += ["Ġai r", "Ġa i", "pla ne"]
         self.init_kwargs = {"vocabulary": self.vocab, "merges": self.merges}
         self.input_data = [
-            "<s>airplane at airport<pad>",
-            "<s> airplane airport<pad>",
+            "<s>airplane at airport</s><pad>",
+            "<s> airplane airport</s><pad>",
         ]
 
     def test_tokenizer_basics(self):
@@ -37,7 +37,7 @@ class BloomTokenizerTest(TestCase):
             cls=BloomTokenizer,
             init_kwargs=self.init_kwargs,
             input_data=self.input_data,
-            expected_output=[[6, 1, 3, 4, 2, 5, 8], [6, 2, 3, 2, 5, 8]],
+            expected_output=[[6, 1, 3, 4, 2, 5, 7, 8], [6, 2, 3, 2, 5, 7, 8]],
         )
 
     def test_errors_missing_special_tokens(self):
