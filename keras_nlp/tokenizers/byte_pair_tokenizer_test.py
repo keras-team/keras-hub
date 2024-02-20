@@ -80,6 +80,17 @@ class BytePairTokenizerTest(TestCase):
         output = tokenizer("sp")
         self.assertAllEqual(output, [0])
 
+        vocab = {"<s>": 0, "</s>": 1, "a": 2, "Ġquick": 3, "Ġfox": 4}
+        merges = ["Ġ q", "u i", "c k", "ui ck", "Ġq uick"]
+        merges += ["Ġ f", "o x", "Ġf ox"]
+        tokenizer = BytePairTokenizer(
+            vocabulary=vocab,
+            merges=merges,
+            unsplittable_tokens=["<s>", "</s>"],
+        )
+        output = tokenizer("<s>a quick fox</s>")
+        self.assertAllEqual(output, [0, 2, 3, 4, 1])
+
     def test_tokenize_prefix_space(self):
         input_data = ["brown.", "black."]
         tokenizer = BytePairTokenizer(

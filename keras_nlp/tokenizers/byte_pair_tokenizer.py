@@ -63,17 +63,10 @@ SPLIT_PATTERN_1 = SPLIT_PATTERN_1.replace(
 SPLIT_PATTERN_2 = rf"""[\s६{SPECIAL_WHITESPACES}]$"""
 
 
-def create_alts_for_unsplittable_tokens(unsplittable_tokens):
-    # Create alternates for all special tokens that will be not split during
-    # tokenization.
-    alts = []
-    prefix = "Ĵ"
-    # Trim out splitters.
-    replace_pattern = r"'|\s+|[^\p{L}\p{N}]+"
-    for token in unsplittable_tokens:
-        token = re.sub(replace_pattern, "", token)
-        alts.append(prefix + token)
-    return alts
+def get_unsplittable_tokens_pattern(unsplittable_tokens):
+    if unsplittable_tokens is None or len(unsplittable_tokens) == 0:
+        return None
+    return r"|".join([re.escape(token) for token in unsplittable_tokens])
 
 
 def bytes_to_unicode():
@@ -108,7 +101,7 @@ def remove_strings_from_inputs(tensor, string_to_remove):
     return result
 
 
-def split_strings_for_bpe(inputs, unsplittable_tokens=None):
+def split_strings_for_bpe(inputs, unsplittable_tokens_pattern=None):
     # We need to recreate the exact behavior of token presplitting in the
     # original gpt2 tokenizer which uses a lookahead. As re2 does not
     # support lookahead match, we are using an alternative insert a special
@@ -120,24 +113,38 @@ def split_strings_for_bpe(inputs, unsplittable_tokens=None):
     inputs = tf.strings.regex_replace(
         inputs, rf"(\s{SPECIAL_WHITESPACES})$", r"\1६"
     )
-    if unsplittable_tokens:
-        alts = create_alts_for_unsplittable_tokens(unsplittable_tokens)
-        for token, alt in zip(unsplittable_tokens, alts):
-            escaped_token = re.escape(token)
-            inputs = tf_text.regex_split(inputs, escaped_token, escaped_token)
-            inputs = tf.strings.regex_replace(inputs, escaped_token, alt)
-    raw_tokens = tf_text.regex_split(inputs, SPLIT_PATTERN_1, SPLIT_PATTERN_1)
+
+    if unsplittable_tokens_pattern is not None:
+        # First split the unsplittable tokens from the input.
+        raw_tokens = tf_text.regex_split(
+            inputs, unsplittable_tokens_pattern, unsplittable_tokens_pattern
+        )
+        split_pattern_1_with_unsplittable_tokens = r"|".join(
+            [unsplittable_tokens_pattern, SPLIT_PATTERN_1]
+        )
+        # Then split using both `unsplittable_tokens_pattern` and
+        # `SPLIT_PATTERN_1` to split inputs like original gpt2, while not
+        # affecting the unsplittable tokens.
+        # We split unsplittable tokens first then apply this split instead of
+        # applying this split directly, because otherwise we will not split
+        # unsplittable tokens from inputs properly, because of this pattern
+        # ` ?[^\s\p{L}\p{N}{special_spaces}]+`.
+        # e.g., [" <s>"] will  be [" <s>"] instead of [" ", "<s>"]
+        raw_tokens = tf_text.regex_split(
+            raw_tokens,
+            split_pattern_1_with_unsplittable_tokens,
+            split_pattern_1_with_unsplittable_tokens,
+        )
+        raw_tokens = raw_tokens.merge_dims(-2, -1)
+    else:
+        raw_tokens = tf_text.regex_split(
+            inputs, SPLIT_PATTERN_1, SPLIT_PATTERN_1
+        )
+
     # Second pass splits out the last whilespace char or "६".
     raw_tokens = tf_text.regex_split(
         raw_tokens, SPLIT_PATTERN_2, SPLIT_PATTERN_2
     )
-    if unsplittable_tokens:
-        # Replace special tokens alternate with originals.
-        for token, alt in zip(unsplittable_tokens, alts):
-            escaped_alt = re.escape(alt)
-            raw_tokens = tf.strings.regex_replace(
-                raw_tokens, escaped_alt, token
-            )
     while raw_tokens.shape.rank > 2:
         raw_tokens = raw_tokens.merge_dims(1, 2)
     return remove_strings_from_inputs(raw_tokens, "६")
@@ -298,6 +305,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         self.sequence_length = sequence_length
         self.add_prefix_space = add_prefix_space
         self.unsplittable_tokens = unsplittable_tokens
+        self._unsplittable_tokens_pattern = get_unsplittable_tokens_pattern(
+            unsplittable_tokens
+        )
 
         # Create byte <=> unicode mapping. This is useful for handling
         # whitespace tokens.
@@ -544,7 +554,9 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
 
-        raw_tokens = split_strings_for_bpe(inputs, self.unsplittable_tokens)
+        raw_tokens = split_strings_for_bpe(
+            inputs, self._unsplittable_tokens_pattern
+        )
         token_row_splits = raw_tokens.row_splits
         flat_tokens = raw_tokens.flat_values
 
