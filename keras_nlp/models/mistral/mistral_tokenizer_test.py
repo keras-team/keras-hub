@@ -38,7 +38,7 @@ class MistralTokenizerTest(TestCase):
             expected_output=[[3, 8, 4, 6], [3, 5, 7, 9]],
         )
 
-    def test_tokenizer_unsplittable_tokens(self):
+    def test_tokenizer_special_tokens(self):
         input_data = ["<s> the quick brown fox </s>"]
         tokenizer = MistralTokenizer(**self.init_kwargs)
         start_token_id = tokenizer.start_token_id

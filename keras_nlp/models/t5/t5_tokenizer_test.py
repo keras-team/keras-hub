@@ -36,7 +36,7 @@ class T5TokenizerTest(TestCase):
             expected_output=[[4, 9, 5, 7], [4, 6, 8, 10]],
         )
 
-    def test_tokenizer_unsplittable_tokens(self):
+    def test_tokenizer_special_tokens(self):
         input_data = ["</s> the quick brown fox </s> <pad>"]
         tokenizer = T5Tokenizer(**self.init_kwargs)
         start_token_id = tokenizer.start_token_id

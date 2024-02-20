@@ -38,7 +38,7 @@ class AlbertTokenizerTest(TestCase):
             expected_output=[[5, 10, 6, 8], [5, 7, 9, 11]],
         )
 
-    def test_tokenizer_unsplittable_tokens(self):
+    def test_tokenizer_special_tokens(self):
         input_data = ["[CLS] the quick [MASK] brown fox [SEP] <pad>"]
         tokenizer = AlbertTokenizer(**self.init_kwargs)
         cls_token_id = tokenizer.cls_token_id

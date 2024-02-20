@@ -47,32 +47,32 @@ class SentencePieceTokenizerTest(TestCase):
         self.assertAllEqual(call_output, [6, 5, 3, 4])
         self.assertAllEqual(tokenize_output, [6, 5, 3, 4])
 
-    def test_tokenize_with_unsplittable_tokens(self):
+    def test_tokenize_with_special_tokens(self):
         input_data = ["<s> the quick brown fox. </s>"]
         tokenizer = SentencePieceTokenizer(
-            proto=self.proto, unsplittable_tokens=["<s>", "</s>"]
+            proto=self.proto, special_tokens=["<s>", "</s>"]
         )
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
         self.assertAllEqual(call_output, [[1, 6, 5, 3, 4, 2]])
         self.assertAllEqual(tokenize_output, [[1, 6, 5, 3, 4, 2]])
 
-    def test_scaler_tokenize_with_unsplittable_tokens(self):
+    def test_scaler_tokenize_with_special_tokens(self):
         input_data = "<s> the quick brown fox. </s>"
         tokenizer = SentencePieceTokenizer(
-            proto=self.proto, unsplittable_tokens=["<s>", "</s>"]
+            proto=self.proto, special_tokens=["<s>", "</s>"]
         )
         call_output = tokenizer(input_data)
         tokenize_output = tokenizer.tokenize(input_data)
         self.assertAllEqual(call_output, [1, 6, 5, 3, 4, 2])
         self.assertAllEqual(tokenize_output, [1, 6, 5, 3, 4, 2])
 
-    def test_string_tokenize_with_unsplittable_tokens(self):
+    def test_string_tokenize_with_special_tokens(self):
         input_data = ["<s> the quick brown fox. </s>"]
         tokenizer = SentencePieceTokenizer(
             proto=self.proto,
             dtype="string",
-            unsplittable_tokens=["<s>", "</s>"],
+            special_tokens=["<s>", "</s>"],
         )
         output_data = tokenizer(input_data)
         self.assertAllEqual(
@@ -82,25 +82,21 @@ class SentencePieceTokenizerTest(TestCase):
 
     def test_same_output_of_tokenization(self):
         # The output of Tokenizing a string that does not contain any
-        # unsplittable token should be the same for the tokenizer that is
+        # special token should be the same for the tokenizer that is
         # configured to tokenize unplittable tokens and the one that isn't.
         input_data = ["the quick brown fox."]
         tokenizer = SentencePieceTokenizer(
             proto=self.proto,
         )
-        unsplittable_tokens_tokenizer = SentencePieceTokenizer(
+        special_tokens_tokenizer = SentencePieceTokenizer(
             proto=self.proto,
-            unsplittable_tokens=["<s>", "</s>"],
+            special_tokens=["<s>", "</s>"],
         )
 
         tokenizer_output = tokenizer(input_data)
-        unsplittable_tokens_tokenizer_output = unsplittable_tokens_tokenizer(
-            input_data
-        )
+        special_tokens_tokenizer_output = special_tokens_tokenizer(input_data)
 
-        self.assertAllEqual(
-            tokenizer_output, unsplittable_tokens_tokenizer_output
-        )
+        self.assertAllEqual(tokenizer_output, special_tokens_tokenizer_output)
 
     def test_dense_output(self):
         input_data = ["the quick brown fox."]

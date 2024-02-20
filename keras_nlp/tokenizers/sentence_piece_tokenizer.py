@@ -41,10 +41,10 @@ except ImportError:
 VOCAB_FILENAME = "vocabulary.spm"
 
 
-def get_unsplittable_tokens_pattern(unsplittable_tokens):
-    if unsplittable_tokens is None or len(unsplittable_tokens) == 0:
+def get_special_tokens_pattern(special_tokens):
+    if special_tokens is None or len(special_tokens) == 0:
         return None
-    return r"|".join([re.escape(token) for token in unsplittable_tokens])
+    return r"|".join([re.escape(token) for token in special_tokens])
 
 
 @keras_nlp_export("keras_nlp.tokenizers.SentencePieceTokenizer")
@@ -71,6 +71,12 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             for more details on the format.
         sequence_length: If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of `sequence_length`.
+        special_tokens: list. A list of strings that will
+            never be split during the word-level splitting applied before the
+            byte-pair encoding. This can be used to ensure special tokens map to
+            unique indices in the vocabulary, even if these special tokens
+            contain splittable characters such as punctuation. Special tokens
+            must still be included in `vocabulary`. Defaults to `None`.
 
     References:
         - [Kudo and Richardson, 2018](https://arxiv.org/abs/1808.06226)
@@ -119,7 +125,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         self,
         proto=None,
         sequence_length: int = None,
-        unsplittable_tokens=None,
+        special_tokens=None,
         dtype="int32",
         **kwargs,
     ) -> None:
@@ -135,9 +141,9 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
         self.proto = None
         self.sequence_length = sequence_length
-        self.unsplittable_tokens = unsplittable_tokens
-        self._unsplittable_tokens_pattern = get_unsplittable_tokens_pattern(
-            unsplittable_tokens
+        self.special_tokens = special_tokens
+        self._special_tokens_pattern = get_special_tokens_pattern(
+            special_tokens
         )
         self.set_proto(proto)
 
@@ -222,7 +228,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             {
                 "proto": None,  # Save vocabulary via an asset!
                 "sequence_length": self.sequence_length,
-                "unsplittable_tokens": self.unsplittable_tokens,
+                "special_tokens": self.special_tokens,
             }
         )
         return config
@@ -241,16 +247,16 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             tokens,
         )
 
-    def _tokenize_with_unsplittable_tokens(self, inputs):
+    def _tokenize_with_special_tokens(self, inputs):
         splitted_inputs = tf_text.regex_split(
             inputs,
-            self._unsplittable_tokens_pattern,
-            self._unsplittable_tokens_pattern,
+            self._special_tokens_pattern,
+            self._special_tokens_pattern,
         )
 
         tokens = self._sentence_piece.tokenize(splitted_inputs)
 
-        for unsplittble_token in self.unsplittable_tokens:
+        for unsplittble_token in self.special_tokens:
             unsplittble_token_mask = tf.equal(
                 splitted_inputs, unsplittble_token
             )
@@ -280,8 +286,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 "sure to pass a `vocabulary` argument when creating the layer."
             )
 
-        if self._unsplittable_tokens_pattern is not None:
-            tokens = self._tokenize_with_unsplittable_tokens(inputs)
+        if self._special_tokens_pattern is not None:
+            tokens = self._tokenize_with_special_tokens(inputs)
         else:
             tokens = self._sentence_piece.tokenize(inputs)
 

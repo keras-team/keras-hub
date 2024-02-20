@@ -105,7 +105,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
         super().__init__(
             proto=proto,
-            unsplittable_tokens=self._vocabulary_prefix[:3] + ["<mask>"],
+            special_tokens=self._vocabulary_prefix[:3] + ["<mask>"],
             **kwargs,
         )
 
@@ -183,8 +183,8 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
 
         splitted_inputs = tf_text.regex_split(
             inputs,
-            self._unsplittable_tokens_pattern,
-            self._unsplittable_tokens_pattern,
+            self._special_tokens_pattern,
+            self._special_tokens_pattern,
         )
 
         tokens = self._sentence_piece.tokenize(splitted_inputs)
@@ -269,7 +269,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
     def get_config(self):
         config = super().get_config()
         # In the constructor, we pass the list of special tokens to the
-        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # `special_tokens` arg of the superclass' constructor. Hence, we
         # delete it from the config here.
-        del config["unsplittable_tokens"]
+        del config["special_tokens"]
         return config

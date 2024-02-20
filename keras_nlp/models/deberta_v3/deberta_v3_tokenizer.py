@@ -106,7 +106,7 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
 
         super().__init__(
             proto=proto,
-            unsplittable_tokens=[
+            special_tokens=[
                 self.cls_token,
                 self.sep_token,
                 self.pad_token,
@@ -179,8 +179,8 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
 
         splitted_inputs = tf_text.regex_split(
             inputs,
-            self._unsplittable_tokens_pattern,
-            self._unsplittable_tokens_pattern,
+            self._special_tokens_pattern,
+            self._special_tokens_pattern,
         )
 
         tokens = self._sentence_piece.tokenize(splitted_inputs)
@@ -243,7 +243,7 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     def get_config(self):
         config = super().get_config()
         # In the constructor, we pass the list of special tokens to the
-        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # `special_tokens` arg of the superclass' constructor. Hence, we
         # delete it from the config here.
-        del config["unsplittable_tokens"]
+        del config["special_tokens"]
         return config

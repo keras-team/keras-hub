@@ -66,7 +66,7 @@ class MistralTokenizer(SentencePieceTokenizer):
         self.end_token = "</s>"
         super().__init__(
             proto=proto,
-            unsplittable_tokens=[self.start_token, self.end_token],
+            special_tokens=[self.start_token, self.end_token],
             **kwargs,
         )
 
@@ -93,7 +93,7 @@ class MistralTokenizer(SentencePieceTokenizer):
     def get_config(self):
         config = super().get_config()
         # In the constructor, we pass the list of special tokens to the
-        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # `special_tokens` arg of the superclass' constructor. Hence, we
         # delete it from the config here.
-        del config["unsplittable_tokens"]
+        del config["special_tokens"]
         return config
