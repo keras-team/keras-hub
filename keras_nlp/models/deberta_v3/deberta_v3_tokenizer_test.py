@@ -38,6 +38,27 @@ class DebertaV3TokenizerTest(TestCase):
             expected_output=[[5, 10, 6, 8], [5, 7, 9, 11]],
         )
 
+    def test_tokenizer_unsplittable_tokens(self):
+        input_data = ["[CLS] the quick [MASK] brown fox [SEP] [PAD]"]
+        tokenizer = DebertaV3Tokenizer(**self.init_kwargs)
+        cls_token_id = tokenizer.cls_token_id
+        sep_token_id = tokenizer.sep_token_id
+        pad_token_id = tokenizer.pad_token_id
+        mask_token_id = tokenizer.mask_token_id
+        expected_output = [
+            [
+                cls_token_id,
+                5,
+                10,
+                mask_token_id,
+                6,
+                8,
+                sep_token_id,
+                pad_token_id,
+            ]
+        ]
+        self.assertAllEqual(tokenizer(input_data), expected_output)
+
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             DebertaV3Tokenizer(

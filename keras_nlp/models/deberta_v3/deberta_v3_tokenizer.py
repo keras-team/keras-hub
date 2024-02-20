@@ -20,6 +20,12 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.tensor_utils import is_int_dtype
+
+try:
+    import tensorflow_text as tf_text
+except ImportError:
+    tf_text = None
 
 
 @keras_nlp_export("keras_nlp.models.DebertaV3Tokenizer")
@@ -98,7 +104,16 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
         self.pad_token = "[PAD]"
         self.mask_token = "[MASK]"
 
-        super().__init__(proto=proto, **kwargs)
+        super().__init__(
+            proto=proto,
+            unsplittable_tokens=[
+                self.cls_token,
+                self.sep_token,
+                self.pad_token,
+                self.mask_token,
+            ],
+            **kwargs,
+        )
 
     def set_proto(self, proto):
         super().set_proto(proto)
@@ -148,6 +163,75 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
             return self.mask_token_id
         return super().token_to_id(token)
 
+    def tokenize(self, inputs):
+        self._check_vocabulary()
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            inputs = tf.convert_to_tensor(inputs)
+        scalar_input = inputs.shape.rank == 0
+        if scalar_input:
+            inputs = tf.expand_dims(inputs, 0)
+
+        if self._sentence_piece is None:
+            raise ValueError(
+                "No vocabulary has been set for SentencePieceTokenizer. Make "
+                "sure to pass a `vocabulary` argument when creating the layer."
+            )
+
+        splitted_inputs = tf_text.regex_split(
+            inputs,
+            self._unsplittable_tokens_pattern,
+            self._unsplittable_tokens_pattern,
+        )
+
+        tokens = self._sentence_piece.tokenize(splitted_inputs)
+
+        # Add token ids for [CLS], [SEP], and [PAD]
+        for unsplittble_token in [
+            self.cls_token,
+            self.sep_token,
+            self.pad_token,
+        ]:
+            unsplittble_token_mask = tf.equal(
+                splitted_inputs, unsplittble_token
+            )
+            tokens = tf.where(
+                unsplittble_token_mask[..., tf.newaxis],
+                (
+                    self._sentence_piece.string_to_id(unsplittble_token)
+                    if is_int_dtype(self.compute_dtype)
+                    else unsplittble_token
+                ),
+                tokens,
+            )
+
+        # Add token ids for [MASK].
+        unsplittble_token_mask = tf.equal(splitted_inputs, "[MASK]")
+        tokens = tf.where(
+            unsplittble_token_mask[..., tf.newaxis],
+            (
+                self.mask_token_id
+                if is_int_dtype(self.compute_dtype)
+                else "[MASK]"
+            ),
+            tokens,
+        )
+
+        # Remove the dimension that was added by `tf_text.regex_split()`.
+        tokens = tokens.merge_dims(-2, -1)
+
+        # Convert to a dense output if `sequence_length` is set.
+        if self.sequence_length:
+            output_shape = tokens.shape.as_list()
+            output_shape[-1] = self.sequence_length
+            tokens = tokens.to_tensor(shape=output_shape)
+
+        # Convert to a dense output if input was a scalar.
+        if scalar_input:
+            tokens = tf.squeeze(tokens, 0)
+            tf.ensure_shape(tokens, shape=[self.sequence_length])
+
+        return tokens
+
     def detokenize(self, ids):
         ids = tf.ragged.boolean_mask(ids, tf.not_equal(ids, self.mask_token_id))
         return super().detokenize(ids)
@@ -155,3 +239,11 @@ class DebertaV3Tokenizer(SentencePieceTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
+
+    def get_config(self):
+        config = super().get_config()
+        # In the constructor, we pass the list of special tokens to the
+        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # delete it from the config here.
+        del config["unsplittable_tokens"]
+        return config
