@@ -71,12 +71,11 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             for more details on the format.
         sequence_length: If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of `sequence_length`.
-        special_tokens: list. A list of strings that will
-            never be split during the word-level splitting applied before the
-            byte-pair encoding. This can be used to ensure special tokens map to
-            unique indices in the vocabulary, even if these special tokens
-            contain splittable characters such as punctuation. Special tokens
-            must still be included in `vocabulary`. Defaults to `None`.
+        special_tokens: list. A list of special tokens strings. Special tokens 
+            must be included in the vocabulary of `proto` and passed through 
+            `special_tokens` argument. This will help to map the special tokens 
+            to their unique indecies. If `special_tokens` isn't passed, special 
+            tokens will be mapped to out of vocabulary (OOV) token .
 
     References:
         - [Kudo and Richardson, 2018](https://arxiv.org/abs/1808.06226)
