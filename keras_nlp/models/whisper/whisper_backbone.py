@@ -75,6 +75,10 @@ class WhisperBackbone(Backbone):
             positional embedding layer.
         max_decoder_sequence_length: int. The maximum sequence length that the
             text decoder can consume.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Examples:
 
@@ -112,79 +116,51 @@ class WhisperBackbone(Backbone):
         dropout=0.0,
         max_encoder_sequence_length=3000,
         max_decoder_sequence_length=448,
+        dtype=None,
         **kwargs,
     ):
         assert_tf_backend(self.__class__.__name__)
 
-        # Encoder inputs. Note that the encoder does not have a padding mask:
-        # https://github.com/openai/whisper/blob/v20230124/whisper/model.py#L132.
-        encoder_feature_input = keras.Input(
-            shape=(None, num_mels), dtype="float32", name="encoder_features"
-        )
-
-        # Decoder inputs.
-        decoder_token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="decoder_token_ids"
-        )
-        decoder_padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="decoder_padding_mask"
-        )
-
-        # ====== Encoder ======
-
-        # Embed the input features. This consists of two 1D convolutional
-        # layers.
-        # For the first layer, we use `padding="same"` since that corresponds to
-        # a padding size of 1.
-        encoder_conv_layer_1 = keras.layers.Conv1D(
+        # === Layers ===
+        self.encoder_conv_layer_1 = keras.layers.Conv1D(
             filters=hidden_dim,
             kernel_size=3,
             strides=1,
             padding="same",
+            dtype=dtype,
             name="encoder_token_embedding_conv_layer_1",
         )
-        embedded_features = keras.activations.gelu(
-            encoder_conv_layer_1(encoder_feature_input),
-            approximate=False,
-        )
-
-        # For the second conv. layer, we cannot use `padding="same"` since
-        # that corresponds to a padding size of 1.5 (since stride is 2). Hence,
-        # we will manually pad the input.
-        embedded_features = Padder()(embedded_features)
-        encoder_conv_layer_2 = keras.layers.Conv1D(
+        self.encoder_conv_layer_2 = keras.layers.Conv1D(
             filters=hidden_dim,
             kernel_size=3,
             strides=2,
             padding="valid",
+            dtype=dtype,
             name="encoder_token_embedding_conv_layer_2",
         )
-        embedded_features = keras.activations.gelu(
-            encoder_conv_layer_2(embedded_features),
-            approximate=False,
+        self.encoder_padder = Padder(
+            dtype=dtype,
+            name="encoder_padder",
         )
-
-        # The position embedding layer for the encoder is a sinusoidal embedding
-        # layer: https://github.com/openai/whisper/blob/v20230124/whisper/model.py#L137.
-        # Hence, we set it to be non-trainable.
-        # TODO: We can use `keras_nlp.layers.SinePositionEncoding` layer.
-        position_embedding = PositionEmbedding(
+        self.encoder_position_embedding = PositionEmbedding(
             initializer=whisper_kernel_initializer(),
             sequence_length=max_encoder_sequence_length // 2,
+            dtype=dtype,
             name="encoder_position_embedding",
             trainable=False,
-        )(embedded_features)
-
-        # Sum and apply dropout to embeddings.
-        x = keras.layers.Add()((embedded_features, position_embedding))
-        x = keras.layers.Dropout(
+        )
+        self.encoder_embeddings_add = keras.layers.Add(
+            dtype=dtype,
+            name="encoder_embeddings_add",
+        )
+        self.encoder_embeddings_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="encoder_embeddings_dropout",
-        )(x)
-
-        # Apply successive transformer encoder blocks.
+        )
+        self.encoder_transformer_layers = []
         for i in range(num_layers):
-            x = WhisperEncoder(
+            layer = WhisperEncoder(
                 num_heads=num_heads,
                 intermediate_dim=intermediate_dim,
                 activation=keras.activations.gelu,
@@ -192,38 +168,33 @@ class WhisperBackbone(Backbone):
                 dropout=dropout,
                 kernel_initializer=whisper_kernel_initializer(),
                 normalize_first=True,
+                dtype=dtype,
                 name=f"transformer_encoder_layer_{i}",
-            )(x)
-
-        x = keras.layers.LayerNormalization(
-            name="encoder_layer_norm",
+            )
+            self.encoder_transformer_layers.append(layer)
+        self.encoder_layer_norm = keras.layers.LayerNormalization(
             axis=-1,
             epsilon=1e-5,
-            dtype="float32",
-        )(x)
-        encoder_output = x
-
-        # ====== Decoder ======
-
-        # Embed tokens and positions.
-        embedding_layer = TokenAndPositionEmbedding(
+            dtype=dtype,
+            name="encoder_layer_norm",
+        )
+        self.decoder_embeddings = TokenAndPositionEmbedding(
             vocabulary_size=vocabulary_size,
             sequence_length=max_decoder_sequence_length,
             embedding_dim=hidden_dim,
             embeddings_initializer=whisper_kernel_initializer(),
+            dtype=dtype,
             name="decoder_token_and_position_embedding",
         )
-        x = embedding_layer(decoder_token_id_input)
-
-        # Apply dropout to embeddings.
-        x = keras.layers.Dropout(
+        self.token_embedding = self.decoder_embeddings.token_embedding
+        self.decoder_embeddings_dropout = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="decoder_embeddings_dropout",
-        )(x)
-
-        # Apply successive transformer decoder blocks.
+        )
+        self.decoder_transformer_layers = []
         for i in range(num_layers):
-            transformer_decoder_layer = WhisperDecoder(
+            layer = WhisperDecoder(
                 intermediate_dim=intermediate_dim,
                 num_heads=num_heads,
                 dropout=dropout,
@@ -231,28 +202,73 @@ class WhisperBackbone(Backbone):
                 layer_norm_epsilon=1e-5,
                 kernel_initializer=whisper_kernel_initializer(),
                 normalize_first=True,
+                dtype=dtype,
                 name=f"transformer_decoder_layer_{i}",
             )
-            x = transformer_decoder_layer(
-                decoder_sequence=x,
-                encoder_sequence=encoder_output,
-                decoder_padding_mask=decoder_padding_mask,
-            )
-
-        x = keras.layers.LayerNormalization(
-            name="decoder_layer_norm",
+            self.decoder_transformer_layers.append(layer)
+        self.decoder_layer_norm = keras.layers.LayerNormalization(
             axis=-1,
             epsilon=1e-5,
-            dtype="float32",
-        )(x)
-        decoder_output = x
+            dtype=dtype,
+            name="decoder_layer_norm",
+        )
 
-        # Instantiate using Functional API Model constructor
+        # === Functional Model ===
+        # Note that the encoder does not have a padding mask:
+        # https://github.com/openai/whisper/blob/v20230124/whisper/model.py#L132.
+        encoder_feature_input = keras.Input(
+            shape=(None, num_mels), dtype="float32", name="encoder_features"
+        )
+        decoder_token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="decoder_token_ids"
+        )
+        decoder_padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="decoder_padding_mask"
+        )
+        # Encoder.
+        # Embed the input features. This consists of two 1D convolutional
+        # layers.
+        # For the first layer, we use `padding="same"` since that corresponds to
+        # a padding size of 1.
+        embedded_features = keras.activations.gelu(
+            self.encoder_conv_layer_1(encoder_feature_input),
+            approximate=False,
+        )
+        # For the second conv. layer, we cannot use `padding="same"` since
+        # that corresponds to a padding size of 1.5 (since stride is 2). Hence,
+        # we will manually pad the input.
+        embedded_features = self.encoder_padder(embedded_features)
+        embedded_features = keras.activations.gelu(
+            self.encoder_conv_layer_2(embedded_features),
+            approximate=False,
+        )
+        # The position embedding layer for the encoder is a sinusoidal embedding
+        # layer: https://github.com/openai/whisper/blob/v20230124/whisper/model.py#L137.
+        # Hence, we set it to be non-trainable.
+        # TODO: We can use `keras_nlp.layers.SinePositionEncoding` layer.
+        positions = self.encoder_position_embedding(embedded_features)
+        x = self.encoder_embeddings_add((embedded_features, positions))
+        x = self.encoder_embeddings_dropout(x)
+        for transformer_layer in self.encoder_transformer_layers:
+            x = transformer_layer(x)
+        x = self.encoder_layer_norm(x)
+        encoder_output = x
+        # Decoder.
+        x = self.decoder_embeddings(decoder_token_id_input)
+        x = self.decoder_embeddings_dropout(x)
+        for transformer_layer in self.decoder_transformer_layers:
+            x = transformer_layer(
+                decoder_sequence=x,
+                encoder_sequence=encoder_output,
+                decoder_padding_mask=decoder_padding_mask_input,
+            )
+        x = self.decoder_layer_norm(x)
+        decoder_output = x
         super().__init__(
             inputs={
                 "encoder_features": encoder_feature_input,
                 "decoder_token_ids": decoder_token_id_input,
-                "decoder_padding_mask": decoder_padding_mask,
+                "decoder_padding_mask": decoder_padding_mask_input,
             },
             outputs={
                 "encoder_sequence_output": encoder_output,
@@ -261,7 +277,7 @@ class WhisperBackbone(Backbone):
             **kwargs,
         )
 
-        # All references to `self` below this line
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -271,7 +287,6 @@ class WhisperBackbone(Backbone):
         self.dropout = dropout
         self.max_encoder_sequence_length = max_encoder_sequence_length
         self.max_decoder_sequence_length = max_decoder_sequence_length
-        self.token_embedding = embedding_layer
 
     def get_config(self):
         config = super().get_config()

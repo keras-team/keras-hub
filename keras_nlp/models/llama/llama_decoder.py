@@ -64,11 +64,13 @@ class LlamaDecoder(keras.layers.Layer):
             max_sequence_length=self.max_sequence_length,
             rope_scaling_factor=self.rope_scaling_factor,
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.dtype_policy,
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
         self._self_attention_layernorm = LlamaLayerNorm(
             epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
         )
         self._self_attention_layernorm.build(decoder_sequence_shape)
 
@@ -76,6 +78,7 @@ class LlamaDecoder(keras.layers.Layer):
         self._feedforward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.dtype_policy,
         )
         self._feedforward_intermediate_dense.build(decoder_sequence_shape)
 
@@ -83,12 +86,14 @@ class LlamaDecoder(keras.layers.Layer):
             self.intermediate_dim,
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.dtype_policy,
         )
         self._feedforward_gate_dense.build(decoder_sequence_shape)
 
         self._feedforward_output_dense = keras.layers.Dense(
             self.hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dtype=self.dtype_policy,
         )
 
         intermediate_shape = list(decoder_sequence_shape)
@@ -97,6 +102,7 @@ class LlamaDecoder(keras.layers.Layer):
 
         self._feedforward_layernorm = LlamaLayerNorm(
             epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
         )
         self._feedforward_layernorm.build(decoder_sequence_shape)
 

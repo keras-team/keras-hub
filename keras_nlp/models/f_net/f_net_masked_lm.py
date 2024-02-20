@@ -101,6 +101,19 @@ class FNetMaskedLM(Task):
         preprocessor=None,
         **kwargs,
     ):
+        # === Layers ===
+        self.backbone = backbone
+        self.preprocessor = preprocessor
+        self.masked_lm_head = MaskedLMHead(
+            vocabulary_size=backbone.vocabulary_size,
+            token_embedding=backbone.token_embedding,
+            intermediate_activation="gelu",
+            kernel_initializer=f_net_kernel_initializer(),
+            dtype=backbone.dtype_policy,
+            name="mlm_head",
+        )
+
+        # === Functional Model ===
         inputs = {
             **backbone.input,
             "mask_positions": keras.Input(
@@ -108,24 +121,16 @@ class FNetMaskedLM(Task):
             ),
         }
         backbone_outputs = backbone(backbone.input)
-        outputs = MaskedLMHead(
-            vocabulary_size=backbone.vocabulary_size,
-            token_embedding=backbone.token_embedding,
-            intermediate_activation="gelu",
-            kernel_initializer=f_net_kernel_initializer(),
-            name="mlm_head",
-        )(backbone_outputs["sequence_output"], inputs["mask_positions"])
-
-        # Instantiate using Functional API Model constructor
+        outputs = self.masked_lm_head(
+            backbone_outputs["sequence_output"], inputs["mask_positions"]
+        )
         super().__init__(
             inputs=inputs,
             outputs=outputs,
-            include_preprocessing=preprocessor is not None,
             **kwargs,
         )
-        # All references to `self` below this line
-        self.backbone = backbone
-        self.preprocessor = preprocessor
+
+        # === Default compilation ===
         self.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(5e-5),

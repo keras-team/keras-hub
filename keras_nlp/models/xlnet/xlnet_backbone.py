@@ -52,6 +52,10 @@ class XLNetBackbone(Backbone):
         bias_initializer: string or `keras.initializers` initializer,
             defaults to "zeros". The bias initializer for
             the dense and multiheaded relative attention layers.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Call arguments:
         token_ids: Indices of input sequence tokens in the vocabulary of shape
@@ -101,44 +105,31 @@ class XLNetBackbone(Backbone):
         activation="gelu",
         kernel_initializer_range=0.02,
         bias_initializer="zeros",
+        dtype=None,
         **kwargs,
     ):
-        # Inputs
-        token_id_input = keras.Input(
-            shape=(None,), dtype="int32", name="token_ids"
-        )
-        padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
-        segment_ids = keras.Input(
-            shape=(None,), dtype="int32", name="segment_ids"
-        )
-
-        # Content and Query Embedding
-        word_emb, pos_emb = ContentAndQueryEmbedding(
+        # === Layers ===
+        self.content_query_embedding = ContentAndQueryEmbedding(
             vocabulary_size=vocabulary_size,
             hidden_dim=hidden_dim,
             dropout=dropout,
+            dtype=dtype,
             name="content_query_embedding",
-        )(token_id_input=token_id_input)
-
-        # Apply XLNetAttentionMaskLayer and XLNetSegmentMatrixLayer Layers
-        # to get the processed attention masks and segment matrix.
-        attn_mask_content, attn_mask_query = XLNetAttentionMaskLayer(
+        )
+        self.attn_mask_layer = XLNetAttentionMaskLayer(
             hidden_dim=hidden_dim,
             kernel_initializer_range=kernel_initializer_range,
+            dtype=dtype,
             name="encoder_block_attn_mask_layer",
-        )(padding_mask)
-        seg_mat = XLNetSegmentMatrixLayer(name="encoder_block_seg_mat_layer")(
-            segment_ids
         )
-
-        output_content = word_emb
-
-        # Encoders
+        self.seg_mat_layer = XLNetSegmentMatrixLayer(
+            dtype=dtype,
+            name="encoder_block_seg_mat_layer",
+        )
         head_dim = hidden_dim // num_heads
+        self.transformer_layers = []
         for i in range(num_layers):
-            output_content, output_query = XLNetEncoder(
+            layer = XLNetEncoder(
                 num_heads=num_heads,
                 hidden_dim=hidden_dim,
                 head_dim=head_dim,
@@ -148,28 +139,55 @@ class XLNetBackbone(Backbone):
                 layer_norm_epsilon=1e-12,
                 kernel_initializer_range=kernel_initializer_range,
                 bias_initializer=bias_initializer,
+                dtype=dtype,
                 name=f"xlnet_encoder_{i}",
-            )(
+            )
+            self.transformer_layers.append(layer)
+        self.dropout = keras.layers.Dropout(
+            dropout,
+            dtype=dtype,
+            name="dropout",
+        )
+
+        # === Functional Model ===
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        segment_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="segment_ids"
+        )
+        # Content and Query Embedding
+        word_emb, pos_emb = self.content_query_embedding(token_id_input)
+        # Apply XLNetAttentionMaskLayer and XLNetSegmentMatrixLayer Layers
+        # to get the processed attention masks and segment matrix.
+        attn_mask_content, attn_mask_query = self.attn_mask_layer(
+            padding_mask_input
+        )
+        seg_mat = self.seg_mat_layer(segment_id_input)
+        output_content = word_emb
+        for transformer_layer in self.transformer_layers:
+            output_content, output_query = transformer_layer(
                 output_content=output_content,
                 attn_mask_content=attn_mask_content,
                 attn_mask_query=attn_mask_query,
                 pos_emb=pos_emb,
                 seg_mat=seg_mat,
             )
-
-        output = keras.layers.Dropout(dropout)(output_content)
-
+        output = self.dropout(output_content)
         super().__init__(
             inputs={
                 "token_ids": token_id_input,
-                "padding_mask": padding_mask,
-                "segment_ids": segment_ids,
+                "padding_mask": padding_mask_input,
+                "segment_ids": segment_id_input,
             },
             outputs=output,
             **kwargs,
         )
 
-        # All references to `self` below this line
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_heads = num_heads

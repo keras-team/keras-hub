@@ -150,39 +150,49 @@ class DistilBertClassifier(Task):
         dropout=0.2,
         **kwargs,
     ):
-        inputs = backbone.input
+        # === Layers ===
+        self.backbone = backbone
+        self.preprocessor = preprocessor
         hidden_dim = hidden_dim or backbone.hidden_dim
-
-        x = backbone(inputs)[:, backbone.cls_token_index, :]
-        x = keras.layers.Dense(
+        self.pooled_dense = keras.layers.Dense(
             hidden_dim,
             activation="relu",
             kernel_initializer=distilbert_kernel_initializer(),
+            dtype=backbone.dtype_policy,
             name="pooled_dense",
-        )(x)
-        x = keras.layers.Dropout(dropout, name="classifier_dropout")(x)
-        outputs = keras.layers.Dense(
+        )
+        self.output_dropout = keras.layers.Dropout(
+            dropout,
+            dtype=backbone.dtype_policy,
+            name="output_dropout",
+        )
+        self.output_dense = keras.layers.Dense(
             num_classes,
             kernel_initializer=distilbert_kernel_initializer(),
             activation=activation,
+            dtype=backbone.dtype_policy,
             name="logits",
-        )(x)
+        )
 
-        # Instantiate using Functional API Model constructor
+        # === Functional Model ===
+        inputs = backbone.input
+        x = backbone(inputs)[:, backbone.cls_token_index, :]
+        x = self.pooled_dense(x)
+        x = self.output_dropout(x)
+        outputs = self.output_dense(x)
         super().__init__(
             inputs=inputs,
             outputs=outputs,
-            include_preprocessing=preprocessor is not None,
             **kwargs,
         )
-        # All references to `self` below this line
-        self.backbone = backbone
-        self.preprocessor = preprocessor
+
+        # === Config ===
         self.num_classes = num_classes
         self.activation = keras.activations.get(activation)
         self.hidden_dim = hidden_dim
         self.dropout = dropout
 
+        # === Default compilation ===
         logit_output = self.activation == keras.activations.linear
         self.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(

@@ -58,7 +58,8 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
                     ops.shape(pos_emb)[0],
                     ops.shape(pos_emb)[1] * bsz,
                     ops.shape(pos_emb)[2],
-                ]
+                ],
+                dtype=self.compute_dtype,
             )
             * pos_emb
         )
@@ -67,12 +68,14 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
 
     def relative_positional_encoding(self, qlen, klen, bsz=None, clamp_len=-1):
         """create relative positional encoding."""
-        freq_seq = ops.arange(0, self.hidden_dim, 2.0, dtype=self.compute_dtype)
+        freq_seq = ops.arange(0, self.hidden_dim, 2.0, dtype="float32")
+        freq_seq = ops.cast(freq_seq, self.compute_dtype)
         inv_freq = 1 / (10000 ** (freq_seq / self.hidden_dim))
 
         beg, end = klen, -qlen
 
-        fwd_pos_seq = ops.arange(beg, end, -1.0, dtype=self.compute_dtype)
+        fwd_pos_seq = ops.arange(beg, end, -1.0, dtype="float32")
+        fwd_pos_seq = ops.cast(fwd_pos_seq, self.compute_dtype)
         if clamp_len > 0:
             fwd_pos_seq = ops.clip(
                 fwd_pos_seq, x_min=-clamp_len, x_max=clamp_len
@@ -85,11 +88,14 @@ class ContentAndQueryEmbedding(keras.layers.Layer):
         self.word_embed = keras.layers.Embedding(
             input_dim=self.vocabulary_size,
             output_dim=self.hidden_dim,
+            dtype=self.dtype_policy,
             name="word_embedding",
         )
         self.word_embed.build(input_shape)
-        self.dropout_layer = keras.layers.Dropout(self.dropout)
-
+        self.dropout_layer = keras.layers.Dropout(
+            self.dropout,
+            dtype=self.dtype_policy,
+        )
         super().build(input_shape)
 
     def call(

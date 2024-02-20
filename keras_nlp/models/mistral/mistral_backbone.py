@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import copy
+
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
@@ -19,9 +21,11 @@ from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.mistral.mistral_layer_norm import (
     MistralLayerNormalization,
 )
+from keras_nlp.models.mistral.mistral_presets import backbone_presets
 from keras_nlp.models.mistral.mistral_transformer_decoder import (
     MistralTransformerDecoder,
 )
+from keras_nlp.utils.python_utils import classproperty
 
 
 def _mistral_kernel_initializer(stddev=0.02):
@@ -64,7 +68,10 @@ class MistralBackbone(Backbone):
             layers in each transformer decoder. Only `sliding_window` number of tokens
             are saved in the cache and used to generate the next token.
             Defaults to `512`.
-        dtype (str, optional): The dtype policy for the mistral model.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
 
     Examples:
 
@@ -107,19 +114,11 @@ class MistralBackbone(Backbone):
         layer_norm_epsilon=1e-6,
         sliding_window=512,
         dropout=0,
+        dtype=None,
         **kwargs,
     ):
-        # Get the dtype
-        dtype = kwargs.pop("dtype", keras.backend.floatx())
-
-        # Inputs
-        token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
-        padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
-
-        # Embed Tokens
-        token_embedding_layer = ReversibleEmbedding(
+        # === Layers ===
+        self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             tie_weights=False,
@@ -127,11 +126,9 @@ class MistralBackbone(Backbone):
             dtype=dtype,
             name="token_embedding",
         )
-        x = token_embedding_layer(token_ids)
-
-        # Apply successive transformer decoder blocks
+        self.transformer_layers = []
         for i in range(num_layers):
-            x = MistralTransformerDecoder(
+            layer = MistralTransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
@@ -144,25 +141,35 @@ class MistralBackbone(Backbone):
                 dropout=dropout,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
-            )(x, decoder_padding_mask=padding_mask)
-
-        sequence_output = MistralLayerNormalization(
-            name="sequence_output_layernorm",
+            )
+            self.transformer_layers.append(layer)
+        self.layer_norm = MistralLayerNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
-        )(x)
+            name="sequence_output_layernorm",
+        )
 
-        # Instantiate using Functional API Model constructor
+        # === Functional Model ===
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        x = self.token_embedding(token_id_input)
+        for transformer_layer in self.transformer_layers:
+            x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
+        sequence_output = self.layer_norm(x)
         super().__init__(
             inputs={
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask_input,
             },
             outputs=sequence_output,
             **kwargs,
         )
 
-        # All references to `self` below this line
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_query_heads = num_query_heads
@@ -174,7 +181,6 @@ class MistralBackbone(Backbone):
         self.sliding_window = sliding_window
         self.layer_norm_epsilon = layer_norm_epsilon
         self.dropout = dropout
-        self.token_embedding = token_embedding_layer
 
     def get_config(self):
         config = super().get_config()
@@ -194,3 +200,7 @@ class MistralBackbone(Backbone):
             }
         )
         return config
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)

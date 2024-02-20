@@ -157,30 +157,49 @@ class XLMRobertaClassifier(Task):
         dropout=0.0,
         **kwargs,
     ):
-        inputs = backbone.input
+        # === Layers ===
+        self.backbone = backbone
+        self.preprocessor = preprocessor
+        self.pooled_dropout = keras.layers.Dropout(
+            dropout,
+            dtype=backbone.dtype_policy,
+            name="pooled_dropout",
+        )
         hidden_dim = hidden_dim or backbone.hidden_dim
-
-        x = backbone(inputs)[:, backbone.start_token_index, :]
-        x = keras.layers.Dropout(dropout, name="pooled_dropout")(x)
-        x = keras.layers.Dense(
-            hidden_dim, activation="tanh", name="pooled_dense"
-        )(x)
-        x = keras.layers.Dropout(dropout, name="classifier_dropout")(x)
-        outputs = keras.layers.Dense(
+        self.pooled_dense = keras.layers.Dense(
+            hidden_dim,
+            activation="tanh",
+            dtype=backbone.dtype_policy,
+            name="pooled_dense",
+        )
+        self.output_dropout = keras.layers.Dropout(
+            dropout,
+            dtype=backbone.dtype_policy,
+            name="output_dropout",
+        )
+        self.output_dense = keras.layers.Dense(
             num_classes,
             kernel_initializer=roberta_kernel_initializer(),
             activation=activation,
+            dtype=backbone.dtype_policy,
             name="logits",
-        )(x)
+        )
 
+        # === Functional Model ===
+        inputs = backbone.input
+        x = backbone(inputs)[:, backbone.start_token_index, :]
+        x = self.pooled_dropout(x)
+        x = self.pooled_dense(x)
+        x = self.output_dropout(x)
+        outputs = self.output_dense(x)
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs=inputs,
             outputs=outputs,
-            include_preprocessing=preprocessor is not None,
             **kwargs,
         )
-        # All references to `self` below this line
+
+        # === Config ===
         self.backbone = backbone
         self.preprocessor = preprocessor
         self.num_classes = num_classes
@@ -188,6 +207,7 @@ class XLMRobertaClassifier(Task):
         self.hidden_dim = hidden_dim
         self.dropout = dropout
 
+        # === Default compilation ===
         logit_output = self.activation == keras.activations.linear
         self.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(
@@ -197,9 +217,6 @@ class XLMRobertaClassifier(Task):
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
             jit_compile=True,
         )
-
-    def preprocess_samples(self, x, y=None, sample_weight=None):
-        return self.preprocessor(x, y=y, sample_weight=sample_weight)
 
     def get_config(self):
         config = super().get_config()

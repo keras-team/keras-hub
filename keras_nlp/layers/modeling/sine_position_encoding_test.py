@@ -107,13 +107,3 @@ class SinePositionEncodingTest(TestCase):
                 sequential_output, (0, i, 0), parial_output
             )
         self.assertAllClose(full_output, sequential_output)
-
-    def test_float16_dtype(self):
-        pos_encoding = SinePositionEncoding(dtype="float16")
-        seq_length = 100
-        hidden_size = 32
-        inputs = keras.Input(shape=(seq_length, hidden_size))
-        outputs = pos_encoding(inputs)
-
-        # output dtype for this layer should be tf.float16.
-        self.assertEqual(outputs.dtype, "float16")

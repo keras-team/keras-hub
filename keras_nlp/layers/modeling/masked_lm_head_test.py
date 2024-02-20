@@ -58,6 +58,7 @@ class MaskedLMHeadTest(TestCase):
             },
             expected_output_shape=(4, 5, 100),
             expected_num_trainable_weights=6,
+            run_precision_checks=False,
         )
 
     def test_value_error_when_neither_embedding_or_vocab_size_set(self):

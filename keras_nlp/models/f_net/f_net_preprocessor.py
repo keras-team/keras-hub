@@ -129,9 +129,9 @@ class FNetPreprocessor(Preprocessor):
     ):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer
+        self.packer = None
         self.truncate = truncate
         self.sequence_length = sequence_length
-        self.packer = None
 
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
@@ -164,6 +164,17 @@ class FNetPreprocessor(Preprocessor):
             "segment_ids": segment_ids,
         }
         return pack_x_y_sample_weight(x, y, sample_weight)
+
+    @property
+    def sequence_length(self):
+        """The padded length of model input sequences."""
+        return self._sequence_length
+
+    @sequence_length.setter
+    def sequence_length(self, value):
+        self._sequence_length = value
+        if self.packer is not None:
+            self.packer.sequence_length = value
 
     @classproperty
     def tokenizer_cls(cls):

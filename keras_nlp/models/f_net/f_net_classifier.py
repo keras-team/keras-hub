@@ -109,29 +109,39 @@ class FNetClassifier(Task):
         dropout=0.1,
         **kwargs,
     ):
-        inputs = backbone.input
-        pooled = backbone(inputs)["pooled_output"]
-        pooled = keras.layers.Dropout(dropout)(pooled)
-        outputs = keras.layers.Dense(
+        # === Layers ===
+        self.backbone = backbone
+        self.preprocessor = preprocessor
+        self.output_dropout = keras.layers.Dropout(
+            dropout,
+            dtype=backbone.dtype_policy,
+            name="output_dropout",
+        )
+        self.output_dense = keras.layers.Dense(
             num_classes,
             kernel_initializer=f_net_kernel_initializer(),
             activation=activation,
+            dtype=backbone.dtype_policy,
             name="logits",
-        )(pooled)
-        # Instantiate using Functional API Model constructor
+        )
+
+        # === Functional Model ===
+        inputs = backbone.input
+        pooled = backbone(inputs)["pooled_output"]
+        pooled = self.output_dropout(pooled)
+        outputs = self.output_dense(pooled)
         super().__init__(
             inputs=inputs,
             outputs=outputs,
-            include_preprocessing=preprocessor is not None,
             **kwargs,
         )
-        # All references to `self` below this line
-        self.backbone = backbone
-        self.preprocessor = preprocessor
+
+        # === Config ===
         self.num_classes = num_classes
         self.activation = keras.activations.get(activation)
         self.dropout = dropout
 
+        # === Default compilation ===
         logit_output = self.activation == keras.activations.linear
         self.compile(
             loss=keras.losses.SparseCategoricalCrossentropy(

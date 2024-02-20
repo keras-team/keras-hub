@@ -58,7 +58,10 @@ class LlamaBackbone(Backbone):
             can consume. If `None`, `max_sequence_length` uses the value from
             sequence length. This determines the variable shape for positional
             embeddings.
-
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
     """
 
     def __init__(
@@ -73,28 +76,21 @@ class LlamaBackbone(Backbone):
         rope_max_wavelength=10000,
         layer_norm_epsilon=1e-5,
         max_sequence_length=4096,
+        dtype=None,
         **kwargs,
     ):
-        # Inputs
-        token_ids = keras.Input(shape=(None,), dtype="int32", name="token_ids")
-        padding_mask = keras.Input(
-            shape=(None,), dtype="int32", name="padding_mask"
-        )
-
-        # Embed tokens
-        token_embedding = ReversibleEmbedding(
+        # === Layers ===
+        self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=_llama_kernel_initializer(stddev=0.01),
             tie_weights=False,
+            dtype=dtype,
             name="token_embedding",
-        )(token_ids)
-
-        x = token_embedding
-
-        # Apply successive transformer decoder blocks.
+        )
+        self.transformer_layers = []
         for i in range(num_layers):
-            x = LlamaDecoder(
+            layer = LlamaDecoder(
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
@@ -104,24 +100,37 @@ class LlamaBackbone(Backbone):
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
                 kernel_initializer=_llama_kernel_initializer(stddev=0.02),
+                dtype=dtype,
                 name=f"transformer_layer_{i}",
-            )(x, decoder_padding_mask=padding_mask)
-
-        sequence_output = LlamaLayerNorm(
-            name="layer_norm",
+            )
+            self.transformer_layers.append(layer)
+        self.layer_norm = LlamaLayerNorm(
+            dtype=dtype,
             epsilon=layer_norm_epsilon,
-        )(x)
+            name="layer_norm",
+        )
 
-        # Instantiate using Functional API Model constructor
+        # === Functional Model ===
+        token_id_input = keras.Input(
+            shape=(None,), dtype="int32", name="token_ids"
+        )
+        padding_mask_input = keras.Input(
+            shape=(None,), dtype="int32", name="padding_mask"
+        )
+        x = self.token_embedding(token_id_input)
+        for transformer_layer in self.transformer_layers:
+            x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
+        sequence_output = self.layer_norm(x)
         super().__init__(
             inputs={
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
+                "token_ids": token_id_input,
+                "padding_mask": padding_mask_input,
             },
             outputs=sequence_output,
             **kwargs,
         )
-        # All references to `self` below this line
+
+        # === Config ===
         self.vocabulary_size = vocabulary_size
         self.num_layers = num_layers
         self.num_query_heads = num_query_heads
@@ -150,7 +159,3 @@ class LlamaBackbone(Backbone):
             }
         )
         return config
-
-    @property
-    def token_embedding(self):
-        return self.get_layer("token_embedding")
