@@ -80,7 +80,6 @@ class DistilBertTokenizer(WordPieceTokenizer):
         self.sep_token = "[SEP]"
         self.pad_token = "[PAD]"
         self.mask_token = "[MASK]"
-        self.unk_token = "[UNK]"
         super().__init__(
             vocabulary=vocabulary,
             lowercase=lowercase,
@@ -89,7 +88,6 @@ class DistilBertTokenizer(WordPieceTokenizer):
                 self.sep_token,
                 self.pad_token,
                 self.mask_token,
-                self.unk_token,
             ],
             **kwargs,
         )
@@ -104,7 +102,6 @@ class DistilBertTokenizer(WordPieceTokenizer):
                 self.pad_token,
                 self.sep_token,
                 self.mask_token,
-                self.unk_token,
             ]:
                 if token not in self.vocabulary:
                     raise ValueError(
