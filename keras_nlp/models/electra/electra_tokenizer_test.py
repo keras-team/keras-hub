@@ -37,7 +37,7 @@ class ElectraTokenizerTest(TestCase):
         output = tokenizer(self.input_data)
         self.assertAllEqual(output, [[9, 10, 11, 12], [9, 12]])
 
-    def test_tokenizer_unsplittable_tokens(self):
+    def test_tokenizer_special_tokens(self):
         input_data = ["[CLS] THE [MASK] FOX [SEP] [PAD]"]
         tokenizer = ElectraTokenizer(**self.init_kwargs)
         output_data = tokenizer(input_data)

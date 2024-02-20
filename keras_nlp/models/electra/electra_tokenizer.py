@@ -70,7 +70,7 @@ class ElectraTokenizer(WordPieceTokenizer):
         super().__init__(
             vocabulary=vocabulary,
             lowercase=lowercase,
-            unsplittable_tokens=[
+            special_tokens=[
                 self.cls_token,
                 self.sep_token,
                 self.pad_token,
@@ -110,7 +110,7 @@ class ElectraTokenizer(WordPieceTokenizer):
     def get_config(self):
         config = super().get_config()
         # In the constructor, we pass the list of special tokens to the
-        # `unsplittable_tokens` arg of the superclass' constructor. Hence, we
+        # `special_tokens` arg of the superclass' constructor. Hence, we
         # delete it from the config here.
-        del config["unsplittable_tokens"]
+        del config["special_tokens"]
         return config

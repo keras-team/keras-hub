@@ -102,10 +102,10 @@ WHITESPACE_PUNCTUATION_AND_CJK_REGEX = r"|".join(
 )
 
 
-def get_unsplittable_tokens_pattern(unsplittable_tokens):
-    if unsplittable_tokens is None or len(unsplittable_tokens) == 0:
+def get_special_tokens_pattern(special_tokens):
+    if special_tokens is None or len(special_tokens) == 0:
         return None
-    return r"|".join([re.escape(token) for token in unsplittable_tokens])
+    return r"|".join([re.escape(token) for token in special_tokens])
 
 
 def pretokenize(
@@ -114,7 +114,7 @@ def pretokenize(
     strip_accents=True,
     split=True,
     split_on_cjk=True,
-    unsplittable_tokens_pattern=None,
+    special_tokens_pattern=None,
 ):
     """Helper function that takes in a dataset element and pretokenizes it.
 
@@ -134,8 +134,8 @@ def pretokenize(
             characters (https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)).
             Note that this is applicable only when `split` is `True`. Defaults
             to `True`.
-        unsplittable_tokens_pattern: str. A regex pattern that contain the
-            unsplittable tokens that will never be split during the word-level
+        special_tokens_pattern: str. A regex pattern that contain the
+            special tokens that will never be split during the word-level
             splitting applied before the word-peice encoding. This can be used
             to ensure special tokens map to unique indices in the vocabulary,
             even if these special tokens contain splittable characters such as
@@ -164,29 +164,29 @@ def pretokenize(
         text = tf.strings.regex_replace(text, r"\p{Mn}", "")
     if split:
         if split_on_cjk:
-            if unsplittable_tokens_pattern is not None:
+            if special_tokens_pattern is not None:
                 split_pattern = r"|".join(
                     [
-                        unsplittable_tokens_pattern,
+                        special_tokens_pattern,
                         WHITESPACE_PUNCTUATION_AND_CJK_REGEX,
                     ]
                 )
                 keep_split_pattern = r"|".join(
-                    [unsplittable_tokens_pattern, PUNCTUATION_AND_CJK_REGEX]
+                    [special_tokens_pattern, PUNCTUATION_AND_CJK_REGEX]
                 )
             else:
                 split_pattern = WHITESPACE_PUNCTUATION_AND_CJK_REGEX
                 keep_split_pattern = PUNCTUATION_AND_CJK_REGEX
         else:
-            if unsplittable_tokens_pattern is not None:
+            if special_tokens_pattern is not None:
                 split_pattern = r"|".join(
                     [
-                        unsplittable_tokens_pattern,
+                        special_tokens_pattern,
                         WHITESPACE_AND_PUNCTUATION_REGEX,
                     ]
                 )
                 keep_split_pattern = r"|".join(
-                    [unsplittable_tokens_pattern, PUNCTUATION_REGEX]
+                    [special_tokens_pattern, PUNCTUATION_REGEX]
                 )
             else:
                 split_pattern = WHITESPACE_AND_PUNCTUATION_REGEX
@@ -262,7 +262,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         oov_token: str. The string value to substitute for
             an unknown token. It must be included in the vocab.
             Defaults to `"[UNK]"`.
-        unsplittable_tokens: list. A list of strings that will
+        special_tokens: list. A list of strings that will
             never be split during the word-level splitting applied before the
             word-peice encoding. This can be used to ensure special tokens map
             to unique indices in the vocabulary, even if these special tokens
@@ -346,7 +346,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         split_on_cjk: bool = True,
         suffix_indicator: str = "##",
         oov_token: str = "[UNK]",
-        unsplittable_tokens: List[str] = None,
+        special_tokens: List[str] = None,
         dtype="int32",
         **kwargs,
     ) -> None:
@@ -369,19 +369,19 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.split_on_cjk = split_on_cjk
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
-        self.unsplittable_tokens = unsplittable_tokens
-        self._unsplittable_tokens_pattern = None
+        self.special_tokens = special_tokens
+        self._special_tokens_pattern = None
         if self.split:
-            # Get the pattern of unsplittable tokens.
-            # the idea here is to pass the unsplittable tokens regex to the
+            # Get the pattern of special tokens.
+            # the idea here is to pass the special tokens regex to the
             # split function as delimiter regex pattern, so the input will
             # be splitted by them, but also the function will treat each on
             # of them as one entity that shouldn't be splitted even if they
             # have other delimiter regex pattern inside them. then pass the
-            # unsplittable tokens regex also as keep delimiter regex
+            # special tokens regex also as keep delimiter regex
             # pattern, so they will not be removed.
-            self._unsplittable_tokens_pattern = get_unsplittable_tokens_pattern(
-                self.unsplittable_tokens
+            self._special_tokens_pattern = get_special_tokens_pattern(
+                self.special_tokens
             )
         self.set_vocabulary(vocabulary)
 
@@ -471,7 +471,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "split": self.split,
                 "suffix_indicator": self.suffix_indicator,
                 "oov_token": self.oov_token,
-                "unsplittable_tokens": self.unsplittable_tokens,
+                "special_tokens": self.special_tokens,
             }
         )
         return config
@@ -495,7 +495,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             self.strip_accents,
             self.split,
             self.split_on_cjk,
-            self._unsplittable_tokens_pattern,
+            self._special_tokens_pattern,
         )
 
         # Apply WordPiece and coerce shape for outputs.
