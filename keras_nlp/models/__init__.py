@@ -75,6 +75,13 @@ from keras_nlp.models.f_net.f_net_masked_lm_preprocessor import (
 )
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
+from keras_nlp.models.gemma.gemma_backbone import GemmaBackbone
+from keras_nlp.models.gemma.gemma_causal_lm import GemmaCausalLM
+from keras_nlp.models.gemma.gemma_causal_lm_preprocessor import (
+    GemmaCausalLMPreprocessor,
+)
+from keras_nlp.models.gemma.gemma_preprocessor import GemmaPreprocessor
+from keras_nlp.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (

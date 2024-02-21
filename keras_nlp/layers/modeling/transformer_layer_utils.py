@@ -55,9 +55,12 @@ def compute_causal_mask(batch_size, input_length, output_length, cache_index=0):
         `(batch_size, output_length, input_length)` that can be passed to a
         attention layer.
     """
-    i = ops.expand_dims(ops.arange(output_length), axis=1) + cache_index
-    j = ops.arange(input_length)
-    mask = ops.expand_dims(ops.cast(i >= j, dtype="int32"), axis=0)
+    i = ops.arange(output_length, dtype="float32")
+    i = i + ops.cast(cache_index, "float32")
+    i = ops.expand_dims(i, axis=1)
+    j = ops.arange(input_length, dtype="float32")
+    mask = ops.expand_dims(i >= j, axis=0)
+
     return ops.broadcast_to(mask, (batch_size, output_length, input_length))
 
 
