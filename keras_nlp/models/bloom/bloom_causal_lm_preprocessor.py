@@ -148,7 +148,7 @@ class BloomCausalLMPreprocessor(BloomPreprocessor):
         x = convert_inputs_to_list_of_tensor_segments(x)[0]
         x = self.tokenizer(x)
         token_ids, padding_mask = self.packer(
-            x, sequence_length=sequence_length, add_end_value=False
+            x, sequence_length=sequence_length, add_start_value=False ,add_end_value=False
         )
         return {
             "token_ids": token_ids,
