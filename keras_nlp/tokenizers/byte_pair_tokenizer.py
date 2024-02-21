@@ -129,7 +129,7 @@ def split_strings_for_bpe(inputs, unsplittable_tokens_pattern=None):
         # applying this split directly, because otherwise we will not split
         # unsplittable tokens from inputs properly, because of this pattern
         # ` ?[^\s\p{L}\p{N}{special_spaces}]+`.
-        # e.g., [" <s>"] will  be [" <s>"] instead of [" ", "<s>"]
+        # e.g., [" </s>"] will  be [" </", "s", ">"] instead of [" ", "</s>"]
         raw_tokens = tf_text.regex_split(
             raw_tokens,
             split_pattern_1_with_unsplittable_tokens,
