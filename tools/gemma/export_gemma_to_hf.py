@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+import contextlib
 import os
 
 import torch
@@ -116,6 +116,19 @@ flags.DEFINE_string(
     "A path containing the vocabulary (must be a `.spm` file or equivalent). "
     "If not passed, the vocabulary of the preset will be used.",
 )
+flags.DEFINE_string(
+    "dtype",
+    "float32",
+    "Set the precision of the converted checkpoint. Must be a valid PyTorch dtype.",
+)
+
+
+@contextlib.contextmanager
+def _set_default_tensor_type(dtype: torch.dtype):
+    """Sets the default torch dtype to the given dtype."""
+    torch.set_default_dtype(dtype)
+    yield
+    torch.set_default_dtype(torch.float)
 
 
 def convert_checkpoints(preset, weights_file, size, output_dir, vocab_path):
@@ -310,17 +323,25 @@ def flag_error_handler():
                 "Invalid `size`. Please pass the appropriate size (`2b` or `7b`) "
                 "for your model to the `--size` flag."
             )
+    if FLAGS.dtype:
+        dtype = getattr(torch, FLAGS.dtype)
+        if not isinstance(dtype, torch.dtype):
+            raise ValueError(
+                "Invalid `dtype`. Please pass a valid PyTorch data type (e.g. "
+                "`float32', 'float16`, etc.) to the `--dtype` flag."
+            )
 
 
 def main(_):
     flag_error_handler()
-    convert_checkpoints(
-        FLAGS.preset,
-        FLAGS.weights_file,
-        FLAGS.size,
-        FLAGS.output_dir,
-        FLAGS.vocab_path,
-    )
+    with _set_default_tensor_type(getattr(torch, FLAGS.dtype)):
+        convert_checkpoints(
+            FLAGS.preset,
+            FLAGS.weights_file,
+            FLAGS.size,
+            FLAGS.output_dir,
+            FLAGS.vocab_path,
+        )
 
 
 if __name__ == "__main__":
