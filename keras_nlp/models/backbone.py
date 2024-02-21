@@ -152,3 +152,80 @@ class Backbone(keras.Model):
                 example_preset_name=next(iter(cls.presets), ""),
                 preset_names='", "'.join(cls.presets),
             )(cls.from_preset.__func__)
+
+    def enable_lora(self, rank):
+        """Enable Lora on the backbone.
+
+        Calling this method will freeze all weights on the backbone,
+        while enabling Lora on the query & value `EinsumDense` layers
+        of the attention layers.
+        """
+        target_names = ["query_dense", "value_dense", "query", "value"]
+        self.trainable = True
+        self._lora_enabled_layers = []
+        self._lora_rank = rank
+        for layer in self._flatten_layers(include_self=False):
+            layer.trainable = False
+        all_layers = self._flatten_layers(include_self=False)
+        all_layers = [lyr for lyr in all_layers if lyr.weights]
+        for i, layer in enumerate(all_layers):
+            for name in target_names:
+                if layer.name == name:
+                    if hasattr(layer, "enable_lora"):
+                        layer.trainable = True
+                        layer.enable_lora(rank)
+                        self._lora_enabled_layers.append(i)
+
+    def save_lora_weights(self, filepath):
+        if not getattr(self, "_lora_enabled_layers", []):
+            raise ValueError(
+                "There are no lora-enabled layers in this model. "
+                "Make sure to call `.enable_lora(rank)` first."
+            )
+        if not str(filepath).endswith(".lora.h5"):
+            raise ValueError(
+                "The filename must end in `.lora.h5`. "
+                f"Received: filepath={filepath}"
+            )
+
+        store = keras.src.saving.saving_lib.H5IOStore(filepath, mode="w")
+        lora_store = store.make("lora")
+        lora_store["rank"] = self._lora_rank
+        # We cannot identify layers by name since names are non-unique,
+        # so we identify them by index in the topologically sorted list
+        # of layers that have weights.
+        all_layers = self._flatten_layers(include_self=False)
+        all_layers = [lyr for lyr in all_layers if lyr.weights]
+        for layer_index in self._lora_enabled_layers:
+            # We only lora the einsumdense layers,
+            # so the factored weights are always named `kernel`
+            layer = all_layers[layer_index]
+            inner_store = store.make(f"lora/{layer_index}")
+            inner_store["lora_kernel_a"] = layer.lora_kernel_a
+            inner_store["lora_kernel_b"] = layer.lora_kernel_b
+        store.close()
+
+    def load_lora_weights(self, filepath):
+        store = keras.src.saving.saving_lib.H5IOStore(filepath, mode="r")
+        lora_store = store.get("lora")
+        rank = int(lora_store["rank"][()])
+
+        if not getattr(self, "_lora_enabled_layers", []):
+            self.enable_lora(rank)
+        else:
+            if self._lora_rank != rank:
+                raise ValueError(
+                    f"The Lora rank expected by file '{filepath}' "
+                    f"is rank={rank}, but the model was called with "
+                    f"`.enable_lora(rank={self._lora_rank})`. "
+                    "Both ranks must match."
+                )
+        all_layers = self._flatten_layers(include_self=False)
+        all_layers = [lyr for lyr in all_layers if lyr.weights]
+        for layer_index in self._lora_enabled_layers:
+            layer = all_layers[layer_index]
+            lora_kernel_a = store.get(f"lora/{layer_index}")["lora_kernel_a"]
+            lora_kernel_b = store.get(f"lora/{layer_index}")["lora_kernel_b"]
+            layer.lora_kernel_a.assign(lora_kernel_a)
+            layer.lora_kernel_b.assign(lora_kernel_b)
+        store.close()

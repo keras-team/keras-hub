@@ -92,6 +92,7 @@ class Sampler:
         mask=None,
         end_token_id=None,
         hidden_states=None,
+        model=None,
     ):
         max_length = ops.shape(prompt)[-1]
         # Make sure `max_length` and `index` are the same dtype.
@@ -133,6 +134,7 @@ class Sampler:
             body,
             loop_vars=(prompt, cache, index),
             maximum_iterations=(max_length - index),
+            model=model,
         )
         return prompt
 
@@ -147,32 +149,68 @@ class Sampler:
         probs = keras.activations.softmax(logits / self.temperature)
         return ops.cast(probs, logits_dtype)
 
-    def run_loop(self, cond, body, loop_vars=None, maximum_iterations=None):
+    def run_loop(
+        self, cond, body, model=None, loop_vars=None, maximum_iterations=None
+    ):
         """Run ops.while_loops with a `StatelessScope` if necessary."""
         if config.backend() == "jax":
+            import itertools
 
-            def stateless_cond(variables, *loop_vars):
+            if model:
+                model_trainable_variables = model.trainable_variables
+                model_non_trainable_variables = model.non_trainable_variables
+            else:
+                model_trainable_variables = []
+                model_non_trainable_variables = []
+
+            def stateless_cond(state, *loop_vars):
                 return cond(*loop_vars)
 
-            def stateless_body(variables, *loop_vars):
-                mapping = zip(self.variables, variables)
+            def stateless_body(state, *loop_vars):
+                (
+                    sampler_variables,
+                    trainable_variables,
+                    non_trainable_variables,
+                ) = state
+                mapping = itertools.chain(
+                    zip(self.variables, sampler_variables),
+                    zip(model_trainable_variables, trainable_variables),
+                    zip(model_non_trainable_variables, non_trainable_variables),
+                )
                 with keras.StatelessScope(state_mapping=mapping) as scope:
                     loop_vars = body(*loop_vars)
 
-                variables = []
+                sampler_variables = []
                 for v in self.variables:
                     new_v = scope.get_current_value(v)
-                    variables.append(new_v if new_v is not None else v)
-                return variables, *loop_vars
+                    sampler_variables.append(new_v if new_v is not None else v)
+                state = (
+                    sampler_variables,
+                    trainable_variables,
+                    non_trainable_variables,
+                )
+                return state, *loop_vars
 
             variables = [ops.convert_to_tensor(v) for v in self.variables]
-            variables, *loop_vars = ops.while_loop(
+            trainable_variables = [
+                ops.convert_to_tensor(v) for v in model_trainable_variables
+            ]
+            non_trainable_variables = [
+                ops.convert_to_tensor(v) for v in model_non_trainable_variables
+            ]
+            state = (
+                variables,
+                trainable_variables,
+                non_trainable_variables,
+            )
+            state, *loop_vars = ops.while_loop(
                 cond=stateless_cond,
                 body=stateless_body,
-                loop_vars=(variables, *loop_vars),
+                loop_vars=(state, *loop_vars),
                 maximum_iterations=maximum_iterations,
             )
-            [ref_v.assign(v) for ref_v, v in zip(self.variables, variables)]
+            for ref_v, v in zip(self.variables, state[0]):
+                ref_v.assign(v)
         else:
             loop_vars = ops.while_loop(
                 cond=cond,

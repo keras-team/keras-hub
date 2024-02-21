@@ -253,6 +253,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     def detokenize(self, inputs):
         self._check_vocabulary()
         inputs, unbatched, _ = convert_to_ragged_batch(inputs)
+        # tf-text sentencepiece does not handle int64.
+        inputs = tf.cast(inputs, "int32")
         outputs = self._sentence_piece.detokenize(inputs)
         if unbatched:
             outputs = tf.squeeze(outputs, 0)

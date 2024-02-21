@@ -73,6 +73,7 @@ class ContrastiveSampler(Sampler):
         mask=None,
         end_token_id=None,
         hidden_states=None,
+        model=None,
     ):
         if hidden_states is None:
             raise ValueError(
@@ -209,6 +210,7 @@ class ContrastiveSampler(Sampler):
             body=body,
             loop_vars=(prompt, cache, index, logits, hidden_states),
             maximum_iterations=(max_length - index),
+            model=model,
         )
         return prompt
 

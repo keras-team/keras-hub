@@ -72,6 +72,7 @@ class BeamSampler(Sampler):
         mask=None,
         end_token_id=None,
         hidden_states=None,
+        model=None,
     ):
         batch_size, max_length = ops.shape(prompt)[0], ops.shape(prompt)[1]
         index = ops.cast(index, "int32")
@@ -167,6 +168,7 @@ class BeamSampler(Sampler):
             body=body,
             loop_vars=(prompt, cache, index, log_probs),
             maximum_iterations=(max_length - index),
+            model=model,
         )
 
         all_prompts = unflatten_beams(prompt)

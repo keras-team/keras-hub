@@ -16,6 +16,7 @@ import datetime
 import json
 import os
 
+from keras_nlp.backend import config as backend_config
 from keras_nlp.backend import keras
 
 try:
@@ -180,6 +181,13 @@ def load_from_preset(
     # Optionally load weights.
     load_weights = load_weights and config["weights"]
     if load_weights:
+        # For jax, delete all previous allocated memory to avoid temporarily
+        # duplicating variable allocations. torch and tensorflow have stateful
+        # variable types and do not need this fix.
+        if backend_config.backend() == "jax":
+            for weight in layer.weights:
+                if getattr(weight, "_value", None) is not None:
+                    weight._value.delete()
         weights_path = get_file(preset, config["weights"])
         layer.load_weights(weights_path)
 
