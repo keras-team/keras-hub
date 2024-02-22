@@ -300,7 +300,7 @@ def main(_):
     print("-> Saved the model weights in float16")
 
     # === Save the model config ===
-    keras_nlp_config["dtype"] = "bfloat16"
+    keras_nlp_config.pop("dtype")  # We don't want a default dtype
     model_config = {
         "module": "keras_nlp.src.models.mistral.mistral_backbone",
         "class_name": "MistralBackbone",
@@ -316,7 +316,7 @@ def main(_):
 
     # === Save the tokenizer config ===
     tokenizer_config = {
-        "module": "keras_nlp.src.models.mistral.Mistral_tokenizer",
+        "module": "keras_nlp.src.models.mistral.mistral_tokenizer",
         "class_name": "MistralTokenizer",
         "config": {
             "name": "mistral_tokenizer",
