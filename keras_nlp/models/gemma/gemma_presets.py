@@ -25,7 +25,7 @@ backbone_presets = {
             "path": "gemma",
             "model_card": "https://www.kaggle.com/models/google/gemma",
         },
-        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_2b_en/1",
+        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_2b_en/2",
     },
     "gemma_instruct_2b_en": {
         "metadata": {
@@ -37,7 +37,7 @@ backbone_presets = {
             "path": "gemma",
             "model_card": "https://www.kaggle.com/models/google/gemma",
         },
-        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_instruct_2b_en/1",
+        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_instruct_2b_en/2",
     },
     "gemma_7b_en": {
         "metadata": {
@@ -49,7 +49,7 @@ backbone_presets = {
             "path": "gemma",
             "model_card": "https://www.kaggle.com/models/google/gemma",
         },
-        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_7b_en/1",
+        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_7b_en/2",
     },
     "gemma_instruct_7b_en": {
         "metadata": {
@@ -61,6 +61,6 @@ backbone_presets = {
             "path": "gemma",
             "model_card": "https://www.kaggle.com/models/google/gemma",
         },
-        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_instruct_7b_en/1",
+        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_instruct_7b_en/2",
     },
 }
