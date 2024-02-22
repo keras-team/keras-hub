@@ -190,6 +190,7 @@ class MistralCausalLM(GenerativeTask):
             mask=padding_mask,
             end_token_id=end_token_id,
             hidden_states=hidden_states,
+            model=self,
         )
 
         # Compute an output padding mask with the token ids we updated.
