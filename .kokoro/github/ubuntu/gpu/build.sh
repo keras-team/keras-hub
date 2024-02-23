@@ -1,7 +1,8 @@
+set -e
+
 export KAGGLE_USERNAME="$(cat ${KOKORO_KEYSTORE_DIR}/73361_keras_kaggle_username)"
 export KAGGLE_KEY="$(cat ${KOKORO_KEYSTORE_DIR}/73361_keras_kaggle_secret_key)"
 
-set -e
 set -x
 
 cd "${KOKORO_ROOT}/"
