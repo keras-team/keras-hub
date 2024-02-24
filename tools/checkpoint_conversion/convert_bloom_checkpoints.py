@@ -46,8 +46,9 @@ PRESET_MAP = {
     "bloomz_3b_multi": "bigscience/bloomz-3b",
     "bloomz_7b_multi": "bigscience/bloomz-7b1",
     "bloomz_multi": "bigscience/bloomz",
-    # Multitask finetuned on P3 (Public Pool of Prompts) https://huggingface.co/datasets/Muennighoff/P3
-    # xP3mt is Mixture of 13 training tasks in 46 languages with prompts in 20 
+    # Multitask finetuned on xP3mt
+    # (Crosslingual Public Pool of Prompts machine-translated) https://huggingface.co/datasets/bigscience/xP3
+    # xP3mt is Mixture of 13 training tasks in 46 languages with prompts in 20
     # languages (machine-translated from English)
     "bloomz_7b_mt": "bigscience/bloomz-7b1-mt",
     "bloomz_mt": "bigscience/bloomz-mt",
