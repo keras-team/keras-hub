@@ -28,18 +28,6 @@ from keras_nlp.models.bloom.bloom_tokenizer import BloomTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
-@contextlib.contextmanager
-def _set_keras_default_dtype(dtype):
-    original_floatx = keras.config.floatx()
-    keras.config.set_floatx(dtype)
-    try:
-        yield
-    finally:
-        # Restore floatx to the original value to prevent impact on other
-        # tests even if there is an exception.
-        keras.config.set_floatx(original_floatx)
-
-
 class BloomCausalLMTest(TestCase):
     def setUp(self):
         self.vocab = ["<unk>", "<s>", "</s>", "<pad>"]
@@ -104,7 +92,20 @@ class BloomCausalLMTest(TestCase):
             prompt_ids["padding_mask"][:, :4],
         )
 
+    @pytest.mark.keras_3_only
     def test_generate_with_bfloat16(self):
+
+        @contextlib.contextmanager
+        def _set_keras_default_dtype(dtype):
+            original_floatx = keras.config.floatx()
+            keras.config.set_floatx(dtype)
+            try:
+                yield
+            finally:
+                # Restore floatx to the original value to prevent impact on other
+                # tests even if there is an exception.
+                keras.config.set_floatx(original_floatx)
+
         with _set_keras_default_dtype("float16"):
             causal_lm = BloomCausalLM(**self.init_kwargs)
             # String input.
