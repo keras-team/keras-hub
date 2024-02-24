@@ -105,7 +105,6 @@ class BloomBackbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=_bloom_kernel_initializer(stddev=0.02),
-            tie_weights=False,
             dtype=dtype,
             name="token_embedding",
         )
