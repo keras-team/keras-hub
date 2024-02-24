@@ -36,7 +36,7 @@ from keras_nlp.models.bert.bert_masked_lm_preprocessor import (
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.models.bloom.bloom_backbone import BloomBackbone
-from keras_nlp.models.bloom.bloom_causal_lm import BloomCausalLm
+from keras_nlp.models.bloom.bloom_causal_lm import BloomCausalLM
 from keras_nlp.models.bloom.bloom_causal_lm_preprocessor import (
     BloomCausalLMPreprocessor,
 )
