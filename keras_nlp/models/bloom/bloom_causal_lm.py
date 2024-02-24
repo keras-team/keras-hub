@@ -26,15 +26,15 @@ from keras_nlp.models.generative_task import GenerativeTask
 from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.models.BloomCausalLm")
-class BloomCausalLm(GenerativeTask):
-    """An end-to-end Gemma model for causal language modeling.
+@keras_nlp_export("keras_nlp.models.BloomCausalLM")
+class BloomCausalLM(GenerativeTask):
+    """An end-to-end BLOOM model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous
     tokens. This task setup can be used to train the model unsupervised on
     plain text input, or to autoregressively generate plain text similar to
     the data used for training. This task can be used for pre-training or
-    fine-tuning a Gemma model, simply by calling `fit()`.
+    fine-tuning a BLOOM model, simply by calling `fit()`.
 
     This model has a `generate()` method, which generates text based on a
     prompt. The generation strategy used is controlled by an additional
@@ -48,8 +48,8 @@ class BloomCausalLm(GenerativeTask):
     when creating the model with `from_preset()`.
 
     Args:
-        backbone: A `keras_nlp.models.GemmaBackbone` instance.
-        preprocessor: A `keras_nlp.models.GemmaCausalLMPreprocessor` or `None`.
+        backbone: A `keras_nlp.models.BloomBackbone` instance.
+        preprocessor: A `keras_nlp.models.BloomCausalLMPreprocessor` or `None`.
             If `None`, this model will not apply preprocessing, and inputs
             should be preprocessed before calling the model.
 
@@ -57,44 +57,44 @@ class BloomCausalLm(GenerativeTask):
 
     Use `generate()` to do text generation.
     ```python
-    gemma_lm = keras_nlp.models.GemmaCausalLM.from_preset("gemma_2b_en")
-    gemma_lm.generate("I want to say", max_length=30)
+    bloom_lm = keras_nlp.models.BloomCausalLM.from_preset("bloom_560m_multi")
+    bloom_lm.generate("I want to say", max_length=30)
 
     # Generate with batched prompts.
-    gemma_lm.generate(["This is a", "Where are you"], max_length=30)
+    bloom_lm.generate(["This is a", "Where are you"], max_length=30)
     ```
 
     Compile the `generate()` function with a custom sampler.
     ```python
-    gemma_lm = keras_nlp.models.GemmaCausalLM.from_preset("gemma_2b_en")
-    gemma_lm.compile(sampler="top_k")
-    gemma_lm.generate("I want to say", max_length=30)
+    bloom_lm = keras_nlp.models.BloomCausalLM.from_preset("bloom_560m_multi")
+    bloom_lm.compile(sampler="top_k")
+    bloom_lm.generate("I want to say", max_length=30)
 
-    gemma_lm.compile(sampler=keras_nlp.samplers.BeamSampler(num_beams=2))
-    gemma_lm.generate("I want to say", max_length=30)
+    bloom_lm.compile(sampler=keras_nlp.samplers.BeamSampler(num_beams=2))
+    bloom_lm.generate("I want to say", max_length=30)
     ```
 
     Use `generate()` without preprocessing.
     ```python
     prompt = {
-        # Token ids for "<bos> Keras is".
-        "token_ids": np.array([[2, 214064, 603, 0, 0, 0, 0]] * 2),
+        # Token ids for "<s> Keras is".
+        "token_ids": np.array([[1, 46, 15762, 632, 3, 3, 3, 3, 3]] * 2),
         # Use `"padding_mask"` to indicate values that should not be overridden.
-        "padding_mask": np.array([[1, 1, 1, 0, 0, 0, 0]] * 2),
+        "padding_mask": np.array([[1, 1, 1, 1, 0, 0, 0, 0, 0]] * 2),
     }
 
-    gemma_lm = keras_nlp.models.GemmaCausalLM.from_preset(
-        "gemma_2b_en",
+    bloom_lm = keras_nlp.models.BloomCausalLM.from_preset(
+        "/home/mohamed/Mohamed/projects/bloom_560m_multi",
         preprocessor=None,
     )
-    gemma_lm.generate(prompt)
+    bloom_lm.generate(prompt)
     ```
 
     Call `fit()` on a single batch.
     ```python
     features = ["The quick brown fox jumped.", "I forgot my homework."]
-    gemma_lm = keras_nlp.models.GemmaCausalLM.from_preset("gemma_2b_en")
-    gemma_lm.fit(x=features, batch_size=2)
+    bloom_lm = keras_nlp.models.BloomCausalLM.from_preset("bloom_560m_multi")
+    bloom_lm.fit(x=features, batch_size=2)
     ```
 
     Call `fit()` without preprocessing.
@@ -107,35 +107,43 @@ class BloomCausalLm(GenerativeTask):
     y = np.array([[214064, 603, 5271, 6044, 9581, 3, 0, 0]] * 2)
     sw = np.array([[1, 1, 1, 1, 1, 1, 0, 0]] * 2)
 
-    gemma_lm = keras_nlp.models.GemmaCausalLM.from_preset(
-        "gemma_2b_en",
+    bloom_lm = keras_nlp.models.BloomCausalLM.from_preset(
+        "bloom_560m_multi",
         preprocessor=None,
     )
-    gemma_lm.fit(x=x, y=y, sample_weight=sw, batch_size=2)
+    bloom_lm.fit(x=x, y=y, sample_weight=sw, batch_size=2)
     ```
 
     Custom backbone and vocabulary.
     ```python
-    tokenizer = keras_nlp.models.GemmaTokenizer(
-        proto="proto.spm",
-    )
-    preprocessor = keras_nlp.models.GemmaCausalLMPreprocessor(
+    features = [
+        " airplane at airport",
+        " airplane airport",
+    ]
+    vocab = ["<unk>", "<s>", "</s>", "<pad>"]
+    vocab += ["!", "air", "Ġair", "plane", "Ġat", "port"]
+    vocab = dict([(token, i) for i, token in enumerate(vocab)])
+    merges = ["Ġ a", "Ġ t", "Ġ i", "Ġ b", "a i", "p l", "n e"]
+    merges += ["Ġa t", "p o", "r t", "Ġt h", "ai r", "pl a", "po rt"]
+    merges += ["Ġai r", "Ġa i", "pla ne"]
+    tokenizer = keras_nlp.models.BloomTokenizer(vocabulary=vocab, merges=merges)
+    preprocessor = keras_nlp.models.BloomCausalLMPreprocessor(
         tokenizer=tokenizer,
         sequence_length=128,
     )
-    backbone = keras_nlp.models.GemmaBackbone(
-        vocabulary_size=30552,
+    backbone = keras_nlp.models.BloomBackbone(
+        vocabulary_size=tokenizer.vocabulary_size(),
         num_layers=4,
         num_heads=4,
         hidden_dim=256,
         intermediate_dim=512,
         max_sequence_length=128,
     )
-    gemma_lm = keras_nlp.models.GemmaCausalLM(
+    bloom_lm = keras_nlp.models.BloomCausalLM(
         backbone=backbone,
         preprocessor=preprocessor,
     )
-    gemma_lm.fit(x=features, batch_size=2)
+    bloom_lm.fit(x=features, batch_size=2)
     ```
     """
 
@@ -186,7 +194,7 @@ class BloomCausalLm(GenerativeTask):
         cache,
         cache_update_index,
     ):
-        """Forward pass of `GemmaCausalLM` with cache.
+        """Forward pass of `BloomCausalLM` with cache.
 
         `call_with_cache` adds an additional forward pass for the model for
         autoregressive inference. Unlike calling the model directly, this method
@@ -196,8 +204,8 @@ class BloomCausalLm(GenerativeTask):
         Args:
             token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
             cache: a dense float Tensor, the cache of key and value.
-            cache_update_index: int, or int Tensor. The index of current inputs in the
-                whole sequence.
+            cache_update_index: int, or int Tensor. The index of current inputs
+                in the whole sequence.
 
         Returns:
             A (logits, hidden_states, cache) tuple. Where `logits` is the
@@ -276,6 +284,7 @@ class BloomCausalLm(GenerativeTask):
                 ops.squeeze(hidden_states, axis=1),
                 cache,
             )
+
         token_ids = self._sampler(
             next=next,
             prompt=token_ids,
