@@ -84,7 +84,7 @@ class BloomCausalLM(GenerativeTask):
     }
 
     bloom_lm = keras_nlp.models.BloomCausalLM.from_preset(
-        "/home/mohamed/Mohamed/projects/bloom_560m_multi",
+        "bloom_560m_multi",
         preprocessor=None,
     )
     bloom_lm.generate(prompt)
@@ -135,8 +135,8 @@ class BloomCausalLM(GenerativeTask):
         vocabulary_size=tokenizer.vocabulary_size(),
         num_layers=4,
         num_heads=4,
-        hidden_dim=256,
-        intermediate_dim=512,
+        hidden_dim=32,
+        intermediate_dim=128,
         max_sequence_length=128,
     )
     bloom_lm = keras_nlp.models.BloomCausalLM(
