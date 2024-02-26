@@ -61,6 +61,17 @@ python tools/gemma/export_gemma_to_torch_xla.py   \
     --preset gemma_2b_en   \
     --output_file path/to/keras_torch_model.ckpt
 ```
+
+Following this usage, you can run the verification script to confirm
+functionality of the converted checkpoint:
+
+```
+python keras-nlp-gemma/tools/gemma/run_gemma_xla.py \
+  --size 2b \
+  --checkpoint_file fine_tuned_imdb.ckpt \
+  --vocab_file gemma_tokenizer/vocabulary.spm \
+  --prompt "Inception is about"
+```
 """
 
 
