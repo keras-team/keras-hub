@@ -36,7 +36,7 @@ def detect_if_tensorflow_uses_keras_3():
 
 
 _USE_KERAS_3 = detect_if_tensorflow_uses_keras_3()
-if os.environ.get("FORCE_KERAS_3"):
+if os.environ.get("KERAS_FORCE_V3"):
     _USE_KERAS_3 = True
 
 if not _USE_KERAS_3:
