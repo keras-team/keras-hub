@@ -12,6 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+Prior to running this conversion script, please install the PyTorch
+implementation of Gemma and `torch_xla`:
+
+`pip install git+https://github.com/google/gemma_pytorch.git`
+`pip install torch_xla`
+
+Please also ensure that your installed versions of `torch_xla` and `torch` are
+compatible.
+"""
+
 import contextlib
 import os
 
