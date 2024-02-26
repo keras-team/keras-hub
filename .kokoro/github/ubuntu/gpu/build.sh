@@ -3,7 +3,15 @@ set -e
 export KAGGLE_KEY="$(cat ${KOKORO_KEYSTORE_DIR}/73361_keras_kaggle_secret_key)"
 export KAGGLE_USERNAME="$(cat ${KOKORO_KEYSTORE_DIR}/73361_keras_kaggle_username)"
 
+if [[ -z "${KAGGLE_KEY}" ]]; then
+   echo "KAGGLE_KEY is NOT set"
+fi
+
 set -x
+
+if [[ -z "${KAGGLE_USERNAME}" ]]; then
+   echo "KAGGLE_USERNAME is NOT set"
+fi
 
 cd "${KOKORO_ROOT}/"
 
