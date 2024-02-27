@@ -22,6 +22,56 @@ from keras_nlp.models.falcon.falcon_transformer_decoder import (
 
 @keras_nlp_export("keras_nlp.models.FalconBackbone")
 class FalconBackbone(Backbone):
+    """The Falcon core architecure.
+
+    This network implements a Transformer-based decoder-only network,
+    [Falcon](http://go/arxiv/2306.01116).
+
+    Args:
+        vocabulary_size: int. The size of the token vocabulary.
+        num_layers: int. The number of transformer layers.
+        num_attention_heads: int. The number of attention heads for each transformer.
+            The hidden size must be divisible by the number of attention heads.
+        hidden_dim: int. The dimensionality of the embeddings and hidden states.
+        intermediate_dim: int. The output dimension of the first Dense layer in
+            the MLP network of each transformer.
+        layer_norm_epsilon: float. Epsilon for the layer normalization layers in
+            the transformer decoder.
+        attention_dropout: float. Dropout probability for the attention.
+        feedforward_dropout: flaot. Dropout probability for the feedforward.
+        dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
+            for model computations and weights. Note that some computations,
+            such as softmax and layer normalization, will always be done at
+            float32 precision regardless of dtype.
+
+    Examples:
+    ```python
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+    }
+
+    # Pretrained Falcon decoder.
+    # TODO: Update the preset.
+    model = keras_nlp.models.FalconBackbone.from_preset("falcon_preset")
+    model(input_data)
+
+    # Randomly initialized Falcon decoder with a custom config.
+    model = keras_nlp.models.FalconBackbone(
+        vocabulary_size=10,
+        num_layers=2,
+        num_attention_heads=2,
+        hidden_dim=32,
+        intermediate_dim=32*4,
+        layer_norm_epsilon=1e-5,
+        attention_dropout=0,
+        feedforward_dropout=0,
+    )
+    model(input_data)
+    ```
+    """
+
+    # TODO: add dtype.
     def __init__(
         self,
         vocabulary_size,

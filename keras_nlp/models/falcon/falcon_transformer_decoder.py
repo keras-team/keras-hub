@@ -25,7 +25,6 @@ from keras_nlp.models.falcon.falcon_attention import FalconAttention
 
 
 class FalconTransformerDecoder(keras.layers.Layer):
-    # TODO: set default values based on Falcon's config.
     def __init__(
         self,
         num_attention_heads,
@@ -58,24 +57,20 @@ class FalconTransformerDecoder(keras.layers.Layer):
         self._attention_layer.build(
             decoder_sequence_shape,
         )
-        # self._attention_layer = keras.layers.Attention(
-        #     use_scale=True, dropout=self.attention_dropout
-        # )
 
         self._attention_dropout = keras.layers.Dropout(
             rate=self.attention_dropout,
             name="attention_dropout",
         )
 
-        # _post_attention_layernorm should only be applied if parallel_attn == False.
-        # In the 1b model parallel_attn is False.
         self._post_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon
         )
         self._post_attention_layernorm.build(decoder_sequence_shape)
 
         # Feedforward layers.
-        # TODO: use_bias should be an argument to the transformer.
+        # TODO: use_bias should be an argument to the transformer to support
+        # other sizes of models, e.g. 7B, that don't use bias.
         self._dense_h_to_4h = keras.layers.Dense(
             self.intermediate_dim,
             activation=keras.activations.gelu,
