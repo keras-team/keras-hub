@@ -24,8 +24,14 @@ try:
 except ImportError:
     kagglehub = None
 
+try:
+    import huggingface_hub
+except ImportError:
+    huggingface_hub = None
+
 KAGGLE_PREFIX = "kaggle://"
 GS_PREFIX = "gs://"
+HF_PREFIX = "hf://"
 TOKENIZER_ASSET_DIR = "assets/tokenizer"
 
 
@@ -64,6 +70,14 @@ def get_file(preset, path):
             url,
             cache_subdir=os.path.join("models", subdir),
         )
+    elif preset.startswith(HF_PREFIX):
+        if huggingface_hub is None:
+            raise ImportError(
+                f"`from_preset()` requires the `huggingface_hub` package to load from '{preset}'. "
+                "Please install with `pip install huggingface_hub`."
+            )
+        hf_handle = preset.removeprefix(HF_PREFIX)
+        return huggingface_hub.hf_hub_download(repo_id=hf_handle, filename=path)
     elif os.path.exists(preset):
         # Assume a local filepath.
         return os.path.join(preset, path)
@@ -109,6 +123,9 @@ def save_to_preset(
     weights_filename="model.weights.h5",
 ):
     """Save a KerasNLP layer to a preset directory."""
+    push_to_hf = preset.startswith(HF_PREFIX)
+    preset = preset.removeprefix(HF_PREFIX)
+
     os.makedirs(preset, exist_ok=True)
 
     # Save tokenizers assets.
@@ -153,6 +170,16 @@ def save_to_preset(
         metadata_path = os.path.join(preset, "metadata.json")
         with open(metadata_path, "w") as metadata_file:
             metadata_file.write(json.dumps(metadata, indent=4))
+
+    # If preset starts with `hf://`, push to the Hugging Face Hub.
+    if push_to_hf:
+        if huggingface_hub is None:
+            raise ImportError(
+                f"`save_to_preset()` requires the `huggingface_hub` package to save to '{preset}'. "
+                "Please install with `pip install huggingface_hub`."
+            )
+        repo_url = huggingface_hub.create_repo(repo_id=preset, exist_ok=True)
+        huggingface_hub.upload_folder(repo_id=repo_url.repo_id, folder_path=preset)
 
 
 def load_from_preset(
