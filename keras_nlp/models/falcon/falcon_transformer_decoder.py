@@ -203,7 +203,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         arange_tensor = (
             (ops.cumsum(attention_mask, axis=-1) - 1) * attention_mask
         )[:, None, :]
-        alibi = slopes[..., None] * arange_tensor
+        alibi = slopes[..., None] * ops.cast(arange_tensor, self.compute_dtype)
         return ops.expand_dims(
             ops.reshape(alibi, (num_heads, 1, seq_length)), 0
         )
