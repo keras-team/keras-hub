@@ -71,7 +71,7 @@ def download_hf_model(hf_model_name):
     hf_model_dir = huggingface_hub.snapshot_download(
         repo_id=hf_model_name,
         allow_patterns=["*.json", "*.bin"],
-        ignore_patterns=["*/"],
+        ignore_patterns=["*/*"],
         local_dir=EXTRACT_DIR,
     )
 
