@@ -12,10 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import contextlib
 from unittest.mock import patch
 
-import keras
 import pytest
 
 from keras_nlp.backend import ops
@@ -49,7 +47,6 @@ class BloomCausalLMTest(TestCase):
             num_heads=2,
             hidden_dim=4,
             intermediate_dim=16,
-            max_sequence_length=8,
         )
         self.init_kwargs = {
             "preprocessor": self.preprocessor,
@@ -92,39 +89,30 @@ class BloomCausalLMTest(TestCase):
             prompt_ids["padding_mask"][:, :4],
         )
 
-    @pytest.mark.keras_3_only
     def test_generate_with_bfloat16(self):
-
-        @contextlib.contextmanager
-        def _set_keras_default_dtype(dtype):
-            original_floatx = keras.config.floatx()
-            keras.config.set_floatx(dtype)
-            try:
-                yield
-            finally:
-                # Restore floatx to the original value to prevent impact on other
-                # tests even if there is an exception.
-                keras.config.set_floatx(original_floatx)
-
-        with _set_keras_default_dtype("float16"):
-            causal_lm = BloomCausalLM(**self.init_kwargs)
-            # String input.
-            prompt = "airplane at airport"
-            output = causal_lm.generate(prompt)
-            self.assertTrue(prompt in output)
-            # Int tensor input.
-            prompt_ids = self.preprocessor.generate_preprocess([prompt])
-            causal_lm.preprocessor = None
-            outputs = causal_lm.generate(prompt_ids)
-            # Assert prompt is in output in token id space.
-            self.assertAllEqual(
-                outputs["token_ids"][:, :4],
-                prompt_ids["token_ids"][:, :4],
-            )
-            self.assertAllEqual(
-                outputs["padding_mask"][:, :4],
-                prompt_ids["padding_mask"][:, :4],
-            )
+        backbone = BloomBackbone.from_config(
+            {**self.backbone.get_config(), "dtype": "bfloat16"}
+        )
+        causal_lm = BloomCausalLM(
+            backbone=backbone, preprocessor=self.preprocessor
+        )
+        # String input.
+        prompt = "airplane at airport"
+        output = causal_lm.generate(prompt)
+        self.assertTrue(prompt in output)
+        # Int tensor input.
+        prompt_ids = self.preprocessor.generate_preprocess([prompt])
+        causal_lm.preprocessor = None
+        outputs = causal_lm.generate(prompt_ids)
+        # Assert prompt is in output in token id space.
+        self.assertAllEqual(
+            outputs["token_ids"][:, :4],
+            prompt_ids["token_ids"][:, :4],
+        )
+        self.assertAllEqual(
+            outputs["padding_mask"][:, :4],
+            prompt_ids["padding_mask"][:, :4],
+        )
 
     def test_early_stopping(self):
         causal_lm = BloomCausalLM(**self.init_kwargs)

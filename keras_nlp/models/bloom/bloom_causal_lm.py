@@ -137,7 +137,6 @@ class BloomCausalLM(GenerativeTask):
         num_heads=4,
         hidden_dim=32,
         intermediate_dim=128,
-        max_sequence_length=128,
     )
     bloom_lm = keras_nlp.models.BloomCausalLM(
         backbone=backbone,
