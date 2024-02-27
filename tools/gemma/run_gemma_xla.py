@@ -11,6 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+"""
+This is a modified version of `run_xla.py` script in the PyTorch Gemma repo
+to ensure proper functionality after porting checkpoints from Keras. Please
+run `export_gemma_to_torch_xla.py` prior to running this verification script.
+
+As with the conversion script, ensure that `torch_xla` and the PyTorch
+implementation of Gemma are properly installed:
+
+`pip install git+https://github.com/google/gemma_pytorch.git`
+`pip install torch_xla`
+
+Note that this verification script can take several minutes to run.
+"""
+
 import contextlib
 import os
 import random
@@ -30,6 +45,47 @@ from gemma.config import get_config_for_2b
 from gemma.config import get_config_for_7b
 from gemma.model_xla import GemmaForCausalLM
 from gemma.tokenizer import Tokenizer
+
+"""
+Sample usage:
+
+Run the verification script supplying your model size, converted checkpoint file,
+vocabulary file, and test prompt.
+
+```
+python keras-nlp-gemma/tools/gemma/run_gemma_xla.py \
+  --size 2b \
+  --checkpoint_file fine_tuned_imdb.ckpt \
+  --vocab_file gemma_tokenizer/vocabulary.spm \
+  --prompt "Three Billboards"
+```
+
+After a delay (a couple minutes if running on CPU), this should produce:
+```
+======================================
+PROMPT: Three Billboards
+RESULT: Outside Ebbing, Missouri is a film in the tradition of Hollywood westerns
+======================================
+```
+
+If running from a preset, instead provide your converted checkpoint file and
+the associated preset name:
+
+```
+python keras-nlp-gemma/tools/gemma/run_gemma_xla.py \
+    --preset gemma_2b_en \
+    --checkpoint_file gemma_2b.ckpt \
+    --prompt "California is the largest"
+```
+
+After a delay (a couple minutes if running on CPU), this should produce:
+```
+======================================
+PROMPT: California is the largest
+RESULT:  producer of strawberries in the world, and is a
+======================================
+```
+"""
 
 PAD_TOKEN_ID = -1
 
@@ -73,9 +129,6 @@ flags.DEFINE_string(
     "The capital of France is",
     "A test prompt for verifying functionality of the PyTorch Gemma model.",
 )
-
-# This is a modified version of `run_xla.py` script in the Hex-LLM Gemma repo
-# to ensure proper functionality after porting checkpoints from Keras.
 
 
 @contextlib.contextmanager

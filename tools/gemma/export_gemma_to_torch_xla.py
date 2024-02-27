@@ -12,6 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+Prior to running this conversion script, please install the PyTorch
+implementation of Gemma and `torch_xla`:
+
+`pip install git+https://github.com/google/gemma_pytorch.git`
+`pip install torch_xla`
+
+Please also ensure that your installed versions of `torch_xla` and `torch` are
+compatible.
+"""
+
 import contextlib
 import os
 
@@ -49,6 +60,17 @@ simply pass the Keras preset name to `--preset`.
 python tools/gemma/export_gemma_to_torch_xla.py   \
     --preset gemma_2b_en   \
     --output_file path/to/keras_torch_model.ckpt
+```
+
+Following this usage, you can run the verification script to confirm
+functionality of the converted checkpoint:
+
+```
+python keras-nlp-gemma/tools/gemma/run_gemma_xla.py \
+  --size 2b \
+  --checkpoint_file fine_tuned_imdb.ckpt \
+  --vocab_file gemma_tokenizer/vocabulary.spm \
+  --prompt "Inception is about"
 ```
 """
 
