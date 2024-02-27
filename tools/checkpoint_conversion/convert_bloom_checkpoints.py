@@ -33,16 +33,16 @@ FLAGS = flags.FLAGS
 
 PRESET_MAP = {
     "bloom_560m_multi": "bigscience/bloom-560m",
-    "bloom_1.1b_multi": "bigscience/bloom-1b1",
-    "bloom_1.7b_multi": "bigscience/bloom-1b7",
+    "bloom_1b1_multi": "bigscience/bloom-1b1",
+    "bloom_1b7_multi": "bigscience/bloom-1b7",
     "bloom_3b_multi": "bigscience/bloom-3b",
     "bloom_7b_multi": "bigscience/bloom-7b1",
     "bloom_multi": "bigscience/bloom",
     # Multitask finetuned on xP3 (Crosslingual Public Pool of Prompts) https://huggingface.co/datasets/bigscience/xP3
     # xP3 is a mixture of 13 training tasks in 46 languages with English prompts
     "bloomz_560m_multi": "bigscience/bloomz-560m",
-    "bloomz_1.1b_multi": "bigscience/bloomz-1b1",
-    "bloomz_1.7b_multi": "bigscience/bloomz-1b7",
+    "bloomz_1b1_multi": "bigscience/bloomz-1b1",
+    "bloomz_1b7_multi": "bigscience/bloomz-1b7",
     "bloomz_3b_multi": "bigscience/bloomz-3b",
     "bloomz_7b_multi": "bigscience/bloomz-7b1",
     "bloomz_multi": "bigscience/bloomz",
