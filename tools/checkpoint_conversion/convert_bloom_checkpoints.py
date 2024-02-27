@@ -254,7 +254,11 @@ def main(_):
         keras_tokenizer,
     )
     print("✅ Numerics validated")
-
+    
+    # Delete huggingface model
+    del hf_model
+    del hf_tokenizer
+    # Save keras preset
     keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
     keras_nlp.src.utils.preset_utils.save_to_preset(
         keras_tokenizer, preset, config_filename="tokenizer.json"
