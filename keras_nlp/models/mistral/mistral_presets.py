@@ -23,7 +23,7 @@ backbone_presets = {
             "path": "mistral",
             "model_card": "https://github.com/mistralai/mistral-src/blob/main/README.md",
         },
-        "kaggle_handle": "kaggle://keras/mistral/keras/mistral_7b_en/3",
+        "kaggle_handle": "kaggle://keras/mistral/keras/mistral_7b_en/6",
     },
     "mistral_instruct_7b_en": {
         "metadata": {
@@ -33,6 +33,6 @@ backbone_presets = {
             "path": "mistral",
             "model_card": "https://github.com/mistralai/mistral-src/blob/main/README.md",
         },
-        "kaggle_handle": "kaggle://keras/mistral/keras/mistral_instruct_7b_en/3",
+        "kaggle_handle": "kaggle://keras/mistral/keras/mistral_instruct_7b_en/6",
     },
 }
