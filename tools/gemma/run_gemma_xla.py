@@ -60,7 +60,7 @@ python keras-nlp-gemma/tools/gemma/run_gemma_xla.py \
   --prompt "Three Billboards"
 ```
 
-After several minutes, this should produce:
+After a delay (a couple minutes if running on CPU), this should produce:
 ```
 ======================================
 PROMPT: Three Billboards
@@ -78,7 +78,7 @@ python keras-nlp-gemma/tools/gemma/run_gemma_xla.py \
     --prompt "California is the largest"
 ```
 
-After several minutes, this should produce:
+After a delay (a couple minutes if running on CPU), this should produce:
 ```
 ======================================
 PROMPT: California is the largest
