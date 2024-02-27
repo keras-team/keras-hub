@@ -53,6 +53,7 @@ class GemmaBackboneTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.kaggle_key_required
     @pytest.mark.large
     def test_smallest_preset(self):
         self.run_preset_test(
@@ -69,6 +70,7 @@ class GemmaBackboneTest(TestCase):
             ),
         )
 
+    @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in GemmaBackbone.presets:

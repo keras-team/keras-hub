@@ -64,6 +64,7 @@ class GemmaPreprocessorTest(TestCase):
         x = preprocessor(input_data, sequence_length=4)
         self.assertAllEqual(x["token_ids"], [1, 4, 9, 2])
 
+    @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in GemmaPreprocessor.presets:
