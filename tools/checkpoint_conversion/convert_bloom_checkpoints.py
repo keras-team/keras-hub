@@ -15,19 +15,16 @@
 import json
 import os
 
-os.environ["KERAS_BACKEND"] = "torch"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+import huggingface_hub
+import numpy as np
+import transformers
+from absl import app
+from absl import flags
 
-import huggingface_hub  # noqa: E402
-import numpy as np  # noqa: E402
-import torch  # noqa: E402
-import transformers  # noqa: E402
-from absl import app  # noqa: E402
-from absl import flags  # noqa: E402
-
-import keras_nlp  # noqa: E402
-from keras_nlp.models import BloomBackbone  # noqa: E402
-from keras_nlp.models import BloomTokenizer  # noqa: E402
+import keras_nlp
+from keras_nlp.models import BloomBackbone
+from keras_nlp.models import BloomPreprocessor
+from keras_nlp.models import BloomTokenizer
 
 FLAGS = flags.FLAGS
 
@@ -117,51 +114,61 @@ def convert_weights(keras_model, hf_model):
     # assign huggingface weights to the keras model.
     # Embedding layer.
     keras_model.get_layer("token_embedding").embeddings.assign(
-        hf_wts["word_embeddings.weight"]
+        hf_wts["word_embeddings.weight"].detach().numpy()
     )
     # LayerNorm.
     keras_model.get_layer("token_embedding_layernorm").gamma.assign(
-        hf_wts["word_embeddings_layernorm.weight"]
+        hf_wts["word_embeddings_layernorm.weight"].detach().numpy()
     )
     keras_model.get_layer("token_embedding_layernorm").beta.assign(
-        hf_wts["word_embeddings_layernorm.bias"]
+        hf_wts["word_embeddings_layernorm.bias"].detach().numpy()
     )
 
-    keras_model.get_layer("final_layernorm").gamma.assign(hf_wts["ln_f.weight"])
-    keras_model.get_layer("final_layernorm").beta.assign(hf_wts["ln_f.bias"])
+    keras_model.get_layer("final_layernorm").gamma.assign(
+        hf_wts["ln_f.weight"].detach().numpy()
+    )
+    keras_model.get_layer("final_layernorm").beta.assign(
+        hf_wts["ln_f.bias"].detach().numpy()
+    )
 
     # Decoder layers.
     for i in range(num_layers):
         decoder_layer = keras_model.get_layer(f"transformer_layer_{i}")
         # LayrNorm.
         decoder_layer._pre_attention_layernorm.gamma.assign(
-            hf_wts[f"h.{i}.input_layernorm.weight"]
+            hf_wts[f"h.{i}.input_layernorm.weight"].detach().numpy()
         )
         decoder_layer._pre_attention_layernorm.beta.assign(
-            hf_wts[f"h.{i}.input_layernorm.bias"]
+            hf_wts[f"h.{i}.input_layernorm.bias"].detach().numpy()
         )
         decoder_layer._post_attention_layernorm.gamma.assign(
-            hf_wts[f"h.{i}.post_attention_layernorm.weight"]
+            hf_wts[f"h.{i}.post_attention_layernorm.weight"].detach().numpy()
         )
         decoder_layer._post_attention_layernorm.beta.assign(
-            hf_wts[f"h.{i}.post_attention_layernorm.bias"]
+            hf_wts[f"h.{i}.post_attention_layernorm.bias"].detach().numpy()
         )
 
         # Attention layer.
         attention_layer = decoder_layer._self_attention_layer
 
-        fused_qkv_kernal = hf_wts[
-            f"h.{i}.self_attention.query_key_value.weight"
-        ].T
-        fused_qkv_kernal = fused_qkv_kernal.view(
+        fused_qkv_kernal = (
+            hf_wts[f"h.{i}.self_attention.query_key_value.weight"]
+            .T.detach()
+            .numpy()
+        )
+        fused_qkv_kernal = fused_qkv_kernal.reshape(
             hidden_dim, num_heads, 3, head_dim
         )
         query_kernal = fused_qkv_kernal[..., 0, :]
         key_kernal = fused_qkv_kernal[..., 1, :]
         value_kernl = fused_qkv_kernal[..., 2, :]
 
-        fused_qkv_bais = hf_wts[f"h.{i}.self_attention.query_key_value.bias"]
-        fused_qkv_bais = fused_qkv_bais.view(num_heads, 3, head_dim)
+        fused_qkv_bais = (
+            hf_wts[f"h.{i}.self_attention.query_key_value.bias"]
+            .detach()
+            .numpy()
+        )
+        fused_qkv_bais = fused_qkv_bais.reshape(num_heads, 3, head_dim)
         query_bais = fused_qkv_bais[:, 0, :]
         key_bais = fused_qkv_bais[:, 1, :]
         value_bais = fused_qkv_bais[:, 2, :]
@@ -174,24 +181,24 @@ def convert_weights(keras_model, hf_model):
         attention_layer._value_dense.bias.assign(value_bais)
 
         attention_layer._output_dense.kernel.assign(
-            hf_wts[f"h.{i}.self_attention.dense.weight"].T
+            hf_wts[f"h.{i}.self_attention.dense.weight"].T.detach().numpy()
         )
         attention_layer._output_dense.bias.assign(
-            hf_wts[f"h.{i}.self_attention.dense.bias"]
+            hf_wts[f"h.{i}.self_attention.dense.bias"].detach().numpy()
         )
 
         # mlp.
         decoder_layer._mlp_intermediate_dense.kernel.assign(
-            hf_wts[f"h.{i}.mlp.dense_h_to_4h.weight"].T
+            hf_wts[f"h.{i}.mlp.dense_h_to_4h.weight"].T.detach().numpy()
         )
         decoder_layer._mlp_intermediate_dense.bias.assign(
-            hf_wts[f"h.{i}.mlp.dense_h_to_4h.bias"]
+            hf_wts[f"h.{i}.mlp.dense_h_to_4h.bias"].detach().numpy()
         )
         decoder_layer._mlp_output_dense.kernel.assign(
-            hf_wts[f"h.{i}.mlp.dense_4h_to_h.weight"].T
+            hf_wts[f"h.{i}.mlp.dense_4h_to_h.weight"].T.detach().numpy()
         )
         decoder_layer._mlp_output_dense.bias.assign(
-            hf_wts[f"h.{i}.mlp.dense_4h_to_h.bias"]
+            hf_wts[f"h.{i}.mlp.dense_4h_to_h.bias"].detach().numpy()
         )
 
 
@@ -203,19 +210,20 @@ def validate_output(
 ):
     input_str = ["the quick brown fox ran, galloped and jumped."]
 
-    # KerasNLP
-    token_ids = torch.tensor(keras_tokenizer(input_str))
-    padding_mask = token_ids != 3
-    keras_model_input = {
-        "token_ids": token_ids,
-        "padding_mask": padding_mask,
-    }
-    keras_model_outputs = keras_model.predict(keras_model_input)
-
+    # HuggingFace
     hf_model_input = hf_tokenizer(input_str, return_tensors="pt")
-
     hf_model_outputs = hf_model(**hf_model_input).last_hidden_state
     hf_model_outputs = hf_model_outputs.detach().numpy()
+
+    # KerasNLP
+    preprocessor = BloomPreprocessor(
+        tokenizer=keras_tokenizer,
+        sequence_length=hf_model_outputs.shape[1],
+        add_end_token=False,
+        add_start_token=False,
+    )
+    keras_model_input = preprocessor(input_str)
+    keras_model_outputs = keras_model.predict(keras_model_input)
 
     # Comparing the outputs.
     print("🔶 KerasNLP output:", keras_model_outputs[0, 0, :10])
@@ -236,7 +244,9 @@ def main(_):
     hf_model_dir = download_hf_model(hf_model_name)
     print("✅ Huggingface model downloaded from hub")
 
-    hf_model = transformers.BloomModel.from_pretrained(hf_model_dir)
+    hf_model = transformers.BloomModel.from_pretrained(
+        hf_model_dir,
+    )
     hf_tokenizer = transformers.BloomTokenizerFast.from_pretrained(hf_model_dir)
     print("✅ Huggingface model loaded")
 
@@ -254,15 +264,27 @@ def main(_):
         keras_tokenizer,
     )
     print("✅ Numerics validated")
-    
+
     # Delete huggingface model
     del hf_model
     del hf_tokenizer
-    # Save keras preset
+
+    # Save float32 keras preset
+    keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
+
+    # Delete float32 Keras model
+    del keras_model
+
+    # Load The model in float16 percision
+    preset_path = os.path.join(os.getcwd(), preset)
+    keras_model = BloomBackbone.from_preset(preset_path, dtype="float16")
+
+    # Save float16 keras model
     keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
     keras_nlp.src.utils.preset_utils.save_to_preset(
         keras_tokenizer, preset, config_filename="tokenizer.json"
     )
+
     print("✅ Preset saved")
 
 
