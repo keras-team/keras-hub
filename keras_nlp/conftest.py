@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import pytest
 import tensorflow as tf
 
@@ -83,6 +85,10 @@ def pytest_configure(config):
         "markers",
         "keras_3_only: mark test as a keras 3 only test",
     )
+    config.addinivalue_line(
+        "markers",
+        "kaggle_key_required: mark test needing a kaggle key",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -107,6 +113,16 @@ def pytest_collection_modifyitems(config, items):
         not backend_config.keras_3(),
         reason="tests only run on with multi-backend keras",
     )
+    found_kaggle_key = all(
+        [
+            os.environ.get("KAGGLE_USERNAME", None),
+            os.environ.get("KAGGLE_KEY", None),
+        ]
+    )
+    kaggle_key_required = pytest.mark.skipif(
+        not found_kaggle_key,
+        reason="tests only run with a kaggle api key",
+    )
     for item in items:
         if "large" in item.keywords:
             item.add_marker(skip_large)
@@ -116,6 +132,8 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(tf_only)
         if "keras_3_only" in item.keywords:
             item.add_marker(keras_3_only)
+        if "kaggle_key_required" in item.keywords:
+            item.add_marker(kaggle_key_required)
 
 
 # Disable traceback filtering for quicker debugging of tests failures.

@@ -82,6 +82,7 @@ class GemmaCausalLMPreprocessorTest(TestCase):
         x = preprocessor.generate_postprocess(input_data)
         self.assertAllEqual(x, "the quick brown fox")
 
+    @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in GemmaCausalLMPreprocessor.presets:

@@ -48,6 +48,7 @@ class GemmaTokenizerTest(TestCase):
                 )
             )
 
+    @pytest.mark.kaggle_key_required
     @pytest.mark.large
     def test_smallest_preset(self):
         self.run_preset_test(
@@ -57,6 +58,7 @@ class GemmaTokenizerTest(TestCase):
             expected_output=[[651, 4320, 8426, 25341, 235265]],
         )
 
+    @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in GemmaTokenizer.presets:

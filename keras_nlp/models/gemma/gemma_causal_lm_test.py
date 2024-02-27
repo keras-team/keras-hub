@@ -142,6 +142,7 @@ class GemmaCausalLMTest(TestCase):
         causal_lm.compile(sampler="greedy")
         self.assertIsNone(causal_lm.generate_function)
 
+    @pytest.mark.kaggle_key_required
     @pytest.mark.large
     def test_saved_model(self):
         self.run_model_saving_test(
@@ -150,6 +151,7 @@ class GemmaCausalLMTest(TestCase):
             input_data=self.input_data,
         )
 
+    @pytest.mark.kaggle_key_required
     @pytest.mark.extra_large
     def test_all_presets(self):
         for preset in GemmaCausalLM.presets:
