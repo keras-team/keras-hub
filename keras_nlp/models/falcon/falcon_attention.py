@@ -65,6 +65,7 @@ class FalconAttention(keras.layers.Layer):
 
         self._attention_dropout = keras.layers.Dropout(
             rate=self.attention_dropout,
+            dtype=self.dtype_policy,
             name="attention_dropout",
         )
 
@@ -75,9 +76,7 @@ class FalconAttention(keras.layers.Layer):
         )
         self._output_dense.build(inputs_shape)
 
-        self._softmax = keras.layers.Softmax(
-            dtype=self.dtype_policy, name="softmax"
-        )
+        self._softmax = keras.layers.Softmax(dtype="float32", name="softmax")
 
         self.built = True
 

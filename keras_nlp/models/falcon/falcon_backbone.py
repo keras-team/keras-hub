@@ -71,7 +71,6 @@ class FalconBackbone(Backbone):
     ```
     """
 
-    # TODO: add dtype.
     def __init__(
         self,
         vocabulary_size,
@@ -82,6 +81,7 @@ class FalconBackbone(Backbone):
         layer_norm_epsilon=1e-5,
         attention_dropout=0,
         feedforward_dropout=0,
+        dtype=None,
         **kwargs,
     ):
         # === Layers ===
@@ -89,6 +89,7 @@ class FalconBackbone(Backbone):
         token_embedding_layer = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
+            dtype=None,
             name="token_embedding",
         )
 
@@ -100,12 +101,14 @@ class FalconBackbone(Backbone):
                 intermediate_dim=intermediate_dim,
                 attention_dropout=attention_dropout,
                 feedforward_dropout=feedforward_dropout,
+                dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
             transformer_layers.append(layer)
 
         layer_norm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
+            dtype=dtype,
             name="layer_norm",
         )
 
