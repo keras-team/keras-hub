@@ -1,6 +1,6 @@
 # Tensorflow with cuda support.
-tf-nightly[and-cuda]==2.16.0.dev20240201  # Pin a working nightly until rc0.
-tensorflow-text-nightly==2.16.0.dev20240201  # Pin a working nightly until rc0.
+tensorflow[and-cuda]==2.16.0rc0  # Pin to rc until TF 2.16 release
+tensorflow-text==2.16.0rc0
 
 # Torch cpu-only version.
 --extra-index-url https://download.pytorch.org/whl/cpu
