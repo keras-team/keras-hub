@@ -73,7 +73,7 @@ def convert_checkpoints(hf_model):
             fused_bias[..., 2, :],
         )
 
-        # TODO: check if bias is true before assining bias.
+        # TODO: check if bias is true before assigning bias.
         # transformer.h.0.self_attention.query_key_value.weight
         # transformer.h.0.self_attention.query_key_value.bias
         keras_model.get_layer(

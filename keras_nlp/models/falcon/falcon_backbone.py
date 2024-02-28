@@ -1,4 +1,4 @@
-# Copyright 2023 The KerasNLP Authors
+# Copyright 2024 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ class FalconBackbone(Backbone):
     """The Falcon core architecure.
 
     This network implements a Transformer-based decoder-only network,
-    [Falcon](http://go/arxiv/2306.01116).
+    [Falcon](https://arxiv.org/abs/2306.01116).
 
     Args:
         vocabulary_size: int. The size of the token vocabulary.
