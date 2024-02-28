@@ -44,7 +44,9 @@ class FalconTransformerDecoder(keras.layers.Layer):
     def build(self, decoder_sequence_shape):
         self.hidden_dim = decoder_sequence_shape[-1]
         self._input_layernorm = keras.layers.LayerNormalization(
-            epsilon=self.layer_norm_epsilon
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="input_layernorm",
         )
         self._input_layernorm.build(decoder_sequence_shape)
 
@@ -53,6 +55,8 @@ class FalconTransformerDecoder(keras.layers.Layer):
         self._attention_layer = FalconAttention(
             num_heads=self.num_attention_heads,
             attention_dropout=self.attention_dropout,
+            dtype=self.dtype_policy,
+            name="attention",
         )
         self._attention_layer.build(
             decoder_sequence_shape,
@@ -60,11 +64,14 @@ class FalconTransformerDecoder(keras.layers.Layer):
 
         self._attention_dropout = keras.layers.Dropout(
             rate=self.attention_dropout,
+            dtype=self.dtype_policy,
             name="attention_dropout",
         )
 
         self._post_attention_layernorm = keras.layers.LayerNormalization(
-            epsilon=self.layer_norm_epsilon
+            epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
+            name="post_attention_layernorm",
         )
         self._post_attention_layernorm.build(decoder_sequence_shape)
 
@@ -75,6 +82,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
             self.intermediate_dim,
             activation=keras.activations.gelu,
             use_bias=True,
+            dtype=self.dtype_policy,
             name="dense_h_to_4h",
         )
         self._dense_h_to_4h.build(decoder_sequence_shape)
@@ -82,6 +90,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         self._dense_4h_to_h = keras.layers.Dense(
             self.hidden_dim,
             use_bias=True,
+            dtype=self.dtype_policy,
             name="dense_4h_to_h",
         )
         self._dense_4h_to_h.build(
@@ -94,6 +103,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
 
         self._feedforward_dropout = keras.layers.Dropout(
             rate=self.feedforward_dropout,
+            dtype=self.dtype_policy,
             name="feedforward_dropout",
         )
 
@@ -195,7 +205,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         )
 
     def _build_alibi_tensor(self, num_heads, attention_mask):
-        _, seq_length = attention_mask.shape
+        batch_size, seq_length = attention_mask.shape
         slopes = ops.convert_to_tensor(
             self._get_slopes(num_heads),
             dtype=self.compute_dtype,
@@ -204,9 +214,8 @@ class FalconTransformerDecoder(keras.layers.Layer):
             (ops.cumsum(attention_mask, axis=-1) - 1) * attention_mask
         )[:, None, :]
         alibi = slopes[..., None] * ops.cast(arange_tensor, self.compute_dtype)
-        return ops.expand_dims(
-            ops.reshape(alibi, (num_heads, 1, seq_length)), 0
-        )
+        alibi = ops.expand_dims(alibi, 0)
+        return ops.reshape(alibi, (batch_size, num_heads, 1, seq_length))
 
     def _get_slopes(self, num_heads):
         def get_slopes_power_of_2(n):

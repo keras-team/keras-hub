@@ -164,10 +164,10 @@ def convert_checkpoints(hf_model):
 
     # transformer.ln_f.weight
     # transformer.ln_f.bias
-    keras_model.get_layer("layer_norm").gamma.assign(
+    keras_model.get_layer("final_layernorm").gamma.assign(
         hf_wts["transformer.ln_f.weight"].numpy()
     )
-    keras_model.get_layer("layer_norm").beta.assign(
+    keras_model.get_layer("final_layernorm").beta.assign(
         hf_wts["transformer.ln_f.bias"].numpy()
     )
 

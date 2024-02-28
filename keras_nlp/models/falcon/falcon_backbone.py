@@ -66,6 +66,7 @@ class FalconBackbone(Backbone):
         layer_norm_epsilon=1e-5,
         attention_dropout=0,
         feedforward_dropout=0,
+        dtype="float32",
     )
     model(input_data)
     ```
@@ -89,7 +90,7 @@ class FalconBackbone(Backbone):
         token_embedding_layer = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            dtype=None,
+            dtype=dtype,
             name="token_embedding",
         )
 
@@ -106,10 +107,10 @@ class FalconBackbone(Backbone):
             )
             transformer_layers.append(layer)
 
-        layer_norm = keras.layers.LayerNormalization(
+        final_layernorm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
-            name="layer_norm",
+            name="final_layernorm",
         )
 
         # === Functional Model ===
@@ -121,7 +122,7 @@ class FalconBackbone(Backbone):
 
         for transformer_layer in transformer_layers:
             x = transformer_layer(inputs=x, decoder_padding_mask=padding_mask)
-        sequence_output = layer_norm(x)
+        sequence_output = final_layernorm(x)
 
         super().__init__(
             inputs={
