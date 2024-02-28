@@ -35,6 +35,6 @@ class RMSNormalization(keras.layers.Layer):
         x = ops.cast(x, "float32")
         scale = ops.cast(self.scale, "float32")
         var = ops.mean(ops.square(x), axis=-1, keepdims=True)
-        normed_inputs = x * ops.reciprocal(ops.sqrt(var + 1e-06))
+        normed_inputs = x * ops.reciprocal(ops.sqrt(var + self.epsilon))
         normed_inputs = normed_inputs * (1 + scale)
         return ops.cast(normed_inputs, self.compute_dtype)
