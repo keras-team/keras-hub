@@ -114,12 +114,16 @@ class FalconTransformerDecoder(keras.layers.Layer):
         inputs,
         decoder_padding_mask=None,
         decoder_attention_mask=None,
+        attention_cache=None,
+        attention_cache_update_index=None,
         training=None,
     ):
-        attention_mask = self._compute_self_attention_mask(
+        attention_mask = self._compute_attention_mask(
             decoder_sequence=inputs,
             decoder_padding_mask=decoder_padding_mask,
             decoder_attention_mask=decoder_attention_mask,
+            attention_cache=attention_cache,
+            attention_cache_update_index=attention_cache_update_index,
         )
 
         residual = inputs
@@ -131,11 +135,18 @@ class FalconTransformerDecoder(keras.layers.Layer):
         )
 
         # Attention block.
-        x = self._attention_layer(
+        attention_output = self._attention_layer(
             inputs=x,
             alibi=alibi,
             attention_mask=attention_mask,
+            cache=attention_cache,
+            cache_update_index=attention_cache_update_index,
         )
+
+        if attention_cache is None:
+            x = attention_output
+        else:
+            x, attention_cache = attention_output
 
         x = self._attention_dropout(x, training=training)
 
@@ -149,9 +160,12 @@ class FalconTransformerDecoder(keras.layers.Layer):
 
         x = self._feedforward_dropout(x, training=training)
 
-        decoder_output = x + residual
+        x = x + residual
 
-        return decoder_output
+        if attention_cache is not None:
+            return x, attention_cache
+        else:
+            return x
 
     def get_config(self):
         config = super().get_config()
@@ -169,13 +183,13 @@ class FalconTransformerDecoder(keras.layers.Layer):
     def compute_output_shape(self, decoder_sequence_shape):
         return decoder_sequence_shape
 
-    def _compute_self_attention_mask(
+    def _compute_attention_mask(
         self,
         decoder_sequence,
         decoder_padding_mask,
         decoder_attention_mask,
-        self_attention_cache=None,
-        self_attention_cache_update_index=None,
+        attention_cache=None,
+        attention_cache_update_index=None,
     ):
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
@@ -185,8 +199,8 @@ class FalconTransformerDecoder(keras.layers.Layer):
         # We need to handle a rectangular causal mask when doing cached
         # decoding. For generative inference, `decoder_sequence` will
         # generally be length 1, and `cache` will be the full generation length.
-        if self_attention_cache is not None:
-            input_length = ops.shape(self_attention_cache)[2]
+        if attention_cache is not None:
+            input_length = ops.shape(attention_cache)[2]
 
         causal_mask = compute_causal_mask(
             batch_size,
@@ -194,8 +208,8 @@ class FalconTransformerDecoder(keras.layers.Layer):
             output_length,
             (
                 0
-                if self_attention_cache_update_index is None
-                else self_attention_cache_update_index
+                if attention_cache_update_index is None
+                else attention_cache_update_index
             ),
         )
         return (
