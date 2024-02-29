@@ -86,16 +86,14 @@ class FalconBackbone(Backbone):
         **kwargs,
     ):
         # === Layers ===
-        # Embed Tokens
-        token_embedding_layer = ReversibleEmbedding(
+        self.token_embedding_layer = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             dtype=dtype,
             name="token_embedding",
         )
 
-        # Apply successive transformer decoder blocks.
-        transformer_layers = []
+        self.transformer_layers = []
         for i in range(num_layers):
             layer = FalconTransformerDecoder(
                 num_attention_heads=num_attention_heads,
@@ -105,9 +103,9 @@ class FalconBackbone(Backbone):
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
-            transformer_layers.append(layer)
+            self.transformer_layers.append(layer)
 
-        final_layernorm = keras.layers.LayerNormalization(
+        self.final_layernorm = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
             dtype=dtype,
             name="final_layernorm",
@@ -118,11 +116,13 @@ class FalconBackbone(Backbone):
         padding_mask = keras.Input(
             shape=(None,), dtype="int32", name="padding_mask"
         )
-        x = token_embedding_layer(token_ids)
+        # Embed Tokens.
+        x = self.token_embedding_layer(token_ids)
 
-        for transformer_layer in transformer_layers:
+        # Apply successive transformer decoder blocks.
+        for transformer_layer in self.transformer_layers:
             x = transformer_layer(inputs=x, decoder_padding_mask=padding_mask)
-        sequence_output = final_layernorm(x)
+        sequence_output = self.final_layernorm(x)
 
         super().__init__(
             inputs={
@@ -158,7 +158,3 @@ class FalconBackbone(Backbone):
             }
         )
         return config
-
-    @property
-    def token_embedding(self):
-        return self.get_layer("token_embedding")
