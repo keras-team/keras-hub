@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
@@ -85,6 +86,13 @@ class FalconBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
+        if not config.keras_3():
+            raise ValueError(
+                "`FalconBackbone` requires Keras 3. Run `pip install -U keras` "
+                "upgrade your Keras version, or see https://keras.io/getting_started/ "
+                "for more info on Keras versions and installation."
+            )
+
         # === Layers ===
         self.token_embedding_layer = ReversibleEmbedding(
             input_dim=vocabulary_size,
