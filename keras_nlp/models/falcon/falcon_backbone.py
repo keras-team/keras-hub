@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import config
+
+# from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
@@ -86,15 +87,15 @@ class FalconBackbone(Backbone):
         dtype=None,
         **kwargs,
     ):
-        if not config.keras_3():
-            raise ValueError(
-                "`FalconBackbone` requires Keras 3. Run `pip install -U keras` "
-                "upgrade your Keras version, or see https://keras.io/getting_started/ "
-                "for more info on Keras versions and installation."
-            )
+        # if not config.keras_3():
+        #     raise ValueError(
+        #         "`FalconBackbone` requires Keras 3. Run `pip install -U keras` "
+        #         "upgrade your Keras version, or see https://keras.io/getting_started/ "
+        #         "for more info on Keras versions and installation."
+        #     )
 
         # === Layers ===
-        self.token_embedding_layer = ReversibleEmbedding(
+        self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             dtype=dtype,
@@ -125,7 +126,7 @@ class FalconBackbone(Backbone):
             shape=(None,), dtype="int32", name="padding_mask"
         )
         # Embed Tokens.
-        x = self.token_embedding_layer(token_ids)
+        x = self.token_embedding(token_ids)
 
         # Apply successive transformer decoder blocks.
         for transformer_layer in self.transformer_layers:

@@ -223,7 +223,7 @@ class FalconTransformerDecoder(keras.layers.Layer):
         slopes = ops.convert_to_tensor(
             self._get_slopes(num_heads),
             dtype=self.compute_dtype,
-        )
+        )  # num_heads
         arange_tensor = (
             (
                 ops.cast(ops.cumsum(attention_mask, axis=-1) - 1, dtype="int32")
@@ -231,8 +231,10 @@ class FalconTransformerDecoder(keras.layers.Layer):
             )
         )[:, None, :]
         alibi = slopes[..., None] * ops.cast(arange_tensor, self.compute_dtype)
-        alibi = ops.expand_dims(alibi, 0)
-        return ops.reshape(alibi, (batch_size, num_heads, 1, seq_length))
+        alibi = ops.expand_dims(
+            alibi, 0
+        )  # [None, batch_size, num_heads, seq_length]
+        return ops.transpose(alibi, [1, 2, 0, 3])
 
     def _get_slopes(self, num_heads):
         def get_slopes_power_of_2(n):
