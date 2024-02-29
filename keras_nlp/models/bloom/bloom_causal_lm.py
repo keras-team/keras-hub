@@ -237,10 +237,7 @@ class BloomCausalLM(GenerativeTask):
         num_heads = self.backbone.num_heads
         head_dim = self.backbone.hidden_dim // num_heads
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
-        attention_layer_dtype = self.backbone.transformer_layers[
-            0
-        ].compute_dtype
-        cache = ops.zeros(shape, dtype=attention_layer_dtype)
+        cache = ops.zeros(shape, dtype=self.compute_dtype)
         # Seed the cache.
         _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
         return hidden_states, cache
