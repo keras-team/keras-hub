@@ -27,10 +27,6 @@ class Backbone(keras.Model):
         self._functional_layer_ids = set(
             id(layer) for layer in self._flatten_layers()
         )
-        if config.keras_3():
-            self.dtype_policy = keras.src.dtype_policies.get(dtype)
-        else:
-            self._set_dtype_policy(dtype)
         self._initialized = True
         if dtype is not None:
             # Keras 2 and Keras 3 handle setting policy differently.

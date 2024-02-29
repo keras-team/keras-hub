@@ -139,7 +139,6 @@ class BloomBackbone(Backbone):
             x = transformer_layer(x, decoder_padding_mask=padding_mask_input)
         sequence_output = self.layer_norm(x)
         super().__init__(
-            dtype=dtype,
             inputs={
                 "token_ids": token_id_input,
                 "padding_mask": padding_mask_input,
