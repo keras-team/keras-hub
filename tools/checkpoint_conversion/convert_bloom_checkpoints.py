@@ -59,9 +59,15 @@ EXTRACT_DIR = "./model"
 
 
 flags.DEFINE_string(
-    "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
+    "preset", None, f'Must be one of {", ".join(PRESET_MAP.keys())}'
 )
 flags.mark_flag_as_required("preset")
+flags.DEFINE_boolean(
+    "validate_only",
+    False,
+    "To validate the output of a preset that has been already uploaded. "
+    "No weights conversion will happen.",
+)
 
 
 def download_hf_model(hf_model_name):
@@ -233,59 +239,87 @@ def validate_output(
 
 def main(_):
     preset = FLAGS.preset
-
     assert (
         preset in PRESET_MAP.keys()
-    ), f'Invalid preset {preset}. Must be one of {",".join(PRESET_MAP.keys())}'
+    ), f'Invalid preset {preset}. Must be one of {", ".join(PRESET_MAP.keys())}'
 
-    print(f"✅ Coverting {preset}")
+    validate_only = FLAGS.validate_only
 
-    hf_model_name = PRESET_MAP[preset]
-    hf_model_dir = download_hf_model(hf_model_name)
-    print("✅ Huggingface model downloaded from hub")
+    if not validate_only:
+        print(f"✅ Coverting {preset}")
 
-    hf_model = transformers.BloomModel.from_pretrained(
-        hf_model_dir,
-    )
-    hf_tokenizer = transformers.BloomTokenizerFast.from_pretrained(hf_model_dir)
-    print("✅ Huggingface model loaded")
+        hf_model_name = PRESET_MAP[preset]
+        hf_model_dir = download_hf_model(hf_model_name)
+        print("✅ Huggingface model downloaded from hub")
 
-    keras_model = convert_model(hf_model)
-    keras_tokenizer = convert_tokenizer(hf_model_dir)
-    print("✅ Keras model loaded")
+        hf_model = transformers.BloomModel.from_pretrained(
+            hf_model_dir,
+        )
+        hf_tokenizer = transformers.BloomTokenizerFast.from_pretrained(
+            hf_model_dir
+        )
+        print("✅ Huggingface model loaded")
 
-    convert_weights(keras_model, hf_model)
-    print("✅ Weights converted")
+        keras_model = convert_model(hf_model)
+        keras_tokenizer = convert_tokenizer(hf_model_dir)
+        print("✅ Keras model loaded")
 
-    validate_output(
-        hf_model,
-        keras_model,
-        hf_tokenizer,
-        keras_tokenizer,
-    )
-    print("✅ Numerics validated")
+        convert_weights(keras_model, hf_model)
+        print("✅ Weights converted")
 
-    # Delete huggingface model
-    del hf_model
-    del hf_tokenizer
+        validate_output(
+            hf_model,
+            keras_model,
+            hf_tokenizer,
+            keras_tokenizer,
+        )
+        print("✅ Numerics validated")
 
-    # Save float32 keras preset
-    keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
+        # Delete huggingface model
+        del hf_model
+        del hf_tokenizer
 
-    # Delete float32 Keras model
-    del keras_model
+        # Save float32 keras preset
+        keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
 
-    # Load The model in float16 percision
-    preset_path = os.path.join(os.getcwd(), preset)
-    keras_model = BloomBackbone.from_preset(preset_path, dtype="float16")
+        # Delete float32 Keras model
+        del keras_model
 
-    # Save float16 keras model
-    keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
-    keras_nlp.src.utils.preset_utils.save_to_preset(
-        keras_tokenizer, preset, config_filename="tokenizer.json"
-    )
+        # Load The model in float16 percision
+        preset_path = os.path.join(os.getcwd(), preset)
+        keras_model = BloomBackbone.from_preset(preset_path, dtype="float16")
 
-    print("✅ Preset saved")
+        # Save float16 keras model
+        keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
+        keras_nlp.src.utils.preset_utils.save_to_preset(
+            keras_tokenizer, preset, config_filename="tokenizer.json"
+        )
+
+        print("✅ Preset saved")
+    else:
+        print(f"✅ Validating {preset}")
+
+        hf_model_name = PRESET_MAP[preset]
+        hf_model_dir = download_hf_model(hf_model_name)
+        print("✅ Huggingface model downloaded from hub")
+
+        hf_model = transformers.BloomModel.from_pretrained(
+            hf_model_dir,
+        )
+        hf_tokenizer = transformers.BloomTokenizerFast.from_pretrained(
+            hf_model_dir
+        )
+
+        keras_model = BloomBackbone.from_preset(preset)
+        keras_tokenizer = BloomTokenizer.from_preset(preset)
+
+        validate_output(
+            hf_model,
+            keras_model,
+            hf_tokenizer,
+            keras_tokenizer,
+        )
+        print("✅ Numerics validated")
 
 
 if __name__ == "__main__":
