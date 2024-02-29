@@ -21,12 +21,12 @@ class FalconAttention(keras.layers.Layer):
     def __init__(
         self,
         num_heads,
-        attention_dropout,
+        attention_dropout_rate,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.num_heads = num_heads
-        self.attention_dropout = attention_dropout
+        self.attention_dropout_rate = attention_dropout_rate
 
     def build(self, inputs_shape):
         batch_size, seq_length, hidden_dim = inputs_shape
@@ -36,47 +36,47 @@ class FalconAttention(keras.layers.Layer):
         # Layer-wise attention scaling
         self.inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
 
-        self._query_dense = keras.layers.EinsumDense(
+        self.query_dense = keras.layers.EinsumDense(
             equation="btm,mnh->btnh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
             dtype=self.dtype_policy,
             name="query_dense",
         )
-        self._query_dense.build(inputs_shape)
+        self.query_dense.build(inputs_shape)
 
-        self._key_dense = keras.layers.EinsumDense(
+        self.key_dense = keras.layers.EinsumDense(
             equation="bsm,mnh->bsnh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
             dtype=self.dtype_policy,
             name="key_dense",
         )
-        self._key_dense.build(inputs_shape)
+        self.key_dense.build(inputs_shape)
 
-        self._value_dense = keras.layers.EinsumDense(
+        self.value_dense = keras.layers.EinsumDense(
             equation="bsm,mnh->bsnh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
             dtype=self.dtype_policy,
             name="value_dense",
         )
-        self._value_dense.build(inputs_shape)
+        self.value_dense.build(inputs_shape)
 
-        self._attention_dropout = keras.layers.Dropout(
-            rate=self.attention_dropout,
+        self.attention_dropout = keras.layers.Dropout(
+            rate=self.attention_dropout_rate,
             dtype=self.dtype_policy,
             name="attention_dropout",
         )
 
-        self._output_dense = keras.layers.Dense(
+        self.output_dense = keras.layers.Dense(
             hidden_dim,
             dtype=self.dtype_policy,
             name="output_dense",
         )
-        self._output_dense.build(inputs_shape)
+        self.output_dense.build(inputs_shape)
 
-        self._softmax = keras.layers.Softmax(dtype="float32", name="softmax")
+        self.softmax = keras.layers.Softmax(dtype="float32", name="softmax")
 
         self.built = True
 
@@ -90,9 +90,9 @@ class FalconAttention(keras.layers.Layer):
     ):
         batch_size, seq_length, hidden_dim = ops.shape(inputs)
 
-        query = self._query_dense(inputs)
-        key = self._key_dense(inputs)
-        value = self._value_dense(inputs)
+        query = self.query_dense(inputs)
+        key = self.key_dense(inputs)
+        value = self.value_dense(inputs)
 
         if cache is not None:
             key_cache = cache[:, 0, ...]
@@ -125,10 +125,10 @@ class FalconAttention(keras.layers.Layer):
         attention_scores = (
             attention_scores * self.inv_norm_factor
         )  # [batch_size, num_heads, query_length, kv_length]
-        attention_scores = self._softmax(
+        attention_scores = self.softmax(
             attention_scores, ops.expand_dims(attention_mask, 1)
         )
-        attention_scores = self._attention_dropout(attention_scores)
+        attention_scores = self.attention_dropout(attention_scores)
         attention_output = ops.matmul(
             attention_scores, value
         )  # [batch_size, num_heads, query_length, head_dim]
@@ -141,7 +141,7 @@ class FalconAttention(keras.layers.Layer):
             [batch_size, seq_length, self.num_heads * self.head_dim],
         )  # [batch_size, query_length, hidden_dim]
 
-        attention_output = self._output_dense(attention_output)
+        attention_output = self.output_dense(attention_output)
 
         if cache is not None:
             return attention_output, cache
@@ -153,7 +153,7 @@ class FalconAttention(keras.layers.Layer):
         config.update(
             {
                 "num_heads": self.num_heads,
-                "attention_dropout": self.attention_dropout,
+                "attention_dropout_rate": self.attention_dropout_rate,
             }
         )
         return config

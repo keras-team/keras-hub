@@ -30,70 +30,70 @@ class FalconTransformerDecoder(keras.layers.Layer):
         num_attention_heads,
         intermediate_dim,
         layer_norm_epsilon=1e-5,
-        attention_dropout=0,
-        feedforward_dropout=0,
+        attention_dropout_rate=0,
+        feedforward_dropout_rate=0,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.num_attention_heads = num_attention_heads
         self.intermediate_dim = intermediate_dim
         self.layer_norm_epsilon = layer_norm_epsilon
-        self.attention_dropout = attention_dropout
-        self.feedforward_dropout = feedforward_dropout
+        self.attention_dropout_rate = attention_dropout_rate
+        self.feedforward_dropout_rate = feedforward_dropout_rate
 
     def build(self, decoder_sequence_shape):
         self.hidden_dim = decoder_sequence_shape[-1]
-        self._input_layernorm = keras.layers.LayerNormalization(
+        self.input_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="input_layernorm",
         )
-        self._input_layernorm.build(decoder_sequence_shape)
+        self.input_layernorm.build(decoder_sequence_shape)
 
         # Attention layers.
         self.key_dim = self.hidden_dim // self.num_attention_heads
-        self._attention_layer = FalconAttention(
+        self.attention_layer = FalconAttention(
             num_heads=self.num_attention_heads,
-            attention_dropout=self.attention_dropout,
+            attention_dropout_rate=self.attention_dropout_rate,
             dtype=self.dtype_policy,
             name="attention",
         )
-        self._attention_layer.build(
+        self.attention_layer.build(
             decoder_sequence_shape,
         )
 
-        self._attention_dropout = keras.layers.Dropout(
-            rate=self.attention_dropout,
+        self.attention_dropout = keras.layers.Dropout(
+            rate=self.attention_dropout_rate,
             dtype=self.dtype_policy,
             name="attention_dropout",
         )
 
-        self._post_attention_layernorm = keras.layers.LayerNormalization(
+        self.post_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
             name="post_attention_layernorm",
         )
-        self._post_attention_layernorm.build(decoder_sequence_shape)
+        self.post_attention_layernorm.build(decoder_sequence_shape)
 
         # Feedforward layers.
         # TODO: use_bias should be an argument to the transformer to support
         # other sizes of models, e.g. 7B, that don't use bias.
-        self._dense_h_to_4h = keras.layers.Dense(
+        self.dense_h_to_4h = keras.layers.Dense(
             self.intermediate_dim,
             activation=keras.activations.gelu,
             use_bias=True,
             dtype=self.dtype_policy,
             name="dense_h_to_4h",
         )
-        self._dense_h_to_4h.build(decoder_sequence_shape)
+        self.dense_h_to_4h.build(decoder_sequence_shape)
 
-        self._dense_4h_to_h = keras.layers.Dense(
+        self.dense_4h_to_h = keras.layers.Dense(
             self.hidden_dim,
             use_bias=True,
             dtype=self.dtype_policy,
             name="dense_4h_to_h",
         )
-        self._dense_4h_to_h.build(
+        self.dense_4h_to_h.build(
             (
                 decoder_sequence_shape[0],
                 decoder_sequence_shape[1],
@@ -101,8 +101,8 @@ class FalconTransformerDecoder(keras.layers.Layer):
             )
         )
 
-        self._feedforward_dropout = keras.layers.Dropout(
-            rate=self.feedforward_dropout,
+        self.feedforward_dropout = keras.layers.Dropout(
+            rate=self.feedforward_dropout_rate,
             dtype=self.dtype_policy,
             name="feedforward_dropout",
         )
@@ -128,14 +128,14 @@ class FalconTransformerDecoder(keras.layers.Layer):
 
         residual = inputs
 
-        x = self._input_layernorm(inputs)
+        x = self.input_layernorm(inputs)
 
         alibi = self._build_alibi_tensor(
             self.num_attention_heads, decoder_padding_mask
         )
 
         # Attention block.
-        attention_output = self._attention_layer(
+        attention_output = self.attention_layer(
             inputs=x,
             alibi=alibi,
             attention_mask=attention_mask,
@@ -148,17 +148,17 @@ class FalconTransformerDecoder(keras.layers.Layer):
         else:
             x, attention_cache = attention_output
 
-        x = self._attention_dropout(x, training=training)
+        x = self.attention_dropout(x, training=training)
 
         x = x + residual
         residual = x
 
-        x = self._post_attention_layernorm(x)
+        x = self.post_attention_layernorm(x)
 
-        x = self._dense_h_to_4h(x)
-        x = self._dense_4h_to_h(x)
+        x = self.dense_h_to_4h(x)
+        x = self.dense_4h_to_h(x)
 
-        x = self._feedforward_dropout(x, training=training)
+        x = self.feedforward_dropout(x, training=training)
 
         x = x + residual
 
@@ -174,8 +174,8 @@ class FalconTransformerDecoder(keras.layers.Layer):
                 "num_attention_heads": self.num_attention_heads,
                 "intermediate_dim": self.intermediate_dim,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "attention_dropout": self.attention_dropout,
-                "feedforward_dropout": self.feedforward_dropout,
+                "attention_dropout_rate": self.attention_dropout_rate,
+                "feedforward_dropout_rate": self.feedforward_dropout_rate,
             }
         )
         return config

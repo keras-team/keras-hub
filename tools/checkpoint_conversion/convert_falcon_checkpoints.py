@@ -33,8 +33,8 @@ def convert_checkpoints(hf_model):
     cfg["num_attention_heads"] = hf_config["num_attention_heads"]
     cfg["hidden_dim"] = hf_config["hidden_size"]
     cfg["intermediate_dim"] = 4 * cfg["hidden_dim"]
-    cfg["feedforward_dropout"] = hf_config["hidden_dropout"]
-    cfg["attention_dropout"] = hf_config["attention_dropout"]
+    cfg["feedforward_dropout_rate"] = hf_config["hidden_dropout"]
+    cfg["attention_dropout_rate"] = hf_config["attention_dropout"]
 
     keras_model = FalconBackbone(**cfg)
 
@@ -78,35 +78,35 @@ def convert_checkpoints(hf_model):
         # transformer.h.0.self_attention.query_key_value.bias
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._attention_layer._query_dense.kernel.assign(query)
+        ).attention_layer.query_dense.kernel.assign(query)
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._attention_layer._query_dense.bias.assign(query_bias)
+        ).attention_layer.query_dense.bias.assign(query_bias)
 
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._attention_layer._key_dense.kernel.assign(key)
+        ).attention_layer.key_dense.kernel.assign(key)
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._attention_layer._key_dense.bias.assign(key_bias)
+        ).attention_layer.key_dense.bias.assign(key_bias)
 
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._attention_layer._value_dense.kernel.assign(value)
+        ).attention_layer.value_dense.kernel.assign(value)
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._attention_layer._value_dense.bias.assign(value_bias)
+        ).attention_layer.value_dense.bias.assign(value_bias)
 
         # transformer.h.0.self_attention.dense.weight
         # transformer.h.0.self_attention.dense.bias
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._attention_layer._output_dense.kernel.assign(
+        ).attention_layer.output_dense.kernel.assign(
             hf_wts[f"transformer.h.{i}.self_attention.dense.weight"].T.numpy()
         )
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._attention_layer._output_dense.bias.assign(
+        ).attention_layer.output_dense.bias.assign(
             hf_wts[f"transformer.h.{i}.self_attention.dense.bias"].numpy()
         )
 
@@ -114,12 +114,12 @@ def convert_checkpoints(hf_model):
         # transformer.h.0.mlp.dense_h_to_4h.bias
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._dense_h_to_4h.kernel.assign(
+        ).dense_h_to_4h.kernel.assign(
             hf_wts[f"transformer.h.{i}.mlp.dense_h_to_4h.weight"].T.numpy()
         )
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._dense_h_to_4h.bias.assign(
+        ).dense_h_to_4h.bias.assign(
             hf_wts[f"transformer.h.{i}.mlp.dense_h_to_4h.bias"].numpy()
         )
 
@@ -127,12 +127,12 @@ def convert_checkpoints(hf_model):
         # transformer.h.0.mlp.dense_4h_to_h.bias
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._dense_4h_to_h.kernel.assign(
+        ).dense_4h_to_h.kernel.assign(
             hf_wts[f"transformer.h.{i}.mlp.dense_4h_to_h.weight"].T.numpy()
         )
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._dense_4h_to_h.bias.assign(
+        ).dense_4h_to_h.bias.assign(
             hf_wts[f"transformer.h.{i}.mlp.dense_4h_to_h.bias"].numpy()
         )
 
@@ -140,12 +140,12 @@ def convert_checkpoints(hf_model):
         # transformer.h.0.input_layernorm.bias
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._input_layernorm.gamma.assign(
+        ).input_layernorm.gamma.assign(
             hf_wts[f"transformer.h.{i}.input_layernorm.weight"]
         )
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._input_layernorm.beta.assign(
+        ).input_layernorm.beta.assign(
             hf_wts[f"transformer.h.{i}.input_layernorm.bias"]
         )
 
@@ -153,12 +153,12 @@ def convert_checkpoints(hf_model):
         # transformer.h.0.post_attention_layernorm.bias
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._post_attention_layernorm.gamma.assign(
+        ).post_attention_layernorm.gamma.assign(
             hf_wts[f"transformer.h.{i}.post_attention_layernorm.weight"].numpy()
         )
         keras_model.get_layer(
             f"transformer_layer_{i}"
-        )._post_attention_layernorm.beta.assign(
+        ).post_attention_layernorm.beta.assign(
             hf_wts[f"transformer.h.{i}.post_attention_layernorm.bias"].numpy()
         )
 

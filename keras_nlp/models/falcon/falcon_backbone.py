@@ -37,8 +37,8 @@ class FalconBackbone(Backbone):
             the MLP network of each transformer.
         layer_norm_epsilon: float. Epsilon for the layer normalization layers in
             the transformer decoder.
-        attention_dropout: float. Dropout probability for the attention.
-        feedforward_dropout: flaot. Dropout probability for the feedforward.
+        attention_dropout_rate: float. Dropout probability for the attention.
+        feedforward_dropout_rate: flaot. Dropout probability for the feedforward.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -64,8 +64,8 @@ class FalconBackbone(Backbone):
         hidden_dim=32,
         intermediate_dim=32*4,
         layer_norm_epsilon=1e-5,
-        attention_dropout=0,
-        feedforward_dropout=0,
+        attention_dropout_rate=0,
+        feedforward_dropout_rate=0,
         dtype="float32",
     )
     model(input_data)
@@ -80,8 +80,8 @@ class FalconBackbone(Backbone):
         hidden_dim,
         intermediate_dim,
         layer_norm_epsilon=1e-5,
-        attention_dropout=0,
-        feedforward_dropout=0,
+        attention_dropout_rate=0,
+        feedforward_dropout_rate=0,
         dtype=None,
         **kwargs,
     ):
@@ -100,8 +100,8 @@ class FalconBackbone(Backbone):
             layer = FalconTransformerDecoder(
                 num_attention_heads=num_attention_heads,
                 intermediate_dim=intermediate_dim,
-                attention_dropout=attention_dropout,
-                feedforward_dropout=feedforward_dropout,
+                attention_dropout_rate=attention_dropout_rate,
+                feedforward_dropout_rate=feedforward_dropout_rate,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
@@ -139,8 +139,8 @@ class FalconBackbone(Backbone):
         self.num_attention_heads = num_attention_heads
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
-        self.attention_dropout = attention_dropout
-        self.feedforward_dropout = feedforward_dropout
+        self.attention_dropout_rate = attention_dropout_rate
+        self.feedforward_dropout_rate = feedforward_dropout_rate
         self.layer_norm_epsilon = layer_norm_epsilon
 
     def get_config(self):
@@ -152,8 +152,8 @@ class FalconBackbone(Backbone):
                 "num_attention_heads": self.num_attention_heads,
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
-                "attention_dropout": self.attention_dropout,
-                "feedforward_dropout": self.feedforward_dropout,
+                "attention_dropout_rate": self.attention_dropout_rate,
+                "feedforward_dropout_rate": self.feedforward_dropout_rate,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )
