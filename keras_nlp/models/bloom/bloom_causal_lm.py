@@ -16,6 +16,7 @@ import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.backend import config
 from keras_nlp.backend import ops
 from keras_nlp.models.bloom.bloom_backbone import BloomBackbone
 from keras_nlp.models.bloom.bloom_causal_lm_preprocessor import (
@@ -175,6 +176,12 @@ class BloomCausalLM(GenerativeTask):
             jit_compile=True,
         )
 
+        # === dtype policy ===
+        if config.keras_3():
+            self.dtype_policy = self.backbone.dtype_policy 
+        else:
+            self._set_dtype_policy(self.backbone._dtype_policy)
+            
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
@@ -237,10 +244,10 @@ class BloomCausalLM(GenerativeTask):
         num_heads = self.backbone.num_heads
         head_dim = self.backbone.hidden_dim // num_heads
         shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
-        attention_layer_dtype = self.backbone.transformer_layers[
-            0
-        ].compute_dtype
-        cache = ops.zeros(shape, dtype=attention_layer_dtype)
+        # attention_layer_dtype = self.backbone.transformer_layers[
+        #     0
+        # ].compute_dtype
+        cache = ops.zeros(shape, dtype=self.compute_dtype)
         # Seed the cache.
         _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
         return hidden_states, cache
