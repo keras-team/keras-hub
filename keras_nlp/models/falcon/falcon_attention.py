@@ -29,6 +29,14 @@ class FalconAttention(keras.layers.Layer):
         self.attention_dropout_rate = attention_dropout_rate
 
     def build(self, inputs_shape):
+        # Einsum variables:
+        # b = batch size
+        # q = query length
+        # m = model dim
+        # n = num attention heads
+        # h = head dim
+        # k = key/value length
+
         batch_size, seq_length, hidden_dim = inputs_shape
 
         self.head_dim = hidden_dim // self.num_heads
@@ -37,7 +45,7 @@ class FalconAttention(keras.layers.Layer):
         self.inv_norm_factor = 1.0 / math.sqrt(self.head_dim)
 
         self.query_dense = keras.layers.EinsumDense(
-            equation="btm,mnh->btnh",
+            equation="bqm,mnh->bqnh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
             dtype=self.dtype_policy,
@@ -46,7 +54,7 @@ class FalconAttention(keras.layers.Layer):
         self.query_dense.build(inputs_shape)
 
         self.key_dense = keras.layers.EinsumDense(
-            equation="bsm,mnh->bsnh",
+            equation="bkm,mnh->bknh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
             dtype=self.dtype_policy,
@@ -55,7 +63,7 @@ class FalconAttention(keras.layers.Layer):
         self.key_dense.build(inputs_shape)
 
         self.value_dense = keras.layers.EinsumDense(
-            equation="bsm,mnh->bsnh",
+            equation="bkm,mnh->bknh",
             output_shape=(None, self.num_heads, self.head_dim),
             bias_axes="nh",
             dtype=self.dtype_policy,
@@ -113,14 +121,7 @@ class FalconAttention(keras.layers.Layer):
                     f"cache_update_index={cache_update_index}"
                 )
 
-        # query (batch_size, num_heads, query_length, head_dim)
-        query = ops.transpose(query, [0, 2, 1, 3])
-        # value (batch_size, num_heads, kv_length, head_dim)
-        value = ops.transpose(value, [0, 2, 1, 3])
-        # key   (batch_size, num_heads, head_dim, kv_length)
-        key = ops.transpose(key, [0, 2, 3, 1])
-
-        attention_scores = ops.matmul(query, key)
+        attention_scores = ops.einsum("bqnh,bknh->bnqk", query, key)
         attention_scores = ops.add(attention_scores, alibi)
         attention_scores = (
             attention_scores * self.inv_norm_factor
@@ -129,13 +130,9 @@ class FalconAttention(keras.layers.Layer):
             attention_scores, ops.expand_dims(attention_mask, 1)
         )
         attention_scores = self.attention_dropout(attention_scores)
-        attention_output = ops.matmul(
-            attention_scores, value
-        )  # [batch_size, num_heads, query_length, head_dim]
-
-        attention_output = ops.transpose(
-            attention_output, [0, 2, 1, 3]
-        )  # [batch_size, query_length, num_heads, head_dim]
+        attention_output = ops.einsum(
+            "bnqk,bknh->bqnh", attention_scores, value
+        )
         attention_output = ops.reshape(
             attention_output,
             [batch_size, seq_length, self.num_heads * self.head_dim],
