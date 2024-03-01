@@ -18,7 +18,6 @@ from keras_nlp.models.falcon.falcon_backbone import FalconBackbone
 from keras_nlp.tests.test_case import TestCase
 
 
-# @pytest.mark.keras_3_only
 class FalconBackboneTest(TestCase):
     def setUp(self):
         self.init_kwargs = {
