@@ -73,7 +73,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
     # Embed tokens to shape `(batch_size, seq_length, hidden_dim)`.
     hidden_states = embedding(token_ids)
     # Project hidden states to shape `(batch_size, seq_length, vocab_size)`.
-    logits = embedding(hidden_state, reverse=True)
+    logits = embedding(hidden_states, reverse=True)
     ```
 
     References:
