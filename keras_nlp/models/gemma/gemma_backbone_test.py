@@ -54,9 +54,9 @@ class GemmaBackboneTest(TestCase):
         )
 
     @pytest.mark.kaggle_key_required
-    @pytest.mark.extra_large
+    @pytest.mark.large
     def test_smallest_preset(self):
-        # TODO: Fails with OOM on current GPU CI
+        keras.config.set_floatx("float16")
         self.run_preset_test(
             cls=GemmaBackbone,
             preset="gemma_2b_en",
