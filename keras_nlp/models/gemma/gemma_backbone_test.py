@@ -54,8 +54,9 @@ class GemmaBackboneTest(TestCase):
         )
 
     @pytest.mark.kaggle_key_required
-    @pytest.mark.large
+    @pytest.mark.extra_large
     def test_smallest_preset(self):
+        # TODO: Fails with OOM on current GPU CI
         self.run_preset_test(
             cls=GemmaBackbone,
             preset="gemma_2b_en",
