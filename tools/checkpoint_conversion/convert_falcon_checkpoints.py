@@ -46,10 +46,6 @@ import transformers  # noqa: E402
 
 import keras_nlp  # noqa: E402
 
-# from transformers import AutoModelForCausalLM
-# from transformers import AutoTokenizer
-
-
 PRESET_MAP = {
     "falcon_rw_1b": "tiiuae/falcon-rw-1b",
 }
@@ -300,8 +296,8 @@ def main(_):
     )
     print("✅ Numerics validated")
 
-    keras_nlp.utils.preset_utils.save_to_preset(keras_model, preset)
-    keras_nlp.utils.preset_utils.save_to_preset(
+    keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
+    keras_nlp.src.utils.preset_utils.save_to_preset(
         keras_tokenizer, preset, config_filename="tokenizer.json"
     )
     print("✅ Preset saved")
