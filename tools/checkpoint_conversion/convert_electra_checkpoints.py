@@ -44,7 +44,7 @@ EXTRACT_DIR = "./model"
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset",
-    "electra_small_generator_en",
+    "electra_base_discriminator_en",
     f'Must be one of {",".join(PRESET_MAP)}',
 )
 flags.mark_flag_as_required("preset")
