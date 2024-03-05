@@ -137,7 +137,7 @@ class GenerativeTask(Task):
     ):
         """Normalize user input to the generate function.
 
-        This function coverts all inputs to tensors, adds a batch dimension if
+        This function converts all inputs to tensors, adds a batch dimension if
         necessary, and returns a iterable "dataset like" object (either an
         actual `tf.data.Dataset` or a list with a single batch element).
         """
