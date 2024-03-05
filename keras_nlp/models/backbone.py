@@ -28,6 +28,16 @@ class Backbone(keras.Model):
             id(layer) for layer in self._flatten_layers()
         )
         self._initialized = True
+        if dtype is not None:
+            if isinstance(dtype, keras.mixed_precision.DTypePolicy):
+                policy = dtype
+            else:
+                policy = keras.mixed_precision.DTypePolicy(dtype)
+            # Keras 2 and Keras 3 handle setting policy differently.
+            if config.keras_3():
+                self.dtype_policy = policy
+            else:
+                self._dtype_policty = policy
 
     def __dir__(self):
         if config.keras_3():

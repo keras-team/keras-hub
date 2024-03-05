@@ -146,6 +146,7 @@ class OPTBackbone(Backbone):
                 "padding_mask": padding_mask_input,
             },
             outputs=x,
+            dtype=dtype,
             **kwargs,
         )
 

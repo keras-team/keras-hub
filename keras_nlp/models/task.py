@@ -133,6 +133,11 @@ class Task(PipelineModel):
     @backbone.setter
     def backbone(self, value):
         self._backbone = value
+        # Keras 2 and Keras 3 handle setting policy differently.
+        if config.keras_3():
+            self.dtype_policy = value.dtype_policy
+        else:
+            self._dtype_policty = value.dtype_policy
 
     @property
     def preprocessor(self):

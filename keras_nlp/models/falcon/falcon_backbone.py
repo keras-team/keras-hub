@@ -130,6 +130,7 @@ class FalconBackbone(Backbone):
                 "padding_mask": padding_mask,
             },
             outputs=sequence_output,
+            dtype=dtype,
             **kwargs,
         )
 

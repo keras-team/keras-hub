@@ -329,10 +329,10 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             for weight in layer.weights:
                 if is_float_dtype(weight.dtype):
                     self.assertDTypeEqual(weight, policy.variable_dtype)
-            for sublayer in layer._flatten_layers(include_self=False):
-                if isinstance(
-                    sublayer, (keras.layers.Softmax, keras.layers.InputLayer)
-                ):
+            for sublayer in layer._flatten_layers():
+                if isinstance(sublayer, keras.layers.Softmax):
+                    continue
+                if isinstance(sublayer, keras.layers.InputLayer):
                     continue
                 self.assertEqual(policy.compute_dtype, sublayer.compute_dtype)
                 self.assertEqual(policy.variable_dtype, sublayer.variable_dtype)
