@@ -34,12 +34,9 @@ class TransformerDecoder(keras.layers.Layer):
     paper [Attention is All You Need](https://arxiv.org/abs/1706.03762). Users
     can instantiate multiple instances of this class to stack up a decoder.
 
-    By default, this layer will apply a causal mask to the decoder attention layer.
-    This layer will correctly compute an attention mask from an implicit
-    Keras padding mask (for example, by passing `mask_zero=True` to a
-    `keras.layers.Embedding` layer). See the Masking and Padding
-    [guide](https://keras.io/guides/understanding_masking_and_padding/)
-    for more details.
+    By default, this layer will apply a causal mask to the decoder attention
+    layer. You can also pass padding or attention masks directly to the layer
+    during call, e.g. with `decoder_padding_mask` or `decoder_attention_mask`.
 
     This layer can be called with either one or two inputs. The number of inputs
     must be consistent across all calls. The options are as follows:
