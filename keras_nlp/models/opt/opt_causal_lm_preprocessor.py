@@ -132,7 +132,7 @@ class OPTCausalLMPreprocessor(OPTPreprocessor):
         x,
         sequence_length=None,
     ):
-        """Covert strings to integer token input for generation.
+        """Convert strings to integer token input for generation.
 
         Similar to calling the layer for training, this method takes in strings
         or tensor strings, tokenizes and packs the input, and computes a padding
@@ -160,7 +160,7 @@ class OPTCausalLMPreprocessor(OPTPreprocessor):
         self,
         x,
     ):
-        """Covert integer token output to strings for generation.
+        """Convert integer token output to strings for generation.
 
         This method reverses `generate_preprocess()`, by first removing all
         padding and start/end tokens, and then converting the integer sequence
