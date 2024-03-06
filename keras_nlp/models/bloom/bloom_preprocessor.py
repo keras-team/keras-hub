@@ -126,8 +126,8 @@ class BloomPreprocessor(Preprocessor):
         # Defer packer creation to `build()` so that we can be sure tokenizer
         # assets have loaded when restoring a saved model.
         self.packer = StartEndPacker(
-            start_value=self.tokenizer.bos_token_id,
-            end_value=self.tokenizer.eos_token_id,
+            start_value=self.tokenizer.start_token_id,
+            end_value=self.tokenizer.end_token_id,
             pad_value=self.tokenizer.pad_token_id,
             sequence_length=self.sequence_length,
             return_padding_mask=True,

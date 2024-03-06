@@ -99,7 +99,6 @@ class AlibiBiasTest(TestCase):
         input_tensor = ops.zeros(input_shape)
         layer = AlibiBias()
         output_tensor = layer(input_tensor)
-        print(output_tensor)
         self.assertAllClose(
             output_tensor,
             ops.convert_to_tensor(
@@ -127,7 +126,6 @@ class AlibiBiasTest(TestCase):
         input_tensor = ops.zeros(input_shape)
         layer = AlibiBias()
         output_tensor = layer(input_tensor)
-        print(output_tensor)
         self.assertAllClose(
             output_tensor,
             ops.convert_to_tensor(
@@ -162,7 +160,6 @@ class AlibiBiasTest(TestCase):
         input_tensor = ops.zeros(input_shape)
         layer = AlibiBias(alibi_bias_max=alibi_bias_max)
         output_tensor = layer(input_tensor)
-        print(output_tensor)
         self.assertAllClose(
             output_tensor,
             ops.convert_to_tensor(
@@ -187,7 +184,6 @@ class AlibiBiasTest(TestCase):
         input_tensor = ops.zeros(input_shape)
         layer = AlibiBias(alibi_bias_max=alibi_bias_max)
         output_tensor = layer(input_tensor)
-        print(output_tensor)
         self.assertAllClose(
             output_tensor,
             ops.convert_to_tensor(

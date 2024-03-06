@@ -53,8 +53,6 @@ class BloomBackbone(Backbone):
         dropout: float. Dropout probability for the Transformer decoder.
         layer_norm_epsilon: float. Epsilon for the layer normalization layers in
             the transformer decoder.
-        max_sequence_length: int. The maximum sequence length that this decoder
-            can consume.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
@@ -80,7 +78,6 @@ class BloomBackbone(Backbone):
         intermediate_dim=32*4,
         dropout=0.0,
         layer_norm_epsilon=1e-5,
-        max_sequence_length=128,
     )
     model(input_data)
     ```
@@ -96,7 +93,6 @@ class BloomBackbone(Backbone):
         intermediate_dim,
         dropout=0.0,
         layer_norm_epsilon=1e-5,
-        max_sequence_length=2048,
         dtype=None,
         **kwargs,
     ):
@@ -105,7 +101,6 @@ class BloomBackbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=_bloom_kernel_initializer(stddev=0.02),
-            tie_weights=False,
             dtype=dtype,
             name="token_embedding",
         )
@@ -161,7 +156,6 @@ class BloomBackbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.layer_norm_epsilon = layer_norm_epsilon
-        self.max_sequence_length = max_sequence_length
 
     def get_config(self):
         config = super().get_config()
@@ -174,7 +168,6 @@ class BloomBackbone(Backbone):
                 "intermediate_dim": self.intermediate_dim,
                 "dropout": self.dropout,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
-                "max_sequence_length": self.max_sequence_length,
             }
         )
         return config

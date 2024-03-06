@@ -27,7 +27,6 @@ class BloomBackboneTest(TestCase):
             "num_heads": 4,
             "hidden_dim": 8,
             "intermediate_dim": 32,
-            "max_sequence_length": 10,
         }
         self.input_data = {
             "token_ids": ops.ones((2, 5), dtype="int32"),
