@@ -25,6 +25,6 @@ backbone_presets = {
             "path": "bloom",
             "model_card": "https://huggingface.co/bigscience/bloom",
         },
-        "kaggle_handle": "kaggle://keras/bloom/keras/bloom_560m_multi/1",
+        "kaggle_handle": "kaggle://keras/bloom/keras/bloom_560m_multi/3",
     },
 }

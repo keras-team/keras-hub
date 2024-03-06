@@ -175,8 +175,8 @@ class BloomCausalLMPreprocessor(BloomPreprocessor):
         # end markers). In the future we could make this configurable.
         padding_mask = (
             padding_mask
-            & (token_ids != self.tokenizer.eos_token_id)
-            & (token_ids != self.tokenizer.bos_token_id)
+            & (token_ids != self.tokenizer.start_token_id)
+            & (token_ids != self.tokenizer.end_token_id)
         )
         token_ids = tf.ragged.boolean_mask(token_ids, padding_mask)
         return self.tokenizer.detokenize(token_ids)

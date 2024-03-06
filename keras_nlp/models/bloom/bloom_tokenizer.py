@@ -74,16 +74,16 @@ class BloomTokenizer(BytePairTokenizer):
         merges=None,
         **kwargs,
     ):
-        self.bos_token = "<s>"
-        self.eos_token = "</s>"
+        self.start_token = "<s>"
+        self.end_token = "</s>"
         self.pad_token = "<pad>"
 
         super().__init__(
             vocabulary=vocabulary,
             merges=merges,
             unsplittable_tokens=[
-                self.bos_token,
-                self.eos_token,
+                self.start_token,
+                self.end_token,
                 self.pad_token,
             ],
             **kwargs,
@@ -94,7 +94,7 @@ class BloomTokenizer(BytePairTokenizer):
 
         if vocabulary is not None:
             # Check for necessary special tokens.
-            for token in [self.bos_token, self.eos_token, self.pad_token]:
+            for token in [self.start_token, self.end_token, self.pad_token]:
                 if token not in self.get_vocabulary():
                     raise ValueError(
                         f"Cannot find token `'{token}'` in the provided "
@@ -102,12 +102,12 @@ class BloomTokenizer(BytePairTokenizer):
                         "your `vocabulary` or use a pretrained `vocabulary` name."
                     )
 
-            self.bos_token_id = self.token_to_id(self.bos_token)
-            self.eos_token_id = self.token_to_id(self.eos_token)
+            self.start_token_id = self.token_to_id(self.start_token)
+            self.end_token_id = self.token_to_id(self.end_token)
             self.pad_token_id = self.token_to_id(self.pad_token)
         else:
-            self.bos_token_id = None
-            self.eos_token_id = None
+            self.start_token_id = None
+            self.end_token_id = None
             self.pad_token_id = None
 
     @classproperty
