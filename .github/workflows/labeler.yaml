@@ -17,7 +17,7 @@
 # It searches for the keyword "Gemma" (case-insensitive) in both the title and description of the issue/PR.
 # If a match is found, the workflow adds the label 'Gemma' to the issue/PR.
 
-name: 'Gemma Labeler'
+name: 'Labeler'
 on:
   issues:
     types: [edited,opened]
