@@ -206,6 +206,7 @@ class FNetBackbone(Backbone):
                 "sequence_output": sequence_output,
                 "pooled_output": pooled_output,
             },
+            dtype=dtype,
             **kwargs,
         )
 

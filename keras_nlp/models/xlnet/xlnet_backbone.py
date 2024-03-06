@@ -184,6 +184,7 @@ class XLNetBackbone(Backbone):
                 "segment_ids": segment_id_input,
             },
             outputs=output,
+            dtype=dtype,
             **kwargs,
         )
 

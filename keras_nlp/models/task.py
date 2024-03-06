@@ -36,6 +36,12 @@ class Task(PipelineModel):
             id(layer) for layer in self._flatten_layers()
         )
         self._initialized = True
+        if self.backbone is not None:
+            # Keras 2 and Keras 3 handle setting policy differently.
+            if config.keras_3():
+                self.dtype_policy = self._backbone.dtype_policy
+            else:
+                self._set_dtype_policy(self._backbone.dtype_policy)
 
     def __dir__(self):
         if config.keras_3():
@@ -128,7 +134,7 @@ class Task(PipelineModel):
     @property
     def backbone(self):
         """A `keras.Model` instance providing the backbone sub-model."""
-        return self._backbone
+        return getattr(self, "_backbone", None)
 
     @backbone.setter
     def backbone(self, value):
@@ -137,7 +143,7 @@ class Task(PipelineModel):
     @property
     def preprocessor(self):
         """A `keras.layers.Layer` instance used to preprocess inputs."""
-        return self._preprocessor
+        return getattr(self, "_preprocessor", None)
 
     @preprocessor.setter
     def preprocessor(self, value):
