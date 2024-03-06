@@ -13,14 +13,15 @@
 # limitations under the License.
 
 
-#This workflow automatically identifies issues and pull requests (PRs) related to Gemma.
-# It searches for the keyword "Gemma" (case-insensitive) in both the title and description of the issue/PR.
-# If a match is found, the workflow adds the label 'Gemma' to the issue/PR.
+# This workflow automatically identifies issues and pull requests (PRs)
+# related to Gemma. It searches for the keyword "Gemma" (case-insensitive)
+# in both the title and description of the issue/PR.  If a match is found,
+# the workflow adds the label 'Gemma' to the issue/PR.
 
 name: 'Labeler'
 on:
   issues:
-    types: [edited,opened]
+    types: [edited, opened]
   pull_request_target:
     types: [opened, edited]
 
