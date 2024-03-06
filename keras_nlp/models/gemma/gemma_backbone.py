@@ -249,20 +249,23 @@ class GemmaBackbone(Backbone):
                 f"device_mesh.axis_names. {device_mesh.axis_name=}"
             )
         model_dim = model_parallel_dim_name
-        # The sharding is partition for the hidden_dim of the model.
+        # The sharding is set to replicated the hidden_dim of the model.
+        # So that the contrasting dimensions for qkv matmul are replicated.
+        # and will be run as local computation. 
+        # See https://github.com/keras-team/keras-nlp/issues/1464 for more details.
         layout_map = keras.distribution.LayoutMap(device_mesh)
-        layout_map["token_embedding/embeddings"] = (None, model_dim)
+        layout_map["token_embedding/embeddings"] = (model_dim, None)
         layout_map["decoder_block.*attention.*(query|key|value).*kernel"] = (
             None,
-            model_dim,
             None,
+            model_dim,
         )
         layout_map["decoder_block.*attention_output.*kernel"] = (
             None,
-            None,
             model_dim,
+            None,
         )
-        layout_map["decoder_block.*ffw_gating.*kernel"] = (model_dim, None)
-        layout_map["decoder_block.*ffw_linear.*kernel"] = (None, model_dim)
+        layout_map["decoder_block.*ffw_gating.*kernel"] = (None, model_dim)
+        layout_map["decoder_block.*ffw_linear.*kernel"] = (model_dim, None)
 
         return layout_map
