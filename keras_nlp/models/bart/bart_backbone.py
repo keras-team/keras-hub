@@ -232,6 +232,7 @@ class BartBackbone(Backbone):
                 "encoder_sequence_output": encoder_output,
                 "decoder_sequence_output": decoder_output,
             },
+            dtype=dtype,
             **kwargs,
         )
 

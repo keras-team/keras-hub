@@ -28,6 +28,15 @@ class Backbone(keras.Model):
             id(layer) for layer in self._flatten_layers()
         )
         self._initialized = True
+        if dtype is not None:
+            # Keras 2 and Keras 3 handle setting policy differently.
+            if config.keras_3():
+                if isinstance(dtype, keras.DTypePolicy):
+                    self.dtype_policy = dtype
+                else:
+                    self.dtype_policy = keras.DTypePolicy(dtype)
+            else:
+                self._set_dtype_policy(dtype)
 
     def __dir__(self):
         if config.keras_3():
@@ -67,7 +76,7 @@ class Backbone(keras.Model):
 
         This layer embeds integer token ids to the hidden dim of the model.
         """
-        return self._token_embedding
+        return getattr(self, "_token_embedding", None)
 
     @token_embedding.setter
     def token_embedding(self, value):
