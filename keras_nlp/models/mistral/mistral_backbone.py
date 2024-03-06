@@ -166,6 +166,7 @@ class MistralBackbone(Backbone):
                 "padding_mask": padding_mask_input,
             },
             outputs=sequence_output,
+            dtype=dtype,
             **kwargs,
         )
 
