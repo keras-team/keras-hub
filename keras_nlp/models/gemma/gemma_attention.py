@@ -95,7 +95,7 @@ class CachedGemmaAttention(keras.layers.Layer):
         max_wavelength = 10000
         x_shape = ops.shape(x)
         freq_exponents = (2.0 / x_shape[-1]) * ops.cast(
-            ops.arange(x_shape[-1] // 2, dtype="float32"), self.compute_dtype
+            ops.arange(x_shape[-1] // 2, dtype="float32"), "float32"
         )
         timescale = max_wavelength**freq_exponents
         radians = positions[..., None] / timescale[None, None, :]
