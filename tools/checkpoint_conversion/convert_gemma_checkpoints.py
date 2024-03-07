@@ -40,9 +40,8 @@ PRESET_MAP = {
 
 
 flags.DEFINE_string(
-    "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}'
+    "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}', required=True
 )
-flags.mark_flag_as_required("preset")
 
 
 def download_flax_model(handle):
@@ -95,15 +94,28 @@ def convert_weights(keras_model, flax_config, flax_params):
         keras_block.ffw_linear.set_weights([flax_block["mlp"]["linear"]])
 
         attn_block = flax_block["attn"]
-        keras_block.attention.query_dense.kernel.assign(
-            np.asarray(attn_block["q_einsum"]["w"][:, :, :])
-        )
-        keras_block.attention.key_dense.kernel.assign(
-            np.asarray(attn_block["kv_einsum"]["w"][0, :, :, :])
-        )
-        keras_block.attention.value_dense.kernel.assign(
-            np.asarray(attn_block["kv_einsum"]["w"][1, :, :, :])
-        )
+        if flax_config.num_heads != flax_config.num_kv_heads:
+            # MQA.
+            keras_block.attention.query_dense.kernel.assign(
+                np.asarray(attn_block["q_einsum"]["w"][:, :, :])
+            )
+            keras_block.attention.key_dense.kernel.assign(
+                np.asarray(attn_block["kv_einsum"]["w"][0, :, :, :])
+            )
+            keras_block.attention.value_dense.kernel.assign(
+                np.asarray(attn_block["kv_einsum"]["w"][1, :, :, :])
+            )
+        else:
+            # MHA.
+            keras_block.attention.query_dense.kernel.assign(
+                np.asarray(attn_block["qkv_einsum"]["w"][0, :, :, :])
+            )
+            keras_block.attention.key_dense.kernel.assign(
+                np.asarray(attn_block["qkv_einsum"]["w"][1, :, :, :])
+            )
+            keras_block.attention.value_dense.kernel.assign(
+                np.asarray(attn_block["qkv_einsum"]["w"][2, :, :, :])
+            )
         keras_block.attention.output_dense.kernel.assign(
             flax_block["attn"]["attn_vec_einsum"]["w"]
         )
