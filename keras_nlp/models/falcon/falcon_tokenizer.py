@@ -22,7 +22,6 @@ from keras_nlp.utils.python_utils import classproperty
 
 @keras_nlp_export("keras_nlp.models.FalconTokenizer")
 class FalconTokenizer(BytePairTokenizer):
-    # TODO: update comments.
     """Falcon tokenizer based on BytePairTokenizer.
 
     This tokenizer class will tokenize raw strings into integer sequences and
@@ -51,7 +50,7 @@ class FalconTokenizer(BytePairTokenizer):
 
     ```python
     # Unbatched input.
-    tokenizer = keras_nlp.models.FalconTokenizer.from_preset("falcon_rw_1b")
+    tokenizer = keras_nlp.models.FalconTokenizer.from_preset("falcon_refinedweb_1b_en")
     tokenizer("The quick brown fox jumped.")
 
     # Batched input.

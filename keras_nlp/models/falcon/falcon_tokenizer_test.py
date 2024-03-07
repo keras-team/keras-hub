@@ -47,7 +47,7 @@ class FalconTokenizerTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=FalconTokenizer,
-            preset="falcon_rw_1b",
+            preset="falcon_refinedweb_1b_en",
             input_data=["The quick brown fox."],
             expected_output=[[464, 2068, 7586, 21831, 13]],
         )

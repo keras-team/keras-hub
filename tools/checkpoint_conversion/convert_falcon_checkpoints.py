@@ -28,7 +28,7 @@ huggingface-cli login
 Finally run this script to convert, validate and upload weights.
 ```
 python tools/checkpoint_conversion/convert_falcon_checkpoints.py \
-    --preset falcon_rw_1b
+    --preset falcon_refinedweb_1b_en
 ```
 """
 
@@ -47,7 +47,7 @@ import transformers  # noqa: E402
 import keras_nlp  # noqa: E402
 
 PRESET_MAP = {
-    "falcon_rw_1b": "tiiuae/falcon-rw-1b",
+    "falcon_refinedweb_1b_en": "tiiuae/falcon-rw-1b",
 }
 
 EXTRACT_DIR = "./model"
@@ -55,7 +55,7 @@ EXTRACT_DIR = "./model"
 FLAGS = absl.flags.FLAGS
 absl.flags.DEFINE_string(
     "preset",
-    "falcon_rw_1b",
+    "falcon_refinedweb_1b_en",
     f'Must be one of {",".join(PRESET_MAP.keys())}.',
 )
 
