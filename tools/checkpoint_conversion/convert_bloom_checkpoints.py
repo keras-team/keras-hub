@@ -34,7 +34,7 @@ PRESET_MAP = {
     "bloom_1.7b_multi": "bigscience/bloom-1b7",
     "bloom_3b_multi": "bigscience/bloom-3b",
     "bloom_7b_multi": "bigscience/bloom-7b1",
-    "bloom_multi": "bigscience/bloom",
+    "bloom_176b_multi": "bigscience/bloom",
     # Multitask finetuned on xP3 (Crosslingual Public Pool of Prompts) https://huggingface.co/datasets/bigscience/xP3
     # xP3 is a mixture of 13 training tasks in 46 languages with English prompts
     "bloomz_560m_multi": "bigscience/bloomz-560m",
@@ -42,17 +42,17 @@ PRESET_MAP = {
     "bloomz_1.7b_multi": "bigscience/bloomz-1b7",
     "bloomz_3b_multi": "bigscience/bloomz-3b",
     "bloomz_7b_multi": "bigscience/bloomz-7b1",
-    "bloomz_multi": "bigscience/bloomz",
+    "bloomz_176b_multi": "bigscience/bloomz",
     # Multitask finetuned on xP3mt
     # (Crosslingual Public Pool of Prompts machine-translated) https://huggingface.co/datasets/bigscience/xP3
     # xP3mt is Mixture of 13 training tasks in 46 languages with prompts in 20
     # languages (machine-translated from English)
     "bloomz_7b_mt": "bigscience/bloomz-7b1-mt",
-    "bloomz_mt": "bigscience/bloomz-mt",
+    "bloomz_176b_mt": "bigscience/bloomz-mt",
     # Multitask finetuned on P3 (Public Pool of Prompts) https://huggingface.co/datasets/Muennighoff/P3
     # xP3 is a mixture of 8 training tasks with English-only prompts
     "bloomz_7b_p3": "bigscience/bloomz-7b1-p3",
-    "bloomz_p3": "bigscience/bloomz-p3",
+    "bloomz_176b_p3": "bigscience/bloomz-p3",
 }
 
 EXTRACT_DIR = "./model"
