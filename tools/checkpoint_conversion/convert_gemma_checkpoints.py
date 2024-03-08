@@ -11,6 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+Convert Gemma flax checkpoints to the Keras format.
+
+Setup:
+pip install requirements.txt
+pip install git+https://github.com/google-deepmind/gemma.git
+python pip_build.py --install
+
+Usage:
+cd tools/checkpoint_conversion
+python convert_gemma_checkpoints.py --preset gemma_2b_en
+"""
 
 import os
 
@@ -19,6 +31,7 @@ os.environ["KERAS_BACKEND"] = "jax"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 import kagglehub  # noqa: E402
+import keras  # noqa: E402
 import numpy as np  # noqa: E402
 import sentencepiece  # noqa: E402
 from absl import app  # noqa: E402
@@ -40,7 +53,10 @@ PRESET_MAP = {
 
 
 flags.DEFINE_string(
-    "preset", None, f'Must be one of {",".join(PRESET_MAP.keys())}', required=True
+    "preset",
+    None,
+    f'Must be one of {",".join(PRESET_MAP.keys())}',
+    required=True,
 )
 
 
@@ -169,6 +185,10 @@ def main(_):
     ), f'Invalid preset {preset}. Must be one of {",".join(PRESET_MAP.keys())}'
 
     print(f"🏃 Coverting {preset}")
+
+    # Currently all flax weights are bfloat16 (and have much faster download
+    # times for it). We follow suit with Keras weights.
+    keras.config.set_floatx("bfloat16")
 
     handle = PRESET_MAP[preset]
     flax_dir = download_flax_model(handle)
