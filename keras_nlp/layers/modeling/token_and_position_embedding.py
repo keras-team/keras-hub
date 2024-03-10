@@ -33,6 +33,9 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         vocabulary_size: The size of the vocabulary.
         sequence_length: The maximum length of input sequence
         embedding_dim: The output dimension of the embedding layer
+        tie_weights: Boolean, whether or not the matrix for embedding and
+            the matrix for the `reverse` projection should share the same
+            weights.
         embeddings_initializer: The initializer to use for the Embedding
             Layers
         mask_zero: Boolean, whether or not the input value 0 is a special
