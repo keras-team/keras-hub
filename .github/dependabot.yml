@@ -22,5 +22,5 @@ updates:
         patterns:
           - "*"
     ignore:
-        # TODO: ignore all updates for JAX GPU due to cuda version issue
+        # ignore all updates for JAX GPU due to cuda version issue
       - dependency-name: "jax[cuda12_pip]"
