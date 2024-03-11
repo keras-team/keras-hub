@@ -20,6 +20,7 @@ from keras_nlp.models.albert.albert_masked_lm_preprocessor import (
 )
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
+from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.bart.bart_backbone import BartBackbone
 from keras_nlp.models.bart.bart_preprocessor import BartPreprocessor
 from keras_nlp.models.bart.bart_seq_2_seq_lm import BartSeq2SeqLM
@@ -130,6 +131,7 @@ from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.models.t5.t5_backbone import T5Backbone
 from keras_nlp.models.t5.t5_tokenizer import T5Tokenizer
+from keras_nlp.models.task import Task
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
