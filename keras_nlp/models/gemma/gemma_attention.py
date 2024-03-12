@@ -103,9 +103,7 @@ class CachedGemmaAttention(keras.layers.Layer):
         timescale = max_wavelength**freq_exponents
         radians = positions[..., None] / timescale[None, None, :]
         radians = radians[..., None, :]
-        # radians = ops.cast(radians, dtype=self.compute_dtype)
         sin, cos = ops.sin(radians), ops.cos(radians)
-        # x = ops.cast(x, dtype=self.compute_dtype)
         x1, x2 = ops.split(x, 2, axis=-1)
         # Avoid `ops.concatenate` for now, to avoid a obscure bug with XLA
         # compilation on jax. We should be able to remove this once the
