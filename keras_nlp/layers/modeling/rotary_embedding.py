@@ -104,14 +104,11 @@ class RotaryEmbedding(keras.layers.Layer):
         sequence_axis = get_axis(self.sequence_axis)
 
         rotary_dim = ops.shape(inputs)[feature_axis]
-        rotary_dim = ops.cast(rotary_dim, "int32")
         inverse_freq = self._get_inverse_freq(rotary_dim)
 
         seq_len = ops.shape(inputs)[self.sequence_axis]
-        seq_len = ops.cast(seq_len, "int32")
-        tensor = ops.cast(ops.arange(seq_len), "float32") + start_index
+        tensor = ops.arange(seq_len, dtype="float32") + start_index
 
-        tensor = ops.cast(tensor, dtype=inverse_freq.dtype)
         freq = ops.einsum("i,j->ij", tensor, inverse_freq)
         embedding = ops.concatenate((freq, freq), axis=-1)
 
@@ -125,8 +122,7 @@ class RotaryEmbedding(keras.layers.Layer):
         return ops.cos(embedding), ops.sin(embedding)
 
     def _get_inverse_freq(self, rotary_dim):
-        freq_range = ops.arange(0, rotary_dim, 2)
-        freq_range = ops.cast(freq_range, "float32")
+        freq_range = ops.arange(0, rotary_dim, 2, dtype="float32")
         freq_range = freq_range / ops.cast(self.scaling_factor, "float32")
         inverse_freq = 1.0 / (
             self.max_wavelength
