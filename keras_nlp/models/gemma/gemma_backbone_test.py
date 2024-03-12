@@ -106,26 +106,26 @@ class GemmaBackboneTest(TestCase):
 
         for w in model.weights:
             if "token_embedding/embeddings" in w.path:
-                self.assertEqual(tuple(w.value.sharding.spec), (None, "model"))
+                self.assertEqual(tuple(w.value.sharding.spec), ("model", None))
             if "attention/query/kernel" in w.path:
-                self.assertEqual(
-                    tuple(w.value.sharding.spec), (None, "model", None)
-                )
-            if "attention/key/kernel" in w.path:
-                self.assertEqual(
-                    tuple(w.value.sharding.spec), (None, "model", None)
-                )
-            if "attention/value/kernel" in w.path:
-                self.assertEqual(
-                    tuple(w.value.sharding.spec), (None, "model", None)
-                )
-            if "attention/attention_output/kernel" in w.path:
                 self.assertEqual(
                     tuple(w.value.sharding.spec), (None, None, "model")
                 )
+            if "attention/key/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, "model")
+                )
+            if "attention/value/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, None, "model")
+                )
+            if "attention/attention_output/kernel" in w.path:
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), (None, "model", None)
+                )
             if "ffw_gating/kernel" in w.path:
-                self.assertEqual(tuple(w.value.sharding.spec), ("model", None))
-            if "ffw_gating_2/kernel" in w.path:
-                self.assertEqual(tuple(w.value.sharding.spec), ("model", None))
-            if "ffw_linearl" in w.path:
                 self.assertEqual(tuple(w.value.sharding.spec), (None, "model"))
+            if "ffw_gating_2/kernel" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), (None, "model"))
+            if "ffw_linearl" in w.path:
+                self.assertEqual(tuple(w.value.sharding.spec), ("model", None))
