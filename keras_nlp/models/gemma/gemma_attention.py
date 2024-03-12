@@ -92,16 +92,20 @@ class CachedGemmaAttention(keras.layers.Layer):
     def _apply_rope(self, x, positions):
         """Rope rotate q or k."""
         # TODO: refactor to use RotaryEmbedding layer?
-        x = ops.cast(x, dtype="float32")  # Carry out rope in float32, then downcast
+        x = ops.cast(
+            x, dtype="float32"
+        )  # Carry out rope in float32, then downcast
         max_wavelength = 10000
         x_shape = ops.shape(x)
-        freq_exponents = (2.0 / x_shape[-1]) * ops.arange(x_shape[-1] // 2, dtype="float32")
+        freq_exponents = (2.0 / x_shape[-1]) * ops.arange(
+            x_shape[-1] // 2, dtype="float32"
+        )
         timescale = max_wavelength**freq_exponents
         radians = positions[..., None] / timescale[None, None, :]
         radians = radians[..., None, :]
-        #radians = ops.cast(radians, dtype=self.compute_dtype)
+        # radians = ops.cast(radians, dtype=self.compute_dtype)
         sin, cos = ops.sin(radians), ops.cos(radians)
-        #x = ops.cast(x, dtype=self.compute_dtype)
+        # x = ops.cast(x, dtype=self.compute_dtype)
         x1, x2 = ops.split(x, 2, axis=-1)
         # Avoid `ops.concatenate` for now, to avoid a obscure bug with XLA
         # compilation on jax. We should be able to remove this once the
@@ -159,7 +163,7 @@ class CachedGemmaAttention(keras.layers.Layer):
         seq_len = ops.shape(x)[1]
         start_index = cache_update_index
         positions = ops.arange(seq_len, dtype="float32")
-    
+
         positions = positions + ops.cast(start_index, "float32")
         query = self.query_dense(x)
         query = self._apply_rope(query, positions)
