@@ -24,20 +24,20 @@ from keras_nlp.models.llama.llama_layernorm import LlamaLayerNorm
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
-class LlamaDecoder(keras.layers.Layer):
-    """Llama decoder block."""
+class LlamaTransformerDecoder(keras.layers.Layer):
+    """A Transformer decoder layer for the Llama backbone."""
 
     def __init__(
         self,
         intermediate_dim,
         num_query_heads,
         num_key_value_heads,
+        rope_max_wavelength=10000,
         rope_scaling_factor=1.0,
-        activation="relu",
+        activation="silu",
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
-        rope_max_wavelength=10000,
-        max_sequence_length=512,
+        dropout=0,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -48,37 +48,50 @@ class LlamaDecoder(keras.layers.Layer):
         self.rope_max_wavelength = rope_max_wavelength
         self.rope_scaling_factor = rope_scaling_factor
 
-        self.max_sequence_length = max_sequence_length
+        self.dropout = dropout
+
         self.activation = keras.activations.get(activation)
         self.layer_norm_epsilon = layer_norm_epsilon
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
 
+        self.supports_masking = True
+
     def build(self, decoder_sequence_shape):
+        self._decoder_sequence_shape = decoder_sequence_shape
         self.hidden_dim = decoder_sequence_shape[-1]
 
-        # Self attention layers.
+        # Self attention layer.
         self._self_attention_layer = LlamaAttention(
             num_query_heads=self.num_query_heads,
             num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
-            max_sequence_length=self.max_sequence_length,
             rope_scaling_factor=self.rope_scaling_factor,
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            dropout=self.dropout,
             dtype=self.dtype_policy,
+            name="self_attention",
         )
         self._self_attention_layer.build(decoder_sequence_shape)
 
         self._self_attention_layernorm = LlamaLayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
+            name="self_attention_layernorm",
         )
         self._self_attention_layernorm.build(decoder_sequence_shape)
+        self._self_attention_dropout = keras.layers.Dropout(
+            rate=self.dropout,
+            dtype=self.dtype_policy,
+            name="self_attention_dropout",
+        )
 
         # Feedforward layers.
         self._feedforward_intermediate_dense = keras.layers.Dense(
             self.intermediate_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            use_bias=False,
             dtype=self.dtype_policy,
+            name="feedforward_intermediate_dense",
         )
         self._feedforward_intermediate_dense.build(decoder_sequence_shape)
 
@@ -86,23 +99,30 @@ class LlamaDecoder(keras.layers.Layer):
             self.intermediate_dim,
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            use_bias=False,
             dtype=self.dtype_policy,
+            name="feedforward_gate_dense",
         )
         self._feedforward_gate_dense.build(decoder_sequence_shape)
 
         self._feedforward_output_dense = keras.layers.Dense(
             self.hidden_dim,
             kernel_initializer=clone_initializer(self.kernel_initializer),
+            use_bias=False,
             dtype=self.dtype_policy,
+            name="feedforward_output_dense",
         )
 
-        intermediate_shape = list(decoder_sequence_shape)
-        intermediate_shape[-1] = self.intermediate_dim
-        self._feedforward_output_dense.build(tuple(intermediate_shape))
+        self._feedforward_output_dense.build(
+            self._feedforward_gate_dense.compute_output_shape(
+                decoder_sequence_shape
+            )
+        )
 
         self._feedforward_layernorm = LlamaLayerNorm(
             epsilon=self.layer_norm_epsilon,
             dtype=self.dtype_policy,
+            name="feedforward_layernorm",
         )
         self._feedforward_layernorm.build(decoder_sequence_shape)
 
@@ -115,6 +135,7 @@ class LlamaDecoder(keras.layers.Layer):
         decoder_attention_mask=None,
         self_attention_cache=None,
         self_attention_cache_update_index=None,
+        training=None,
     ):
         self_attention_mask = self._compute_self_attention_mask(
             decoder_sequence=decoder_sequence,
@@ -125,10 +146,9 @@ class LlamaDecoder(keras.layers.Layer):
         )
         residual = decoder_sequence
 
-        x = self._self_attention_layernorm(
-            decoder_sequence,
-        )
+        x = self._self_attention_layernorm(decoder_sequence)
 
+        # Self attention block.
         x = self._self_attention_layer(
             hidden_states=x,
             attention_mask=self_attention_mask,
@@ -138,6 +158,8 @@ class LlamaDecoder(keras.layers.Layer):
 
         if self_attention_cache is not None:
             x, self_attention_cache = x
+
+        x = self._self_attention_dropout(x, training=training)
 
         x = x + residual
         residual = x
@@ -152,7 +174,7 @@ class LlamaDecoder(keras.layers.Layer):
         decoder_output = x + residual
 
         if self_attention_cache is not None:
-            return (decoder_output, self_attention_cache)
+            return decoder_output, self_attention_cache
         return decoder_output
 
     def _compute_self_attention_mask(
@@ -160,8 +182,8 @@ class LlamaDecoder(keras.layers.Layer):
         decoder_sequence,
         decoder_padding_mask,
         decoder_attention_mask,
-        self_attention_cache=None,
-        self_attention_cache_update_index=None,
+        self_attention_cache,
+        self_attention_cache_update_index,
     ):
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
@@ -174,16 +196,16 @@ class LlamaDecoder(keras.layers.Layer):
         if self_attention_cache is not None:
             input_length = ops.shape(self_attention_cache)[2]
 
-        causal_mask = compute_causal_mask(
-            batch_size,
-            input_length,
-            output_length,
-            (
-                0
-                if self_attention_cache_update_index is None
-                else self_attention_cache_update_index
-            ),
+        cache_update_index = (
+            0
+            if self_attention_cache_update_index is None
+            else self_attention_cache_update_index
         )
+
+        causal_mask = compute_causal_mask(
+            batch_size, input_length, output_length, cache_update_index
+        )
+
         return (
             ops.minimum(decoder_mask, causal_mask)
             if decoder_mask is not None
@@ -198,17 +220,16 @@ class LlamaDecoder(keras.layers.Layer):
         config.update(
             {
                 "intermediate_dim": self.intermediate_dim,
-                "hidden_dim": self.hidden_dim,
                 "num_query_heads": self.num_query_heads,
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "num_key_value_heads": self.num_key_value_heads,
-                "max_sequence_length": self.max_sequence_length,
                 "activation": keras.activations.serialize(self.activation),
                 "layer_norm_epsilon": self.layer_norm_epsilon,
                 "kernel_initializer": keras.initializers.serialize(
                     self.kernel_initializer
                 ),
+                "dropout": self.dropout,
             }
         )
         return config
