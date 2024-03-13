@@ -98,20 +98,6 @@ class BertTokenizer(WordPieceTokenizer):
         super().set_vocabulary(vocabulary)
 
         if vocabulary is not None:
-            # Check for necessary special tokens.
-            for token in [
-                self.cls_token,
-                self.pad_token,
-                self.sep_token,
-                self.mask_token,
-            ]:
-                if token not in self.vocabulary:
-                    raise ValueError(
-                        f"Cannot find token `'{token}'` in the provided "
-                        f"`vocabulary`. Please provide `'{token}'` in your "
-                        "`vocabulary` or use a pretrained `vocabulary` name."
-                    )
-
             self.cls_token_id = self.token_to_id(self.cls_token)
             self.sep_token_id = self.token_to_id(self.sep_token)
             self.pad_token_id = self.token_to_id(self.pad_token)

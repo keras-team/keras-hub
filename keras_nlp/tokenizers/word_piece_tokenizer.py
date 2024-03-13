@@ -423,6 +423,15 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "the `oov_token` argument when creating the tokenizer."
             )
 
+        # Check for special tokens in the vocabulary
+        for token in self.special_tokens:
+            if token not in self.vocabulary:
+                raise ValueError(
+                    f"Cannot find token `'{token}'` in the provided "
+                    f"`vocabulary`. Please provide `'{token}'` in your "
+                    "`vocabulary` or use a pretrained `vocabulary` name."
+                )
+
         self._fast_word_piece = tf_text.FastWordpieceTokenizer(
             vocab=self.vocabulary,
             token_out_type=self.compute_dtype,
