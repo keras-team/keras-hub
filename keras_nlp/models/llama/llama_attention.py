@@ -53,12 +53,13 @@ class LlamaAttention(keras.layers.Layer):
         # u = num query heads
         # v = num key/value heads
         # h = head dim
-        self._hidden_dim = inputs_shape[-1]
-        self._head_dim = self._hidden_dim // self.num_query_heads
+        hidden_dim = inputs_shape[-1]
+        head_dim = hidden_dim // self.num_query_heads
+        self._norm_factor = ops.sqrt(ops.cast(head_dim, self.compute_dtype))
 
         self._query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
-            output_shape=(None, self.num_query_heads, self._head_dim),
+            output_shape=(None, self.num_query_heads, head_dim),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
             name="query",
@@ -70,7 +71,7 @@ class LlamaAttention(keras.layers.Layer):
             output_shape=(
                 None,
                 self.num_key_value_heads,
-                self._head_dim,
+                head_dim,
             ),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
@@ -83,7 +84,7 @@ class LlamaAttention(keras.layers.Layer):
             output_shape=(
                 None,
                 self.num_key_value_heads,
-                self._head_dim,
+                head_dim,
             ),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
@@ -104,14 +105,12 @@ class LlamaAttention(keras.layers.Layer):
 
         self._output_dense = keras.layers.EinsumDense(
             equation="bquh,uhm->bqm",
-            output_shape=(None, self._hidden_dim),
+            output_shape=(None, hidden_dim),
             kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
             name="attention_output",
         )
-        self._output_dense.build(
-            (None, None, self.num_query_heads, self._head_dim)
-        )
+        self._output_dense.build((None, None, self.num_query_heads, head_dim))
 
         self.rotary_embedding_layer = RotaryEmbedding(
             max_wavelength=self.rope_max_wavelength,
@@ -189,9 +188,7 @@ class LlamaAttention(keras.layers.Layer):
     def _compute_attention(self, query, key, value, attention_mask=None):
         attention_scores = ops.einsum(self._dot_product_equation, query, key)
 
-        norm_factor = ops.sqrt(ops.cast(self._head_dim, self.compute_dtype))
-
-        attention_scores = attention_scores / norm_factor
+        attention_scores = attention_scores / self._norm_factor
         attention_scores = self._masked_softmax(
             attention_scores, attention_mask
         )
