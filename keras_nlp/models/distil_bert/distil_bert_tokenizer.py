@@ -46,6 +46,9 @@ class DistilBertTokenizer(WordPieceTokenizer):
             plain text file containing a single word piece token per line.
         lowercase: If `True`, the input text will be first lowered before
             tokenization.
+        special_tokens_in_strings: bool. A bool to indicate if the tokenizer
+            should expect special tokens in input strings that should be
+            tokenized and mapped correctly to their ids. Defaults to False.
 
     Examples:
 
@@ -74,6 +77,7 @@ class DistilBertTokenizer(WordPieceTokenizer):
         self,
         vocabulary,
         lowercase=False,
+        special_tokens_in_strings=False,
         **kwargs,
     ):
         self.cls_token = "[CLS]"
@@ -89,6 +93,7 @@ class DistilBertTokenizer(WordPieceTokenizer):
                 self.pad_token,
                 self.mask_token,
             ],
+            special_tokens_in_strings=special_tokens_in_strings,
             **kwargs,
         )
 

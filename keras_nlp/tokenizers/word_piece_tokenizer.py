@@ -262,12 +262,15 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         oov_token: str. The string value to substitute for
             an unknown token. It must be included in the vocab.
             Defaults to `"[UNK]"`.
-        special_tokens: list. A list of strings that will never be split during
-            the word-level splitting applied before the word-peice encoding.
-            This can be used to ensure special tokens map to unique indices in
-            the vocabulary, even if these special tokens contain splittable
-            characters such as punctuation. Special tokens must still be
-            included in `vocabulary`. Defaults to `None`.
+        special_tokens: list. A list of special tokens. when
+            `special_tokens_in_strings` is set to `True`, the tokenizer will map
+            every special token in the input strings to its id, even if these
+            special tokens contain characters that should be splitted before
+            tokenization such as punctuation. `special_tokens` must be included
+            in `vocabulary`.
+        special_tokens_in_strings: bool. A bool to indicate if the tokenizer
+            should expect special tokens in input strings that should be
+            tokenized and mapped correctly to their ids. Defaults to False.
 
     References:
      - [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)
@@ -347,6 +350,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         suffix_indicator: str = "##",
         oov_token: str = "[UNK]",
         special_tokens: List[str] = None,
+        special_tokens_in_strings: bool = False,
         dtype="int32",
         **kwargs,
     ) -> None:
@@ -371,8 +375,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.oov_token = oov_token
         self.special_tokens = special_tokens
         self._special_tokens_pattern = None
-        if self.split:
-            # Get the pattern of special tokens.
+        if self.split and special_tokens_in_strings:
+            # Use special tokens pattern to avoid sp.
             # the idea here is to pass the special tokens regex to the
             # split function as delimiter regex pattern, so the input will
             # be splitted by them, but also the function will treat each on
@@ -424,13 +428,14 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             )
 
         # Check for special tokens in the vocabulary
-        for token in self.special_tokens:
-            if token not in self.vocabulary:
-                raise ValueError(
-                    f"Cannot find token `'{token}'` in the provided "
-                    f"`vocabulary`. Please provide `'{token}'` in your "
-                    "`vocabulary` or use a pretrained `vocabulary` name."
-                )
+        if isinstance(self.special_tokens, Iterable):
+            for token in self.special_tokens:
+                if token not in self.vocabulary:
+                    raise ValueError(
+                        f"Cannot find token `'{token}'` in the provided "
+                        f"`vocabulary`. Please provide `'{token}'` in your "
+                        "`vocabulary` or use a pretrained `vocabulary` name."
+                    )
 
         self._fast_word_piece = tf_text.FastWordpieceTokenizer(
             vocab=self.vocabulary,

@@ -39,7 +39,9 @@ class ElectraTokenizerTest(TestCase):
 
     def test_tokenizer_special_tokens(self):
         input_data = ["[CLS] THE [MASK] FOX [SEP] [PAD]"]
-        tokenizer = ElectraTokenizer(**self.init_kwargs)
+        tokenizer = ElectraTokenizer(
+            **self.init_kwargs, special_tokens_in_strings=True
+        )
         output_data = tokenizer(input_data)
         expected_output = [[2, 5, 4, 8, 3, 0]]
 
