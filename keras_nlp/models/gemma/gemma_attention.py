@@ -90,7 +90,7 @@ class CachedGemmaAttention(keras.layers.Layer):
         self.softmax = keras.layers.Softmax(dtype="float32")
 
         self.rope_layer = RotaryEmbedding(
-            max_wavelength=10000.0, dtype=self.dtype_policy
+            max_wavelength=10_000.0, dtype=self.dtype_policy
         )
 
         self.built = True
@@ -98,6 +98,9 @@ class CachedGemmaAttention(keras.layers.Layer):
     def _apply_rope(self, x, start_index):
         """Rope rotate q or k."""
         x = self.rope_layer(x, start_index=start_index)
+        # Gemma uses a different layout for positional embeddings.
+        # The transformation below ensures the embeddings are numerically
+        # equivalent to the original gemma implementation.
         x = ops.reshape(
             ops.stack(ops.split(x, 2, axis=-1), axis=-1), ops.shape(x)
         )
