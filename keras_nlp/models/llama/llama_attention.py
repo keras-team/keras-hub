@@ -17,7 +17,7 @@ from keras_nlp.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
-class CachedLlamaAttention(keras.layers.Layer):
+class LlamaAttention(keras.layers.Layer):
     """A cached grounded query attention layer with sliding window."""
 
     def __init__(
@@ -31,18 +31,18 @@ class CachedLlamaAttention(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self._num_query_heads = num_query_heads
-        self._num_key_value_heads = num_key_value_heads
-        self._dropout = dropout
+        self.num_query_heads = num_query_heads
+        self.num_key_value_heads = num_key_value_heads
+        self.dropout = dropout
 
-        self._num_key_value_groups = num_query_heads // num_key_value_heads
-        self._rope_max_wavelength = rope_max_wavelength
+        self.num_key_value_groups = num_query_heads // num_key_value_heads
+        self.rope_max_wavelength = rope_max_wavelength
 
-        self._kernel_initializer = keras.initializers.get(
+        self.kernel_initializer = keras.initializers.get(
             clone_initializer(kernel_initializer)
         )
 
-        self._rope_scaling_factor = rope_scaling_factor
+        self.rope_scaling_factor = rope_scaling_factor
 
     def build(self, inputs_shape):
         # Einsum variables:
@@ -54,12 +54,12 @@ class CachedLlamaAttention(keras.layers.Layer):
         # v = num key/value heads
         # h = head dim
         self._hidden_dim = inputs_shape[-1]
-        self._head_dim = self._hidden_dim // self._num_query_heads
+        self._head_dim = self._hidden_dim // self.num_query_heads
 
         self._query_dense = keras.layers.EinsumDense(
             equation="bqm,muh->bquh",
-            output_shape=(None, self._num_query_heads, self._head_dim),
-            kernel_initializer=self._kernel_initializer,
+            output_shape=(None, self.num_query_heads, self._head_dim),
+            kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
             name="query",
         )
@@ -69,10 +69,10 @@ class CachedLlamaAttention(keras.layers.Layer):
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
-                self._num_key_value_heads,
+                self.num_key_value_heads,
                 self._head_dim,
             ),
-            kernel_initializer=self._kernel_initializer,
+            kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
             name="key",
         )
@@ -82,10 +82,10 @@ class CachedLlamaAttention(keras.layers.Layer):
             equation="bkm,mvh->bkvh",
             output_shape=(
                 None,
-                self._num_key_value_heads,
+                self.num_key_value_heads,
                 self._head_dim,
             ),
-            kernel_initializer=self._kernel_initializer,
+            kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
             name="value",
         )
@@ -98,24 +98,24 @@ class CachedLlamaAttention(keras.layers.Layer):
         )
 
         self._dropout_layer = keras.layers.Dropout(
-            rate=self._dropout,
+            rate=self.dropout,
             dtype=self.dtype_policy,
         )
 
         self._output_dense = keras.layers.EinsumDense(
             equation="bquh,uhm->bqm",
             output_shape=(None, self._hidden_dim),
-            kernel_initializer=self._kernel_initializer,
+            kernel_initializer=self.kernel_initializer,
             dtype=self.dtype_policy,
             name="attention_output",
         )
         self._output_dense.build(
-            (None, None, self._num_query_heads, self._head_dim)
+            (None, None, self.num_query_heads, self._head_dim)
         )
 
         self.rotary_embedding_layer = RotaryEmbedding(
-            max_wavelength=self._rope_max_wavelength,
-            scaling_factor=self._rope_scaling_factor,
+            max_wavelength=self.rope_max_wavelength,
+            scaling_factor=self.rope_scaling_factor,
             dtype=self.dtype_policy,
         )
 
@@ -162,8 +162,8 @@ class CachedLlamaAttention(keras.layers.Layer):
 
         # [batch_shape, seq_len, num_key_value_heads, head_dim]
         # -> [batch_shape, seq_len, num_heads, head_dim]
-        key = ops.repeat(key, repeats=self._num_key_value_groups, axis=2)
-        value = ops.repeat(value, repeats=self._num_key_value_groups, axis=2)
+        key = ops.repeat(key, repeats=self.num_key_value_groups, axis=2)
+        value = ops.repeat(value, repeats=self.num_key_value_groups, axis=2)
 
         attention_output = self._compute_attention(
             query, key, value, attention_mask
@@ -206,14 +206,14 @@ class CachedLlamaAttention(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "num_query_heads": self._num_query_heads,
-                "num_key_value_heads": self._num_key_value_heads,
-                "rope_max_wavelength": self._rope_max_wavelength,
-                "rope_scaling_factor": self._rope_scaling_factor,
+                "num_query_heads": self.num_query_heads,
+                "num_key_value_heads": self.num_key_value_heads,
+                "rope_max_wavelength": self.rope_max_wavelength,
+                "rope_scaling_factor": self.rope_scaling_factor,
                 "kernel_initializer": keras.initializers.serialize(
-                    self._kernel_initializer
+                    self.kernel_initializer
                 ),
-                "dropout": self._dropout,
+                "dropout": self.dropout,
             }
         )
         return config

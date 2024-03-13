@@ -19,7 +19,7 @@ from keras_nlp.layers.modeling.transformer_layer_utils import (
 from keras_nlp.layers.modeling.transformer_layer_utils import (
     merge_padding_and_attention_mask,
 )
-from keras_nlp.models.llama.llama_attention import CachedLlamaAttention
+from keras_nlp.models.llama.llama_attention import LlamaAttention
 from keras_nlp.models.llama.llama_layernorm import LlamaLayerNorm
 from keras_nlp.utils.keras_utils import clone_initializer
 
@@ -61,7 +61,7 @@ class LlamaTransformerDecoder(keras.layers.Layer):
         self.hidden_dim = decoder_sequence_shape[-1]
 
         # Self attention layer.
-        self._self_attention_layer = CachedLlamaAttention(
+        self._self_attention_layer = LlamaAttention(
             num_query_heads=self.num_query_heads,
             num_key_value_heads=self.num_key_value_heads,
             rope_max_wavelength=self.rope_max_wavelength,
