@@ -18,6 +18,7 @@ from keras_nlp.layers.preprocessing.preprocessing_layer import (
 )
 from keras_nlp.utils.preset_utils import check_preset_class
 from keras_nlp.utils.preset_utils import load_from_preset
+from keras_nlp.utils.preset_utils import save_to_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -95,6 +96,13 @@ class Preprocessor(PreprocessingLayer):
             config_file=config_file,
         )
         return cls(tokenizer=tokenizer, **kwargs)
+
+    def save_to_preset(
+        self,
+        preset,
+        config_filename="tokenizer.json",
+    ):
+        save_to_preset(self, preset, config_filename=config_filename)
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.

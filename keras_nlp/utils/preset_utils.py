@@ -155,6 +155,20 @@ def save_to_preset(
             metadata_file.write(json.dumps(metadata, indent=4))
 
 
+def upload_preset(
+    preset,
+    uri,
+):
+    if uri.startswith(KAGGLE_PREFIX):
+        kaggle_handle = uri.removeprefix(KAGGLE_PREFIX)
+        kagglehub.model_upload(kaggle_handle, preset)
+    else:
+        raise ValueError(
+            f"Unexpected URI `'{uri}'`. "
+            f"URI prefix should be one of `'{','.join([KAGGLE_PREFIX])}'`."
+        )
+
+
 def load_from_preset(
     preset,
     load_weights=True,

@@ -18,6 +18,7 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_nlp.utils.preset_utils import save_to_preset
 
 
 @keras_nlp_export("keras_nlp.tokenizers.Tokenizer")
@@ -120,6 +121,13 @@ class Tokenizer(PreprocessingLayer):
             "No implementation of `token_to_id()` was found for "
             f"{self.__class__.__name__}."
         )
+
+    def save_to_preset(
+        self,
+        preset,
+        config_filename="tokenizer.json",
+    ):
+        save_to_preset(self, preset, config_filename=config_filename)
 
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)
