@@ -97,7 +97,6 @@ class CachedGemmaAttention(keras.layers.Layer):
 
     def _apply_rope(self, x, start_index):
         """Rope rotate q or k."""
-        start_index = ops.cast(start_index, dtype="float32")
         x = self.rope_layer(x, start_index=start_index)
         x = ops.reshape(
             ops.stack(ops.split(x, 2, axis=-1), axis=-1), ops.shape(x)
