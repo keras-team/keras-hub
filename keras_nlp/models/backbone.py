@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.preset_utils import check_preset_class
@@ -20,7 +21,7 @@ from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras.saving.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.Backbone")
 class Backbone(keras.Model):
     def __init__(self, *args, dtype=None, **kwargs):
         super().__init__(*args, **kwargs)

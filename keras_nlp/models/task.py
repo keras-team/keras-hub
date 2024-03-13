@@ -16,6 +16,7 @@ from rich import console as rich_console
 from rich import markup
 from rich import table as rich_table
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.keras_utils import print_msg
@@ -26,7 +27,7 @@ from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras.saving.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.Task")
 class Task(PipelineModel):
     """Base class for Task models."""
 
