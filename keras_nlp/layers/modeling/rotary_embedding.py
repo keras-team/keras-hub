@@ -85,11 +85,8 @@ class RotaryEmbedding(keras.layers.Layer):
         self.built = True
 
     def call(self, inputs, start_index=0):
-        inputs = ops.cast(inputs, "float32")
-        start_index = ops.cast(start_index, dtype="float32")
         cos_emb, sin_emb = self._compute_cos_sin_embedding(inputs, start_index)
-        output = self._apply_rotary_pos_emb(inputs, cos_emb, sin_emb)
-        return ops.cast(output, self.compute_dtype)
+        return self._apply_rotary_pos_emb(inputs, cos_emb, sin_emb)
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
         x1, x2 = ops.split(tensor, 2, axis=self.feature_axis)
@@ -99,6 +96,8 @@ class RotaryEmbedding(keras.layers.Layer):
     def _compute_cos_sin_embedding(self, inputs, start_index=0):
         def get_axis(axis):
             return axis if axis > 0 else len(inputs.shape) + axis
+
+        start_index = ops.cast(start_index, dtype="float32")
 
         feature_axis = get_axis(self.feature_axis)
         sequence_axis = get_axis(self.sequence_axis)
@@ -119,7 +118,9 @@ class RotaryEmbedding(keras.layers.Layer):
             if axis != sequence_axis and axis != feature_axis:
                 embedding = ops.expand_dims(embedding, axis)
 
-        return ops.cos(embedding), ops.sin(embedding)
+        cos_emb = ops.cast(ops.cos(embedding), self.compute_dtype)
+        sin_emb = ops.cast(ops.sin(embedding), self.compute_dtype)
+        return cos_emb, sin_emb
 
     def _get_inverse_freq(self, rotary_dim):
         freq_range = ops.arange(0, rotary_dim, 2, dtype="float32")
