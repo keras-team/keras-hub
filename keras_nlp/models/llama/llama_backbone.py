@@ -11,13 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# import copy
+
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
-from keras_nlp.models.llama.llama_decoder import LlamaDecoder
+
+# from keras_nlp.models.llama.llama_presets import backbone_presets
+from keras_nlp.models.llama.llama_decoder import LlamaTransformerDecoder
 from keras_nlp.models.llama.llama_layernorm import LlamaLayerNorm
+
+# from keras_nlp.utils.python_utils import classproperty
 
 
 def _llama_kernel_initializer(stddev=0.02):
@@ -27,41 +34,64 @@ def _llama_kernel_initializer(stddev=0.02):
 @keras_nlp_export("keras_nlp.models.LlamaBackbone")
 class LlamaBackbone(Backbone):
     """
-    LLaMA core network with hyperparameters.
+    The Llama Transformer core architecture with hyperparameters.
 
     This network implements a Transformer-based decoder network,
-    LLaMA, as described in ["LLaMA: Open Foundation and Fine-Tuned Language Models"](https://arxiv.org/abs/2302.13971).
+    Llama, as described in
+    ["Llama 7B"](https://arxiv.org/pdf/2310.06825.pdf).
+    It includes the embedding lookups and transformer layers.
 
     The default constructor gives a fully customizable, randomly initialized
-    LLaMA model with any number of layers, heads, and embedding
-    dimensions. This backbone also supports LLaMA2 checkpoints.
+    Llama model with any number of layers, heads, and embedding
+    dimensions. To load preset architectures and weights, use the `from_preset`
+    constructor.
 
     Args:
-        vocabulary_size: int. The size of the token vocabulary.
-        num_layers: int. The number of transformer layers.
-        num_query_heads: int. The number of attention heads for each transformer.
-            The hidden size must be divisible by the number of attention heads.
-        hidden_dim: int. The size of the transformer encoding and pooler layers.
-        intermediate_dim: int. The output dimension of the first Dense layer in
-            a two-layer feedforward network for each transformer.
-        num_key_value_heads: int. This is the number of key_value heads that
-            should be used to implement Grouped Query Attention. If num_key_value_heads=num_attention_heads,
-            the model will use Multi Head Attention (MHA), if num_key_value_heads=1
-            the model will use Multi Query Attention (MQA)
-        rope_scaling_factor: float. The scaling factor for calculation of rotary
-            embedding
-        rope_max_wavelength: int. The maximum angular wavelength of the
-            sine/cosine curves, for rotary embeddings.
-        layer_norm_epsilon: float. a value added to the denominator for
-            numerical stability.
-        max_sequence_length: int. The maximum sequence length that this encoder
-            can consume. If `None`, `max_sequence_length` uses the value from
-            sequence length. This determines the variable shape for positional
-            embeddings.
+        vocabulary_size (int): The size of the token vocabulary.
+        num_layers (int): The number of transformer layers.
+        num_query_heads (int): The number of query attention heads for
+            each transformer.
+        hidden_dim (int): The size of the transformer encoding and pooling layers.
+        intermediate_dim (int): The output dimension of the first Dense layer in a
+            three-layer feedforward network for each transformer.
+        num_key_value_heads (int): The number of key and value attention heads for
+            each transformer.
+        rope_max_wavelength (int, optional): The maximum angular wavelength of the
+            sine/cosine curves, for rotary embeddings. Defaults to `10000`.
+        rope_scaling_factor (float, optional): The scaling factor for calculation
+            of roatary embedding. Defaults to `1.0`.
+        layer_norm_epsilon (float, optional): Epsilon for the layer normalization
+            layers in the transformer decoder. Defaults to `1e-6`.
         dtype: string or `keras.mixed_precision.DTypePolicy`. The dtype to use
             for model computations and weights. Note that some computations,
             such as softmax and layer normalization, will always be done at
             float32 precision regardless of dtype.
+
+    Examples:
+
+    ```python
+    input_data = {
+        "token_ids": np.ones(shape=(1, 12), dtype="int32"),
+        "padding_mask": np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]]),
+    }
+
+    # Pretrained Llama decoder.
+    model = keras_nlp.models.LlamaBackbone.from_preset("llama7b_base_en")
+    model(input_data)
+
+    # Randomly initialized Llama decoder with custom config.
+    model = keras_nlp.models.LlamaBackbone(
+        vocabulary_size=10,
+        hidden_dim=512,
+        num_layers=2,
+        num_query_heads=32,
+        num_key_value_heads=8,
+        intermediate_dim=1024,
+        layer_norm_epsilon=1e-6,
+        dtype="float32"
+    )
+    model(input_data)
+    ```
     """
 
     def __init__(
@@ -72,10 +102,10 @@ class LlamaBackbone(Backbone):
         hidden_dim,
         intermediate_dim,
         num_key_value_heads,
-        rope_scaling_factor=1.0,
         rope_max_wavelength=10000,
-        layer_norm_epsilon=1e-5,
-        max_sequence_length=4096,
+        rope_scaling_factor=1.0,
+        layer_norm_epsilon=1e-6,
+        dropout=0,
         dtype=None,
         **kwargs,
     ):
@@ -83,31 +113,31 @@ class LlamaBackbone(Backbone):
         self.token_embedding = ReversibleEmbedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
-            embeddings_initializer=_llama_kernel_initializer(stddev=0.01),
             tie_weights=False,
+            embeddings_initializer=_llama_kernel_initializer(stddev=0.01),
             dtype=dtype,
             name="token_embedding",
         )
         self.transformer_layers = []
         for i in range(num_layers):
-            layer = LlamaDecoder(
+            layer = LlamaTransformerDecoder(
                 intermediate_dim=intermediate_dim,
                 num_query_heads=num_query_heads,
                 num_key_value_heads=num_key_value_heads,
-                rope_scaling_factor=rope_scaling_factor,
-                max_sequence_length=max_sequence_length,
                 rope_max_wavelength=rope_max_wavelength,
+                rope_scaling_factor=rope_scaling_factor,
                 layer_norm_epsilon=layer_norm_epsilon,
                 activation=ops.silu,
                 kernel_initializer=_llama_kernel_initializer(stddev=0.02),
+                dropout=dropout,
                 dtype=dtype,
                 name=f"transformer_layer_{i}",
             )
             self.transformer_layers.append(layer)
         self.layer_norm = LlamaLayerNorm(
-            dtype=dtype,
             epsilon=layer_norm_epsilon,
-            name="layer_norm",
+            dtype=dtype,
+            name="sequence_output_layernorm",
         )
 
         # === Functional Model ===
@@ -140,8 +170,8 @@ class LlamaBackbone(Backbone):
         self.rope_max_wavelength = rope_max_wavelength
         self.num_key_value_heads = num_key_value_heads
         self.rope_scaling_factor = rope_scaling_factor
-        self.max_sequence_length = max_sequence_length
         self.layer_norm_epsilon = layer_norm_epsilon
+        self.dropout = dropout
 
     def get_config(self):
         config = super().get_config()
@@ -155,8 +185,12 @@ class LlamaBackbone(Backbone):
                 "rope_max_wavelength": self.rope_max_wavelength,
                 "rope_scaling_factor": self.rope_scaling_factor,
                 "num_key_value_heads": self.num_key_value_heads,
-                "max_sequence_length": self.max_sequence_length,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
+                "dropout": self.dropout,
             }
         )
         return config
+
+    # @classproperty
+    # def presets(cls):
+    #     return copy.deepcopy(backbone_presets)
