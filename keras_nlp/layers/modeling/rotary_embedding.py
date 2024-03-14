@@ -85,30 +85,42 @@ class RotaryEmbedding(keras.layers.Layer):
         self.built = True
 
     def call(self, inputs, start_index=0):
+        inputs = ops.moveaxis(
+            inputs, (self.feature_axis, self.sequence_axis), (-1, 1)
+        )
         cos_emb, sin_emb = self._compute_cos_sin_embedding(inputs, start_index)
-        return self._apply_rotary_pos_emb(inputs, cos_emb, sin_emb)
+        output = self._apply_rotary_pos_emb(inputs, cos_emb, sin_emb)
+        return ops.moveaxis(
+            output, (-1, 1), (self.feature_axis, self.sequence_axis)
+        )
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
-        x1, x2 = ops.split(tensor, 2, axis=self.feature_axis)
-        half_rot_tensor = ops.concatenate((-x2, x1), axis=self.feature_axis)
+        x1, x2 = ops.split(tensor, 2, axis=-1)
+        # Avoid `ops.concatenate` for now, to avoid a obscure bug with XLA
+        # compilation on jax. We should be able to remove this once the
+        # following PR is in all jax releases we care about:
+        # https://github.com/openxla/xla/pull/7875
+        half_rot_tensor = ops.stack((-x2, x1), axis=-2)
+        half_rot_tensor = ops.reshape(half_rot_tensor, ops.shape(tensor))
         return (tensor * cos_emb) + (half_rot_tensor * sin_emb)
 
     def _compute_cos_sin_embedding(self, inputs, start_index=0):
-        def get_axis(axis):
-            return axis if axis > 0 else len(inputs.shape) + axis
+        start_index = ops.cast(start_index, dtype="float32")
 
-        feature_axis = get_axis(self.feature_axis)
-        sequence_axis = get_axis(self.sequence_axis)
+        feature_axis = len(inputs.shape) - 1
+        sequence_axis = 1
 
         rotary_dim = ops.shape(inputs)[feature_axis]
         inverse_freq = self._get_inverse_freq(rotary_dim)
 
-        seq_len = ops.shape(inputs)[self.sequence_axis]
-        tensor = ops.cast(ops.arange(seq_len), self.compute_dtype) + start_index
+        seq_len = ops.shape(inputs)[sequence_axis]
+        tensor = ops.arange(seq_len, dtype="float32") + start_index
 
-        tensor = ops.cast(tensor, dtype=inverse_freq.dtype)
         freq = ops.einsum("i,j->ij", tensor, inverse_freq)
-        embedding = ops.concatenate((freq, freq), axis=-1)
+        embedding = ops.stack((freq, freq), axis=-2)
+        embedding = ops.reshape(
+            embedding, (*ops.shape(freq)[:-1], ops.shape(freq)[-1] * 2)
+        )
 
         # Reshape the embedding to be broadcastable with input shape.
         if feature_axis < sequence_axis:
@@ -117,17 +129,16 @@ class RotaryEmbedding(keras.layers.Layer):
             if axis != sequence_axis and axis != feature_axis:
                 embedding = ops.expand_dims(embedding, axis)
 
-        return ops.cos(embedding), ops.sin(embedding)
+        cos_emb = ops.cast(ops.cos(embedding), self.compute_dtype)
+        sin_emb = ops.cast(ops.sin(embedding), self.compute_dtype)
+        return cos_emb, sin_emb
 
     def _get_inverse_freq(self, rotary_dim):
-        freq_range = ops.arange(0, rotary_dim, 2)
-        freq_range = ops.cast(freq_range, self.compute_dtype)
-        freq_range = freq_range / ops.cast(
-            self.scaling_factor, self.compute_dtype
-        )
+        freq_range = ops.arange(0, rotary_dim, 2, dtype="float32")
+        freq_range = freq_range / ops.cast(self.scaling_factor, "float32")
         inverse_freq = 1.0 / (
             self.max_wavelength
-            ** (freq_range / ops.cast(rotary_dim, self.compute_dtype))
+            ** (freq_range / ops.cast(rotary_dim, "float32"))
         )
         return inverse_freq
 
