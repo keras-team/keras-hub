@@ -106,26 +106,34 @@ class GemmaBackboneTest(TestCase):
 
         for w in model.weights:
             if "token_embedding/embeddings" in w.path:
-                self.assertEqual(tuple(w.value.sharding.spec), (None, "model"))
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
             if "attention/query/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), (None, "model", None)
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
                 )
             if "attention/key/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), (None, "model", None)
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
                 )
             if "attention/value/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), (None, "model", None)
+                    tuple(w.value.sharding.spec), ("model", "batch", None)
                 )
             if "attention/attention_output/kernel" in w.path:
                 self.assertEqual(
-                    tuple(w.value.sharding.spec), (None, None, "model")
+                    tuple(w.value.sharding.spec), ("model", None, "batch")
                 )
             if "ffw_gating/kernel" in w.path:
-                self.assertEqual(tuple(w.value.sharding.spec), ("model", None))
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
             if "ffw_gating_2/kernel" in w.path:
-                self.assertEqual(tuple(w.value.sharding.spec), ("model", None))
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("batch", "model")
+                )
             if "ffw_linearl" in w.path:
-                self.assertEqual(tuple(w.value.sharding.spec), (None, "model"))
+                self.assertEqual(
+                    tuple(w.value.sharding.spec), ("model", "batch")
+                )
