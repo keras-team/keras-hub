@@ -102,7 +102,7 @@ class Preprocessor(PreprocessingLayer):
         preset,
         config_filename="tokenizer.json",
     ):
-        save_to_preset(self, preset, config_filename=config_filename)
+        save_to_preset(self.tokenizer, preset, config_filename=config_filename)
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.

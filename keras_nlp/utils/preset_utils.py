@@ -16,6 +16,7 @@ import datetime
 import json
 import os
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config as backend_config
 from keras_nlp.backend import keras
 
@@ -155,9 +156,10 @@ def save_to_preset(
             metadata_file.write(json.dumps(metadata, indent=4))
 
 
+@keras_nlp_export("keras_nlp.upload_preset")
 def upload_preset(
-    preset,
     uri,
+    preset,
 ):
     if uri.startswith(KAGGLE_PREFIX):
         kaggle_handle = uri.removeprefix(KAGGLE_PREFIX)
