@@ -164,33 +164,28 @@ def pretokenize(
         text = tf.strings.regex_replace(text, r"\p{Mn}", "")
     if split:
         if split_on_cjk:
-            if special_tokens_pattern is not None:
-                split_pattern = r"|".join(
-                    [
-                        special_tokens_pattern,
-                        WHITESPACE_PUNCTUATION_AND_CJK_REGEX,
-                    ]
-                )
-                keep_split_pattern = r"|".join(
-                    [special_tokens_pattern, PUNCTUATION_AND_CJK_REGEX]
-                )
-            else:
-                split_pattern = WHITESPACE_PUNCTUATION_AND_CJK_REGEX
-                keep_split_pattern = PUNCTUATION_AND_CJK_REGEX
+            split_pattern = WHITESPACE_PUNCTUATION_AND_CJK_REGEX
+            keep_split_pattern = PUNCTUATION_AND_CJK_REGEX
         else:
-            if special_tokens_pattern is not None:
-                split_pattern = r"|".join(
-                    [
-                        special_tokens_pattern,
-                        WHITESPACE_AND_PUNCTUATION_REGEX,
-                    ]
-                )
-                keep_split_pattern = r"|".join(
-                    [special_tokens_pattern, PUNCTUATION_REGEX]
-                )
-            else:
-                split_pattern = WHITESPACE_AND_PUNCTUATION_REGEX
-                keep_split_pattern = PUNCTUATION_REGEX
+            split_pattern = WHITESPACE_AND_PUNCTUATION_REGEX
+            keep_split_pattern = PUNCTUATION_REGEX
+        if special_tokens_pattern is not None:
+            # the idea here is to pass the special tokens regex to the split 
+            # function as delimiter regex pattern, so the input will be splitted
+            # by them, but also the function will treat each on of them as one 
+            # entity that shouldn't be splitted even if they have other 
+            # delimiter regex pattern inside them. then pass the special tokens 
+            # regex also as keep delimiter regex pattern, so they will 
+            # not be removed.
+            split_pattern = r"|".join(
+                [
+                    special_tokens_pattern,
+                    split_pattern,
+                ]
+            )
+            keep_split_pattern = r"|".join(
+                [special_tokens_pattern, keep_split_pattern]
+            )
         text = tf_text.regex_split(
             text,
             delim_regex_pattern=split_pattern,
@@ -376,7 +371,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.special_tokens = special_tokens
         self._special_tokens_pattern = None
         if self.split and special_tokens_in_strings:
-            # Use special tokens pattern to avoid sp.
             # the idea here is to pass the special tokens regex to the
             # split function as delimiter regex pattern, so the input will
             # be splitted by them, but also the function will treat each on
@@ -428,7 +422,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             )
 
         # Check for special tokens in the vocabulary
-        if isinstance(self.special_tokens, Iterable):
+        if self.special_tokens is not None:
             for token in self.special_tokens:
                 if token not in self.vocabulary:
                     raise ValueError(
