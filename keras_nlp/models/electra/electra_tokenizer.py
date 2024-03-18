@@ -100,8 +100,5 @@ class ElectraTokenizer(WordPieceTokenizer):
 
     def get_config(self):
         config = super().get_config()
-        # In the constructor, we pass the list of special tokens to the
-        # `special_tokens` arg of the superclass' constructor. Hence, we
-        # delete it from the config here.
-        del config["special_tokens"]
+        del config["special_tokens"] # Not configurable; set in __init__.
         return config
