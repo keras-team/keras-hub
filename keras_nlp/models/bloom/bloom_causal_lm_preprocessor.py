@@ -131,7 +131,7 @@ class BloomCausalLMPreprocessor(BloomPreprocessor):
         x,
         sequence_length=None,
     ):
-        """Covert strings to integer token input for generation.
+        """Convert strings to integer token input for generation.
 
         Similar to calling the layer for training, this method takes in strings
         or tensor strings, tokenizes and packs the input, and computes a padding
@@ -159,7 +159,7 @@ class BloomCausalLMPreprocessor(BloomPreprocessor):
         self,
         x,
     ):
-        """Covert integer token output to strings for generation.
+        """Convert integer token output to strings for generation.
 
         This method reverses `generate_preprocess()`, by first removing all
         padding and start/end tokens, and then converting the integer sequence
@@ -175,8 +175,8 @@ class BloomCausalLMPreprocessor(BloomPreprocessor):
         # end markers). In the future we could make this configurable.
         padding_mask = (
             padding_mask
-            & (token_ids != self.tokenizer.eos_token_id)
-            & (token_ids != self.tokenizer.bos_token_id)
+            & (token_ids != self.tokenizer.start_token_id)
+            & (token_ids != self.tokenizer.end_token_id)
         )
         token_ids = tf.ragged.boolean_mask(token_ids, padding_mask)
         return self.tokenizer.detokenize(token_ids)

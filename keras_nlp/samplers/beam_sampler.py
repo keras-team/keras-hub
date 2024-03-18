@@ -18,11 +18,8 @@ import tree
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import ops
 from keras_nlp.samplers.sampler import Sampler
-from keras_nlp.samplers.sampler import call_args_docstring
-from keras_nlp.utils.python_utils import format_docstring
 
 
-@format_docstring(call_args=call_args_docstring)
 @keras_nlp_export("keras_nlp.samplers.BeamSampler")
 class BeamSampler(Sampler):
     """Beam Sampler class.
@@ -42,55 +39,17 @@ class BeamSampler(Sampler):
         {{call_args}}
 
     Examples:
-    Return only the beam with the highest accumulated probability.
     ```python
-    # Use a simple alphabet of lowercase characters with ids in range [0, 25].
-    int_lookup = {i: chr(i + ord('a')) for i in range(26)}
-    char_lookup = {v: k for k, v in int_lookup.items()}
-    batch_size, length, vocab_size = 1, 12, len(int_lookup)
+    causal_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
 
-    def next(prompt, cache, index):
-        prompt_batch_size = tf.shape(prompt)[0]
-        hidden_states = np.ones((prompt_batch_size, 10))
-        # A uniform distribution over our alphabet.
-        logits = np.ones((prompt_batch_size, vocab_size))
-        return logits, hidden_states, cache
+    # Pass by name to compile.
+    causal_lm.compile(sampler="beam")
+    causal_lm.generate(["Keras is a"])
 
-    output = keras_nlp.samplers.BeamSampler()(
-        next=next,
-        prompt=np.full((batch_size, length), char_lookup["z"], dtype="int32"),
-        index=5,
-    )
-    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
-    # >>> ['zzzzzeeeeeee']
-    ```
-
-    Return all beams and their probabilities.
-    ```python
-    # Use a simple alphabet of lowercase characters with ids in range [0, 25].
-    int_lookup = {i: chr(i + ord('a')) for i in range(26)}
-    char_lookup = {v: k for k, v in int_lookup.items()}
-    batch_size, length, vocab_size = 1, 8, len(int_lookup)
-
-    def next(prompt, cache, index):
-        prompt_batch_size = tf.shape(prompt)[0]
-        hidden_states = np.ones((prompt_batch_size, 10))
-        # A uniform distribution over our alphabet.
-        logits = np.ones((batch_size, vocab_size))
-        return logits, hidden_states, cache
-
-    beams, probs = keras_nlp.samplers.BeamSampler(return_all_beams=True)(
-        next=next,
-        prompt=np.full((batch_size, length,), char_lookup['z'], dtype="int32"),
-        index=5,
-    )
-
-    print(beams.shape)
-    # >>> (1, 5, 8)
-    print(probs.shape)
-    # >>> (1, 5)
-    print(["".join([int_lookup[i] for i in s]) for s in beams[0].numpy()])
-    # >>> ['zzzzzeee', 'zzzzzeed', 'zzzzzeec', 'zzzzzeea', 'zzzzzeeb']
+    # Pass by object to compile.
+    sampler = keras_nlp.samplers.BeamSampler(num_beams=5)
+    causal_lm.compile(sampler=sampler)
+    causal_lm.generate(["Keras is a"])
     ```
     """
 
@@ -113,6 +72,7 @@ class BeamSampler(Sampler):
         mask=None,
         end_token_id=None,
         hidden_states=None,
+        model=None,
     ):
         batch_size, max_length = ops.shape(prompt)[0], ops.shape(prompt)[1]
         index = ops.cast(index, "int32")
@@ -208,6 +168,7 @@ class BeamSampler(Sampler):
             body=body,
             loop_vars=(prompt, cache, index, log_probs),
             maximum_iterations=(max_length - index),
+            model=model,
         )
 
         all_prompts = unflatten_beams(prompt)

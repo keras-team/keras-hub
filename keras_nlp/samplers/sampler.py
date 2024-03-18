@@ -17,33 +17,8 @@ from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.backend import random
-from keras_nlp.utils.python_utils import format_docstring
-
-call_args_docstring = """next: A function which takes in the
-            `prompt, cache, index` of the current generation loop, and outputs
-            a tuple `(logits, hidden_states, cache)` with `logits` being the
-            logits of next token, `hidden_states` being the representation of
-            the next token, and `cache` for next iteration.
-        prompt: A 2D integer tensor with shape `(batch_size, max_length)`. This
-            tensor will be iteratively updated column by column with new sampled
-            values, starting at `index`.
-        cache: Optional. A tensor or nested structure of tensors that will be
-            updated by each call to `next`. This can be used to cache
-            computations from early iterations of the generative loop.
-        index: Optional. The first index of `prompt` to start sampling at.
-            Usually this is set as the length of the shortest non-padded
-            sequence in `prompt`.
-        mask: Optional. A 2D integer tensor with the same shape as `prompt`.
-            Locations which are `True` in the mask are never updated during
-            sampling. Usually used to mark all locations in the dense prompt
-            tensor which were present in a user input.
-        end_token_id: Optional. The token marking the end of the sequence. If
-            specified, sampling will stop as soon as all sequences in the prompt
-            produce a `end_token_id` in a location where `mask` is `False`.
-"""
 
 
-@format_docstring(call_args=call_args_docstring)
 @keras_nlp_export("keras_nlp.samplers.Sampler")
 class Sampler:
     """Base sampler class.
@@ -57,35 +32,32 @@ class Sampler:
         {{call_args}}
 
     This base class can be extended to implement different auto-regressive
-    sampling methods. Subclasses can either:
-
-    - Override the `get_next_token()` method, which computes the next token
-      based on a probability distribution over all possible vocab entries.
-    - Override `__call__`, if the sampling method needs additional information
-      beyond the next tokens probability distribution to sample a sequence.
-
-    Please check available subclass samplers for examples.
+    sampling methods. To do so, override the `get_next_token()` method, which
+    computes the next token based on a probability distribution over all
+    possible vocab entries.
 
     Examples:
 
     ```python
-    # Use a simple alphabet of lowercase characters with ids in range [0, 25].
-    int_lookup = {i: chr(i + ord('a')) for i in range(26)}
-    char_lookup = {v: k for k, v in int_lookup.items()}
-    batch_size, length, vocab_size = 1, 12, len(int_lookup)
+    causal_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
 
-    def next(prompt, cache, index):
-        # return a uniform distribution over our alphabet.
-        logits = ops.ones((batch_size, vocab_size))
-        return logits, None, cache
+    # Greedy search with some tokens forbidden.
+    class CustomSampler(keras_nlp.samplers.Sampler):
+        def __init__(self, forbidden_tokens, **kwargs):
+            super().__init__(**kwargs)
+            self.forbidden_tokens = forbidden_tokens
 
-    output = keras_nlp.samplers.GreedySampler()(
-        next=next,
-        prompt=ops.fill((batch_size, length,), char_lookup['z']),
-        index=5,
-    )
-    print(["".join([int_lookup[i] for i in s]) for s in output.numpy()])
-    # >>> ['zzzzzaaaaaaa']
+        def get_next_token(self, probs):
+            batch_size, vocab_size = keras.ops.shape(probs)
+            for id in self.forbidden_tokens:
+                update = keras.ops.zeros((batch_size, 1))
+                probs = keras.ops.slice_update(probs, (0, id), update)
+            return keras.ops.argmax(probs, axis=-1)
+
+    # 257 = "a" with a leading space, 262 = "the" with a leading space.
+    causal_lm.compile(sampler=CustomSampler(forbidden_tokens=[257, 262]))
+    causal_lm.summary()
+    causal_lm.generate(["That's strange"])
     ```
     """
 
@@ -120,6 +92,7 @@ class Sampler:
         mask=None,
         end_token_id=None,
         hidden_states=None,
+        model=None,
     ):
         max_length = ops.shape(prompt)[-1]
         # Make sure `max_length` and `index` are the same dtype.
@@ -161,6 +134,7 @@ class Sampler:
             body,
             loop_vars=(prompt, cache, index),
             maximum_iterations=(max_length - index),
+            model=model,
         )
         return prompt
 
@@ -175,32 +149,68 @@ class Sampler:
         probs = keras.activations.softmax(logits / self.temperature)
         return ops.cast(probs, logits_dtype)
 
-    def run_loop(self, cond, body, loop_vars=None, maximum_iterations=None):
+    def run_loop(
+        self, cond, body, model=None, loop_vars=None, maximum_iterations=None
+    ):
         """Run ops.while_loops with a `StatelessScope` if necessary."""
         if config.backend() == "jax":
+            import itertools
 
-            def stateless_cond(variables, *loop_vars):
+            if model:
+                model_trainable_variables = model.trainable_variables
+                model_non_trainable_variables = model.non_trainable_variables
+            else:
+                model_trainable_variables = []
+                model_non_trainable_variables = []
+
+            def stateless_cond(state, *loop_vars):
                 return cond(*loop_vars)
 
-            def stateless_body(variables, *loop_vars):
-                mapping = zip(self.variables, variables)
+            def stateless_body(state, *loop_vars):
+                (
+                    sampler_variables,
+                    trainable_variables,
+                    non_trainable_variables,
+                ) = state
+                mapping = itertools.chain(
+                    zip(self.variables, sampler_variables),
+                    zip(model_trainable_variables, trainable_variables),
+                    zip(model_non_trainable_variables, non_trainable_variables),
+                )
                 with keras.StatelessScope(state_mapping=mapping) as scope:
                     loop_vars = body(*loop_vars)
 
-                variables = []
+                sampler_variables = []
                 for v in self.variables:
                     new_v = scope.get_current_value(v)
-                    variables.append(new_v if new_v is not None else v)
-                return variables, *loop_vars
+                    sampler_variables.append(new_v if new_v is not None else v)
+                state = (
+                    sampler_variables,
+                    trainable_variables,
+                    non_trainable_variables,
+                )
+                return state, *loop_vars
 
             variables = [ops.convert_to_tensor(v) for v in self.variables]
-            variables, *loop_vars = ops.while_loop(
+            trainable_variables = [
+                ops.convert_to_tensor(v) for v in model_trainable_variables
+            ]
+            non_trainable_variables = [
+                ops.convert_to_tensor(v) for v in model_non_trainable_variables
+            ]
+            state = (
+                variables,
+                trainable_variables,
+                non_trainable_variables,
+            )
+            state, *loop_vars = ops.while_loop(
                 cond=stateless_cond,
                 body=stateless_body,
-                loop_vars=(variables, *loop_vars),
+                loop_vars=(state, *loop_vars),
                 maximum_iterations=maximum_iterations,
             )
-            [ref_v.assign(v) for ref_v, v in zip(self.variables, variables)]
+            for ref_v, v in zip(self.variables, state[0]):
+                ref_v.assign(v)
         else:
             loop_vars = ops.while_loop(
                 cond=cond,

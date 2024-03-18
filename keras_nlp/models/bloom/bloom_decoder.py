@@ -110,8 +110,8 @@ class BloomDecoder(keras.layers.Layer):
         decoder_sequence,
         decoder_padding_mask=None,
         decoder_attention_mask=None,
-        attention_cache=None,
-        attention_cache_update_index=None,
+        cache=None,
+        cache_update_index=None,
         use_causal_mask=True,
     ):
         self_attention_mask = self._compute_attention_mask(
@@ -119,8 +119,8 @@ class BloomDecoder(keras.layers.Layer):
             decoder_padding_mask=decoder_padding_mask,
             decoder_attention_mask=decoder_attention_mask,
             use_causal_mask=use_causal_mask,
-            attention_cache=attention_cache,
-            attention_cache_update_index=attention_cache_update_index,
+            cache=cache,
+            cache_update_index=cache_update_index,
         )
 
         residual = decoder_sequence
@@ -129,14 +129,14 @@ class BloomDecoder(keras.layers.Layer):
         attention_output = self._self_attention_layer(
             hidden_states=x,
             attention_mask=self_attention_mask,
-            cache=attention_cache,
-            cache_update_index=attention_cache_update_index,
+            cache=cache,
+            cache_update_index=cache_update_index,
         )
 
-        if attention_cache is None:
+        if cache is None:
             x = attention_output
         else:
-            x, attention_cache = attention_output
+            x, cache = attention_output
 
         x = x + residual
         residual = x
@@ -147,8 +147,8 @@ class BloomDecoder(keras.layers.Layer):
         x = self._dropout_layer(x)
         x = x + residual
 
-        if attention_cache is not None:
-            return x, attention_cache
+        if cache is not None:
+            return x, cache
         else:
             return x
 
@@ -158,8 +158,8 @@ class BloomDecoder(keras.layers.Layer):
         decoder_padding_mask,
         decoder_attention_mask,
         use_causal_mask,
-        attention_cache,
-        attention_cache_update_index,
+        cache,
+        cache_update_index,
     ):
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
@@ -167,18 +167,14 @@ class BloomDecoder(keras.layers.Layer):
         if use_causal_mask:
             batch_size = ops.shape(decoder_sequence)[0]
             input_length = output_length = ops.shape(decoder_sequence)[1]
-            if attention_cache is not None:
-                input_length = ops.shape(attention_cache)[2]
+            if cache is not None:
+                input_length = ops.shape(cache)[2]
 
             causal_mask = compute_causal_mask(
                 batch_size,
                 input_length,
                 output_length,
-                (
-                    0
-                    if attention_cache_update_index is None
-                    else attention_cache_update_index
-                ),
+                (0 if cache_update_index is None else cache_update_index),
             )
             return (
                 ops.minimum(decoder_mask, causal_mask)

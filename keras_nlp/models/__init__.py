@@ -20,6 +20,7 @@ from keras_nlp.models.albert.albert_masked_lm_preprocessor import (
 )
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
+from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.bart.bart_backbone import BartBackbone
 from keras_nlp.models.bart.bart_preprocessor import BartPreprocessor
 from keras_nlp.models.bart.bart_seq_2_seq_lm import BartSeq2SeqLM
@@ -36,6 +37,11 @@ from keras_nlp.models.bert.bert_masked_lm_preprocessor import (
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.models.bloom.bloom_backbone import BloomBackbone
+from keras_nlp.models.bloom.bloom_causal_lm import BloomCausalLM
+from keras_nlp.models.bloom.bloom_causal_lm_preprocessor import (
+    BloomCausalLMPreprocessor,
+)
+from keras_nlp.models.bloom.bloom_preprocessor import BloomPreprocessor
 from keras_nlp.models.bloom.bloom_tokenizer import BloomTokenizer
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_classifier import (
@@ -76,6 +82,15 @@ from keras_nlp.models.f_net.f_net_masked_lm_preprocessor import (
 )
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
+from keras_nlp.models.falcon.falcon_backbone import FalconBackbone
+from keras_nlp.models.falcon.falcon_tokenizer import FalconTokenizer
+from keras_nlp.models.gemma.gemma_backbone import GemmaBackbone
+from keras_nlp.models.gemma.gemma_causal_lm import GemmaCausalLM
+from keras_nlp.models.gemma.gemma_causal_lm_preprocessor import (
+    GemmaCausalLMPreprocessor,
+)
+from keras_nlp.models.gemma.gemma_preprocessor import GemmaPreprocessor
+from keras_nlp.models.gemma.gemma_tokenizer import GemmaTokenizer
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm import GPT2CausalLM
 from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
@@ -117,6 +132,7 @@ from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.models.t5.t5_backbone import T5Backbone
 from keras_nlp.models.t5.t5_tokenizer import T5Tokenizer
+from keras_nlp.models.task import Task
 from keras_nlp.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
