@@ -12,12 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
-
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.models.electra.electra_presets import backbone_presets
 from keras_nlp.tokenizers import WordPieceTokenizer
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.ElectraTokenizer")
@@ -106,7 +102,3 @@ class ElectraTokenizer(WordPieceTokenizer):
         config = super().get_config()
         del config["special_tokens"]  # Not configurable; set in __init__.
         return config
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

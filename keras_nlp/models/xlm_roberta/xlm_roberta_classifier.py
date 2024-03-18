@@ -12,22 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.models.classifier import Classifier
 from keras_nlp.models.roberta.roberta_backbone import roberta_kernel_initializer
-from keras_nlp.models.task import Task
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
     XLMRobertaPreprocessor,
 )
-from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaClassifier")
-class XLMRobertaClassifier(Task):
+class XLMRobertaClassifier(Classifier):
     """An end-to-end XLM-RoBERTa model for classification tasks.
 
     This model attaches a classification head to a
@@ -147,6 +144,9 @@ class XLMRobertaClassifier(Task):
     ```
     """
 
+    backbone_cls = XLMRobertaBackbone
+    preprocessor_cls = XLMRobertaPreprocessor
+
     def __init__(
         self,
         backbone,
@@ -229,15 +229,3 @@ class XLMRobertaClassifier(Task):
             }
         )
         return config
-
-    @classproperty
-    def backbone_cls(cls):
-        return XLMRobertaBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return XLMRobertaPreprocessor
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

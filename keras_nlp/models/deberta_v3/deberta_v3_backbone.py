@@ -12,18 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
-from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.models.deberta_v3.disentangled_attention_encoder import (
     DisentangledAttentionEncoder,
 )
 from keras_nlp.models.deberta_v3.relative_embedding import RelativeEmbedding
-from keras_nlp.utils.python_utils import classproperty
 
 
 def deberta_kernel_initializer(stddev=0.02):
@@ -208,7 +205,3 @@ class DebertaV3Backbone(Backbone):
             }
         )
         return config
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

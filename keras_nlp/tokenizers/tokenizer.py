@@ -19,10 +19,20 @@ from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
 from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
+from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import list_presets
+from keras_nlp.utils.preset_utils import list_subclasses
+from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.preset_utils import save_to_preset
+from keras_nlp.utils.python_utils import classproperty
 
 
-@keras_nlp_export("keras_nlp.tokenizers.Tokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.models.Tokenizer",
+        "keras_nlp.tokenizers.Tokenizer",
+    ]
+)
 class Tokenizer(PreprocessingLayer):
     """A base class for tokenizer layers.
 
@@ -133,3 +143,70 @@ class Tokenizer(PreprocessingLayer):
 
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)
+
+    @classproperty
+    def presets(cls):
+        """List builtin presets for a `Task` subclass."""
+        presets = list_presets(cls)
+        for subclass in list_subclasses(cls):
+            presets.update(subclass.presets)
+        return presets
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        """Instantiate a `keras_nlp.models.Tokenizer` from a model preset.
+
+        A preset is a directory of configs, weights and other file assets used
+        to save and load a pre-trained model. The `preset` can be passed as a
+        one of:
+
+        1. a built in preset identifier like `'bert_base_en'`
+        2. a Kaggle Models handle like `'kaggle://user/bert/keras/bert_base_en'`
+        3. a Hugging Face handle like `'hf://user/bert_base_en'`
+        4. a path to a local preset directory like `'./bert_base_en'`
+
+        For any `Tokenizer` subclass, you can run `cls.presets.keys()` to list
+        all built-in presets available on the class.
+
+        This constructor can be called in one of two ways. Either from the base
+        class like `keras_nlp.models.Tokenizer.from_preset()`, or from
+        a model class like `keras_nlp.models.GemmaTokenizer.from_preset()`.
+        If calling from the base class, the subclass of the returning object
+        will be inferred from the config in the preset directory.
+
+        Args:
+            preset: string. A built in preset identifier, a Kaggle Models
+                handle, a Hugging Face handle, or a path to a local directory.
+            load_weights: bool. If `True`, the weights will be loaded into the
+                model architecture. If `False`, the weights will be randomly
+                initialized.
+
+        Examples:
+        ```python
+        # Load a preset tokenizer.
+        tokenizer = keras_nlp.tokenizerTokenizer.from_preset("bert_base_en")
+
+        # Tokenize some input.
+        tokenizer("The quick brown fox tripped.")
+
+        # Detokenize some input.
+        tokenizer.detokenize([5, 6, 7, 8, 9])
+        ```
+        """
+        config_file = "tokenizer.json"
+        preset_cls = check_config_class(preset, config_file=config_file)
+        if not issubclass(preset_cls, cls):
+            raise ValueError(
+                f"Preset has type `{preset_cls.__name__}` which is not a "
+                f"a subclass of calling class `{cls.__name__}`. Call "
+                f"`from_preset` directly on `{preset_cls.__name__}` instead."
+            )
+        return load_from_preset(
+            preset,
+            config_file=config_file,
+            config_overrides=kwargs,
+        )

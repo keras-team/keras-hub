@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
@@ -20,9 +19,7 @@ from keras_nlp.layers.modeling.f_net_encoder import FNetEncoder
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
 from keras_nlp.layers.modeling.reversible_embedding import ReversibleEmbedding
 from keras_nlp.models.backbone import Backbone
-from keras_nlp.models.f_net.f_net_presets import backbone_presets
 from keras_nlp.utils.keras_utils import gelu_approximate
-from keras_nlp.utils.python_utils import classproperty
 
 
 def f_net_kernel_initializer(stddev=0.02):
@@ -234,7 +231,3 @@ class FNetBackbone(Backbone):
             }
         )
         return config
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

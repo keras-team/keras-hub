@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
 import tensorflow as tf
 
+from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
+from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.tokenizer import Tokenizer
 
@@ -29,6 +32,29 @@ class SimpleTokenizer(Tokenizer):
 
 
 class TokenizerTest(TestCase):
+    def test_preset_accessors(self):
+        bert_presets = set(BertTokenizer.presets.keys())
+        gpt2_presets = set(GPT2Tokenizer.presets.keys())
+        all_presets = set(Tokenizer.presets.keys())
+        self.assertContainsSubset(bert_presets, all_presets)
+        self.assertContainsSubset(gpt2_presets, all_presets)
+
+    @pytest.mark.large
+    def test_from_preset(self):
+        self.assertIsInstance(
+            Tokenizer.from_preset("bert_tiny_en_uncased"),
+            BertTokenizer,
+        )
+        self.assertIsInstance(
+            Tokenizer.from_preset("gpt2_base_en"),
+            GPT2Tokenizer,
+        )
+
+    @pytest.mark.large
+    def test_from_preset_errors(self):
+        with self.assertRaises(ValueError):
+            GPT2Tokenizer.from_preset("bert_tiny_en_uncased")
+
     def test_tokenize(self):
         input_data = ["the quick brown fox"]
         tokenizer = SimpleTokenizer()

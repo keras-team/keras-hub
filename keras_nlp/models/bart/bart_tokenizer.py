@@ -12,12 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.models.bart.bart_presets import backbone_presets
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.BartTokenizer")
@@ -117,10 +114,6 @@ class BartTokenizer(BytePairTokenizer):
             self.start_token_id = None
             self.pad_token_id = None
             self.end_token_id = None
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
 
     def get_config(self):
         config = super().get_config()

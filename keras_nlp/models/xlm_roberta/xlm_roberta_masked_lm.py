@@ -12,23 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.masked_lm_head import MaskedLMHead
+from keras_nlp.models.masked_lm import MaskedLM
 from keras_nlp.models.roberta.roberta_backbone import roberta_kernel_initializer
-from keras_nlp.models.task import Task
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import (
     XLMRobertaMaskedLMPreprocessor,
 )
-from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.XLMRobertaMaskedLM")
-class XLMRobertaMaskedLM(Task):
+class XLMRobertaMaskedLM(MaskedLM):
     """An end-to-end XLM-RoBERTa model for the masked language modeling task.
 
     This model will train XLM-RoBERTa on a masked language modeling task.
@@ -100,6 +97,9 @@ class XLMRobertaMaskedLM(Task):
     ```
     """
 
+    backbone_cls = XLMRobertaBackbone
+    preprocessor_cls = XLMRobertaMaskedLMPreprocessor
+
     def __init__(
         self,
         backbone,
@@ -142,15 +142,3 @@ class XLMRobertaMaskedLM(Task):
             weighted_metrics=[keras.metrics.SparseCategoricalAccuracy()],
             jit_compile=True,
         )
-
-    @classproperty
-    def backbone_cls(cls):
-        return XLMRobertaBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return XLMRobertaMaskedLMPreprocessor
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

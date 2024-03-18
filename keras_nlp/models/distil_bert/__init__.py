@@ -11,3 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
+from keras_nlp.models.distil_bert.distil_bert_presets import backbone_presets
+from keras_nlp.models.distil_bert.distil_bert_tokenizer import (
+    DistilBertTokenizer,
+)
+from keras_nlp.utils.preset_utils import register_presets
+
+register_presets(backbone_presets, (DistilBertBackbone, DistilBertTokenizer))

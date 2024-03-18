@@ -15,17 +15,16 @@
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
-from keras_nlp.models.generative_task import GenerativeTask
+from keras_nlp.models.causal_lm import CausalLM
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_backbone import GPTNeoXBackbone
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_causal_lm_preprocessor import (
     GPTNeoXCausalLMPreprocessor,
 )
-from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.models.GPTNeoXCausalLM")
-class GPTNeoXCausalLM(GenerativeTask):
+class GPTNeoXCausalLM(CausalLM):
     """An end-to-end GPTNeoX model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous
@@ -46,6 +45,9 @@ class GPTNeoXCausalLM(GenerativeTask):
             If `None`, this model will not apply preprocessing, and inputs
             should be preprocessed before calling the model.
     """
+
+    backbone_cls = GPTNeoXBackbone
+    preprocessor_cls = GPTNeoXCausalLMPreprocessor
 
     def __init__(
         self,
@@ -74,14 +76,6 @@ class GPTNeoXCausalLM(GenerativeTask):
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
             jit_compile=True,
         )
-
-    @classproperty
-    def backbone_cls(cls):
-        return GPTNeoXBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return GPTNeoXCausalLMPreprocessor
 
     def call_with_cache(
         self,

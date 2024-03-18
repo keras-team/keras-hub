@@ -11,23 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
-from keras_nlp.models.generative_task import GenerativeTask
+from keras_nlp.models.causal_lm import CausalLM
 from keras_nlp.models.mistral.mistral_backbone import MistralBackbone
 from keras_nlp.models.mistral.mistral_causal_lm_preprocessor import (
     MistralCausalLMPreprocessor,
 )
-from keras_nlp.models.mistral.mistral_presets import backbone_presets
-from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.models.MistralCausalLM")
-class MistralCausalLM(GenerativeTask):
+class MistralCausalLM(CausalLM):
     """An end-to-end Mistral model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous
@@ -48,6 +45,9 @@ class MistralCausalLM(GenerativeTask):
             If `None`, this model will not apply preprocessing, and inputs
             should be preprocessed before calling the model.
     """
+
+    backbone_cls = MistralBackbone
+    preprocessor_cls = MistralCausalLMPreprocessor
 
     def __init__(self, backbone, preprocessor=None, **kwargs):
         # === Layers ===
@@ -71,14 +71,6 @@ class MistralCausalLM(GenerativeTask):
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
             jit_compile=True,
         )
-
-    @classproperty
-    def backbone_cls(cls):
-        return MistralBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return MistralCausalLMPreprocessor
 
     def call_with_cache(
         self,
@@ -341,7 +333,3 @@ class MistralCausalLM(GenerativeTask):
         )
         per_token_loss = per_token_loss_fn(target_ids, logits)
         return per_token_loss
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

@@ -12,15 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
-
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.models.bert.bert_presets import backbone_presets
-from keras_nlp.models.bert.bert_presets import classifier_presets
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
-from keras_nlp.utils.python_utils import classproperty
-
-PRESET_NAMES = ", ".join(list(backbone_presets) + list(classifier_presets))
 
 
 @keras_nlp_export("keras_nlp.models.BertTokenizer")
@@ -112,10 +105,6 @@ class BertTokenizer(WordPieceTokenizer):
             self.sep_token_id = None
             self.pad_token_id = None
             self.mask_token_id = None
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy({**backbone_presets, **classifier_presets})
 
     def get_config(self):
         config = super().get_config()
