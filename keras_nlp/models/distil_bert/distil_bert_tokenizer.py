@@ -117,5 +117,5 @@ class DistilBertTokenizer(WordPieceTokenizer):
 
     def get_config(self):
         config = super().get_config()
-        del config["special_tokens"] # Not configurable; set in __init__.
+        del config["special_tokens"]  # Not configurable; set in __init__.
         return config
