@@ -20,10 +20,10 @@ backbone_presets = {
                 "ELECTRA: Pre-training Text Encoders as Discriminators Rather Than Generators"
                 "This is base discriminator model with 12 layers."
             ),
-            "params": "109482240",
+            "params": 109482240,
             "official_name": "ELECTRA",
             "path": "electra",
-            "model_card": "https://huggingface.co/google/electra-base-discriminator",
+            "model_card": "https://github.com/google-research/electra",
         },
         "kaggle_handle": "kaggle://pranavprajapati16/electra/keras/electra_base_discriminator_en/1",
     },
@@ -33,10 +33,10 @@ backbone_presets = {
                 "ELECTRA: Pre-training Text Encoders as Discriminators Rather Than Generators"
                 "This is small discriminator model with 12 layers."
             ),
-            "params": "13,548,800",
+            "params": 13548800,
             "official_name": "ELECTRA",
             "path": "electra",
-            "model_card": "https://huggingface.co/google/electra-small-discriminator",
+            "model_card": "https://github.com/google-research/electra",
         },
         "kaggle_handle": "kaggle://pranavprajapati16/electra/keras/electra_small_discriminator_en/1",
     },
@@ -46,10 +46,10 @@ backbone_presets = {
                 "ELECTRA: Pre-training Text Encoders as Discriminators Rather Than Generators"
                 "This is small generator model with 12 layers."
             ),
-            "params": "13548800",
+            "params": 13548800,
             "official_name": "ELECTRA",
             "path": "electra",
-            "model_card": "https://huggingface.co/google/electra-small-generator",
+            "model_card": "https://github.com/google-research/electra",
         },
         "kaggle_handle": "kaggle://pranavprajapati16/electra/keras/electra_small_generator_en/1",
     },
@@ -59,10 +59,10 @@ backbone_presets = {
                 "ELECTRA: Pre-training Text Encoders as Discriminators Rather Than Generators"
                 "This is base generator model with 12 layers."
             ),
-            "params": "33576960",
+            "params": 33576960,
             "official_name": "ELECTRA",
             "path": "electra",
-            "model_card": "https://huggingface.co/google/electra-base-generator",
+            "model_card": "https://github.com/google-research/electra",
         },
         "kaggle_handle": "kaggle://pranavprajapati16/electra/keras/electra_base_generator_en/1",
     },

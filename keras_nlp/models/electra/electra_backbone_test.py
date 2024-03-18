@@ -59,7 +59,7 @@ class ElectraBackboneTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=ElectraBackbone,
-            preset="electra-small-generator",
+            preset="electra_small_discriminator_en",
             input_data={
                 "token_ids": ops.array([[101, 1996, 4248, 102]], dtype="int32"),
                 "segment_ids": ops.zeros((1, 4), dtype="int32"),
@@ -70,10 +70,13 @@ class ElectraBackboneTest(TestCase):
                 "pooled_output": (1, 256),
             },
             # The forward pass from a preset should be stable!
-            # TODO: Add sequence and pooled output trimmed to 5 tokens.
             expected_partial_output={
-                "sequence_output": (ops.array()),
-                "pooled_output": (ops.array()),
+                "sequence_output": (
+                    ops.array([0.32287, 0.18754, -0.22272, -0.24177, 1.18977])
+                ),
+                "pooled_output": (
+                    ops.array([-0.02974, 0.23383, 0.08430, -0.19471, 0.14822])
+                ),
             },
         )
 

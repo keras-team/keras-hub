@@ -38,14 +38,14 @@ class ElectraPreprocessor(Preprocessor):
      2. Pack the inputs together using a `keras_nlp.layers.MultiSegmentPacker`.
        with the appropriate `"[CLS]"`, `"[SEP]"` and `"[PAD]"` tokens.
      3. Construct a dictionary of with keys `"token_ids"` and `"padding_mask"`,
-       that can be passed directly to a DistilBERT model.
+       that can be passed directly to a ELECTRA model.
 
     This layer can be used directly with `tf.data.Dataset.map` to preprocess
     string data in the `(x, y, sample_weight)` format used by
     `keras.Model.fit`.
 
     Args:
-        tokenizer: A `keras_nlp.models.DistilBertTokenizer` instance.
+        tokenizer: A `keras_nlp.models.ElectraTokenizer` instance.
         sequence_length: The length of the packed inputs.
         truncate: string. The algorithm to truncate a list of batched segments
             to fit within `sequence_length`. The value can be either
