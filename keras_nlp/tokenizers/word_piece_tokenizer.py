@@ -170,12 +170,12 @@ def pretokenize(
             split_pattern = WHITESPACE_AND_PUNCTUATION_REGEX
             keep_split_pattern = PUNCTUATION_REGEX
         if special_tokens_pattern is not None:
-            # the idea here is to pass the special tokens regex to the split 
+            # the idea here is to pass the special tokens regex to the split
             # function as delimiter regex pattern, so the input will be splitted
-            # by them, but also the function will treat each on of them as one 
-            # entity that shouldn't be splitted even if they have other 
-            # delimiter regex pattern inside them. then pass the special tokens 
-            # regex also as keep delimiter regex pattern, so they will 
+            # by them, but also the function will treat each on of them as one
+            # entity that shouldn't be splitted even if they have other
+            # delimiter regex pattern inside them. then pass the special tokens
+            # regex also as keep delimiter regex pattern, so they will
             # not be removed.
             split_pattern = r"|".join(
                 [
