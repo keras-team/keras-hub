@@ -54,7 +54,7 @@ class RobertaMaskedLMTest(TestCase):
             "backbone": self.backbone,
         }
         self.train_data = (
-            [" airplane at airport", " airplane_airport"],  # Features.
+            [" airplane at airport", " airplane airport"],  # Features.
         )
         self.input_data = self.preprocessor(*self.train_data)[0]
 

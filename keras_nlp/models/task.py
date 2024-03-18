@@ -83,56 +83,6 @@ class Task(PipelineModel):
 
         return filter(filter_fn, super().__dir__())
 
-    def _check_for_loss_mismatch(self, loss):
-        """Check for a softmax/from_logits mismatch after compile.
-
-        We cannot handle this in the general case, but we can handle this for
-        the extremely common case of a single `SparseCategoricalCrossentropy`
-        loss, and a `None` or `"softmax"` activation.
-        """
-        # Only handle a single loss.
-        if isinstance(loss, (dict, list, tuple)):
-            return
-        # Only handle tasks with activation.
-        if not hasattr(self, "activation"):
-            return
-
-        loss = keras.losses.get(loss)
-        activation = keras.activations.get(self.activation)
-        if isinstance(loss, keras.losses.SparseCategoricalCrossentropy):
-            from_logits = loss.get_config()["from_logits"]
-        elif loss == keras.losses.sparse_categorical_crossentropy:
-            from_logits = False
-        else:
-            # Only handle sparse categorical crossentropy.
-            return
-
-        softmax_output = activation == keras.activations.softmax
-        logit_output = activation == keras.activations.linear
-        if softmax_output and from_logits:
-            raise ValueError(
-                "The `loss` passed to `compile()` expects logit output, but "
-                "the model is configured to output softmax probabilities "
-                "(`activation='softmax'`). This will not converge! Pass "
-                "`from_logits=False` to your loss, e.g. "
-                "`loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False)`. "
-            )
-        if logit_output and not from_logits:
-            raise ValueError(
-                "The `loss` passed to `compile()` expects softmax probability "
-                "output, but the model is configured to output logits "
-                "(`activation=None`). This will not converge! Pass "
-                "`from_logits=True` to your loss, e.g. "
-                "`loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True)`. "
-            )
-
-    def compile(self, optimizer="rmsprop", loss=None, **kwargs):
-        # Temporarily disable jit compilation on torch.
-        if config.backend() == "torch":
-            kwargs["jit_compile"] = False
-        self._check_for_loss_mismatch(loss)
-        super().compile(optimizer=optimizer, loss=loss, **kwargs)
-
     def preprocess_samples(self, x, y=None, sample_weight=None):
         if self.preprocessor is not None:
             return self.preprocessor(x, y=y, sample_weight=sample_weight)

@@ -14,7 +14,6 @@
 
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.models.bart.bart_backbone import BartBackbone
 from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
@@ -198,14 +197,6 @@ class BartSeq2SeqLM(Seq2SeqLM):
             inputs=inputs,
             outputs=outputs,
             **kwargs,
-        )
-
-        # === Default compilation ===
-        self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            optimizer=keras.optimizers.Adam(2e-5),
-            metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=True,
         )
 
     def call_decoder_with_cache(
@@ -460,7 +451,7 @@ class BartSeq2SeqLM(Seq2SeqLM):
                 cache,
             )
 
-        decoder_token_ids = self._sampler(
+        decoder_token_ids = self.sampler(
             next=next,
             prompt=decoder_token_ids,
             cache=self_attention_cache,

@@ -128,13 +128,3 @@ class BertMaskedLM(MaskedLM):
             outputs=outputs,
             **kwargs,
         )
-
-        # === Default compilation ===
-        self.backbone = backbone
-        self.preprocessor = preprocessor
-        self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            optimizer=keras.optimizers.Adam(5e-5),
-            weighted_metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=True,
-        )

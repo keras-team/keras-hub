@@ -68,23 +68,74 @@ class CausalLM(Task):
     ```
     """
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Default compilation.
+        self.compile()
+
     def compile(
         self,
-        *args,
-        run_eagerly=False,
-        jit_compile=True,
+        optimizer="auto",
+        loss="auto",
+        *,
+        weighted_metrics="auto",
         sampler="top_k",
         **kwargs,
     ):
-        xla_compatible = True
+        """Configures the `CausalLM` task for training and generation.
+
+        The `CausalLM` task extends the default compilation signature of
+        `keras.Model.compile` with defaults for `optimizer`, `loss`, and
+        `weighted_metrics`. To override these defaults, pass any value
+        to these arguments during compilation.
+
+        The `CausalLM` task adds a new `sampler` to `compile`, which can be used
+        to control the sampling strategy used with the `generate` function.
+
+        Note that because training inputs include padded tokens which are
+        excluded from the loss, it is almost always a good idea to compile with
+        `weighted_metrics` and not `metrics`.
+
+        Args:
+            optimizer: `"auto"`, an optimizer name, or a `keras.Optimizer`
+                instance. Defaults to `"auto"`, which uses the default optimizer
+                for the given model and task. See `keras.Model.compile` and
+                `keras.optimizers` for more info on possible `optimizer` values.
+            loss: `"auto"', a loss name, or a `keras.losses.Loss` instance.
+                Defaults to `"auto"`, where a
+                `keras.losses.SparseCategoricalCrossentropy` loss will be
+                applied for the token classification `CausalLM` task. See
+                `keras.Model.compile` and `keras.losses` for more info on
+                possible `loss` values.
+            weighted_metrics: `"auto"`, or a list of metrics to be evaluated by
+                the model during training and testing. Defaults to `"auto"`,
+                where a `keras.metrics.SparseCategoricalAccuracy` will be
+                applied to track the accuracy of the model at guessing masked
+                token values. See `keras.Model.compile` and `keras.metrics` for
+                more info on possible `weighted_metrics` values.
+            sampler: A sampler name, or a `keras_nlp.samplers.Sampler` instance.
+                Configures the sampling method used during `generate()` calls.
+                See `keras_nlp.samplers` for a full list of built-in sampling
+                strategies.
+            **kwargs: See `keras.Model.compile` for a full list of arguments
+                supported by the compile method.
+        """
+        if optimizer == "auto":
+            optimizer = keras.optimizers.Adam(2e-5)
+        if loss == "auto":
+            loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+        if weighted_metrics == "auto":
+            weighted_metrics = [keras.metrics.SparseCategoricalAccuracy()]
+        # Keras 2 does not jit_compile by default.
+        if not config.keras_3():
+            kwargs["jit_compile"] = True
         super().compile(
-            *args,
-            run_eagerly=run_eagerly,
-            # Only `jit_compile` if not eager and in a compatible environment.
-            jit_compile=jit_compile and xla_compatible and not run_eagerly,
+            optimizer=optimizer,
+            loss=loss,
+            weighted_metrics=weighted_metrics,
             **kwargs,
         )
-        self._sampler = get_sampler(sampler)
+        self.sampler = get_sampler(sampler)
         # Clear the compiled generate function.
         self.generate_function = None
 
@@ -127,7 +178,7 @@ class CausalLM(Task):
                     non_trainable_variables,
                 ) = state
                 mapping = itertools.chain(
-                    zip(self._sampler.variables, sampler_variables),
+                    zip(self.sampler.variables, sampler_variables),
                     zip(self.trainable_variables, trainable_variables),
                     zip(self.non_trainable_variables, non_trainable_variables),
                 )
@@ -137,7 +188,7 @@ class CausalLM(Task):
 
                 # Get updated sampler variables from the stateless scope.
                 sampler_variables = []
-                for v in self._sampler.variables:
+                for v in self.sampler.variables:
                     new_v = scope.get_current_value(v)
                     sampler_variables.append(new_v if new_v is not None else v)
                 return outputs, sampler_variables
@@ -151,7 +202,7 @@ class CausalLM(Task):
 
                 # Create an explicit tuple of all variable state.
                 state = (
-                    self._sampler.variables,
+                    self.sampler.variables,
                     # Use the explicit variable.value to preserve the
                     # sharding spec of distribution.
                     [v.value for v in self.trainable_variables],
@@ -165,7 +216,7 @@ class CausalLM(Task):
                 )
                 # Only assign the sampler variables (random seeds), as other
                 # model variables should never be updated in generation.
-                for ref_v, v in zip(self._sampler.variables, sampler_variables):
+                for ref_v, v in zip(self.sampler.variables, sampler_variables):
                     ref_v.assign(v)
                 return outputs
 
