@@ -15,6 +15,7 @@ import numpy as np
 
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
+from keras_nlp.layers.modeling.rotary_embedding import RotaryEmbedding
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
@@ -87,28 +88,23 @@ class CachedGemmaAttention(keras.layers.Layer):
             (None, None, self.num_query_heads, self.head_dim)
         )
         self.softmax = keras.layers.Softmax(dtype="float32")
+
+        self.rope_layer = RotaryEmbedding(
+            max_wavelength=10_000.0, dtype=self.dtype_policy
+        )
+
         self.built = True
 
-    def _apply_rope(self, x, positions):
+    def _apply_rope(self, x, start_index):
         """Rope rotate q or k."""
-        # TODO: refactor to use RotaryEmbedding layer?
-        max_wavelength = 10000
-        x_shape = ops.shape(x)
-        freq_exponents = (2.0 / x_shape[-1]) * ops.arange(
-            x_shape[-1] // 2, dtype="float32"
+        x = self.rope_layer(x, start_index=start_index)
+        # Gemma uses a different layout for positional embeddings.
+        # The transformation below ensures the embeddings are numerically
+        # equivalent to the original gemma implementation.
+        x = ops.reshape(
+            ops.stack(ops.split(x, 2, axis=-1), axis=-1), ops.shape(x)
         )
-        timescale = max_wavelength**freq_exponents
-        radians = positions[..., None] / timescale[None, None, :]
-        radians = radians[..., None, :]
-        sin = ops.cast(ops.sin(radians), self.compute_dtype)
-        cos = ops.cast(ops.cos(radians), self.compute_dtype)
-        x1, x2 = ops.split(x, 2, axis=-1)
-        # Avoid `ops.concatenate` for now, to avoid a obscure bug with XLA
-        # compilation on jax. We should be able to remove this once the
-        # following PR is in all jax releases we care about:
-        # https://github.com/openxla/xla/pull/7875
-        output = ops.stack([x1 * cos - x2 * sin, x2 * cos + x1 * sin], axis=-1)
-        return ops.reshape(output, x_shape)
+        return x
 
     def _compute_attention(
         self,
@@ -155,19 +151,14 @@ class CachedGemmaAttention(keras.layers.Layer):
         cache_update_index=0,
         training=False,
     ):
-        seq_len = ops.shape(x)[1]
-        start_index = cache_update_index
-        positions = ops.arange(seq_len, dtype="float32")
-
-        positions = positions + ops.cast(start_index, "float32")
         query = self.query_dense(x)
-        query = self._apply_rope(query, positions)
+        query = self._apply_rope(query, cache_update_index)
 
         if cache is not None:
             key_cache = cache[:, 0, ...]
             value_cache = cache[:, 1, ...]
             key_update = self.key_dense(x)
-            key_update = self._apply_rope(key_update, positions)
+            key_update = self._apply_rope(key_update, cache_update_index)
             value_update = self.value_dense(x)
             start = [0, cache_update_index, 0, 0]
             key = ops.slice_update(key_cache, start, key_update)
@@ -175,7 +166,7 @@ class CachedGemmaAttention(keras.layers.Layer):
             cache = ops.stack((key, value), axis=1)
         else:
             key = self.key_dense(x)
-            key = self._apply_rope(key, positions)
+            key = self._apply_rope(key, cache_update_index)
             value = self.value_dense(x)
 
         attention_vec = self._compute_attention(
