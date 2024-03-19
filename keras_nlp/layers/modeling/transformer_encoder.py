@@ -92,10 +92,9 @@ class TransformerEncoder(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         normalize_first=False,
-        name=None,
         **kwargs,
     ):
-        super().__init__(name=name, **kwargs)
+        super().__init__(**kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.dropout = dropout

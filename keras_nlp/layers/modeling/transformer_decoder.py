@@ -108,7 +108,6 @@ class TransformerDecoder(keras.layers.Layer):
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
         normalize_first=False,
-        name=None,
         **kwargs,
     ):
         # Work around for model saving, we need to ensure our model is built
@@ -116,7 +115,7 @@ class TransformerDecoder(keras.layers.Layer):
         decoder_sequence_shape = kwargs.pop("decoder_sequence_shape", None)
         encoder_sequence_shape = kwargs.pop("encoder_sequence_shape", None)
 
-        super().__init__(name=name, **kwargs)
+        super().__init__(**kwargs)
         self.intermediate_dim = intermediate_dim
         self.num_heads = num_heads
         self.dropout = dropout
