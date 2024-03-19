@@ -38,6 +38,8 @@ class RotaryEmbedding(keras.layers.Layer):
         scaling_factor: float. The scaling factor used to scale frequency range.
         sequence_axis: int. Sequence axis in the input tensor.
         feature_axis: int. Feature axis in the input tensor.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
 
     Call arguments:
         inputs: The tensor inputs to apply the embedding to. This can have

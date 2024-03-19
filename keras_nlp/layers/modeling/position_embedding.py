@@ -33,6 +33,8 @@ class PositionEmbedding(keras.layers.Layer):
         initializer: The initializer to use for the embedding weights. Defaults
             to `"glorot_uniform"`.
         seq_axis: The axis of the input tensor where we add the embeddings.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
 
     Call arguments:
         inputs: The tensor inputs to compute an embedding for, with shape

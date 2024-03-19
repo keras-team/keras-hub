@@ -46,6 +46,8 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
             If mask_zero` is set to True, as a consequence, index 0 cannot be
             used in the vocabulary
             (input_dim should equal size of vocabulary + 1).
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
 
     Examples:
     ```python
