@@ -49,6 +49,9 @@ class BertTokenizer(WordPieceTokenizer):
             plain text file containing a single word piece token per line.
         lowercase: If `True`, the input text will be first lowered before
             tokenization.
+        special_tokens_in_strings: bool. A bool to indicate if the tokenizer
+            should expect special tokens in input strings that should be
+            tokenized and mapped correctly to their ids. Defaults to False.
 
     Examples:
     ```python
@@ -76,6 +79,7 @@ class BertTokenizer(WordPieceTokenizer):
         self,
         vocabulary=None,
         lowercase=False,
+        special_tokens_in_strings=False,
         **kwargs,
     ):
         self.cls_token = "[CLS]"
@@ -85,6 +89,13 @@ class BertTokenizer(WordPieceTokenizer):
         super().__init__(
             vocabulary=vocabulary,
             lowercase=lowercase,
+            special_tokens=[
+                self.cls_token,
+                self.sep_token,
+                self.pad_token,
+                self.mask_token,
+            ],
+            special_tokens_in_strings=special_tokens_in_strings,
             **kwargs,
         )
 
@@ -92,15 +103,6 @@ class BertTokenizer(WordPieceTokenizer):
         super().set_vocabulary(vocabulary)
 
         if vocabulary is not None:
-            # Check for necessary special tokens.
-            for token in [self.cls_token, self.pad_token, self.sep_token]:
-                if token not in self.vocabulary:
-                    raise ValueError(
-                        f"Cannot find token `'{token}'` in the provided "
-                        f"`vocabulary`. Please provide `'{token}'` in your "
-                        "`vocabulary` or use a pretrained `vocabulary` name."
-                    )
-
             self.cls_token_id = self.token_to_id(self.cls_token)
             self.sep_token_id = self.token_to_id(self.sep_token)
             self.pad_token_id = self.token_to_id(self.pad_token)
@@ -114,3 +116,8 @@ class BertTokenizer(WordPieceTokenizer):
     @classproperty
     def presets(cls):
         return copy.deepcopy({**backbone_presets, **classifier_presets})
+
+    def get_config(self):
+        config = super().get_config()
+        del config["special_tokens"]  # Not configurable; set in __init__.
+        return config
