@@ -40,7 +40,7 @@ class Perplexity(keras.metrics.Metric):
         name: string. Name of the metric instance.
         **kwargs: Other keyword arguments.
 
-    Example usage:
+    Examples:
 
     1. Calculate perplexity by calling update_state() and result().
     1.1. `sample_weight`, and `mask_token_id` are not provided.

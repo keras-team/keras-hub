@@ -68,7 +68,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
     References:
         - [Kudo and Richardson, 2018](https://arxiv.org/abs/1808.06226)
 
-    Example usage:
+    Examples:
 
     From bytes.
     ```python
@@ -275,7 +275,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         Args:
             preset: string. Must be one of "{{preset_names}}".
 
-        Example usage:
+        Examples:
         ```python
         # Load a preset tokenizer.
         tokenizer = {{model_name}}.from_preset("{{example_preset_name}}")

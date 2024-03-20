@@ -57,7 +57,7 @@ class OPTCausalLMPreprocessor(OPTPreprocessor):
         return_labels: If `True`, the output `"token_ids"` will be offset by one
             and returned as labels. If `False` only features will be returned.
 
-    Example usage:
+    Examples:
     ```python
     # Load the preprocessor from a preset.
     preprocessor = keras_nlp.models.OPTCausalLMPreprocessor.from_preset(

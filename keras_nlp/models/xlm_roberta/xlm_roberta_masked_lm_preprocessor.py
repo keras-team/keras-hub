@@ -76,7 +76,7 @@ class XLMRobertaMaskedLMPreprocessor(XLMRobertaPreprocessor):
         sample_weight: Label weights. Should always be `None` as the layer
             generates label weights.
 
-    Example usage:
+    Examples:
 
     Directly calling the layer on data.
     ```python

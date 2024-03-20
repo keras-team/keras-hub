@@ -82,7 +82,7 @@ class MaskedLMMaskGenerator(PreprocessingLayer):
                 1 means the corresponding position in `mask_positions` is an
                 actual mask, 0 means it is a pad.
 
-    Example usage:
+    Examples:
 
     Basic usage.
     ```python

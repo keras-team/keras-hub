@@ -149,7 +149,7 @@ class BytePairTokenizerCache(tf.Module):
     The cache key is string tensor or python strings, and the value is split
     tokens joined by whitespace. For example, "dragonfly" => "dragon fly"
 
-    Example usage:
+    Examples:
     ```
     cache = BytePairTokenizerCache()
     cache.insert(["butterfly", "dragonfly"], ["but ter fly", "dragon fly"])
@@ -245,7 +245,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             contain splittable characters such as punctuation. Special tokens
             must still be included in `vocabulary`. Defaults to `None`.
 
-    Example usage:
+    Examples:
 
     Tokenize
     >>> vocab = {"butter": 1, "fly": 2}
@@ -653,7 +653,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         Args:
             preset: string. Must be one of "{{preset_names}}".
 
-        Example usage:
+        Examples:
         ```python
         # Load a preset tokenizer.
         tokenizer = {{model_name}}.from_preset("{{example_preset_name}}")

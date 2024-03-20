@@ -13,7 +13,7 @@
 # limitations under the License.
 """Script to create (and optionally install) a `.whl` archive for KerasNLP.
 
-Example usage:
+Usage:
 
 1. Create a `.whl` file in `dist/`:
 

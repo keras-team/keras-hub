@@ -47,7 +47,7 @@ class RobertaTokenizer(BytePairTokenizer):
             path. the file should have one merge rule per line. Every merge
             rule contains merge entities separated by a space.
 
-    Example usage:
+    Examples:
     ```python
     # Unbatched input.
     tokenizer = keras_nlp.models.RobertaTokenizer.from_preset(

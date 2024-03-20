@@ -50,7 +50,7 @@ class XLMRobertaTokenizer(SentencePieceTokenizer):
             [SentencePiece repository](https://github.com/google/sentencepiece)
             for more details on the format.
 
-    Example usage:
+    Examples:
     ```python
     tokenizer = keras_nlp.models.XLMRobertaTokenizer.from_preset(
         "xlm_roberta_base_multi",

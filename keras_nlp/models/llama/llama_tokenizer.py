@@ -41,7 +41,7 @@ class LlamaTokenizer(SentencePieceTokenizer):
             [SentencePiece repository](https://github.com/google/sentencepiece)
             for more details on the format.
 
-    Example usage:
+    Examples:
     ```python
     # Unbatched input.
     tokenizer = keras_nlp.models.LlamaTokenizer.from_preset(

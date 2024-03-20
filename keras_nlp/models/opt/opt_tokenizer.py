@@ -45,7 +45,7 @@ class OPTTokenizer(BytePairTokenizer):
             should have one merge rule per line. Every merge rule contains
             merge entities separated by a space.
 
-    Example usage:
+    Examples:
     ```python
     # Unbatched input.
     tokenizer = keras_nlp.models.OPTTokenizer.from_preset(

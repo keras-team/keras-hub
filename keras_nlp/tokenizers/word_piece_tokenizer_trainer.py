@@ -75,7 +75,7 @@ def compute_word_piece_vocabulary(
     Returns:
         Returns a list of vocabulary terms.
 
-    Example usage:
+    Examples:
 
     Basic Usage (from Dataset).
     >>> inputs = tf.data.Dataset.from_tensor_slices(["bat sat pat mat rat"])

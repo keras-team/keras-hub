@@ -46,7 +46,7 @@ class BloomTokenizer(BytePairTokenizer):
             should have one merge rule per line. Every merge rule contains
             merge entities separated by a space.
 
-    Example usage:
+    Examples:
 
     ```python
     # Unbatched input.

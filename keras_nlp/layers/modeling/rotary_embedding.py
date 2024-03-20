@@ -47,7 +47,7 @@ class RotaryEmbedding(keras.layers.Layer):
             compute the rotary embedding from. This is useful during cached
             decoding, where each position is predicted separately in a loop.
 
-    Example usage:
+    Examples:
 
     ```python
     batch_size = 16

@@ -72,7 +72,7 @@ class TransformerDecoder(keras.layers.Layer):
         name: string. The name of the layer. Defaults to `None`.
         **kwargs: other keyword arguments.
 
-    Example usage:
+    Examples:
     ```python
     # Create a single transformer decoder layer.
     decoder = keras_nlp.layers.TransformerDecoder(

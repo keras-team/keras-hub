@@ -38,7 +38,7 @@ import keras_nlp
 os.environ["KERAS_BACKEND"] = "torch"
 
 """
-Example usage:
+Sample usage:
 
 For converting a Keras model to PyTorch format using a custom or fine-tuned
 checkpoint from Keras, make sure to pass the path for the Keras weights file

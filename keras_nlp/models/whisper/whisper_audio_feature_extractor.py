@@ -51,7 +51,7 @@ class WhisperAudioFeatureExtractor(PreprocessingLayer):
             seconds. The input audio tensor will be padded/trimmed to
             `max_audio_length * sampling_rate`. Defaults to `30`.
 
-    Example usage:
+    Examples:
 
     ```python
     audio_tensor = tf.ones((8000,), dtype="float32")
@@ -281,7 +281,7 @@ class WhisperAudioFeatureExtractor(PreprocessingLayer):
         Args:
             preset: string. Must be one of "{{preset_names}}".
 
-        Example usage:
+        Examples:
         ```python
         # Load a preset tokenizer.
         audio_feature_extractor = WhisperAudioFeatureExtractor.from_preset(

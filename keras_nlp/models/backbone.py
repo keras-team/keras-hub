@@ -115,7 +115,7 @@ class Backbone(keras.Model):
             load_weights: Whether to load pre-trained weights into model.
                 Defaults to `True`.
 
-        Example usage:
+        Examples:
         ```python
         # Load architecture and weights from preset
         model = keras_nlp.models.{{model_name}}.from_preset(

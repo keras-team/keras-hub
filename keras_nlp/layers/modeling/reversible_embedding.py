@@ -59,7 +59,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
             from `output_dim` to `input_dim`, instead of a normal embedding
             call. Default to `False`.
 
-    Example usage:
+    Examples:
     ```python
     batch_size = 16
     vocab_size = 100

@@ -76,7 +76,7 @@ class ByteTokenizer(tokenizer.Tokenizer):
             https://www.tensorflow.org/api_docs/python/tf/strings/unicode_transcode).
             (U+FFFD) is `65533`. Defaults to `65533`.
 
-    Example usage:
+    Examples:
 
     Basic usage.
     >>> tokenizer = keras_nlp.tokenizers.ByteTokenizer()

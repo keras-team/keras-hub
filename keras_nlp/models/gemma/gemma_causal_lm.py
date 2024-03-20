@@ -53,7 +53,7 @@ class GemmaCausalLM(GenerativeTask):
             If `None`, this model will not apply preprocessing, and inputs
             should be preprocessed before calling the model.
 
-    Example usage:
+    Examples:
 
     Use `generate()` to do text generation.
     ```python
@@ -359,7 +359,7 @@ class GemmaCausalLM(GenerativeTask):
             <float>[batch_size, num_tokens, vocab_size] in "logits" mode, or
             <float>[batch_size, num_tokens] in "loss" mode.
 
-        Example usage:
+        Examples:
 
         Compute gradients between embeddings and loss scores with TensorFlow:
         ```python

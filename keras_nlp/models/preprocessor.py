@@ -75,7 +75,7 @@ class Preprocessor(PreprocessingLayer):
         Args:
             preset: string. Must be one of "{{preset_names}}".
 
-        Example usage:
+        Examples:
         ```python
         # Load a preprocessor layer from a preset.
         preprocessor = keras_nlp.models.{{preprocessor_name}}.from_preset(

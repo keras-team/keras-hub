@@ -55,7 +55,7 @@ class BertClassifier(Task):
         dropout: float. The dropout probability value, applied after the dense
             layer.
 
-    Example usage:
+    Examples:
 
     Raw string data.
     ```python

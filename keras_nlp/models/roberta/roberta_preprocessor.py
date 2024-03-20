@@ -69,7 +69,7 @@ class RobertaPreprocessor(Preprocessor):
         sample_weight: Any label weight data. Will be passed through unaltered.
 
 
-    Example usage:
+    Examples:
 
     Directly calling the layer on data.
     ```python
