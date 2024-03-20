@@ -43,7 +43,7 @@ class AlibiBias(keras.layers.Layer):
             multi-head attention layer of the transformer to add alibi bias to
             it. With shape `(batch_size, num_heads, query_length, key_length)`.
 
-    Examples:
+    Example:
     ```python
     query_length = 10
     key_length = 10

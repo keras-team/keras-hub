@@ -45,7 +45,7 @@ class PositionEmbedding(keras.layers.Layer):
             compute the position embedding from. This is useful during cached
             decoding, where each position is predicted separately in a loop.
 
-    Examples:
+    Example:
 
     Called directly on input.
     >>> layer = keras_nlp.layers.PositionEmbedding(sequence_length=10)
