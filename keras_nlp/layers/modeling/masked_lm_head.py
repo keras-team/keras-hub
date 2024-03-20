@@ -60,7 +60,7 @@ class MaskedLMHead(keras.layers.Layer):
             The bias initializer for the dense and multiheaded
             attention layers. Defaults to `"zeros"`.
 
-    Examples:
+    Example usage:
 
     ```python
     batch_size = 16

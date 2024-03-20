@@ -44,7 +44,7 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
             used in the vocabulary
             (input_dim should equal size of vocabulary + 1).
 
-    Examples:
+    Example usage:
     ```python
     inputs = np.ones(shape=(1, 50), dtype="int32")
     embedding_layer = keras_nlp.layers.TokenAndPositionEmbedding(

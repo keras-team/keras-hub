@@ -56,7 +56,7 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
         sequence_length: Pass to override the configured `sequence_length` of
             the layer.
 
-    Examples:
+    Example usage:
     ```python
     # Load the preprocessor from a preset.
     preprocessor = keras_nlp.models.GPT2CausalLMPreprocessor.from_preset(

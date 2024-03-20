@@ -54,7 +54,7 @@ class AlbertClassifier(Task):
         dropout: float. The dropout probability value, applied after the dense
             layer.
 
-    Examples:
+    Example usage:
 
      Raw string data.
     ```python

@@ -48,7 +48,7 @@ class BartTokenizer(BytePairTokenizer):
             should have one merge rule per line. Every merge rule contains
             merge entities separated by a space.
 
-    Examples:
+    Example usage:
 
     ```python
     # Unbatched input.

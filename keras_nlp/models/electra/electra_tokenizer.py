@@ -37,7 +37,7 @@ class ElectraTokenizer(WordPieceTokenizer):
         lowercase: If `True`, the input text will be first lowered before
             tokenization.
 
-    Examples:
+    Example usage:
     ```python
     # Custom Vocabulary.
     vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]

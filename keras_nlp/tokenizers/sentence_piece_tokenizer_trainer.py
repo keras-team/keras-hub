@@ -56,7 +56,7 @@ def compute_sentence_piece_proto(
         A `bytes` object with a serialized SentencePiece proto or
         `None` if proto_output_file if provided.
 
-    Examples:
+    Example usage:
 
     Basic Usage (from Dataset).
     >>> inputs = tf.data.Dataset.from_tensor_slices(["Drifting Along"])

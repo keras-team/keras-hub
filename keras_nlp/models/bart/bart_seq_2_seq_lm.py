@@ -59,7 +59,7 @@ class BartSeq2SeqLM(GenerativeTask):
             If `None`, this model will not apply preprocessing, and inputs
             should be preprocessed before calling the model.
 
-    Examples:
+    Example usage:
 
     Use `generate()` to do text generation, given an input context.
     ```python
