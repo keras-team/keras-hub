@@ -52,6 +52,8 @@ class ReversibleEmbedding(keras.layers.Embedding):
         reverse_dtype: The dtype for the reverse projection computation.
             For stability, it is usually best to use full precision even when
             working with half or mixed precision training.
+        **kwargs: other keyword arguments passed to `keras.layers.Embedding`,
+            including `name`, `trainable`, `dtype` etc.
 
     Call arguments:
         inputs: The tensor inputs to the layer.
