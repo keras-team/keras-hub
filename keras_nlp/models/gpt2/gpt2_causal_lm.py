@@ -58,7 +58,7 @@ class GPT2CausalLM(GenerativeTask):
             If `None`, this model will not apply preprocessing, and inputs
             should be preprocessed before calling the model.
 
-    Example usage:
+    Examples:
 
     Use `generate()` to do text generation.
     ```python

@@ -53,7 +53,7 @@ class EditDistance(keras.metrics.Metric):
     References:
         - [Morris et al.](https://www.researchgate.net/publication/221478089)
 
-    Example usage:
+    Examples:
 
     Various Input Types.
 

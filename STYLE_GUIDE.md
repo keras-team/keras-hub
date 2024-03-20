@@ -116,7 +116,7 @@ class PositionEmbedding(keras.layers.Layer):
     Args:
         sequence_length: The maximum length of the dynamic sequence.
 
-    Example usage:
+    Examples:
 
     Direct call.
     >>> layer = keras_nlp.layers.PositionEmbedding(sequence_length=10)

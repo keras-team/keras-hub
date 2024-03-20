@@ -199,7 +199,7 @@ class Task(PipelineModel):
             load_weights: Whether to load pre-trained weights into model.
                 Defaults to `True`.
 
-        Example usage:
+        Examples:
         ```python
         # Load architecture and weights from preset
         model = {{model_task_name}}.from_preset("{{example_preset_name}}")

@@ -46,7 +46,7 @@ class AlbertTokenizer(SentencePieceTokenizer):
             [SentencePiece repository](https://github.com/google/sentencepiece)
             for more details on the format.
 
-    Example usage:
+    Examples:
 
     ```python
     # Unbatched input.

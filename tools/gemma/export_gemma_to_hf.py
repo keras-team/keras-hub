@@ -25,7 +25,7 @@ import keras_nlp
 os.environ["KERAS_BACKEND"] = "torch"
 
 """
-Example usage:
+Sample usage:
 
 For converting a keras model to HuggingFace format using a custom or fine-tuned
 checkpoint from Keras, make sure to pass the path for the Keras weights file

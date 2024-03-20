@@ -58,7 +58,7 @@ class XLMRobertaClassifier(Task):
         dropout: float. The dropout probability value, applied to the pooled
             output, and after the first dense layer.
 
-    Example usage:
+    Examples:
 
     Raw string data.
     ```python

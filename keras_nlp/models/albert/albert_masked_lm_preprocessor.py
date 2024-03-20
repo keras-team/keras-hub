@@ -69,7 +69,7 @@ class AlbertMaskedLMPreprocessor(AlbertPreprocessor):
                     left-to-right manner and fills up the buckets until we run
                     out of budget. It supports an arbitrary number of segments.
 
-    Example usage:
+    Examples:
 
     Directly calling the layer on data.
     ```python

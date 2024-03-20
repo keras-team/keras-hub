@@ -61,7 +61,7 @@ class DistilBertClassifier(Task):
         dropout: float. The dropout probability value, applied after the first
             dense layer.
 
-    Example usage:
+    Examples:
 
     Raw string data.
     ```python

@@ -60,7 +60,7 @@ class RandomSwap(PreprocessingLayer):
         seed: A seed for the random number generator.
 
 
-    Example usage:
+    Examples:
 
     Word level usage.
     >>> keras.utils.set_random_seed(1337)

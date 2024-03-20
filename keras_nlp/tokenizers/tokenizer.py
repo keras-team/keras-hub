@@ -40,7 +40,7 @@ class Tokenizer(PreprocessingLayer):
     "vocab free" tokenizers, such as a whitespace splitter show below, these
     methods do not apply and can be skipped.
 
-    Example usage:
+    Examples:
 
     ```python
     class WhitespaceSplitterTokenizer(keras_nlp.tokenizers.Tokenizer):

@@ -67,7 +67,7 @@ class LlamaBackbone(Backbone):
             such as softmax and layer normalization, will always be done at
             float32 precision regardless of dtype.
 
-    Example usage:
+    Examples:
 
     ```python
     input_data = {

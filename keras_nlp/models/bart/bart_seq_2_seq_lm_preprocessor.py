@@ -58,7 +58,7 @@ class BartSeq2SeqLMPreprocessor(BartPreprocessor):
             generates label weights by shifting the padding mask one step to the
             left.
 
-    Example usage:
+    Examples:
 
     Directly calling the layer on data
     ```python

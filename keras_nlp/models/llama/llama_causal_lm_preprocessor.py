@@ -56,7 +56,7 @@ class LlamaCausalLMPreprocessor(LlamaPreprocessor):
         sequence_length: Pass to override the configured `sequence_length` of
             the layer.
 
-    Example usage:
+    Examples:
     ```python
     # Load the preprocessor from a preset.
     preprocessor = keras_nlp.models.LlamaCausalLMPreprocessor.from_preset(

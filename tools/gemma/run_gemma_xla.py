@@ -47,7 +47,7 @@ from gemma.model_xla import GemmaForCausalLM
 from gemma.tokenizer import Tokenizer
 
 """
-Example usage:
+Sample usage:
 
 Run the verification script supplying your model size, converted checkpoint file,
 vocabulary file, and test prompt.

@@ -64,7 +64,7 @@ class DebertaV3Classifier(Task):
         dropout: float. Dropout probability applied to the pooled output. For
             the second dropout layer, `backbone.dropout` is used.
 
-    Example usage:
+    Examples:
 
     Raw string data.
     ```python

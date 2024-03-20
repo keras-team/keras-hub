@@ -21,7 +21,7 @@ line per sentence, with empty newlines between documents.
 This script will run muliprocessed, and the number of concurrent process and
 output file shards can be controlled with `--num_jobs` and `--num_shards`.
 
-Example usage:
+Usage:
 python examples/tools/create_sentence_split_data.py \
     --input_files ~/datasets/wikipedia,~/datasets/bookscorpus \
     --output_directory ~/datasets/bert-sentence-split-data
