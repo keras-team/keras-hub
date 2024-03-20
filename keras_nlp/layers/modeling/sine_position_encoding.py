@@ -34,6 +34,8 @@ class SinePositionEncoding(keras.layers.Layer):
         max_wavelength: The maximum angular wavelength of the sine/cosine
             curves, as described in Attention is All You Need. Defaults to
             `10000`.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
 
     Call arguments:
         inputs: The tensor inputs to compute an embedding for, with shape

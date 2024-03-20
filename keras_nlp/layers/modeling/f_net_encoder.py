@@ -47,8 +47,8 @@ class FNetEncoder(keras.layers.Layer):
         bias_initializer: "string" or `keras.initializers` initializer.
             The bias initializer for the dense layers.
             Defaults to `"zeros"`.
-        name: string. The name of the layer. Defaults to `None`.
-        **kwargs: other keyword arguments.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
 
     Examples:
 
@@ -79,10 +79,9 @@ class FNetEncoder(keras.layers.Layer):
         layer_norm_epsilon=1e-5,
         kernel_initializer="glorot_uniform",
         bias_initializer="zeros",
-        name=None,
         **kwargs
     ):
-        super().__init__(name=name, **kwargs)
+        super().__init__(**kwargs)
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.activation = keras.activations.get(activation)
