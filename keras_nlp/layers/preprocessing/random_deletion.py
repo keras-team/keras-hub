@@ -58,7 +58,7 @@ class RandomDeletion(PreprocessingLayer):
             tracable--it can be any python function.
         seed: A seed for the random number generator.
 
-    Examples:
+    Example usage:
 
     Word level usage.
     >>> keras.utils.set_random_seed(1337)

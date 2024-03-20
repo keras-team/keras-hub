@@ -86,7 +86,7 @@ class MultiSegmentPacker(PreprocessingLayer):
         sequence. The second is an integer tensor of the same shape, containing
         the segment ids.
 
-    Examples:
+    Example usage:
 
     *Pack a single input for classification.*
     >>> seq1 = [1, 2, 3, 4]

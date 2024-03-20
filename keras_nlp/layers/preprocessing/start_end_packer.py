@@ -59,7 +59,7 @@ class StartEndPacker(PreprocessingLayer):
         add_end_value: Pass `False` to not append an end value for this
             input.
 
-    Examples:
+    Example usage:
 
     Unbatched input (int).
     >>> inputs = [5, 6, 7]

@@ -40,7 +40,7 @@ class RougeL(RougeBase):
     References:
         - [Lin et al., 2004](https://aclanthology.org/W04-1013/)
 
-    Examples:
+    Example usage:
 
     1. Python string.
     >>> rouge_l = keras_nlp.metrics.RougeL()

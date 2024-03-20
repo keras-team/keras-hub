@@ -15,7 +15,7 @@
 
 This script will create wordpiece vocabularies suitable for pretraining BERT.
 
-Usage:
+Example usage:
 python examples/tools/train_word_piece_vocabulary.py \
     --input_files ~/datasets/bert-sentence-split-data/ \
     --output_file vocab.txt

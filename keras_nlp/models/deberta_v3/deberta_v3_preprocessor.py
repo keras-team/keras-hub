@@ -71,7 +71,7 @@ class DebertaV3Preprocessor(Preprocessor):
                     left-to-right manner and fills up the buckets until we run
                     out of budget. It supports an arbitrary number of segments.
 
-    Examples:
+    Example usage:
     Directly calling the layer on data.
     ```python
     preprocessor = keras_nlp.models.DebertaV3Preprocessor.from_preset(

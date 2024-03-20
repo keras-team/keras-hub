@@ -74,7 +74,7 @@ class DistilBertMaskedLMPreprocessor(DistilBertPreprocessor):
         sample_weight: Label weights. Should always be `None` as the layer
             generates label weights.
 
-    Examples:
+    Example usage:
 
     Directly calling the layer on data.
     ```python

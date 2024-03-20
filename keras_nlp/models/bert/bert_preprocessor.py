@@ -69,7 +69,7 @@ class BertPreprocessor(Preprocessor):
         y: Any label data. Will be passed through unaltered.
         sample_weight: Any label weight data. Will be passed through unaltered.
 
-    Examples:
+    Example usage:
 
     Directly calling the layer on data.
     ```python

@@ -42,7 +42,7 @@ class SinePositionEncoding(keras.layers.Layer):
             compute the encoding from. This is useful during cached decoding,
             where each position is predicted separately in a loop.
 
-    Examples:
+    Example usage:
     ```python
     # create a simple embedding layer with sinusoidal positional encoding
     seq_len = 100

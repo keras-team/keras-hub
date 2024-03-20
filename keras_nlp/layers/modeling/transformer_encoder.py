@@ -61,7 +61,7 @@ class TransformerEncoder(keras.layers.Layer):
         name: string. The name of the layer. Defaults to `None`.
         **kwargs: other keyword arguments.
 
-    Examples:
+    Example usage:
 
     ```python
     # Create a single transformer encoder layer.

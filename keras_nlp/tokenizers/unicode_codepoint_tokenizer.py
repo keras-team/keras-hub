@@ -79,7 +79,7 @@ class UnicodeCodepointTokenizer(tokenizer.Tokenizer):
             Effectively this will make the `vocabulary_size - 1` id the
             the OOV value.
 
-    Examples:
+    Example usage:
 
     Basic Usage.
     >>> inputs = "Unicode Tokenizer"

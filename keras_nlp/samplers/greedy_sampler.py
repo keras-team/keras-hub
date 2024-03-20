@@ -24,7 +24,7 @@ class GreedySampler(Sampler):
     This sampler is implemented on greedy search, i.e., always picking up the
     token of the largest probability as the next token.
 
-    Examples:
+    Example usage:
     ```python
     causal_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
 

@@ -67,7 +67,7 @@ class FalconPreprocessor(Preprocessor):
         sequence_length: Pass to override the configured `sequence_length` of
             the layer.
 
-    Examples:
+    Example usage:
 
     Directly calling the layer on data.
     ```python

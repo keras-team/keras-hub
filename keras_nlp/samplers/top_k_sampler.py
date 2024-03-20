@@ -33,7 +33,7 @@ class TopKSampler(Sampler):
     Call arguments:
         {{call_args}}
 
-    Examples:
+    Example usage:
     ```python
     causal_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")
 

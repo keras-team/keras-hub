@@ -46,7 +46,7 @@ class FNetTokenizer(SentencePieceTokenizer):
             [SentencePiece repository](https://github.com/google/sentencepiece)
             for more details on the format.
 
-    Examples:
+    Example usage:
     ```python
     # Unbatched input.
     tokenizer = keras_nlp.models.FNetTokenizer.from_preset(

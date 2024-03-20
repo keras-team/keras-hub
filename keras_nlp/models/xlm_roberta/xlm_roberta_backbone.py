@@ -57,7 +57,7 @@ class XLMRobertaBackbone(roberta_backbone.RobertaBackbone):
             such as softmax and layer normalization, will always be done at
             float32 precision regardless of dtype.
 
-    Examples:
+    Example usage:
     ```python
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),

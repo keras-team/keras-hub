@@ -19,7 +19,7 @@ pip install -r requirements.txt
 pip install git+https://github.com/google-deepmind/gemma.git
 python pip_build.py --install
 
-Usage:
+Example usage:
 cd tools/checkpoint_conversion
 python convert_gemma_checkpoints.py --preset gemma_2b_en
 """

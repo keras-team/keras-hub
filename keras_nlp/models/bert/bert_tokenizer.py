@@ -50,7 +50,7 @@ class BertTokenizer(WordPieceTokenizer):
         lowercase: If `True`, the input text will be first lowered before
             tokenization.
 
-    Examples:
+    Example usage:
     ```python
     # Unbatched input.
     tokenizer = keras_nlp.models.BertTokenizer.from_preset(

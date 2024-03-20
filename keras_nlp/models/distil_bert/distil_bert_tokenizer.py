@@ -47,7 +47,7 @@ class DistilBertTokenizer(WordPieceTokenizer):
         lowercase: If `True`, the input text will be first lowered before
             tokenization.
 
-    Examples:
+    Example usage:
 
     ```python
     # Unbatched input.

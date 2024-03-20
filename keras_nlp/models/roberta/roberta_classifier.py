@@ -56,7 +56,7 @@ class RobertaClassifier(Task):
         dropout: float. The dropout probability value, applied to the pooled
             output, and after the first dense layer.
 
-    Examples:
+    Example usage:
 
     Raw string data.
     ```python

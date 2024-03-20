@@ -41,7 +41,7 @@ class T5Tokenizer(SentencePieceTokenizer):
             [SentencePiece repository](https://github.com/google/sentencepiece)
             for more details on the format.
 
-    Examples:
+    Example usage:
 
     ```python
     bytes_io = io.BytesIO()

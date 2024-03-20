@@ -14,7 +14,7 @@
 """
 Small utility script to count parameters in our preset checkpoints.
 
-Usage:
+Example usage:
 python tools/count_preset_params.py
 python tools/count_preset_params.py --model BertBackbone
 python tools/count_preset_params.py --preset bert_base_multi
