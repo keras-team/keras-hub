@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import re
 from typing import Iterable
 from typing import List
 
@@ -101,12 +102,19 @@ WHITESPACE_PUNCTUATION_AND_CJK_REGEX = r"|".join(
 )
 
 
+def get_special_tokens_pattern(special_tokens):
+    if special_tokens is None or len(special_tokens) == 0:
+        return None
+    return r"|".join([re.escape(token) for token in special_tokens])
+
+
 def pretokenize(
     text,
     lowercase=False,
     strip_accents=True,
     split=True,
     split_on_cjk=True,
+    special_tokens_pattern=None,
 ):
     """Helper function that takes in a dataset element and pretokenizes it.
 
@@ -124,7 +132,14 @@ def pretokenize(
         split_on_cjk: bool. If `True`, input will be split
             on CJK characters, i.e., Chinese, Japanese, Korean and Vietnamese
             characters (https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)).
-            Note that this is applicable only when `split` is `True`. Defaults to `True`.
+            Note that this is applicable only when `split` is `True`. Defaults
+            to `True`.
+        special_tokens_pattern: str. A regex pattern that contain the
+            special tokens that will never be split during the word-level
+            splitting applied before the word-peice encoding. This can be used
+            to ensure special tokens map to unique indices in the vocabulary,
+            even if these special tokens contain splittable characters such as
+            punctuation.
 
     Returns:
         A tensor containing the pre-processed and pre-tokenized `text`.
@@ -154,6 +169,23 @@ def pretokenize(
         else:
             split_pattern = WHITESPACE_AND_PUNCTUATION_REGEX
             keep_split_pattern = PUNCTUATION_REGEX
+        if special_tokens_pattern is not None:
+            # the idea here is to pass the special tokens regex to the split
+            # function as delimiter regex pattern, so the input will be splitted
+            # by them, but also the function will treat each on of them as one
+            # entity that shouldn't be splitted even if they have other
+            # delimiter regex pattern inside them. then pass the special tokens
+            # regex also as keep delimiter regex pattern, so they will
+            # not be removed.
+            split_pattern = r"|".join(
+                [
+                    special_tokens_pattern,
+                    split_pattern,
+                ]
+            )
+            keep_split_pattern = r"|".join(
+                [special_tokens_pattern, keep_split_pattern]
+            )
         text = tf_text.regex_split(
             text,
             delim_regex_pattern=split_pattern,
@@ -225,6 +257,15 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         oov_token: str. The string value to substitute for
             an unknown token. It must be included in the vocab.
             Defaults to `"[UNK]"`.
+        special_tokens: list. A list of special tokens. when
+            `special_tokens_in_strings` is set to `True`, the tokenizer will map
+            every special token in the input strings to its id, even if these
+            special tokens contain characters that should be splitted before
+            tokenization such as punctuation. `special_tokens` must be included
+            in `vocabulary`.
+        special_tokens_in_strings: bool. A bool to indicate if the tokenizer
+            should expect special tokens in input strings that should be
+            tokenized and mapped correctly to their ids. Defaults to False.
 
     References:
      - [Schuster and Nakajima, 2012](https://research.google/pubs/pub37842/)
@@ -303,6 +344,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         split_on_cjk: bool = True,
         suffix_indicator: str = "##",
         oov_token: str = "[UNK]",
+        special_tokens: List[str] = None,
+        special_tokens_in_strings: bool = False,
         dtype="int32",
         **kwargs,
     ) -> None:
@@ -325,6 +368,19 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         self.split_on_cjk = split_on_cjk
         self.suffix_indicator = suffix_indicator
         self.oov_token = oov_token
+        self.special_tokens = special_tokens
+        self._special_tokens_pattern = None
+        if self.split and special_tokens_in_strings:
+            # the idea here is to pass the special tokens regex to the
+            # split function as delimiter regex pattern, so the input will
+            # be splitted by them, but also the function will treat each on
+            # of them as one entity that shouldn't be splitted even if they
+            # have other delimiter regex pattern inside them. then pass the
+            # special tokens regex also as keep delimiter regex
+            # pattern, so they will not be removed.
+            self._special_tokens_pattern = get_special_tokens_pattern(
+                self.special_tokens
+            )
         self.set_vocabulary(vocabulary)
 
     def save_assets(self, dir_path):
@@ -364,6 +420,16 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 f'`"{self.oov_token}"`, or pass a different value for '
                 "the `oov_token` argument when creating the tokenizer."
             )
+
+        # Check for special tokens in the vocabulary
+        if self.special_tokens is not None:
+            for token in self.special_tokens:
+                if token not in self.vocabulary:
+                    raise ValueError(
+                        f"Cannot find token `'{token}'` in the provided "
+                        f"`vocabulary`. Please provide `'{token}'` in your "
+                        "`vocabulary` or use a pretrained `vocabulary` name."
+                    )
 
         self._fast_word_piece = tf_text.FastWordpieceTokenizer(
             vocab=self.vocabulary,
@@ -413,6 +479,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "split": self.split,
                 "suffix_indicator": self.suffix_indicator,
                 "oov_token": self.oov_token,
+                "special_tokens": self.special_tokens,
             }
         )
         return config
@@ -436,6 +503,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             self.strip_accents,
             self.split,
             self.split_on_cjk,
+            self._special_tokens_pattern,
         )
 
         # Apply WordPiece and coerce shape for outputs.
