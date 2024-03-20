@@ -61,7 +61,7 @@ class TransformerEncoder(keras.layers.Layer):
         **kwargs: other keyword arguments passed to `keras.layers.Layer`,
             including `name`, `trainable`, `dtype` etc.
 
-    Examples:
+    Example:
 
     ```python
     # Create a single transformer encoder layer.

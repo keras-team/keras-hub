@@ -359,7 +359,7 @@ class GemmaCausalLM(GenerativeTask):
             <float>[batch_size, num_tokens, vocab_size] in "logits" mode, or
             <float>[batch_size, num_tokens] in "loss" mode.
 
-        Examples:
+        Example:
 
         Compute gradients between embeddings and loss scores with TensorFlow:
         ```python
