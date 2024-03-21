@@ -168,6 +168,10 @@ class GemmaCausalLMPreprocessor(GemmaPreprocessor):
         # and end markers). In the future we could make this configurable.
         mask = mask & (token_ids != self.tokenizer.start_token_id)
         mask = mask & (token_ids != self.tokenizer.pad_token_id)
-        mask = mask & (token_ids != self.tokenizer.end_token_id)
+        if isinstance(self.tokenizer.end_token_id, list):
+            for token in self.tokenizer.end_token_id:
+                mask = mask & (token_ids != token)
+        else:
+            mask = mask & (token_ids != self.tokenizer.end_token_id)
         token_ids = tf.ragged.boolean_mask(token_ids, mask)
         return self.tokenizer.detokenize(token_ids)

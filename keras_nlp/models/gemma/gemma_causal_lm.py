@@ -251,7 +251,7 @@ class GemmaCausalLM(GenerativeTask):
                 `"padding_mask"` and batched tensor values.
             end_token_id: The id of the end token to stop on. If all
                 sequences have produced a new `end_token_id`, generation
-                will stop.
+                will stop. Can be a list or a single token.
         """
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
         # Create and seed cache with a single forward pass.
