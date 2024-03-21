@@ -289,7 +289,7 @@ class GemmaCausalLM(GenerativeTask):
         )
 
         # Compute an output padding mask with the token ids we updated.
-        if end_token_id isinstance(end_token_id, list):
+        if isinstance(end_token_id, list):
             # Build a mask of `end_token_id` locations not in the original
             # prompt (not in locations where `padding_mask` is True).
             end_locations = ops.logical_and(
