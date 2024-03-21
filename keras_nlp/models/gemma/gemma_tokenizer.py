@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import copy
+
 import tree
 
 from keras_nlp.api_export import keras_nlp_export
@@ -97,7 +98,10 @@ class GemmaTokenizer(SentencePieceTokenizer):
                         "`vocabulary` or use a pretrained `vocabulary` name."
                     )
             self.start_token_id = self.token_to_id(self.start_token)
-            self.end_token_id = [self.token_to_id(token) for token in tree.flatten([self.end_token])]
+            self.end_token_id = [
+                self.token_to_id(token)
+                for token in tree.flatten([self.end_token])
+            ]
             self.pad_token_id = self.token_to_id(self.pad_token)
         else:
             self.start_token_id = None
