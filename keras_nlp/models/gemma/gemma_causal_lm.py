@@ -289,7 +289,26 @@ class GemmaCausalLM(GenerativeTask):
         )
 
         # Compute an output padding mask with the token ids we updated.
-        if end_token_id is not None:
+        if end_token_id isinstance(end_token_id, list):
+            # Build a mask of `end_token_id` locations not in the original
+            # prompt (not in locations where `padding_mask` is True).
+            end_locations = ops.logical_and(
+                ops.equal(token_ids, end_token_id[0]),
+                ops.logical_not(padding_mask),
+            )
+            for token in end_token_id:
+                end_locations |= ops.logical_and(
+                    ops.equal(token_ids, token),
+                    ops.logical_not(padding_mask),
+                )
+
+            end_locations = ops.cast(end_locations, "int32")
+            # Use cumsum to get ones in all locations after end_locations.
+            cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
+            overflow = cumsum - end_locations
+            # Our padding mask is the inverse of these overflow locations.
+            padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
+        elif end_token_id is not None:
             # Build a mask of `end_token_id` locations not in the original
             # prompt (not in locations where `padding_mask` is True).
             end_locations = ops.logical_and(

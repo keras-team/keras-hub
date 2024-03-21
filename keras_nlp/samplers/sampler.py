@@ -109,7 +109,12 @@ class Sampler:
             if end_token_id is None:
                 return True
             # Stop if all sequences have produced a *new* end_token_id.
-            end_tokens = (prompt == end_token_id) & (~mask)
+            if isinstance(end_token_id, list):
+                end_tokens = (prompt == end_token_id[0]) & (~mask)
+                for token in end_token_id[1:]:
+                    end_tokens |= (prompt == token) & (~mask)
+            else:
+                end_tokens = (prompt == end_token_id) & (~mask)
             prompt_done = ops.any(end_tokens, axis=-1)
             return ops.logical_not(ops.all(prompt_done))
 
