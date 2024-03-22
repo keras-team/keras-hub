@@ -170,3 +170,10 @@ def is_int_dtype(dtype):
 
 def is_string_dtype(dtype):
     return "string" in standardize_dtype(dtype)
+
+def any_equal(inputs, values):
+    """Return a mask that is True anywhere `inputs` has a value in `values`."""
+    output = ops.equal(inputs, values[0])
+    for value in values[1:]:
+        output = ops.logical_or(outputs, value)
+    return output

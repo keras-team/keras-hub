@@ -206,6 +206,7 @@ class GenerativeTask(Task):
         self,
         inputs,
         max_length=None,
+        end_token_ids="auto",
     ):
         """Generate text given prompt `inputs`.
 
@@ -234,6 +235,12 @@ class GenerativeTask(Task):
                 `preprocessor`. If `preprocessor` is `None`, `inputs` should be
                 should be padded to the desired maximum length and this argument
                 will be ignored.
+            end_token_ids: Optional. "auto", or list of token ids. Defaults to
+                "auto" in which case the model will use the preprocessor's
+                tokenizer's end token. You may specify a list of token id's the
+                model should stop on. Note that sequences of tokens will each
+                be interpreted as a stop token, multi-token stop sequences are
+                not supported.
         """
         # Setup our three main passes.
         # 1. Optionally preprocessing strings to dense integer tensors.
@@ -241,8 +248,15 @@ class GenerativeTask(Task):
         # 3. Optionally postprocess dense integer tensors back to string.
         generate_function = self.make_generate_function()
         end_token_id = None
-        if self.preprocessor is not None:
-            end_token_id = self.preprocessor.tokenizer.end_token_id
+
+        # We expect `end_token_ids` to be a list
+        if self.preprocessor None and end_token_ids == "auto":
+            raise ValueError(
+                '''Preprocessor must be specified with a tokenizer if `end_token_ids` 
+                is set to "auto".'''
+            )
+        elif end_token_ids == "auto":
+            end_token_ids = self.preprocessor.tokenizer.end_token_id
 
         def preprocess(x):
             return self.preprocessor.generate_preprocess(
@@ -250,7 +264,7 @@ class GenerativeTask(Task):
             )
 
         def generate(x):
-            return generate_function(x, end_token_id=end_token_id)
+            return generate_function(x, end_token_id=end_token_ids)
 
         def postprocess(x):
             return self.preprocessor.generate_postprocess(x)

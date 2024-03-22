@@ -24,6 +24,7 @@ from keras_nlp.models.gemma.gemma_causal_lm_preprocessor import (
 from keras_nlp.models.gemma.gemma_presets import backbone_presets
 from keras_nlp.models.generative_task import GenerativeTask
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.models.GemmaCausalLM")
@@ -249,7 +250,7 @@ class GemmaCausalLM(GenerativeTask):
         Args:
             inputs: A dictionary with two keys `"token_ids"` and
                 `"padding_mask"` and batched tensor values.
-            end_token_id: The id of the end token to stop on. If all
+            end_token_id: List of id's the end token to stop on. If all
                 sequences have produced a new `end_token_id`, generation
                 will stop. Can be a list or a single token.
         """
@@ -289,7 +290,10 @@ class GemmaCausalLM(GenerativeTask):
         )
 
         # Compute an output padding mask with the token ids we updated.
-        if isinstance(end_token_id, list):
+        if end_token_id is not None:
+            if not isinstance(end_token_id, list):
+                # Gracefully work with non list end tokens
+                end_token_id = [end_token_id]
             # Build a mask of `end_token_id` locations not in the original
             # prompt (not in locations where `padding_mask` is True).
             end_locations = ops.logical_and(
@@ -302,19 +306,6 @@ class GemmaCausalLM(GenerativeTask):
                     ops.logical_not(padding_mask),
                 )
 
-            end_locations = ops.cast(end_locations, "int32")
-            # Use cumsum to get ones in all locations after end_locations.
-            cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
-            overflow = cumsum - end_locations
-            # Our padding mask is the inverse of these overflow locations.
-            padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
-        elif end_token_id is not None:
-            # Build a mask of `end_token_id` locations not in the original
-            # prompt (not in locations where `padding_mask` is True).
-            end_locations = ops.logical_and(
-                ops.equal(token_ids, end_token_id),
-                ops.logical_not(padding_mask),
-            )
             end_locations = ops.cast(end_locations, "int32")
             # Use cumsum to get ones in all locations after end_locations.
             cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
