@@ -250,7 +250,7 @@ class GenerativeTask(Task):
         end_token_id = None
 
         # We expect `end_token_ids` to be a list
-        if self.preprocessor is not None and end_token_ids == "auto":
+        if self.preprocessor is None and end_token_ids == "auto":
             raise ValueError(
                 '''Preprocessor must be specified with a tokenizer if `end_token_ids` 
                 is set to "auto".'''
