@@ -23,7 +23,6 @@ from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.preset_utils import check_preset_class
 from keras_nlp.utils.preset_utils import load_from_preset
-from keras_nlp.utils.preset_utils import save_to_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -253,12 +252,6 @@ class Task(PipelineModel):
             load_weights=load_weights,
             config_overrides=kwargs,
         )
-
-    def save_to_preset(
-        self,
-        preset,
-    ):
-        save_to_preset(self, preset)
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.

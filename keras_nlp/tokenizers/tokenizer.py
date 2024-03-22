@@ -125,9 +125,8 @@ class Tokenizer(PreprocessingLayer):
     def save_to_preset(
         self,
         preset,
-        config_filename="tokenizer.json",
     ):
-        save_to_preset(self, preset, config_filename=config_filename)
+        save_to_preset(self, preset, config_filename="tokenizer.json")
 
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)
