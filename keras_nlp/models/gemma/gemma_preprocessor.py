@@ -142,14 +142,9 @@ class GemmaPreprocessor(Preprocessor):
     def build(self, input_shape):
         # Defer packer creation to `build()` so that we can be sure tokenizer
         # assets have loaded when restoring a saved model.
-        if isinstance(self.tokenizer.end_token_id, list):
-            end_token_id = self.tokenizer.end_token_id[0]
-        else:
-            end_token_id = self.tokenizer.end_token_id
-
         self.packer = StartEndPacker(
             start_value=self.tokenizer.start_token_id,
-            end_value=end_token_id,
+            end_value=self.tokenizer.end_token_id,
             pad_value=self.tokenizer.pad_token_id,
             sequence_length=self.sequence_length,
             return_padding_mask=True,

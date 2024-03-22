@@ -13,8 +13,6 @@
 # limitations under the License.
 import copy
 
-import tree
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.gemma.gemma_presets import backbone_presets
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
@@ -90,7 +88,7 @@ class GemmaTokenizer(SentencePieceTokenizer):
     def set_proto(self, proto):
         super().set_proto(proto)
         if proto is not None:
-            for token in tree.flatten([self.end_token, self.pad_token]):
+            for token in [self.end_token, self.pad_token]:
                 if token not in self.get_vocabulary():
                     raise ValueError(
                         f"Cannot find token `'{token}'` in the provided "
@@ -98,10 +96,7 @@ class GemmaTokenizer(SentencePieceTokenizer):
                         "`vocabulary` or use a pretrained `vocabulary` name."
                     )
             self.start_token_id = self.token_to_id(self.start_token)
-            self.end_token_id = [
-                self.token_to_id(token)
-                for token in tree.flatten([self.end_token])
-            ]
+            self.end_token_id = self.token_to_id(self.end_token)
             self.pad_token_id = self.token_to_id(self.pad_token)
         else:
             self.start_token_id = None
