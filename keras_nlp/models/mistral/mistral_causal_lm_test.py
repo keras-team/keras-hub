@@ -179,7 +179,7 @@ class MistralCausalLMTest(TestCase):
         # Setup prompts, models, and associated expected shapes.
         prompts = ["the quick brown fox", "the quick brown fox"]
         causal_lm = MistralCausalLM(**self.init_kwargs)
-        expected_embedded_shape = (2, 8, 4)
+        expected_embedded_shape = (2, 8, 8)
         expected_score_shape = (2, 8, 10)
 
         # Preprocess prompts to get tokenized representations and padding masks.
