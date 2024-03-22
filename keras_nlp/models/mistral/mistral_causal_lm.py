@@ -315,9 +315,6 @@ class MistralCausalLM(GenerativeTask):
         batch_shape = ops.shape(token_ids)[:2]
         assert len(batch_shape) == 2
 
-        if padding_mask is None:
-            padding_mask = ops.ones(shape=batch_shape)
-
         if layer_intercept_fn is None:
 
             def default_layer_intercept_fn(x, unused_i):
@@ -329,7 +326,7 @@ class MistralCausalLM(GenerativeTask):
         x = layer_intercept_fn(token_embeddings, -1)
 
         for i, transformer_layer in enumerate(self.backbone.transformer_layers):
-            x = transformer_layer(x, padding_mask=padding_mask)
+            x = transformer_layer(x, decoder_padding_mask=padding_mask)
             x = layer_intercept_fn(x, i)
 
         x = self.backbone.layer_norm(x)
