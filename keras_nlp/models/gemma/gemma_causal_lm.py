@@ -24,7 +24,6 @@ from keras_nlp.models.gemma.gemma_causal_lm_preprocessor import (
 from keras_nlp.models.gemma.gemma_presets import backbone_presets
 from keras_nlp.models.generative_task import GenerativeTask
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.models.GemmaCausalLM")
