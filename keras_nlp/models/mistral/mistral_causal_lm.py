@@ -228,13 +228,14 @@ class MistralCausalLM(GenerativeTask):
         Args:
             token_ids: A <int>[batch_size, num_tokens] tensor containing tokens
                 to score. Typically, this tensor captures the output from a call
-                to `GemmaCausalLM.generate()`, i.e., tokens for both the input
+                to `MistralCausalLM.generate()`, i.e., tokens for both the input
                 text and the model-generated text.
             padding_mask: A <bool>[batch_size, num_tokens] tensor indicating the
                 tokens that should be preserved during generation. This is an
-                artifact required by the GemmaBackbone and isn't influential on
-                the computation of this function. If omitted, this function uses
-                `keras.ops.ones()` to create a tensor of the appropriate shape.
+                artifact required by the MistralBackbone and isn't influential
+                on the computation of this function. If omitted, this function
+                uses `keras.ops.ones()` to create a tensor of the appropriate
+                shape.
             scoring_mode: The type of scores to return, either "logits" or
                 "loss", both will be per input token.
             layer_intercept_fn: An optional function for augmenting activations
@@ -268,14 +269,14 @@ class MistralCausalLM(GenerativeTask):
 
         Compute gradients between embeddings and loss scores with TensorFlow:
         ```python
-        gemma_lm = keras_nlp.models.GemmaCausalLM.from_preset(
-            "gemma_2b_en"
+        mistral_lm = keras_nlp.models.MistralCausalLM.from_preset(
+            "mistral_7b_en"
         )
-        generations = gemma_lm.generate(
+        generations = mistral_lm.generate(
             ["This is a", "Where are you"],
             max_length=30
         )
-        preprocessed = gemma_lm.preprocessor.generate_preprocess(generations)
+        preprocessed = mistral_lm.preprocessor.generate_preprocess(generations)
         generation_ids = preprocessed["token_ids"]
         padding_mask = preprocessed["padding_mask"]
         target_ids = keras.ops.roll(generation_ids, shift=-1, axis=1)
@@ -289,7 +290,7 @@ class MistralCausalLM(GenerativeTask):
                     tape.watch(embeddings)
                 return x
 
-            losses = gemma_lm.score(
+            losses = mistral_lm.score(
                 token_ids=generation_ids,
                 padding_mask=padding_mask,
                 scoring_mode="loss",
