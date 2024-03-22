@@ -60,7 +60,7 @@ class GemmaBackbone(Backbone):
             computations, such as softmax and layer normalization will always
             be done a float32 precision regardless of dtype.
 
-    Example usage:
+    Example:
     ```python
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
@@ -205,7 +205,7 @@ class GemmaBackbone(Backbone):
         backbone weights, so that you can use it to distribute weights across
         the accelerators.
 
-        Sample usage:
+        Example:
         ```
         # Feel free to change the mesh shape to balance data and model parallel
         mesh = keras.distribution.DeviceMesh(
