@@ -64,10 +64,10 @@ class GenerativeTask(Task):
 
             def wrapped_generate_function(
                 inputs,
-                end_token_id=None,
+                stop_token_ids=None,
             ):
                 with torch.no_grad():
-                    return self.generate_step(inputs, end_token_id)
+                    return self.generate_step(inputs, stop_token_ids)
 
             self.generate_function = wrapped_generate_function
         elif config.backend() == "tensorflow" and not self.run_eagerly:
@@ -81,7 +81,7 @@ class GenerativeTask(Task):
             import jax
 
             @jax.jit
-            def compiled_generate_function(inputs, end_token_id, state):
+            def compiled_generate_function(inputs, stop_token_ids, state):
                 (
                     sampler_variables,
                     trainable_variables,
@@ -94,7 +94,7 @@ class GenerativeTask(Task):
                 )
 
                 with keras.StatelessScope(state_mapping=mapping) as scope:
-                    outputs = self.generate_step(inputs, end_token_id)
+                    outputs = self.generate_step(inputs, stop_token_ids)
 
                 # Get updated sampler variables from the stateless scope.
                 sampler_variables = []
@@ -105,7 +105,7 @@ class GenerativeTask(Task):
 
             def wrapped_generate_function(
                 inputs,
-                end_token_id=None,
+                stop_token_ids=None,
             ):
                 # Create an explicit tuple of all variable state.
                 state = (
@@ -118,7 +118,7 @@ class GenerativeTask(Task):
                 inputs = tree.map_structure(ops.convert_to_tensor, inputs)
                 outputs, sampler_variables = compiled_generate_function(
                     inputs,
-                    end_token_id,
+                    stop_token_ids,
                     state,
                 )
                 # Only assign the sampler variables (random seeds), as other
@@ -206,7 +206,7 @@ class GenerativeTask(Task):
         self,
         inputs,
         max_length=None,
-        end_token_ids="auto",
+        stop_token_ids=None,
     ):
         """Generate text given prompt `inputs`.
 
@@ -235,28 +235,27 @@ class GenerativeTask(Task):
                 `preprocessor`. If `preprocessor` is `None`, `inputs` should be
                 should be padded to the desired maximum length and this argument
                 will be ignored.
-            end_token_ids: Optional. "auto", or list of token ids. Defaults to
-                "auto" in which case the model will use the preprocessor's
-                tokenizer's end token. You may specify a list of token id's the
-                model should stop on. Note that sequences of tokens will each
-                be interpreted as a stop token, multi-token stop sequences are
-                not supported.
+            stop_token_ids: Optional. None, "auto", or list of token ids. Defaults
+                to "auto" which uses the `self.preprocessor.tokenizer.end_token_id`
+                if a preprocessor has been specified. None stops generation after
+                generating `max_length` tokens. You may also specify a list of
+                token id's the model should stop on. Note that sequences of
+                tokens will each be interpreted as a stop token, multi-token
+                stop sequences are not supported.  
         """
         # Setup our three main passes.
         # 1. Optionally preprocessing strings to dense integer tensors.
         # 2. Generate new tokens via a compiled function on dense tensors.
         # 3. Optionally postprocess dense integer tensors back to string.
         generate_function = self.make_generate_function()
-        end_token_id = None
 
-        # We expect `end_token_ids` to be a list
-        if self.preprocessor is None and end_token_ids == "auto":
+        if self.preprocessor is None and stop_token_ids == "auto":
             raise ValueError(
-                'Preprocessor must be specified with a tokenizer if `end_token_ids`'
+                'Preprocessor must be specified with a tokenizer if `stop_token_ids`'
                 'is set to "auto".'
             )
-        elif end_token_ids == "auto":
-            end_token_ids = self.preprocessor.tokenizer.end_token_id
+        elif stop_token_ids == "auto":
+            stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
 
         def preprocess(x):
             return self.preprocessor.generate_preprocess(
@@ -264,7 +263,7 @@ class GenerativeTask(Task):
             )
 
         def generate(x):
-            return generate_function(x, end_token_id=end_token_ids)
+            return generate_function(x, stop_token_ids=stop_token_ids)
 
         def postprocess(x):
             return self.preprocessor.generate_postprocess(x)

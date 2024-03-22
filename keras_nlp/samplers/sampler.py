@@ -17,6 +17,7 @@ from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.backend import random
+from keras_nlp.utils.tensor_utils import masked_any_equal
 
 
 @keras_nlp_export("keras_nlp.samplers.Sampler")
@@ -90,7 +91,7 @@ class Sampler:
         cache=None,
         index=0,
         mask=None,
-        end_token_id=None,
+        stop_token_ids=None,
         hidden_states=None,
         model=None,
     ):
@@ -106,15 +107,10 @@ class Sampler:
         cache = () if cache is None else cache
 
         def cond(prompt, cache, index):
-            if end_token_id is None:
+            if stop_token_ids is None:
                 return True
-            # Stop if all sequences have produced a *new* end_token_id.
-            if isinstance(end_token_id, list):
-                end_tokens = (prompt == end_token_id[0]) & (~mask)
-                for token in end_token_id[1:]:
-                    end_tokens |= (prompt == token) & (~mask)
-            else:
-                end_tokens = (prompt == end_token_id) & (~mask)
+            # Stop if all sequences have produced a *new* id from stop_token_ids.
+            end_tokens = masked_any_equal(prompt, stop_token_ids, ~mask)
             prompt_done = ops.any(end_tokens, axis=-1)
             return ops.logical_not(ops.all(prompt_done))
 
