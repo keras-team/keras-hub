@@ -122,10 +122,12 @@ class Tokenizer(PreprocessingLayer):
             f"{self.__class__.__name__}."
         )
 
-    def save_to_preset(
-        self,
-        preset,
-    ):
+    def save_to_preset(self, preset):
+        """Save tokenizer to a preset directory.
+
+        Args:
+            preset: The path to the local model preset directory.
+        """
         save_to_preset(self, preset, config_filename="tokenizer.json")
 
     def call(self, inputs, *args, training=None, **kwargs):

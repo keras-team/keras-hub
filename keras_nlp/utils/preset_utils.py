@@ -201,8 +201,6 @@ def _validate_backbone(preset):
     config_path = get_file(preset, CONFIG_FILE)
     with open(config_path) as config_file:
         config = json.load(config_file)
-    # Check if backbone is deserializable.
-    keras.saving.deserialize_keras_object(config)
 
     if config["weights"]:
         weights_path = os.path.join(preset, config["weights"])
@@ -216,25 +214,6 @@ def _validate_backbone(preset):
             "`save_to_preset()` which adds additional data to a serialized "
             "Keras object."
         )
-
-
-def _validate_files(preset):
-    # TODO: check if file sizes are reasonable.
-    # TODO: validate asset files.
-    backbone_config_path = get_file(preset, CONFIG_FILE)
-    with open(backbone_config_path) as config_file:
-        backbone_config = json.load(config_file)
-    valid_files = [
-        CONFIG_FILE,
-        TOKENIZER_CONFIG_FILE,
-        "metadata.json",
-        "assets",
-        backbone_config["weights"],
-    ]
-    files = os.listdir(preset)
-    for file in files:
-        if file not in valid_files:
-            raise ValueError(f"File {file} is an unexpected file.")
 
 
 @keras_nlp_export("keras_nlp.upload_preset")
@@ -262,15 +241,14 @@ def upload_preset(
 
     _validate_backbone(preset)
     _validate_tokenizer(preset, allow_incomplete)
-    _validate_files(preset)
 
     if uri.startswith(KAGGLE_PREFIX):
         kaggle_handle = uri.removeprefix(KAGGLE_PREFIX)
         kagglehub.model_upload(kaggle_handle, preset)
     else:
         raise ValueError(
-            f"Unexpected URI `'{uri}'`. "
-            f"URI prefix should be one of `'{','.join([KAGGLE_PREFIX])}'`."
+            f"Unexpected URI `'{uri}'`. Kaggle upload format should follow "
+            "`kaggle://<KAGGLE_USERNAME>/<MODEL>/<FRAMEWORK>/<VARIATION>`."
         )
 
 

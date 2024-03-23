@@ -142,10 +142,12 @@ class Backbone(keras.Model):
             config_overrides=kwargs,
         )
 
-    def save_to_preset(
-        self,
-        preset,
-    ):
+    def save_to_preset(self, preset):
+        """Save backbone to a preset directory.
+
+        Args:
+            preset: The path to the local model preset directory.
+        """
         save_to_preset(self, preset)
 
     def __init_subclass__(cls, **kwargs):
