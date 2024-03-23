@@ -37,6 +37,8 @@ PRESET_MAP = {
     "electra_small_generator_en": "google/electra-small-generator",
     "electra_base_discriminator_en": "google/electra-base-discriminator",
     "electra_small_discriminator_en": "google/electra-small-discriminator",
+    "electra_large_discriminator_en": "google/electra-large-discriminator",
+    "electra_large_generator_en": "google/electra-large-generator",
 }
 
 EXTRACT_DIR = "./model"

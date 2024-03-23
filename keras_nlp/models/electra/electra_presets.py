@@ -25,7 +25,7 @@ backbone_presets = {
             "path": "electra",
             "model_card": "https://github.com/google-research/electra",
         },
-        "kaggle_handle": "kaggle://pranavprajapati16/electra/keras/electra_base_discriminator_en/1",
+        "kaggle_handle": "kaggle://keras/electra/keras/electra_base_discriminator_en/1",
     },
     "electra_small_discriminator_en": {
         "metadata": {
@@ -38,7 +38,7 @@ backbone_presets = {
             "path": "electra",
             "model_card": "https://github.com/google-research/electra",
         },
-        "kaggle_handle": "kaggle://pranavprajapati16/electra/keras/electra_small_discriminator_en/1",
+        "kaggle_handle": "kaggle://keras/electra/keras/electra_small_discriminator_en/1",
     },
     "electra_small_generator_en": {
         "metadata": {
@@ -51,7 +51,7 @@ backbone_presets = {
             "path": "electra",
             "model_card": "https://github.com/google-research/electra",
         },
-        "kaggle_handle": "kaggle://pranavprajapati16/electra/keras/electra_small_generator_en/1",
+        "kaggle_handle": "kaggle://keras/electra/keras/electra_small_generator_en/1",
     },
     "electra_base_generator_en": {
         "metadata": {
@@ -64,6 +64,32 @@ backbone_presets = {
             "path": "electra",
             "model_card": "https://github.com/google-research/electra",
         },
-        "kaggle_handle": "kaggle://pranavprajapati16/electra/keras/electra_base_generator_en/1",
+        "kaggle_handle": "kaggle://keras/electra/keras/electra_base_generator_en/1",
+    },
+    "electra_large_generator_en": {
+        "metadata": {
+            "description": (
+                "ELECTRA: Pre-training Text Encoders as Discriminators Rather Than Generators"
+                "This is large generator model with 24 layers."
+            ),
+            "params": 51065344,
+            "official_name": "ELECTRA",
+            "path": "electra",
+            "model_card": "https://github.com/google-research/electra",
+        },
+        "kaggle_handle": "kaggle://pranavprajapati16/electra/keras/electra_large_generator_en/1",
+    },
+    "electra_large_discriminator_en": {
+        "metadata": {
+            "description": (
+                "ELECTRA: Pre-training Text Encoders as Discriminators Rather Than Generators"
+                "This is large discriminator model with 24 layers."
+            ),
+            "params": 335141888,
+            "official_name": "ELECTRA",
+            "path": "electra",
+            "model_card": "https://github.com/google-research/electra",
+        },
+        "kaggle_handle": "kaggle://pranavprajapati16/electra/keras/electra_large_discriminator_en/1",
     },
 }
