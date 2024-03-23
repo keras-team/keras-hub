@@ -12,12 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
-
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.models.electra.electra_presets import backbone_presets
 from keras_nlp.tokenizers import WordPieceTokenizer
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.ElectraTokenizer")
@@ -40,15 +36,12 @@ class ElectraTokenizer(WordPieceTokenizer):
             plain text file containing a single word piece token per line.
         lowercase: If `True`, the input text will be first lowered before
             tokenization.
+        special_tokens_in_strings: bool. A bool to indicate if the tokenizer
+            should expect special tokens in input strings that should be
+            tokenized and mapped correctly to their ids. Defaults to False.
 
     Examples:
     ```python
-    # Loading the tokenizer from preset.
-    tokenizer = keras_nlp.models.ElectraTokenizer.from_preset(
-        "electra_base_discriminator_en"
-    )
-    tokenizer("The quick brown fox jumped.")
-
     # Custom Vocabulary.
     vocab = ["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"]
     vocab += ["The", "quick", "brown", "fox", "jumped", "."]
@@ -67,30 +60,34 @@ class ElectraTokenizer(WordPieceTokenizer):
     ```
     """
 
-    def __init__(self, vocabulary, lowercase=False, **kwargs):
+    def __init__(
+        self,
+        vocabulary,
+        lowercase=False,
+        special_tokens_in_strings=False,
+        **kwargs,
+    ):
         self.cls_token = "[CLS]"
         self.sep_token = "[SEP]"
         self.pad_token = "[PAD]"
         self.mask_token = "[MASK]"
-        super().__init__(vocabulary=vocabulary, lowercase=lowercase, **kwargs)
+        super().__init__(
+            vocabulary=vocabulary,
+            lowercase=lowercase,
+            special_tokens=[
+                self.cls_token,
+                self.sep_token,
+                self.pad_token,
+                self.mask_token,
+            ],
+            special_tokens_in_strings=special_tokens_in_strings,
+            **kwargs,
+        )
 
     def set_vocabulary(self, vocabulary):
         super().set_vocabulary(vocabulary)
 
         if vocabulary is not None:
-            # Check for special tokens.
-            for token in [
-                self.cls_token,
-                self.pad_token,
-                self.sep_token,
-                self.mask_token,
-            ]:
-                if token not in self.get_vocabulary():
-                    raise ValueError(
-                        f"Cannot find token `'{token}'` in the provided "
-                        f"`vocabulary`. Please provide `'{token}'` in your "
-                        "`vocabulary` or use a pretrained `vocabulary` name."
-                    )
             self.cls_token_id = self.token_to_id(self.cls_token)
             self.sep_token_id = self.token_to_id(self.sep_token)
             self.pad_token_id = self.token_to_id(self.pad_token)
@@ -101,6 +98,7 @@ class ElectraTokenizer(WordPieceTokenizer):
             self.pad_token_id = None
             self.mask_token_id = None
 
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy({**backbone_presets})
+    def get_config(self):
+        config = super().get_config()
+        del config["special_tokens"]  # Not configurable; set in __init__.
+        return config

@@ -69,10 +69,10 @@ class TransformerDecoder(keras.layers.Layer):
             (similar to GPT-2). If set to False, outputs of attention layer and
             intermediate dense layer are normalized (similar to BERT).
             Defaults to `False`.
-        name: string. The name of the layer. Defaults to `None`.
-        **kwargs: other keyword arguments.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
 
-    Examples:
+    Example:
     ```python
     # Create a single transformer decoder layer.
     decoder = keras_nlp.layers.TransformerDecoder(

@@ -36,7 +36,7 @@ class Sampler:
     computes the next token based on a probability distribution over all
     possible vocab entries.
 
-    Examples:
+    Example:
 
     ```python
     causal_lm = keras_nlp.models.GPT2CausalLM.from_preset("gpt2_base_en")

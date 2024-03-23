@@ -51,7 +51,7 @@ class BertMaskedLM(Task):
             `None`. If `None`, this model will not apply preprocessing, and
             inputs should be preprocessed before calling the model.
 
-    Example usage:
+    Examples:
 
     Raw string data.
     ```python

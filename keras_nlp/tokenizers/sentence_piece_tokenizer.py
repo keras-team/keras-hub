@@ -275,7 +275,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         Args:
             preset: string. Must be one of "{{preset_names}}".
 
-        Examples:
+        Example:
         ```python
         # Load a preset tokenizer.
         tokenizer = {{model_name}}.from_preset("{{example_preset_name}}")

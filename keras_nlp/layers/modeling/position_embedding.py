@@ -33,6 +33,8 @@ class PositionEmbedding(keras.layers.Layer):
         initializer: The initializer to use for the embedding weights. Defaults
             to `"glorot_uniform"`.
         seq_axis: The axis of the input tensor where we add the embeddings.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
 
     Call arguments:
         inputs: The tensor inputs to compute an embedding for, with shape
@@ -43,7 +45,7 @@ class PositionEmbedding(keras.layers.Layer):
             compute the position embedding from. This is useful during cached
             decoding, where each position is predicted separately in a loop.
 
-    Examples:
+    Example:
 
     Called directly on input.
     >>> layer = keras_nlp.layers.PositionEmbedding(sequence_length=10)

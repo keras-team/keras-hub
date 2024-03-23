@@ -78,20 +78,37 @@ class WordPieceTokenizerTest(TestCase):
         with self.assertRaises(ValueError):
             tokenizer.id_to_token(-1)
 
-    def test_special_tokens(self):
-        input_data = ["quick brown whale"]
-        vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@own", "fox"]
+    def test_special_tokens_string_dtype(self):
+        input_data = ["quick brown whale @MASK@"]
+        vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@own", "fox", "@MASK@"]
+        special_tokens = ["@UNK@", "@MASK@"]
         tokenizer = WordPieceTokenizer(
             vocabulary=vocab_data,
             oov_token="@UNK@",
             suffix_indicator="@@",
             dtype="string",
+            special_tokens=special_tokens,
+            special_tokens_in_strings=True,
         )
         call_output = tokenizer(input_data)
         self.assertAllEqual(
             call_output,
-            [["qu", "@@ick", "br", "@@own", "@UNK@"]],
+            [["qu", "@@ick", "br", "@@own", "@UNK@", "@MASK@"]],
         )
+
+    def test_special_tokens_int_dtype(self):
+        input_data = ["[UNK] [MASK] [SEP] [PAD] [CLS] the quick brown fox."]
+        special_tokens = ["[UNK]", "[MASK]", "[SEP]", "[PAD]", "[CLS]"]
+        vocab_data = ["the", "qu", "##ick", "br", "##own", "fox", "."]
+        vocab_data = [*special_tokens, *vocab_data]
+
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            special_tokens=special_tokens,
+            special_tokens_in_strings=True,
+        )
+        output = tokenizer(input_data)
+        self.assertAllEqual(output, [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]])
 
     def test_cjk_tokens(self):
         input_data = ["ah半推zz"]
@@ -217,3 +234,40 @@ class WordPieceTokenizerTest(TestCase):
 
         with self.assertRaises(ValueError):
             WordPieceTokenizer(vocabulary=vocab_data, oov_token=None)
+
+    def test_no_splitting_with_special_tokens(self):
+        # When `split` is `False`, no special tokens tokenization will be done.
+        input_data = [
+            "[MASK] t o k e n",
+            "m i s s i n g",
+            "[MASK]",
+            "t o k e n",
+        ]
+        vocab_data = ["[UNK]", "[MASK]", "t o k e n"]
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data, split=False, special_tokens=["[MASK]"]
+        )
+        output = tokenizer(input_data)
+        self.assertAllEqual(output, [0, 0, 1, 2])
+
+    def test_config_with_special_tokens(self):
+        input_data = ["[UNK] [MASK] [SEP] [PAD] [CLS] the quick brown fox."]
+        special_tokens = ["[UNK]", "[MASK]", "[SEP]", "[PAD]", "[CLS]"]
+        vocab_data = ["the", "qu", "##ick", "br", "##own", "fox", "."]
+        vocab_data = [*special_tokens, *vocab_data]
+        original_tokenizer = WordPieceTokenizer(
+            vocabulary=vocab_data,
+            lowercase=False,
+            oov_token="[UNK]",
+            suffix_indicator="##",
+            dtype="string",
+            special_tokens=special_tokens,
+        )
+        cloned_tokenizer = WordPieceTokenizer.from_config(
+            original_tokenizer.get_config()
+        )
+        cloned_tokenizer.set_vocabulary(original_tokenizer.get_vocabulary())
+        self.assertAllEqual(
+            original_tokenizer(input_data),
+            cloned_tokenizer(input_data),
+        )
