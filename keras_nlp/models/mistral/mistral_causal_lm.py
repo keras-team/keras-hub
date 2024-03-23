@@ -243,7 +243,7 @@ class MistralCausalLM(GenerativeTask):
                 interpretability research. This function will be passed the
                 activations as its first parameter and a numeric index
                 associated with that backbone layer. _This index _is not_ an
-                index into `self.backbone.layers`_. The index -1 accompanies the
+                index into `self.backbone.layers`. The index -1 accompanies the
                 embeddings returned by calling `self.backbone.token_embedding()`
                 on `token_ids` in the forward direction. All subsequent indexes
                 will be 0-based indices for the activations returned by each of
