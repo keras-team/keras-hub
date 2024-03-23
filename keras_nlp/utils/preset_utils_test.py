@@ -116,4 +116,4 @@ class PresetUtilsTest(TestCase):
         with self.assertRaises(FileNotFoundError):
             upload_preset(uri, empty_preset)
 
-    # TODO: add more test to cover various invalid scenarios such as invalid json, missing files, extra files, etc.
+    # TODO: add more test to cover various invalid scenarios such as invalid json, missing files, etc.

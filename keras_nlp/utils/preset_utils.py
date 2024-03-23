@@ -165,16 +165,23 @@ def _validate_tokenizer(preset, allow_incomplete=False):
     if not os.path.exists(config_path):
         if allow_incomplete:
             logging.warning(
-                f"Tokenizer is missing from the preset directory {preset}."
+                f"`tokenizer.json` is missing from the preset directory `{preset}`."
             )
             return
         else:
             raise FileNotFoundError(
-                f"Tokenizer is missing from the preset directory {preset}."
-                "If you wish to upload model without a tokenizer, set `allow_incomplete=True`."
+                f"`tokenizer.json` is missing from the preset directory `{preset}`. "
+                "If you wish to upload the model without a tokenizer, "
+                "set `allow_incomplete=True`."
             )
-    with open(config_path) as config_file:
-        config = json.load(config_file)
+    try:
+        with open(config_path) as config_file:
+            config = json.load(config_file)
+    except Exception as e:
+        raise ValueError(
+            f"Tokenizer config file `{config_path}` is an invalid json file. "
+            f"Error message: {e}"
+        )
     layer = keras.saving.deserialize_keras_object(config)
 
     if not config["assets"]:
@@ -186,21 +193,31 @@ def _validate_tokenizer(preset, allow_incomplete=False):
         asset_path = os.path.join(preset, asset)
         if not os.path.exists(asset_path):
             raise FileNotFoundError(
-                f"Asset {asset} doesn't exist in the preset direcotry {preset}."
+                f"Asset `{asset}` doesn't exist in the preset direcotry `{preset}`."
             )
     config_dir = os.path.dirname(config_path)
     asset_dir = os.path.join(config_dir, TOKENIZER_ASSET_DIR)
 
     tokenizer = get_tokenizer(layer)
     if not tokenizer:
-        raise ValueError(f"Model or layer {layer} is missing tokenizer.")
+        raise ValueError(f"Model or layer `{layer}` is missing tokenizer.")
     tokenizer.load_assets(asset_dir)
 
 
 def _validate_backbone(preset):
-    config_path = get_file(preset, CONFIG_FILE)
-    with open(config_path) as config_file:
-        config = json.load(config_file)
+    config_path = os.path.join(preset, CONFIG_FILE)
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(
+            f"`config.json` is missing from the preset directory `{preset}`."
+        )
+    try:
+        with open(config_path) as config_file:
+            config = json.load(config_file)
+    except Exception as e:
+        raise ValueError(
+            f"Config file `{config_path}` is an invalid json file. "
+            f"Error message: {e}"
+        )
 
     if config["weights"]:
         weights_path = os.path.join(preset, config["weights"])
