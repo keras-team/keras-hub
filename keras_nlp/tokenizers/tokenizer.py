@@ -18,6 +18,7 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_nlp.utils.preset_utils import TOKENIZER_CONFIG_FILE
 from keras_nlp.utils.preset_utils import save_to_preset
 
 
@@ -128,7 +129,7 @@ class Tokenizer(PreprocessingLayer):
         Args:
             preset: The path to the local model preset directory.
         """
-        save_to_preset(self, preset, config_filename="tokenizer.json")
+        save_to_preset(self, preset, config_filename=TOKENIZER_CONFIG_FILE)
 
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)

@@ -165,13 +165,13 @@ def _validate_tokenizer(preset, allow_incomplete=False):
     if not os.path.exists(config_path):
         if allow_incomplete:
             logging.warning(
-                f"`tokenizer.json` is missing from the preset directory `{preset}`."
+                f"`{TOKENIZER_CONFIG_FILE}` is missing from the preset directory `{preset}`."
             )
             return
         else:
             raise FileNotFoundError(
-                f"`tokenizer.json` is missing from the preset directory `{preset}`. "
-                "If you wish to upload the model without a tokenizer, "
+                f"`{TOKENIZER_CONFIG_FILE}` is missing from the preset directory `{preset}`. "
+                "To upload the model without a tokenizer, "
                 "set `allow_incomplete=True`."
             )
     try:
@@ -208,7 +208,7 @@ def _validate_backbone(preset):
     config_path = os.path.join(preset, CONFIG_FILE)
     if not os.path.exists(config_path):
         raise FileNotFoundError(
-            f"`config.json` is missing from the preset directory `{preset}`."
+            f"`{CONFIG_FILE}` is missing from the preset directory `{preset}`."
         )
     try:
         with open(config_path) as config_file:
@@ -227,7 +227,7 @@ def _validate_backbone(preset):
             )
     else:
         raise ValueError(
-            "No weights listed in `config.json`. Make sure to use "
+            f"No weights listed in `{CONFIG_FILE}`. Make sure to use "
             "`save_to_preset()` which adds additional data to a serialized "
             "Keras object."
         )
