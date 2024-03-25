@@ -223,7 +223,7 @@ def _validate_backbone(preset):
         weights_path = os.path.join(preset, config["weights"])
         if not os.path.exists(weights_path):
             raise FileNotFoundError(
-                f"The weights file doesn't exist in preset directory `{preset}`."
+                f"The weights file is missing from the preset directory `{preset}`."
             )
     else:
         raise ValueError(
