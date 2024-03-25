@@ -18,6 +18,7 @@ import os
 import pytest
 from absl.testing import parameterized
 
+from keras_nlp import upload_preset
 from keras_nlp.models.albert.albert_classifier import AlbertClassifier
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.bert.bert_classifier import BertClassifier
@@ -105,3 +106,14 @@ class PresetUtilsTest(TestCase):
 
         with self.assertRaisesRegex(ValueError, "Unknown preset identifier"):
             AlbertClassifier.from_preset("snaggle://bort/bort/bort")
+
+    def test_upload_empty_preset(self):
+        temp_dir = self.get_temp_dir()
+        empty_preset = os.path.join(temp_dir, "empty")
+        os.mkdir(empty_preset)
+        uri = "kaggle://test/test/test"
+
+        with self.assertRaises(FileNotFoundError):
+            upload_preset(uri, empty_preset)
+
+    # TODO: add more test to cover various invalid scenarios such as invalid json, missing files, etc.
