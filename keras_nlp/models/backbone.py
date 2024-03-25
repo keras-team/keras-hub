@@ -17,6 +17,7 @@ from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.preset_utils import check_preset_class
 from keras_nlp.utils.preset_utils import load_from_preset
+from keras_nlp.utils.preset_utils import save_to_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -140,6 +141,14 @@ class Backbone(keras.Model):
             load_weights=load_weights,
             config_overrides=kwargs,
         )
+
+    def save_to_preset(self, preset):
+        """Save backbone to a preset directory.
+
+        Args:
+            preset: The path to the local model preset directory.
+        """
+        save_to_preset(self, preset)
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.

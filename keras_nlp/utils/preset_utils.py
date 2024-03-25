@@ -16,6 +16,9 @@ import datetime
 import json
 import os
 
+from absl import logging
+
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config as backend_config
 from keras_nlp.backend import keras
 
@@ -27,6 +30,8 @@ except ImportError:
 KAGGLE_PREFIX = "kaggle://"
 GS_PREFIX = "gs://"
 TOKENIZER_ASSET_DIR = "assets/tokenizer"
+CONFIG_FILE = "config.json"
+TOKENIZER_CONFIG_FILE = "tokenizer.json"
 
 
 def get_file(preset, path):
@@ -153,6 +158,115 @@ def save_to_preset(
         metadata_path = os.path.join(preset, "metadata.json")
         with open(metadata_path, "w") as metadata_file:
             metadata_file.write(json.dumps(metadata, indent=4))
+
+
+def _validate_tokenizer(preset, allow_incomplete=False):
+    config_path = get_file(preset, TOKENIZER_CONFIG_FILE)
+    if not os.path.exists(config_path):
+        if allow_incomplete:
+            logging.warning(
+                f"`{TOKENIZER_CONFIG_FILE}` is missing from the preset directory `{preset}`."
+            )
+            return
+        else:
+            raise FileNotFoundError(
+                f"`{TOKENIZER_CONFIG_FILE}` is missing from the preset directory `{preset}`. "
+                "To upload the model without a tokenizer, "
+                "set `allow_incomplete=True`."
+            )
+    try:
+        with open(config_path) as config_file:
+            config = json.load(config_file)
+    except Exception as e:
+        raise ValueError(
+            f"Tokenizer config file `{config_path}` is an invalid json file. "
+            f"Error message: {e}"
+        )
+    layer = keras.saving.deserialize_keras_object(config)
+
+    if not config["assets"]:
+        raise ValueError(
+            f"Tokenizer config file {config_path} is missing `asset`."
+        )
+
+    for asset in config["assets"]:
+        asset_path = os.path.join(preset, asset)
+        if not os.path.exists(asset_path):
+            raise FileNotFoundError(
+                f"Asset `{asset}` doesn't exist in the preset direcotry `{preset}`."
+            )
+    config_dir = os.path.dirname(config_path)
+    asset_dir = os.path.join(config_dir, TOKENIZER_ASSET_DIR)
+
+    tokenizer = get_tokenizer(layer)
+    if not tokenizer:
+        raise ValueError(f"Model or layer `{layer}` is missing tokenizer.")
+    tokenizer.load_assets(asset_dir)
+
+
+def _validate_backbone(preset):
+    config_path = os.path.join(preset, CONFIG_FILE)
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(
+            f"`{CONFIG_FILE}` is missing from the preset directory `{preset}`."
+        )
+    try:
+        with open(config_path) as config_file:
+            config = json.load(config_file)
+    except Exception as e:
+        raise ValueError(
+            f"Config file `{config_path}` is an invalid json file. "
+            f"Error message: {e}"
+        )
+
+    if config["weights"]:
+        weights_path = os.path.join(preset, config["weights"])
+        if not os.path.exists(weights_path):
+            raise FileNotFoundError(
+                f"The weights file doesn't exist in preset directory `{preset}`."
+            )
+    else:
+        raise ValueError(
+            f"No weights listed in `{CONFIG_FILE}`. Make sure to use "
+            "`save_to_preset()` which adds additional data to a serialized "
+            "Keras object."
+        )
+
+
+@keras_nlp_export("keras_nlp.upload_preset")
+def upload_preset(
+    uri,
+    preset,
+    allow_incomplete=False,
+):
+    """Upload a preset directory to a model hub.
+
+    Args:
+        uri: The URI identifying model to upload to.
+             URIs with format
+             `kaggle://<KAGGLE_USERNAME>/<MODEL>/<FRAMEWORK>/<VARIATION>`
+             will be uploaded to Kaggle Hub.
+        preset: The path to the local model preset directory.
+        allow_incomplete: If True, allows the upload of presets without
+                          a tokenizer configuration. Otherwise, a tokenizer
+                          is required.
+    """
+
+    # Check if preset directory exists.
+    if not os.path.exists(preset):
+        raise FileNotFoundError(f"The preset directory {preset} doesn't exist.")
+
+    _validate_backbone(preset)
+    _validate_tokenizer(preset, allow_incomplete)
+
+    if uri.startswith(KAGGLE_PREFIX):
+        kaggle_handle = uri.removeprefix(KAGGLE_PREFIX)
+        kagglehub.model_upload(kaggle_handle, preset)
+    else:
+        raise ValueError(
+            f"Unexpected URI `'{uri}'`. Kaggle upload format should follow "
+            "`kaggle://<KAGGLE_USERNAME>/<MODEL>/<FRAMEWORK>/<VARIATION>`."
+        )
 
 
 def load_from_preset(
