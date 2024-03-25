@@ -236,12 +236,12 @@ class GenerativeTask(Task):
                 should be padded to the desired maximum length and this argument
                 will be ignored.
             stop_token_ids: Optional. None, "auto", or list of token ids. Defaults
-                to "auto" which uses the `self.preprocessor.tokenizer.end_token_id`
-                if a preprocessor has been specified. None stops generation after
-                generating `max_length` tokens. You may also specify a list of
-                token id's the model should stop on. Note that sequences of
-                tokens will each be interpreted as a stop token, multi-token
-                stop sequences are not supported.
+                to "auto" which uses the `self.preprocessor.tokenizer.end_token_id`.
+                Not specifying a processor will produce an error. None stops
+                generation after generating `max_length` tokens. You may also
+                specify a list of token id's the model should stop on. Note that
+                sequences of tokens will each be interpreted as a stop token,
+                multi-token stop sequences are not supported.
         """
         # Setup our three main passes.
         # 1. Optionally preprocessing strings to dense integer tensors.
