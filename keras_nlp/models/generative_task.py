@@ -241,7 +241,7 @@ class GenerativeTask(Task):
                 generating `max_length` tokens. You may also specify a list of
                 token id's the model should stop on. Note that sequences of
                 tokens will each be interpreted as a stop token, multi-token
-                stop sequences are not supported.  
+                stop sequences are not supported.
         """
         # Setup our three main passes.
         # 1. Optionally preprocessing strings to dense integer tensors.
@@ -251,7 +251,7 @@ class GenerativeTask(Task):
 
         if self.preprocessor is None and stop_token_ids == "auto":
             raise ValueError(
-                'Preprocessor must be specified with a tokenizer if `stop_token_ids`'
+                "Preprocessor must be specified with a tokenizer if `stop_token_ids`"
                 'is set to "auto".'
             )
         elif stop_token_ids == "auto":
