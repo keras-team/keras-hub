@@ -236,7 +236,7 @@ class GenerativeTask(Task):
                 `preprocessor`. If `preprocessor` is `None`, `inputs` should be
                 should be padded to the desired maximum length and this argument
                 will be ignored.
-            stop_token_ids: Optional. None, "auto", or list of token ids. Defaults
+            stop_token_ids: Optional. None, "auto", or tuple of token ids. Defaults
                 to "auto" which uses the `self.preprocessor.tokenizer.end_token_id`.
                 Not specifying a processor will produce an error. None stops
                 generation after generating `max_length` tokens. You may also
