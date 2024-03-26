@@ -172,9 +172,10 @@ def is_string_dtype(dtype):
     return "string" in standardize_dtype(dtype)
 
 
-def masked_any_equal(inputs, values, padding_mask):
+def any_equal(inputs, values, padding_mask):
     """Return a mask that is True anywhere `inputs` has a value in `values`.
-    `padding_mask` will mask output bits.
+
+    Final mask has `padding_mask` applied.
 
     Args:
         inputs: Input tensor.

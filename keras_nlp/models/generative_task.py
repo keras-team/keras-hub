@@ -251,8 +251,12 @@ class GenerativeTask(Task):
 
         if self.preprocessor is None and stop_token_ids == "auto":
             raise ValueError(
-                "Preprocessor must be specified with a tokenizer if `stop_token_ids`"
-                'is set to "auto".'
+                'A `preprocessor` must be attached to the model if `stop_token_ids="auto"`. '
+                "Currently `preprocessor=None`. To call `generate()` with preprocessing "
+                "detached, either pass `stop_tokens_ids=None` to always generate until "
+                "`max_length` or pass a list of token ids that should terminate generation "
+                "as `stop_tokens_ids`. Preprocessor must be specified with a tokenizer if "
+                '`stop_token_ids` is set to "auto".'
             )
         elif stop_token_ids == "auto":
             stop_token_ids = [self.preprocessor.tokenizer.end_token_id]

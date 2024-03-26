@@ -24,7 +24,7 @@ from keras_nlp.models.gemma.gemma_causal_lm_preprocessor import (
 from keras_nlp.models.gemma.gemma_presets import backbone_presets
 from keras_nlp.models.generative_task import GenerativeTask
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.tensor_utils import masked_any_equal
+from keras_nlp.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.models.GemmaCausalLM")
@@ -250,9 +250,9 @@ class GemmaCausalLM(GenerativeTask):
         Args:
             inputs: A dictionary with two keys `"token_ids"` and
                 `"padding_mask"` and batched tensor values.
-            stop_token_ids: List of id's the end token to stop on. If all
+            stop_token_ids: List of id's of end token's to stop on. If all
                 sequences have produced a new stop token, generation
-                will stop. Can be a list or a single token.
+                will stop.
         """
         token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
         # Create and seed cache with a single forward pass.
@@ -293,7 +293,7 @@ class GemmaCausalLM(GenerativeTask):
         if stop_token_ids is not None:
             # Build a mask of `stop_token_ids` locations not in the original
             # prompt (not in locations where `padding_mask` is True).
-            end_locations = masked_any_equal(
+            end_locations = any_equal(
                 token_ids, stop_token_ids, ops.logical_not(padding_mask)
             )
 

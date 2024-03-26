@@ -17,7 +17,7 @@ from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.backend import random
-from keras_nlp.utils.tensor_utils import masked_any_equal
+from keras_nlp.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.samplers.Sampler")
@@ -110,7 +110,7 @@ class Sampler:
             if stop_token_ids is None:
                 return True
             # Stop if all sequences have produced a *new* id from stop_token_ids.
-            end_tokens = masked_any_equal(prompt, stop_token_ids, ~mask)
+            end_tokens = any_equal(prompt, stop_token_ids, ~mask)
             prompt_done = ops.any(end_tokens, axis=-1)
             return ops.logical_not(ops.all(prompt_done))
 

@@ -148,7 +148,7 @@ class GemmaCausalLMPreprocessor(GemmaPreprocessor):
             "padding_mask": padding_mask,
         }
 
-    def generate_postprocess(self, x, end_token_ids=None):
+    def generate_postprocess(self, x):
         """Convert integer token output to strings for generation.
 
         This method reverses `generate_preprocess()`, by first removing all
@@ -158,9 +158,6 @@ class GemmaCausalLMPreprocessor(GemmaPreprocessor):
         if not self.built:
             self.build(None)
 
-        if end_token_ids is None:
-            end_token_ids = [self.tokenizer.end_token_id]
-
         token_ids, padding_mask = x["token_ids"], x["padding_mask"]
         token_ids = ops.convert_to_numpy(token_ids)
         mask = ops.convert_to_numpy(padding_mask)
@@ -168,7 +165,6 @@ class GemmaCausalLMPreprocessor(GemmaPreprocessor):
         # and end markers). In the future we could make this configurable.
         mask = mask & (token_ids != self.tokenizer.start_token_id)
         mask = mask & (token_ids != self.tokenizer.pad_token_id)
-        for end_token_id in end_token_ids:
-            mask = mask & (token_ids != end_token_id)
+        mask = mask & (token_ids != self.tokenizer.end_token_id)
         token_ids = tf.ragged.boolean_mask(token_ids, mask)
         return self.tokenizer.detokenize(token_ids)

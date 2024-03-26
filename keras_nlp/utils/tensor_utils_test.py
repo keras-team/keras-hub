@@ -17,7 +17,7 @@ import tensorflow as tf
 from keras_nlp.backend import ops
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
-from keras_nlp.utils.tensor_utils import masked_any_equal
+from keras_nlp.utils.tensor_utils import any_equal
 from keras_nlp.utils.tensor_utils import tensor_to_list
 
 
@@ -106,7 +106,7 @@ class MaskedAnyEqualTest(tf.test.TestCase):
         values = [3, 5]
         padding_mask = ops.array([True, True, True, False])
         expected_output = ops.array([False, False, True, False])
-        result = masked_any_equal(inputs, values, padding_mask)
+        result = any_equal(inputs, values, padding_mask)
         self.assertAllEqual(result, expected_output)
 
     def test_multiple_values(self):
@@ -114,7 +114,7 @@ class MaskedAnyEqualTest(tf.test.TestCase):
         values = [5, 4, 9]
         padding_mask = ops.array([True, True, True, True])
         expected_output = ops.array([False, True, False, True])
-        result = masked_any_equal(inputs, values, padding_mask)
+        result = any_equal(inputs, values, padding_mask)
         self.assertAllEqual(result, expected_output)
 
     def test_padding_mask(self):
@@ -122,7 +122,7 @@ class MaskedAnyEqualTest(tf.test.TestCase):
         values = [5, 3]
         padding_mask = ops.array([True, False, True, False])
         expected_output = ops.array([False, False, True, False])
-        result = masked_any_equal(inputs, values, padding_mask)
+        result = any_equal(inputs, values, padding_mask)
         self.assertAllEqual(result, expected_output)
 
     def test_input_shaped_values(self):
@@ -130,5 +130,5 @@ class MaskedAnyEqualTest(tf.test.TestCase):
         values = [[5, 5, 5, 5], [3, 3, 3, 3]]
         padding_mask = ops.array([True, False, True, False])
         expected_output = ops.array([False, False, True, False])
-        result = masked_any_equal(inputs, values, padding_mask)
+        result = any_equal(inputs, values, padding_mask)
         self.assertAllEqual(result, expected_output)
