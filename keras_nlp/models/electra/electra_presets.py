@@ -47,7 +47,7 @@ backbone_presets = {
                 "lowercased. Trained on English Wikipedia + BooksCorpus."
             ),
             "params": 109482240,
-            "official_name": "ELECTRA",     
+            "official_name": "ELECTRA",
             "path": "electra",
             "model_card": "https://github.com/google-research/electra",
         },
@@ -66,7 +66,6 @@ backbone_presets = {
         },
         "kaggle_handle": "kaggle://keras/electra/keras/electra_base_generator_uncased_en/1",
     },
-
     "electra_large_discriminator_uncased_en": {
         "metadata": {
             "description": (

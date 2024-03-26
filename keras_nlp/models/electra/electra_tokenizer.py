@@ -15,8 +15,8 @@
 import copy
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.tokenizers import WordPieceTokenizer
 from keras_nlp.models.electra.electra_presets import backbone_presets
+from keras_nlp.tokenizers import WordPieceTokenizer
 from keras_nlp.utils.python_utils import classproperty
 
 
