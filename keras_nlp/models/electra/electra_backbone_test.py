@@ -59,7 +59,7 @@ class ElectraBackboneTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=ElectraBackbone,
-            preset="electra_small_discriminator_en",
+            preset="electra_small_discriminator_uncased_en",
             input_data={
                 "token_ids": ops.array([[101, 1996, 4248, 102]], dtype="int32"),
                 "segment_ids": ops.zeros((1, 4), dtype="int32"),

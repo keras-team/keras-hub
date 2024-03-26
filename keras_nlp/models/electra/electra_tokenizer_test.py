@@ -57,8 +57,8 @@ class ElectraTokenizerTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=ElectraTokenizer,
-            preset="electra_small_discriminator_en",
-            input_data=["The quick brown fox."],
+            preset="electra_small_discriminator_uncased_en",
+            input_data=["the quick brown fox."],
             expected_output=[[1996, 4248, 2829, 4419, 1012]],
         )
 
