@@ -77,7 +77,7 @@ class AlbertBackbone(Backbone):
             such as softmax and layer normalization, will always be done at
             float32 precision regardless of dtype.
 
-    Examples:
+    Example:
     ```python
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
@@ -230,6 +230,7 @@ class AlbertBackbone(Backbone):
                 "sequence_output": sequence_output,
                 "pooled_output": pooled_output,
             },
+            dtype=dtype,
             **kwargs,
         )
 

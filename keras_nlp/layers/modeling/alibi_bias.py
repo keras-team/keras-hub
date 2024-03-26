@@ -35,12 +35,15 @@ class AlibiBias(keras.layers.Layer):
             each head. The heads' slopes are a geometric sequence that starts at
             `2**(-alibi_bias_max/num_heads)` and uses that same value as its
             ratio. Defaults to 8.
+        **kwargs: other keyword arguments passed to `keras.layers.Layer`,
+            including `name`, `trainable`, `dtype` etc.
+
     Call arguments:
         attention_scores: The result of multipying the query and the key of the
             multi-head attention layer of the transformer to add alibi bias to
             it. With shape `(batch_size, num_heads, query_length, key_length)`.
 
-    Examples:
+    Example:
     ```python
     query_length = 10
     key_length = 10
@@ -94,7 +97,9 @@ class AlibiBias(keras.layers.Layer):
         )
         slopes = ops.expand_dims(slopes, 1)
 
-        seq_range = ops.expand_dims(ops.arange(1 - key_length, 1), 0)
+        seq_range = ops.expand_dims(
+            ops.arange(1 - key_length, 1, dtype="int32"), 0
+        )
         seq_range = ops.cast(seq_range, dtype=self.compute_dtype)
 
         alibi_bias = ops.multiply(slopes, seq_range)

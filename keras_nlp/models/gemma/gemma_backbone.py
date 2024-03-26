@@ -60,7 +60,7 @@ class GemmaBackbone(Backbone):
             computations, such as softmax and layer normalization will always
             be done a float32 precision regardless of dtype.
 
-    Example usage:
+    Example:
     ```python
     input_data = {
         "token_ids": np.ones(shape=(1, 12), dtype="int32"),
@@ -157,6 +157,7 @@ class GemmaBackbone(Backbone):
                 "padding_mask": padding_mask_input,
             },
             outputs=sequence_output,
+            dtype=dtype,
             **kwargs,
         )
 
@@ -193,14 +194,18 @@ class GemmaBackbone(Backbone):
         return copy.deepcopy(backbone_presets)
 
     @staticmethod
-    def get_layout_map(device_mesh, model_parallel_dim_name="model"):
+    def get_layout_map(
+        device_mesh,
+        model_parallel_dim_name="model",
+        data_parallel_dim_name="batch",
+    ):
         """Get a `keras.distribution.LayoutMap` for model parallel distribution.
 
         The returned `LayoutMap` contains the sharding spec for the gemma
         backbone weights, so that you can use it to distribute weights across
         the accelerators.
 
-        Sample usage:
+        Example:
         ```
         # Feel free to change the mesh shape to balance data and model parallel
         mesh = keras.distribution.DeviceMesh(
@@ -220,6 +225,8 @@ class GemmaBackbone(Backbone):
                 distribution.
             model_parallel_dim_name: The axis name of the device mesh, where
                 the weights should be partition on.
+            data_parallel_dim_name: The axis name of the device mesh, where
+                the data should be partition on.
         Return:
             `keras.distribution.LayoutMap` that contains the sharding spec
             of all the model weights.
@@ -247,21 +254,30 @@ class GemmaBackbone(Backbone):
                 f"{model_parallel_dim_name} is not found in the "
                 f"device_mesh.axis_names. {device_mesh.axis_name=}"
             )
+        if data_parallel_dim_name not in device_mesh.axis_names:
+            raise ValueError(
+                f"{data_parallel_dim_name} is not found in the "
+                f"device_mesh.axis_names. {device_mesh.axis_name=}"
+            )
+        # Note that it is possible to further config the mesh to be 3D, eg
+        # (data, seq, model). We leave it as 2D for now for simplicity.
+        data_dim = data_parallel_dim_name
         model_dim = model_parallel_dim_name
-        # The sharding is partition for the hidden_dim of the model.
+        # The sharding config is based on the Gemma team training config.
+        # See https://arxiv.org/abs/2403.08295
         layout_map = keras.distribution.LayoutMap(device_mesh)
-        layout_map["token_embedding/embeddings"] = (None, model_dim)
+        layout_map["token_embedding/embeddings"] = (model_dim, data_dim)
         layout_map["decoder_block.*attention.*(query|key|value).*kernel"] = (
-            None,
             model_dim,
+            data_dim,
             None,
         )
         layout_map["decoder_block.*attention_output.*kernel"] = (
-            None,
-            None,
             model_dim,
+            None,
+            data_dim,
         )
-        layout_map["decoder_block.*ffw_gating.*kernel"] = (model_dim, None)
-        layout_map["decoder_block.*ffw_linear.*kernel"] = (None, model_dim)
+        layout_map["decoder_block.*ffw_gating.*kernel"] = (data_dim, model_dim)
+        layout_map["decoder_block.*ffw_linear.*kernel"] = (model_dim, data_dim)
 
         return layout_map

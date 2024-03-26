@@ -16,6 +16,7 @@ from rich import console as rich_console
 from rich import markup
 from rich import table as rich_table
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.keras_utils import print_msg
@@ -26,7 +27,7 @@ from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras.saving.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.Task")
 class Task(PipelineModel):
     """Base class for Task models."""
 
@@ -36,6 +37,12 @@ class Task(PipelineModel):
             id(layer) for layer in self._flatten_layers()
         )
         self._initialized = True
+        if self.backbone is not None:
+            # Keras 2 and Keras 3 handle setting policy differently.
+            if config.keras_3():
+                self.dtype_policy = self._backbone.dtype_policy
+            else:
+                self._set_dtype_policy(self._backbone.dtype_policy)
 
     def __dir__(self):
         if config.keras_3():
@@ -128,7 +135,7 @@ class Task(PipelineModel):
     @property
     def backbone(self):
         """A `keras.Model` instance providing the backbone sub-model."""
-        return self._backbone
+        return getattr(self, "_backbone", None)
 
     @backbone.setter
     def backbone(self, value):
@@ -137,7 +144,7 @@ class Task(PipelineModel):
     @property
     def preprocessor(self):
         """A `keras.layers.Layer` instance used to preprocess inputs."""
-        return self._preprocessor
+        return getattr(self, "_preprocessor", None)
 
     @preprocessor.setter
     def preprocessor(self, value):

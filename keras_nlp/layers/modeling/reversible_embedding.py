@@ -52,6 +52,8 @@ class ReversibleEmbedding(keras.layers.Embedding):
         reverse_dtype: The dtype for the reverse projection computation.
             For stability, it is usually best to use full precision even when
             working with half or mixed precision training.
+        **kwargs: other keyword arguments passed to `keras.layers.Embedding`,
+            including `name`, `trainable`, `dtype` etc.
 
     Call arguments:
         inputs: The tensor inputs to the layer.
@@ -59,7 +61,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
             from `output_dim` to `input_dim`, instead of a normal embedding
             call. Default to `False`.
 
-    Examples:
+    Example:
     ```python
     batch_size = 16
     vocab_size = 100
@@ -73,7 +75,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
     # Embed tokens to shape `(batch_size, seq_length, hidden_dim)`.
     hidden_states = embedding(token_ids)
     # Project hidden states to shape `(batch_size, seq_length, vocab_size)`.
-    logits = embedding(hidden_state, reverse=True)
+    logits = embedding(hidden_states, reverse=True)
     ```
 
     References:

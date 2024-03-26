@@ -33,6 +33,7 @@ from keras_nlp.utils.preset_utils import save_to_preset
 PRESET_MAP = {
     "mistral_7b_en": "mistralai/Mistral-7B-v0.1",
     "mistral_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.1",
+    "mistral_0.2_instruct_7b_en": "mistralai/Mistral-7B-Instruct-v0.2",
 }
 
 FLAGS = flags.FLAGS

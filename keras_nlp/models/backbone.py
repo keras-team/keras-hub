@@ -12,15 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.preset_utils import check_preset_class
 from keras_nlp.utils.preset_utils import load_from_preset
+from keras_nlp.utils.preset_utils import save_to_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras.saving.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.Backbone")
 class Backbone(keras.Model):
     def __init__(self, *args, dtype=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -28,6 +30,15 @@ class Backbone(keras.Model):
             id(layer) for layer in self._flatten_layers()
         )
         self._initialized = True
+        if dtype is not None:
+            # Keras 2 and Keras 3 handle setting policy differently.
+            if config.keras_3():
+                if isinstance(dtype, keras.DTypePolicy):
+                    self.dtype_policy = dtype
+                else:
+                    self.dtype_policy = keras.DTypePolicy(dtype)
+            else:
+                self._set_dtype_policy(dtype)
 
     def __dir__(self):
         if config.keras_3():
@@ -67,7 +78,7 @@ class Backbone(keras.Model):
 
         This layer embeds integer token ids to the hidden dim of the model.
         """
-        return self._token_embedding
+        return getattr(self, "_token_embedding", None)
 
     @token_embedding.setter
     def token_embedding(self, value):
@@ -130,6 +141,14 @@ class Backbone(keras.Model):
             load_weights=load_weights,
             config_overrides=kwargs,
         )
+
+    def save_to_preset(self, preset):
+        """Save backbone to a preset directory.
+
+        Args:
+            preset: The path to the local model preset directory.
+        """
+        save_to_preset(self, preset)
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.

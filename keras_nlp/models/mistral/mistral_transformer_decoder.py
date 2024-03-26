@@ -207,17 +207,20 @@ class MistralTransformerDecoder(keras.layers.Layer):
             else self_attention_cache_update_index
         )
 
-        # Mistral uses a banded attention mask
-        causal_mask_lower = compute_causal_mask(
+        # The lower traingular attention mask
+        causal_mask = compute_causal_mask(
             batch_size, input_length, output_length, cache_update_index
         )
-        # Below is a workaround for `ops.triu` for Keras 2.
-        # TODO(tirthasheshpatel): Use `ops.triu` once Keras 2 support is removed.
-        # causal_mask = ops.triu(causal_mask_lower, k=-self.sliding_window)
-        i = ops.arange(output_length)[:, None] + cache_update_index
-        j = ops.arange(input_length)[None, :]
-        causal_mask_upper = ops.cast(i < j + self.sliding_window, "int32")
-        causal_mask = ops.minimum(causal_mask_lower, causal_mask_upper)
+
+        # Mistral uses a banded attention mask if sliding window is not None
+        if self.sliding_window is not None:
+            # Below is a workaround for `ops.triu` for Keras 2.
+            # TODO(tirthasheshpatel): Use `ops.triu` once Keras 2 support is removed.
+            # causal_mask = ops.triu(causal_mask, k=-self.sliding_window)
+            i = ops.arange(output_length)[:, None] + cache_update_index
+            j = ops.arange(input_length)[None, :]
+            causal_mask_upper = ops.cast(i < j + self.sliding_window, "int32")
+            causal_mask = ops.minimum(causal_mask, causal_mask_upper)
 
         return (
             ops.minimum(decoder_mask, causal_mask)

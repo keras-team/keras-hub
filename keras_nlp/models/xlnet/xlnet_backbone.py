@@ -65,7 +65,7 @@ class XLNetBackbone(Backbone):
         padding_mask: Mask to avoid performing attention on padding token indices
             of shape `[batch_size, sequence_length]`.
 
-    Examples:
+    Example:
     ```python
     import numpy as np
     from keras_nlp.models import XLNetBackbone
@@ -184,6 +184,7 @@ class XLNetBackbone(Backbone):
                 "segment_ids": segment_id_input,
             },
             outputs=output,
+            dtype=dtype,
             **kwargs,
         )
 
