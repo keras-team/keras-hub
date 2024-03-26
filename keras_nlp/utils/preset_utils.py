@@ -35,6 +35,7 @@ except ImportError:
 KAGGLE_PREFIX = "kaggle://"
 GS_PREFIX = "gs://"
 HF_PREFIX = "hf://"
+
 TOKENIZER_ASSET_DIR = "assets/tokenizer"
 CONFIG_FILE = "config.json"
 TOKENIZER_CONFIG_FILE = "tokenizer.json"
@@ -128,9 +129,6 @@ def save_to_preset(
     weights_filename="model.weights.h5",
 ):
     """Save a KerasNLP layer to a preset directory."""
-    push_to_hf = preset.startswith(HF_PREFIX)
-    preset = preset.removeprefix(HF_PREFIX)
-
     os.makedirs(preset, exist_ok=True)
 
     # Save tokenizers assets.
@@ -175,17 +173,6 @@ def save_to_preset(
         metadata_path = os.path.join(preset, "metadata.json")
         with open(metadata_path, "w") as metadata_file:
             metadata_file.write(json.dumps(metadata, indent=4))
-
-    # If preset starts with `hf://`, push to the Hugging Face Hub.
-    if push_to_hf:
-        if huggingface_hub is None:
-            raise ImportError(
-                f"`save_to_preset()` requires the `huggingface_hub` package to save to '{preset}'. "
-                "Please install with `pip install huggingface_hub`."
-            )
-        repo_url = huggingface_hub.create_repo(repo_id=preset, exist_ok=True)
-        huggingface_hub.upload_folder(repo_id=repo_url.repo_id, folder_path=preset)
-
 
 def _validate_tokenizer(preset, allow_incomplete=False):
     config_path = get_file(preset, TOKENIZER_CONFIG_FILE)
@@ -289,6 +276,15 @@ def upload_preset(
     if uri.startswith(KAGGLE_PREFIX):
         kaggle_handle = uri.removeprefix(KAGGLE_PREFIX)
         kagglehub.model_upload(kaggle_handle, preset)
+    elif uri.startswith(HF_PREFIX):
+        if huggingface_hub is None:
+            raise ImportError(
+                f"`upload_preset()` requires the `huggingface_hub` package to upload to '{uri}'. "
+                "Please install with `pip install huggingface_hub`."
+            )
+        hf_handle = uri.removeprefix(HF_PREFIX)
+        repo_url = huggingface_hub.create_repo(repo_id=hf_handle, exist_ok=True)
+        huggingface_hub.upload_folder(repo_id=repo_url.repo_id, folder_path=preset)
     else:
         raise ValueError(
             f"Unexpected URI `'{uri}'`. Kaggle upload format should follow "
