@@ -98,7 +98,7 @@ class ContrastiveSamplerTest(TestCase):
             next=self.next,
             prompt=prompt,
             cache=cache,
-            end_token_id=self.char_lookup["t"],
+            stop_token_ids=[self.char_lookup["t"]],
             index=0,
             hidden_states=self.hidden_states,
         )
