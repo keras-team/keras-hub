@@ -174,6 +174,7 @@ def save_to_preset(
         with open(metadata_path, "w") as metadata_file:
             metadata_file.write(json.dumps(metadata, indent=4))
 
+
 def _validate_tokenizer(preset, allow_incomplete=False):
     config_path = get_file(preset, TOKENIZER_CONFIG_FILE)
     if not os.path.exists(config_path):
