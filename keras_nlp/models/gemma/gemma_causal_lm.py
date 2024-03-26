@@ -250,7 +250,7 @@ class GemmaCausalLM(GenerativeTask):
         Args:
             inputs: A dictionary with two keys `"token_ids"` and
                 `"padding_mask"` and batched tensor values.
-            stop_token_ids: List of id's of end token's to stop on. If all
+            stop_token_ids: Tuple of id's of end token's to stop on. If all
                 sequences have produced a new stop token, generation
                 will stop.
         """

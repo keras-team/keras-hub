@@ -146,7 +146,7 @@ class GemmaCausalLMTest(TestCase):
         with patch.object(causal_lm, "call_with_cache", wraps=wrapper):
             prompt = ["the quick brown fox", "the quick"]
 
-            output = causal_lm.generate(prompt, stop_token_ids=[3])
+            output = causal_lm.generate(prompt, stop_token_ids=(3,))
             # We should immediately abort and output the prompt.
             self.assertEqual(prompt, output)
 
