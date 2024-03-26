@@ -16,8 +16,8 @@ import tensorflow as tf
 
 from keras_nlp.backend import ops
 from keras_nlp.tests.test_case import TestCase
-from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.utils.tensor_utils import any_equal
+from keras_nlp.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.utils.tensor_utils import tensor_to_list
 
 

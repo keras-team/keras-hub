@@ -24,7 +24,7 @@ from keras_nlp.models.bloom.bloom_causal_lm_preprocessor import (
 from keras_nlp.models.bloom.bloom_presets import backbone_presets
 from keras_nlp.models.generative_task import GenerativeTask
 from keras_nlp.utils.python_utils import classproperty
-from keras_nlp.utils.tensor_utils import any_equal 
+from keras_nlp.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.models.BloomCausalLM")
@@ -300,7 +300,9 @@ class BloomCausalLM(GenerativeTask):
         if stop_token_ids is not None:
             # Build a mask of stop token locations not in the original
             # prompt (not in locations where `padding_mask` is True).
-            end_locations = any_equal(token_ids, stop_token_ids, ops.logical_not(padding_mask))
+            end_locations = any_equal(
+                token_ids, stop_token_ids, ops.logical_not(padding_mask)
+            )
 
             end_locations = ops.cast(end_locations, "int32")
             # Use cumsum to get ones in all locations after end_locations.

@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from functools import partial
 import itertools
+from functools import partial
 
 import tensorflow as tf
 import tree
@@ -81,7 +81,7 @@ class GenerativeTask(Task):
         elif config.backend() == "jax" and not self.run_eagerly:
             import jax
 
-            @partial(jax.jit, static_argnames=['stop_token_ids'])
+            @partial(jax.jit, static_argnames=["stop_token_ids"])
             def compiled_generate_function(inputs, stop_token_ids, state):
                 (
                     sampler_variables,
