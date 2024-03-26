@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
+
 from keras_nlp.models.electra.electra_tokenizer import ElectraTokenizer
 from keras_nlp.tests.test_case import TestCase
 
@@ -50,3 +52,21 @@ class ElectraTokenizerTest(TestCase):
     def test_errors_missing_special_tokens(self):
         with self.assertRaises(ValueError):
             ElectraTokenizer(vocabulary=["a", "b", "c"])
+
+    @pytest.mark.large
+    def test_smallest_preset(self):
+        self.run_preset_test(
+            cls=ElectraTokenizer,
+            preset="electra_small_discriminator_uncased_en",
+            input_data=["the quick brown fox."],
+            expected_output=[[1996, 4248, 2829, 4419, 1012]],
+        )
+
+    @pytest.mark.extra_large
+    def test_all_presets(self):
+        for preset in ElectraTokenizer.presets:
+            self.run_preset_test(
+                cls=ElectraTokenizer,
+                preset=preset,
+                input_data=self.input_data,
+            )
