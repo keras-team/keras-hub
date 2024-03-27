@@ -17,6 +17,7 @@ import tree
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import ops
 from keras_nlp.samplers.sampler import Sampler
+from keras_nlp.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.samplers.ContrastiveSampler")
@@ -70,7 +71,7 @@ class ContrastiveSampler(Sampler):
         cache=None,
         index=0,
         mask=None,
-        end_token_id=None,
+        stop_token_ids=None,
         hidden_states=None,
         model=None,
     ):
@@ -106,10 +107,10 @@ class ContrastiveSampler(Sampler):
         cache = cache if has_cache else ()
 
         def cond(prompt, cache, index, logits, hidden_states):
-            if end_token_id is None:
+            if stop_token_ids is None:
                 return True
-            # Stop if all sequences have produced a *new* end_token_id.
-            end_tokens = (prompt == end_token_id) & (~mask)
+            # Stop if all sequences have produced a *new* stop token.
+            end_tokens = any_equal(prompt, stop_token_ids, ~mask)
             prompt_done = ops.any(end_tokens, axis=-1)
             return ops.logical_not(ops.all(prompt_done))
 

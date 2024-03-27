@@ -86,9 +86,21 @@ class GreedySamplerTest(TestCase):
             next=self.next,
             prompt=prompt,
             cache=cache,
-            end_token_id=self.char_lookup["t"],
+            stop_token_ids=[self.char_lookup["t"]],
         )
         self.assertEqual(self.join_as_string(output), ["sequentzzzzz"])
+
+    def test_multitoken_early_stopping(self):
+        cache_chars = list("sequentially")
+        cache = ops.array([[self.char_lookup[c] for c in cache_chars]])
+        prompt = ops.full((self.batch_size, self.length), self.char_lookup["z"])
+        output = self.sampler(
+            next=self.next,
+            prompt=prompt,
+            cache=cache,
+            stop_token_ids=[self.char_lookup["t"], self.char_lookup["n"]],
+        )
+        self.assertEqual(self.join_as_string(output), ["sequenzzzzzz"])
 
     def test_is_greedy(self):
         def next(prompt, cache, index):

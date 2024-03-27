@@ -24,6 +24,7 @@ from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
 )
 from keras_nlp.models.generative_task import GenerativeTask
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLM")
@@ -398,7 +399,7 @@ class BartSeq2SeqLM(GenerativeTask):
     def generate_step(
         self,
         inputs,
-        end_token_id=None,
+        stop_token_ids=None,
     ):
         """A compilable generation function for a batch of inputs.
 
@@ -412,8 +413,8 @@ class BartSeq2SeqLM(GenerativeTask):
             inputs: A dictionary with four keys - `"encoder_token_ids"`,
                 `"encoder_padding_mask"`, `"decoder_token_ids"` and
                 `"decoder_padding_mask"`, with batched tensor values.
-            end_token_id: The id of the end token to stop on. If all
-                sequences have produced a new `end_token_id`, generation
+            stop_token_ids: Tuple of id's of end token's to stop on. If all
+                sequences have produced a new stop token, generation
                 will stop.
         """
         (
@@ -477,17 +478,18 @@ class BartSeq2SeqLM(GenerativeTask):
             cache=self_attention_cache,
             index=index,
             mask=decoder_padding_mask,
-            end_token_id=end_token_id,
+            stop_token_ids=stop_token_ids,
             hidden_states=hidden_states,
             model=self,
         )
 
         # Compute an output padding mask with the token ids we updated.
-        if end_token_id is not None:
-            # Build a mask of `end_token_id` locations not in the original
+        if stop_token_ids is not None:
+            # Build a mask of `stop_token_ids` locations not in the original
             # prompt (not in locations where `decoder_padding_mask` is True).
-            end_locations = ops.logical_and(
-                ops.equal(decoder_token_ids, end_token_id),
+            end_locations = any_equal(
+                decoder_token_ids,
+                stop_token_ids,
                 ops.logical_not(decoder_padding_mask),
             )
             end_locations = ops.cast(end_locations, "int32")

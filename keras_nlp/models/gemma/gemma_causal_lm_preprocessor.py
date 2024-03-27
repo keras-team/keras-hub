@@ -148,10 +148,7 @@ class GemmaCausalLMPreprocessor(GemmaPreprocessor):
             "padding_mask": padding_mask,
         }
 
-    def generate_postprocess(
-        self,
-        x,
-    ):
+    def generate_postprocess(self, x):
         """Convert integer token output to strings for generation.
 
         This method reverses `generate_preprocess()`, by first removing all
