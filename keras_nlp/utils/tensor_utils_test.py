@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import tensorflow as tf
 
 from keras_nlp.backend import ops
@@ -105,7 +106,7 @@ class MaskedAnyEqualTest(tf.test.TestCase):
         inputs = ops.array([1, 2, 3, 5])
         values = [3, 5]
         padding_mask = ops.array([True, True, True, False])
-        expected_output = ops.array([False, False, True, False])
+        expected_output = np.array([False, False, True, False])
         result = any_equal(inputs, values, padding_mask)
         result = ops.convert_to_numpy(result)
         self.assertAllEqual(result, expected_output)
@@ -114,7 +115,7 @@ class MaskedAnyEqualTest(tf.test.TestCase):
         inputs = ops.array([2, 4, 7, 9])
         values = [5, 4, 9]
         padding_mask = ops.array([True, True, True, True])
-        expected_output = ops.array([False, True, False, True])
+        expected_output = np.array([False, True, False, True])
         result = any_equal(inputs, values, padding_mask)
         result = ops.convert_to_numpy(result)
         self.assertAllEqual(result, expected_output)
@@ -123,7 +124,7 @@ class MaskedAnyEqualTest(tf.test.TestCase):
         inputs = ops.array([1, 5, 3, 2])
         values = [5, 3]
         padding_mask = ops.array([True, False, True, False])
-        expected_output = ops.array([False, False, True, False])
+        expected_output = np.array([False, False, True, False])
         result = any_equal(inputs, values, padding_mask)
         result = ops.convert_to_numpy(result)
         self.assertAllEqual(result, expected_output)
@@ -132,7 +133,7 @@ class MaskedAnyEqualTest(tf.test.TestCase):
         inputs = ops.array([1, 5, 3, 2])
         values = [[5, 5, 5, 5], [3, 3, 3, 3]]
         padding_mask = ops.array([True, False, True, False])
-        expected_output = ops.array([False, False, True, False])
+        expected_output = np.array([False, False, True, False])
         result = any_equal(inputs, values, padding_mask)
         result = ops.convert_to_numpy(result)
         self.assertAllEqual(result, expected_output)
