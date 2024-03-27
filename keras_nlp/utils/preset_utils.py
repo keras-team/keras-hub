@@ -85,7 +85,9 @@ def get_file(preset, path):
             )
         hf_handle = preset.removeprefix(HF_PREFIX)
         try:
-            return huggingface_hub.hf_hub_download(repo_id=hf_handle, filename=path)
+            return huggingface_hub.hf_hub_download(
+                repo_id=hf_handle, filename=path
+            )
         except HFValidationError as e:
             raise ValueError(
                 "Unexpected Hugging Face preset. Hugging Face model handles "
@@ -296,7 +298,9 @@ def upload_preset(
             )
         hf_handle = uri.removeprefix(HF_PREFIX)
         try:
-            repo_url = huggingface_hub.create_repo(repo_id=hf_handle, exist_ok=True)
+            repo_url = huggingface_hub.create_repo(
+                repo_id=hf_handle, exist_ok=True
+            )
         except HFValidationError as e:
             raise ValueError(
                 "Unexpected Hugging Face URI. Hugging Face model handles "
@@ -304,7 +308,9 @@ def upload_preset(
                 "'hf://username/bert_base_en' or 'hf://bert_case_en' to implicitly"
                 f"upload to your user account. Received: URI={uri}."
             ) from e
-        huggingface_hub.upload_folder(repo_id=repo_url.repo_id, folder_path=preset)
+        huggingface_hub.upload_folder(
+            repo_id=repo_url.repo_id, folder_path=preset
+        )
     else:
         raise ValueError(
             "Unknown URI. An URI must be a one of:\n"
