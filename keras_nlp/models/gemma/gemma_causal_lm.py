@@ -98,6 +98,14 @@ class GemmaCausalLM(GenerativeTask):
     gemma_lm.fit(x=features, batch_size=2)
     ```
 
+    Call `fit()` with LoRA fine-tuning enabled.
+    ```python
+    features = ["The quick brown fox jumped.", "I forgot my homework."]
+    gemma_lm = keras_nlp.models.GemmaCausalLM.from_preset("gemma_2b_en")
+    gemma.backbone.enable_lora(rank=4)
+    gemma_lm.fit(x=features, batch_size=2)
+    ```
+
     Call `fit()` without preprocessing.
     ```python
     x = {
