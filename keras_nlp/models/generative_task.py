@@ -108,6 +108,9 @@ class GenerativeTask(Task):
                 inputs,
                 stop_token_ids=None,
             ):
+                if isinstance(stop_token_ids, list):
+                    stop_token_ids = tuple(stop_token_ids)
+
                 # Create an explicit tuple of all variable state.
                 state = (
                     self._sampler.variables,
@@ -236,8 +239,8 @@ class GenerativeTask(Task):
                 `preprocessor`. If `preprocessor` is `None`, `inputs` should be
                 should be padded to the desired maximum length and this argument
                 will be ignored.
-            stop_token_ids: Optional. None, "auto", or tuple of token ids. Defaults
-                to "auto" which uses the `self.preprocessor.tokenizer.end_token_id`.
+            stop_token_ids: Optional. `None`, "auto", or tuple of token ids. Defaults
+                to "auto" which uses the `preprocessor.tokenizer.end_token_id`.
                 Not specifying a processor will produce an error. None stops
                 generation after generating `max_length` tokens. You may also
                 specify a list of token id's the model should stop on. Note that
@@ -255,9 +258,8 @@ class GenerativeTask(Task):
                 'A `preprocessor` must be attached to the model if `stop_token_ids="auto"`. '
                 "Currently `preprocessor=None`. To call `generate()` with preprocessing "
                 "detached, either pass `stop_tokens_ids=None` to always generate until "
-                "`max_length` or pass a list of token ids that should terminate generation "
-                "as `stop_tokens_ids`. Preprocessor must be specified with a tokenizer if "
-                '`stop_token_ids` is set to "auto".'
+                "`max_length` or pass a tuple of token ids that should terminate generation "
+                "as `stop_tokens_ids`."
             )
         elif stop_token_ids == "auto":
             stop_token_ids = [self.preprocessor.tokenizer.end_token_id]

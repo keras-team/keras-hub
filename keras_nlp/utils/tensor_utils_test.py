@@ -107,6 +107,7 @@ class MaskedAnyEqualTest(tf.test.TestCase):
         padding_mask = ops.array([True, True, True, False])
         expected_output = ops.array([False, False, True, False])
         result = any_equal(inputs, values, padding_mask)
+        result = ops.convert_to_numpy(result)
         self.assertAllEqual(result, expected_output)
 
     def test_multiple_values(self):
@@ -115,6 +116,7 @@ class MaskedAnyEqualTest(tf.test.TestCase):
         padding_mask = ops.array([True, True, True, True])
         expected_output = ops.array([False, True, False, True])
         result = any_equal(inputs, values, padding_mask)
+        result = ops.convert_to_numpy(result)
         self.assertAllEqual(result, expected_output)
 
     def test_padding_mask(self):
@@ -123,6 +125,7 @@ class MaskedAnyEqualTest(tf.test.TestCase):
         padding_mask = ops.array([True, False, True, False])
         expected_output = ops.array([False, False, True, False])
         result = any_equal(inputs, values, padding_mask)
+        result = ops.convert_to_numpy(result)
         self.assertAllEqual(result, expected_output)
 
     def test_input_shaped_values(self):
@@ -131,4 +134,5 @@ class MaskedAnyEqualTest(tf.test.TestCase):
         padding_mask = ops.array([True, False, True, False])
         expected_output = ops.array([False, False, True, False])
         result = any_equal(inputs, values, padding_mask)
+        result = ops.convert_to_numpy(result)
         self.assertAllEqual(result, expected_output)
