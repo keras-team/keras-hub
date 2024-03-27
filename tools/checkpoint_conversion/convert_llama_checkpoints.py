@@ -18,7 +18,6 @@ import tempfile
 import traceback
 
 import numpy as np
-import requests
 from absl import app
 from absl import flags
 from keras import ops
@@ -31,8 +30,8 @@ from keras_nlp.models import LlamaTokenizer
 from keras_nlp.utils.preset_utils import save_to_preset
 
 PRESET_MAP = {
-    "llama_7b_en": "meta-llama/Llama-2-7b-hf",
-    "llama_instruct_7b_en": "meta-llama/Llama-2-7b-chat-hf",
+    "llama2_7b_en": "meta-llama/Llama-2-7b-hf",
+    "llama2_instruct_7b_en": "meta-llama/Llama-2-7b-chat-hf",
 }
 
 FLAGS = flags.FLAGS
@@ -249,16 +248,8 @@ def main(_):
         )
         keras_nlp_model = LlamaBackbone(**backbone_kwargs)
 
-        # === Download the tokenizer from Huggingface model card ===
-        spm_path = (
-            f"https://huggingface.co/{hf_preset}/resolve/main/tokenizer.model"
-        )
-        response = requests.get(spm_path)
-        if not response.ok:
-            raise ValueError(f"Couldn't fetch {preset}'s tokenizer.")
-        tokenizer_path = os.path.join(temp_dir, "vocabulary.spm")
-        with open(tokenizer_path, "wb") as tokenizer_file:
-            tokenizer_file.write(response.content)
+        # === Get the tokenizer from the Huggingface model ===
+        tokenizer_path = hf_tokenizer.vocab_file
         keras_nlp_tokenizer = LlamaTokenizer(tokenizer_path)
         print("\n-> Keras 3 model and tokenizer loaded.")
 

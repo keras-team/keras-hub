@@ -15,24 +15,24 @@
 
 # Metadata for loading pretrained model weights.
 backbone_presets = {
-    "llama_7b_en": {
+    "llama2_7b_en": {
         "metadata": {
-            "description": "Llama 7B Base model",
+            "description": "LLaMA 2 7B Base model",
             "params": 6738415616,
-            "official_name": "Llama",
-            "path": "llama",
-            "model_card": "https://github.com/llamaai/llama-src/blob/main/README.md",
+            "official_name": "LLaMA 2",
+            "path": "llama2",
+            "model_card": "https://github.com/meta-llama/llama",
         },
-        "kaggle_handle": "kaggle://keras/llama/keras/llama_7b_en/1",
+        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_7b_en/1",
     },
-    "llama_instruct_7b_en": {
+    "llama2_instruct_7b_en": {
         "metadata": {
-            "description": "LLaMA 7B Chat model",
+            "description": "LLaMA 2 7B Chat model",
             "params": 6738415616,
-            "official_name": "LLaMA",
-            "path": "llama",
-            "model_card": "https://github.com/llamaai/llama-src/blob/main/README.md",
+            "official_name": "LLaMA 2",
+            "path": "llama2",
+            "model_card": "https://github.com/meta-llama/llama",
         },
-        "kaggle_handle": "kaggle://keras/llama/keras/llama_instruct_7b_en/1",
+        "kaggle_handle": "kaggle://keras/llama2/keras/llama2_instruct_7b_en/1",
     },
 }
