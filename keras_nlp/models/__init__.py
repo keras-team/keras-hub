@@ -107,6 +107,7 @@ from keras_nlp.models.gpt_neo_x.gpt_neo_x_preprocessor import (
 )
 from keras_nlp.models.gpt_neo_x.gpt_neo_x_tokenizer import GPTNeoXTokenizer
 from keras_nlp.models.llama.llama_backbone import LlamaBackbone
+from keras_nlp.models.llama.llama_causal_lm import LlamaCausalLM
 from keras_nlp.models.llama.llama_causal_lm_preprocessor import (
     LlamaCausalLMPreprocessor,
 )
