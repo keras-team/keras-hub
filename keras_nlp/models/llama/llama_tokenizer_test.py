@@ -51,9 +51,9 @@ class LlamaTokenizerTest(TestCase):
     def test_smallest_preset(self):
         self.run_preset_test(
             cls=LlamaTokenizer,
-            preset="llama_7b_en",
+            preset="llama2_7b_en",
             input_data=["The quick brown fox."],
-            expected_output=[[415, 2936, 9060, 285, 1142, 28723]],
+            expected_output=[[450, 4996, 17354, 1701, 29916, 29889]],
         )
 
     @pytest.mark.extra_large
